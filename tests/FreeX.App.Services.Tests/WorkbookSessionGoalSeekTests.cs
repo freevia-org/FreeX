@@ -39,7 +39,11 @@ public sealed class WorkbookSessionGoalSeekTests
         var setCell = new CellAddress(sheet.Id, 1, 2);
         var selectionCell = new CellAddress(sheet.Id, 3, 3);
         sheet.SetCell(changingCell, new NumberValue(1));
-        sheet.SetCell(setCell, new NumberValue(5));
+        // Set cell's formula references the changing cell (so it recalculates along with it) but
+        // its value is constant with respect to that input, so the solver's derivative guard fires
+        // and it never converges -- distinct from an outright non-formula Set cell, which is
+        // rejected up front (see ExecuteGoalSeek_RejectsNonFormulaSetCellWithoutMutating).
+        sheet.SetFormula(setCell, "5+A1*0");
         var session = CreateSession(workbook);
         session.SelectCell(selectionCell);
         var originalSelection = session.SelectedRange;
@@ -58,6 +62,43 @@ public sealed class WorkbookSessionGoalSeekTests
         session.CanUndo.Should().BeFalse();
         session.ActiveCell.Should().Be(selectionCell);
         session.SelectedRange.Should().Be(originalSelection);
+    }
+
+    [Fact]
+    public void ExecuteGoalSeek_RejectsNonFormulaSetCellWithoutMutating()
+    {
+        var workbook = new Workbook("Book");
+        var sheet = workbook.AddSheet("Sheet1");
+        workbook.ActiveSheetIndex = 0;
+        var changingCell = new CellAddress(sheet.Id, 1, 1);
+        var setCell = new CellAddress(sheet.Id, 1, 2);
+        sheet.SetCell(changingCell, new NumberValue(1));
+        sheet.SetCell(setCell, new NumberValue(5));
+        var session = CreateSession(workbook);
+
+        var result = session.ExecuteGoalSeek(new GoalSeekRequest(setCell, 10, changingCell));
+
+        result.Success.Should().BeFalse();
+        result.Status.Should().Be(WorkbookGoalSeekStatus.InvalidRequest);
+        result.ErrorMessage.Should().Be("Goal Seek set cell must contain a formula.");
+        result.SeekResult.Should().BeNull();
+        result.EditResult.Should().BeNull();
+        GetNumber(sheet, changingCell).Should().Be(1);
+        GetNumber(sheet, setCell).Should().Be(5);
+        session.IsDirty.Should().BeFalse();
+        session.CanUndo.Should().BeFalse();
+    }
+
+    [Fact]
+    public void ExecuteGoalSeek_FormulaSetCellProceedsPastValidation()
+    {
+        var (session, sheet, changingCell, setCell, _) = CreateLinearGoalSeekSession();
+
+        var result = session.ExecuteGoalSeek(new GoalSeekRequest(setCell, 12, changingCell));
+
+        result.Status.Should().NotBe(WorkbookGoalSeekStatus.InvalidRequest);
+        result.Success.Should().BeTrue();
+        GetNumber(sheet, changingCell).Should().BeApproximately(4, 1e-4);
     }
 
     [Fact]

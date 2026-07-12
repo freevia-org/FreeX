@@ -23,6 +23,12 @@ public sealed class FilterCommand : IWorkbookCommand
     // silently lost the moment the workbook is saved and reopened. -1 = no table matched this range.
     private int _tableId = -1;
     private List<StructuredTableFilterColumnModel>? _previousTableFilterColumns;
+    // R33-commands-autofilter-slicer-1: when _range is a plain worksheet-level AutoFilter range
+    // (sheet.AutoFilter.Reference, not a structured table), sheet.AutoFilter.FilterColumns (the
+    // model XlsxWorksheetAutoFilterXmlMapper.Save serializes into the worksheet's own
+    // <autoFilter>/<filterColumn> XML) must likewise be kept in sync, otherwise value-list filters
+    // vanish from the saved .xlsx.
+    private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
 
     public string Label => _allowedValues.Count == 0 ? "Clear Filter" : "Apply Filter";
 
@@ -66,6 +72,14 @@ public sealed class FilterCommand : IWorkbookCommand
         RecomputeHiddenRows(sheet, _range);
 
         ApplyToStructuredTableIfMatched(sheet);
+
+        _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            _allowedValues.Count == 0
+                ? null
+                : new WorksheetAutoFilterColumnModel((int)_filterColOffset, _allowedValues));
 
         return new CommandOutcome(true);
     }
@@ -166,8 +180,10 @@ public sealed class FilterCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (!_undoSnapshot.HasSnapshot) return;
         var sheet = ctx.GetSheet(_sheetId);
+        WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
+
+        if (!_undoSnapshot.HasSnapshot) return;
         _undoSnapshot.Restore(sheet);
 
         if (_tableId != -1 && _previousTableFilterColumns is not null &&
@@ -426,6 +442,67 @@ internal struct FilterUndoSnapshot
                 sheet.ColumnFilterOwnedRows[col] = [.. ownedRows];
         }
     }
+}
+
+/// <summary>
+/// R33-commands-autofilter-slicer-1: mirrors an interactively-applied worksheet-level AutoFilter
+/// criterion (value list / Top 10 / above-average / below-average) into
+/// <see cref="Sheet.AutoFilter"/>'s <see cref="WorksheetAutoFilterModel.FilterColumns"/> — the model
+/// <c>XlsxWorksheetAutoFilterXmlMapper.Save</c> actually serializes into the worksheet's own
+/// <c>&lt;autoFilter&gt;/&lt;filterColumn&gt;</c> XML. Without this, the criterion only lives in
+/// session-only state (<see cref="Sheet.ActiveValueFilterColumns"/> / <see cref="Sheet.ColumnFilterOwnedRows"/>)
+/// and is silently discarded the moment the workbook is saved and reopened. Only applies when
+/// <c>range</c> matches <see cref="Sheet.AutoFilter"/>'s <see cref="WorksheetAutoFilterModel.Reference"/>
+/// exactly — a plain worksheet AutoFilter range, as opposed to a structured table's own filter (which
+/// <see cref="FilterCommand.ApplyToStructuredTableIfMatched"/> already handles separately via
+/// <see cref="StructuredTableFilterColumnModel"/>).
+/// </summary>
+internal static class WorksheetAutoFilterColumnSync
+{
+    /// <summary>
+    /// Replaces (or removes, when <paramref name="newColumn"/> is <c>null</c>) the filter-column
+    /// entry for <paramref name="columnId"/> on the worksheet AutoFilter matching <paramref name="range"/>.
+    /// Returns a snapshot of the previous <see cref="WorksheetAutoFilterModel.FilterColumns"/> list for
+    /// undo (via <see cref="Restore"/>), or <c>null</c> when no worksheet AutoFilter matches
+    /// <paramref name="range"/> (e.g. the range belongs to a structured table instead).
+    /// </summary>
+    public static List<WorksheetAutoFilterColumnModel>? Apply(
+        Sheet sheet,
+        GridRange range,
+        int columnId,
+        WorksheetAutoFilterColumnModel? newColumn)
+    {
+        var autoFilter = sheet.AutoFilter;
+        if (autoFilter is null || !IsMatchingRange(autoFilter, range))
+            return null;
+
+        var previous = new List<WorksheetAutoFilterColumnModel>(autoFilter.FilterColumns);
+
+        autoFilter.FilterColumns.RemoveAll(filterColumn => filterColumn.ColumnId == columnId);
+        if (newColumn is not null)
+            autoFilter.FilterColumns.Add(newColumn);
+        if (autoFilter.FilterColumns.Count > 1)
+            autoFilter.FilterColumns.Sort(static (a, b) => a.ColumnId.CompareTo(b.ColumnId));
+
+        return previous;
+    }
+
+    /// <summary>Undoes an <see cref="Apply"/> call, restoring the exact previous list contents.</summary>
+    public static void Restore(Sheet sheet, GridRange range, List<WorksheetAutoFilterColumnModel>? previousFilterColumns)
+    {
+        if (previousFilterColumns is null)
+            return;
+
+        var autoFilter = sheet.AutoFilter;
+        if (autoFilter is null || !IsMatchingRange(autoFilter, range))
+            return;
+
+        autoFilter.FilterColumns.Clear();
+        autoFilter.FilterColumns.AddRange(previousFilterColumns);
+    }
+
+    private static bool IsMatchingRange(WorksheetAutoFilterModel autoFilter, GridRange range) =>
+        string.Equals(autoFilter.Reference, range.ToString(), StringComparison.OrdinalIgnoreCase);
 }
 
 internal readonly struct FilterAllowedValueMatcher

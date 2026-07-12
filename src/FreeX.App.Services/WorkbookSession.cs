@@ -2949,8 +2949,67 @@ public sealed class WorkbookSession
     public WorkbookCellEditResult SetSelectedRangeVerticalAlignment(VerticalAlignment alignment) =>
         ApplySelectedRangeStyle(new StyleDiff(VAlign: alignment));
 
-    public WorkbookCellEditResult SetSelectedRangeWrapText(bool enabled) =>
-        ApplySelectedRangeStyle(new StyleDiff(WrapText: enabled));
+    public WorkbookCellEditResult SetSelectedRangeWrapText(bool enabled)
+    {
+        // Not routed through ApplySelectedRangeStyle: when enabling wrap, the style change and the
+        // Excel-matching row-height auto-grow (below) must land as a single undoable/repeatable
+        // operation, so both are folded into one command up front rather than applied as two
+        // separate edits.
+        var result = _cellEditService.ExecuteRepeatableEditCommand(
+            Workbook,
+            () => CreateWrapTextCommand(enabled));
+        if (!result.Success)
+            return result;
+
+        ApplySuccessfulRangeEditResult(result, SelectedRange);
+        return result;
+    }
+
+    private IWorkbookCommand CreateWrapTextCommand(bool enabled)
+    {
+        var range = SelectedRange;
+        var commands = new List<IWorkbookCommand> { CreateApplyStyleCommand(range, new StyleDiff(WrapText: enabled)) };
+        if (enabled)
+            commands.AddRange(CreateWrapTextGrowthCommands(range));
+
+        return ToCommand("Wrap Text", commands);
+    }
+
+    /// <summary>
+    /// Turning on Wrap Text auto-grows each affected row to fit the now-wrapped content, matching
+    /// Excel's "row grows unless you've manually resized it" behavior. Reuses the exact same
+    /// content-based estimate (RowColumnSizingPlanner/AutoFitSizingService) as the explicit "AutoFit
+    /// Row Height" command — but since this runs before the WrapText style diff above has been
+    /// applied, the display-text lookup is wrapped to report WrapText=true for the cells being
+    /// toggled on. Only ever grows a row: any row whose estimate doesn't exceed its current height
+    /// (including a row a user previously resized taller by hand) is left untouched, matching Excel
+    /// never shrinking a row just from toggling wrap on.
+    /// </summary>
+    private IReadOnlyList<IWorkbookCommand> CreateWrapTextGrowthCommands(GridRange range)
+    {
+        var sheet = ActiveSheet;
+        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights(
+            sheet,
+            range,
+            sheet.GetUsedRange(),
+            (row, col) => GetAutoFitDisplayTextForPendingWrap(row, col, range),
+            sheet.DefaultRowHeight);
+
+        return plans
+            .Where(plan => plan.Size > (sheet.RowHeights.TryGetValue(plan.Index, out var currentHeight) ? currentHeight : sheet.DefaultRowHeight))
+            .Select(plan => (IWorkbookCommand)new SetRowHeightCommand(sheet.Id, plan.Index, plan.Index, plan.Size))
+            .ToList();
+    }
+
+    private AutoFitCellText? GetAutoFitDisplayTextForPendingWrap(uint row, uint col, GridRange pendingWrapRange)
+    {
+        if (GetAutoFitDisplayText(row, col) is not { } cellText)
+            return null;
+
+        return pendingWrapRange.Contains(new CellAddress(ActiveSheet.Id, row, col))
+            ? cellText with { WrapText = true }
+            : cellText;
+    }
 
     public WorkbookCellEditResult IncreaseSelectedRangeIndent() =>
         SetSelectedRangeIndentLevel(Math.Min(15, SelectedRangeStartIndentLevel + 1));

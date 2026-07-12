@@ -49,7 +49,7 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 pvAttrs,
                 [
                     "workbookViewId", "view", "showGridLines", "showRowColHeaders", "showRuler", "zoomScale",
-                    "showFormulas", "topLeftCell",
+                    "showFormulas", "topLeftCell", "showZeros",
                     "zoomScaleNormal", "zoomScaleSheetLayoutView", "zoomScalePageLayoutView"
                 ]);
 

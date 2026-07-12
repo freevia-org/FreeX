@@ -18,6 +18,7 @@ public enum AccessibilityIssueKind
     TableDefaultHeaderText,
     TableDuplicateHeaderText,
     TableMissingHeaderRow,
+    BlankRowOrColumnInTable,
     ChartMissingAxisTitle,
     GenericChartAxisTitle,
     LowContrastCellText,

@@ -11,65 +11,18 @@ public static class GroupedSheetRangePlanner
 
     public static ConditionalFormat CloneConditionalFormatForSheet(ConditionalFormat source, SheetId sheetId)
     {
-        IReadOnlyList<GridRange>? remappedAdditional = source.AdditionalRanges is null
+        // Delegate to ConditionalFormat.Clone() so every field (icon overrides, color-scale/dataBar
+        // theme provenance, EqualAverage/StdDevCount, native round-trip metadata, ...) stays in sync
+        // with the canonical clone instead of being hand-maintained here (the old hand-written
+        // initializer silently dropped several of those, R33-commands-conditionalformat-manage-1).
+        // This is a fan-out of the rule to ANOTHER sheet in the same grouped edit, so the copy must
+        // get a fresh Id and the sheet-specific x14 extLst id must be stripped (Clone(newId) does
+        // both) so the two sheets' rules do not collide on the same x14 id.
+        var clone = source.Clone(Guid.NewGuid());
+        clone.AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId);
+        clone.AdditionalRanges = source.AdditionalRanges is null
             ? null
             : source.AdditionalRanges.Select(r => RemapRangeToSheet(r, sheetId)).ToList();
-
-        var clone = new ConditionalFormat
-        {
-            AppliesTo = RemapRangeToSheet(source.AppliesTo, sheetId),
-            AdditionalRanges = remappedAdditional,
-            Priority = source.Priority,
-            RuleType = source.RuleType,
-            Operator = source.Operator,
-            Value1 = source.Value1,
-            Value2 = source.Value2,
-            FormatIfTrue = source.FormatIfTrue?.Clone(),
-            MinColor = source.MinColor,
-            MidColor = source.MidColor,
-            MaxColor = source.MaxColor,
-            UseThreeColorScale = source.UseThreeColorScale,
-            MinThresholdType = source.MinThresholdType,
-            MinThresholdValue = source.MinThresholdValue,
-            MinThresholdGreaterThanOrEqual = source.MinThresholdGreaterThanOrEqual,
-            MidThresholdType = source.MidThresholdType,
-            MidThresholdValue = source.MidThresholdValue,
-            MidThresholdGreaterThanOrEqual = source.MidThresholdGreaterThanOrEqual,
-            MaxThresholdType = source.MaxThresholdType,
-            MaxThresholdValue = source.MaxThresholdValue,
-            MaxThresholdGreaterThanOrEqual = source.MaxThresholdGreaterThanOrEqual,
-            DataBarColor = source.DataBarColor,
-            DataBarMinThresholdType = source.DataBarMinThresholdType,
-            DataBarMinThresholdValue = source.DataBarMinThresholdValue,
-            DataBarMaxThresholdType = source.DataBarMaxThresholdType,
-            DataBarMaxThresholdValue = source.DataBarMaxThresholdValue,
-            DataBarShowValue = source.DataBarShowValue,
-            DataBarMinLength = source.DataBarMinLength,
-            DataBarMaxLength = source.DataBarMaxLength,
-            DataBarGradient = source.DataBarGradient,
-            DataBarBorder = source.DataBarBorder,
-            DataBarAxisPosition = source.DataBarAxisPosition,
-            DataBarAxisColor = source.DataBarAxisColor,
-            DataBarNegativeFillColor = source.DataBarNegativeFillColor,
-            DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
-            AboveAverage = source.AboveAverage,
-            FormulaText = source.FormulaText,
-            IconSetStyle = source.IconSetStyle,
-            IconSetShowValue = source.IconSetShowValue,
-            IconSetReverse = source.IconSetReverse,
-            TopBottomRank = source.TopBottomRank,
-            TopBottomPercent = source.TopBottomPercent,
-            TextRuleText = source.TextRuleText,
-            DateOccurringPeriod = source.DateOccurringPeriod,
-            StopIfTrue = source.StopIfTrue,
-            NativeAttributes = source.NativeAttributes,
-            NativeChildXmls = ConditionalFormatNativeMetadata.RemoveX14IdNativeChildXmls(source.NativeChildXmls),
-            NativePayloadAttributes = source.NativePayloadAttributes,
-            NativePayloadChildXmls = source.NativePayloadChildXmls,
-            NativeContainerAttributes = source.NativeContainerAttributes,
-            NativeContainerChildXmls = source.NativeContainerChildXmls
-        };
-        clone.IconSetThresholds.AddRange(source.IconSetThresholds);
         return clone;
     }
 

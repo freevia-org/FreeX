@@ -25,6 +25,7 @@ public sealed partial class AccessibilityCheckerServiceTests
             nameof(AccessibilityIssueKind.TableDefaultHeaderText),
             nameof(AccessibilityIssueKind.TableDuplicateHeaderText),
             nameof(AccessibilityIssueKind.TableMissingHeaderRow),
+            nameof(AccessibilityIssueKind.BlankRowOrColumnInTable),
             nameof(AccessibilityIssueKind.ChartMissingAxisTitle),
             nameof(AccessibilityIssueKind.GenericChartAxisTitle),
             nameof(AccessibilityIssueKind.LowContrastCellText),

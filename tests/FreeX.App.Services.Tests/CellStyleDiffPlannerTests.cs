@@ -166,11 +166,19 @@ public sealed class CellStyleDiffPlannerTests
         var total = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Total);
 
         heading1.Bold.Should().BeTrue();
-        heading1.FontSize.Should().Be(16);
-        heading1.FillColor.Should().Be(new CellColor(31, 115, 70));
-        heading1.FontColor.Should().Be(CellColor.White);
+        heading1.FontSize.Should().Be(15);
+        heading1.FillColor.Should().BeNull();
+        heading1.FillThemeColor.Should().BeNull();
+        heading1.ClearFill.Should().BeTrue();
+        heading1.FontColor.Should().Be(CellColor.Black);
+        heading1.BorderBottom.Should().NotBeNull();
+        heading1.BorderBottom!.Value.Style.Should().Be(BorderStyle.Medium);
         heading2.Bold.Should().BeTrue();
         heading2.FontSize.Should().Be(14);
+        heading2.FillColor.Should().BeNull();
+        heading2.ClearFill.Should().BeTrue();
+        heading2.BorderBottom.Should().NotBeNull();
+        heading2.BorderBottom!.Value.Style.Should().Be(BorderStyle.Thin);
         note.FillColor.Should().Be(new CellColor(255, 255, 204));
         note.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, CellColor.Black));
         warning.FillColor.Should().Be(new CellColor(255, 192, 0));
@@ -264,9 +272,11 @@ public sealed class CellStyleDiffPlannerTests
 
         var diffs = presets.Select(CellStyleDiffPlanner.GetCellStylePresetDiff).ToList();
 
-        diffs.Select(diff => diff.FillColor).Should().OnlyHaveUniqueItems();
+        diffs.Select(diff => diff.FillThemeColor).Should().OnlyHaveUniqueItems();
         diffs.Should().AllSatisfy(diff =>
         {
+            diff.FillColor.Should().BeNull();
+            diff.FillThemeColor.Should().NotBeNull();
             diff.FontColor.Should().Be(CellColor.Black);
             diff.BorderBottom.Should().NotBeNull();
             diff.BorderBottom!.Value.Style.Should().Be(BorderStyle.Thin);
@@ -290,7 +300,9 @@ public sealed class CellStyleDiffPlannerTests
 
         var diff = CellStyleDiffPlanner.GetCellStylePresetDiff(preset, theme);
 
-        diff.FillColor.Should().Be(theme.ResolveColor(slot, expectedTint));
+        diff.FillColor.Should().BeNull();
+        diff.FillThemeColor.Should().Be(new WorkbookThemeColorReference(slot, expectedTint));
+        diff.FillThemeColor!.Value.Resolve(theme).Should().Be(theme.ResolveColor(slot, expectedTint));
         diff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, theme.GetColor(slot)));
         diff.FontColor.Should().Be(CellColor.Black);
     }

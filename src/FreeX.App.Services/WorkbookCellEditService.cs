@@ -226,7 +226,7 @@ public sealed class WorkbookCellEditService
             return true;
         }
 
-        if (workbook.GetSheet(request.SetCell.Sheet) is null)
+        if (workbook.GetSheet(request.SetCell.Sheet) is not { } setSheet)
         {
             errorMessage = "Goal Seek set cell sheet was not found.";
             return true;
@@ -235,6 +235,12 @@ public sealed class WorkbookCellEditService
         if (workbook.GetSheet(request.ChangingCell.Sheet) is not { } changingSheet)
         {
             errorMessage = "Goal Seek changing cell sheet was not found.";
+            return true;
+        }
+
+        if (string.IsNullOrEmpty(setSheet.GetCell(request.SetCell)?.FormulaText))
+        {
+            errorMessage = "Goal Seek set cell must contain a formula.";
             return true;
         }
 

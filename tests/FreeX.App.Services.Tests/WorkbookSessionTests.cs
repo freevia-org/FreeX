@@ -6268,9 +6268,17 @@ public sealed class WorkbookSessionTests
 
         result.Success.Should().BeTrue();
         var style = workbook.GetStyle(sheet.GetCell(a1)!.StyleId);
-        style.FillColor.Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent2, 0.6));
+        style.FillColor.Should().BeNull();
+        style.FillThemeColor.Should().Be(new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, 0.6));
+        style.ResolveFillColor(workbook.Theme).Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent2, 0.6));
         style.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, workbook.Theme.GetColor(WorkbookThemeColorSlot.Accent2)));
         style.FontColor.Should().Be(CellColor.Black);
+
+        // Regression for R33-commands-cellstyles-themes-1: the fill must be a live theme
+        // reference, so switching the workbook theme re-tints the cell without reapplying
+        // the preset - matching Excel's cascading theme-linked cell styles.
+        workbook.Theme = WorkbookTheme.Office.WithColor(WorkbookThemeColorSlot.Accent2, new CellColor(200, 210, 220));
+        style.ResolveFillColor(workbook.Theme).Should().Be(workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Accent2, 0.6));
     }
 
     [Fact]

@@ -211,8 +211,10 @@ public sealed partial class ManageConditionalFormatsDialog : Window
             ? _sheet.ConditionalFormats.Where(r => r.AllRanges.Any(ar => RangesOverlap(ar, range)))
             : (IEnumerable<ConditionalFormat>)_sheet.ConditionalFormats;
 
+        // Rule list order need not match Priority order after load, so sort by priority before
+        // reassigning 1..N positions - otherwise a no-edit open+OK silently inverts precedence.
         var priority = 1;
-        foreach (var rule in source)
+        foreach (var rule in source.OrderBy(r => r.Priority))
         {
             // Work on a shallow clone so we don't mutate the live sheet until OK/Apply
             var copy = CloneWithPriority(rule, priority++);

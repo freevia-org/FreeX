@@ -165,12 +165,16 @@ public static class CellStyleDiffPlanner
                 NumberFormat: "General"),
             CellStylePreset.Heading1 => new StyleDiff(
                 Bold: true,
-                FontSize: 16,
-                FillColor: new CellColor(31, 115, 70),
-                FontColor: CellColor.White),
+                FontSize: 15,
+                FontColor: CellColor.Black,
+                ClearFill: true,
+                BorderBottom: new CellBorder(BorderStyle.Medium, theme.GetColor(WorkbookThemeColorSlot.Accent1))),
             CellStylePreset.Heading2 => new StyleDiff(
                 Bold: true,
-                FontSize: 14),
+                FontSize: 14,
+                FontColor: CellColor.Black,
+                ClearFill: true,
+                BorderBottom: new CellBorder(BorderStyle.Thin, theme.GetColor(WorkbookThemeColorSlot.Accent1))),
             CellStylePreset.Note => new StyleDiff(
                 FillColor: new CellColor(255, 255, 204),
                 BorderBottom: new CellBorder(BorderStyle.Thin, CellColor.Black)),
@@ -219,7 +223,7 @@ public static class CellStyleDiffPlanner
 
     private static StyleDiff AccentDepth(WorkbookTheme theme, WorkbookThemeColorSlot slot, double tint) =>
         new(
-            FillColor: theme.ResolveColor(slot, tint),
+            FillThemeColor: new WorkbookThemeColorReference(slot, tint),
             FontColor: CellColor.Black,
             BorderBottom: new CellBorder(BorderStyle.Thin, theme.GetColor(slot)));
 

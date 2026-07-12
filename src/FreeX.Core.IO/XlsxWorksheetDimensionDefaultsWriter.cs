@@ -61,7 +61,8 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
                     "defaultColWidth",
                     FormatDouble(sheet.DefaultColumnWidth));
 
-            if (IsNonDefaultRowHeight(sheet.DefaultRowHeight))
+            var isNonDefaultRowHeight = IsNonDefaultRowHeight(sheet.DefaultRowHeight);
+            if (isNonDefaultRowHeight)
             {
                 changed |= XlsxXmlNormalizationHelpers.SetAttributeIfChanged(
                     sheetFormat,
@@ -73,7 +74,7 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
                     "1");
             }
 
-            changed |= ApplyNativeSheetFormatMetadata(sheetFormat, sheet.SheetFormatMetadata);
+            changed |= ApplyNativeSheetFormatMetadata(sheetFormat, sheet.SheetFormatMetadata, isNonDefaultRowHeight);
 
             if (changed)
                 XlsxPackageXmlEditor.ReplaceXml(archive, worksheetPath, worksheetXml);
@@ -83,14 +84,23 @@ internal static class XlsxWorksheetDimensionDefaultsWriter
     private static readonly IReadOnlyCollection<string> ModeledSheetFormatAttributes =
         ["defaultColWidth", "defaultRowHeight"];
 
+    // When we've just written a live customHeight="1" for a genuinely new DefaultRowHeight, the bag's
+    // stale customHeight (captured from the source file before the edit) must not be reapplied on top of it.
+    private static readonly IReadOnlyCollection<string> ModeledSheetFormatAttributesWithCustomHeight =
+        ["defaultColWidth", "defaultRowHeight", "customHeight"];
+
     private static bool ApplyNativeSheetFormatMetadata(
         XElement sheetFormat,
-        NativeXmlPreserveBag? metadata)
+        NativeXmlPreserveBag? metadata,
+        bool excludeCustomHeight)
     {
         if (metadata is null)
             return false;
 
-        return XmlNativeBagSerializer.ApplyToElement(sheetFormat, metadata.Get("sheetFormatPr"), ModeledSheetFormatAttributes);
+        var modeledAttributes = excludeCustomHeight
+            ? ModeledSheetFormatAttributesWithCustomHeight
+            : ModeledSheetFormatAttributes;
+        return XmlNativeBagSerializer.ApplyToElement(sheetFormat, metadata.Get("sheetFormatPr"), modeledAttributes);
     }
 
     private static bool IsNonDefaultColumnWidth(double value) =>

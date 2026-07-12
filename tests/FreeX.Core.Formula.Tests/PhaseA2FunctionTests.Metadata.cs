@@ -269,7 +269,10 @@ public partial class PhaseA2FunctionTests
     [InlineData(HorizontalAlignment.Left, "'")]
     [InlineData(HorizontalAlignment.Center, "^")]
     [InlineData(HorizontalAlignment.Right, "\"")]
-    [InlineData(HorizontalAlignment.General, "")]
+    // General-aligned TEXT is left-justified by Excel, which reports it with the
+    // apostrophe label prefix (see R33_InformationCellPrefixFormatTests) -- General
+    // does not mean "no prefix" for a text value, only for numbers/blanks.
+    [InlineData(HorizontalAlignment.General, "'")]
     [InlineData(HorizontalAlignment.Justify, "")]
     [InlineData(HorizontalAlignment.Distributed, "")]
     public void Cell_Prefix_ReturnsHorizontalAlignmentCode(HorizontalAlignment alignment, string expected)

@@ -1490,20 +1490,42 @@ public sealed class RecalcEngine
 
             // A1#:B5 spill-range-union reference (ANCHORARRAY(anchor, end), see Parser.cs's ':' handling
             // after a '#' anchor). FormulaEvaluator.Functions.cs EvaluateAnchorArray reads every cell in
-            // the bounding rectangle that unions the anchor's spill extent with the end cell -- not just
-            // the anchor and end cells themselves -- so register a dependency edge across the whole
-            // rectangle between them (a conservative superset of the true, spill-extent-dependent union)
-            // rather than the single-cell edges the generic FunctionCallNode case below would add. Only
-            // handles the plain same-sheet CellRefNode/CellRefNode shape the parser always produces for
-            // this operator; anything else (e.g. a named-range anchor) falls through to the generic case.
+            // the bounding rectangle that unions the anchor's LIVE spill extent with the end cell -- not
+            // just the literal anchor..end rectangle -- so once the anchor's spill grows past the end
+            // cell (e.g. A1=SEQUENCE(3) growing to SEQUENCE(10) while the formula reads A1#:B5), cells
+            // inside the true (grown) union that fall outside the literal anchor..end rectangle need a
+            // dependency edge too, or editing them never marks the dependent formula dirty. Consult
+            // sheet.TryGetSpillExtent for the anchor -- exactly like EvaluateAnchorArray does -- and
+            // union that with the end cell; when the extent isn't reachable yet (anchor hasn't spilled
+            // as of this registration), fall back to the literal anchor..end rectangle, same as before.
+            // Also mark this dependency plan non-cacheable: the correct edge depends on live sheet
+            // state (the spill extent) that can change without the formula's own AST changing, so a
+            // later re-registration (e.g. RebuildFormulaDependencies) must re-run this branch instead of
+            // reusing a stale cached rectangle from before the anchor grew. Only handles the plain
+            // same-sheet CellRefNode/CellRefNode shape the parser always produces for this operator;
+            // anything else (e.g. a named-range anchor) falls through to the generic case.
             case FunctionCallNode anchorArray when anchorArray.FunctionName == "ANCHORARRAY" &&
                 anchorArray.Arguments.Count == 2 &&
                 anchorArray.Arguments[0] is CellRefNode { SheetName: null } anchorCell &&
                 anchorArray.Arguments[1] is CellRefNode { SheetName: null } endCell:
             {
+                cacheableForDependencyPlan = false;
+
+                var unionEndRow = Math.Max(anchorCell.Row, endCell.Row);
+                var unionEndCol = Math.Max(anchorCell.ColumnNumber, endCell.ColumnNumber);
+
+                if (workbook?.GetSheet(defaultSheetId) is { } anchorSheet &&
+                    anchorSheet.TryGetSpillExtent(
+                        new CellAddress(defaultSheetId, anchorCell.Row, anchorCell.ColumnNumber),
+                        out var spillRows, out var spillCols))
+                {
+                    unionEndRow = Math.Max(unionEndRow, anchorCell.Row + spillRows - 1);
+                    unionEndCol = Math.Max(unionEndCol, anchorCell.ColumnNumber + spillCols - 1);
+                }
+
                 refs.AddRange(new GridRange(
                     new CellAddress(defaultSheetId, anchorCell.Row, anchorCell.ColumnNumber),
-                    new CellAddress(defaultSheetId, endCell.Row, endCell.ColumnNumber)));
+                    new CellAddress(defaultSheetId, unionEndRow, unionEndCol)));
                 return false;
             }
 

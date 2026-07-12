@@ -555,15 +555,22 @@ public sealed partial class FormulaEvaluator
 
     /// <summary>
     /// Back-compat overload used by SINGLE() (FormulaEvaluator.Functions.cs's EvaluateSingle), which
-    /// only has the already-evaluated scalar in hand, not the operand AST node. Always resolves via
-    /// positional intersection — the pre-existing behavior for that call site — since SINGLE() cannot
-    /// be reached through this file's discriminated <see cref="UnaryOperator.ImplicitIntersection"/>
-    /// path below.
+    /// only has the already-evaluated scalar in hand, not the operand AST node — so it can't use the
+    /// AST-based reference-vs-computed-array whitelist that the AST-aware @ overload below uses.
+    /// Instead it falls back to the RangeValue.IsSheetReference provenance flag (set only when the
+    /// range was actually rooted to worksheet cells, e.g. FormulaEvaluator.References.cs): when the
+    /// argument is a computed/dynamic array (IsSheetReference == false, e.g. SINGLE(SEQUENCE(3))),
+    /// Excel returns the array's top-left element regardless of the formula cell's own position —
+    /// there's no "formula cell row/col" to intersect against. Only a genuine worksheet reference
+    /// falls through to the pre-existing positional intersection.
     /// </summary>
     private static ScalarValue ImplicitIntersectionOp(ScalarValue value, IEvalContext context)
     {
         if (value is not RangeValue range)
             return value;
+
+        if (!range.IsSheetReference)
+            return range.RowCount > 0 && range.ColCount > 0 ? range.Cells[0, 0] : ErrorValue.Value;
 
         if (context.CurrentCellAddress is not { } currentCell)
             return ErrorValue.Value;

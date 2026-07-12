@@ -179,7 +179,15 @@ public static partial class BuiltInFunctions
             var col = new ScalarValue[table.RowCount, 1];
             for (int r = 0; r < table.RowCount; r++)
                 col[r, 0] = table.Cells[r, colNum - 1];
-            return new RangeValue(col);
+            // If the source table is a genuine worksheet reference, the selected column's
+            // coordinates map to real cells too, so carry StartRow/StartCol/SheetName forward
+            // (offset to the selected column) and mark it so ROW()/COLUMN() and
+            // SUBTOTAL/AGGREGATE's hidden-row exclusion see the true position (mirrors OFFSET's
+            // construction in FormulaEvaluator.References.cs). A computed-array base has no real
+            // coordinates, so it must stay position-less.
+            return table.IsSheetReference
+                ? new RangeValue(col, table.StartRow, table.StartCol + (uint)(colNum - 1)) { SheetName = table.SheetName, IsSheetReference = true }
+                : new RangeValue(col);
         }
 
         if (colNum == 0)
@@ -187,7 +195,10 @@ public static partial class BuiltInFunctions
             var row = new ScalarValue[1, table.ColCount];
             for (int c = 0; c < table.ColCount; c++)
                 row[0, c] = table.Cells[rowNum - 1, c];
-            return new RangeValue(row);
+            // Same reasoning as the whole-column branch above, offset to the selected row.
+            return table.IsSheetReference
+                ? new RangeValue(row, table.StartRow + (uint)(rowNum - 1), table.StartCol) { SheetName = table.SheetName, IsSheetReference = true }
+                : new RangeValue(row);
         }
 
         return table.At(rowNum, colNum);

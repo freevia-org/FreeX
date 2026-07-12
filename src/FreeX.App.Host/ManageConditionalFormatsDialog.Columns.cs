@@ -109,6 +109,7 @@ public sealed partial class ManageConditionalFormatsDialog
             Mode = BindingMode.TwoWay,
             UpdateSourceTrigger = UpdateSourceTrigger.LostFocus
         });
+        appliesToFactory.AddHandler(UIElement.LostFocusEvent, new RoutedEventHandler(AppliesToTextBox_LostFocus));
 
         appliesToPanelFactory.AppendChild(rangePickerFactory);
         appliesToPanelFactory.AppendChild(appliesToFactory);
@@ -120,6 +121,19 @@ public sealed partial class ManageConditionalFormatsDialog
             Width = 170,
             CellTemplate = appliesToTemplate
         };
+    }
+
+    // The binding's ConvertBack already commits the newly-typed range into rule.AppliesTo
+    // (which runs first, since this handler is attached after the binding). Typing a fresh
+    // range must also drop any stale AdditionalRanges left over from a prior multi-area
+    // selection, matching the range-picker path (see ManageConditionalFormatsPlanner.ApplyRuleRange).
+    private void AppliesToTextBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox { DataContext: ConditionalFormat rule } textBox)
+            return;
+
+        if (TryParseAppliesToText(textBox.Text, _sheet.Id, out _))
+            rule.AdditionalRanges = null;
     }
 
     private static GridViewColumn CreateStopIfTrueColumn()

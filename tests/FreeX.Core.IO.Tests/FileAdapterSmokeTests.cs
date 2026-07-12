@@ -15375,6 +15375,9 @@ public partial class FileAdapterSmokeTests
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("View metadata"));
         sheet.ActiveRow = 1;
         sheet.ActiveCol = 1;
+        // showZeros, like zoomScale, is modeled (Sheet.ShowZeros) so it is excluded from the bulk
+        // native-attribute bag reapply and must be driven by the live model value instead.
+        sheet.ShowZeros = false;
         sheet.PrimaryViewMetadata = MakeBag("sheetView",
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -15399,7 +15402,7 @@ public partial class FileAdapterSmokeTests
             .Elements(worksheetNs + "sheetView")
             .Single(element => element.Attribute("workbookViewId")?.Value == "0");
         sheetView.Attribute("rightToLeft")!.Value.Should().Be("1");
-        sheetView.Attribute("showZeros")!.Value.Should().Be("0");
+        sheetView.Attribute("showZeros")!.Value.Should().Be("0", "the live Sheet.ShowZeros=false value drives this, not the bag");
         sheetView.Attribute("zoomScale").Should().BeNull("zoomScale is modeled separately");
         sheetView.Element(worksheetNs + "selection")!.Attribute("sqref")!.Value.Should().Be("A1:F2");
         sheetView.Element(worksheetNs + "pivotSelection")!.Attribute("pane")!.Value.Should().Be("topRight");

@@ -70,14 +70,21 @@ public sealed partial class CellStyleDiffPlannerTests
         var total = CellStyleDiffPlanner.GetCellStylePresetDiff(CellStylePreset.Total);
 
         heading1.Bold.Should().BeTrue();
-        heading1.FontSize.Should().Be(16);
-        heading1.FillColor.Should().Be(new CellColor(31, 115, 70));
-        heading1.FontColor.Should().Be(CellColor.White);
+        heading1.FontSize.Should().Be(15);
+        heading1.FillColor.Should().BeNull();
+        heading1.FillThemeColor.Should().BeNull();
+        heading1.ClearFill.Should().BeTrue();
+        heading1.FontColor.Should().Be(CellColor.Black);
+        heading1.BorderBottom.Should().NotBeNull();
+        heading1.BorderBottom!.Value.Style.Should().Be(BorderStyle.Medium);
 
         heading2.Bold.Should().BeTrue();
         heading2.FontSize.Should().Be(14);
         heading2.FillColor.Should().BeNull();
-        heading2.FontColor.Should().BeNull();
+        heading2.ClearFill.Should().BeTrue();
+        heading2.FontColor.Should().Be(CellColor.Black);
+        heading2.BorderBottom.Should().NotBeNull();
+        heading2.BorderBottom!.Value.Style.Should().Be(BorderStyle.Thin);
 
         note.FillColor.Should().Be(new CellColor(255, 255, 204));
         note.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, CellColor.Black));

@@ -12,6 +12,10 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
     private readonly bool _top;
     private readonly bool _percent;
     private FilterUndoSnapshot _undoSnapshot;
+    // R33-commands-autofilter-slicer-1: keep the worksheet AutoFilter's <top10> filterColumn model in
+    // sync with the interactively-applied Top 10/Bottom 10 (items or percent) criterion, so it
+    // round-trips through XlsxWorksheetAutoFilterXmlMapper instead of being silently dropped on save.
+    private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
 
     public string Label => (_top, _percent) switch
     {
@@ -55,6 +59,28 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
         _undoSnapshot.Reset();
 
         var filterCol = _range.Start.Col + _filterColOffset;
+
+        _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            _count == 0
+                ? null
+                : new WorksheetAutoFilterColumnModel(
+                    ColumnId: (int)_filterColOffset,
+                    Values: [],
+                    IncludeBlank: false,
+                    CustomFilters: [],
+                    CustomFiltersAnd: false,
+                    CustomFiltersAndRaw: null,
+                    NativeCustomFiltersAttributes: null,
+                    Top10: new WorksheetAutoFilterTop10Model(Top: _top, Percent: _percent, Value: _count),
+                    DynamicFilter: null,
+                    ColorFilter: null,
+                    IconFilter: null,
+                    DateGroups: [],
+                    NativeFiltersAttributes: null,
+                    NativeFilterXmls: []));
 
         if (_count == 0)
         {
@@ -102,10 +128,12 @@ public sealed class TopBottomFilterCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
+        var sheet = ctx.GetSheet(_sheetId);
+        WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
+
         if (!_undoSnapshot.HasSnapshot)
             return;
 
-        var sheet = ctx.GetSheet(_sheetId);
         _undoSnapshot.Restore(sheet);
     }
 

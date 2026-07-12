@@ -57,6 +57,13 @@ public sealed class SaveScenarioCommand : IWorkbookCommand
         if (_previousIndex >= 0)
         {
             _previousScenario = ctx.Workbook.Scenarios[_previousIndex];
+            if (ScenarioProtectionGuards.RejectIfScenarioLocked(ctx.Workbook, _previousScenario) is { } lockedOutcome)
+            {
+                _previousScenario = null;
+                _previousIndex = -1;
+                return lockedOutcome;
+            }
+
             ctx.Workbook.Scenarios[_previousIndex] = _scenario;
         }
         else
@@ -166,6 +173,8 @@ public sealed class DeleteScenarioCommand : IWorkbookCommand
         _removedScenario = ctx.Workbook.Scenarios[_removedIndex];
         if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, _removedScenario.ChangingCells) is { } protectedOutcome)
             return protectedOutcome;
+        if (ScenarioProtectionGuards.RejectIfScenarioLocked(ctx.Workbook, _removedScenario) is { } lockedOutcome)
+            return lockedOutcome;
 
         ctx.Workbook.Scenarios.RemoveAt(_removedIndex);
         _applied = true;
@@ -185,6 +194,8 @@ public sealed class DeleteScenarioCommand : IWorkbookCommand
 
 internal static class ScenarioProtectionGuards
 {
+    private const string ScenarioLockedMessage = "This scenario is locked and cannot be changed while the sheet is protected.";
+
     public static CommandOutcome? RejectIfChangingCellsProtected(
         Workbook workbook,
         IEnumerable<ScenarioCellValue> changingCells)
@@ -201,6 +212,31 @@ internal static class ScenarioProtectionGuards
                 return ScenarioCommandHelpers.ChangingCellsOutsideWorkbook();
             if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.EditScenarios) is { } protectedOutcome)
                 return protectedOutcome;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Enforces the scenario's own "Prevent changes" (Locked) flag, which -- like a cell's
+    /// Locked style -- only takes effect once its sheet is protected, independent of whether
+    /// the sheet-level EditScenarios permission is granted.
+    /// </summary>
+    public static CommandOutcome? RejectIfScenarioLocked(Workbook workbook, WorkbookScenario scenario)
+    {
+        if (!scenario.Locked)
+            return null;
+
+        var checkedSheets = new HashSet<SheetId>();
+        foreach (var cell in scenario.ChangingCells)
+        {
+            var sheetId = cell.Address.Sheet;
+            if (!checkedSheets.Add(sheetId))
+                continue;
+
+            var sheet = workbook.GetSheet(sheetId);
+            if (sheet is { IsProtected: true })
+                return new CommandOutcome(false, ScenarioLockedMessage);
         }
 
         return null;

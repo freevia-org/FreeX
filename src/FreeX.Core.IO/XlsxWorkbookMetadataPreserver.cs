@@ -584,7 +584,17 @@ internal static class XlsxWorkbookMetadataPreserver
             {
                 var sourceViewKey = WorkbookViewIdentityKey(sourceView);
                 if (IsPrimaryWorkbookView(sourceView) && !mergedTargetViewKeys.Contains(sourceViewKey))
-                    targetView = FindWorkbookViewByIdentityKey(targetViews, sourceViewKey);
+                {
+                    // A non-primary source view (a genuine extra window) must never be matched against
+                    // the primary target view here, even when it shares the same firstSheet/activeTab
+                    // key: the primary was already claimed by position above (or is reserved for the
+                    // sourceIndex==0 iteration), so re-matching it against a *different* source view
+                    // would silently swallow a real second window into the primary instead of appending
+                    // it (R33-meta-1). Only non-primary target views are eligible identity-key matches.
+                    targetView = FindWorkbookViewByIdentityKey(
+                        targetViews.Where(view => !ReferenceEquals(view, primaryTargetView)),
+                        sourceViewKey);
+                }
             }
 
             if (targetView is not null)

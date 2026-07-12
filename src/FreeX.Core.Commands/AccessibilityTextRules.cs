@@ -211,7 +211,21 @@ internal static partial class AccessibilityTextRules
 
     public static bool IsDefaultWorksheetName(string name) =>
         name.StartsWith("Sheet", StringComparison.OrdinalIgnoreCase) &&
-        int.TryParse(name["Sheet".Length..], out _);
+        IsAllAsciiDigits(name.AsSpan("Sheet".Length));
+
+    private static bool IsAllAsciiDigits(ReadOnlySpan<char> text)
+    {
+        if (text.Length == 0)
+            return false;
+
+        foreach (var c in text)
+        {
+            if (c < '0' || c > '9')
+                return false;
+        }
+
+        return true;
+    }
 
     public static bool IsGenericChartTitle(string title)
     {

@@ -232,7 +232,7 @@ internal static class XlsxLegacyCommentPreserver
         // fallback pass below instead of dropping them immediately, so rich-text formatting and
         // custom authors survive the shift (mirrors PreserveReconciledVmlDrawing's
         // TryFindShiftedSourceShape for the VML side).
-        var unmatchedSourceEntries = new List<(XElement Element, string PlainText)>();
+        var unmatchedSourceEntries = new List<(XElement Element, string PlainText, CellAddress OldAddress)>();
 
         foreach (var (sourceRef, sourceElement) in sourceCommentElements)
         {
@@ -254,7 +254,7 @@ internal static class XlsxLegacyCommentPreserver
                     continue;
                 }
 
-                unmatchedSourceEntries.Add((sourceElement, ReadCommentPlainText(sourceElement, workbookNs)));
+                unmatchedSourceEntries.Add((sourceElement, ReadCommentPlainText(sourceElement, workbookNs), address));
                 continue; // note was deleted (or shifted — resolved in the fallback pass below)
             }
 
@@ -267,29 +267,47 @@ internal static class XlsxLegacyCommentPreserver
         // Shift-aware fallback pass: match a still-unmatched source entry to a model note at a
         // currently-unconsumed address by comparing plain text (a stable key that survives an
         // address shift as long as the note's text itself was not also edited in the same save).
+        //
+        // R33-meta-2: when TWO OR MORE unmatched source entries share IDENTICAL text, matching by
+        // text alone is ambiguous — picking by dictionary/list enumeration order can pair a source
+        // entry to the WRONG shifted candidate, swapping rich-text/author between same-text notes.
+        // Disambiguate by original relative position: a row/column insert or delete is a monotonic
+        // shift, so notes that shared the same text also keep their relative (row, col) order after
+        // the shift. Within each same-text group, sort the source entries by their OLD address and
+        // the candidate addresses by their (new) address, then pair index-for-index — this preserves
+        // each note's own identity instead of relying on enumeration order.
         if (unmatchedSourceEntries.Count > 0)
         {
             var candidateAddresses = sheet.Comments.Keys
                 .Where(addr => !consumedAddresses.Contains(addr))
                 .ToList();
+            var claimedCandidateIndexes = new HashSet<int>();
 
-            foreach (var (sourceElement, plainText) in unmatchedSourceEntries)
+            foreach (var group in unmatchedSourceEntries.GroupBy(e => e.PlainText, StringComparer.Ordinal))
             {
-                var matchIndex = candidateAddresses.FindIndex(addr =>
-                    string.Equals(sheet.Comments[addr], plainText, StringComparison.Ordinal));
-                if (matchIndex < 0)
-                    continue;
+                var plainText = group.Key;
+                var sourceGroupEntries = group.OrderBy(e => e.OldAddress).ToList();
+                var candidateIndexesForText = candidateAddresses
+                    .Select((addr, idx) => (addr, idx))
+                    .Where(pair => !claimedCandidateIndexes.Contains(pair.idx) &&
+                        string.Equals(sheet.Comments[pair.addr], plainText, StringComparison.Ordinal))
+                    .OrderBy(pair => pair.addr)
+                    .ToList();
 
-                var newAddress = candidateAddresses[matchIndex];
-                candidateAddresses.RemoveAt(matchIndex);
-                consumedAddresses.Add(newAddress);
-                sourceRefsHandled.Add(newAddress.ToA1());
+                var pairCount = Math.Min(sourceGroupEntries.Count, candidateIndexesForText.Count);
+                for (var i = 0; i < pairCount; i++)
+                {
+                    var (candidateAddress, candidateIndex) = candidateIndexesForText[i];
+                    claimedCandidateIndexes.Add(candidateIndex);
+                    consumedAddresses.Add(candidateAddress);
+                    sourceRefsHandled.Add(candidateAddress.ToA1());
 
-                var shiftedEntry = new XElement(sourceElement);
-                shiftedEntry.SetAttributeValue("ref", newAddress.ToA1());
-                reconciledEntries.Add(ReconcileCommentEntry(
-                    shiftedEntry, plainText, newAddress, sheet, sourceAuthors, reconciledAuthors, workbookNs));
-                matchedCount++;
+                    var shiftedEntry = new XElement(sourceGroupEntries[i].Element);
+                    shiftedEntry.SetAttributeValue("ref", candidateAddress.ToA1());
+                    reconciledEntries.Add(ReconcileCommentEntry(
+                        shiftedEntry, plainText, candidateAddress, sheet, sourceAuthors, reconciledAuthors, workbookNs));
+                    matchedCount++;
+                }
             }
         }
 

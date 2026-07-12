@@ -14,9 +14,11 @@ public sealed partial class CellStyleDiffPlannerTests
 
         var diffs = presets.Select(CellStyleDiffPlanner.GetCellStylePresetDiff).ToList();
 
-        diffs.Select(diff => diff.FillColor).Should().OnlyHaveUniqueItems();
+        diffs.Select(diff => diff.FillThemeColor).Should().OnlyHaveUniqueItems();
         diffs.Should().AllSatisfy(diff =>
         {
+            diff.FillColor.Should().BeNull();
+            diff.FillThemeColor.Should().NotBeNull();
             diff.FontColor.Should().Be(CellColor.Black);
             diff.BorderBottom.Should().NotBeNull();
             diff.BorderBottom!.Value.Style.Should().Be(BorderStyle.Thin);
@@ -40,7 +42,9 @@ public sealed partial class CellStyleDiffPlannerTests
 
         var diff = CellStyleDiffPlanner.GetCellStylePresetDiff(preset, theme);
 
-        diff.FillColor.Should().Be(theme.ResolveColor(slot, expectedTint));
+        diff.FillColor.Should().BeNull();
+        diff.FillThemeColor.Should().Be(new WorkbookThemeColorReference(slot, expectedTint));
+        diff.FillThemeColor!.Value.Resolve(theme).Should().Be(theme.ResolveColor(slot, expectedTint));
         diff.BorderBottom.Should().Be(new CellBorder(BorderStyle.Thin, theme.GetColor(slot)));
         diff.FontColor.Should().Be(CellColor.Black);
     }

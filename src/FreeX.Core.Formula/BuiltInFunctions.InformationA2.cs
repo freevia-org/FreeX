@@ -102,7 +102,7 @@ public static partial class BuiltInFunctions
             case "parentheses":
                 return new NumberValue(CellPositiveOrAllSectionUsesParentheses(style?.NumberFormat) ? 1 : 0);
             case "prefix":
-                return new TextValue(CellPrefixCode(style));
+                return new TextValue(CellPrefixCode(style, cellValue));
             default:
                 return ErrorValue.Value;
         }
@@ -117,12 +117,19 @@ public static partial class BuiltInFunctions
         return styleOnly is null ? CellStyle.Default : ctx.CurrentWorkbook.GetStyle(styleOnly.Value);
     }
 
-    private static string CellPrefixCode(CellStyle? style) =>
+    private static string CellPrefixCode(CellStyle? style, ScalarValue cellValue) =>
         (style?.HorizontalAlignment ?? HorizontalAlignment.General) switch
         {
             HorizontalAlignment.Left => "'",
             HorizontalAlignment.Center => "^",
             HorizontalAlignment.Right => "\"",
+            // Fill repeats the cell text to fill the column; Excel reports the
+            // fill-alignment label prefix as a single backslash.
+            HorizontalAlignment.Fill => "\\",
+            // General left-justifies TEXT (Excel reports the apostrophe label prefix
+            // for it, same as an explicit Left alignment) but right-justifies/has no
+            // label for numbers and blanks.
+            HorizontalAlignment.General => cellValue is TextValue ? "'" : "",
             _ => ""
         };
 
@@ -178,9 +185,20 @@ public static partial class BuiltInFunctions
         bool quoted = false;
         bool escaped = false;
         bool bracketed = false;
+        // '_' and '*' are padding-escapes: like '\', they consume the immediately
+        // following character as a non-literal argument (a spacer width / fill char),
+        // not just themselves -- so that char must be skipped too, or it leaks into
+        // the normalized format and breaks the exact-match lookup below.
+        bool skipNext = false;
 
         foreach (var ch in numberFormat)
         {
+            if (skipNext)
+            {
+                skipNext = false;
+                continue;
+            }
+
             if (ch == ';' && !quoted && !bracketed)
                 break;
 
@@ -217,7 +235,16 @@ public static partial class BuiltInFunctions
                 continue;
             }
 
-            if (bracketed || ch is '_' or '*' or ' ')
+            if (bracketed)
+                continue;
+
+            if (ch is '_' or '*')
+            {
+                skipNext = true;
+                continue;
+            }
+
+            if (ch == ' ')
                 continue;
 
             chars.Add(char.ToLowerInvariant(ch));

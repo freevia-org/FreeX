@@ -10,6 +10,10 @@ public sealed class AverageFilterCommand : IWorkbookCommand
     private readonly uint _filterColOffset;
     private readonly bool _above;
     private FilterUndoSnapshot _undoSnapshot;
+    // R33-commands-autofilter-slicer-1: keep the worksheet AutoFilter's <dynamicFilter> filterColumn
+    // model in sync with the interactively-applied Above/Below Average criterion, so it round-trips
+    // through XlsxWorksheetAutoFilterXmlMapper instead of being silently dropped on save.
+    private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
 
     public string Label => _above ? "Above Average Filter" : "Below Average Filter";
 
@@ -30,6 +34,26 @@ public sealed class AverageFilterCommand : IWorkbookCommand
             return protectedOutcome;
 
         _undoSnapshot.Reset();
+
+        _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
+            sheet,
+            _range,
+            (int)_filterColOffset,
+            new WorksheetAutoFilterColumnModel(
+                ColumnId: (int)_filterColOffset,
+                Values: [],
+                IncludeBlank: false,
+                CustomFilters: [],
+                CustomFiltersAnd: false,
+                CustomFiltersAndRaw: null,
+                NativeCustomFiltersAttributes: null,
+                Top10: null,
+                DynamicFilter: new WorksheetAutoFilterDynamicFilterModel(Type: _above ? "aboveAverage" : "belowAverage"),
+                ColorFilter: null,
+                IconFilter: null,
+                DateGroups: [],
+                NativeFiltersAttributes: null,
+                NativeFilterXmls: []));
 
         var filterCol = _range.Start.Col + _filterColOffset;
         var firstDataRow = _range.Start.Row + 1;
@@ -93,10 +117,12 @@ public sealed class AverageFilterCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
+        var sheet = ctx.GetSheet(_sheetId);
+        WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
+
         if (!_undoSnapshot.HasSnapshot)
             return;
 
-        var sheet = ctx.GetSheet(_sheetId);
         _undoSnapshot.Restore(sheet);
     }
 }

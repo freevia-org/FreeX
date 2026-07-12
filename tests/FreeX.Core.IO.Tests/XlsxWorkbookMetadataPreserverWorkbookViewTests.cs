@@ -93,6 +93,69 @@ public sealed class XlsxWorkbookMetadataPreserverWorkbookViewTests
             "the genuine second window is appended from the source, carrying its own window geometry");
     }
 
+    [Fact]
+    public void Preserve_WithGenuineSecondWorkbookViewSharingPrimaryActiveTab_KeepsBothViews()
+    {
+        // R33-meta-1: a genuine second window (Window > New Window) that happens to share the SAME
+        // firstSheet/activeTab as the primary view (the common case - a new window opens showing
+        // whatever sheet tab is currently active) must still be preserved as its own view, not
+        // swallowed into the primary just because their identity keys collide.
+        var workbook = new Workbook("Test");
+        workbook.AddSheet("Sheet1");
+        workbook.AddSheet("Sheet2");
+
+        // "Target": a freshly-rebuilt package for the CURRENT model. Its primary view's activeTab
+        // (0) matches the source's pristine primary view below, so the primary merge is exercised
+        // via a differing NON-modeled attribute (windowWidth) rather than via activeTab.
+        using var target = XlsxPackageTestHelper.SaveWorkbook(workbook);
+
+        // "Source": the pristine pre-edit package, carrying window geometry on the primary view plus
+        // a real second <workbookView> whose activeTab (0) is the SAME as the primary's.
+        using var sourcePackage = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        SetPrimaryWorkbookViewWindowWidth(sourcePackage, windowWidth: 19200);
+        AddSecondWorkbookView(sourcePackage, activeTab: 0, xWindow: 480);
+
+        RunPreserve(sourcePackage, target, workbook);
+
+        var workbookViews = ReadWorkbookViews(target);
+
+        workbookViews.Should().HaveCount(
+            2,
+            "a genuine second window must survive even when its activeTab collides with the " +
+            "primary view's - it must not be merged away as if it were the same window");
+        workbookViews[0].Attribute("windowWidth")?.Value.Should().Be(
+            "19200",
+            "the primary view is still merged in place, picking up the source's window geometry");
+        workbookViews[1].Attribute("xWindow")?.Value.Should().Be(
+            "480",
+            "the genuine second window is appended from the source, carrying its own window geometry");
+    }
+
+    [Fact]
+    public void Preserve_WithSingleWorkbookView_StaysSingle()
+    {
+        // Sibling sanity check: when the source has only the primary view (no genuine second
+        // window at all), the merge must stay a single view - the fix for R33-meta-1 must not
+        // start manufacturing extra views out of nothing.
+        var workbook = new Workbook("Test");
+        workbook.AddSheet("Sheet1");
+        workbook.AddSheet("Sheet2");
+
+        using var target = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        using var sourcePackage = XlsxPackageTestHelper.SaveWorkbook(workbook);
+        SetPrimaryWorkbookViewWindowWidth(sourcePackage, windowWidth: 19200);
+
+        RunPreserve(sourcePackage, target, workbook);
+
+        var workbookViews = ReadWorkbookViews(target);
+
+        workbookViews.Should().ContainSingle(
+            "with no genuine second window in the source, the merge must not append anything extra");
+        workbookViews[0].Attribute("windowWidth")?.Value.Should().Be(
+            "19200",
+            "the primary view is still merged in place, picking up the source's window geometry");
+    }
+
     // ── helpers ────────────────────────────────────────────────────────────────────────────────
 
     private static void RunPreserve(MemoryStream sourcePackage, MemoryStream target, Workbook workbook)
@@ -145,6 +208,36 @@ public sealed class XlsxWorkbookMetadataPreserverWorkbookViewTests
                 .Elements(WorkbookNs + "workbookView")
                 .First();
             primaryView.SetAttributeValue("activeTab", activeTab.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+            entry.Delete();
+            var replacement = archive.CreateEntry("xl/workbook.xml");
+            using var replacementStream = replacement.Open();
+            workbookXml.Save(replacementStream, SaveOptions.DisableFormatting);
+        }
+
+        package.Position = 0;
+    }
+
+    /// <summary>
+    /// Sets a non-modeled window-geometry attribute on the primary workbookView, so a real merge
+    /// (not a raw-text no-op skip) is exercised on the primary view without touching its
+    /// firstSheet/activeTab identity attributes.
+    /// </summary>
+    private static void SetPrimaryWorkbookViewWindowWidth(MemoryStream package, int windowWidth)
+    {
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = archive.GetEntry("xl/workbook.xml")!;
+            XDocument workbookXml;
+            using (var entryStream = entry.Open())
+                workbookXml = XDocument.Load(entryStream);
+
+            var primaryView = workbookXml.Root!
+                .Element(WorkbookNs + "bookViews")!
+                .Elements(WorkbookNs + "workbookView")
+                .First();
+            primaryView.SetAttributeValue("windowWidth", windowWidth.ToString(System.Globalization.CultureInfo.InvariantCulture));
 
             entry.Delete();
             var replacement = archive.CreateEntry("xl/workbook.xml");

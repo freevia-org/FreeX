@@ -454,11 +454,45 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Clear Filter",
                 range,
-                _ => new FilterCommand(_currentSheetId, range, filterColOffset: 0, allowedValues: [])))
+                currentRange => BuildClearAllValueFiltersCommand(currentRange)))
             return;
         ClearRememberedAutoFilterCommand();
         RestoreAutoFilterRangeSelection(range);
         UpdateFilterViewportAndStatusBar();
+    }
+
+    /// <summary>
+    /// R33-commands-autofilter-slicer-2: the "Clear Filter" command must clear EVERY column's active
+    /// value filter in <paramref name="range"/>, not just the first (offset 0). A single FilterCommand
+    /// only removes one column's entry from sheet.ActiveValueFilterColumns; if more than one column
+    /// carries an active filter (e.g. B only, or A and C), clearing offset 0 alone leaves the other
+    /// column(s) filtered and the same rows hidden. Mirror the per-column dropdown's own clear (a
+    /// FilterCommand with empty allowedValues for that column's offset), but issue one per active
+    /// column found in the range so every filter is actually removed.
+    /// </summary>
+    private IWorkbookCommand BuildClearAllValueFiltersCommand(GridRange range)
+    {
+        var offsets = new List<uint>();
+        if (_workbook.GetSheet(_currentSheetId) is { } sheet)
+        {
+            foreach (var col in sheet.ActiveValueFilterColumns.Keys)
+            {
+                if (col >= range.Start.Col && col <= range.End.Col)
+                    offsets.Add(col - range.Start.Col);
+            }
+        }
+
+        if (offsets.Count == 0)
+            offsets.Add(0);
+
+        if (offsets.Count == 1)
+            return new FilterCommand(_currentSheetId, range, offsets[0], allowedValues: []);
+
+        var commands = new List<IWorkbookCommand>(offsets.Count);
+        foreach (var offset in offsets)
+            commands.Add(new FilterCommand(_currentSheetId, range, offset, allowedValues: []));
+
+        return new CompositeWorkbookCommand("Clear Filter", commands);
     }
 
     private void RestoreAutoFilterRangeSelection(GridRange range)

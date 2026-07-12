@@ -479,11 +479,17 @@ internal static partial class DelimitedTextWorkbookReader
             return 0;
 
         var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
-        // Math.Round(double, int) only accepts digits in [0, 15] and throws ArgumentOutOfRangeException
-        // for negative values (which occur whenever |value| >= 10^digits); clamp to [0, 15] rather than
-        // [-15, 15] since a value that already has more integer digits than the cap has nothing left to
-        // round off.
-        scale = Math.Clamp(scale, 0, 15);
+        if (scale < 0)
+        {
+            // The value has more integer digits than the significant-digit cap (e.g. an 18-digit
+            // integer). Excel does not round such values to the nearest 10^-scale — it truncates
+            // (chops) the excess low-order digits to zero, matching its 15-significant-digit storage
+            // cap. Math.Round(double, int) only accepts digits in [0, 15] and cannot express a
+            // negative scale, so replicate the truncation directly instead of clamping to a no-op.
+            var divisor = Math.Pow(10, -scale);
+            return Math.Truncate(value / divisor) * divisor;
+        }
+
         return Math.Round(value, scale, MidpointRounding.AwayFromZero);
     }
 
@@ -542,9 +548,15 @@ internal static partial class DelimitedTextWorkbookReader
             return false;
         }
 
+        // Clone so the two-digit-year window can be overridden to Excel's documented 1930-2029
+        // rule (30-99 -> 19xx, 00-29 -> 20xx). .NET's default Calendar.TwoDigitYearMax is 2049,
+        // which would misdate e.g. "6/15/45" to 2045 instead of Excel's 1945.
+        var culture = (CultureInfo)CultureInfo.CurrentCulture.Clone();
+        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
+
         return DateTime.TryParse(
             field,
-            CultureInfo.CurrentCulture,
+            culture,
             DateTimeStyles.NoCurrentDateDefault,
             out dateTime) &&
             dateTime.Date != DateTime.MinValue.Date;
@@ -740,9 +752,28 @@ internal static partial class DelimitedTextWorkbookReader
 
         var integerPart = decimalIndex >= 0 ? field[..decimalIndex] : field;
 
-        // Strip a single leading sign so it doesn't get counted as part of the first digit group.
+        // Strip a parenthesized-negative wrapper, a leading sign, and (when the style allows one) a
+        // leading currency symbol before scanning for digit groups. Without this, the symbol/paren is
+        // the very first character the loop below sees, which is neither a digit nor the group
+        // separator and so hits the "let styles decide" bailout further down — silently skipping
+        // grouping validation for every currency string (e.g. "$1,2" would otherwise never be
+        // checked and would parse as 12).
+        integerPart = integerPart.Trim();
+        if (integerPart.Length >= 2 && integerPart[0] == '(' && integerPart[^1] == ')')
+            integerPart = integerPart[1..^1].Trim();
         if (integerPart.Length > 0 && (integerPart[0] == '+' || integerPart[0] == '-'))
             integerPart = integerPart[1..];
+
+        if ((styles & NumberStyles.AllowCurrencySymbol) != 0)
+        {
+            var currencySymbol = numberFormat.CurrencySymbol;
+            if (!string.IsNullOrEmpty(currencySymbol))
+            {
+                var symbolIndex = integerPart.IndexOf(currencySymbol, StringComparison.Ordinal);
+                if (symbolIndex >= 0 && integerPart[..symbolIndex].Trim().Length == 0)
+                    integerPart = integerPart[(symbolIndex + currencySymbol.Length)..].TrimStart();
+            }
+        }
 
         var groups = new List<int>();
         var currentGroupDigits = 0;
@@ -786,11 +817,16 @@ internal static partial class DelimitedTextWorkbookReader
         if (field.IndexOf('$') < 0)
             return false;
 
+        var currencyCulture = CultureInfo.GetCultureInfo("en-US");
         return double.TryParse(
             field,
             NumberStyles.Currency,
-            CultureInfo.GetCultureInfo("en-US"),
+            currencyCulture,
             out value) &&
-            double.IsFinite(value);
+            double.IsFinite(value) &&
+            // Same shape check the plain-number path applies (HasValidGroupingShape strips the
+            // currency symbol/parens itself before scanning), so a malformed grouping like "$1,2"
+            // is rejected here instead of silently parsing as 12.
+            HasValidGroupingShape(field, NumberStyles.Currency, currencyCulture);
     }
 }
