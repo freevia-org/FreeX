@@ -178,6 +178,12 @@ public sealed class ConditionalFormat
     public RgbColor? DataBarAxisColor { get; set; }
     public RgbColor? DataBarNegativeFillColor { get; set; }
     public RgbColor? DataBarNegativeBorderColor { get; set; }
+    /// <summary>
+    /// Raw value of the x14 <c>dataBar/@direction</c> attribute ("context" or "rightToLeft"), preserved
+    /// verbatim for XLSX round-trip fidelity. Null means the attribute was absent (Excel's default,
+    /// left-to-right growth). Rendering does not currently consult this value.
+    /// </summary>
+    public string? DataBarDirection { get; set; }
 
     // ── AboveAverage rule ───────────────────────────────────────────────────
 
@@ -299,6 +305,7 @@ public sealed class ConditionalFormat
             DataBarAxisColor = DataBarAxisColor,
             DataBarNegativeFillColor = DataBarNegativeFillColor,
             DataBarNegativeBorderColor = DataBarNegativeBorderColor,
+            DataBarDirection = DataBarDirection,
             AboveAverage = AboveAverage,
             EqualAverage = EqualAverage,
             StdDevCount = StdDevCount,

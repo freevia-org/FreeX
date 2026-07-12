@@ -533,14 +533,19 @@ internal static partial class ViewportConditionalFormatEvaluator
     /// number ARE the same value), but everything else is tagged by its value kind so a
     /// type-erased display string can never collide across kinds.
     /// </summary>
+    private static double NormalizeZero(double value) => value == 0 ? 0.0 : value;
+
     private static string GetDuplicateValueKey(ScalarValue value) => value switch
     {
         // Numbers and dates share the "N" bucket keyed by the raw serial value (Excel stores
         // dates as numeric serials internally, so a date and the equal-valued number ARE the
         // same value) rather than by GetString's formatted display text, which differs between
         // the two (a plain number vs. "yyyy-MM-dd") even for the same underlying value.
-        NumberValue n => "N:" + n.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
-        DateTimeValue d => "N:" + d.Value.ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        // Negative zero is normalized to positive zero first: ToString("R") renders -0.0 as
+        // "-0", which would otherwise key it separately from 0 even though Excel treats them
+        // as the same duplicate-detection value.
+        NumberValue n => "N:" + NormalizeZero(n.Value).ToString("R", System.Globalization.CultureInfo.InvariantCulture),
+        DateTimeValue d => "N:" + NormalizeZero(d.Value).ToString("R", System.Globalization.CultureInfo.InvariantCulture),
         BoolValue => "B:" + NormalizeDisplayValue(value),
         TextValue => "T:" + NormalizeDisplayValue(value),
         ErrorValue => "E:" + NormalizeDisplayValue(value),

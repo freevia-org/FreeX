@@ -168,6 +168,8 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
     private readonly double _width;
     private readonly double _height;
     private ChartModel? _addedChart;
+    private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+    private GridRange? _lastRenderedRangeSnapshot;
 
     public string Label => "Insert PivotChart";
 
@@ -209,6 +211,13 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
         if (!CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
             return CommandGuards.RejectPivotTableNotFound();
 
+        // Refresh mutates the sheet's pivot-rendered cells as a side effect of inserting the
+        // chart (it reads live source data, not a frozen cache). Snapshot the pre-refresh
+        // state here -- mirroring every sibling pivot-editing command (e.g.
+        // RefreshPivotTableCommand, ConfigurePivotTableLayoutCommand) -- so Revert can restore
+        // it, not just remove the chart.
+        _targetSnapshot = AddPivotTableCommand.Snapshot(sheet, pivotTable.LastRenderedRange ?? pivotTable.TargetRange);
+        _lastRenderedRangeSnapshot = pivotTable.LastRenderedRange;
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
         var dataRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
         var chart = new ChartModel
@@ -241,8 +250,21 @@ public sealed class AddPivotChartCommand : IWorkbookCommand
         if (_addedChart is null)
             return;
 
-        ctx.GetSheet(_sheetId).Charts.Remove(_addedChart);
+        var sheet = ctx.GetSheet(_sheetId);
+        sheet.Charts.Remove(_addedChart);
         _addedChart = null;
+
+        if (_targetSnapshot is not null)
+        {
+            if (CommandGuards.TryFindPivotTable(sheet, _pivotTableName, out var pivotTable))
+            {
+                PivotTableRefreshService.ClearRenderedRange(sheet, pivotTable.LastRenderedRange);
+                pivotTable.LastRenderedRange = _lastRenderedRangeSnapshot;
+            }
+            AddPivotTableCommand.Restore(sheet, _targetSnapshot);
+            _targetSnapshot = null;
+            _lastRenderedRangeSnapshot = null;
+        }
     }
 }
 

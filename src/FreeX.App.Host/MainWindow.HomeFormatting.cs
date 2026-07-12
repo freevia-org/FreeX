@@ -189,6 +189,11 @@ public partial class MainWindow
     private void MergeAcrossMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
+        // A single-column selection would build one per-row range with ColCount==1 (CellCount<=1),
+        // which CellMergePlanner.CreateMergeCommands treats as a no-op merge. Reject up front, matching
+        // the Avalonia shell's MergeAcrossSelectedRangeAsync (MainWindow.MergePaste.cs), instead of
+        // silently dirtying the workbook and pushing a phantom undo entry for a composite of no-ops.
+        if (range.ColCount <= 1) return;
         if (!TryResolveMergeContentResolution(range, out var contentResolution)) return;
         if (!TryExecuteRepeatableGroupedSheetCommand(
                 "Merge Across",

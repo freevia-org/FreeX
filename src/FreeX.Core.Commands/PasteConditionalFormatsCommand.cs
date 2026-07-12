@@ -133,7 +133,16 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             NativeContainerAttributes = source.NativeContainerAttributes,
             NativeContainerChildXmls = source.NativeContainerChildXmls
         };
-        clone.IconSetThresholds.AddRange(source.IconSetThresholds);
+        // Mirrors RowColumnShiftHelpers.Rules.cs's iconSet-threshold loop: a Formula-type iconSet
+        // cfvo threshold holds a relative cell reference just like the colorScale/dataBar thresholds
+        // above and must be shifted by the same paste offset. Number/Percent/Percentile thresholds
+        // hold literal values and are copied verbatim.
+        foreach (var threshold in source.IconSetThresholds)
+        {
+            clone.IconSetThresholds.Add(threshold.Type == CfThresholdType.Formula
+                ? threshold with { Value = RewriteThresholdValue(threshold.Type, threshold.Value, hostSheetName, rowDelta, colDelta) }
+                : threshold);
+        }
         clone.IconOverrides.AddRange(source.IconOverrides);
         return clone;
     }

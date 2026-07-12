@@ -148,8 +148,15 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         if (overlappingMerges.Count > 0)
         {
             var firstColSpan = overlappingMerges[0].ColCount;
-            bool uniform = overlappingMerges.All(m =>
-                _range.Contains(m) && m.RowCount == 1 && m.ColCount == firstColSpan);
+            // Merged regions never overlap one another (MergeCellsCommand rejects any merge
+            // whose range intersects an existing one), so requiring the merge count to equal
+            // the range's row count — on top of each merge being fully contained, exactly one
+            // row tall, and identically sized — guarantees every row of the range is covered by
+            // an identically-sized merge and none is left partially/un-merged.
+            var rangeRowCount = (int)(_range.End.Row - _range.Start.Row + 1);
+            bool uniform = overlappingMerges.Count == rangeRowCount &&
+                overlappingMerges.All(m =>
+                    _range.Contains(m) && m.RowCount == 1 && m.ColCount == firstColSpan);
 
             if (!uniform)
                 return new CommandOutcome(false, "Cannot sort a range that contains merged cells.");

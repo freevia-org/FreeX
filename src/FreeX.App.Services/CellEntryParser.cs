@@ -192,8 +192,18 @@ public static class CellEntryParser
         if (string.IsNullOrEmpty(CultureInfo.CurrentCulture.Name) || !LooksLikeDateCandidate(text))
             return false;
 
-        return DateTime.TryParse(text, CultureInfo.CurrentCulture, DateTimeStyles.NoCurrentDateDefault, out dateTime) &&
-               dateTime.Date != DateTime.MinValue.Date;
+        // Clone so the two-digit-year window can be overridden to Excel's documented 1930-2029
+        // rule (30-99 -> 19xx, 00-29 -> 20xx). .NET's default Calendar.TwoDigitYearMax is 2049,
+        // which would misdate e.g. "6/15/45" to 2045 instead of Excel's 1945.
+        var culture = (CultureInfo)CultureInfo.CurrentCulture.Clone();
+        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
+
+        if (!DateTime.TryParse(text, culture, DateTimeStyles.NoCurrentDateDefault, out dateTime))
+            return false;
+
+        // Excel's earliest representable date is 1/1/1900 (serial 1); text that parses to an
+        // earlier date is left as plain text instead of becoming a negative-serial DateTimeValue.
+        return dateTime.Date >= new DateTime(1900, 1, 1);
     }
 
     private static bool LooksLikeDateCandidate(string text)

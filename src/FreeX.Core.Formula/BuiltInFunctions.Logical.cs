@@ -144,10 +144,13 @@ public static partial class BuiltInFunctions
                 else if (refError is not null) return refError;
                 continue;
             }
-            if (a is TextValue) return ErrorValue.Value;
             if (a is BlankValue) continue; // blank = FALSE, skip (no effect on XOR)
+            // Route direct scalars through the same coercion AND/OR use, so a direct numeric-text
+            // literal (e.g. "1"/"0") coerces to its numeric value instead of erroring, while
+            // genuinely non-numeric text still yields #VALUE!.
+            if (!TryDirectLogicalBool(a, out var direct)) return ErrorValue.Value;
             hadUsableValue = true;
-            result ^= ToBool(a);
+            result ^= direct;
         }
         return hadUsableValue ? new BoolValue(result) : ErrorValue.Value;
     }

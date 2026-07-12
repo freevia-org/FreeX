@@ -191,10 +191,12 @@ internal static class XlsxNamedRangeMapper
                     (uint)lastCell.Address.RowNumber,
                     (uint)lastCell.Address.ColumnNumber);
 
+                var metadata = new NamedRangeMetadata("Workbook", namedRange.Comment ?? "", !namedRange.Visible);
+
                 if (scopeSheetId is { } sid)
-                    workbook.DefineNamedRange(namedRange.Name, new GridRange(start, end), metadata: null, sid);
+                    workbook.DefineNamedRange(namedRange.Name, new GridRange(start, end), metadata, sid);
                 else
-                    workbook.DefineNamedRange(namedRange.Name, new GridRange(start, end));
+                    workbook.DefineNamedRange(namedRange.Name, new GridRange(start, end), metadata);
             }
             catch (Exception ex)
             {
@@ -560,7 +562,12 @@ internal static class XlsxNamedRangeMapper
             if (!TryFormatRangeAddress(workbook, range, xlWorkbook, out var address))
                 return;
 
-            xlWorkbook.DefinedNames.Add(name, address);
+            var hasMetadata = workbook.TryGetNamedRangeMetadata(name, out var metadata);
+            var definedName = hasMetadata && !string.IsNullOrEmpty(metadata.Comment)
+                ? xlWorkbook.DefinedNames.Add(name, address, metadata.Comment)
+                : xlWorkbook.DefinedNames.Add(name, address);
+            if (hasMetadata && metadata.Hidden)
+                definedName.Visible = false;
         }
         catch (Exception ex)
         {
@@ -589,7 +596,12 @@ internal static class XlsxNamedRangeMapper
             if (!TryFormatRangeAddress(workbook, range, xlWorkbook, out var address))
                 return;
 
-            xlScopeSheet.DefinedNames.Add(name, address);
+            var hasMetadata = workbook.TryGetScopedNamedRangeMetadata(name, scopeSheetId, out var metadata);
+            var definedName = hasMetadata && !string.IsNullOrEmpty(metadata.Comment)
+                ? xlScopeSheet.DefinedNames.Add(name, address, metadata.Comment)
+                : xlScopeSheet.DefinedNames.Add(name, address);
+            if (hasMetadata && metadata.Hidden)
+                definedName.Visible = false;
         }
         catch (Exception ex)
         {

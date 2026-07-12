@@ -29,6 +29,12 @@ public sealed class MergeCellsCommand : IWorkbookCommand
                 return new CommandOutcome(false, "Range overlaps an existing merged region.");
         }
 
+        foreach (var table in sheet.StructuredTables)
+        {
+            if (Overlaps(_range, table.Range))
+                return new CommandOutcome(false, "Cannot merge cells that overlap a table.");
+        }
+
         _snapshot = [];
         foreach (var addr in _range.AllCells())
             _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));

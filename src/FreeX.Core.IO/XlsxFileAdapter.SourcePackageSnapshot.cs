@@ -6362,6 +6362,17 @@ public sealed partial class XlsxFileAdapter
                     if (_pivotSourceRanges.Contains(baseline.SheetId, row, col))
                         return Fail("change_pivot_source_cell", out blockReason);
 
+                    // A cell absent from sheet._cells (currentCells) is not necessarily gone: a
+                    // dynamic-array/legacy-CSE spill member that vacated _cells into the sheet's
+                    // spill-value store (e.g. a recalc shrank/reshaped the spilling formula's
+                    // result after this baseline was captured) is still live data, just relocated.
+                    // Treating it as DeletedCell would drop its <c> element from the saved package
+                    // entirely (RewriteFormulaTextAndCachedCellValue/ApplyChanges has no path to
+                    // patch it back in). Bail to the full-save fallback so the package is
+                    // regenerated consistently instead of silently losing the cell.
+                    if (sheet.TryGetArrayExtent(new CellAddress(baseline.SheetId, row, col), out _, out _, out _))
+                        return Fail("change_deleted_cell_still_spilled", out blockReason);
+
                     changes.Add(new XlsxCellValuePatch(
                         XlsxCellValuePatchKind.DeletedCell,
                         baseline.SheetId,

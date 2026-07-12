@@ -238,7 +238,10 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue NumbervalueScalar(ScalarValue value, string decSep, string grpSep)
     {
-        var text = ToText(value).Trim();
+        // Only ASCII space/tab/CR/LF are ignorable to Excel here; other Unicode whitespace
+        // (e.g. NBSP) must NOT be trimmed, or a leading/trailing NBSP would silently parse
+        // instead of yielding #VALUE! as Excel does.
+        var text = ToText(value).Trim(' ', '\t', '\r', '\n');
         // Excel uses only the first character when separator arguments contain more than one character.
         if (decSep.Length == 0) return ErrorValue.Value;
         if (grpSep.Length == 0) return ErrorValue.Value;

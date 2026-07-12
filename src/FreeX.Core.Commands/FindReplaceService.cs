@@ -383,11 +383,19 @@ public static class FindReplaceService
         // to BlankValue rather than storing an empty TextValue — Excel leaves the cell truly
         // blank (COUNTA excludes it, ISBLANK is TRUE), and a stored empty-string TextValue would
         // also round-trip into the saved .xlsx as a non-blank string cell.
+        //
+        // A destination cell whose number format is Text ("@") must never be re-parsed — Excel
+        // keeps typed/replaced text as literal text there (e.g. a zip code "01234" kept as text
+        // to preserve the leading zero), exactly like PasteCommandFactory.IsDestinationTextFormatted.
+        var isDestinationTextFormatted =
+            workbook is not null && workbook.GetStyle(cell.StyleId).NumberFormat == "@";
         ScalarValue newValue = newText.Length == 0
             ? BlankValue.Instance
-            : ExcelTextNumberParser.TryParse(newText, out var number)
-                ? new NumberValue(number)
-                : new TextValue(newText);
+            : isDestinationTextFormatted
+                ? new TextValue(newText)
+                : ExcelTextNumberParser.TryParse(newText, out var number, workbook?.Uses1904DateSystem ?? false)
+                    ? new NumberValue(number)
+                    : new TextValue(newText);
 
         newCell = cell.Clone();
         newCell.Value = newValue;

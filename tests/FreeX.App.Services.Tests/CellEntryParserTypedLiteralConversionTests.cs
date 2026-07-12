@@ -83,4 +83,43 @@ public sealed class CellEntryParserTypedLiteralConversionTests
 
         cell.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("1.2.3");
     }
+
+    // R31-datetime-serial-format-deep-1: a two-digit year must resolve using Excel's documented
+    // 1930-2029 window (30-99 -> 19xx), not .NET's default Calendar.TwoDigitYearMax of 2049.
+    [Fact]
+    public void CreateCell_ConvertsTwoDigitYearLiteralUsingExcelsTwoDigitYearWindow()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var cell = CellEntryParser.CreateCell("6/15/45", Anchor, useR1C1ReferenceStyle: false);
+
+        cell.Value.Should().BeOfType<DateTimeValue>()
+            .Which.ToDateTime().Should().Be(new DateTime(1945, 6, 15));
+    }
+
+    // Sibling: an ordinary full four-digit-year date literal must still parse correctly - the
+    // two-digit-year window override must not disturb this already-working case.
+    [Fact]
+    public void CreateCell_StillConvertsFullFourDigitYearDateLiteral()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var cell = CellEntryParser.CreateCell("6/15/2020", Anchor, useR1C1ReferenceStyle: false);
+
+        cell.Value.Should().BeOfType<DateTimeValue>()
+            .Which.ToDateTime().Should().Be(new DateTime(2020, 6, 15));
+    }
+
+    // R31-datetime-serial-format-deep-3: Excel cannot represent any date before 1/1/1900, so a
+    // typed date-like literal earlier than that floor must stay literal text, not become a
+    // negative-serial DateTimeValue.
+    [Fact]
+    public void CreateCell_TreatsDateLiteralBeforeExcelsEpochFloorAsText()
+    {
+        using var cultureScope = TestCultureScope.CurrentCulture("en-US");
+
+        var cell = CellEntryParser.CreateCell("1/1/1850", Anchor, useR1C1ReferenceStyle: false);
+
+        cell.Value.Should().BeOfType<TextValue>().Which.Value.Should().Be("1/1/1850");
+    }
 }

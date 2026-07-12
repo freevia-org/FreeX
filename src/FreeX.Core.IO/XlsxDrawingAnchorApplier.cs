@@ -54,8 +54,12 @@ internal static class XlsxDrawingAnchorApplier
             picture.Width = width;
         if (height > 0)
             picture.Height = height;
-        picture.AnchorOffsetX = anchor.FromColumnOffset;
-        picture.AnchorOffsetY = anchor.FromRowOffset;
+        // For an absoluteAnchor the caller resolves Anchor to the sheet's origin cell (row 1/col
+        // 1, pixel (0,0)), so applying the anchor's absolute pixel position as the sub-cell offset
+        // reproduces the intended on-sheet position, mirroring how ApplyToChart applies
+        // AbsoluteLeft/AbsoluteTop directly (see lines 30-31 above).
+        picture.AnchorOffsetX = anchor.AbsoluteLeft ?? anchor.FromColumnOffset;
+        picture.AnchorOffsetY = anchor.AbsoluteTop ?? anchor.FromRowOffset;
     }
 
     public static void ApplyToTextBox(TextBoxModel textBox, XlsxDrawingAnchor? anchor, Sheet sheet)
@@ -68,8 +72,10 @@ internal static class XlsxDrawingAnchorApplier
             textBox.Width = width;
         if (height > 0)
             textBox.Height = height;
-        textBox.AnchorOffsetX = anchor.FromColumnOffset;
-        textBox.AnchorOffsetY = anchor.FromRowOffset;
+        // See the comment in ApplyToPicture: an absoluteAnchor's Anchor cell is the sheet origin
+        // (pixel (0,0)), so the absolute pixel position doubles as the correct sub-cell offset.
+        textBox.AnchorOffsetX = anchor.AbsoluteLeft ?? anchor.FromColumnOffset;
+        textBox.AnchorOffsetY = anchor.AbsoluteTop ?? anchor.FromRowOffset;
     }
 
     public static void ApplyToShape(
@@ -108,8 +114,10 @@ internal static class XlsxDrawingAnchorApplier
             shape.Height = Math.Max(0, height);   // allow flat (zero-height) lines
         else if (height > 0)
             shape.Height = height;
-        shape.AnchorOffsetX = anchor.FromColumnOffset;
-        shape.AnchorOffsetY = anchor.FromRowOffset;
+        // See the comment in ApplyToPicture: an absoluteAnchor's Anchor cell is the sheet origin
+        // (pixel (0,0)), so the absolute pixel position doubles as the correct sub-cell offset.
+        shape.AnchorOffsetX = anchor.AbsoluteLeft ?? anchor.FromColumnOffset;
+        shape.AnchorOffsetY = anchor.AbsoluteTop ?? anchor.FromRowOffset;
     }
 
     /// <summary>

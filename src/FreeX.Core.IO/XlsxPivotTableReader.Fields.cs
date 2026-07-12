@@ -22,26 +22,42 @@ internal static partial class XlsxPivotTableReader
             if (sharedItems is null || sharedItems.Count == 0)
                 continue;
 
-            // R30-io-pivot-cache-deep-2: XlsxPivotCacheReader.ReadSharedItemValues drops any <m/>
-            // (missing/blank) OOXML sharedItems child before this list is built, shifting every later
-            // item out of alignment with the raw OOXML index space the pivotField's own item @x attribute
-            // is defined against. When the field's declared sharedItems @count (SharedItemCount) is larger
-            // than this materialized list, at least one item was dropped and we can no longer tell which
-            // materialized entry a given raw index now lands on -- indexing into it here would risk
-            // silently hiding/keeping the wrong item. Decline to resolve a selection in that case, mirroring
-            // the same guard ReadNativePageFieldSelectedItem already applies for the identical hazard.
-            if (field.SharedItemCount is { } declaredCount && declaredCount > sharedItems.Count)
-                continue;
-
-            var hiddenIndexes = pivotFields[fieldIndex]
+            var items = pivotFields[fieldIndex]
                 .Element(workbookNs + "items")?
                 .Elements(workbookNs + "item")
-                .Where(item => XlsxXmlAttributeReader.ReadBoolAttribute(item, "hidden"))
-                .Select(item => XlsxXmlAttributeReader.ReadIntAttribute(item, "x"))
-                .Where(index => index.HasValue && index.Value >= 0 && index.Value < sharedItems.Count)
-                .Select(index => index!.Value)
-                .ToHashSet() ?? [];
-            if (hiddenIndexes.Count == 0)
+                .ToList() ?? [];
+
+            HashSet<int>? hiddenIndexes;
+            if (field.SharedItemCount is { } declaredCount && declaredCount > sharedItems.Count)
+            {
+                // R30-io-pivot-cache-deep-2 / R31-meta-2: XlsxPivotCacheReader.ReadSharedItemValues drops
+                // any <m/> (missing/blank) OOXML sharedItems child before this list is built, shifting
+                // every later item out of alignment with the raw OOXML index space the pivotField's own
+                // item @x attribute is defined against. That misalignment is common (any field with a
+                // blank source cell triggers it), so unconditionally declining to resolve a selection here
+                // -- as the original fix did -- silently disabled hidden-item filtering for the ordinary
+                // case, not just the narrow ambiguous one. Instead, reconstruct the raw-index ->
+                // materialized-index mapping from the pivotField's own <items> list: each <item> carries
+                // its own "m" (missing) flag independent of its shared-item index, so when every raw index
+                // 0..declaredCount-1 is accounted for we can tell exactly how many missing items precede a
+                // given real one and thus its true position in the filtered SharedItems list, without ever
+                // needing to see the pivot cache's raw sharedItems XML. Only decline (return null) when
+                // that reconstruction is not possible (an incomplete/partial <items> list) -- that is the
+                // genuine ambiguity case where we truly cannot tell which materialized entry a raw index
+                // now lands on.
+                hiddenIndexes = TryResolveHiddenIndexesAcrossMissingSharedItems(items, declaredCount, sharedItems.Count);
+            }
+            else
+            {
+                hiddenIndexes = items
+                    .Where(item => XlsxXmlAttributeReader.ReadBoolAttribute(item, "hidden"))
+                    .Select(item => XlsxXmlAttributeReader.ReadIntAttribute(item, "x"))
+                    .Where(index => index.HasValue && index.Value >= 0 && index.Value < sharedItems.Count)
+                    .Select(index => index!.Value)
+                    .ToHashSet();
+            }
+
+            if (hiddenIndexes is null || hiddenIndexes.Count == 0)
                 continue;
 
             result[fieldIndex] = sharedItems
@@ -50,6 +66,70 @@ internal static partial class XlsxPivotTableReader
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Reconstructs the raw OOXML shared-item index (which includes dropped &lt;m/&gt; blank entries) to
+    /// materialized <see cref="PivotCacheFieldModel.SharedItems"/> index mapping purely from the
+    /// pivotField's own &lt;items&gt; list, using each &lt;item&gt;'s "m" (missing) flag to identify which
+    /// raw indices were blank -- no access to the pivot cache's raw sharedItems XML required. Returns null
+    /// when the list does not account for every raw index in 0..declaredCount-1 exactly once (an
+    /// incomplete/partial &lt;items&gt; list): in that case which raw indices are missing vs. real cannot
+    /// be determined, and resolving would risk hiding the wrong item.
+    /// </summary>
+    private static HashSet<int>? TryResolveHiddenIndexesAcrossMissingSharedItems(
+        List<XElement> items,
+        int declaredCount,
+        int materializedCount)
+    {
+        var seenRawIndexes = new HashSet<int>();
+        var realRawIndexes = new List<int>();
+        var missingRawIndexCount = 0;
+        var hiddenRealRawIndexes = new HashSet<int>();
+        foreach (var item in items)
+        {
+            var rawIndex = XlsxXmlAttributeReader.ReadIntAttribute(item, "x");
+            if (rawIndex is not { } index || index < 0 || index >= declaredCount || !seenRawIndexes.Add(index))
+                return null;
+
+            if (XlsxXmlAttributeReader.ReadBoolAttribute(item, "m"))
+            {
+                // This raw index is the blank/missing bucket itself, not a real value -- it has no
+                // corresponding entry in SharedItems, so it is never a candidate to hide there even if
+                // the item is itself flagged hidden.
+                missingRawIndexCount++;
+            }
+            else
+            {
+                realRawIndexes.Add(index);
+                if (XlsxXmlAttributeReader.ReadBoolAttribute(item, "hidden"))
+                    hiddenRealRawIndexes.Add(index);
+            }
+        }
+
+        // Only trust the reconstruction when every raw index in the declared space is accounted for
+        // exactly once and the real/missing split matches the declared counts -- otherwise we cannot be
+        // sure which raw indices are missing vs. real, and mapping would risk hiding the wrong item.
+        if (seenRawIndexes.Count != declaredCount ||
+            realRawIndexes.Count != materializedCount ||
+            missingRawIndexCount != declaredCount - materializedCount)
+        {
+            return null;
+        }
+
+        realRawIndexes.Sort();
+        var materializedIndexByRawIndex = new Dictionary<int, int>(realRawIndexes.Count);
+        for (var rank = 0; rank < realRawIndexes.Count; rank++)
+            materializedIndexByRawIndex[realRawIndexes[rank]] = rank;
+
+        var hiddenIndexes = new HashSet<int>();
+        foreach (var rawIndex in hiddenRealRawIndexes)
+        {
+            if (materializedIndexByRawIndex.TryGetValue(rawIndex, out var materializedIndex))
+                hiddenIndexes.Add(materializedIndex);
+        }
+
+        return hiddenIndexes;
     }
 
     private static Dictionary<int, PivotFieldModel> ReadNativePivotFieldGroups(XElement? pivotFieldsElement, XNamespace workbookNs)

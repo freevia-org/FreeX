@@ -598,8 +598,9 @@ public partial class MainWindow
             : SheetGrid.SelectedRange.Value.Start;
 
         var sheet = _workbook.GetSheet(_currentSheetId);
-        int pageSize = Math.Max(1, (SheetGrid.Viewport?.RowMetrics.Count ?? 25) - 1);
-        int colPageSize = Math.Max(1, (SheetGrid.Viewport?.ColMetrics.Count ?? 12) - 1);
+        var pagingViewport = SheetGrid.Viewport;
+        int pageSize = Math.Max(1, (pagingViewport is null ? 25 : CountScrollableRows(pagingViewport, sheet)) - 1);
+        int colPageSize = Math.Max(1, (pagingViewport is null ? 12 : CountScrollableColumns(pagingViewport, sheet)) - 1);
 
         CellAddress? target = ExcelWorksheetNavigationPlanner.GetHorizontalPageTarget(
             e.Key,
@@ -640,6 +641,26 @@ public partial class MainWindow
 
         // Enter and Tab (including Shift variants) move the active cell; they don't extend selection
         bool moveOnly = e.Key is Key.Enter or Key.Tab;
+
+        // When a single multi-cell rectangular range is already selected (no Ctrl-added extra
+        // areas, not in Add/Extend selection mode), Enter/Tab should move the active cell WITHIN
+        // the range -- wrapping at its edges -- and keep the whole range highlighted, matching
+        // Excel, instead of collapsing the selection down to one cell via SetActiveCell.
+        if (moveOnly &&
+            _selectionMode == ExcelSelectionMode.Normal &&
+            SheetGrid.SelectedRanges is null &&
+            SheetGrid.SelectedRange is { } activeMultiRange &&
+            activeMultiRange.Start != activeMultiRange.End)
+        {
+            var withinRangeCurrent = _selectionAnchor ?? activeMultiRange.Start;
+            var withinRangeTarget = AdvanceActiveCellWithinRange(
+                activeMultiRange, withinRangeCurrent, isTab: e.Key == Key.Tab, forward: !shiftHeld);
+            MoveActiveCellWithinSelection(withinRangeTarget);
+            EnsureCellVisible(withinRangeTarget);
+            e.Handled = true;
+            return;
+        }
+
         if (_selectionMode == ExcelSelectionMode.Add && !moveOnly)
             AddOrMoveAdditionalSelection(target.Value, extendSelection);
         else if (extendSelection && !moveOnly && _selectionAnchor.HasValue)
@@ -649,6 +670,94 @@ public partial class MainWindow
 
         EnsureCellVisible(target.Value);
         e.Handled = true;
+    }
+
+    // Advances the active cell within an already-selected multi-cell range for Enter/Tab
+    // (and their Shift-reversed variants), wrapping at the range's edges the way Excel does:
+    // Tab moves right and wraps to the start of the next row; Enter moves down and wraps to the
+    // top of the next column; reaching the last cell in the direction of travel wraps back
+    // around to the opposite edge of the range.
+    private static CellAddress AdvanceActiveCellWithinRange(GridRange range, CellAddress current, bool isTab, bool forward)
+    {
+        var minRow = range.Start.Row;
+        var maxRow = range.End.Row;
+        var minCol = range.Start.Col;
+        var maxCol = range.End.Col;
+        var row = Math.Clamp(current.Row, minRow, maxRow);
+        var col = Math.Clamp(current.Col, minCol, maxCol);
+
+        if (isTab)
+        {
+            if (forward)
+            {
+                if (col < maxCol)
+                    col++;
+                else
+                {
+                    col = minCol;
+                    row = row < maxRow ? row + 1 : minRow;
+                }
+            }
+            else
+            {
+                if (col > minCol)
+                    col--;
+                else
+                {
+                    col = maxCol;
+                    row = row > minRow ? row - 1 : maxRow;
+                }
+            }
+        }
+        else
+        {
+            if (forward)
+            {
+                if (row < maxRow)
+                    row++;
+                else
+                {
+                    row = minRow;
+                    col = col < maxCol ? col + 1 : minCol;
+                }
+            }
+            else
+            {
+                if (row > minRow)
+                    row--;
+                else
+                {
+                    row = maxRow;
+                    col = col > minCol ? col - 1 : maxCol;
+                }
+            }
+        }
+
+        return new CellAddress(current.Sheet, row, col);
+    }
+
+    // Moves the active cell to `addr` within the CURRENT selection without touching
+    // SheetGrid.SelectedRange, so the pre-existing multi-cell marquee stays highlighted
+    // (unlike SetActiveCell, which always collapses the selection to a single cell).
+    private void MoveActiveCellWithinSelection(CellAddress addr)
+    {
+        _selectionAnchor = addr;
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is not null)
+        {
+            sheet.ActiveRow = addr.Row;
+            sheet.ActiveCol = addr.Col;
+        }
+
+        SetCellAddressBoxSelectionText(FormatCellReference(addr));
+        var cell = sheet?.GetCell(addr);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, addr));
+        FocusSheetGridIfNeeded();
+        RefreshToolbarAfterSelectionChange();
+        RefreshStatusBar();
+        RefreshValidationDropdown();
+        RefreshDvInputMessage();
+        UpdateCommentPreview(addr);
     }
 
     private void CycleSelectionCorner()

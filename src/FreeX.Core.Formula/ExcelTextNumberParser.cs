@@ -5,7 +5,7 @@ namespace FreeX.Core.Formula;
 
 internal static class ExcelTextNumberParser
 {
-    private static readonly CultureInfo UsCulture = CultureInfo.GetCultureInfo("en-US");
+    private static readonly CultureInfo UsCulture = CreateUsCultureWithExcelTwoDigitYearCutoff();
     private static readonly Regex FakeLeapDayTextRegex = new(
         @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$",
         RegexOptions.IgnoreCase);
@@ -37,7 +37,30 @@ internal static class ExcelTextNumberParser
         NumberStyles.AllowExponent     |
         NumberStyles.AllowCurrencySymbol;
 
-    public static bool TryParse(string text, out double number)
+    /// <summary>
+    /// Clones en-US with Excel's fixed two-digit-year pivot (00-29 -> 2000-2029, 30-99 ->
+    /// 1930-1999) instead of .NET's default <see cref="Calendar.TwoDigitYearMax"/>, which trails
+    /// ~50 years ahead of the current date (e.g. 2049 in 2026) and drifts over time. Mirrors
+    /// <c>BuiltInFunctions.DateTime.cs</c>'s <c>CreateExcelTwoDigitYearCulture</c> (same pivot,
+    /// same clone-and-override pattern) so DATEVALUE and this text-to-number path agree.
+    /// </summary>
+    private static CultureInfo CreateUsCultureWithExcelTwoDigitYearCutoff()
+    {
+        var culture = (CultureInfo)CultureInfo.GetCultureInfo("en-US").Clone();
+        culture.Calendar.TwoDigitYearMax = 2029;
+        return culture;
+    }
+
+    public static bool TryParse(string text, out double number) => TryParse(text, out number, uses1904DateSystem: false);
+
+    /// <param name="uses1904DateSystem">
+    /// Whether the owning workbook uses the 1904 date system. A successfully-parsed date is
+    /// converted to a serial number via <see cref="ExcelDateSystem.DateToSerial(DateTime, bool)"/>
+    /// with this flag so the resulting serial is expressed in the same epoch the workbook's
+    /// number formatter will later use to render it — mismatching the two epochs silently
+    /// shifts the displayed date by the ~4-year (1462-day) gap between the 1900 and 1904 systems.
+    /// </param>
+    public static bool TryParse(string text, out double number, bool uses1904DateSystem)
     {
         var trimmed = text.Trim();
 
@@ -81,7 +104,7 @@ internal static class ExcelTextNumberParser
         {
             number = IsTimeOnlyText(trimmed)
                 ? dt.TimeOfDay.TotalDays
-                : ExcelDateSystem.DateToSerial(dt);
+                : ExcelDateSystem.DateToSerial(dt, uses1904DateSystem);
             return true;
         }
 

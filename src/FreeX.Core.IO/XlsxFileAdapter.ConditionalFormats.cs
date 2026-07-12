@@ -234,6 +234,9 @@ public sealed partial class XlsxFileAdapter
                             var axisPosition = x14DataBar.Attribute("axisPosition")?.Value;
                             if (!string.IsNullOrWhiteSpace(axisPosition))
                                 format.DataBarAxisPosition = axisPosition;
+                            var direction = x14DataBar.Attribute("direction")?.Value;
+                            if (!string.IsNullOrWhiteSpace(direction))
+                                format.DataBarDirection = direction;
                             if (XlsxColorReader.TryReadRgbColor(x14DataBar.Element(x14Ns + "axisColor"), out var axisColor))
                                 format.DataBarAxisColor = axisColor;
                             if (XlsxColorReader.TryReadRgbColor(x14DataBar.Element(x14Ns + "borderColor"), out var borderColor))
@@ -624,6 +627,7 @@ public sealed partial class XlsxFileAdapter
             DataBarAxisColor = source.DataBarAxisColor,
             DataBarNegativeFillColor = source.DataBarNegativeFillColor,
             DataBarNegativeBorderColor = source.DataBarNegativeBorderColor,
+            DataBarDirection = source.DataBarDirection,
             AboveAverage = source.AboveAverage,
             EqualAverage = source.EqualAverage,
             StdDevCount = source.StdDevCount,

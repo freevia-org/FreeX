@@ -15,6 +15,7 @@ public sealed class Parser
     private int _pos;
     private int _parseDepth;
     private int _nestingDepth;
+    private int _chainedCallCounter;
 
     private sealed record ParsedTokenCacheEntry(int Hash, Token[] Tokens, FormulaNode Node);
 
@@ -348,6 +349,31 @@ public sealed class Parser
             {
                 Advance();
                 node = new UnaryOpNode(UnaryOperator.Percent, node);
+                continue;
+            }
+
+            // Immediate/chained invocation of a call/lambda RESULT, e.g. LAMBDA(x,x+1)(5) or the
+            // curried mk(5)(3) (mk itself a LAMBDA-returning LAMBDA). FunctionCallNode.FunctionName
+            // is a fixed string, not an arbitrary sub-expression, so this can't be represented as a
+            // direct call node the way a plain name-call (mk(5)) is. Instead desugar
+            // `expr(args)` into `LET(__call<N>, expr, __call<N>(args))` — a synthetic LET binding
+            // whose body calls the freshly-bound name. This reuses the LET-scoped lambda-binding
+            // path (FormulaEvaluator.EvaluateFunction: context.TryResolveLambdaBinding) that already
+            // knows how to invoke a name bound to a LambdaValue, so no new AST node or evaluator
+            // support is needed. If `expr` isn't actually a lambda, the bound name resolves to a
+            // non-lambda scalar and TryResolveLambdaBinding's caller correctly yields #VALUE!,
+            // matching what already happened (via a parse-exception fallback) before this existed.
+            if (Current.Type == TokenType.OpenParen)
+            {
+                var callOpenParen = Advance();
+                using var callNesting = EnterNesting(callOpenParen);
+                var chainedArgs = ParseArgumentList();
+                Expect(TokenType.CloseParen);
+
+                var tempName = $"__call{_chainedCallCounter++}";
+                var tempRef = new NamedRangeNode(tempName);
+                node = new FunctionCallNode("LET",
+                    [tempRef, node, new FunctionCallNode(tempName, chainedArgs)]);
                 continue;
             }
 

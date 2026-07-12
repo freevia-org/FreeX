@@ -281,6 +281,12 @@ public static class OpcMediaTypes
         if (extension.Equals(".webp", StringComparison.OrdinalIgnoreCase))
             return "image/webp";
 
+        if (extension.Equals(".wmf", StringComparison.OrdinalIgnoreCase))
+            return "image/x-wmf";
+
+        if (extension.Equals(".emf", StringComparison.OrdinalIgnoreCase))
+            return "image/x-emf";
+
         return "image/png";
     }
 
@@ -299,7 +305,13 @@ public static class OpcMediaTypes
                         ? "tiff"
                         : trimmed.Equals("image/webp", StringComparison.OrdinalIgnoreCase)
                             ? "webp"
-                            : "png";
+                            : trimmed.Equals("image/x-wmf", StringComparison.OrdinalIgnoreCase) ||
+                              trimmed.Equals("image/wmf", StringComparison.OrdinalIgnoreCase)
+                                ? "wmf"
+                                : trimmed.Equals("image/x-emf", StringComparison.OrdinalIgnoreCase) ||
+                                  trimmed.Equals("image/emf", StringComparison.OrdinalIgnoreCase)
+                                    ? "emf"
+                                    : "png";
 
         return includeDot ? $".{extension}" : extension;
     }

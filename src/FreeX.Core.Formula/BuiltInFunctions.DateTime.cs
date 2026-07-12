@@ -18,6 +18,18 @@ public static partial class BuiltInFunctions
         @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$",
         RegexOptions.IgnoreCase);
 
+    // Excel's two-digit-year pivot is 29 (00-29 -> 2000-2029, 30-99 -> 1930-1999),
+    // unlike .NET's default calendar cutoff of 2049. Clone invariant culture with
+    // that pivot for DATEVALUE's free-form DateTime.TryParse.
+    private static readonly CultureInfo ExcelTwoDigitYearCulture = CreateExcelTwoDigitYearCulture();
+
+    private static CultureInfo CreateExcelTwoDigitYearCulture()
+    {
+        var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        culture.Calendar.TwoDigitYearMax = 2029;
+        return culture;
+    }
+
     private static ScalarValue Now(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         new DateTimeValue(DateToSerial(DateTime.Now, ctx.Uses1904DateSystem));
 
@@ -416,7 +428,7 @@ public static partial class BuiltInFunctions
         if (!TextHasDateComponent(text)) return ErrorValue.Value;
         if (TryParseMonthYearDateValueText(text, out var monthYearDate))
             return DateValueSerialOrNum(monthYearDate, uses1904DateSystem);
-        if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+        if (DateTime.TryParse(text, ExcelTwoDigitYearCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return DateValueSerialOrNum(dt, uses1904DateSystem);
         return ErrorValue.Value;

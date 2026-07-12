@@ -22,7 +22,8 @@ internal static class XlsxAdvancedConditionalFormatMetadata
         !string.IsNullOrWhiteSpace(cf.DataBarAxisPosition) ||
         cf.DataBarAxisColor is not null ||
         cf.DataBarNegativeFillColor is not null ||
-        cf.DataBarNegativeBorderColor is not null;
+        cf.DataBarNegativeBorderColor is not null ||
+        !string.IsNullOrWhiteSpace(cf.DataBarDirection);
 
     public static bool RequiresGeneratedOrExistingX14DataBar(ConditionalFormat cf) =>
         RequiresGeneratedX14DataBar(cf) ||

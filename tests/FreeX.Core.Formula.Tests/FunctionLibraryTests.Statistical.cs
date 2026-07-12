@@ -1044,11 +1044,14 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Subtotal_FuncNum4_EmptyRange_ReturnsDivByZero()
+    public void Subtotal_FuncNum4_EmptyRange_ReturnsZero()
     {
+        // R31-formula-math-aggregate-1: MAX (4) returns 0 for an empty range, matching plain
+        // MAX() and real Excel -- it does not error like AVERAGE/STDEV/VAR do. This test
+        // previously pinned the wrong (buggy) #DIV/0! behavior.
         var sheet = MakeSheet();
         var result = _eval.Evaluate("=SUBTOTAL(4,B1:B3)", sheet);
-        result.Should().Be(ErrorValue.DivByZero);
+        result.Should().Be(new NumberValue(0));
     }
 
     [Fact]

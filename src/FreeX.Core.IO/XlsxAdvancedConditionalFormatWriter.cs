@@ -557,6 +557,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 new XAttribute("gradient", cf.DataBarGradient ? "1" : "0"),
                 cf.DataBarBorder ? new XAttribute("border", "1") : null,
                 string.IsNullOrWhiteSpace(cf.DataBarAxisPosition) ? null : new XAttribute("axisPosition", cf.DataBarAxisPosition),
+                string.IsNullOrWhiteSpace(cf.DataBarDirection) ? null : new XAttribute("direction", cf.DataBarDirection),
                 ToX14DataBarCfvoXml(x14Ns, xmNs, cf.DataBarMinThresholdType, cf.DataBarMinThresholdValue, isMinimum: true),
                 ToX14DataBarCfvoXml(x14Ns, xmNs, cf.DataBarMaxThresholdType, cf.DataBarMaxThresholdValue, isMinimum: false),
                 // x14 CT_DataBar requires this child order: cfvo, cfvo, fillColor?, borderColor?,

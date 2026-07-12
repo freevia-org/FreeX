@@ -237,7 +237,7 @@ public static partial class BuiltInFunctions
 
         if (args.Count > 2 && args[2] is not BlankValue)
         {
-            if (!TryGetScalarControlArgument(args[2], out padWith, out error)) return false;
+            if (!TryGetScalarFillArgument(args[2], out padWith, out error)) return false;
         }
 
         return values.Count > 0;
@@ -281,7 +281,7 @@ public static partial class BuiltInFunctions
         var padWith = (ScalarValue)ErrorValue.NA;
         if (args.Count > 3 && args[3] is not BlankValue)
         {
-            if (!TryGetScalarControlArgument(args[3], out padWith, out var padError)) return padError;
+            if (!TryGetScalarFillArgument(args[3], out padWith, out var padError)) return padError;
         }
 
         var result = CreateFilledRange(rowCount, colCount, padWith);

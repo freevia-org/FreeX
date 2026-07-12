@@ -714,7 +714,7 @@ public sealed class Workbook
     }
 }
 
-public sealed record NamedRangeMetadata(string Scope, string Comment)
+public sealed record NamedRangeMetadata(string Scope, string Comment, bool Hidden = false)
 {
     public static NamedRangeMetadata WorkbookScope { get; } = new("Workbook", "");
 }

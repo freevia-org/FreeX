@@ -33,9 +33,19 @@ public class LogicalTextCoercionTests
     public void Or_CoercesNumericDirectText(string formula, bool expected) =>
         Eval(formula).Should().Be(new BoolValue(expected));
 
+    // Regression for R31-formula-logical-lambda-1: XOR had its own un-mirrored special case
+    // (`if (a is TextValue) return ErrorValue.Value;`) that skipped the AND/OR numeric-text
+    // coercion path entirely, so XOR("1",1) wrongly errored instead of returning FALSE.
+    [Theory]
+    [InlineData("=XOR(\"1\",1)", false)]
+    [InlineData("=XOR(\"0\",1)", true)]
+    public void Xor_CoercesNumericDirectText(string formula, bool expected) =>
+        Eval(formula).Should().Be(new BoolValue(expected));
+
     [Theory]
     [InlineData("=AND(\"abc\",1)")]
     [InlineData("=OR(\"abc\",0)")]
+    [InlineData("=XOR(\"abc\",1)")]
     [InlineData("=AND(\"TRUE\",1)")]   // the word "TRUE" as text is not numeric -> #VALUE! (matches Excel)
     [InlineData("=OR(\"FALSE\",0)")]
     public void Logical_NonNumericText_IsValueError(string formula) =>

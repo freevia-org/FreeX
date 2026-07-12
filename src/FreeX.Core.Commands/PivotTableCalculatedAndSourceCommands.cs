@@ -67,14 +67,7 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
         PivotTableCommandCollections.Replace(pivotTable.CalculatedItems, _calculatedItems);
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
-        var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
-        foreach (var chart in sheet.Charts.Where(chart =>
-                     chart.IsPivotChart &&
-                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
-        {
-            chart.DataRange = outputRange;
-            chart.PivotCacheId = pivotTable.CacheId;
-        }
+        UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
 
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
@@ -88,8 +81,23 @@ public sealed class ConfigurePivotTableCalculatedItemsCommand : IWorkbookCommand
             _snapshot.Restore(pivotTable);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
+        if (pivotTable is not null)
+            UpdateBoundPivotChartRanges(ctx.Workbook, sheet, pivotTable);
         _snapshot = null;
         _targetSnapshot = null;
+    }
+
+    private static void UpdateBoundPivotChartRanges(Workbook workbook, Sheet sheet, PivotTableModel pivotTable)
+    {
+        var outputRange = PivotTableRefreshService.GetMaterializedOutputRange(sheet, pivotTable);
+        foreach (var chartSheet in workbook.Sheets)
+        foreach (var chart in chartSheet.Charts.Where(chart =>
+                     chart.IsPivotChart &&
+                     string.Equals(chart.PivotTableName, pivotTable.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            chart.DataRange = outputRange;
+            chart.PivotCacheId = pivotTable.CacheId;
+        }
     }
 
     private sealed record PivotCalculatedItemsSnapshot(

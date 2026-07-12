@@ -420,8 +420,11 @@ public sealed partial class FormulaEvaluator
             1 => numeric.Count == 0 ? ErrorValue.DivByZero : FastNumberResult(numeric.Average),
             2 => NumberValueFor(numeric.Count),
             3 => NumberValueFor(countA),
-            4 => numeric.Count == 0 ? ErrorValue.DivByZero : FastNumberResult(numeric.Max),
-            5 => numeric.Count == 0 ? ErrorValue.DivByZero : FastNumberResult(numeric.Min),
+            // MAX/MIN return 0 for an all-non-numeric/empty range, matching the plain MAX()/MIN()
+            // functions and real Excel (and BuiltInFunctions.Subtotal.cs's SUBTOTAL slow path) —
+            // unlike AVERAGE/STDEV/VAR (1,7,8,10,11) which genuinely error (#DIV/0!) on an empty sample.
+            4 => FastNumberResult(numeric.Count == 0 ? 0 : numeric.Max),
+            5 => FastNumberResult(numeric.Count == 0 ? 0 : numeric.Min),
             6 => FastNumberResult(numeric.Count == 0 ? 0 : numeric.Product),
             7 => numeric.Count < 2 ? ErrorValue.DivByZero : FastNumberResult(Math.Sqrt(numeric.SampleVariance)),
             8 => numeric.Count == 0 ? ErrorValue.DivByZero : FastNumberResult(Math.Sqrt(numeric.PopulationVariance)),
@@ -474,12 +477,34 @@ public sealed partial class FormulaEvaluator
         if (string.IsNullOrWhiteSpace(formulaText))
             return false;
 
-        var text = formulaText.TrimStart();
-        if (text.StartsWith("=", StringComparison.Ordinal))
-            text = text[1..].TrimStart();
+        // Excel's anti-double-counting rule excludes a cell whose formula contains a nested
+        // SUBTOTAL/AGGREGATE call ANYWHERE in the expression, not just when the whole formula is
+        // literally that call (e.g. "=1+SUBTOTAL(9,A1:A1)" must be recognized as nested too).
+        return ContainsFastSubtotalOrAggregateCall(formulaText, "SUBTOTAL")
+            || ContainsFastSubtotalOrAggregateCall(formulaText, "AGGREGATE");
+    }
 
-        return text.StartsWith("SUBTOTAL(", StringComparison.OrdinalIgnoreCase)
-            || text.StartsWith("AGGREGATE(", StringComparison.OrdinalIgnoreCase);
+    private static bool ContainsFastSubtotalOrAggregateCall(string text, string functionName)
+    {
+        var startIndex = 0;
+        while (true)
+        {
+            var idx = text.IndexOf(functionName, startIndex, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) return false;
+
+            // Reject matches that are part of a longer identifier (e.g. "MYSUBTOTAL(" must not
+            // match "SUBTOTAL(") by requiring the preceding character not be an identifier character.
+            var precededByIdentifierChar = idx > 0 &&
+                (char.IsLetterOrDigit(text[idx - 1]) || text[idx - 1] == '_' || text[idx - 1] == '.');
+            if (!precededByIdentifierChar)
+            {
+                var cursor = idx + functionName.Length;
+                while (cursor < text.Length && char.IsWhiteSpace(text[cursor])) cursor++;
+                if (cursor < text.Length && text[cursor] == '(') return true;
+            }
+
+            startIndex = idx + 1;
+        }
     }
 
     private static ScalarValue GetFastRangeCellValue(
