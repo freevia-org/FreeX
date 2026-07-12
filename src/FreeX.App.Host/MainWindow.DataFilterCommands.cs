@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.QuickAnalysis;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -19,7 +20,7 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
                 range,
-                currentRange => new SortCommand(_currentSheetId, currentRange, sortByColOffset: 0, ascending: true)))
+                currentRange => new SortCommand(_currentSheetId, ExcludeHeaderRowForQuickSort(currentRange), sortByColOffset: 0, ascending: true)))
             return;
         UpdateViewport();
     }
@@ -30,9 +31,27 @@ public partial class MainWindow
         if (!TryExecuteRepeatableCurrentRangeCommand(
                 "Sort",
                 range,
-                currentRange => new SortCommand(_currentSheetId, currentRange, sortByColOffset: 0, ascending: false)))
+                currentRange => new SortCommand(_currentSheetId, ExcludeHeaderRowForQuickSort(currentRange), sortByColOffset: 0, ascending: false)))
             return;
         UpdateViewport();
+    }
+
+    /// <summary>
+    /// R34-commands-sort-custom-deep-2: the quick ribbon Sort Ascending/Descending buttons passed
+    /// SelectedRange straight into SortCommand with no header exclusion, so a header row (e.g. "Name",
+    /// "Score") got sorted in among the data rows instead of staying pinned at the top -- unlike
+    /// SortCustomButton_Click, which already excludes an (opt-in) header row via
+    /// SortDialog.ExcludeHeaderRow before building its SortCommand. The quick buttons have no dialog to
+    /// ask the user, so auto-detect a header row with the same heuristic Quick Analysis already uses
+    /// (first row all-text, at least one data row numeric/date) and exclude it the same way.
+    /// </summary>
+    private GridRange ExcludeHeaderRowForQuickSort(GridRange range)
+    {
+        if (_workbook.GetSheet(_currentSheetId) is not { } sheet)
+            return range;
+
+        var hasHeaderRow = QuickAnalysisSelectionReader.Describe(sheet, range).HasHeaderRow;
+        return SortDialog.ExcludeHeaderRow(range, hasHeaderRow);
     }
 
     private void SortCustomButton_Click(object sender, RoutedEventArgs e)
@@ -463,19 +482,29 @@ public partial class MainWindow
 
     /// <summary>
     /// R33-commands-autofilter-slicer-2: the "Clear Filter" command must clear EVERY column's active
-    /// value filter in <paramref name="range"/>, not just the first (offset 0). A single FilterCommand
+    /// filter in <paramref name="range"/>, not just the first (offset 0). A single FilterCommand
     /// only removes one column's entry from sheet.ActiveValueFilterColumns; if more than one column
     /// carries an active filter (e.g. B only, or A and C), clearing offset 0 alone leaves the other
     /// column(s) filtered and the same rows hidden. Mirror the per-column dropdown's own clear (a
     /// FilterCommand with empty allowedValues for that column's offset), but issue one per active
     /// column found in the range so every filter is actually removed.
+    ///
+    /// R34-meta-1: value-list filters register in sheet.ActiveValueFilterColumns, but Top10/
+    /// Above-Average filters (TopBottomFilterCommand/AverageFilterCommand) only register in
+    /// sheet.ColumnFilterOwnedRows, never in ActiveValueFilterColumns. Walking ActiveValueFilterColumns
+    /// alone misses those columns, so their hidden rows survive "Clear Filter". Union both dictionaries'
+    /// keys (ColumnFilterOwnedRows is the superset of all filtered columns, of every kind) so every
+    /// active filter column is found and cleared.
     /// </summary>
     private IWorkbookCommand BuildClearAllValueFiltersCommand(GridRange range)
     {
         var offsets = new List<uint>();
         if (_workbook.GetSheet(_currentSheetId) is { } sheet)
         {
-            foreach (var col in sheet.ActiveValueFilterColumns.Keys)
+            var activeCols = new HashSet<uint>(sheet.ActiveValueFilterColumns.Keys);
+            activeCols.UnionWith(sheet.ColumnFilterOwnedRows.Keys);
+
+            foreach (var col in activeCols.OrderBy(c => c))
             {
                 if (col >= range.Start.Col && col <= range.End.Col)
                     offsets.Add(col - range.Start.Col);

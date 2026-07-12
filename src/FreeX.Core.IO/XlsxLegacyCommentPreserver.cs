@@ -90,7 +90,7 @@ internal static class XlsxLegacyCommentPreserver
                 // Sheet.Comments even when nothing was deleted (see
                 // XlsxWorksheetCommentReader.IsLegacyThreadedCommentShim), so an empty model here
                 // is normal and the shim must be left in place for older/non-Excel readers.
-                if (!SourceCommentsHaveOnlyUnmodeledEntries(sourceCommentsXml, workbookNs))
+                if (!SourceCommentsHaveOnlyUnmodeledEntries(sourceCommentsXml, workbookNs, sheet, sourceArchive, sourceWorksheetPath))
                 {
                     PurgeDeletedLegacyComments(
                         sourceArchive,
@@ -503,7 +503,24 @@ internal static class XlsxLegacyCommentPreserver
     /// purge in <see cref="Preserve"/> must not fire for it. Returns <c>false</c> (i.e. "go ahead
     /// and purge") when the part has no entries at all, since there is nothing there to protect.
     /// </summary>
-    private static bool SourceCommentsHaveOnlyUnmodeledEntries(XDocument sourceCommentsXml, XNamespace workbookNs)
+    /// <remarks>
+    /// R34-io-comments-threaded-mentions-1: a threaded-comment compatibility shim is only safe to
+    /// leave untouched forever while its paired thread is still alive. This checks each shim entry's
+    /// cell against <paramref name="sourceArchive"/>'s OWN <c>threadedComments</c> part (via
+    /// <see cref="XlsxWorksheetThreadedCommentMapper.Read"/>) for the ORIGINAL, pre-edit set of
+    /// threads: when that shows a live thread once existed at the shim's cell, but
+    /// <see cref="Sheet.ThreadedComments"/> no longer has it (the user deleted the whole thread
+    /// before saving), the shim is now stale and must be purged too -- mirroring the live-thread
+    /// check the Comments.Count &gt; 0 reconciliation path already applies (~line 249). A shim with
+    /// no paired thread in the source at all (e.g. a legacy-only file that never had one) is left
+    /// alone exactly as before, since there is nothing there that could have been "deleted".
+    /// </remarks>
+    private static bool SourceCommentsHaveOnlyUnmodeledEntries(
+        XDocument sourceCommentsXml,
+        XNamespace workbookNs,
+        Sheet sheet,
+        ZipArchive sourceArchive,
+        string sourceWorksheetPath)
     {
         var commentElements = sourceCommentsXml.Root?
             .Element(workbookNs + "commentList")?
@@ -518,6 +535,8 @@ internal static class XlsxLegacyCommentPreserver
             .Select(a => a.Value)
             .ToList() ?? [];
 
+        HashSet<(uint Row, uint Col)>? sourceThreadedCellKeys = null;
+
         foreach (var comment in commentElements)
         {
             var text = ReadCommentPlainText(comment, workbookNs);
@@ -529,6 +548,23 @@ internal static class XlsxLegacyCommentPreserver
             }
 
             if (!IsUnmodeledLegacyCommentEntry(author, text))
+                return false;
+
+            var isShim = author.StartsWith("tc=", StringComparison.OrdinalIgnoreCase) ||
+                text.StartsWith("[Threaded comment]", StringComparison.Ordinal);
+            if (!isShim)
+                continue;
+
+            var reference = comment.Attribute("ref")?.Value;
+            if (string.IsNullOrEmpty(reference) || !CellAddress.TryParse(reference, sheet.Id, out var address))
+                continue;
+
+            sourceThreadedCellKeys ??= XlsxWorksheetThreadedCommentMapper.Read(sourceArchive, sourceWorksheetPath)
+                .Select(t => (t.Row, t.Col))
+                .ToHashSet();
+
+            var sourceThreadOnceExisted = sourceThreadedCellKeys.Contains((address.Row, address.Col));
+            if (sourceThreadOnceExisted && !sheet.ThreadedComments.ContainsKey(address))
                 return false;
         }
 

@@ -525,11 +525,20 @@ public sealed class Workbook
         if (!IsValidNamedRangeStart(name[0]) || name.Skip(1).Any(ch => !IsValidNamedRangeChar(ch)))
             return "Named range name is invalid: use letters, numbers, underscores, and periods; start with a letter or underscore (or a backslash, for legacy macro-name compatibility).";
 
+        if (IsReservedToken(name))
+            return "Named range name is invalid: 'C', 'c', 'R', and 'r' are reserved single-letter names.";
+
         if (CellAddress.TryParse(name, SheetId.New(), out _) || IsR1C1Reference(name))
             return "Named range name is invalid: it cannot look like a cell reference.";
 
         return null;
     }
+
+    // Excel reserves the single-letter names "C"/"c" (current column) and "R"/"r" (current row)
+    // as defined-name identifiers; they cannot be used even though they otherwise satisfy the
+    // structural naming rules. Matches DefinedNameValidator.IsReservedToken used by the Avalonia shell.
+    private static bool IsReservedToken(string name) =>
+        name.Length == 1 && (name[0] is 'R' or 'r' or 'C' or 'c');
 
     // Excel allows a defined name's first character to be a letter, underscore, or
     // backslash ('\') — the backslash form exists for Lotus 1-2-3 macro-key compatibility

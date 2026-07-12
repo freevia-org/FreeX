@@ -144,19 +144,39 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         // Merges that only partially overlap the range, or that differ in size/shape from one
         // another, still make the range unsortable — this mirrors Excel's own "This operation
         // requires the merged cells to be identically sized" refusal.
+        //
+        // R34-commands-sort-custom-deep-1: a LeftToRight (byRows) sort instead swaps whole grid
+        // COLUMNS below (ApplyLeftToRight), so the uniform layout that is safe there is the
+        // transpose of the row case — every merge must be exactly one COLUMN wide, share the same
+        // row-span, and there must be exactly one such merge per column of the range. Approving a
+        // row-uniform merge (safe only for a top-to-bottom sort) for a column swap — or vice versa
+        // — would leave the merge geometry anchored to its old physical row/column while the swap
+        // relocates the data that geometry is supposed to describe, desyncing the two.
         var overlappingMerges = sheet.MergedRegions.Where(m => _range.Overlaps(m)).ToList();
         if (overlappingMerges.Count > 0)
         {
-            var firstColSpan = overlappingMerges[0].ColCount;
-            // Merged regions never overlap one another (MergeCellsCommand rejects any merge
-            // whose range intersects an existing one), so requiring the merge count to equal
-            // the range's row count — on top of each merge being fully contained, exactly one
-            // row tall, and identically sized — guarantees every row of the range is covered by
-            // an identically-sized merge and none is left partially/un-merged.
-            var rangeRowCount = (int)(_range.End.Row - _range.Start.Row + 1);
-            bool uniform = overlappingMerges.Count == rangeRowCount &&
-                overlappingMerges.All(m =>
-                    _range.Contains(m) && m.RowCount == 1 && m.ColCount == firstColSpan);
+            bool uniform;
+            if (_options.LeftToRight)
+            {
+                var firstRowSpan = overlappingMerges[0].RowCount;
+                var rangeColCount = (int)(_range.End.Col - _range.Start.Col + 1);
+                uniform = overlappingMerges.Count == rangeColCount &&
+                    overlappingMerges.All(m =>
+                        _range.Contains(m) && m.ColCount == 1 && m.RowCount == firstRowSpan);
+            }
+            else
+            {
+                var firstColSpan = overlappingMerges[0].ColCount;
+                // Merged regions never overlap one another (MergeCellsCommand rejects any merge
+                // whose range intersects an existing one), so requiring the merge count to equal
+                // the range's row count — on top of each merge being fully contained, exactly one
+                // row tall, and identically sized — guarantees every row of the range is covered by
+                // an identically-sized merge and none is left partially/un-merged.
+                var rangeRowCount = (int)(_range.End.Row - _range.Start.Row + 1);
+                uniform = overlappingMerges.Count == rangeRowCount &&
+                    overlappingMerges.All(m =>
+                        _range.Contains(m) && m.RowCount == 1 && m.ColCount == firstColSpan);
+            }
 
             if (!uniform)
                 return new CommandOutcome(false, "Cannot sort a range that contains merged cells.");
@@ -445,7 +465,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             CaseSensitive = _options.CaseSensitive ? true : null
         };
 
-        foreach (var (index, ascending, sortOn, _, _) in keys)
+        foreach (var (index, ascending, sortOn, _, customOrder) in keys)
         {
             // Top-to-bottom: each key is a column, and its condition ref spans the full sorted
             // row range within that single column. Left-to-right: each key is a row, and its
@@ -458,6 +478,14 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                     new CellAddress(_sheetId, range.Start.Row, range.Start.Col + (uint)index),
                     new CellAddress(_sheetId, range.End.Row, range.Start.Col + (uint)index));
 
+            // R34-commands-sort-custom-deep-3: a custom-list ("First key sort order") key must
+            // round-trip its list through the persisted customList attribute, or reopening the
+            // saved file shows "Normal" instead of the custom order that was actually applied.
+            // Note: TargetColor (cellColor/fontColor sorts) has no corresponding fix here — a
+            // real dxfId must reference an entry in the workbook's <dxfs> differential-format
+            // list, and Workbook/Sheet have no such registry to allocate one from; stamping an
+            // arbitrary dxfId would point Excel at an unrelated (or out-of-range) format, which
+            // is worse than omitting the attribute.
             model.Conditions.Add(new WorksheetSortConditionModel
             {
                 Reference = conditionRange.ToString(),
@@ -467,7 +495,8 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                     SortOn.CellColor => "cellColor",
                     SortOn.FontColor => "fontColor",
                     _ => null
-                }
+                },
+                CustomList = customOrder is not null ? string.Join(",", customOrder.Tokens) : null
             });
         }
 

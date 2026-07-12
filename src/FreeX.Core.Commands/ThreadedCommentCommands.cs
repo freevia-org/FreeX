@@ -136,7 +136,15 @@ public sealed class UpdateThreadedCommentTextCommand : IWorkbookCommand
         if (!sheet.ThreadedComments.TryGetValue(_address, out _previous))
             return CommentCommandGuards.ThreadedCommentNotFound();
 
-        sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(_previous with { Text = _text }, _timestampUtc);
+        // Editing the text invalidates any preserved raw @mention metadata: its startIndex/length
+        // offsets anchor into the OLD text, so keeping MentionsXml verbatim would point the
+        // mention at the wrong (or out-of-range) substring of the new text. Excel itself drops a
+        // mention whose text was edited away, so clear it rather than carry stale offsets.
+        var updated = _previous with { Text = _text };
+        if (!string.Equals(_previous.Text, _text, StringComparison.Ordinal))
+            updated = updated with { MentionsXml = null };
+
+        sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(updated, _timestampUtc);
         return new CommandOutcome(true, AffectedCells: [_address]);
     }
 
@@ -188,7 +196,14 @@ public sealed class UpdateThreadedCommentReplyCommand : IWorkbookCommand
             return CommentCommandGuards.ThreadedCommentReplyNotFound();
 
         var replies = _previous.Replies.ToList();
-        replies[_replyIndex] = ThreadedCommentTimestamps.Touch(replies[_replyIndex] with { Text = _text }, _timestampUtc);
+        var priorReply = replies[_replyIndex];
+        var updatedReply = priorReply with { Text = _text };
+        // Same rationale as UpdateThreadedCommentTextCommand: a reply's preserved raw @mention
+        // metadata anchors into the reply's OLD text, so it must be dropped when the text changes
+        // rather than carried forward pointing at the wrong/out-of-range substring.
+        if (!string.Equals(priorReply.Text, _text, StringComparison.Ordinal))
+            updatedReply = updatedReply with { MentionsXml = null };
+        replies[_replyIndex] = ThreadedCommentTimestamps.Touch(updatedReply, _timestampUtc);
         sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(
             _previous with
             {
@@ -356,7 +371,11 @@ public sealed class ApplyThreadedCommentChangesCommand : IWorkbookCommand
 
         if (_rootText is not null && !string.Equals(_rootText, updated.Text, StringComparison.Ordinal))
         {
-            updated = updated with { Text = _rootText };
+            // The root text is changing, so any preserved raw @mention metadata (anchored via
+            // startIndex/length into the OLD text) would now point at the wrong or out-of-range
+            // substring of the new text. Drop it, matching Excel's own behavior of dropping a
+            // mention whose text was edited away.
+            updated = updated with { Text = _rootText, MentionsXml = null };
             hasChange = true;
         }
 

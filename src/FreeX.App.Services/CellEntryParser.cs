@@ -113,11 +113,17 @@ public static class CellEntryParser
             return 0;
 
         var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
-        // Math.Round(double, int) only accepts digits in [0, 15] and throws for negative values
-        // (which occur whenever |value| >= 10^digits); clamp to [0, 15] rather than [-15, 15]
-        // since a value that already has more integer digits than the cap has nothing left to
-        // round off.
-        scale = Math.Clamp(scale, 0, 15);
+        if (scale < 0)
+        {
+            // The value has more integer digits than the significant-digit cap (e.g. an 18-digit
+            // integer). Excel does not round such values to the nearest 10^-scale -- it truncates
+            // (chops) the excess low-order digits to zero, matching its 15-significant-digit storage
+            // cap. Math.Round(double, int) only accepts digits in [0, 15] and cannot express a
+            // negative scale, so replicate the truncation directly instead of clamping to a no-op.
+            var divisor = Math.Pow(10, -scale);
+            return Math.Truncate(value / divisor) * divisor;
+        }
+
         return Math.Round(value, scale, MidpointRounding.AwayFromZero);
     }
 

@@ -127,7 +127,7 @@ public sealed class DefineNamedRangeCommand : IWorkbookCommand, IAffectedCellsCo
 /// regardless of whether it resolves to a range or a formula/constant expression, and undo
 /// restores whichever kind was actually removed.
 /// </summary>
-public sealed class RemoveNamedRangeCommand : IWorkbookCommand
+public sealed class RemoveNamedRangeCommand : IWorkbookCommand, IAffectedCellsCommand
 {
     private readonly string _name;
     private readonly SheetId? _scopeSheetId;
@@ -136,6 +136,17 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
     private bool _existed;
     private bool _wasFormula;
     private string? _previousFormulaText;
+    private List<CellAddress> _affectedCells = [];
+
+    /// <summary>
+    /// Formula cells that referenced the removed name and must be recalculated — deleting a name
+    /// makes those formulas resolve to #NAME? (matching Excel's Name Manager Delete behavior), but
+    /// like <see cref="DefineNamedRangeCommand"/>'s redefine case, nothing touches the dependency
+    /// graph or any formula cell's CachedAst on removal, so without reporting these cells as
+    /// AffectedCells, RecalculateIfAutomatic has nothing to recompute and they keep showing their
+    /// stale pre-delete value instead of #NAME?.
+    /// </summary>
+    public IReadOnlyList<CellAddress> AffectedCells => _affectedCells;
 
     public string Label => $"Remove Named Range '{_name}'";
 
@@ -156,16 +167,18 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
             if (_existed)
             {
                 ctx.Workbook.TryGetScopedNamedRangeMetadata(_name, scopeSheetId, out _previousMetadata);
+                _affectedCells = NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, scopeSheetId);
                 ctx.Workbook.RemoveScopedNamedRange(_name, scopeSheetId);
-                return new CommandOutcome(true);
+                return new CommandOutcome(true, AffectedCells: _affectedCells);
             }
 
             if (ctx.Workbook.ScopedNamedFormulas.TryGetValue((_name, scopeSheetId), out _previousFormulaText))
             {
                 _existed = true;
                 _wasFormula = true;
+                _affectedCells = NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, scopeSheetId);
                 ctx.Workbook.RemoveScopedNamedFormula(_name, scopeSheetId);
-                return new CommandOutcome(true);
+                return new CommandOutcome(true, AffectedCells: _affectedCells);
             }
 
             return new CommandOutcome(false, $"Named range '{_name}' does not exist.");
@@ -176,16 +189,18 @@ public sealed class RemoveNamedRangeCommand : IWorkbookCommand
         {
             if (ctx.Workbook.TryGetNamedRangeMetadata(_name, out var metadata))
                 _previousMetadata = metadata;
+            _affectedCells = NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, null);
             ctx.Workbook.RemoveNamedRange(_name);
-            return new CommandOutcome(true);
+            return new CommandOutcome(true, AffectedCells: _affectedCells);
         }
 
         if (ctx.Workbook.NamedFormulas.TryGetValue(_name, out _previousFormulaText))
         {
             _existed = true;
             _wasFormula = true;
+            _affectedCells = NamedDefinitionRecalcHelper.FindCellsReferencingName(ctx.Workbook, _name, null);
             ctx.Workbook.RemoveNamedFormula(_name);
-            return new CommandOutcome(true);
+            return new CommandOutcome(true, AffectedCells: _affectedCells);
         }
 
         return new CommandOutcome(false, $"Named range '{_name}' does not exist.");

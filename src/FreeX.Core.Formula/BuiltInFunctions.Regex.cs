@@ -40,7 +40,19 @@ public static partial class BuiltInFunctions
             return ErrorValue.Value;
 
         if (args[0] is RangeValue textRange)
+        {
+            // return_mode 1/2 makes RegexExtractScalar itself return a per-cell RangeValue (all
+            // matches / capture groups). Over a MULTI-cell text range that would require nesting a
+            // RangeValue inside another RangeValue's cell -- a ragged, non-rectangular combination
+            // that has no well-defined flattening. Real Excel can't represent this either and
+            // surfaces #CALC!, so match that instead of letting MapUnaryTextRange store the nested
+            // RangeValue verbatim into a single outer cell (which corrupts the sheet -- the cell
+            // would display the array's own record dump). A single-cell range still spills normally.
+            if (returnMode is 1 or 2 && textRange.RowCount * textRange.ColCount > 1)
+                return ErrorValue.Calc;
+
             return MapUnaryTextRange(textRange, value => RegexExtractScalar(value, regex, returnMode));
+        }
 
         return RegexExtractScalar(args[0], regex, returnMode);
     }
@@ -154,9 +166,27 @@ public static partial class BuiltInFunctions
         if (!TryGetRegexCaseSensitivity(caseSensitivityValue, out var options, out error))
             return false;
 
+        var patternText = ToText(pattern);
+
+        // Excel's REGEX* functions run on Google's RE2 engine, which deliberately omits
+        // backreferences and lookaround (for linear-time matching guarantees) -- both of those
+        // compile fine under .NET's full regex engine and would silently produce a different
+        // result than real Excel (which errors with #VALUE!) instead of merely a different error.
+        // Reject them up front so both engines agree a formula using them is invalid.
+        if (HasRe2UnsupportedConstruct(patternText))
+        {
+            error = ErrorValue.Value;
+            return false;
+        }
+
+        // RE2/Excel accepts the Python-style named-group syntax (?P<name>...); .NET only
+        // recognizes (?<name>...). Translate before compiling so a pattern real Excel accepts
+        // doesn't spuriously fail here with #VALUE!.
+        patternText = TranslatePythonNamedGroups(patternText);
+
         try
         {
-            regex = new Regex(ToText(pattern), options, FormulaSafetyLimits.RegexTimeout);
+            regex = new Regex(patternText, options, FormulaSafetyLimits.RegexTimeout);
             return true;
         }
         catch (ArgumentException)
@@ -164,6 +194,59 @@ public static partial class BuiltInFunctions
             error = ErrorValue.Value;
             return false;
         }
+    }
+
+    private static readonly Regex PythonNamedGroupSyntax = new(@"\(\?P<", RegexOptions.Compiled);
+
+    private static string TranslatePythonNamedGroups(string pattern) =>
+        PythonNamedGroupSyntax.IsMatch(pattern) ? PythonNamedGroupSyntax.Replace(pattern, "(?<") : pattern;
+
+    /// <summary>
+    /// Detects the two RE2-unsupported construct families that .NET's regex engine happily
+    /// compiles but real Excel/RE2 rejects with #VALUE!: backreferences (\1-\9) and lookaround
+    /// ((?=...), (?!...), (?&lt;=...), (?&lt;!...)). Named groups ((?&lt;name&gt;...)) are deliberately not
+    /// flagged -- only a lookbehind's '=' / '!' right after '(?&lt;' trips this check.
+    /// </summary>
+    private static bool HasRe2UnsupportedConstruct(string pattern)
+    {
+        var inClass = false;
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            var c = pattern[i];
+            if (c == '\\' && i + 1 < pattern.Length)
+            {
+                var next = pattern[i + 1];
+                if (!inClass && next is >= '1' and <= '9')
+                    return true; // backreference \1..\9
+                i++; // skip the escaped character
+                continue;
+            }
+
+            if (!inClass && c == '[')
+            {
+                inClass = true;
+                continue;
+            }
+            if (inClass && c == ']')
+            {
+                inClass = false;
+                continue;
+            }
+
+            if (!inClass && c == '(' && i + 1 < pattern.Length && pattern[i + 1] == '?')
+            {
+                if (i + 2 < pattern.Length)
+                {
+                    var afterQuestion = pattern[i + 2];
+                    if (afterQuestion is '=' or '!')
+                        return true; // (?=...) or (?!...) lookahead
+                    if (afterQuestion == '<' && i + 3 < pattern.Length && pattern[i + 3] is '=' or '!')
+                        return true; // (?<=...) or (?<!...) lookbehind
+                }
+            }
+        }
+
+        return false;
     }
 
     private static bool TryGetRegexCaseSensitivity(ScalarValue value, out RegexOptions options, out ScalarValue error)

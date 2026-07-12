@@ -238,10 +238,25 @@ public sealed partial class NamedRangeDialog : Window
         // new name, or an edit that changed the name and/or scope — must not silently clobber an
         // unrelated existing name already occupying that scope (Excel's New Name dialog rejects
         // this with "already exists"; cross-scope same-text names are fine and simply coexist).
+        var isEditingExisting = originalName is not null && originalScope is not null;
         var isSameEntry =
-            originalName is not null && originalScope is not null &&
+            isEditingExisting &&
             string.Equals(originalName, name, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(originalScope, scope, StringComparison.OrdinalIgnoreCase);
+
+        // Renaming an existing name (or moving it to a different scope): remove the old entry
+        // first so it does not linger alongside the new one as an orphaned duplicate.
+        if (isEditingExisting && !isSameEntry)
+        {
+            var removeCmd = new RemoveNamedRangeCommand(originalName!, ResolveScopeSheetId(originalScope!));
+            var removeOutcome = _commandBus.Execute(_workbook.Id, removeCmd);
+            if (!removeOutcome.Success)
+            {
+                DialogMessageHelper.ShowWarning(this, removeOutcome.ErrorMessage ?? UiText.Get("NamedRange_DefineFailedMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
+                FocusNamesListOrNewButton();
+                return;
+            }
+        }
 
         var cmd = new DefineNamedRangeCommand(
             name,

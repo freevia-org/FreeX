@@ -170,6 +170,19 @@ internal static class XlsxWorksheetThreadedCommentMapper
             .GroupBy(pair => pair.Author, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First().SourcePersonId!, StringComparer.Ordinal);
 
+        // Fallback source: a person id that some OTHER comment's preserved @mention captured for
+        // a display name (via MentionedPersonDisplayNames, populated unconditionally on load --
+        // see ReadMentionedPersonDisplayNames) that matches an author elsewhere in the workbook.
+        // This covers an author who is @mentioned by someone else but whose OWN comment carries
+        // no mentions of its own (e.g. Alice mentions Bob, and Bob separately authors a plain,
+        // mention-free comment): without this, Bob would have no entry in sourcePersonIdsByAuthor
+        // above and would get a freshly minted guid, while GetNonAuthoringMentionedPersons then
+        // adds a SECOND <person> record under Bob's real id purely to keep Alice's untouched
+        // mention resolvable -- splitting one real person into two records
+        // (see R34-io-comments-threaded-mentions-2). When a display name has more than one
+        // candidate mentioned id, the first one encountered wins, same tie-break as above.
+        var mentionedPersonIdsByDisplayName = GetMentionedPersonIdsByDisplayName(workbook);
+
         var authors = workbook.Sheets
             .SelectMany(sheet => sheet.ThreadedComments.Values.SelectMany(GetThreadAuthorsWithSourcePersonId))
             .Select(pair => pair.Author)
@@ -180,10 +193,39 @@ internal static class XlsxWorksheetThreadedCommentMapper
                 author => author,
                 author => sourcePersonIdsByAuthor.TryGetValue(author, out var sourcePersonId)
                     ? sourcePersonId
-                    : CreateStableGuid("person", author),
+                    : mentionedPersonIdsByDisplayName.TryGetValue(author, out var mentionedPersonId)
+                        ? mentionedPersonId
+                        : CreateStableGuid("person", author),
                 StringComparer.Ordinal);
 
         return authors;
+    }
+
+    private static IReadOnlyDictionary<string, string> GetMentionedPersonIdsByDisplayName(Workbook workbook)
+    {
+        var byDisplayName = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var comment in sheet.ThreadedComments.Values)
+            {
+                AddMentionedPersonIdsByDisplayName(comment.MentionedPersonDisplayNames, byDisplayName);
+                foreach (var reply in comment.Replies)
+                    AddMentionedPersonIdsByDisplayName(reply.MentionedPersonDisplayNames, byDisplayName);
+            }
+        }
+
+        return byDisplayName;
+    }
+
+    private static void AddMentionedPersonIdsByDisplayName(
+        IReadOnlyDictionary<string, string>? mentionedPersonDisplayNames,
+        Dictionary<string, string> byDisplayName)
+    {
+        if (mentionedPersonDisplayNames is null)
+            return;
+
+        foreach (var (personId, displayName) in mentionedPersonDisplayNames)
+            byDisplayName.TryAdd(displayName, personId);
     }
 
     private static IEnumerable<(string Author, string? SourcePersonId)> GetThreadAuthorsWithSourcePersonId(
@@ -367,7 +409,9 @@ internal static class XlsxWorksheetThreadedCommentMapper
                     mentionsXml,
                     // Only preserve the source personId when there is @mention metadata to keep
                     // resolvable; comments without mentions let the writer mint/reuse the normal
-                    // deterministic per-author guid instead.
+                    // deterministic per-author guid instead (or, when some OTHER comment's
+                    // preserved mention references this same author's real id, reuse that id --
+                    // see CreateAuthorIds' mentionedPersonIdsByDisplayName cross-reference).
                     mentionsXml is not null ? NormalizeId(comment.Attribute("personId")?.Value) : null,
                     // Capture a display name for every @-mentioned person so a mention referencing
                     // someone who never authors a comment/reply still gets a <person> record

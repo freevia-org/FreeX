@@ -247,6 +247,37 @@ public sealed class DataBarAdvancedOptionsTests
     }
 
     [Fact]
+    public void Save_X14DataBarWithNativeFillAndModeledAxisColor_WritesFillColorBeforeAxisColor()
+    {
+        // CT_DataBar requires the child order cfvo, cfvo, fillColor?, borderColor?, negativeFillColor?,
+        // negativeBorderColor?, axisColor?. A preserved native fillColor must be inserted BEFORE the
+        // already-modeled axisColor, not appended after it, or Excel flags the file for repair.
+        var workbook = new Workbook("Book1");
+        var sheet = workbook.AddSheet("Sheet1");
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 1)),
+            RuleType = CfRuleType.DataBar,
+            DataBarAxisColor = new RgbColor(1, 2, 3),
+            NativePayloadChildXmls =
+            [
+                """<fillColor xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main" rgb="FF112233" />"""
+            ]
+        });
+        using var stream = new MemoryStream();
+
+        new XlsxFileAdapter().Save(workbook, stream);
+
+        var x14DataBar = XlsxPackageTestHelper.ReadWorksheetXml(stream).Descendants(X14Ns + "dataBar").Should().ContainSingle().Subject;
+        var childNames = x14DataBar.Elements().Select(e => e.Name.LocalName).ToArray();
+        var fillIndex = Array.IndexOf(childNames, "fillColor");
+        var axisIndex = Array.IndexOf(childNames, "axisColor");
+        fillIndex.Should().BeGreaterThan(-1, because: "the native fillColor child must be preserved");
+        axisIndex.Should().BeGreaterThan(-1, because: "the modeled axisColor must be written");
+        fillIndex.Should().BeLessThan(axisIndex, because: "CT_DataBar requires fillColor before axisColor");
+    }
+
+    [Fact]
     public void Save_NativeOnlyDataBarAdvancedPayload_IsPreserved()
     {
         var workbook = new Workbook("Book1");

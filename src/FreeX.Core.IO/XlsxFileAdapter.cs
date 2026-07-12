@@ -110,6 +110,12 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         IReadOnlyList<ExternalLinkModel> externalLinkMetadata = [];
         var structuredTableMetadata = StructuredTablePackageMetadata.Empty;
         IReadOnlyList<XlsxChartsheet> chartsheets = [];
+        // Raw pageSetup@useFirstPageNumber per worksheet part path (keyed like SheetXmlLayout.WorksheetPath).
+        // ClosedXML's IXLPageSetup.FirstPageNumber reflects only the raw firstPageNumber attribute value and
+        // drops the useFirstPageNumber checkbox flag entirely, so it must be read directly from the source
+        // package XML to tell an enabled custom first-page-number from a disabled one with a stale numeric
+        // value left in the file (see the FirstPageNumber assignment below).
+        Dictionary<string, bool>? firstPageNumberEnabledByWorksheetPath = null;
         var packageMetadataDiagnostics = MeasureLoadPhase(() =>
         {
             try
@@ -122,6 +128,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
 
                 packageParts = XlsxLoadPackageParts.Inspect(packageArchive);
                 chartsheets = XlsxChartsheetReader.Read(packageArchive);
+                firstPageNumberEnabledByWorksheetPath = ReadWorksheetFirstPageNumberEnabledFlags(packageArchive);
 
                 workbookTheme = packageParts.HasTheme
                     ? XlsxWorkbookThemeReader.Load(packageArchive)
@@ -725,7 +732,18 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
             sheet.PageOrder = xlSheet.PageSetup.PageOrder == XLPageOrderValues.OverThenDown
                 ? WorksheetPageOrder.OverThenDown
                 : WorksheetPageOrder.DownThenOver;
-            sheet.FirstPageNumber = xlSheet.PageSetup.FirstPageNumber == 0
+            // ClosedXML reads the raw firstPageNumber attribute unconditionally, ignoring whether the
+            // "First page number" checkbox (useFirstPageNumber) was actually on -- Excel commonly leaves
+            // a stale firstPageNumber value in the XML after the box is unchecked. Only trust a nonzero
+            // FirstPageNumber here when the source XML positively confirms useFirstPageNumber was truthy;
+            // if we can't determine that (no raw metadata available), fall back to ClosedXML's value
+            // rather than risk dropping a genuinely-enabled custom first page number.
+            bool? firstPageNumberExplicitlyEnabled = xmlLayout?.WorksheetPath is { Length: > 0 } firstPageNumberWorksheetPath &&
+                firstPageNumberEnabledByWorksheetPath is not null &&
+                firstPageNumberEnabledByWorksheetPath.TryGetValue(firstPageNumberWorksheetPath, out var firstPageNumberEnabled)
+                ? firstPageNumberEnabled
+                : null;
+            sheet.FirstPageNumber = xlSheet.PageSetup.FirstPageNumber == 0 || firstPageNumberExplicitlyEnabled == false
                 ? null
                 : xlSheet.PageSetup.FirstPageNumber;
             sheet.PrintBlackAndWhite = xlSheet.PageSetup.BlackAndWhite;
@@ -1687,6 +1705,39 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
     // without an explicit check here the user only ever sees a low-level zip/ClosedXML format
     // exception, never the actual reason ("this workbook is password protected").
     private static readonly byte[] CompoundFileBinarySignature = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
+
+    private static readonly XNamespace FirstPageNumberWorksheetNamespace =
+        "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+    // Reads, per worksheet part path, whether the source XML's <pageSetup useFirstPageNumber="..."/>
+    // attribute is truthy. ClosedXML's IXLPageSetup surface has no property for this flag (it only
+    // exposes the raw FirstPageNumber value), so it has to be recovered directly from the package XML.
+    // Best-effort: any entry that fails to parse or has no pageSetup element is simply omitted, and
+    // callers treat a missing entry as "unknown" rather than "disabled".
+    private static Dictionary<string, bool> ReadWorksheetFirstPageNumberEnabledFlags(ZipArchive archive)
+    {
+        var result = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in archive.Entries.Where(XlsxPackagePath.IsWorksheetXmlEntry))
+        {
+            XDocument xml;
+            try
+            {
+                xml = XlsxPackageXmlEditor.LoadXml(entry);
+            }
+            catch (Exception)
+            {
+                continue;
+            }
+
+            if (xml.Root?.Element(FirstPageNumberWorksheetNamespace + "pageSetup") is not { } pageSetup)
+                continue;
+
+            result[XlsxPackagePath.NormalizeEntryPath(entry)] =
+                XlsxWorksheetXmlValueParser.IsTruthy(pageSetup.Attribute("useFirstPageNumber")?.Value);
+        }
+
+        return result;
+    }
 
     private static void ThrowIfPasswordEncrypted(MemoryStream packageStream)
     {

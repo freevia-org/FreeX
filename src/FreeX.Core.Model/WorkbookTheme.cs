@@ -135,8 +135,75 @@ public sealed record WorkbookTheme(
         {
             [slot] = color
         };
-        return this with { Colors = colors, NativeColorSchemeXml = null };
+        return this with
+        {
+            Colors = colors,
+            NativeColorSchemeXml = PatchNativeColorScheme(NativeColorSchemeXml, slot, color)
+        };
     }
+
+    // Mirror WithFonts/WithEffects: patch only the changed slot's <a:srgbClr> in place rather than
+    // discarding the whole native clrScheme XML. Discarding it would make the writer regenerate all
+    // 12 slots from scratch, converting untouched sysClr entries (e.g. dk1/lt1 bound to
+    // windowText/window) into baked srgbClr values and dropping the clrScheme "name" attribute.
+    private static string? PatchNativeColorScheme(string? colorSchemeXml, WorkbookThemeColorSlot slot, CellColor color)
+    {
+        var colorScheme = TryParseColorScheme(colorSchemeXml);
+        if (colorScheme is null)
+            return null;
+
+        var elementName = ColorSlotElementName(slot);
+        if (elementName is null)
+            return colorScheme.ToString(SaveOptions.DisableFormatting);
+
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var patchedColorScheme = new XElement(colorScheme);
+        var newSlotElement = new XElement(drawingNs + elementName,
+            new XElement(drawingNs + "srgbClr",
+                new XAttribute("val", new DrawingMlRgbColor(color.R, color.G, color.B).ToHexRgb())));
+
+        var existingSlotElement = patchedColorScheme.Element(drawingNs + elementName);
+        if (existingSlotElement is not null)
+            existingSlotElement.ReplaceWith(newSlotElement);
+        else
+            patchedColorScheme.Add(newSlotElement);
+
+        return patchedColorScheme.ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static XElement? TryParseColorScheme(string? colorSchemeXml)
+    {
+        if (string.IsNullOrWhiteSpace(colorSchemeXml))
+            return null;
+
+        try
+        {
+            XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
+            var colorScheme = XElement.Parse(colorSchemeXml);
+            return colorScheme.Name == drawingNs + "clrScheme" ? colorScheme : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string? ColorSlotElementName(WorkbookThemeColorSlot slot) => slot switch
+    {
+        WorkbookThemeColorSlot.Dark1 => "dk1",
+        WorkbookThemeColorSlot.Light1 => "lt1",
+        WorkbookThemeColorSlot.Dark2 => "dk2",
+        WorkbookThemeColorSlot.Light2 => "lt2",
+        WorkbookThemeColorSlot.Accent1 => "accent1",
+        WorkbookThemeColorSlot.Accent2 => "accent2",
+        WorkbookThemeColorSlot.Accent3 => "accent3",
+        WorkbookThemeColorSlot.Accent4 => "accent4",
+        WorkbookThemeColorSlot.Accent5 => "accent5",
+        WorkbookThemeColorSlot.Accent6 => "accent6",
+        WorkbookThemeColorSlot.Hyperlink => "hlink",
+        WorkbookThemeColorSlot.FollowedHyperlink => "folHlink",
+        _ => null
+    };
 
     private static string? RenameNativeFormatScheme(string? formatSchemeXml, string effectsName)
     {

@@ -13,7 +13,9 @@ public sealed class FormulaParityCatalogTests
         "CUBESET",
         "CUBESETCOUNT",
         "CUBEVALUE",
+        "IMAGE",
         "RTD",
+        "STOCKHISTORY",
         "WEBSERVICE"
     ];
 
@@ -36,6 +38,21 @@ public sealed class FormulaParityCatalogTests
     public void ExcludedFunctions_AreNotRegisteredBuiltIns()
     {
         BuiltInFunctions.Names.Should().NotIntersectWith(ExcludedFunctionNames);
+    }
+
+    [Fact]
+    public void ExcludedFunctions_AllHaveDocumentedExcludedRow()
+    {
+        // Every name in ExcludedFunctionNames (including modern-365 functions like IMAGE and
+        // STOCKHISTORY that need external infra we don't implement) must have an explicit
+        // "Excluded from scope" row in docs/parity/functions.md, so #NAME? for these is a
+        // tracked, documented gap rather than a silent untracked one.
+        var documentedExcluded = ReadDocumentedFunctions()
+            .Where(entry => entry.Status.StartsWith("Excluded", StringComparison.OrdinalIgnoreCase))
+            .Select(entry => entry.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        documentedExcluded.Should().Contain(ExcludedFunctionNames);
     }
 
     [Fact]

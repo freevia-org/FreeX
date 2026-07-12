@@ -46,7 +46,13 @@ public sealed partial class ViewportService
                 if (string.Equals(ovr.IconSet, "NoIcons", StringComparison.OrdinalIgnoreCase))
                     return null;
 
-                return new ConditionalFormatIcon(ovr.IconSet, ovr.IconId, iconCount, rule.IconSetShowValue);
+                // An override may pick an icon from a different family than the rule's own
+                // icon-set style (e.g. a 5-arrow glyph plugged into a 3-icon rule). The glyph
+                // shape/color/rating-bar math downstream keys off IconCount, so it must reflect
+                // the override's OWN family size, not the rule-bucket count used to resolve
+                // which threshold bucket we're in.
+                var overrideIconCount = ViewportConditionalFormatEvaluator.GetIconSetCount(ovr.IconSet);
+                return new ConditionalFormatIcon(ovr.IconSet, ovr.IconId, overrideIconCount, rule.IconSetShowValue);
             }
 
             return new ConditionalFormatIcon(style, bucketIndex.Value, iconCount, rule.IconSetShowValue);

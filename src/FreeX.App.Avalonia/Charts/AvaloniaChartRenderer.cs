@@ -41,9 +41,6 @@ public sealed class AvaloniaChartRenderer
     private const double DefaultSeriesStrokeThickness = 2;
     private const double TrendlineAnnotationFontSize = 10;
 
-    // Title reserve: when a chart title is present we shift the plot area down by this many points.
-    private const double TitleAreaHeight = 28;
-
     private static readonly IBrush AxisBrush = SolidBrush(0x59, 0x59, 0x59);
     private static readonly IBrush AxisLabelBrush = SolidBrush(0x40, 0x40, 0x40);
     private static readonly IBrush DefaultPlotBackground = SolidBrush(0xFF, 0xFF, 0xFF);
@@ -96,9 +93,11 @@ public sealed class AvaloniaChartRenderer
         // Chart-area border (on top of background, under everything else).
         AddChartAreaBorder(canvas, width, height);
 
-        // Chart title — rendered above the plot, centered horizontally.
+        // Chart title — rendered above the plot, centered horizontally. Constrained to the space
+        // already reserved above layout.PlotArea so a large title font (or a small chart box) never
+        // overlaps the plot/top axis (see AddChartTitle).
         if (!string.IsNullOrWhiteSpace(_chart.Title))
-            AddChartTitle(canvas, width);
+            AddChartTitle(canvas, width, layout.PlotArea.Top);
 
         var isPie = layout.Series.Any(s => s.Kind == SeriesGeometryKind.PieSlices);
         if (!isPie)
@@ -167,7 +166,15 @@ public sealed class AvaloniaChartRenderer
 
     // ── Chart title ──────────────────────────────────────────────────────────
 
-    private void AddChartTitle(Canvas canvas, double canvasWidth)
+    /// <summary>
+    /// Draws the chart title above the plot, shrinking its font size (never growing it) so the
+    /// title's rendered box fits within <paramref name="availableHeight"/> — the vertical space
+    /// already reserved above <c>layout.PlotArea</c> by the caller. Without this clamp a large
+    /// title font (e.g. 20-24pt "Format Chart Title") or a small chart box renders past the fixed
+    /// 4px top margin and overlaps the plot area's top border/gridline and axis, unlike Excel (which
+    /// always reserves title space) and the WPF host (OxyPlot auto-manages title spacing).
+    /// </summary>
+    private void AddChartTitle(Canvas canvas, double canvasWidth, double availableHeight)
     {
         var title = _chart.Title;
         if (string.IsNullOrWhiteSpace(title))
@@ -177,6 +184,8 @@ public sealed class AvaloniaChartRenderer
         IBrush foreground = _chart.ResolveChartTitleTextColor(_theme) is { } titleColor
             ? SolidBrush(titleColor)
             : SolidBrush(0x26, 0x26, 0x26);
+
+        const double topMargin = 4;
 
         var tb = new TextBlock
         {
@@ -191,10 +200,20 @@ public sealed class AvaloniaChartRenderer
 
         // Measure so we can center it properly even without layout pass.
         tb.Measure(new Size(canvasWidth, double.PositiveInfinity));
+        var measuredHeight = tb.DesiredSize.Height > 0 ? tb.DesiredSize.Height : fontSize + 4;
+
+        var maxTitleHeight = Math.Max(0, availableHeight - topMargin);
+        var fittedFontSize = ChartTitleFit.ResolveFittingFontSize(fontSize, measuredHeight, maxTitleHeight);
+        if (fittedFontSize < fontSize)
+        {
+            tb.FontSize = fittedFontSize;
+            tb.Measure(new Size(canvasWidth, double.PositiveInfinity));
+        }
+
         var labelWidth = tb.DesiredSize.Width > 0 ? tb.DesiredSize.Width : canvasWidth * 0.8;
 
         Canvas.SetLeft(tb, (canvasWidth - labelWidth) / 2);
-        Canvas.SetTop(tb, 4);
+        Canvas.SetTop(tb, topMargin);
         canvas.Children.Add(tb);
     }
 
@@ -399,9 +418,17 @@ public sealed class AvaloniaChartRenderer
             if (slice.Arc.SweepAngleDegrees <= 0 || slice.Arc.OuterRadius <= 0)
                 continue;
 
+            // Per-slice fill override: an explicit per-point <c:dPt> fill (Format Data Point in
+            // Excel) takes priority over the theme-palette-by-index color, matching WPF's
+            // ChartRenderer which resolves GetPointFillColor(chart, seriesIndex, pointIndex, theme)
+            // before falling back to the palette.
+            IBrush sliceFill = ChartStylePlanner.ResolvePointFillColor(_chart, series.SeriesIndex, slice.PointIndex, _theme) is { } overrideColor
+                ? SolidBrush(overrideColor)
+                : PaletteFill(slice.PointIndex);
+
             var path = new AvaloniaPath
             {
-                Fill = PaletteFill(slice.PointIndex),
+                Fill = sliceFill,
                 Stroke = stroke,
                 StrokeThickness = 1,
                 Data = BuildSliceGeometry(slice.Arc),

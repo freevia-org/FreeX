@@ -493,14 +493,17 @@ public sealed class RecalcEngine
             return 0;
 
         var scale = digits - (int)Math.Floor(Math.Log10(Math.Abs(value))) - 1;
-        // Math.Round(double, int) only accepts digits in [0, 15] and throws ArgumentOutOfRangeException
-        // for negative values (which occur whenever |value| >= 10^digits, e.g. any value >= 1e15 when
-        // digits == 15). Clamping to [-15, 15] does NOT avoid this -- it must be clamped to [0, 15].
-        // A negative "scale" would mean rounding to the left of the decimal point (tens/hundreds/...),
-        // which Math.Round cannot express directly; since callers only ask for at most 15 significant
-        // digits and doubles carry ~15-17 significant digits anyway, clamping to 0 is a safe no-op for
-        // values that already exceed that many integer digits (nothing meaningful left to round off).
-        scale = Math.Clamp(scale, 0, 15);
+        if (scale < 0)
+        {
+            // The value has more integer digits than the significant-digit cap (e.g. an 18-digit
+            // integer). Excel does not round such values to the nearest 10^-scale -- it truncates
+            // (chops) the excess low-order digits to zero, matching its 15-significant-digit storage
+            // cap. Math.Round(double, int) only accepts digits in [0, 15] and cannot express a
+            // negative scale, so replicate the truncation directly instead of clamping to a no-op.
+            var divisor = Math.Pow(10, -scale);
+            return Math.Truncate(value / divisor) * divisor;
+        }
+
         return Math.Round(value, scale, MidpointRounding.AwayFromZero);
     }
 

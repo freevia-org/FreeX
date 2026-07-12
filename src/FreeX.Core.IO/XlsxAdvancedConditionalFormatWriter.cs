@@ -661,6 +661,20 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
             ? null
             : new XElement(x14Ns + elementName, new XAttribute("rgb", $"FF{color.Value.R:X2}{color.Value.G:X2}{color.Value.B:X2}"));
 
+    // x14 CT_DataBar requires this exact child order: cfvo, cfvo, fillColor?, borderColor?,
+    // negativeFillColor?, negativeBorderColor?, axisColor?. Native children preserved from a prior
+    // load (most commonly fillColor, which the writer never models itself) must be inserted at their
+    // schema position rather than appended after axisColor, or Excel will flag the file for repair.
+    private static readonly Dictionary<string, int> X14DataBarChildOrder = new(StringComparer.Ordinal)
+    {
+        ["cfvo"] = 0,
+        ["fillColor"] = 1,
+        ["borderColor"] = 2,
+        ["negativeFillColor"] = 3,
+        ["negativeBorderColor"] = 4,
+        ["axisColor"] = 5,
+    };
+
     private static void AddNativeX14DataBarChildren(XElement dataBar, ConditionalFormat cf, XNamespace x14Ns)
     {
         var modeledChildren = XlsxAdvancedConditionalFormatMetadata.ModeledDataBarPayloadChildren(cf);
@@ -669,7 +683,47 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
         foreach (var nativeChildXml in cf.NativePayloadChildXmls)
         {
-            TryAddNativeElement(dataBar, nativeChildXml, x14Ns, modeledChildren);
+            TryInsertNativeX14DataBarChild(dataBar, nativeChildXml, x14Ns, modeledChildren);
+        }
+    }
+
+    private static void TryInsertNativeX14DataBarChild(
+        XElement dataBar,
+        string? xml,
+        XNamespace expectedNamespace,
+        IReadOnlyCollection<string>? excludedLocalNames)
+    {
+        if (string.IsNullOrWhiteSpace(xml))
+            return;
+
+        try
+        {
+            var element = XElement.Parse(xml);
+            if (element.Name.Namespace != expectedNamespace ||
+                excludedLocalNames?.Contains(element.Name.LocalName) == true)
+            {
+                return;
+            }
+
+            if (!X14DataBarChildOrder.TryGetValue(element.Name.LocalName, out var rank))
+            {
+                // Not one of the schema-ordered CT_DataBar children; preserve prior append behavior.
+                dataBar.Add(element);
+                return;
+            }
+
+            var insertBeforeElement = dataBar.Elements()
+                .FirstOrDefault(existing =>
+                    X14DataBarChildOrder.TryGetValue(existing.Name.LocalName, out var existingRank) &&
+                    existingRank > rank);
+            if (insertBeforeElement is not null)
+                insertBeforeElement.AddBeforeSelf(element);
+            else
+                dataBar.Add(element);
+        }
+        catch
+        {
+            // Ignore malformed native conditional-format payloads from older saves.
         }
     }
 

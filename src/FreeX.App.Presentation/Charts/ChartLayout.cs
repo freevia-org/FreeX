@@ -2,6 +2,37 @@ using FreeX.Core.Model;
 
 namespace FreeX.App.Presentation.Charts;
 
+/// <summary>
+/// Pure sizing math for fitting a chart title above the plot area without overlapping it. Desktop
+/// host renderers measure the title's natural rendered height at the model's
+/// configured font size, then call <see cref="ResolveFittingFontSize"/> to find the font size that
+/// keeps the title's box within the space already reserved above the plot area.
+/// </summary>
+public static class ChartTitleFit
+{
+    /// <summary>Never shrink a title below this font size, even on a very small chart box.</summary>
+    public const double MinimumFontSize = 6;
+
+    /// <summary>
+    /// Returns <paramref name="naturalFontSize"/> unchanged when a title measured at
+    /// <paramref name="naturalHeight"/> already fits within <paramref name="availableHeight"/> (the
+    /// vertical space reserved above the plot area, net of any fixed top margin). Otherwise scales
+    /// the font size down proportionally so the (re-measured) title height fits, floored at
+    /// <see cref="MinimumFontSize"/> so the title is shrunk, never suppressed entirely.
+    /// </summary>
+    public static double ResolveFittingFontSize(double naturalFontSize, double naturalHeight, double availableHeight)
+    {
+        if (availableHeight <= 0)
+            return MinimumFontSize;
+
+        if (naturalHeight <= 0 || naturalHeight <= availableHeight)
+            return naturalFontSize;
+
+        var scale = availableHeight / naturalHeight;
+        return Math.Max(MinimumFontSize, naturalFontSize * scale);
+    }
+}
+
 /// <summary>A single axis tick: its data value, its pixel position, and its formatted label.</summary>
 public readonly record struct AxisTick(double Value, double Position, string Label);
 

@@ -501,7 +501,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         if (max > CellAddress.MaxCol)
             max = CellAddress.MaxCol;
 
-        if (XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("hidden")?.Value))
+        var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("hidden")?.Value);
+        if (isHidden)
         {
             for (var colNumber = min; colNumber <= max; colNumber++)
                 hiddenCols.Add(colNumber);
@@ -510,7 +511,12 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var colOutlineStr = col.Attribute("outlineLevel")?.Value;
         if (int.TryParse(colOutlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var colOutlineLevel) && colOutlineLevel > 0)
         {
-            var collapsed = XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("collapsed")?.Value);
+            // `collapsed="1"` alone marks the (potentially still-visible) anchor column of a
+            // collapsed outline group in real Excel-authored files -- it does not mean the column
+            // itself is hidden. Only fold it into GroupHiddenCols when the column's own `hidden`
+            // attribute agrees, so a visible collapsed summary column stays visible. Mirrors
+            // ReadRowLayout's identical row-side handling above.
+            var collapsed = isHidden && XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("collapsed")?.Value);
             for (var colNumber = min; colNumber <= max; colNumber++)
             {
                 colOutlineLevels[colNumber] = colOutlineLevel;

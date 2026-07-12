@@ -1151,6 +1151,9 @@ internal sealed class ExternalTextPasteSpecialCommand : IWorkbookCommand, IAffec
                     return CommandGuards.RejectSheetProtected();
         }
 
+        if (CommandGuards.RejectIfSplitsArray(sheet, _edits.Select(e => e.Address)) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         _snapshot = [];
         foreach (var (address, text) in _edits)
         {

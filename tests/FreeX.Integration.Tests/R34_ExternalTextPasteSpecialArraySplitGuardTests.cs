@@ -1,0 +1,131 @@
+using FluentAssertions;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
+
+namespace FreeX.Integration.Tests;
+
+/// <summary>
+/// R34-commands-paste-special-3-1: ExternalTextPasteSpecialCommand.Apply (the external-clipboard
+/// counterpart of Paste Special's arithmetic Operation, e.g. pasting a copied Notepad number with
+/// Add/Subtract/Multiply/Divide) never called CommandGuards.RejectIfSplitsArray before mutating the
+/// destination cell, unlike every other content-mutating paste command (PasteCellsCommand,
+/// PasteSpecialCellsCommand, EditCellsCommand). That let it silently overwrite a single member of a
+/// live dynamic-array spill (or legacy CSE array) in the raw cell dictionary while the spill's
+/// _spillAnchors/_spillValues bookkeeping -- keyed off the anchor -- was left untouched, desyncing the
+/// cached spill state instead of being rejected with Excel's "You cannot change part of an array."
+/// Fixed by adding the same RejectIfSplitsArray guard used by its siblings.
+/// </summary>
+public sealed class R34_ExternalTextPasteSpecialArraySplitGuardTests
+{
+    private const string CannotChangePartOfArrayMessage = "You cannot change part of an array.";
+
+    private static (Workbook Workbook, Sheet Sheet, CellAddress Anchor, ICommandContext Ctx) MakeLiveSpillSetup()
+    {
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var anchor = new CellAddress(sheet.Id, 1, 1); // A1
+        sheet.SetCell(anchor, Cell.FromFormula("SEQUENCE(3,1)"));
+        var cells = new ScalarValue[3, 1]
+        {
+            { new NumberValue(1) },
+            { new NumberValue(2) },
+            { new NumberValue(3) },
+        };
+        sheet.SetSpillRange(anchor, new RangeValue(cells)); // spills to A1:A3
+        return (wb, sheet, anchor, new TestCommandContext(wb));
+    }
+
+    [Fact]
+    public void ExternalTextPasteWithOperation_OnNonAnchorSpillMember_IsBlocked()
+    {
+        var (_, sheet, _, ctx) = MakeLiveSpillSetup();
+        var member = new CellAddress(sheet.Id, 2, 1); // A2 - spill member, not anchor
+
+        var command = PasteCommandFactory.CreateExternalTextPasteCommand(
+            sheet.Id,
+            new GridRange(member, member),
+            [["5"]],
+            preserveText: true,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be(CannotChangePartOfArrayMessage);
+        // The spill member must be left untouched -- no silent overwrite/desync.
+        sheet.GetValue(member).Should().Be(new NumberValue(2));
+    }
+
+    [Fact]
+    public void ExternalTextPasteWithOperation_OnAnchorAlone_IsBlocked()
+    {
+        // Excel also blocks touching just the anchor of a multi-cell array in isolation.
+        var (_, sheet, anchor, ctx) = MakeLiveSpillSetup();
+
+        var command = PasteCommandFactory.CreateExternalTextPasteCommand(
+            sheet.Id,
+            new GridRange(anchor, anchor),
+            [["5"]],
+            preserveText: true,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeFalse();
+        outcome.ErrorMessage.Should().Be(CannotChangePartOfArrayMessage);
+        // The anchor's formula cell must be left untouched -- no silent overwrite/desync.
+        sheet.GetCell(anchor)!.FormulaText.Should().Be("SEQUENCE(3,1)");
+    }
+
+    [Fact]
+    public void ExternalTextPasteWithOperation_OnNormalCell_StillCombinesNumerically_NoRegression()
+    {
+        // Sibling case: a plain (non-array) destination cell must still be able to receive an
+        // external-clipboard arithmetic-Operation paste exactly as before the guard was added.
+        var wb = new Workbook("test");
+        var sheet = wb.AddSheet("Sheet1");
+        var ctx = new TestCommandContext(wb);
+        var address = new CellAddress(sheet.Id, 5, 6);
+        sheet.SetCell(address, Cell.FromValue(new NumberValue(10)));
+
+        var command = PasteCommandFactory.CreateExternalTextPasteCommand(
+            sheet.Id,
+            new GridRange(address, address),
+            [["5"]],
+            preserveText: true,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+        sheet.GetValue(address).Should().Be(new NumberValue(15));
+    }
+
+    [Fact]
+    public void ExternalTextPasteWithOperation_OnEntireSpillRange_IsAllowed()
+    {
+        // Sibling case: selecting and pasting over the WHOLE array range at once (not splitting it)
+        // must still be permitted, matching every other RejectIfSplitsArray-guarded command.
+        var (_, sheet, anchor, ctx) = MakeLiveSpillSetup();
+        var whole = new GridRange(anchor, new CellAddress(sheet.Id, 3, 1)); // A1:A3
+
+        var command = PasteCommandFactory.CreateExternalTextPasteCommand(
+            sheet.Id,
+            whole,
+            [["10"], ["20"], ["30"]],
+            preserveText: true,
+            new PasteSpecialOptions(Operation: PasteSpecialOperation.Add));
+
+        var outcome = command.Apply(ctx);
+
+        outcome.Success.Should().BeTrue(outcome.ErrorMessage);
+        // Only the anchor has a raw stored Cell in this synthetic setup (spill members exist only
+        // via the spill's cached RangeValue, never as their own Cell); ExternalTextPasteSpecialCommand
+        // combines against sheet.GetCell (the raw dictionary), so every destination here starts from
+        // Blank (0) regardless of what GetValue reported pre-paste -- the point of this test is only
+        // that the whole-range paste is allowed (not rejected), not the arithmetic result.
+        sheet.GetValue(anchor).Should().Be(new NumberValue(10));
+        sheet.GetValue(new CellAddress(sheet.Id, 2, 1)).Should().Be(new NumberValue(20));
+        sheet.GetValue(new CellAddress(sheet.Id, 3, 1)).Should().Be(new NumberValue(30));
+    }
+}
