@@ -686,11 +686,14 @@ public static partial class BuiltInFunctions
             }
             if (arg is RangeValue rv)
             {
-                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1):
-                // a computed/virtual array (FILTER, SORT, ...) defaults its StartRow/StartCol to
-                // (1,1) with SheetName null, which must not be mistaken for a real sheet position
-                // when checking hidden rows / nested SUBTOTAL-AGGREGATE cells.
-                bool isReference = rv.SheetName is not null || rv.StartRow != 1 || rv.StartCol != 1;
+                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
+                // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
+                // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
+                // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
+                // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
+                // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
+                // no coordinate heuristic can distinguish the two without wrongly dropping elements.
+                bool isReference = rv.IsSheetReference;
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;
@@ -736,11 +739,14 @@ public static partial class BuiltInFunctions
 
             if (arg is RangeValue rv)
             {
-                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1):
-                // a computed/virtual array (FILTER, SORT, ...) defaults its StartRow/StartCol to
-                // (1,1) with SheetName null, which must not be mistaken for a real sheet position
-                // when checking hidden rows / nested SUBTOTAL-AGGREGATE cells.
-                bool isReference = rv.SheetName is not null || rv.StartRow != 1 || rv.StartCol != 1;
+                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
+                // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
+                // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
+                // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
+                // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
+                // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
+                // no coordinate heuristic can distinguish the two without wrongly dropping elements.
+                bool isReference = rv.IsSheetReference;
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;
@@ -795,11 +801,14 @@ public static partial class BuiltInFunctions
 
             if (arg is RangeValue rv)
             {
-                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1):
-                // a computed/virtual array (FILTER, SORT, ...) defaults its StartRow/StartCol to
-                // (1,1) with SheetName null, which must not be mistaken for a real sheet position
-                // when checking hidden rows / nested SUBTOTAL-AGGREGATE cells.
-                bool isReference = rv.SheetName is not null || rv.StartRow != 1 || rv.StartCol != 1;
+                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
+                // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
+                // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
+                // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
+                // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
+                // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
+                // no coordinate heuristic can distinguish the two without wrongly dropping elements.
+                bool isReference = rv.IsSheetReference;
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;
@@ -849,11 +858,14 @@ public static partial class BuiltInFunctions
 
             if (arg is RangeValue rv)
             {
-                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1):
-                // a computed/virtual array (FILTER, SORT, ...) defaults its StartRow/StartCol to
-                // (1,1) with SheetName null, which must not be mistaken for a real sheet position
-                // when checking hidden rows / nested SUBTOTAL-AGGREGATE cells.
-                bool isReference = rv.SheetName is not null || rv.StartRow != 1 || rv.StartCol != 1;
+                // See BuiltInFunctions.Subtotal.cs's isReference guard (R19-formula-functions-edge-1,
+                // R25-aggregate-subtotal-deep-3): only a genuine worksheet reference carries
+                // coordinates that map to real cells, so gate hidden-row / nested SUBTOTAL-AGGREGATE
+                // exclusion on the explicit RangeValue.IsSheetReference provenance flag. A computed/
+                // virtual array (FILTER, SORT, ...) defaults StartRow/StartCol to (1,1) with SheetName
+                // null — field-for-field identical to a genuine same-sheet A1-anchored reference — so
+                // no coordinate heuristic can distinguish the two without wrongly dropping elements.
+                bool isReference = rv.IsSheetReference;
                 for (int r = 0; r < rv.RowCount; r++)
                 {
                     uint absRow = rv.StartRow + (uint)r;

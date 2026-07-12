@@ -443,7 +443,9 @@ public sealed partial class FormulaEvaluator
                     ? context.GetCellValue(range.SheetName, r0 + (uint)ri, c0 + (uint)ci)
                     : context.GetCellValue(r0 + (uint)ri, c0 + (uint)ci);
             }
-        return new RangeValue(cells, r0, c0) { SheetName = range.SheetName };
+        // Materialized directly from a worksheet reference — its coordinates map to real cells, so
+        // mark it so SUBTOTAL/AGGREGATE honour hidden-row / nested-aggregate exclusion (RangeValue.IsSheetReference).
+        return new RangeValue(cells, r0, c0) { SheetName = range.SheetName, IsSheetReference = true };
     }
 
     // Clamp the open end of a full-column/full-row reference to the target sheet's used extent.
@@ -1239,7 +1241,9 @@ public sealed partial class FormulaEvaluator
                     ? context.GetCellValue(baseSheet, (uint)(r0Final + ri), (uint)(c0Final + ci))
                     : context.GetCellValue((uint)(r0Final + ri), (uint)(c0Final + ci));
             }
-        return new RangeValue(cells, (uint)r0Final, (uint)c0Final) { SheetName = baseSheet };
+        // OFFSET yields a genuine worksheet reference — its coordinates map to real cells, so mark it
+        // so SUBTOTAL/AGGREGATE honour hidden-row / nested-aggregate exclusion (RangeValue.IsSheetReference).
+        return new RangeValue(cells, (uint)r0Final, (uint)c0Final) { SheetName = baseSheet, IsSheetReference = true };
     }
 
 }

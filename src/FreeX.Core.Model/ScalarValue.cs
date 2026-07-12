@@ -54,6 +54,21 @@ public sealed record RangeValue(ScalarValue[,] Cells, uint StartRow = 1, uint St
 {
     public string? SheetName { get; init; }
 
+    /// <summary>
+    /// True only when this RangeValue was materialized directly from a genuine worksheet
+    /// reference — a cell/range reference, a named range, INDIRECT, OFFSET, INDEX's reference
+    /// form, and the like — as opposed to being synthesized by a function or operator
+    /// (FILTER, SORT, SEQUENCE, MAP, arithmetic broadcast over a range, ROW/COLUMN, ...).
+    /// Only a genuine reference's <see cref="StartRow"/>/<see cref="StartCol"/>/<see cref="SheetName"/>
+    /// coordinates map to real cells whose hidden-row state and formula text are meaningful, so
+    /// coordinate-sensitive consumers (SUBTOTAL / AGGREGATE hidden-row and nested-aggregate
+    /// exclusion) must gate on this flag rather than guessing from the coordinates: a computed
+    /// array defaults to StartRow=1/StartCol=1/SheetName=null, which is field-for-field identical
+    /// to a genuine same-sheet A1-anchored reference and therefore indistinguishable by coordinate
+    /// alone. See R25-aggregate-subtotal-deep-3.
+    /// </summary>
+    public bool IsSheetReference { get; init; }
+
     public int RowCount => Cells.GetLength(0);
     public int ColCount => Cells.GetLength(1);
 

@@ -28,14 +28,16 @@ public static partial class BuiltInFunctions
                 // has no real position on the sheet, so RangeValue defaults its StartRow/StartCol
                 // to 1 and leaves SheetName null (see RangeValue in FreeX.Core.Model/ScalarValue.cs
                 // and its construction sites in BuiltInFunctions.DynamicArrays.*.cs). Only a genuine
-                // worksheet REFERENCE — recognizable by a real SheetName, or a start row/col other
-                // than that (1,1) default — carries coordinates meaningful enough to look up
-                // hidden-row state or nested SUBTOTAL/AGGREGATE formulas. Applying those
-                // coordinate-based exclusions to a virtual array's bogus (1,1)-anchored coordinates
-                // silently (and wrongly) drops elements whenever sheet row 1 / column A happens to
-                // be hidden or hold a nested SUBTOTAL, regardless of where the array's values
-                // actually came from. See R19-formula-functions-edge-1.
-                bool isReference = rv.SheetName is not null || rv.StartRow != 1 || rv.StartCol != 1;
+                // worksheet REFERENCE carries coordinates meaningful enough to look up hidden-row
+                // state or nested SUBTOTAL/AGGREGATE formulas. We gate on the explicit
+                // RangeValue.IsSheetReference provenance flag (set only at the reference-
+                // materialization sites — BuildRangeValue / OFFSET / INDIRECT) rather than guessing
+                // from the coordinates: a computed array's default (1,1)/null-SheetName is field-for-
+                // field identical to a genuine same-sheet A1-anchored reference, so no coordinate
+                // heuristic can tell them apart without wrongly dropping elements for one of them
+                // (e.g. =SUBTOTAL(107,A1:A4) with a hidden row 2 must still exclude that row).
+                // See R19-formula-functions-edge-1 and R25-aggregate-subtotal-deep-3.
+                bool isReference = rv.IsSheetReference;
 
                 for (int r = 0; r < rv.RowCount; r++)
                 {

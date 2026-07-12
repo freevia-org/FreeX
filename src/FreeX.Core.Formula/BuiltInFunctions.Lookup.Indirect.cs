@@ -335,7 +335,9 @@ public static partial class BuiltInFunctions
                     ? ctx.GetCellValue(sheetName, r, c)
                     : ctx.GetCellValue(r, c);
 
-        return new RangeValue(cells, r0, c0) { SheetName = sheetName };
+        // INDIRECT resolves to a genuine worksheet reference — its coordinates map to real cells, so
+        // mark it so SUBTOTAL/AGGREGATE honour hidden-row / nested-aggregate exclusion (RangeValue.IsSheetReference).
+        return new RangeValue(cells, r0, c0) { SheetName = sheetName, IsSheetReference = true };
     }
 
 
