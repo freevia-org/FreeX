@@ -86,13 +86,45 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartNs,
         XNamespace drawingNs)
     {
-        var dataLabelWritten = false;
+        var groupIndex = 0;
         foreach (var (plotChart, usesSecondaryAxis) in CreatePlotCharts(chart, sheet, chartNs, drawingNs))
         {
-            AddPlotChartCommonElements(plotChart, chart, chartNs, drawingNs, usesSecondaryAxis, includeDataLabels: !dataLabelWritten);
-            dataLabelWritten = true;
+            // Only the FIRST native plot-chart-type group's <c:dLbls> is modeled by the chart-wide
+            // ShowDataLabels*/DataLabel* scalars. Later groups (combo charts) instead re-emit any
+            // <c:dLbls> preserved verbatim from the source file for that same group index — see
+            // ChartModel.AdditionalPlotGroupDataLabels.
+            AddPlotChartCommonElements(plotChart, chart, chartNs, drawingNs, usesSecondaryAxis, includeDataLabels: groupIndex == 0);
+            if (groupIndex > 0)
+                AddPreservedGroupDataLabels(plotChart, chart, chartNs, groupIndex);
+            groupIndex++;
             yield return plotChart;
         }
+    }
+
+    /// <summary>
+    /// Re-attaches a non-first combo-chart plot group's original &lt;c:dLbls&gt; (preserved verbatim
+    /// by <see cref="XlsxChartDataLabelReader.ApplyDataLabels"/>) to the group at the same yield
+    /// index on save, so it round-trips instead of being dropped. See
+    /// <see cref="ChartModel.AdditionalPlotGroupDataLabels"/>.
+    /// </summary>
+    private static void AddPreservedGroupDataLabels(XElement plotChart, ChartModel chart, XNamespace chartNs, int groupIndex)
+    {
+        var preserved = chart.AdditionalPlotGroupDataLabels
+            .FirstOrDefault(group => group.GroupIndex == groupIndex);
+        if (preserved is null)
+            return;
+
+        XElement dataLabels;
+        try
+        {
+            dataLabels = XElement.Parse(preserved.RawXml);
+        }
+        catch (System.Xml.XmlException)
+        {
+            return;
+        }
+
+        InsertAfterLastSeries(plotChart, dataLabels, chartNs);
     }
 
     private static IEnumerable<(XElement PlotChart, bool UsesSecondaryAxis)> CreatePlotCharts(

@@ -34,6 +34,12 @@ public sealed partial class XlsxFileAdapter
         var classicPriorities = new List<int>();
         var dataBarGuids = new Dictionary<string, ConditionalFormat>(StringComparer.OrdinalIgnoreCase);
         var iconSetGuids = new Dictionary<string, ConditionalFormat>(StringComparer.OrdinalIgnoreCase);
+        // Every x14 id claimed by a classic-modeled rule (colorScale/dataBar/iconSet/long-tail), so the
+        // x14-only passthrough pass below can tell an x14 rule that merely EXTENDS an already-modeled
+        // classic rule (whose extra properties are a smaller, pre-existing gap) apart from a rule Excel
+        // wrote EXCLUSIVELY in the x14 extension with no classic counterpart at all (see
+        // ReadX14UnhandledConditionalFormatRules).
+        var claimedX14Ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var tempSheet = SheetId.New();
         foreach (var conditionalFormatting in worksheetXml.Root?.Elements(worksheetNs + "conditionalFormatting") ?? [])
         {
@@ -70,6 +76,8 @@ public sealed partial class XlsxFileAdapter
                     format.StopIfTrue = IsTruthy(rule.Attribute("stopIfTrue")?.Value);
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
+                    if (ExtractX14IdFromCfRule(rule) is { } colorScaleX14Id)
+                        claimedX14Ids.Add(colorScaleX14Id);
                     result.Add(format);
                 }
                 else if (string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase) &&
@@ -83,7 +91,10 @@ public sealed partial class XlsxFileAdapter
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
                     var x14Id = ExtractX14IdFromCfRule(rule);
                     if (x14Id is not null)
+                    {
                         dataBarGuids[x14Id] = format;
+                        claimedX14Ids.Add(x14Id);
+                    }
                     result.Add(format);
                 }
                 else if (string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) &&
@@ -108,7 +119,10 @@ public sealed partial class XlsxFileAdapter
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
                     var iconSetX14Id = ExtractX14IdFromCfRule(rule);
                     if (iconSetX14Id is not null)
+                    {
                         iconSetGuids[iconSetX14Id] = format;
+                        claimedX14Ids.Add(iconSetX14Id);
+                    }
                     result.Add(format);
                 }
                 else if (TryMapLongTailConditionalFormatRule(type, out var mappedType))
@@ -139,6 +153,8 @@ public sealed partial class XlsxFileAdapter
                     };
                     ApplyNativeConditionalFormatRuleMetadata(format, rule, worksheetNs);
                     ApplyNativeConditionalFormattingContainerMetadata(format, conditionalFormatting, worksheetNs);
+                    if (ExtractX14IdFromCfRule(rule) is { } longTailX14Id)
+                        claimedX14Ids.Add(longTailX14Id);
                     result.Add(format);
                 }
                 else if (string.Equals(type, "cellIs", StringComparison.OrdinalIgnoreCase) ||
@@ -154,8 +170,99 @@ public sealed partial class XlsxFileAdapter
 
         ApplyX14DataBarProperties(dataBarGuids, worksheetXml);
         ReadX14IconSetConditionalFormats(result, iconSetGuids, worksheetXml, tempSheet);
+        ReadX14UnhandledConditionalFormatRules(result, claimedX14Ids, worksheetXml, tempSheet);
         classicRulePriorities = classicPriorities;
         return result;
+    }
+
+    /// <summary>
+    /// Reads every x14-extension conditional-format rule that <see cref="ReadX14IconSetConditionalFormats"/>
+    /// and <see cref="ApplyX14DataBarProperties"/> do not already own (i.e. every cfRule type other than
+    /// iconSet/dataBar) and that has no matching classic cfRule counterpart in
+    /// <paramref name="claimedX14Ids"/>. Excel writes some rules -- most notably an "expression" rule
+    /// whose formula references another worksheet -- EXCLUSIVELY in this x14 extension, because the
+    /// classic ST cfRule formula grammar cannot carry a cross-sheet reference, so there is no classic
+    /// &lt;conditionalFormatting&gt;&lt;cfRule&gt; fallback to fall back on for it at all. Rather than
+    /// modeling every possible x14-only rule type/shape, capture the raw &lt;x14:cfRule&gt; XML verbatim
+    /// on a synthetic <see cref="ConditionalFormat"/> (using a rule type that already round-trips through
+    /// <see cref="XlsxAdvancedConditionalFormatWriter"/> and evaluates as an inert no-op because
+    /// <see cref="ConditionalFormat.FormatIfTrue"/> is left null) so the writer can detect the raw payload
+    /// and re-emit it byte-for-byte on save instead of silently dropping the rule. An x14 rule that merely
+    /// EXTENDS an already-modeled classic rule (its id is in <paramref name="claimedX14Ids"/>) is left
+    /// alone here so a second, duplicate rule isn't fabricated on save.
+    /// </summary>
+    private static void ReadX14UnhandledConditionalFormatRules(
+        List<ConditionalFormat> result,
+        HashSet<string> claimedX14Ids,
+        XDocument worksheetXml,
+        SheetId tempSheet)
+    {
+        XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+        XNamespace xmNs  = "http://schemas.microsoft.com/office/excel/2006/main";
+        const string x14CfUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
+
+        var worksheetRoot = worksheetXml.Root;
+        if (worksheetRoot is null)
+            return;
+
+        foreach (var extLst in worksheetRoot.Elements().Where(e => e.Name.LocalName == "extLst"))
+        {
+            foreach (var ext in extLst.Elements().Where(e => e.Name.LocalName == "ext"))
+            {
+                if (ext.Attribute("uri")?.Value != x14CfUri)
+                    continue;
+
+                foreach (var x14CFs in ext.Elements(x14Ns + "conditionalFormattings"))
+                {
+                    foreach (var x14CF in x14CFs.Elements(x14Ns + "conditionalFormatting"))
+                    {
+                        var sqrefEl = x14CF.Element(xmNs + "sqref");
+                        var sqref = sqrefEl?.Value?.Trim();
+                        if (string.IsNullOrWhiteSpace(sqref))
+                            continue;
+
+                        foreach (var x14CfRule in x14CF.Elements(x14Ns + "cfRule"))
+                        {
+                            var type = x14CfRule.Attribute("type")?.Value;
+                            if (string.Equals(type, "iconSet", StringComparison.OrdinalIgnoreCase) ||
+                                string.Equals(type, "dataBar", StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
+
+                            var id = x14CfRule.Attribute("id")?.Value;
+                            if (id is not null && claimedX14Ids.Contains(id))
+                                continue;
+
+                            GridRange appliesTo;
+                            IReadOnlyList<GridRange>? additionalRanges;
+                            try
+                            {
+                                (appliesTo, additionalRanges) = ParseSqrefRanges(sqref!, tempSheet);
+                            }
+                            catch
+                            {
+                                continue;
+                            }
+
+                            var priority = XlsxXmlAttributeReader.ReadIntAttribute(x14CfRule, "priority") ?? 1;
+                            var format = new ConditionalFormat
+                            {
+                                AppliesTo = appliesTo,
+                                AdditionalRanges = additionalRanges,
+                                Priority = priority,
+                                RuleType = CfRuleType.DuplicateValues,
+                                NativeChildXmls = [x14CfRule.ToString(SaveOptions.DisableFormatting)]
+                            };
+                            result.Add(format);
+
+                            if (id is not null)
+                                claimedX14Ids.Add(id);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private static string? ExtractX14IdFromCfRule(XElement cfRule)

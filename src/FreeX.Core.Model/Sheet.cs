@@ -51,6 +51,23 @@ public sealed record ThreadedComment(string Text, string Author = "FreeX")
     public DateTimeOffset? ModifiedAtUtc { get; init; }
 
     /// <summary>
+    /// The UTC time the ROOT comment's own text was last genuinely edited (via
+    /// UpdateThreadedCommentTextCommand, or the root-text branch of
+    /// ApplyThreadedCommentChangesCommand, in FreeX.Core.Commands), distinct from
+    /// <see cref="ModifiedAtUtc"/> which also gets bumped by unrelated thread activity (a reply
+    /// being added/edited/removed elsewhere in the thread). Null when the root text has never
+    /// been edited since creation, or for a comment freshly loaded from a source XLSX -- in
+    /// either case the writer falls back to inferring the root's persisted dT from
+    /// ModifiedAtUtc/CreatedAtUtc/replies (see
+    /// XlsxWorksheetThreadedCommentMapper.ResolveRootThreadedCommentTimestamp). Once set, this
+    /// value always wins over any later reply-driven ModifiedAtUtc bump when the writer persists
+    /// the root &lt;threadedComment&gt; element's own dT, so a genuine root-text edit is never
+    /// silently reverted/overwritten by subsequent reply activity in the same session (see
+    /// R35-deferred-comment-edit-timestamp-1).
+    /// </summary>
+    public DateTimeOffset? RootTextEditedAtUtc { get; init; }
+
+    /// <summary>
     /// The stable threadedComment id (a GUID string, e.g. "{5A2F...}") this root comment was
     /// loaded with from the source XLSX, or null for a comment created in this session that has
     /// not yet been saved. Preserved across saves so this id (and every reply's parentId, which
@@ -618,6 +635,23 @@ public sealed partial class Sheet
 
     /// <summary>Columns currently collapsed by a group expand/collapse operation.</summary>
     public HashSet<uint> GroupHiddenCols { get; } = [];
+
+    /// <summary>
+    /// Rows that are the visible "anchor" (subtotal/summary) row of a collapsed outline group --
+    /// i.e. they carry Excel's <c>collapsed="1"</c> outline marker while remaining visible
+    /// themselves (they are NOT in <see cref="GroupHiddenRows"/>, which tracks the hidden detail
+    /// rows the anchor summarizes). Distinguishing the two is required because a full-rebuild XLSX
+    /// save must apply <c>collapsed="1"</c> to the anchor row and only <c>hidden="1"</c> (never
+    /// also <c>collapsed="1"</c>) to the detail rows in <see cref="GroupHiddenRows"/> -- conflating
+    /// them stamps a spurious <c>collapsed="1"</c> onto interior hidden rows and silently drops the
+    /// marker Excel actually used to place the group's "+/-" outline toggle. A row can legitimately
+    /// appear in both sets at once (it is hidden as a nested detail row of an outer group while also
+    /// anchoring its own now-collapsed inner group).
+    /// </summary>
+    public HashSet<uint> CollapsedAnchorRows { get; } = [];
+
+    /// <summary>Columns that are the visible anchor of a collapsed outline group. See <see cref="CollapsedAnchorRows"/>.</summary>
+    public HashSet<uint> CollapsedAnchorCols { get; } = [];
 
     /// <summary>True if the row is hidden by any mechanism (filter, manual, or group collapse).</summary>
     public bool IsRowEffectivelyHidden(uint row) =>

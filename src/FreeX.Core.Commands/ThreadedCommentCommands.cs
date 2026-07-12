@@ -144,7 +144,7 @@ public sealed class UpdateThreadedCommentTextCommand : IWorkbookCommand
         if (!string.Equals(_previous.Text, _text, StringComparison.Ordinal))
             updated = updated with { MentionsXml = null };
 
-        sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(updated, _timestampUtc);
+        sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.TouchRootTextEdit(updated, _timestampUtc);
         return new CommandOutcome(true, AffectedCells: [_address]);
     }
 
@@ -368,6 +368,7 @@ public sealed class ApplyThreadedCommentChangesCommand : IWorkbookCommand
 
         var updated = _previous;
         var hasChange = false;
+        var rootTextChanged = false;
 
         if (_rootText is not null && !string.Equals(_rootText, updated.Text, StringComparison.Ordinal))
         {
@@ -377,6 +378,7 @@ public sealed class ApplyThreadedCommentChangesCommand : IWorkbookCommand
             // mention whose text was edited away.
             updated = updated with { Text = _rootText, MentionsXml = null };
             hasChange = true;
+            rootTextChanged = true;
         }
 
         if (!string.IsNullOrWhiteSpace(_replyText))
@@ -395,7 +397,13 @@ public sealed class ApplyThreadedCommentChangesCommand : IWorkbookCommand
         if (!hasChange)
             return new CommandOutcome(false, "No threaded comment changes were specified.");
 
-        sheet.ThreadedComments[_address] = ThreadedCommentTimestamps.Touch(updated, _timestampUtc);
+        // Only a genuine root-text edit should stamp RootTextEditedAtUtc: a reply being added in
+        // this same call is thread activity, not a rewrite of the root's own text, and must not
+        // be able to (later) masquerade as one -- see ThreadedCommentTimestamps.TouchRootTextEdit
+        // and R35-deferred-comment-edit-timestamp-1.
+        sheet.ThreadedComments[_address] = rootTextChanged
+            ? ThreadedCommentTimestamps.TouchRootTextEdit(updated, _timestampUtc)
+            : ThreadedCommentTimestamps.Touch(updated, _timestampUtc);
         return new CommandOutcome(true, AffectedCells: [_address]);
     }
 
@@ -468,6 +476,24 @@ internal static class ThreadedCommentTimestamps
         comment with
         {
             ModifiedAtUtc = timestampUtc
+        };
+
+    /// <summary>
+    /// Stamps a genuine edit to the ROOT comment's own text (or a resolved-state change applied
+    /// alongside it in the same undoable step), as opposed to <see cref="Touch(ThreadedComment,DateTimeOffset)"/>
+    /// which only tracks thread-wide "last activity" (e.g. a reply being added/edited/removed
+    /// elsewhere in the thread). This gives the IO mapper an unambiguous
+    /// <see cref="ThreadedComment.RootTextEditedAtUtc"/> signal for the persisted root
+    /// &lt;threadedComment&gt; dT that cannot later be overwritten by unrelated reply activity
+    /// bumping <see cref="ThreadedComment.ModifiedAtUtc"/> (see
+    /// XlsxWorksheetThreadedCommentMapper.ResolveRootThreadedCommentTimestamp and
+    /// R35-deferred-comment-edit-timestamp-1).
+    /// </summary>
+    public static ThreadedComment TouchRootTextEdit(ThreadedComment comment, DateTimeOffset timestampUtc) =>
+        comment with
+        {
+            ModifiedAtUtc = timestampUtc,
+            RootTextEditedAtUtc = timestampUtc
         };
 
     public static CommentReply Touch(CommentReply reply, DateTimeOffset timestampUtc) =>

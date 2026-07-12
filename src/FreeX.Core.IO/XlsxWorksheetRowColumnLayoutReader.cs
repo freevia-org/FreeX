@@ -46,6 +46,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var colOutlineLevels = new Dictionary<uint, int>();
         var groupHiddenRows = new HashSet<uint>();
         var groupHiddenCols = new HashSet<uint>();
+        var collapsedAnchorRows = new HashSet<uint>();
+        var collapsedAnchorCols = new HashSet<uint>();
         var rowHeights = new Dictionary<uint, double>();
         var columnWidths = new Dictionary<uint, double>();
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
@@ -68,7 +70,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             foreach (var row in root.Element(worksheetNs + "sheetData")?.Elements(rowName) ?? [])
             {
                 if (uint.TryParse(row.Attribute("r")?.Value, out var rowNumber))
-                    ReadRowLayout(row, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, rowHeights);
+                    ReadRowLayout(row, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, collapsedAnchorRows, rowHeights);
 
                 foreach (var cell in row.Elements(cellName))
                 {
@@ -90,7 +92,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             foreach (var cols in root.Elements(worksheetNs + "cols"))
             {
                 foreach (var col in cols.Elements(worksheetNs + "col"))
-                    ReadColumnLayout(col, hiddenCols, colOutlineLevels, groupHiddenCols, columnWidths);
+                    ReadColumnLayout(col, hiddenCols, colOutlineLevels, groupHiddenCols, collapsedAnchorCols, columnWidths);
             }
         }
 
@@ -103,7 +105,9 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 groupHiddenRows,
                 groupHiddenCols,
                 rowHeights,
-                columnWidths),
+                columnWidths,
+                collapsedAnchorRows,
+                collapsedAnchorCols),
             new XlsxWorksheetCellLayout(
                 cachedFormulaErrors,
                 explicitPopulatedCellStyles,
@@ -125,6 +129,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         var colOutlineLevels = new Dictionary<uint, int>();
         var groupHiddenRows = new HashSet<uint>();
         var groupHiddenCols = new HashSet<uint>();
+        var collapsedAnchorRows = new HashSet<uint>();
+        var collapsedAnchorCols = new HashSet<uint>();
         var rowHeights = new Dictionary<uint, double>();
         var columnWidths = new Dictionary<uint, double>();
         var explicitStyleOnlyCells = new List<(uint Row, uint Col, int StyleIndex)>();
@@ -234,7 +240,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 }
 
                 if (uint.TryParse(reader.GetAttribute("r"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var rowNumber))
-                    ReadRowLayout(reader, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, rowHeights);
+                    ReadRowLayout(reader, rowNumber, hiddenRows, rowOutlineLevels, groupHiddenRows, collapsedAnchorRows, rowHeights);
 
                 rowDepth = reader.Depth;
                 if (reader.IsEmptyElement)
@@ -342,7 +348,9 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                     groupHiddenRows,
                     groupHiddenCols,
                     rowHeights,
-                    columnWidths),
+                    columnWidths,
+                    collapsedAnchorRows,
+                    collapsedAnchorCols),
                 new XlsxWorksheetCellLayout(
                     cachedFormulaErrors,
                     explicitPopulatedCellStyles,
@@ -429,6 +437,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         HashSet<uint> hiddenRows,
         Dictionary<uint, int> rowOutlineLevels,
         HashSet<uint> groupHiddenRows,
+        HashSet<uint> collapsedAnchorRows,
         Dictionary<uint, double> rowHeights)
     {
         var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("hidden")?.Value);
@@ -438,6 +447,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         if (TryReadRowHeight(row.Attribute("ht")?.Value, row.Attribute("customHeight")?.Value, out var height))
             rowHeights[rowNumber] = height;
 
+        var isCollapsed = XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("collapsed")?.Value);
+
         var outlineStr = row.Attribute("outlineLevel")?.Value;
         if (int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0)
         {
@@ -446,9 +457,18 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             // collapsed outline group in real Excel-authored files -- it does not mean the row
             // itself is hidden. Only fold it into GroupHiddenRows when the row's own `hidden`
             // attribute agrees, so a visible collapsed subtotal/summary row stays visible.
-            if (isHidden && XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("collapsed")?.Value))
+            if (isHidden && isCollapsed)
                 groupHiddenRows.Add(rowNumber);
         }
+
+        // A row marked `collapsed="1"` but NOT itself hidden is the visible anchor (subtotal/
+        // summary row) Excel uses to host that group's "+/-" outline toggle. This is independent
+        // of whether the row itself carries a nonzero outlineLevel: the anchor of the OUTERMOST
+        // collapsed group commonly has outlineLevel="0"/absent, since only the detail rows it
+        // summarizes are nested -- so this check must not be gated by the outlineLevel>0 branch
+        // above (R35-deferred-collapse-anchor-1).
+        if (isCollapsed && !isHidden)
+            collapsedAnchorRows.Add(rowNumber);
     }
 
     private static void ReadRowLayout(
@@ -457,6 +477,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         HashSet<uint> hiddenRows,
         Dictionary<uint, int> rowOutlineLevels,
         HashSet<uint> groupHiddenRows,
+        HashSet<uint> collapsedAnchorRows,
         Dictionary<uint, double> rowHeights)
     {
         var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("hidden"));
@@ -466,6 +487,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         if (TryReadRowHeight(row.GetAttribute("ht"), row.GetAttribute("customHeight"), out var height))
             rowHeights[rowNumber] = height;
 
+        var isCollapsed = XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("collapsed"));
+
         var outlineStr = row.GetAttribute("outlineLevel");
         if (int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0)
         {
@@ -474,9 +497,13 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             // collapsed outline group in real Excel-authored files -- it does not mean the row
             // itself is hidden. Only fold it into GroupHiddenRows when the row's own `hidden`
             // attribute agrees, so a visible collapsed subtotal/summary row stays visible.
-            if (isHidden && XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("collapsed")))
+            if (isHidden && isCollapsed)
                 groupHiddenRows.Add(rowNumber);
         }
+
+        // See the XElement overload above for why this is not gated by outlineLevel>0.
+        if (isCollapsed && !isHidden)
+            collapsedAnchorRows.Add(rowNumber);
     }
 
     private static void ReadColumnLayout(
@@ -484,6 +511,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         HashSet<uint> hiddenCols,
         Dictionary<uint, int> colOutlineLevels,
         HashSet<uint> groupHiddenCols,
+        HashSet<uint> collapsedAnchorCols,
         Dictionary<uint, double> columnWidths)
     {
         if (!uint.TryParse(col.Attribute("min")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var min))
@@ -508,6 +536,8 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 hiddenCols.Add(colNumber);
         }
 
+        var isColCollapsed = XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("collapsed")?.Value);
+
         var colOutlineStr = col.Attribute("outlineLevel")?.Value;
         if (int.TryParse(colOutlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var colOutlineLevel) && colOutlineLevel > 0)
         {
@@ -516,13 +546,24 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             // itself is hidden. Only fold it into GroupHiddenCols when the column's own `hidden`
             // attribute agrees, so a visible collapsed summary column stays visible. Mirrors
             // ReadRowLayout's identical row-side handling above.
-            var collapsed = isHidden && XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("collapsed")?.Value);
+            var collapsed = isHidden && isColCollapsed;
             for (var colNumber = min; colNumber <= max; colNumber++)
             {
                 colOutlineLevels[colNumber] = colOutlineLevel;
                 if (collapsed)
                     groupHiddenCols.Add(colNumber);
             }
+        }
+
+        // A column marked `collapsed="1"` but NOT itself hidden is the visible anchor (summary
+        // column) Excel uses to host that group's "+/-" outline toggle -- not gated by
+        // outlineLevel>0 for the same reason as the row-side handling above
+        // (R35-deferred-collapse-anchor-1): the outermost collapsed group's anchor column
+        // commonly has outlineLevel="0"/absent.
+        if (isColCollapsed && !isHidden)
+        {
+            for (var colNumber = min; colNumber <= max; colNumber++)
+                collapsedAnchorCols.Add(colNumber);
         }
 
         if (XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("customWidth")?.Value) &&
@@ -647,4 +688,10 @@ internal sealed record XlsxWorksheetRowColumnLayout(
     HashSet<uint> GroupHiddenRows,
     HashSet<uint> GroupHiddenCols,
     Dictionary<uint, double> RowHeights,
-    Dictionary<uint, double> ColumnWidths);
+    Dictionary<uint, double> ColumnWidths,
+    // Trailing optional so existing positional call sites outside this file (which construct this
+    // record with the original 8 arguments) keep compiling unchanged. Rows/columns that are the
+    // visible, still-uncollapsed anchor of a collapsed outline group (collapsed="1", hidden absent/
+    // false) -- see Sheet.CollapsedAnchorRows/CollapsedAnchorCols and R35-deferred-collapse-anchor-1.
+    HashSet<uint>? CollapsedAnchorRows = null,
+    HashSet<uint>? CollapsedAnchorCols = null);

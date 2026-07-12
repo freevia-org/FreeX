@@ -17,6 +17,10 @@ public sealed partial class ScenarioManagerDialog
     }
 
     public static bool RequiresScenarioName(ScenarioManagerAction action) =>
+        // Merge pulls scenarios from another sheet/workbook rather than the dialog's own name/
+        // changing-cells fields, and has no ScenarioManagerDialogAction counterpart to route
+        // through -- handle it directly instead of calling ToDialogAction (which has no Merge arm).
+        action != ScenarioManagerAction.Merge &&
         SharedScenarioManagerDialogPlanner.RequiresScenarioName(ToDialogAction(action));
 
     public static bool TryValidateScenarioName(string? name, out string? error)
@@ -74,6 +78,12 @@ public sealed partial class ScenarioManagerDialog
         SheetId? currentSheetId,
         Func<string, SheetId?>? resolveSheetIdByName)
     {
+        // Merge has no dialog-form fields to validate (its source scenarios come from another
+        // sheet/workbook, not the name/changing-cells/result-cells text boxes) and no
+        // ScenarioManagerDialogAction counterpart -- never route it through ToDialogAction.
+        if (action == ScenarioManagerAction.Merge)
+            return null;
+
         return SharedScenarioManagerDialogPlanner.ValidateAcceptRequest(
             ToDialogAction(action),
             scenarioName,
@@ -91,8 +101,28 @@ public sealed partial class ScenarioManagerDialog
         string resultCellsText,
         string commentText,
         bool locked,
-        bool hidden) =>
-        SharedScenarioManagerDialogPlanner.ProjectAcceptResult(
+        bool hidden)
+    {
+        // Merge has no ScenarioManagerDialogAction counterpart (it isn't part of the
+        // Add/Edit/Save/Show/Delete/List/Report dialog form) and today no dialog button ever
+        // calls Accept(ScenarioManagerAction.Merge) -- ScenarioManagerDialog has no Merge button
+        // yet, so this branch is unreachable in shipped UI. It exists purely so a future Merge
+        // trigger (or a direct call) can never hit ToDialogAction's throw for Merge; the
+        // placeholder ScenarioManagerDialogAction.List here is never surfaced as a real selection.
+        if (action == ScenarioManagerAction.Merge)
+        {
+            return new ScenarioManagerDialogAcceptResult(
+                ScenarioManagerDialogAction.List,
+                selected?.Name,
+                newScenarioName,
+                changingCellsText,
+                resultCellsText,
+                commentText,
+                locked,
+                hidden);
+        }
+
+        return SharedScenarioManagerDialogPlanner.ProjectAcceptResult(
             ToDialogAction(action),
             selected,
             newScenarioName,
@@ -101,6 +131,7 @@ public sealed partial class ScenarioManagerDialog
             commentText,
             locked,
             hidden);
+    }
 
     private static ScenarioManagerDialogAction ToDialogAction(ScenarioManagerAction action) =>
         action switch

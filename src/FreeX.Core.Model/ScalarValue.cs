@@ -43,6 +43,15 @@ public sealed record ErrorValue(string Code) : ScalarValue
     public static readonly ErrorValue Circular = new("#CIRCULAR!");
     public static readonly ErrorValue Spill = new("#SPILL!");
     public static readonly ErrorValue Calc = new("#CALC!");
+
+    /// <summary>
+    /// Excel's #FIELD! error: raised for linked-data-type field access (e.g. <c>=A1.Price</c>)
+    /// when the referenced cell isn't a Rich Data Type record or doesn't expose that field.
+    /// FreeX doesn't model linked data types, so any "&lt;cellref&gt;.&lt;field&gt;" reference
+    /// surfaces this instead of being misrouted through named-range lookup to #NAME?.
+    /// ERROR.TYPE(#FIELD!) is 13 (see BuiltInFunctions.ArrayInfo.ErrorTypeScalar).
+    /// </summary>
+    public static readonly ErrorValue Field = new("#FIELD!");
 }
 
 /// <summary>

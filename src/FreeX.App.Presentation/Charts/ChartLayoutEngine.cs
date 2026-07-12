@@ -211,12 +211,36 @@ public static class ChartLayoutEngine
     {
         var chart = request.Chart;
         var legend = LegendLayoutBuilder.Build(request, out var plot);
-        var series = request.Series.Count > 0 ? request.Series[0] : null;
 
-        var values = new List<(int Index, double Value, string Label)>();
-        var total = 0.0;
-        if (series is not null)
+        var center = plot.ToRect().Center;
+        var outerRadius = Math.Max(0, Math.Min(plot.Width, plot.Height) / 2);
+
+        // Excel's Doughnut chart draws every <c:ser> as its own concentric ring (series 0 innermost,
+        // rising outward); a multi-series Pie/3D-Pie still shows only the first series as a single
+        // ring (Excel silently ignores the rest). Both keep today's single-ring geometry unchanged
+        // when there is exactly one series.
+        var isDoughnut = chart.Type == ChartType.Doughnut;
+        var ringSeries = isDoughnut ? request.Series : request.Series.Count > 0 ? [request.Series[0]] : [];
+
+        var holeRadius = isDoughnut
+            ? outerRadius * Math.Clamp(chart.DoughnutHoleSize, 0, 0.95)
+            : 0;
+        var ringCount = Math.Max(1, ringSeries.Count);
+        var ringBandWidth = (outerRadius - holeRadius) / ringCount;
+
+        var seriesLayouts = new List<SeriesLayout>(Math.Max(1, ringSeries.Count));
+        var dataLabels = new List<DataLabelBox>();
+
+        for (var ringIndex = 0; ringIndex < ringSeries.Count; ringIndex++)
         {
+            var series = ringSeries[ringIndex];
+            // Single-series case reproduces the original fixed outerRadius/innerRadius pair exactly
+            // (ringIndex 0 of 1: inner = holeRadius, outer = outerRadius).
+            var ringInnerRadius = holeRadius + (ringIndex * ringBandWidth);
+            var ringOuterRadius = holeRadius + ((ringIndex + 1) * ringBandWidth);
+
+            var values = new List<(int Index, double Value, string Label)>();
+            var total = 0.0;
             for (var i = 0; i < series.Values.Count; i++)
             {
                 if (series.Values[i] is not { } v || v <= 0)
@@ -225,58 +249,63 @@ public static class ChartLayoutEngine
                 values.Add((i, v, label));
                 total += v;
             }
-        }
 
-        var center = plot.ToRect().Center;
-        var outerRadius = Math.Max(0, Math.Min(plot.Width, plot.Height) / 2);
-        var innerRadius = chart.Type == ChartType.Doughnut
-            ? outerRadius * Math.Clamp(chart.DoughnutHoleSize, 0, 0.95)
-            : 0;
-
-        var slices = new List<SeriesSlice>(values.Count);
-        var dataLabels = new List<DataLabelBox>(values.Count);
-        // Angles measured clockwise from 12 o'clock, starting at the chart's first-slice angle.
-        var angle = chart.FirstSliceAngle;
-        for (var s = 0; s < values.Count; s++)
-        {
-            var (index, value, label) = values[s];
-            var fraction = total > 0 ? value / total : 0;
-            var sweep = fraction * 360.0;
-
-            var sliceCenter = center;
-            if (chart.ExplodedSliceIndex == index && chart.ExplodedSliceDistance > 0)
+            var slices = new List<SeriesSlice>(values.Count);
+            // Angles measured clockwise from 12 o'clock, starting at the chart's first-slice angle.
+            var angle = chart.FirstSliceAngle;
+            for (var s = 0; s < values.Count; s++)
             {
-                var mid = angle + (sweep / 2);
-                var offset = outerRadius * chart.ExplodedSliceDistance;
-                sliceCenter = PolarToPixel(center, mid, offset);
+                var (index, value, label) = values[s];
+                var fraction = total > 0 ? value / total : 0;
+                var sweep = fraction * 360.0;
+
+                var sliceCenter = center;
+                if (chart.ExplodedSliceIndex == index && chart.ExplodedSliceDistance > 0)
+                {
+                    var mid = angle + (sweep / 2);
+                    var offset = ringOuterRadius * chart.ExplodedSliceDistance;
+                    sliceCenter = PolarToPixel(center, mid, offset);
+                }
+
+                var arc = new LayoutArc(sliceCenter, ringOuterRadius, ringInnerRadius, angle, sweep);
+                slices.Add(new SeriesSlice(index, value, fraction, label, arc));
+
+                if (chart.ShowDataLabels)
+                {
+                    var text = ChartDataLabelTextPlanner.FormatPieDataLabel(chart, series.Name ?? "", label, value, fraction);
+                    if (!string.IsNullOrEmpty(text))
+                        dataLabels.Add(BuildPieDataLabel(request, arc, index, text));
+                }
+
+                angle += sweep;
             }
 
-            var arc = new LayoutArc(sliceCenter, outerRadius, innerRadius, angle, sweep);
-            slices.Add(new SeriesSlice(index, value, fraction, label, arc));
-
-            if (chart.ShowDataLabels)
+            seriesLayouts.Add(new SeriesLayout
             {
-                var text = ChartDataLabelTextPlanner.FormatPieDataLabel(chart, series?.Name ?? "", label, value, fraction);
-                if (!string.IsNullOrEmpty(text))
-                    dataLabels.Add(BuildPieDataLabel(request, arc, index, text));
-            }
-
-            angle += sweep;
+                SeriesIndex = series.SeriesIndex,
+                Name = series.Name,
+                Kind = SeriesGeometryKind.PieSlices,
+                Slices = slices,
+            });
         }
 
-        var seriesLayout = new SeriesLayout
+        if (seriesLayouts.Count == 0)
         {
-            SeriesIndex = series?.SeriesIndex ?? 0,
-            Name = series?.Name,
-            Kind = SeriesGeometryKind.PieSlices,
-            Slices = slices,
-        };
+            // No series at all (empty chart): keep a single empty ring so consumers still see a
+            // Series list shaped like every other pie/doughnut layout.
+            seriesLayouts.Add(new SeriesLayout
+            {
+                SeriesIndex = 0,
+                Kind = SeriesGeometryKind.PieSlices,
+                Slices = [],
+            });
+        }
 
         return new ChartLayout
         {
             Type = chart.Type,
             PlotArea = plot.ToRect(),
-            Series = [seriesLayout],
+            Series = seriesLayouts,
             Legend = legend,
             DataLabels = dataLabels,
         };

@@ -74,43 +74,64 @@ internal static class XlsxChartDataLabelReader
 
     public static void ApplyDataLabels(XElement? plotArea, ChartModel chart)
     {
-        var dataLabels = FindPlotChartElement(plotArea)?.Element(ChartNs + "dLbls");
-        if (dataLabels is null)
+        chart.AdditionalPlotGroupDataLabels.Clear();
+
+        var groups = FindAllPlotChartElements(plotArea);
+        if (groups.Count == 0)
             return;
 
-        chart.DataLabelPosition = FromXlsxDataLabelPosition(dataLabels.Element(ChartNs + "dLblPos")?.Attribute("val")?.Value);
-        var numberFormatElement = dataLabels.Element(ChartNs + "numFmt");
-        var numberFormatCode = numberFormatElement?.Attribute("formatCode")?.Value;
-        chart.DataLabelNumberFormat = XlsxChartAxisReader.FromXlsxNumberFormatCode(numberFormatCode);
-        // The writer always emits the required numFmt with formatCode="General" for the default format, so
-        // treat that as "no explicit code" — otherwise an unformatted chart's data-label format drifts from
-        // <none> to "General" on round-trip.
-        chart.DataLabelNumberFormatCode =
-            string.Equals(numberFormatCode, "General", StringComparison.Ordinal) ? null : numberFormatCode;
-        chart.DataLabelNumberFormatSourceLinked = ReadNullableBool(numberFormatElement?.Attribute("sourceLinked")?.Value);
-        chart.ShowDataLabelValue = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showVal")?.Attribute("val")?.Value);
-        chart.ShowDataLabelLegendKey = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showLegendKey")?.Attribute("val")?.Value);
-        chart.ShowDataLabelBubbleSize = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showBubbleSize")?.Attribute("val")?.Value);
-        chart.ShowDataLabelCategoryName = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showCatName")?.Attribute("val")?.Value);
-        chart.ShowDataLabelSeriesName = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showSerName")?.Attribute("val")?.Value);
-        chart.ShowDataLabelPercentage = ChartTypeSupport.SupportsPercentageDataLabels(chart.Type)
-            && XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showPercent")?.Attribute("val")?.Value);
-        chart.ShowDataLabelCallouts = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showLeaderLines")?.Attribute("val")?.Value);
+        var dataLabels = groups[0].Element(ChartNs + "dLbls");
+        if (dataLabels is not null)
+        {
+            chart.DataLabelPosition = FromXlsxDataLabelPosition(dataLabels.Element(ChartNs + "dLblPos")?.Attribute("val")?.Value);
+            var numberFormatElement = dataLabels.Element(ChartNs + "numFmt");
+            var numberFormatCode = numberFormatElement?.Attribute("formatCode")?.Value;
+            chart.DataLabelNumberFormat = XlsxChartAxisReader.FromXlsxNumberFormatCode(numberFormatCode);
+            // The writer always emits the required numFmt with formatCode="General" for the default format, so
+            // treat that as "no explicit code" — otherwise an unformatted chart's data-label format drifts from
+            // <none> to "General" on round-trip.
+            chart.DataLabelNumberFormatCode =
+                string.Equals(numberFormatCode, "General", StringComparison.Ordinal) ? null : numberFormatCode;
+            chart.DataLabelNumberFormatSourceLinked = ReadNullableBool(numberFormatElement?.Attribute("sourceLinked")?.Value);
+            chart.ShowDataLabelValue = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showVal")?.Attribute("val")?.Value);
+            chart.ShowDataLabelLegendKey = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showLegendKey")?.Attribute("val")?.Value);
+            chart.ShowDataLabelBubbleSize = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showBubbleSize")?.Attribute("val")?.Value);
+            chart.ShowDataLabelCategoryName = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showCatName")?.Attribute("val")?.Value);
+            chart.ShowDataLabelSeriesName = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showSerName")?.Attribute("val")?.Value);
+            chart.ShowDataLabelPercentage = ChartTypeSupport.SupportsPercentageDataLabels(chart.Type)
+                && XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showPercent")?.Attribute("val")?.Value);
+            chart.ShowDataLabelCallouts = XlsxChartScalarReader.IsTrue(dataLabels.Element(ChartNs + "showLeaderLines")?.Attribute("val")?.Value);
 
-        // Only mark ShowDataLabels=true when at least one visible label component is requested.
-        // A <c:dLbls> element with all show flags = 0 means "labels present in XML but effectively
-        // disabled"; rendering it would produce spurious per-point numeric labels on the chart.
-        chart.ShowDataLabels = chart.ShowDataLabelValue
-            || chart.ShowDataLabelCategoryName
-            || chart.ShowDataLabelSeriesName
-            || chart.ShowDataLabelPercentage
-            || chart.ShowDataLabelBubbleSize
-            || chart.ShowDataLabelLegendKey;
-        var separator = dataLabels.Element(ChartNs + "separator");
-        chart.DataLabelSeparator = FromXlsxDataLabelSeparator(separator?.Attribute("val")?.Value ?? separator?.Value);
-        ApplyDataLabelShapeProperties(dataLabels.Element(ChartNs + "spPr"), chart);
-        ApplyDataLabelTextProperties(dataLabels.Element(ChartNs + "txPr"), chart);
-        ApplyDataLabelLeaderLineProperties(dataLabels.Element(ChartNs + "leaderLines")?.Element(ChartNs + "spPr"), chart);
+            // Only mark ShowDataLabels=true when at least one visible label component is requested.
+            // A <c:dLbls> element with all show flags = 0 means "labels present in XML but effectively
+            // disabled"; rendering it would produce spurious per-point numeric labels on the chart.
+            chart.ShowDataLabels = chart.ShowDataLabelValue
+                || chart.ShowDataLabelCategoryName
+                || chart.ShowDataLabelSeriesName
+                || chart.ShowDataLabelPercentage
+                || chart.ShowDataLabelBubbleSize
+                || chart.ShowDataLabelLegendKey;
+            var separator = dataLabels.Element(ChartNs + "separator");
+            chart.DataLabelSeparator = FromXlsxDataLabelSeparator(separator?.Attribute("val")?.Value ?? separator?.Value);
+            ApplyDataLabelShapeProperties(dataLabels.Element(ChartNs + "spPr"), chart);
+            ApplyDataLabelTextProperties(dataLabels.Element(ChartNs + "txPr"), chart);
+            ApplyDataLabelLeaderLineProperties(dataLabels.Element(ChartNs + "leaderLines")?.Element(ChartNs + "spPr"), chart);
+        }
+
+        // Combo charts (bar+line, etc.) write one native plot-chart-type group per series subset.
+        // Only the first group's <c:dLbls> is modeled above as chart-wide scalars; a later group
+        // (e.g. a secondary-axis line series with its own data labels) would otherwise be silently
+        // dropped on open. Preserve each later group's <c:dLbls> verbatim, keyed by its 0-based
+        // group index, so XlsxChartXmlWriter can re-attach it to the same group on save.
+        for (var groupIndex = 1; groupIndex < groups.Count; groupIndex++)
+        {
+            var groupDataLabels = groups[groupIndex].Element(ChartNs + "dLbls");
+            if (groupDataLabels is null)
+                continue;
+
+            chart.AdditionalPlotGroupDataLabels.Add(
+                new ChartPlotGroupDataLabelsXml(groupIndex, groupDataLabels.ToString(SaveOptions.DisableFormatting)));
+        }
     }
 
     public static void ApplyPointDataLabels(XElement series, int seriesIndex, ChartModel chart)
@@ -147,18 +168,24 @@ internal static class XlsxChartDataLabelReader
         }
     }
 
-    private static XElement? FindPlotChartElement(XElement? plotArea)
+    /// <summary>
+    /// Returns every native plot-chart-type group (barChart/lineChart/etc.) that is a direct child
+    /// of <paramref name="plotArea"/>, in document order. A combo chart (e.g. bar+line) has more
+    /// than one of these; each can carry its own group-level <c:dLbls>.
+    /// </summary>
+    private static List<XElement> FindAllPlotChartElements(XElement? plotArea)
     {
+        var groups = new List<XElement>();
         if (plotArea is null)
-            return null;
+            return groups;
 
         foreach (var element in plotArea.Elements())
         {
             if (IsPlotChartElement(element.Name))
-                return element;
+                groups.Add(element);
         }
 
-        return null;
+        return groups;
     }
 
     private static bool IsPlotChartElement(XName name) =>

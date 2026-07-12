@@ -223,6 +223,21 @@ public sealed class ChartModel
     public string? DataLabelNumberFormatCode { get; set; }
     public bool? DataLabelNumberFormatSourceLinked { get; set; }
     public bool ShowDataLabelCallouts { get; set; }
+
+    /// <summary>
+    /// Combo charts write one native plot-chart-type group per series subset (e.g. a bar group on
+    /// the primary axis plus a line group on the secondary axis); today only the FIRST group's
+    /// data-label settings are modeled by the scalar <see cref="ShowDataLabels"/>/<c>DataLabel*</c>
+    /// properties above. When a LATER group (e.g. that secondary-axis line series) has its own
+    /// <c>&lt;c:dLbls&gt;</c> instead, its raw XML is preserved verbatim here — keyed by the
+    /// group's 0-based index in plot-area write/read order (matching
+    /// <c>XlsxChartXmlWriter.CreatePlotCharts</c>' yield order) — so it survives an open/save
+    /// round-trip instead of being silently dropped. This is a stop-gap round-trip fix, not a full
+    /// per-group data-label model: FreeX cannot yet render or edit labels attached to a non-first
+    /// combo group; that remains a follow-up.
+    /// </summary>
+    public List<ChartPlotGroupDataLabelsXml> AdditionalPlotGroupDataLabels { get; set; } = [];
+
     public CellColor? DataLabelFillColor { get; set; }
     public WorkbookThemeColorReference? DataLabelFillThemeColor { get; set; }
     public CellColor? DataLabelBorderColor { get; set; }
@@ -461,3 +476,9 @@ public sealed class ChartModel
 /// i.e. an OOXML <c>explosion val="25"</c> (25%) becomes 0.25.
 /// </summary>
 public sealed record ChartPointExplosion(int SeriesIndex, int PointIndex, double Distance);
+
+/// <summary>
+/// Verbatim <c>&lt;c:dLbls&gt;</c> XML preserved for a non-first combo-chart plot group.
+/// See <see cref="ChartModel.AdditionalPlotGroupDataLabels"/> for the round-trip rationale.
+/// </summary>
+public sealed record ChartPlotGroupDataLabelsXml(int GroupIndex, string RawXml);

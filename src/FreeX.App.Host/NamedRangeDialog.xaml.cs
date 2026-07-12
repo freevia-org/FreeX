@@ -244,19 +244,16 @@ public sealed partial class NamedRangeDialog : Window
             string.Equals(originalName, name, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(originalScope, scope, StringComparison.OrdinalIgnoreCase);
 
-        // Renaming an existing name (or moving it to a different scope): remove the old entry
-        // first so it does not linger alongside the new one as an orphaned duplicate.
-        if (isEditingExisting && !isSameEntry)
-        {
-            var removeCmd = new RemoveNamedRangeCommand(originalName!, ResolveScopeSheetId(originalScope!));
-            var removeOutcome = _commandBus.Execute(_workbook.Id, removeCmd);
-            if (!removeOutcome.Success)
-            {
-                DialogMessageHelper.ShowWarning(this, removeOutcome.ErrorMessage ?? UiText.Get("NamedRange_DefineFailedMessage"), UiText.Get("NamedRange_NamedRangeTitle"));
-                FocusNamesListOrNewButton();
-                return;
-            }
-        }
+        // NOTE: renaming an existing name (or moving it to a different scope) intentionally does
+        // NOT remove the old entry first. FreeX resolves names in formulas by literal text (e.g.
+        // =SUM(Revenue)), and nothing rewrites referencing formulas old-name -> new-name on rename;
+        // removing the old entry here would turn every such formula into #NAME? the instant the
+        // rename is applied. Leaving the old entry in place means a rename creates a second,
+        // orphaned name alongside the new one (visible/deletable from Name Manager like any other
+        // name) - a lesser, cosmetic bug compared to silently breaking live formulas. The correct
+        // fix is a dedicated rename command that updates the name and rewrites every referencing
+        // formula via a FormulaRewriter (the same way a sheet rename does); that is deferred pending
+        // that plumbing.
 
         var cmd = new DefineNamedRangeCommand(
             name,

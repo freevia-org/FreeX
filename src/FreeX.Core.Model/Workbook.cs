@@ -118,6 +118,15 @@ public sealed class Workbook
     /// <summary>File name or title of the workbook.</summary>
     public string Name { get; set; }
 
+    /// <summary>
+    /// Full on-disk path of the workbook's last saved or opened location, or <see langword="null"/>
+    /// when the workbook has never been saved (a brand-new, in-memory-only workbook). Consumed by
+    /// <c>CELL("filename")</c> to reproduce Excel's "drive:\path\[filename]sheetname" result. The
+    /// host application's open/save code is responsible for setting this after an IO operation
+    /// completes (mirroring how Excel updates the title bar / CELL("filename") on Save As).
+    /// </summary>
+    public string? FilePath { get; set; }
+
     /// <summary>All sheets in order.</summary>
     public IReadOnlyList<Sheet> Sheets => _sheets;
 

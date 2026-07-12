@@ -52,16 +52,29 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         foreach (var sheet in workbook.Sheets)
         {
             List<ConditionalFormat>? advancedRules = null;
+            List<ConditionalFormat>? rawX14PassthroughRules = null;
             foreach (var conditionalFormat in sheet.ConditionalFormats)
             {
                 if (!XlsxAdvancedConditionalFormatMetadata.IsAdvancedConditionalFormat(conditionalFormat))
                     continue;
 
+                // A synthetic rule created by ReadX14UnhandledConditionalFormatRules to carry an
+                // x14-only cfRule (e.g. a cross-sheet expression rule) that has no classic
+                // <conditionalFormatting><cfRule> fallback at all in the source file. Route it straight
+                // to the x14 ext block below, verbatim -- do NOT let it fall through the normal advanced
+                // path, which would fabricate a classic cfRule that never existed in the original file.
+                if (TryGetRawX14PassthroughXml(conditionalFormat) is not null)
+                {
+                    rawX14PassthroughRules ??= [];
+                    rawX14PassthroughRules.Add(conditionalFormat);
+                    continue;
+                }
+
                 advancedRules ??= [];
                 advancedRules.Add(conditionalFormat);
             }
 
-            if (advancedRules is null ||
+            if ((advancedRules is null && rawX14PassthroughRules is null) ||
                 !worksheetPathMap.SheetPathsByName.TryGetValue(sheet.Name, out var worksheetPath))
             {
                 continue;
@@ -78,7 +91,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
 
             List<ConditionalFormat>? newX14DataBars = null;
             List<ConditionalFormat>? newX14IconSets = null;
-            foreach (var cf in advancedRules)
+            foreach (var cf in advancedRules ?? [])
             {
                 XlsxWorksheetConditionalFormattingPlacement.AddConditionalFormatting(
                     root,
@@ -98,8 +111,8 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 }
             }
 
-            if (newX14DataBars is not null || newX14IconSets is not null)
-                AppendX14ConditionalFormattingsExt(root, newX14DataBars, newX14IconSets, workbookNs);
+            if (newX14DataBars is not null || newX14IconSets is not null || rawX14PassthroughRules is not null)
+                AppendX14ConditionalFormattingsExt(root, newX14DataBars, newX14IconSets, rawX14PassthroughRules, workbookNs);
 
             RealignClassicRulePriorities(root, workbookNs, sheet);
 
@@ -536,10 +549,50 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
     private static string GetX14DataBarId(ConditionalFormat cf) =>
         XlsxAdvancedConditionalFormatMetadata.TryGetExistingX14Id(cf) ?? $"{{{cf.Id.ToString().ToUpperInvariant()}}}";
 
+    /// <summary>
+    /// The x14 namespace used by the extended conditional-formatting extension.
+    /// </summary>
+    private static readonly XNamespace X14PassthroughNs = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+
+    /// <summary>
+    /// Returns the raw &lt;x14:cfRule&gt; XML captured by
+    /// <c>XlsxFileAdapter.ReadX14UnhandledConditionalFormatRules</c> for a synthetic passthrough rule, or
+    /// <see langword="null"/> when <paramref name="cf"/> is a normal modeled advanced rule. A normal rule's
+    /// own <see cref="ConditionalFormat.NativeChildXmls"/> entries (its classic cfRule's native extLst,
+    /// etc.) are always rooted at a different element name/namespace, so this check is unambiguous.
+    /// </summary>
+    private static string? TryGetRawX14PassthroughXml(ConditionalFormat cf)
+    {
+        if (cf.NativeChildXmls is null)
+            return null;
+
+        foreach (var xml in cf.NativeChildXmls)
+        {
+            if (string.IsNullOrWhiteSpace(xml))
+                continue;
+
+            XElement element;
+            try
+            {
+                element = XElement.Parse(xml);
+            }
+            catch
+            {
+                continue;
+            }
+
+            if (element.Name == X14PassthroughNs + "cfRule")
+                return xml;
+        }
+
+        return null;
+    }
+
     private static void AppendX14ConditionalFormattingsExt(
         XElement worksheetRoot,
         IReadOnlyList<ConditionalFormat>? newGradientFalseRules,
         IReadOnlyList<ConditionalFormat>? newX14IconSets,
+        IReadOnlyList<ConditionalFormat>? rawX14PassthroughRules,
         XNamespace worksheetNs)
     {
         XNamespace x14Ns = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
@@ -547,7 +600,7 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         const string x14CfUri = "{78C0D931-6437-407d-A8EE-F0AAD7539E65}";
 
         var x14CfElements = new List<XElement>(
-            (newGradientFalseRules?.Count ?? 0) + (newX14IconSets?.Count ?? 0));
+            (newGradientFalseRules?.Count ?? 0) + (newX14IconSets?.Count ?? 0) + (rawX14PassthroughRules?.Count ?? 0));
         foreach (var cf in newGradientFalseRules ?? [])
         {
             var dataBar = new XElement(
@@ -605,6 +658,31 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                     new XAttribute("type", "iconSet"),
                     new XAttribute("id", GetX14DataBarId(cf)),
                     x14IconSet),
+                new XElement(xmNs + "sqref", BuildSqref(cf))));
+        }
+
+        foreach (var cf in rawX14PassthroughRules ?? [])
+        {
+            var rawXml = TryGetRawX14PassthroughXml(cf);
+            if (rawXml is null)
+                continue;
+
+            XElement cfRuleElement;
+            try
+            {
+                cfRuleElement = XElement.Parse(rawXml);
+            }
+            catch
+            {
+                continue;
+            }
+
+            // Same xm:sqref-as-trailing-child requirement as the data-bar/icon-set cases above. The
+            // cfRule element itself is re-emitted byte-for-byte as captured at read time -- it is never
+            // modeled/reinterpreted, only carried through.
+            x14CfElements.Add(new XElement(
+                x14Ns + "conditionalFormatting",
+                cfRuleElement,
                 new XElement(xmNs + "sqref", BuildSqref(cf))));
         }
 

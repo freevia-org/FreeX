@@ -267,10 +267,32 @@ public sealed partial class XlsxFileAdapter
                     xlSheet.Row((int)rowNum).OutlineLevel = level;
             }
 
+            // Hide the detail rows a collapsed group summarizes. Do NOT call Collapse() here --
+            // ClosedXML's Collapse() stamps both hidden="1" AND collapsed="1" on the same row, which
+            // would spuriously mark every interior hidden detail row as if it were itself the
+            // group's visible outline anchor. The anchor row (see CollapsedAnchorRows below) is the
+            // one that actually carries collapsed="1" in Excel's own output
+            // (R35-deferred-collapse-anchor-1).
             foreach (var rowNum in sheet.GroupHiddenRows)
             {
                 if (IsValidWorksheetRow(rowNum))
-                    xlSheet.Row((int)rowNum).Collapse();
+                    xlSheet.Row((int)rowNum).Hide();
+            }
+
+            // Mark the visible anchor (subtotal/summary) row of each collapsed outline group with
+            // Excel's collapsed="1" outline marker. Collapse() is the only ClosedXML API that can set
+            // the collapsed flag, but it also hides the row; Unhide() afterward clears that spurious
+            // hidden flag so the anchor stays visible -- unless the same row is ALSO a genuinely
+            // hidden detail row of an outer group (already hidden above), in which case both flags are
+            // correct and it must stay hidden.
+            foreach (var rowNum in sheet.CollapsedAnchorRows)
+            {
+                if (!IsValidWorksheetRow(rowNum))
+                    continue;
+                var xlRow = xlSheet.Row((int)rowNum);
+                xlRow.Collapse();
+                if (!sheet.GroupHiddenRows.Contains(rowNum))
+                    xlRow.Unhide();
             }
 
             foreach (var (colNum, width) in sheet.ColumnWidths)
@@ -291,10 +313,25 @@ public sealed partial class XlsxFileAdapter
                     xlSheet.Column((int)colNum).OutlineLevel = level;
             }
 
+            // See the row-side handling above (R35-deferred-collapse-anchor-1): hide detail columns
+            // without Collapse() so they don't get a spurious collapsed="1".
             foreach (var colNum in sheet.GroupHiddenCols)
             {
                 if (IsValidWorksheetColumn(colNum))
-                    xlSheet.Column((int)colNum).Collapse();
+                    xlSheet.Column((int)colNum).Hide();
+            }
+
+            // Mark the visible anchor column of each collapsed outline group with collapsed="1",
+            // un-hiding afterward unless that same column is also a genuinely hidden detail column
+            // of an outer group.
+            foreach (var colNum in sheet.CollapsedAnchorCols)
+            {
+                if (!IsValidWorksheetColumn(colNum))
+                    continue;
+                var xlCol = xlSheet.Column((int)colNum);
+                xlCol.Collapse();
+                if (!sheet.GroupHiddenCols.Contains(colNum))
+                    xlCol.Unhide();
             }
 
             foreach (var (address, commentText) in sheet.Comments)

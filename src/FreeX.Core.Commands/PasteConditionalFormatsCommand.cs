@@ -36,6 +36,20 @@ public sealed class PasteConditionalFormatsCommand : IWorkbookCommand
             .Select(rule => CloneRuleForDestination(rule, targetSheet.Name))
             .ToList();
 
+        // Give each pasted rule a fresh slot in the destination sheet's priority sequence instead of
+        // trusting the source rule's Priority verbatim (CloneRuleForDestination copies it as-is).
+        // Excel's paste-with-formatting never leaves two active rules tied at the same priority number,
+        // so renumber the pasted rules to start after whatever priority the destination sheet already
+        // holds. This only assigns priorities to the newly pasted rules -- it never rewrites the
+        // existing rules already on targetSheet, so it cannot affect
+        // ManageConditionalFormatsPlanner.ApplyRuleRange/MoveRule/Reprioritize (the Manage Rules dialog
+        // always replaces the whole rule list itself via ReplaceAllConditionalFormatsCommand).
+        var nextPriority = targetSheet.ConditionalFormats.Count > 0
+            ? targetSheet.ConditionalFormats.Max(f => f.Priority) + 1
+            : 1;
+        foreach (var pasted in pastedRules)
+            pasted.Priority = nextPriority++;
+
         _previousRules = [.. targetSheet.ConditionalFormats];
         targetSheet.ConditionalFormats.AddRange(pastedRules);
 

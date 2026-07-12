@@ -9,7 +9,7 @@ namespace FreeX.App.Host;
 
 public partial class MainWindow
 {
-    private void ScenariosBtn_Click(object sender, RoutedEventArgs e)
+    private async void ScenariosBtn_Click(object sender, RoutedEventArgs e)
     {
         ScenarioManagerDialog? dialog = null;
         dialog = new ScenarioManagerDialog(
@@ -44,6 +44,13 @@ public partial class MainWindow
                 break;
             case ScenarioManagerAction.Report:
                 CreateScenarioSummaryReport(dialog.ResultCellsText);
+                break;
+            case ScenarioManagerAction.Merge:
+                // ScenarioManagerDialog has no Merge button yet (that UI entry point is a
+                // separate, later addition), so this case is unreachable from the shipped dialog
+                // today -- but it must not silently no-op if a future trigger (or a direct caller)
+                // ever selects Merge, so it's wired to the real merge flow now.
+                await MergeScenariosFromFileAsync();
                 break;
         }
     }
@@ -230,5 +237,94 @@ public partial class MainWindow
         RefreshSheetTabs();
         if (!refreshedSelectionUi)
             RefreshStatusBar();
+    }
+
+    /// <summary>
+    /// Excel's Scenario Manager "Merge..." command: lets the user pick another saved workbook and
+    /// pulls every scenario it contains into this workbook, matching each source scenario's
+    /// changing cells onto this workbook's own sheets by sheet name. A scenario referencing a
+    /// sheet name that doesn't exist here is skipped rather than guessed at.
+    /// </summary>
+    private async Task MergeScenariosFromFileAsync()
+    {
+        var openDialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Filter = FileDialogFilterBuilder.BuildOpenFilter(_fileAdapters),
+            Title = "Merge Scenarios",
+            CheckFileExists = true
+        };
+        if (openDialog.ShowDialog(this) != true)
+            return;
+
+        if (!WorkbookOpenTargetPlanner.TryCreateOpenTarget(_fileAdapters, openDialog.FileName, out var target, out _))
+        {
+            _messageService.ShowInfo("The selected file could not be opened for merging scenarios.", "Scenario Manager");
+            return;
+        }
+
+        Workbook sourceWorkbook;
+        try
+        {
+            var loader = new OpenWorkbookLoader(recalculateAllFormulas: _ => { });
+            var result = await loader.LoadAsync(
+                target!.Path,
+                target.Adapter,
+                FileFormatResolver.NormalizeExtension(target.Extension),
+                target.Format,
+                new Progress<OpenProgressUpdate>(_ => { }));
+            sourceWorkbook = result.Workbook;
+        }
+        catch (Exception)
+        {
+            _messageService.ShowInfo("The selected file could not be opened for merging scenarios.", "Scenario Manager");
+            return;
+        }
+
+        var mergeCandidates = RemapScenariosBySheetName(sourceWorkbook, _workbook);
+        if (!TryExecuteCommand(new MergeScenarioCommand(mergeCandidates), "Scenario Manager", out var outcome))
+        {
+            ShowCommandError(outcome, "Scenario Manager");
+            return;
+        }
+
+        RecalculateIfAutomatic(outcome.AffectedCells ?? []);
+        UpdateViewport();
+        RefreshStatusBar();
+    }
+
+    /// <summary>
+    /// Remaps every source scenario's changing cells from <paramref name="source"/>'s sheets onto
+    /// <paramref name="target"/>'s sheets of the same name (source and target workbooks each mint
+    /// their own <see cref="SheetId"/>s, so a scenario's addresses can never be reused as-is). A
+    /// scenario with any changing cell on a sheet name absent from the target is dropped entirely
+    /// rather than partially merged.
+    /// </summary>
+    private static List<WorkbookScenario> RemapScenariosBySheetName(Workbook source, Workbook target)
+    {
+        var remapped = new List<WorkbookScenario>();
+        foreach (var scenario in source.Scenarios)
+        {
+            var remappedCells = new List<ScenarioCellValue>(scenario.ChangingCells.Count);
+            var allResolved = true;
+            foreach (var cell in scenario.ChangingCells)
+            {
+                var sourceSheet = source.GetSheet(cell.Address.Sheet);
+                var targetSheet = sourceSheet is null ? null : target.GetSheet(sourceSheet.Name);
+                if (targetSheet is null)
+                {
+                    allResolved = false;
+                    break;
+                }
+
+                remappedCells.Add(new ScenarioCellValue(
+                    new CellAddress(targetSheet.Id, cell.Address.Row, cell.Address.Col),
+                    cell.Value));
+            }
+
+            if (allResolved && remappedCells.Count > 0)
+                remapped.Add(scenario with { ChangingCells = remappedCells });
+        }
+
+        return remapped;
     }
 }

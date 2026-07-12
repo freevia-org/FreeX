@@ -65,12 +65,61 @@ public sealed class GroupColumnsCommand : IWorkbookCommand
     }
 }
 
+/// <summary>
+/// Computes the visible outline "anchor" (summary) column for a contiguous run of collapsed detail
+/// columns, matching Excel's own placement per <c>outlinePr/@summaryRight</c>: the column just past
+/// the run in the summary direction (to the right by default; to the left when
+/// <c>Sheet.OutlineSummaryRight</c> is explicitly false). Shared by
+/// <see cref="CollapseColGroupCommand"/> and <see cref="ExpandColGroupCommand"/> so the two stay in
+/// agreement about which column a given run's anchor is (R35-deferred-collapse-anchor-1).
+/// </summary>
+internal static class ColumnGroupAnchorHelper
+{
+    public static List<(uint Start, uint End)> GetContiguousRuns(IEnumerable<uint> cols)
+    {
+        var sorted = new List<uint>(cols);
+        sorted.Sort();
+        var runs = new List<(uint Start, uint End)>();
+        var haveRun = false;
+        uint runStart = 0, runEnd = 0;
+        foreach (var col in sorted)
+        {
+            if (!haveRun)
+            {
+                runStart = runEnd = col;
+                haveRun = true;
+            }
+            else if (col == runEnd)
+            {
+                // Duplicate (defensive; callers pass a HashSet-derived sequence in practice).
+            }
+            else if (col == runEnd + 1)
+            {
+                runEnd = col;
+            }
+            else
+            {
+                runs.Add((runStart, runEnd));
+                runStart = runEnd = col;
+            }
+        }
+        if (haveRun)
+            runs.Add((runStart, runEnd));
+        return runs;
+    }
+
+    /// <summary>Returns the anchor column for a run, or null when summaryRight is false and the run starts at column 1 (no column to its left to anchor to).</summary>
+    public static uint? ComputeAnchor(bool summaryRight, uint runStart, uint runEnd) =>
+        summaryRight ? runEnd + 1 : (runStart > 1 ? runStart - 1 : null);
+}
+
 /// <summary>Collapses (hides) all columns whose outline level is >= the given level.</summary>
 public sealed class CollapseColGroupCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly int _level;
     private HashSet<uint>? _newly;
+    private HashSet<uint>? _newlyAnchored;
 
     public string Label => "Collapse Column Group";
 
@@ -87,12 +136,32 @@ public sealed class CollapseColGroupCommand : IWorkbookCommand
             return protectedOutcome;
 
         _newly = [];
+        _newlyAnchored = [];
         foreach (var (col, lvl) in sheet.ColOutlineLevels)
         {
             if (lvl >= _level && !sheet.GroupHiddenCols.Contains(col))
             {
                 sheet.GroupHiddenCols.Add(col);
                 _newly.Add(col);
+            }
+        }
+
+        // Anchor placement is based on every column currently qualifying at this level (not just
+        // the ones newly hidden by this call), so a repeated/partial collapse still resolves the
+        // same physical anchor position for each contiguous detail run.
+        var summaryRight = sheet.OutlineSummaryRight ?? true;
+        var qualifyingCols = new List<uint>();
+        foreach (var (col, lvl) in sheet.ColOutlineLevels)
+        {
+            if (lvl >= _level)
+                qualifyingCols.Add(col);
+        }
+        foreach (var run in ColumnGroupAnchorHelper.GetContiguousRuns(qualifyingCols))
+        {
+            if (ColumnGroupAnchorHelper.ComputeAnchor(summaryRight, run.Start, run.End) is { } anchor &&
+                sheet.CollapsedAnchorCols.Add(anchor))
+            {
+                _newlyAnchored.Add(anchor);
             }
         }
         return new CommandOutcome(true);
@@ -104,6 +173,9 @@ public sealed class CollapseColGroupCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         foreach (var col in _newly)
             sheet.GroupHiddenCols.Remove(col);
+        if (_newlyAnchored is not null)
+            foreach (var col in _newlyAnchored)
+                sheet.CollapsedAnchorCols.Remove(col);
     }
 }
 
@@ -113,6 +185,7 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly int _level;
     private HashSet<uint>? _removed;
+    private HashSet<uint>? _removedAnchors;
 
     public string Label => "Expand Column Group";
 
@@ -129,12 +202,32 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
             return protectedOutcome;
 
         _removed = [];
+        _removedAnchors = [];
         foreach (var col in sheet.GroupHiddenCols.ToList())
         {
             if (sheet.ColOutlineLevels.TryGetValue(col, out var lvl) && lvl >= _level)
             {
                 sheet.GroupHiddenCols.Remove(col);
                 _removed.Add(col);
+            }
+        }
+
+        // This call just un-hid every column at this level sheet-wide, so -- mirroring
+        // CollapseColGroupCommand's placement over the same qualifying-column set -- none of those
+        // runs have any hidden detail left to summarize; clear each run's anchor marker.
+        var summaryRight = sheet.OutlineSummaryRight ?? true;
+        var qualifyingCols = new List<uint>();
+        foreach (var (col, lvl) in sheet.ColOutlineLevels)
+        {
+            if (lvl >= _level)
+                qualifyingCols.Add(col);
+        }
+        foreach (var run in ColumnGroupAnchorHelper.GetContiguousRuns(qualifyingCols))
+        {
+            if (ColumnGroupAnchorHelper.ComputeAnchor(summaryRight, run.Start, run.End) is { } anchor &&
+                sheet.CollapsedAnchorCols.Remove(anchor))
+            {
+                _removedAnchors.Add(anchor);
             }
         }
         return new CommandOutcome(true);
@@ -146,6 +239,9 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
         foreach (var col in _removed)
             sheet.GroupHiddenCols.Add(col);
+        if (_removedAnchors is not null)
+            foreach (var col in _removedAnchors)
+                sheet.CollapsedAnchorCols.Add(col);
     }
 }
 

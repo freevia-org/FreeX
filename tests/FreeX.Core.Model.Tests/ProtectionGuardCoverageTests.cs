@@ -326,6 +326,7 @@ public class ProtectionGuardCoverageTests
         ["SaveScenarioCommand"] = "Scenario save; requires existing scenario or new-scenario model.",
         ["ApplyScenarioCommand"] = "Scenario apply; requires scenario model with changing cells.",
         ["DeleteScenarioCommand"] = "Scenario delete; requires scenario model.",
+        ["MergeScenarioCommand"] = "Scenario merge; requires source scenarios + honors the plan's own protected-cell checks.",
 
         // Filter commands — UseAutoFilter permission; auto-guarded in FilterCommand
         ["FilterCommand"] = "AutoFilter state; UseAutoFilter-guarded in its own Apply.",

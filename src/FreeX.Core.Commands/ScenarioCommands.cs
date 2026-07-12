@@ -192,6 +192,98 @@ public sealed class DeleteScenarioCommand : IWorkbookCommand
     }
 }
 
+/// <summary>
+/// Excel's Scenario Manager "Merge..." command: pulls scenarios saved on another worksheet (or
+/// workbook) into this workbook's scenario set. Callers are responsible for remapping each source
+/// scenario's <see cref="ScenarioCellValue.Address"/> sheet references onto this workbook's own
+/// <see cref="SheetId"/>s (e.g. by matching sheet names) before constructing this command --
+/// exactly like <see cref="FreeX.App.Services.ScenarioManagerPlanner.CreateMergePlan"/> already
+/// validates. Rejects the merge (without adding anything) if any source scenario references a
+/// cell outside this workbook or on a protected sheet without the EditScenarios permission,
+/// mirroring the checks <c>CreateMergePlan</c> performs before this command ever existed.
+/// </summary>
+public sealed class MergeScenarioCommand : IWorkbookCommand
+{
+    private readonly IReadOnlyList<WorkbookScenario> _sourceScenarios;
+    private int _addedCount;
+    private bool _applied;
+
+    public string Label => "Merge Scenarios";
+
+    public MergeScenarioCommand(IReadOnlyList<WorkbookScenario> sourceScenarios)
+    {
+        _sourceScenarios = sourceScenarios ?? [];
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        if (_sourceScenarios.Count == 0)
+            return new CommandOutcome(false, "There are no scenarios to merge.");
+
+        foreach (var scenario in _sourceScenarios)
+        {
+            foreach (var cell in scenario.ChangingCells)
+            {
+                if (ctx.Workbook.GetSheet(cell.Address.Sheet) is null)
+                    return ScenarioCommandHelpers.ChangingCellsOutsideWorkbook();
+            }
+
+            if (ScenarioProtectionGuards.RejectIfChangingCellsProtected(ctx.Workbook, scenario.ChangingCells) is { } protectedOutcome)
+                return protectedOutcome;
+        }
+
+        // Merged scenarios must not silently collide with (and shadow) an existing scenario name --
+        // Excel's own Merge dialog keeps every merged scenario distinct, so a name that already
+        // exists in the target (or among scenarios merged earlier in this same call) is uniquified.
+        var existingNames = new List<string>(ctx.Workbook.Scenarios.Select(s => s.Name));
+        var affectedCells = new List<CellAddress>();
+        foreach (var scenario in _sourceScenarios)
+        {
+            var uniqueName = MakeUniqueScenarioName(scenario.Name, existingNames);
+            existingNames.Add(uniqueName);
+
+            var mergedScenario = string.Equals(uniqueName, scenario.Name, StringComparison.Ordinal)
+                ? scenario
+                : scenario with { Name = uniqueName };
+            ctx.Workbook.Scenarios.Add(mergedScenario);
+            affectedCells.AddRange(ScenarioCommandHelpers.BuildAffectedCells(mergedScenario.ChangingCells));
+        }
+
+        _addedCount = _sourceScenarios.Count;
+        _applied = true;
+        return new CommandOutcome(true, AffectedCells: affectedCells);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        if (!_applied)
+            return;
+
+        // Merged scenarios are always appended at the tail (never inserted/reordered), so undo can
+        // simply drop the last _addedCount entries -- the same tail-append/tail-trim pairing this
+        // command's own Apply relies on, without needing per-scenario identity tracking.
+        var start = ctx.Workbook.Scenarios.Count - _addedCount;
+        if (start >= 0 && _addedCount > 0)
+            ctx.Workbook.Scenarios.RemoveRange(start, _addedCount);
+
+        _addedCount = 0;
+        _applied = false;
+    }
+
+    private static string MakeUniqueScenarioName(string name, IReadOnlyList<string> existingNames)
+    {
+        var candidate = name;
+        var suffix = 2;
+        while (existingNames.Any(existing => string.Equals(existing, candidate, StringComparison.OrdinalIgnoreCase)))
+        {
+            candidate = $"{name} ({suffix})";
+            suffix++;
+        }
+
+        return candidate;
+    }
+}
+
 internal static class ScenarioProtectionGuards
 {
     private const string ScenarioLockedMessage = "This scenario is locked and cannot be changed while the sheet is protected.";

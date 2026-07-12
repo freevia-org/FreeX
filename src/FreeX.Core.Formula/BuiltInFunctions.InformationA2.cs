@@ -93,8 +93,7 @@ public static partial class BuiltInFunctions
                 return new NumberValue(Math.Round(width, 0, MidpointRounding.AwayFromZero));
             }
             case "filename":
-                // In-memory workbook has no on-disk path; Excel compat is empty string.
-                return new TextValue("");
+                return new TextValue(CellFilenameInfo(ctx, sheet));
             case "format":
                 return new TextValue(CellFormatInfo(style?.NumberFormat));
             case "color":
@@ -475,6 +474,24 @@ public static partial class BuiltInFunctions
         string.IsNullOrEmpty(path) || System.IO.Path.EndsInDirectorySeparator(path)
             ? path
             : path + System.IO.Path.DirectorySeparatorChar;
+
+    // CELL("filename") reproduces Excel's "drive:\path\[filename]sheetname" result once the
+    // workbook has an on-disk path (Workbook.FilePath, set by the host app's open/save code);
+    // a never-saved in-memory-only workbook has no path and Excel returns "".
+    private static string CellFilenameInfo(IEvalContext ctx, Sheet? sheet)
+    {
+        var filePath = ctx.CurrentWorkbook?.FilePath;
+        if (string.IsNullOrEmpty(filePath)) return "";
+
+        var directory = System.IO.Path.GetDirectoryName(filePath);
+        var fileName = System.IO.Path.GetFileName(filePath);
+        var sheetName = (sheet ?? ctx.CurrentSheet)?.Name ?? "";
+        var directoryWithSeparator = string.IsNullOrEmpty(directory)
+            ? ""
+            : EnsureTrailingDirectorySeparator(directory);
+
+        return $"{directoryWithSeparator}[{fileName}]{sheetName}";
+    }
 
     private static ScalarValue Isblank(IReadOnlyList<ScalarValue> args, IEvalContext ctx) =>
         args[0] is RangeValue range

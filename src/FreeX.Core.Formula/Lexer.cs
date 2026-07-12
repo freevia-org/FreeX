@@ -470,7 +470,14 @@ public sealed class Lexer
         throw new FormulaParseException($"Unknown error literal at position {start}");
     }
 
-    private static bool IsCellReference(ReadOnlySpan<char> value)
+    /// <summary>
+    /// True when <paramref name="value"/> is a well-formed cell reference (e.g. "A1", "$B$2").
+    /// Internal (not private) so FormulaEvaluator.References.cs can reuse this same shape test
+    /// to detect the "&lt;cellref&gt;.&lt;field&gt;" linked-data-type field-access syntax
+    /// (e.g. "A1.PRICE") without duplicating the column/row validation logic — see
+    /// R35-deferred-field-error-1.
+    /// </summary>
+    internal static bool IsCellReference(ReadOnlySpan<char> value)
     {
         int i = 0;
         if (i < value.Length && value[i] == '$')

@@ -11,8 +11,29 @@ public sealed partial class FormulaEvaluator
     [ThreadStatic]
     private static HashSet<string>? _namedFormulaVisiting;
 
+    /// <summary>
+    /// True when <paramref name="name"/> has the shape of a linked-data-type field access — a
+    /// cell reference immediately followed by ".Field" (e.g. "A1.PRICE" from <c>=A1.Price</c>).
+    /// Excel reserves this dotted syntax for Rich Data Type field access; since FreeX doesn't
+    /// model linked data types, such a reference must surface Excel's #FIELD! error rather than
+    /// being misrouted through named-range lookup to #NAME? (R35-deferred-field-error-1). A
+    /// plain defined name with no dot — or one whose text before the dot isn't itself a valid
+    /// cell reference (e.g. "Rate", "Q1_2023") — is unaffected and still resolves normally.
+    /// </summary>
+    private static bool IsLinkedDataTypeFieldAccessShape(string name)
+    {
+        var dot = name.IndexOf('.');
+        if (dot <= 0 || dot == name.Length - 1)
+            return false;
+
+        return Lexer.IsCellReference(name.AsSpan(0, dot));
+    }
+
     private static ScalarValue EvaluateNamedRange(NamedRangeNode node, IEvalContext context)
     {
+        if (IsLinkedDataTypeFieldAccessShape(node.Name))
+            return ErrorValue.Field;
+
         // Local LET/LAMBDA bindings shadow workbook named ranges.
         var binding = context.TryResolveLambdaBinding(node.Name);
         if (binding is not null) return binding;
@@ -312,6 +333,9 @@ public sealed partial class FormulaEvaluator
 
         if (node is NamedRangeNode named)
         {
+            if (IsLinkedDataTypeFieldAccessShape(named.Name))
+                return ErrorValue.Field;
+
             var binding = context.TryResolveLambdaBinding(named.Name);
             if (binding is not null)
                 return binding;
@@ -553,6 +577,9 @@ public sealed partial class FormulaEvaluator
     /// </summary>
     private static ScalarValue ResolveNamedRangeNodeAsReference(NamedRangeNode node, IEvalContext context)
     {
+        if (IsLinkedDataTypeFieldAccessShape(node.Name))
+            return ErrorValue.Field;
+
         if (IsSheetScopedName(node.Name, context, out var sheetScopedIsFormula) && sheetScopedIsFormula)
         {
             if (!TryEvaluateNamedFormula(node.Name, context, out var formulaValue))

@@ -65,7 +65,11 @@ public partial class CommentCommandTests
         sheet.ThreadedComments[addr].Should().Be(original with
         {
             Text = "New root",
-            ModifiedAtUtc = ModifiedAtUtc
+            ModifiedAtUtc = ModifiedAtUtc,
+            // R35-deferred-comment-edit-timestamp-1: a genuine root-text edit now stamps a
+            // distinct RootTextEditedAtUtc (via ThreadedCommentTimestamps.TouchRootTextEdit) so
+            // this timestamp survives even if a later reply bumps the shared ModifiedAtUtc.
+            RootTextEditedAtUtc = ModifiedAtUtc
         });
 
         command.Revert(ctx);
@@ -175,7 +179,10 @@ public partial class CommentCommandTests
                 }
             ],
             IsResolved = true,
-            ModifiedAtUtc = ModifiedAtUtc
+            ModifiedAtUtc = ModifiedAtUtc,
+            // R35-deferred-comment-edit-timestamp-1: the root text also changed in this call, so
+            // RootTextEditedAtUtc is stamped alongside ModifiedAtUtc/the appended reply.
+            RootTextEditedAtUtc = ModifiedAtUtc
         });
 
         command.Revert(ctx);

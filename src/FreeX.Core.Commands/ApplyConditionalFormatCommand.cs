@@ -38,6 +38,21 @@ public sealed class ApplyConditionalFormatCommand : IWorkbookCommand
         else
         {
             _previous = null;
+            // Newly-added rules must not silently reuse an existing rule's Priority: every
+            // ConditionalFormat.Priority defaults to 1 (see ConditionalFormat.cs), and none of the
+            // single-rule callers (ConditionalFormatRuleBuilder, the preset gallery planner, the icon
+            // set catalog) assign a distinct one before constructing this command. Excel never leaves
+            // two active rules tied at the same priority on one sheet, so give the new rule the next
+            // free slot after the sheet's current max instead of trusting whatever it arrived with.
+            // This only touches the incoming rule -- existing rules' Priority values are left exactly
+            // as-is, so it cannot affect ManageConditionalFormatsPlanner's renumbering behavior
+            // (ApplyRuleRange/MoveRule/Reprioritize), which always replaces the whole rule list itself.
+            if (sheet.ConditionalFormats.Count > 0)
+            {
+                var maxPriority = sheet.ConditionalFormats.Max(f => f.Priority);
+                if (_format.Priority <= maxPriority)
+                    _format.Priority = maxPriority + 1;
+            }
             sheet.ConditionalFormats.Add(_format);
         }
 

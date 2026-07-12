@@ -24,10 +24,10 @@ public sealed class RepositionShapeCommand : IWorkbookCommand
     public CommandOutcome Apply(ICommandContext ctx)
     {
         var sheet = ctx.GetSheet(_sheetId);
-        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
         if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
             return new CommandOutcome(false, "Shape was not found.");
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
+            return protectedOutcome;
         _previousAnchor = shape.Anchor;
         _previousAnchorOffsetX = shape.AnchorOffsetX;
         _previousAnchorOffsetY = shape.AnchorOffsetY;

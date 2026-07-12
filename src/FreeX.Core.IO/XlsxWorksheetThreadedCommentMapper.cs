@@ -829,23 +829,32 @@ internal static class XlsxWorksheetThreadedCommentMapper
 
     /// <summary>
     /// Determines the timestamp to persist as the root &lt;threadedComment&gt; element's own dT.
-    /// Unlike a reply (see ToThreadedCommentReplyElement), the root's ModifiedAtUtc is a
-    /// thread-wide "last activity" value that also gets bumped by actions that never touch the
-    /// root's own XML element or text -- e.g. AddThreadedCommentReplyCommand/
-    /// DeleteThreadedCommentReplyCommand Touch the root purely because a *reply* (a separate
-    /// &lt;threadedComment&gt; element with its own independent dT) was added/removed/edited; on
-    /// load, GetThreadModifiedAt similarly folds reply activity into the root's ModifiedAtUtc so
-    /// round-tripping preserves that same "last activity" reading. None of that reply-driven
-    /// activity should ever move the ROOT element's own dT, matching real Excel (adding a reply
-    /// never rewrites the root comment's dT). Only when ModifiedAtUtc has advanced past what mere
-    /// reply activity already explains -- i.e. past what GetThreadModifiedAt would compute from
-    /// just CreatedAtUtc plus the current replies -- has the root's own text or resolved state
-    /// actually been edited (UpdateThreadedCommentTextCommand / ToggleThreadedCommentResolvedCommand
-    /// Touch the root directly), so only then should that newer ModifiedAtUtc win over the
-    /// original CreatedAtUtc.
+    ///
+    /// When <see cref="ThreadedComment.RootTextEditedAtUtc"/> is set, the command layer has
+    /// already unambiguously recorded the last genuine edit to the root's own text (see
+    /// ThreadedCommentTimestamps.TouchRootTextEdit), so that value wins outright -- it can never
+    /// be polluted by later reply activity, unlike ModifiedAtUtc (below).
+    ///
+    /// Otherwise (e.g. a comment freshly loaded from a source XLSX, where RootTextEditedAtUtc is
+    /// intentionally left unset), fall back to inferring it from ModifiedAtUtc: unlike a reply
+    /// (see ToThreadedCommentReplyElement), the root's ModifiedAtUtc is a thread-wide "last
+    /// activity" value that also gets bumped by actions that never touch the root's own XML
+    /// element or text -- e.g. AddThreadedCommentReplyCommand/DeleteThreadedCommentReplyCommand
+    /// Touch the root purely because a *reply* (a separate &lt;threadedComment&gt; element with
+    /// its own independent dT) was added/removed/edited; on load, GetThreadModifiedAt similarly
+    /// folds reply activity into the root's ModifiedAtUtc so round-tripping preserves that same
+    /// "last activity" reading. None of that reply-driven activity should ever move the ROOT
+    /// element's own dT, matching real Excel (adding a reply never rewrites the root comment's
+    /// dT). Only when ModifiedAtUtc has advanced past what mere reply activity already explains
+    /// -- i.e. past what GetThreadModifiedAt would compute from just CreatedAtUtc plus the
+    /// current replies -- has the root's own text or resolved state actually been edited, so only
+    /// then should that newer ModifiedAtUtc win over the original CreatedAtUtc.
     /// </summary>
     private static DateTimeOffset? ResolveRootThreadedCommentTimestamp(ThreadedComment comment)
     {
+        if (comment.RootTextEditedAtUtc is { } rootTextEditedAtUtc)
+            return rootTextEditedAtUtc;
+
         if (comment.ModifiedAtUtc is not { } modifiedAtUtc)
             return comment.CreatedAtUtc;
 
