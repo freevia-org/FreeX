@@ -102,7 +102,12 @@ public sealed partial class XlsxBroaderRetentionChecksTests
                 new XElement(
                     MainNs + "protectedRange",
                     new XAttribute("name", "NativeMultiArea"),
-                    new XAttribute("sqref", "A1 B1"),
+                    // Deliberately disjoint from "EditableInput"'s sqref (A1) so this multi-area
+                    // range's own areas (C1, D1) don't collide with it once both are modeled as
+                    // separate AllowEditRanges (a duplicate GridRange key would otherwise collapse
+                    // in the passwords/native-attribute-merge lookups, which is an unrelated
+                    // pre-existing corner case this test isn't about).
+                    new XAttribute("sqref", "C1 D1"),
                     new XAttribute("nativeUnsupportedRange", "kept"))),
             new XElement(
                 MainNs + "ignoredErrors",

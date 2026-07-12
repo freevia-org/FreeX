@@ -32,17 +32,24 @@ internal static class XlsxAllowEditRangeMapper
             if (string.IsNullOrWhiteSpace(sqref))
                 continue;
 
+            // A protectedRange's sqref may list several disjoint areas separated by spaces (Excel's
+            // "Allow Users to Edit Ranges" supports multi-area ranges, e.g. "B2:B10 D2:D10"). Model
+            // each area as its own AllowEditRange (sharing the same range password) so
+            // CommandGuards.CanEditCell honors every area, not just the first.
             var tokens = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (tokens.Length != 1)
+            if (tokens.Length == 0)
                 continue;
 
-            if (!TryParseSqrefToken(tokens[0], tempSheet, out var range))
-                continue;
-
-            ranges.Add(range);
             var password = ReadRangePassword(protectedRange);
-            if (password is not null)
-                passwordsByRange[range] = password;
+            foreach (var token in tokens)
+            {
+                if (!TryParseSqrefToken(token, tempSheet, out var range))
+                    continue;
+
+                ranges.Add(range);
+                if (password is not null)
+                    passwordsByRange[range] = password;
+            }
         }
 
         return ranges;

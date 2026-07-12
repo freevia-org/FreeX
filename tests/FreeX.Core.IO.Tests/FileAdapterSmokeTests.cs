@@ -3961,9 +3961,15 @@ public partial class FileAdapterSmokeTests
     }
 
     [Fact]
-    public void XlsxAdapter_LoadedWorkbookSave_RetainsNativeOnlyMultiAreaProtectedRange()
+    public void XlsxAdapter_LoadedWorkbookSave_ModelsMultiAreaProtectedRangeAcrossAllAreas()
     {
-        var workbook = new Workbook("ProtectedRangeNativeOnlyTest");
+        // Corrected contract (was: XlsxAdapter_LoadedWorkbookSave_RetainsNativeOnlyMultiAreaProtectedRange,
+        // which pinned the OLD/buggy behavior of dropping a multi-area protectedRange sqref entirely
+        // for edit-enforcement purposes and merely round-tripping it as an inert native-only
+        // passthrough element). Excel enforces the range password on every area of a multi-area
+        // "Allow Users to Edit Ranges" entry, so each area must now be modeled as its own
+        // AllowEditRange (sharing the range's password) rather than being ignored.
+        var workbook = new Workbook("ProtectedRangeMultiAreaTest");
         var sheet = workbook.AddSheet("S1");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
 
@@ -3975,7 +3981,25 @@ public partial class FileAdapterSmokeTests
 
         source.Position = 0;
         var loaded = adapter.Load(source);
-        loaded.GetSheetAt(0).AllowEditRanges.Should().BeEmpty();
+        var loadedSheet = loaded.GetSheetAt(0);
+
+        // "B2 C3" (from AddMultiAreaProtectedRangeMetadata) modeled as two single-cell AllowEditRanges,
+        // each carrying the shared range password "1234".
+        loadedSheet.AllowEditRanges.Should().HaveCount(2);
+        var b2 = new CellAddress(loadedSheet.Id, 2, 2);
+        var c3 = new CellAddress(loadedSheet.Id, 3, 3);
+        loadedSheet.AllowEditRanges.Should().Contain(range => range.Contains(b2) && range.CellCount == 1);
+        loadedSheet.AllowEditRanges.Should().Contain(range => range.Contains(c3) && range.CellCount == 1);
+        foreach (var range in loadedSheet.AllowEditRanges)
+        {
+            loadedSheet.AllowEditRangePasswords.Should().ContainKey(range)
+                .WhoseValue.Should().Be("1234");
+        }
+
+        // Edit a cell so the save goes through the real save/merge pipeline instead of the
+        // unchanged-model source-copy fast path (which would trivially byte-copy the source and not
+        // exercise XlsxAllowEditRangeMapper.Save/XlsxWorksheetMetadataPreserver at all).
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 4, 1), new TextValue("edited"));
 
         var saved = new MemoryStream();
         adapter.Save(loaded, saved);
@@ -3984,13 +4008,88 @@ public partial class FileAdapterSmokeTests
         using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
         var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
         XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
-        var protectedRange = worksheetXml.Root!
+        var protectedRanges = worksheetXml.Root!
             .Element(worksheetNs + "protectedRanges")!
-            .Element(worksheetNs + "protectedRange");
-        protectedRange.Should().NotBeNull();
-        protectedRange!.Attribute("sqref")!.Value.Should().Be("B2 C3");
-        protectedRange.Attribute("name")!.Value.Should().Be("NativeMultiAreaRange");
-        protectedRange.Attribute("password")!.Value.Should().Be("1234");
+            .Elements(worksheetNs + "protectedRange")
+            .ToList();
+
+        // Re-emitted from the model (one modeled AllowEditRange per area) rather than duplicated as
+        // an inert native-only passthrough copy: both areas still round-trip, and each still carries
+        // the range password.
+        // GridRange.ToString() always uses "Start:End" notation, even for a degenerate single-cell
+        // range, so each area round-trips as "B2:B2"/"C3:C3" rather than the original bare "B2"/"C3".
+        protectedRanges.Should().HaveCount(2);
+        protectedRanges.Select(range => range.Attribute("sqref")!.Value)
+            .Should().BeEquivalentTo(["B2:B2", "C3:C3"]);
+        protectedRanges.Should().OnlyContain(range => range.Attribute("password")!.Value == "1234");
+    }
+
+    [Fact]
+    public void XlsxAdapter_LoadedWorkbookSave_MultiAreaProtectedRangeEnforcesEveryArea()
+    {
+        var workbook = new Workbook("ProtectedRangeMultiAreaEnforcementTest");
+        var sheet = workbook.AddSheet("S1");
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("locked"));
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(workbook, source);
+        source.Position = 0;
+
+        using (var archive = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+            var worksheetXml = LoadPackageXml(archive.GetEntry("xl/worksheets/sheet1.xml")!);
+            worksheetXml.Root!.Add(new XElement(
+                worksheetNs + "protectedRanges",
+                new XElement(
+                    worksheetNs + "protectedRange",
+                    new XAttribute("name", "TwoColumnEditableRange"),
+                    new XAttribute("sqref", "B2:B10 D2:D10"))));
+            ReplacePackageXml(archive, "xl/worksheets/sheet1.xml", worksheetXml);
+        }
+
+        source.Position = 0;
+        var loaded = adapter.Load(source);
+        var loadedSheet = loaded.GetSheetAt(0);
+        loadedSheet.IsProtected = true;
+
+        // Both areas of "B2:B10 D2:D10" are modeled as their own AllowEditRange, so
+        // CommandGuards.CanEditCell (which iterates Sheet.AllowEditRanges checking containment) can
+        // honor edits anywhere in either column, not just the first area.
+        loadedSheet.AllowEditRanges.Should().HaveCount(2);
+
+        bool IsWithinAnAllowEditRange(uint row, uint col)
+        {
+            var address = new CellAddress(loadedSheet.Id, row, col);
+            return loadedSheet.AllowEditRanges.Any(range => range.Contains(address));
+        }
+
+        IsWithinAnAllowEditRange(5, 2).Should().BeTrue("B5 falls within the first area (B2:B10)");
+        IsWithinAnAllowEditRange(9, 4).Should().BeTrue("D9 falls within the second area (D2:D10)");
+        IsWithinAnAllowEditRange(1, 1).Should().BeFalse("A1 is outside both areas of the protected range");
+        IsWithinAnAllowEditRange(5, 3).Should().BeFalse("C5 (between the two areas) is outside both areas");
+
+        // Edit a cell so the save goes through the real save/merge pipeline instead of the
+        // unchanged-model source-copy fast path.
+        loadedSheet.SetCell(new CellAddress(loadedSheet.Id, 20, 20), new TextValue("edited"));
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        using var savedArchive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var savedWorksheetXml = LoadPackageXml(savedArchive.GetEntry("xl/worksheets/sheet1.xml")!);
+        XNamespace ns = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        var savedSqrefs = savedWorksheetXml.Root!
+            .Element(ns + "protectedRanges")!
+            .Elements(ns + "protectedRange")
+            .Select(range => range.Attribute("sqref")!.Value)
+            .ToList();
+
+        // Both areas still round-trip (as modeled AllowEditRanges), covering both columns.
+        savedSqrefs.Should().Contain("B2:B10");
+        savedSqrefs.Should().Contain("D2:D10");
     }
 
     [Fact]

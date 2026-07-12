@@ -96,8 +96,13 @@ public sealed partial class XlsxBroaderRetentionChecksTests
         worksheetText.Should().Contain("name=\"EditableInput\"");
         worksheetText.Should().Contain("password=\"ABCD\"");
         worksheetText.Should().Contain("{FREEX-PROTECTED-RANGE}");
-        worksheetText.Should().Contain("sqref=\"A1 B1\"");
-        worksheetText.Should().Contain("nativeUnsupportedRange=\"kept\"");
+        // The native "NativeMultiArea" range's sqref ("C1 D1") is modeled as one AllowEditRange per
+        // area (so CommandGuards.CanEditCell enforces both, not just the first) and re-emitted from
+        // the model on save, rather than round-tripped as an inert, unenforced native-only
+        // passthrough copy of the original element.
+        worksheetText.Should().Contain("sqref=\"C1:C1\"");
+        worksheetText.Should().Contain("sqref=\"D1:D1\"");
+        worksheetText.Should().NotContain("nativeUnsupportedRange");
 
         worksheetText.Should().Contain("ignoredErrors");
         worksheetText.Should().NotContain("nativeIgnoredErrorsAttr=\"kept\"");

@@ -1,6 +1,7 @@
 using FreeX.Core.Model;
 using System.Collections;
 using System.Windows;
+using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 
 namespace FreeX.App.UI;
 
@@ -99,8 +100,15 @@ public static class SplitPaneCellLayoutPlanner
             if (CanOverflowSplitPaneText(cell, merge))
             {
                 occupied ??= BuildOccupiedCells(cells, editingCell);
-                var renderWidth = width + SumEmptyOverflowColumnWidths(cell, colMetrics, occupied.Value);
-                textClipRect = new Rect(x, y, renderWidth, height);
+                var hAlign = cell.Style?.HorizontalAlignment ?? CellHAlign.General;
+                double rightOverflow = hAlign == CellHAlign.Right
+                    ? 0
+                    : SumEmptyOverflowColumnWidths(cell, colMetrics, occupied.Value);
+                double leftOverflow = hAlign == CellHAlign.Right || hAlign == CellHAlign.Center
+                    ? SumEmptyOverflowColumnWidthsLeft(cell, colMetrics, occupied.Value)
+                    : 0;
+                var renderWidth = width + leftOverflow + rightOverflow;
+                textClipRect = new Rect(x - leftOverflow, y, renderWidth, height);
             }
 
             consumer.AcceptLayout(new SplitPaneCellLayout(cell, rect, textClipRect, region));
@@ -666,6 +674,30 @@ public static class SplitPaneCellLayoutPlanner
         {
             width += nextMetric!.Width;
             nextCol++;
+        }
+
+        return width;
+    }
+
+    // Leftward companion to SumEmptyOverflowColumnWidths: used for Right/Center-aligned text,
+    // which (like real Excel) overflows over empty cells to the left of the anchor column.
+    private static double SumEmptyOverflowColumnWidthsLeft(
+        DisplayCell cell,
+        SplitPaneColumnMetricLookup columns,
+        SplitPaneOccupiedCellMap occupied)
+    {
+        double width = 0;
+        if (cell.Col <= 1)
+            return width;
+
+        var prevCol = cell.Col - 1;
+        while (columns.TryGetValue(prevCol, out var prevMetric) &&
+               !occupied.Contains(cell.Row, prevCol))
+        {
+            width += prevMetric!.Width;
+            if (prevCol == 1)
+                break;
+            prevCol--;
         }
 
         return width;

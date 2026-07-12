@@ -1482,7 +1482,7 @@ public partial class XlsxCorpusRunnerTests
         adapter.Save(workbook, saved);
         saved.Position = 0;
         AssertPackageHealth(saved, "generated-worksheet-protected-ranges-001");
-        AssertWorksheetProtectedRanges(saved, "generated-worksheet-protected-ranges-001 saved");
+        AssertWorksheetProtectedRangesAfterModelSave(saved, "generated-worksheet-protected-ranges-001 saved");
 
         saved.Position = 0;
         var reloaded = adapter.Load(saved);
@@ -2364,11 +2364,56 @@ public partial class XlsxCorpusRunnerTests
         nativeOnlyRange.Attribute("password")!.Value.Should().Be("1234", because);
     }
 
+    /// <summary>
+    /// Asserts the worksheet's protectedRanges after an ordinary model-edit save, once both of the
+    /// source fixture's ranges ("NativeEditableRange" sqref="B2:C3" and the multi-area
+    /// "NativeMultiAreaRange" sqref="B2 C3") are modeled: the single-area range still round-trips as
+    /// one preserved element (name/password/securityDescriptor intact), but the multi-area range is
+    /// now re-emitted from the model as one element per area (each carrying the shared range
+    /// password) rather than as an inert native-only passthrough copy of the original element -
+    /// Excel enforces the range password on every area of a multi-area "Allow Users to Edit Ranges"
+    /// entry, so both areas must be modeled for edit-enforcement to honor them.
+    /// </summary>
+    private static void AssertWorksheetProtectedRangesAfterModelSave(Stream package, string because)
+    {
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+
+        using var archive = new ZipArchive(package, ZipArchiveMode.Read, leaveOpen: true);
+        var worksheetXml = LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        var protectedRanges = worksheetXml.Root!.Element(worksheetNs + "protectedRanges");
+        protectedRanges.Should().NotBeNull(because);
+        var ranges = protectedRanges!.Elements(worksheetNs + "protectedRange").ToArray();
+        ranges.Should().HaveCount(3, because);
+
+        var editableRange = ranges.Should()
+            .ContainSingle(element => (string?)element.Attribute("name") == "NativeEditableRange", because)
+            .Subject;
+        editableRange.Attribute("sqref")!.Value.Should().Be("B2:C3", because);
+        editableRange.Attribute("password")!.Value.Should().Be("ABCD", because);
+        editableRange.Attribute("securityDescriptor")!.Value.Should().Be("D:PAI", because);
+        editableRange.HasElements.Should().BeFalse(because);
+
+        var multiAreaRanges = ranges.Where(element => (string?)element.Attribute("name") != "NativeEditableRange").ToArray();
+        multiAreaRanges.Should().HaveCount(2, because);
+        multiAreaRanges.Select(element => element.Attribute("sqref")!.Value)
+            .Should().BeEquivalentTo(["B2:B2", "C3:C3"], because);
+        multiAreaRanges.Should().OnlyContain(element => element.Attribute("password")!.Value == "1234", because);
+    }
+
     private static void AssertWorksheetProtectedRangesModel(Sheet sheet, string because)
     {
-        var allowEditRange = sheet.AllowEditRanges.Should().ContainSingle(because).Subject;
-        allowEditRange.Start.ToA1().Should().Be("B2", because);
-        allowEditRange.End.ToA1().Should().Be("C3", because);
+        sheet.AllowEditRanges.Should().HaveCount(3, because);
+
+        var editableRange = sheet.AllowEditRanges.Should()
+            .ContainSingle(range => range.CellCount == 4, because)
+            .Subject;
+        editableRange.Start.ToA1().Should().Be("B2", because);
+        editableRange.End.ToA1().Should().Be("C3", because);
+
+        var b2 = new CellAddress(sheet.Id, 2, 2);
+        var c3 = new CellAddress(sheet.Id, 3, 3);
+        sheet.AllowEditRanges.Should().Contain(range => range.Contains(b2) && range.CellCount == 1, because);
+        sheet.AllowEditRanges.Should().Contain(range => range.Contains(c3) && range.CellCount == 1, because);
     }
 
     private static void AssertWorksheetCellStructureNative(Stream package, string because)

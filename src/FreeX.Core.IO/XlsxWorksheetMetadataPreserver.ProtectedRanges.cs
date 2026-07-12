@@ -33,14 +33,22 @@ internal static partial class XlsxWorksheetMetadataPreserver
             var sourceSqref = CanonicalSupportedProtectedRangeSqref(sourceRange);
             if (!string.IsNullOrWhiteSpace(sourceSqref))
             {
-                if (!modeledSqrefs.Contains(sourceSqref) ||
-                    !targetBySqref.TryGetValue(sourceSqref, out var targetRange))
-                {
+                // A fully-parseable sqref (single- or multi-area) that is entirely represented in
+                // the model has already been re-emitted (one modeled AllowEditRange per area) by
+                // XlsxAllowEditRangeMapper.Save, so it must not also be copied verbatim below (that
+                // would duplicate it). A single-area sqref additionally has a 1:1 matching target
+                // element whose native-only attributes (custom name, extra attributes/children) can
+                // be merged back onto it; a multi-area sqref is represented by several separate
+                // target elements with no single element to merge onto, so it is simply left as-is.
+                if (!IsFullyModeledSqref(sourceSqref, modeledSqrefs))
                     continue;
+
+                if (targetBySqref.TryGetValue(sourceSqref, out var targetRange) &&
+                    MergeProtectedRangeMetadata(sourceRange, targetRange))
+                {
+                    changed = true;
                 }
 
-                if (MergeProtectedRangeMetadata(sourceRange, targetRange))
-                    changed = true;
                 continue;
             }
 
@@ -61,6 +69,15 @@ internal static partial class XlsxWorksheetMetadataPreserver
         return changed;
     }
 
+    /// <summary>
+    /// Canonicalizes a <c>&lt;protectedRange&gt;</c> element's <c>sqref</c> into a form comparable
+    /// against <see cref="XlsxAllowEditRangeMapper.GetModeledReferences"/>'s per-area strings. A
+    /// single-area sqref canonicalizes to that area's <see cref="GridRange"/> string (unchanged
+    /// behavior). A multi-area sqref (space-separated areas, e.g. "B2:B10 D2:D10") canonicalizes to
+    /// each area's GridRange string, sorted and re-joined by single spaces, so equivalent multi-area
+    /// sqrefs compare equal regardless of the original area order/spacing. Returns null when any
+    /// area fails to parse (an unsupported/malformed sqref, which is preserved verbatim instead).
+    /// </summary>
     private static string? CanonicalSupportedProtectedRangeSqref(XElement protectedRange)
     {
         var sqref = protectedRange.Attribute("sqref")?.Value;
@@ -68,12 +85,41 @@ internal static partial class XlsxWorksheetMetadataPreserver
             return null;
 
         var tokens = sqref.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (tokens.Length != 1)
+        if (tokens.Length == 0)
             return null;
 
-        return TryParseSqrefToken(tokens[0], SheetId.New(), out var range)
-            ? range.ToString()
-            : null;
+        var sheet = SheetId.New();
+        var canonicalAreas = new string[tokens.Length];
+        for (var index = 0; index < tokens.Length; index++)
+        {
+            if (!TryParseSqrefToken(tokens[index], sheet, out var range))
+                return null;
+
+            canonicalAreas[index] = range.ToString();
+        }
+
+        if (canonicalAreas.Length == 1)
+            return canonicalAreas[0];
+
+        Array.Sort(canonicalAreas, StringComparer.OrdinalIgnoreCase);
+        return string.Join(' ', canonicalAreas);
+    }
+
+    /// <summary>
+    /// True when every area of <paramref name="canonicalSqref"/> (as produced by
+    /// <see cref="CanonicalSupportedProtectedRangeSqref"/>, so single areas have no internal spaces)
+    /// is present in <paramref name="modeledSqrefs"/> — i.e. the whole sqref, single- or multi-area,
+    /// is already represented in the model and must not be duplicated as a native-only passthrough.
+    /// </summary>
+    private static bool IsFullyModeledSqref(string canonicalSqref, IReadOnlySet<string> modeledSqrefs)
+    {
+        foreach (var area in canonicalSqref.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!modeledSqrefs.Contains(area))
+                return false;
+        }
+
+        return true;
     }
 
     private static bool TryParseSqrefToken(string token, SheetId sheet, out GridRange range)
@@ -130,14 +176,29 @@ internal static partial class XlsxWorksheetMetadataPreserver
     {
         var sourceSqref = sourceRange.Attribute("sqref")?.Value;
         var sourceName = sourceRange.Attribute("name")?.Value;
+        var sourceAreas = NormalizeSqrefAreaSet(sourceSqref);
         return targetProtectedRanges
             .Elements(workbookNs + "protectedRange")
             .Any(targetRange =>
-                (!string.IsNullOrWhiteSpace(sourceSqref) &&
-                 string.Equals(targetRange.Attribute("sqref")?.Value, sourceSqref, StringComparison.OrdinalIgnoreCase)) ||
-                (string.IsNullOrWhiteSpace(sourceSqref) &&
+                (sourceAreas is not null &&
+                 sourceAreas.SetEquals(NormalizeSqrefAreaSet(targetRange.Attribute("sqref")?.Value) ?? [])) ||
+                (sourceAreas is null &&
                  !string.IsNullOrWhiteSpace(sourceName) &&
                  string.Equals(targetRange.Attribute("name")?.Value, sourceName, StringComparison.OrdinalIgnoreCase)));
     }
+
+    /// <summary>
+    /// Splits a <c>sqref</c> attribute's raw (unparsed) space-separated area tokens into a
+    /// case-insensitive set, for order/spacing-independent equivalence checks against another
+    /// sqref. Unlike <see cref="CanonicalSupportedProtectedRangeSqref"/> this does not require the
+    /// areas to parse as valid <see cref="GridRange"/>s — it is a purely textual comparison used
+    /// only to detect duplicate native-only ranges being re-added. Returns null for a blank sqref.
+    /// </summary>
+    private static HashSet<string>? NormalizeSqrefAreaSet(string? sqref) =>
+        string.IsNullOrWhiteSpace(sqref)
+            ? null
+            : sqref
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
 }

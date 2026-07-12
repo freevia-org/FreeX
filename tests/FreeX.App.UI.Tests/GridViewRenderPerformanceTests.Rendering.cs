@@ -739,7 +739,7 @@ public sealed partial class GridViewRenderPerformanceTests
             textPass.IndexOf("bool canOverflow = CanOverflowCellText", StringComparison.Ordinal)..
             textPass.IndexOf("FormattedText text;", StringComparison.Ordinal)];
         var overflowBlock = textPass[
-            textPass.IndexOf("var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);", StringComparison.Ordinal)..
+            textPass.IndexOf("double clipLeft = rect.Left;", StringComparison.Ordinal)..
             textPass.IndexOf("var shouldClipText = ShouldClipText", StringComparison.Ordinal)];
 
         setup.Should().Contain("HashSet<(uint Row, uint Col)>? occupied = null;");
@@ -748,7 +748,9 @@ public sealed partial class GridViewRenderPerformanceTests
         overflowBlock.Should().Contain("if (canOverflow && textLayout.Bounds.Right > rect.Right)");
         overflowBlock.Should().Contain("occupied ??= GetOccupiedCellLookup(viewport, EditingCell);");
         overflowBlock.Should().Contain("!occupied.Contains((cell.Row, nextCol))");
-        overflowBlock.Should().Contain("clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);");
+        overflowBlock.Should().Contain("if (canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1)");
+        overflowBlock.Should().Contain("!occupied.Contains((cell.Row, prevCol))");
+        overflowBlock.Should().Contain("var clipRect = new Rect(clipLeft, rect.Top, renderWidth, rect.Height);");
     }
 
     [Fact]

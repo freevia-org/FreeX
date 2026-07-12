@@ -870,7 +870,8 @@ public partial class GridView : FrameworkElement
             !HasCellTextOrientation(style?.TextRotation ?? 0) &&
             rawValue is not NumberValue and not DateTimeValue &&
             !merge.HasValue &&
-            (hAlign == CellHAlign.Left || hAlign == CellHAlign.General);
+            (hAlign == CellHAlign.Left || hAlign == CellHAlign.General ||
+             hAlign == CellHAlign.Right || hAlign == CellHAlign.Center);
     }
 
     public static CellAddress ConstrainAutofillTarget(GridRange source, CellAddress target)

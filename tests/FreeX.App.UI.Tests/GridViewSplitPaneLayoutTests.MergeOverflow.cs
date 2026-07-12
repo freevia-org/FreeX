@@ -236,6 +236,56 @@ public sealed partial class GridViewSplitPaneLayoutTests
     }
 
     [Fact]
+    public void CalculateSplitPaneCellLayouts_RightAlignedTextOverflowsLeftwardAcrossEmptyCellsAndStopsAtOccupiedCell()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40)],
+                [new ColMetric(1, 64, 0), new ColMetric(2, 80, 64), new ColMetric(3, 64, 144)],
+                [
+                    Cell(1, 1, "stop"),
+                    Cell(1, 3, "overflow", new CellStyle { HorizontalAlignment = FreeX.Core.Model.HorizontalAlignment.Right })
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
+
+        layouts.Single(layout => layout.Cell.Col == 3).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth + 64, GridView.ColHeaderHeight, 144, 18));
+    }
+
+    [Fact]
+    public void CalculateSplitPaneCellLayouts_CenterAlignedTextOverflowsBothDirectionsAcrossEmptyCells()
+    {
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(20, 18, 0), new RowMetric(21, 18, 18)],
+            [new ColMetric(10, 64, 0), new ColMetric(11, 64, 64)],
+            SplitPanes: new SplitPaneState(
+                4,
+                4,
+                [new RowMetric(1, 18, 0), new RowMetric(2, 22, 18), new RowMetric(3, 18, 40), new RowMetric(4, 18, 58)],
+                [
+                    new ColMetric(1, 64, 0),
+                    new ColMetric(2, 80, 64),
+                    new ColMetric(3, 64, 144),
+                    new ColMetric(4, 80, 208)
+                ],
+                [
+                    Cell(1, 3, "overflow", new CellStyle { HorizontalAlignment = FreeX.Core.Model.HorizontalAlignment.Center })
+                ]));
+
+        var layouts = GridView.CalculateSplitPaneCellLayouts(viewport);
+
+        layouts.Single(layout => layout.Cell.Col == 3).TextClipRect
+            .Should().Be(new Rect(GridView.RowHeaderWidth, GridView.ColHeaderHeight, 288, 18));
+    }
+
+    [Fact]
     public void RenderSplitPaneCells_DrawsCommentIndicatorsForCommentOnlyPaneCells()
     {
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.Rendering.cs");

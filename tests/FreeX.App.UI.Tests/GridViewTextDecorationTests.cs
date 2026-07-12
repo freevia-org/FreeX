@@ -145,6 +145,45 @@ public sealed class GridViewTextDecorationTests
             .Should().BeFalse();
     }
 
+    [Fact]
+    public void CanOverflowCellText_AllowsRightAndCenterAlignmentButExcludesJustifyDistributedAndFill()
+    {
+        GridView.CanOverflowCellText(
+                new CellStyle { HorizontalAlignment = FreeX.Core.Model.HorizontalAlignment.Right },
+                new TextValue("right"),
+                "right",
+                merge: null)
+            .Should().BeTrue();
+
+        GridView.CanOverflowCellText(
+                new CellStyle { HorizontalAlignment = FreeX.Core.Model.HorizontalAlignment.Center },
+                new TextValue("center"),
+                "center",
+                merge: null)
+            .Should().BeTrue();
+
+        GridView.CanOverflowCellText(
+                new CellStyle { HorizontalAlignment = FreeX.Core.Model.HorizontalAlignment.Justify },
+                new TextValue("justify"),
+                "justify",
+                merge: null)
+            .Should().BeFalse();
+
+        GridView.CanOverflowCellText(
+                new CellStyle { HorizontalAlignment = FreeX.Core.Model.HorizontalAlignment.Distributed },
+                new TextValue("distributed"),
+                "distributed",
+                merge: null)
+            .Should().BeFalse();
+
+        GridView.CanOverflowCellText(
+                new CellStyle { HorizontalAlignment = FreeX.Core.Model.HorizontalAlignment.Fill },
+                new TextValue("fill"),
+                "fill",
+                merge: null)
+            .Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(-91, 0)]
     [InlineData(-90, -90)]

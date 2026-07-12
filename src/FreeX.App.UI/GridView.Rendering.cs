@@ -746,7 +746,7 @@ public partial class GridView
                 textRotation,
                 isEffectivelyRightToLeft);
 
-            var clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
+            double clipLeft = rect.Left;
             if (canOverflow && textLayout.Bounds.Right > rect.Right)
             {
                 occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
@@ -757,9 +757,26 @@ public partial class GridView
                     renderWidth += nextMetric.Width;
                     nextCol++;
                 }
-
-                clipRect = new Rect(rect.Left, rect.Top, renderWidth, rect.Height);
             }
+
+            // Right/Center-aligned text can overflow leftward into empty cells (mirrors Excel,
+            // which slides right-aligned/centered overflow text over blank cells to its left).
+            if (canOverflow && textLayout.Bounds.Left < rect.Left && colMetric.Col > 1)
+            {
+                occupied ??= GetOccupiedCellLookup(viewport, EditingCell);
+                uint prevCol = colMetric.Col - 1;
+                while (colLookup.TryGetValue(prevCol, out var prevMetric)
+                       && !occupied.Contains((cell.Row, prevCol)))
+                {
+                    clipLeft -= prevMetric.Width;
+                    renderWidth += prevMetric.Width;
+                    if (prevCol == 1)
+                        break;
+                    prevCol--;
+                }
+            }
+
+            var clipRect = new Rect(clipLeft, rect.Top, renderWidth, rect.Height);
 
             if (!IntersectsVisibleGrid(clipRect, visibleLeft, visibleTop, visibleRight, visibleBottom))
                 continue;
