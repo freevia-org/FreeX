@@ -13,6 +13,18 @@ public abstract class MathNode
 {
     private MathNode() { }
 
+    /// <summary>Math alphabet requested by <c>m:rPr/m:scr</c>.</summary>
+    public enum MathAlphabet
+    {
+        Default,
+        Roman,
+        Script,
+        Fraktur,
+        DoubleStruck,
+        SansSerif,
+        Monospace
+    }
+
     // ── Leaf: text run ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -30,15 +42,19 @@ public abstract class MathNode
         /// <summary>True when m:rPr/m:sty requests bold math text.</summary>
         public bool IsBold { get; }
 
+        /// <summary>Requested math alphabet for ASCII letter/digit remapping.</summary>
+        public MathAlphabet Alphabet { get; }
+
         /// <summary>
         /// When m:rPr/m:lit is present or m:nor is absent the run uses the math italic style.
         /// When m:nor is set (literal/roman) the run is upright.
         /// </summary>
-        public Run(string text, bool isItalic = true, bool isBold = false)
+        public Run(string text, bool isItalic = true, bool isBold = false, MathAlphabet alphabet = MathAlphabet.Default)
         {
             Text = text;
             IsItalic = isItalic;
             IsBold = isBold;
+            Alphabet = alphabet;
         }
     }
 

@@ -2310,7 +2310,11 @@ public static partial class ChartRenderPlanner
         if (string.IsNullOrWhiteSpace(code))
             return FormatAxisValue(value);
 
-        var section = NormalizeNumberFormatSection(SelectNumberFormatSection(value, code));
+        var rawSection = SelectNumberFormatSection(value, code);
+        if (TryFormatElapsedTimeValue(value, rawSection, out var elapsedText))
+            return elapsedText;
+
+        var section = NormalizeNumberFormatSection(rawSection);
         if (string.IsNullOrWhiteSpace(section) ||
             string.Equals(section, "General", StringComparison.OrdinalIgnoreCase))
         {
@@ -2319,6 +2323,9 @@ public static partial class ChartRenderPlanner
 
         if (LooksLikeDateFormat(section) && TryFromOaDate(value, out var date))
             return FormatDateValue(date, section);
+
+        if (TryFormatFractionValue(value, section, out var fractionText))
+            return fractionText;
 
         var placeholderStart = IndexOfAny(section, '#', '0', '?');
         if (placeholderStart < 0)
@@ -2336,11 +2343,7 @@ public static partial class ChartRenderPlanner
         suffix = suffix.Replace("%", string.Empty, StringComparison.Ordinal);
 
         var number = FormatNumberWithPattern(scaled, numericPattern);
-        var hasAuthoredNegativeAffordance =
-            prefix.Contains('-', StringComparison.Ordinal) ||
-            suffix.Contains('-', StringComparison.Ordinal) ||
-            prefix.Contains('(', StringComparison.Ordinal) ||
-            suffix.Contains(')', StringComparison.Ordinal);
+        var hasAuthoredNegativeAffordance = HasAuthoredNegativeAffordance(prefix, suffix);
         var sign = scaled < 0 && !hasAuthoredNegativeAffordance ? "-" : string.Empty;
         return $"{sign}{prefix}{number}{suffix}{(asPercent ? "%" : string.Empty)}";
     }
@@ -2419,7 +2422,7 @@ public static partial class ChartRenderPlanner
         return false;
     }
 
-    private static string NormalizeNumberFormatSection(string section)
+    private static string NormalizeNumberFormatSection(string section, bool preserveElapsedTimeTokens = false)
     {
         var builder = new StringBuilder(section.Length);
         bool inQuotedLiteral = false;
@@ -2437,6 +2440,10 @@ public static partial class ChartRenderPlanner
                 var end = section.IndexOf(']', index + 1);
                 if (end >= 0)
                 {
+                    var token = section[(index + 1)..end].Trim();
+                    if (preserveElapsedTimeTokens && IsElapsedTimeToken(token))
+                        builder.Append(section, index, end - index + 1);
+
                     index = end;
                     continue;
                 }
@@ -2460,6 +2467,222 @@ public static partial class ChartRenderPlanner
 
         return builder.ToString().Trim();
     }
+
+    private static bool TryFormatElapsedTimeValue(double value, string section, out string formatted)
+    {
+        formatted = string.Empty;
+
+        var pattern = NormalizeNumberFormatSection(section, preserveElapsedTimeTokens: true);
+        if (string.IsNullOrWhiteSpace(pattern))
+            return false;
+
+        var lower = pattern.ToLowerInvariant();
+        var absoluteSeconds = Math.Abs(value) * 86400.0;
+        string sign = value < 0 ? "-" : string.Empty;
+
+        if (lower.StartsWith("[h]:mm:ss", StringComparison.Ordinal) &&
+            TryReadElapsedFractionalSecondDigits(pattern, "[h]:mm:ss".Length, out var hourSecondDecimals))
+        {
+            formatted = sign + FormatElapsedHours(absoluteSeconds, hourSecondDecimals);
+            return true;
+        }
+
+        if (lower.StartsWith("[m]:ss", StringComparison.Ordinal) &&
+            TryReadElapsedFractionalSecondDigits(pattern, "[m]:ss".Length, out var minuteSecondDecimals))
+        {
+            formatted = sign + FormatElapsedMinutes(absoluteSeconds, minuteSecondDecimals);
+            return true;
+        }
+
+        if (lower.StartsWith("[s]", StringComparison.Ordinal) &&
+            TryReadElapsedFractionalSecondDigits(pattern, "[s]".Length, out var totalSecondDecimals))
+        {
+            formatted = sign + FormatElapsedTotalSeconds(absoluteSeconds, totalSecondDecimals);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryReadElapsedFractionalSecondDigits(string pattern, int startIndex, out int decimals)
+    {
+        decimals = 0;
+        if (startIndex == pattern.Length)
+            return true;
+
+        if (startIndex >= pattern.Length || pattern[startIndex] != '.')
+            return false;
+
+        int index = startIndex + 1;
+        while (index < pattern.Length && pattern[index] == '0')
+            index++;
+
+        decimals = index - startIndex - 1;
+        return decimals is > 0 and <= 3 && index == pattern.Length;
+    }
+
+    private static string FormatElapsedHours(double absoluteSeconds, int decimals)
+    {
+        var roundedSeconds = Math.Round(absoluteSeconds, decimals, MidpointRounding.AwayFromZero);
+        var hours = (long)Math.Floor(roundedSeconds / 3600.0);
+        var minutes = (long)Math.Floor((roundedSeconds - hours * 3600.0) / 60.0);
+        var seconds = roundedSeconds - hours * 3600.0 - minutes * 60.0;
+        return $"{hours}:{minutes:00}:{FormatElapsedSecondComponent(seconds, decimals)}";
+    }
+
+    private static string FormatElapsedMinutes(double absoluteSeconds, int decimals)
+    {
+        var roundedSeconds = Math.Round(absoluteSeconds, decimals, MidpointRounding.AwayFromZero);
+        var minutes = (long)Math.Floor(roundedSeconds / 60.0);
+        var seconds = roundedSeconds - minutes * 60.0;
+        return $"{minutes}:{FormatElapsedSecondComponent(seconds, decimals)}";
+    }
+
+    private static string FormatElapsedTotalSeconds(double absoluteSeconds, int decimals)
+    {
+        var roundedSeconds = Math.Round(absoluteSeconds, decimals, MidpointRounding.AwayFromZero);
+        return roundedSeconds.ToString(decimals == 0 ? "0" : $"0.{new string('0', decimals)}", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatElapsedSecondComponent(double seconds, int decimals) =>
+        seconds.ToString(decimals == 0 ? "00" : $"00.{new string('0', decimals)}", CultureInfo.InvariantCulture);
+
+    private static bool IsElapsedTimeToken(string token) =>
+        string.Equals(token, "h", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(token, "m", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(token, "s", StringComparison.OrdinalIgnoreCase);
+
+    private static bool TryFormatFractionValue(double value, string section, out string formatted)
+    {
+        formatted = string.Empty;
+        if (section.Contains('%', StringComparison.Ordinal))
+            return false;
+
+        var placeholderStart = IndexOfAny(section, '#', '0', '?');
+        if (placeholderStart < 0)
+            return false;
+
+        var placeholderEnd = LastIndexOfAny(section, '#', '0', '?');
+        if (placeholderEnd < placeholderStart)
+            return false;
+
+        var prefix = section[..placeholderStart];
+        var fractionPattern = section[placeholderStart..(placeholderEnd + 1)];
+        var suffix = section[(placeholderEnd + 1)..];
+        if (!TryReadFractionPattern(fractionPattern, out var hasWholePart, out var maxDenominator))
+            return false;
+
+        var fraction = FormatFractionNumber(Math.Abs(value), hasWholePart, maxDenominator);
+        var sign = value < 0 && !HasAuthoredNegativeAffordance(prefix, suffix) ? "-" : string.Empty;
+        formatted = $"{sign}{prefix}{fraction}{suffix}";
+        return true;
+    }
+
+    private static bool TryReadFractionPattern(string pattern, out bool hasWholePart, out int maxDenominator)
+    {
+        hasWholePart = false;
+        maxDenominator = 0;
+
+        var slashIndex = pattern.IndexOf('/');
+        if (slashIndex <= 0 || slashIndex != pattern.LastIndexOf('/'))
+            return false;
+
+        var beforeSlash = pattern[..slashIndex].TrimEnd();
+        var denominatorPattern = pattern[(slashIndex + 1)..].Trim();
+        if (!IsFractionPlaceholderRun(denominatorPattern))
+            return false;
+
+        var wholeAndNumeratorSeparator = beforeSlash.LastIndexOf(' ');
+        var numeratorPattern = beforeSlash.Trim();
+        if (wholeAndNumeratorSeparator >= 0)
+        {
+            var wholePattern = beforeSlash[..wholeAndNumeratorSeparator].Trim();
+            numeratorPattern = beforeSlash[(wholeAndNumeratorSeparator + 1)..].Trim();
+            hasWholePart = IsFractionPlaceholderRun(wholePattern);
+        }
+
+        if (!IsFractionPlaceholderRun(numeratorPattern))
+            return false;
+
+        var denominatorDigits = denominatorPattern.Count(IsFractionPlaceholder);
+        var numeratorDigits = numeratorPattern.Count(IsFractionPlaceholder);
+        if (denominatorDigits is < 1 or > 2 || numeratorDigits is < 1 or > 2)
+            return false;
+
+        maxDenominator = (int)Math.Pow(10, denominatorDigits) - 1;
+        return true;
+    }
+
+    private static bool IsFractionPlaceholderRun(string text) =>
+        text.Length > 0 && text.All(ch => IsFractionPlaceholder(ch) || ch == ',');
+
+    private static bool IsFractionPlaceholder(char ch) => ch is '#' or '0' or '?';
+
+    private static string FormatFractionNumber(double value, bool hasWholePart, int maxDenominator)
+    {
+        var whole = hasWholePart ? (long)Math.Floor(value) : 0;
+        var fractionalValue = hasWholePart ? value - whole : value;
+        var (numerator, denominator) = ApproximateFraction(fractionalValue, maxDenominator);
+
+        if (hasWholePart && numerator == denominator)
+        {
+            whole++;
+            numerator = 0;
+        }
+
+        if (numerator == 0)
+            return whole == 0 ? "0" : whole.ToString(CultureInfo.InvariantCulture);
+
+        var divisor = GreatestCommonDivisor(numerator, denominator);
+        numerator /= divisor;
+        denominator /= divisor;
+
+        var fraction = $"{numerator.ToString(CultureInfo.InvariantCulture)}/{denominator.ToString(CultureInfo.InvariantCulture)}";
+        return hasWholePart && whole != 0
+            ? $"{whole.ToString(CultureInfo.InvariantCulture)} {fraction}"
+            : fraction;
+    }
+
+    private static (long numerator, long denominator) ApproximateFraction(double value, int maxDenominator)
+    {
+        long bestNumerator = 0;
+        long bestDenominator = 1;
+        double bestError = double.MaxValue;
+
+        for (long denominator = 1; denominator <= maxDenominator; denominator++)
+        {
+            var numerator = (long)Math.Round(value * denominator, MidpointRounding.AwayFromZero);
+            var error = Math.Abs(value - (double)numerator / denominator);
+            if (error + 1e-12 < bestError)
+            {
+                bestError = error;
+                bestNumerator = numerator;
+                bestDenominator = denominator;
+            }
+        }
+
+        return (bestNumerator, bestDenominator);
+    }
+
+    private static long GreatestCommonDivisor(long left, long right)
+    {
+        left = Math.Abs(left);
+        right = Math.Abs(right);
+        while (right != 0)
+        {
+            var remainder = left % right;
+            left = right;
+            right = remainder;
+        }
+
+        return left == 0 ? 1 : left;
+    }
+
+    private static bool HasAuthoredNegativeAffordance(string prefix, string suffix) =>
+        prefix.Contains('-', StringComparison.Ordinal) ||
+        suffix.Contains('-', StringComparison.Ordinal) ||
+        prefix.Contains('(', StringComparison.Ordinal) ||
+        suffix.Contains(')', StringComparison.Ordinal);
 
     private static int CountScaleCommas(ref string suffix)
     {

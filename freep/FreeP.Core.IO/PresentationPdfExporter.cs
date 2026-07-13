@@ -160,11 +160,22 @@ public static class PresentationPdfExporter
         if (TryAppendConnectorGeometry(ops, shape, x, y, width, height, slideHeightPoints))
             return new ShapeBox(x, y, width, height);
 
-        if (TryMapFill(shape.Fill, out var fill))
-            ops.Add(new PdfFillRect(x, y, width, height, fill));
+        if (IsEllipseLike(shape))
+        {
+            if (TryMapFill(shape.Fill, out var fill))
+                ops.Add(new PdfFillEllipse(x, y, width, height, fill));
 
-        if (TryMapOutline(shape.Outline, out var stroke, out var strokeWidth))
-            ops.Add(new PdfStrokeRect(x, y, width, height, stroke, strokeWidth));
+            if (TryMapOutline(shape.Outline, out var stroke, out var strokeWidth))
+                ops.Add(new PdfStrokeEllipse(x, y, width, height, stroke, strokeWidth));
+
+            return new ShapeBox(x, y, width, height);
+        }
+
+        if (TryMapFill(shape.Fill, out var rectFill))
+            ops.Add(new PdfFillRect(x, y, width, height, rectFill));
+
+        if (TryMapOutline(shape.Outline, out var rectStroke, out var rectStrokeWidth))
+            ops.Add(new PdfStrokeRect(x, y, width, height, rectStroke, rectStrokeWidth));
 
         return new ShapeBox(x, y, width, height);
     }
@@ -304,6 +315,9 @@ public static class PresentationPdfExporter
             or SlideShapeKind.Ole
             or SlideShapeKind.PreservedObject
         || shape.Picture is not null;
+
+    private static bool IsEllipseLike(SlideShape shape) =>
+        shape.AutoShapeKind == DrawingShapeKind.Ellipse;
 
     private static bool IsSupportedImageContentType(string? contentType)
     {

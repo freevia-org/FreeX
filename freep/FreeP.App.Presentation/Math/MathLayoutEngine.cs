@@ -22,6 +22,119 @@ public static class MathLayoutEngine
 {
     // ── Public entry ──────────────────────────────────────────────────────
 
+    private static string ApplyMathAlphabet(string text, MathNode.MathAlphabet alphabet)
+    {
+        if (string.IsNullOrEmpty(text) || alphabet is MathNode.MathAlphabet.Default or MathNode.MathAlphabet.Roman)
+            return text;
+
+        var mapped = new System.Text.StringBuilder(text.Length);
+        foreach (var ch in text)
+            mapped.Append(MapMathAlphabetChar(ch, alphabet));
+        return mapped.ToString();
+    }
+
+    private static string MapMathAlphabetChar(char ch, MathNode.MathAlphabet alphabet) =>
+        alphabet switch
+        {
+            MathNode.MathAlphabet.Script => MapScript(ch),
+            MathNode.MathAlphabet.Fraktur => MapFraktur(ch),
+            MathNode.MathAlphabet.DoubleStruck => MapDoubleStruck(ch),
+            MathNode.MathAlphabet.SansSerif => MapConsecutiveAlphabet(ch, upperStart: 0x1D5A0, lowerStart: 0x1D5BA, digitStart: 0x1D7E2),
+            MathNode.MathAlphabet.Monospace => MapConsecutiveAlphabet(ch, upperStart: 0x1D670, lowerStart: 0x1D68A, digitStart: 0x1D7F6),
+            _ => ch.ToString()
+        };
+
+    private static string MapScript(char ch) =>
+        ch switch
+        {
+            'A' => FromCodePoint(0x1D49C),
+            'B' => "\u212C",
+            'C' => FromCodePoint(0x1D49E),
+            'D' => FromCodePoint(0x1D49F),
+            'E' => "\u2130",
+            'F' => "\u2131",
+            'G' => FromCodePoint(0x1D4A2),
+            'H' => "\u210B",
+            'I' => "\u2110",
+            'J' => FromCodePoint(0x1D4A5),
+            'K' => FromCodePoint(0x1D4A6),
+            'L' => "\u2112",
+            'M' => "\u2133",
+            >= 'N' and <= 'Q' => FromCodePoint(0x1D4A9 + (ch - 'N')),
+            'R' => "\u211B",
+            >= 'S' and <= 'Z' => FromCodePoint(0x1D4AE + (ch - 'S')),
+            >= 'a' and <= 'd' => FromCodePoint(0x1D4B6 + (ch - 'a')),
+            'e' => "\u212F",
+            'f' => FromCodePoint(0x1D4BB),
+            'g' => "\u210A",
+            >= 'h' and <= 'n' => FromCodePoint(0x1D4BD + (ch - 'h')),
+            'o' => "\u2134",
+            >= 'p' and <= 'z' => FromCodePoint(0x1D4C5 + (ch - 'p')),
+            _ => ch.ToString()
+        };
+
+    private static string MapFraktur(char ch) =>
+        ch switch
+        {
+            'A' => FromCodePoint(0x1D504),
+            'B' => FromCodePoint(0x1D505),
+            'C' => "\u212D",
+            >= 'D' and <= 'G' => FromCodePoint(0x1D507 + (ch - 'D')),
+            'H' => "\u210C",
+            'I' => "\u2111",
+            >= 'J' and <= 'Q' => FromCodePoint(0x1D50D + (ch - 'J')),
+            'R' => "\u211C",
+            >= 'S' and <= 'Y' => FromCodePoint(0x1D516 + (ch - 'S')),
+            'Z' => "\u2128",
+            >= 'a' and <= 'z' => FromCodePoint(0x1D51E + (ch - 'a')),
+            _ => ch.ToString()
+        };
+
+    private static string MapDoubleStruck(char ch) =>
+        ch switch
+        {
+            'A' => FromCodePoint(0x1D538),
+            'B' => FromCodePoint(0x1D539),
+            'C' => "\u2102",
+            >= 'D' and <= 'G' => FromCodePoint(0x1D53B + (ch - 'D')),
+            'H' => "\u210D",
+            >= 'I' and <= 'M' => FromCodePoint(0x1D540 + (ch - 'I')),
+            'N' => "\u2115",
+            'O' => FromCodePoint(0x1D546),
+            'P' => "\u2119",
+            'Q' => "\u211A",
+            'R' => "\u211D",
+            >= 'S' and <= 'Y' => FromCodePoint(0x1D54A + (ch - 'S')),
+            'Z' => "\u2124",
+            >= 'a' and <= 'z' => FromCodePoint(0x1D552 + (ch - 'a')),
+            >= '0' and <= '9' => FromCodePoint(0x1D7D8 + (ch - '0')),
+            _ => ch.ToString()
+        };
+
+    private static string MapConsecutiveAlphabet(char ch, int upperStart, int lowerStart, int digitStart) =>
+        ch switch
+        {
+            >= 'A' and <= 'Z' => FromCodePoint(upperStart + (ch - 'A')),
+            >= 'a' and <= 'z' => FromCodePoint(lowerStart + (ch - 'a')),
+            >= '0' and <= '9' => FromCodePoint(digitStart + (ch - '0')),
+            _ => ch.ToString()
+        };
+
+    private static string FromCodePoint(int codePoint) => char.ConvertFromUtf32(codePoint);
+
+    private static int CountTextElements(string text)
+    {
+        var count = 0;
+        for (var i = 0; i < text.Length; i++)
+        {
+            if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1]))
+                i++;
+            count++;
+        }
+
+        return count;
+    }
+
     /// <summary>
     /// Lay out <paramref name="node"/> at the given base font size and return
     /// a <see cref="MathBox.Container"/> with all children positioned.
@@ -79,7 +192,14 @@ public static class MathLayoutEngine
 
     private static MathBox LayoutRun(MathNode.Run run, string fontFamily, double fontSizePt)
     {
-        return MakeGlyph(run.Text, fontFamily, fontSizePt, run.IsItalic, run.IsBold);
+        var text = ApplyMathAlphabet(run.Text, run.Alphabet);
+        var alphabetOverridesStyle = run.Alphabet is not MathNode.MathAlphabet.Default and not MathNode.MathAlphabet.Roman;
+        return MakeGlyph(
+            text,
+            fontFamily,
+            fontSizePt,
+            alphabetOverridesStyle ? false : run.IsItalic,
+            alphabetOverridesStyle ? false : run.IsBold);
     }
 
     // ── Fallback (unknown) ────────────────────────────────────────────────
@@ -1482,7 +1602,7 @@ public static class MathLayoutEngine
             return empty;
         }
 
-        int len = System.Math.Max(1, text.Length);
+        int len = System.Math.Max(1, CountTextElements(text));
 
         // Per-character width varies; use tighter estimate for single chars (operators)
         double charW = len == 1

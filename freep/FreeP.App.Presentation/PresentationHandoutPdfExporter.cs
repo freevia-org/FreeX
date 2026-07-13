@@ -124,6 +124,12 @@ public static class PresentationHandoutPdfExporter
                 case PdfStrokeRect stroke:
                     yield return MapRect(stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth);
                     break;
+                case PdfFillEllipse fill:
+                    yield return MapEllipse(fill.X, fill.Y, fill.Width, fill.Height, fill.Color, null);
+                    break;
+                case PdfStrokeEllipse stroke:
+                    yield return MapEllipse(stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth);
+                    break;
                 case PdfText text:
                     yield return new PdfText(
                         MapX(text.X),
@@ -156,6 +162,19 @@ public static class PresentationHandoutPdfExporter
             return lineWidth is null
                 ? new PdfFillRect(mapped.X, pdfY, mapped.Width, mapped.Height, color)
                 : new PdfStrokeRect(mapped.X, pdfY, mapped.Width, mapped.Height, color, lineWidth.Value * scale);
+        }
+
+        PdfDrawOp MapEllipse(double x, double y, double width, double height, PdfColor color, double? lineWidth)
+        {
+            var mapped = new LayoutRect(
+                MapX(x),
+                MapTopFromPdfBottom(y + height),
+                width * scale,
+                height * scale);
+            var pdfY = pageHeight - mapped.Bottom;
+            return lineWidth is null
+                ? new PdfFillEllipse(mapped.X, pdfY, mapped.Width, mapped.Height, color)
+                : new PdfStrokeEllipse(mapped.X, pdfY, mapped.Width, mapped.Height, color, lineWidth.Value * scale);
         }
 
         double MapX(double x) => fitted.X + (x * scale);

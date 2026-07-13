@@ -130,6 +130,31 @@ public static class SkiaPdfWriter
                 break;
             }
 
+            case PdfFillEllipse fillEllipse:
+            {
+                var top = pageHeight - (float)(fillEllipse.Y + fillEllipse.Height);
+                fillPaint.Color = ToSkColor(fillEllipse.Color);
+                canvas.DrawOval(new SKRect(
+                    (float)fillEllipse.X,
+                    top,
+                    (float)(fillEllipse.X + fillEllipse.Width),
+                    top + (float)fillEllipse.Height), fillPaint);
+                break;
+            }
+
+            case PdfStrokeEllipse strokeEllipse:
+            {
+                var top = pageHeight - (float)(strokeEllipse.Y + strokeEllipse.Height);
+                strokePaint.Color = ToSkColor(strokeEllipse.Color);
+                strokePaint.StrokeWidth = (float)strokeEllipse.LineWidth;
+                canvas.DrawOval(new SKRect(
+                    (float)strokeEllipse.X,
+                    top,
+                    (float)(strokeEllipse.X + strokeEllipse.Width),
+                    top + (float)strokeEllipse.Height), strokePaint);
+                break;
+            }
+
             case PdfText text:
             {
                 if (string.IsNullOrEmpty(text.Text))

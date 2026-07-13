@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using Free.Shared.Drawing;
 using Free.Shared.Pdf;
 using FreeP.App.Compositor;
 using FreeP.Core.IO;
@@ -62,6 +63,28 @@ public sealed class PresentationExportPlannerTests
         presentation.Slides[2].Notes = MakeTextBody("First closing note.", "Second closing note.");
         presentation.Properties.Title = "Notes Deck";
         presentation.Properties.Author = "Parity";
+        return presentation;
+    }
+
+    private static Presentation BuildEllipseDeck()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var slide = new Slide { Title = "Ellipse evidence" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Ellipse,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x70AD47)),
+            Outline = new ShapeOutline.Visible(SrgbColor.FromRgb(0x2F5597), widthPt: 1.75),
+            Text = "Oval callout",
+        });
+        slide.Notes = MakeTextBody("Ellipse notes evidence.");
+        presentation.Slides.Add(slide);
         return presentation;
     }
 
@@ -363,6 +386,23 @@ public sealed class PresentationExportPlannerTests
         handoutPackage.Bytes.Length.Should().BeGreaterThan(100);
         Encoding.ASCII.GetString(handoutPackage.Bytes, 0, 5).Should().Be("%PDF-");
         Encoding.Latin1.GetString(handoutPackage.Bytes).Should().Contain("%%EOF");
+    }
+
+    [Fact]
+    public void NotesAndHandoutPdfRenderPlans_PreserveEllipseSlideOps()
+    {
+        var deck = BuildEllipseDeck();
+
+        var notesPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(deck);
+        var handoutPlan = PresentationHandoutPdfExporter.BuildRenderPlan(
+            deck,
+            new PresentationHandoutPdfExportRequest(
+                new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts, HandoutSlidesPerPage: 1)));
+
+        notesPlan.Pages[0].Ops.OfType<PdfFillEllipse>().Should().ContainSingle();
+        notesPlan.Pages[0].Ops.OfType<PdfStrokeEllipse>().Should().ContainSingle();
+        handoutPlan.Pages[0].Ops.OfType<PdfFillEllipse>().Should().ContainSingle();
+        handoutPlan.Pages[0].Ops.OfType<PdfStrokeEllipse>().Should().ContainSingle();
     }
 
     [Fact]

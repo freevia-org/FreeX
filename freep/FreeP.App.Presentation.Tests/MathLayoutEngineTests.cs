@@ -13,7 +13,12 @@ public sealed class MathLayoutEngineTests
     private const double FontSizePt = 18.0;
     private const string M = "http://schemas.openxmlformats.org/officeDocument/2006/math";
 
-    private static MathNode Run(string text, bool isItalic = true, bool isBold = false) => new MathNode.Run(text, isItalic, isBold);
+    private static MathNode Run(
+        string text,
+        bool isItalic = true,
+        bool isBold = false,
+        MathNode.MathAlphabet alphabet = MathNode.MathAlphabet.Default) =>
+        new MathNode.Run(text, isItalic, isBold, alphabet);
 
     private static MathNode ParseOmml(string oMathInner)
     {
@@ -209,6 +214,60 @@ public sealed class MathLayoutEngineTests
             .Single();
 
         op.Text.Should().Be("x");
+        op.IsItalic.Should().BeTrue();
+        op.IsBold.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(MathNode.MathAlphabet.Script, "\U0001D49C\U0001D4B6-1")]
+    [InlineData(MathNode.MathAlphabet.Fraktur, "\U0001D504\U0001D51E-1")]
+    [InlineData(MathNode.MathAlphabet.DoubleStruck, "\U0001D538\U0001D552-\U0001D7D9")]
+    [InlineData(MathNode.MathAlphabet.SansSerif, "\U0001D5A0\U0001D5BA-\U0001D7E3")]
+    [InlineData(MathNode.MathAlphabet.Monospace, "\U0001D670\U0001D68A-\U0001D7F7")]
+    public void Run_WithMathAlphabet_MapsAsciiGlyphsInSharedDrawPlan(MathNode.MathAlphabet alphabet, string expectedText)
+    {
+        var layout = MathLayoutEngine.Layout(
+            Run("Aa-1", isItalic: true, isBold: true, alphabet),
+            "Cambria Math",
+            FontSizePt);
+
+        var op = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        op.Text.Should().Be(expectedText);
+        op.IsItalic.Should().BeFalse("explicit mathematical alphabet glyphs replace renderer font-style policy");
+        op.IsBold.Should().BeFalse("explicit mathematical alphabet glyphs replace renderer font-weight policy");
+    }
+
+    [Fact]
+    public void OmmlScrDoubleStruck_RenderPlanUsesUnicodeMathGlyphs()
+    {
+        var node = ParseOmml("<m:r><m:rPr><m:scr m:val=\"double-struck\"/><m:sty m:val=\"bi\"/></m:rPr><m:t>NZ9?</m:t></m:r>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var op = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        op.Text.Should().Be("\u2115\u2124\U0001D7E1?");
+        op.IsItalic.Should().BeFalse();
+        op.IsBold.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Run_WithRomanAlphabet_PreservesExistingItalicAndBoldBehavior()
+    {
+        var layout = MathLayoutEngine.Layout(
+            Run("x1", isItalic: true, isBold: true, MathNode.MathAlphabet.Roman),
+            "Cambria Math",
+            FontSizePt);
+
+        var op = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        op.Text.Should().Be("x1");
         op.IsItalic.Should().BeTrue();
         op.IsBold.Should().BeTrue();
     }
