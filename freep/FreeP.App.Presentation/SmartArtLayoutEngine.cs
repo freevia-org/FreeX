@@ -16,6 +16,7 @@ namespace FreeP.App.Compositor;
 ///   <see cref="SmartArtFamily.List"/>      — vertical stack of boxes
 ///   <see cref="SmartArtFamily.Cycle"/>     — N boxes on a circle with arrow connectors
 ///   <see cref="SmartArtFamily.Hierarchy"/> — tree (root top, children below, connector lines)
+///   <see cref="SmartArtFamily.Matrix"/>    — up to four boxes in a quadrant grid
 ///
 /// Returns null for <see cref="SmartArtFamily.Unknown"/> → compositor falls back to cached drawing.
 ///
@@ -86,6 +87,7 @@ public static class SmartArtLayoutEngine
             SmartArtFamily.List      => LayoutList      (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
             SmartArtFamily.Cycle     => LayoutCycle     (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
             SmartArtFamily.Hierarchy => LayoutHierarchy (data,  frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan, IsOrgChartLayout(data.LayoutUniqueId)),
+            SmartArtFamily.Matrix    => LayoutMatrix    (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
             _                        => null
         };
     }
@@ -128,7 +130,8 @@ public static class SmartArtLayoutEngine
     private static SlideShape MakeBox(
         uint id, string text, SmartArtNodeStyle style,
         long x, long y, long cx, long cy,
-        double fontSizePt = NodeFontSizePt)
+        double fontSizePt = NodeFontSizePt,
+        DrawingShapeKind shapeKind = DrawingShapeKind.RoundedRectangle)
     {
         var run = new Run { Text = text, Color = style.Text, Bold = true, FontSizePt = fontSizePt };
         var para = new Paragraph();
@@ -144,7 +147,7 @@ public static class SmartArtLayoutEngine
             Id            = id,
             Name          = $"SmartArt_Box_{id}",
             Kind          = SlideShapeKind.AutoShape,
-            AutoShapeKind = DrawingShapeKind.RoundedRectangle,
+            AutoShapeKind = shapeKind,
             OffsetXEmu    = x,
             OffsetYEmu    = y,
             ExtentCxEmu   = cx,
@@ -314,6 +317,59 @@ public static class SmartArtLayoutEngine
     }
 
     // ── Cycle layout ───────────────────────────────────────────────────────────────────────────
+
+    // Matrix layout.
+
+    /// <summary>
+    /// Bounded two-by-two quadrant grid for PowerPoint matrix layouts.
+    /// More than four parsed nodes keep cached drawing fallback in control.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutMatrix(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        if (n is 0 or > 4)
+            return null;
+
+        int columns = n == 1 ? 1 : 2;
+        int rows = n <= 2 ? 1 : 2;
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapX = columns > 1 ? (long)(fcx * GapFrac) : 0;
+        long gapY = rows > 1 ? (long)(fcy * GapFrac) : 0;
+
+        long availW = fcx - 2 * outerPadX - (columns - 1) * gapX;
+        long availH = fcy - 2 * outerPadY - (rows - 1) * gapY;
+        long boxW = Math.Max(availW / columns, 1L);
+        long boxH = Math.Max(availH / rows, 1L);
+
+        var shapes = new List<SlideShape>();
+        uint idCounter = 500;
+
+        for (int i = 0; i < n; i++)
+        {
+            int row = i / columns;
+            int column = i % columns;
+            long x = fx + outerPadX + column * (boxW + gapX);
+            long y = fy + outerPadY + row * (boxH + gapY);
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Matrix);
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                nodeStyle,
+                x,
+                y,
+                boxW,
+                boxH,
+                NodeFontSizePt,
+                DrawingShapeKind.Rectangle));
+        }
+
+        return shapes;
+    }
 
     /// <summary>
     /// Boxes arranged on a circle with arrow connectors between adjacent boxes.

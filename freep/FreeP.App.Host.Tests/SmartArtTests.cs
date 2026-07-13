@@ -1308,6 +1308,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesBasicMatrixAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix",
+            nodes: [("id1", "People"), ("id2", "Process"), ("id3", "Platform"), ("id4", "Proof")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Matrix,
+            "basicMatrix is a matrix-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "basicMatrix is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("People", "Process", "Platform", "Proof");
+    }
+
+    [Fact]
     public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1382,6 +1401,25 @@ public sealed class SmartArtTests : IDisposable
             "hierarchy-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Should().ContainSingle();
         sa.Data.Nodes[0].Children.Should().ContainSingle().Which.Text.Should().Be("Child");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownMatrixFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix",
+            nodes: [("id1", "A"), ("id2", "B"), ("id3", "C"), ("id4", "D")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Matrix,
+            "unsupported matrix siblings still retain broad family metadata for future layout slices");
+        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "matrix-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("A", "B", "C", "D");
     }
 
     [Fact]
@@ -2196,7 +2234,7 @@ public sealed class SmartArtTests : IDisposable
     public void Reader_ParsesSmartArtData_UnknownFamilyIsUnknown()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/matrix1",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/freeformDiagram",
             nodes: [("A", "X")],
             parOfConnections: []);
 
@@ -2204,7 +2242,7 @@ public sealed class SmartArtTests : IDisposable
             .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
 
         sa.Data!.Family.Should().Be(SmartArtFamily.Unknown,
-            "layout uniqueId 'matrix1' doesn't match any supported family keyword so it should be Unknown");
+            "layout uniqueId 'freeformDiagram' doesn't match any supported family keyword so it should be Unknown");
     }
 
     [Fact]

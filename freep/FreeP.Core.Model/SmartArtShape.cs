@@ -4,7 +4,7 @@ namespace FreeP.Core.Model;
 
 /// <summary>
 /// SmartArt diagram family — classifies the layout uniqueId into a rendering strategy.
-/// The live layout engine supports the four common families; Unknown falls back to cached drawing.
+/// The live layout engine supports common bounded families; Unknown falls back to cached drawing.
 /// </summary>
 public enum SmartArtFamily
 {
@@ -12,7 +12,8 @@ public enum SmartArtFamily
     Process   = 1,   // horizontal row of boxes + arrow connectors
     List      = 2,   // vertical (or horizontal) stack of boxes
     Cycle     = 3,   // boxes on a circle with arrow connectors
-    Hierarchy = 4    // tree (root top, children below, connector lines)
+    Hierarchy = 4,   // tree (root top, children below, connector lines)
+    Matrix    = 5    // two-by-two quadrant grid
 }
 
 /// <summary>

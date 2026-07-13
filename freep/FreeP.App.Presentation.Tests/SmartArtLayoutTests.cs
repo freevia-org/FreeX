@@ -684,6 +684,42 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BasicMatrix_ReturnsLiveQuadrantBoxesWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Matrix, "People", "Process", "Platform", "Proof");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("basicMatrix is a bounded shared matrix-family layout");
+        shapes!.Should().HaveCount(4, "one shared quadrant shape should be emitted per matrix node");
+        shapes.Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Rectangle,
+            "the matrix planner emits quadrant boxes without connector ops");
+
+        var boxes = shapes.ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("People", "Process", "Platform", "Proof");
+
+        boxes[1].OffsetXEmu.Should().BeGreaterThan(boxes[0].OffsetXEmu,
+            "the second quadrant should be to the right of the first");
+        boxes[2].OffsetYEmu.Should().BeGreaterThan(boxes[0].OffsetYEmu,
+            "the third quadrant should start the lower row");
+        boxes[3].OffsetXEmu.Should().BeGreaterThan(boxes[2].OffsetXEmu,
+            "the fourth quadrant should be to the right of the third");
+    }
+
+    [Fact]
+    public void Matrix_MoreThanFourNodes_ReturnsNullForCachedFallback()
+    {
+        var data = MakeData(SmartArtFamily.Matrix, "A", "B", "C", "D", "E");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix";
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().BeNull("the bounded matrix planner only owns PowerPoint-style four-quadrant geometry");
+    }
+
+    [Fact]
     public void UnsupportedKnownLayout_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
@@ -717,6 +753,18 @@ public sealed class SmartArtLayoutTests
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         result.Should().BeNull("hierarchy-family layouts outside the bounded live planner should use cached drawing");
+    }
+
+    [Fact]
+    public void UnsupportedMatrixSibling_ReturnsNull()
+    {
+        var data = MakeData(SmartArtFamily.Matrix, "A", "B", "C", "D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
+        data.IsLiveLayoutSupported = false;
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().BeNull("matrix-family layouts outside the bounded live planner should use cached drawing");
     }
 
     // BI2: when nodes parse to zero, Layout returns null so compositor uses cached-drawing fallback.
@@ -1526,6 +1574,61 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().NotContain("Cached text cycle fallback");
         shapeOps.Where(op => op.Text is null)
             .Should().HaveCount(4, "hosts consume shared text-cycle connector DrawOps without renderer-local SmartArt policy");
+    }
+
+    [Fact]
+    public void Compositor_BasicMatrix_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Matrix, "North", "East", "South", "West");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicMatrix";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 22,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached matrix fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 74,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(4, "basicMatrix should render four live quadrant ops");
+        shapeOps.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(["North", "East", "South", "West"]);
+        shapeOps.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().NotContain("Cached matrix fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().BeEmpty("matrix SmartArt emits quadrant boxes only, with no connector DrawOps");
     }
 
     [Fact]
