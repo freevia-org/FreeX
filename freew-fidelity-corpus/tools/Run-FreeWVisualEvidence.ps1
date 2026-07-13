@@ -41,6 +41,9 @@
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/smartart-polygon-proof -ScenarioSet SmartArtPolygonVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/chart-visual-proof -ScenarioSet ChartVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/wordart-watermark-proof -ScenarioSet WordArtWatermarkVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
@@ -186,6 +189,9 @@ $namedScenarioSets = @{
         'object-format-position-size-style'
     )
     SmartArtPolygonVisualProof = @(
+        'chart-smartart-complex'
+    )
+    ChartVisualProof = @(
         'chart-smartart-complex'
     )
     WordArtWatermarkVisualProof = @(
@@ -1658,6 +1664,150 @@ function Assert-SmartArtPolygonVisualProofReadiness {
     }
 }
 
+function Assert-ChartVisualProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $scenarioId = 'chart-smartart-complex'
+    if (-not ($ScenarioIds -contains $scenarioId)) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Chart visual proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 38) {
+        throw "Chart visual proof readiness requires FreeW visual evidence summary schema v38 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $readinessRows = @($summary.drawingObjectProofReadiness | Where-Object { $_.scenarioId -eq $scenarioId })
+    $evidenceRows = @($summary.evidence)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $remainingBlockers = @($summary.remainingEvidenceBlockers)
+    $failures = New-Object System.Collections.Generic.List[string]
+    $verifiedSemanticRows = 0
+    $verifiedBaselineRows = 0
+
+    if ($readinessRows.Count -eq 0) {
+        $failures.Add("${scenarioId}: missing chart drawing/object proof readiness row")
+    }
+    foreach ($proofRow in $readinessRows) {
+        if ($proofRow.trust.passed -ne $true -or $proofRow.status -ne 'paired-renderer-proof-ready') {
+            $notes = @($proofRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = [string]$proofRow.baselineReadiness
+            }
+            $failures.Add("${scenarioId}/p$($proofRow.pageNumber): readiness status '$($proofRow.status)' failed ($notes)")
+        }
+        if ([string]$proofRow.semanticEvidence -notmatch 'chart signatures=') {
+            $failures.Add("${scenarioId}/p$($proofRow.pageNumber): semantic readiness does not report chart signatures")
+        }
+    }
+
+    foreach ($hostId in $requiredHosts) {
+        $hostRows = @($evidenceRows | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.trust.passed -eq $true
+        })
+        if ($hostRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing trusted normalized evidence row for chart visual proof")
+            continue
+        }
+
+        foreach ($row in $hostRows) {
+            $chartSmartArt = $row.chartSmartArt
+            if ([int]$chartSmartArt.chartCount -lt 2 -or
+                @($chartSmartArt.chartVisualSignatures).Count -lt 2) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing multiple chart plans or signatures")
+                continue
+            }
+
+            $signatures = @($chartSmartArt.chartVisualSignatures)
+            if (@($signatures | Where-Object {
+                ([string]$_).IndexOf('kind=Column', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('geometry=Bars', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('legend=1', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('dataLabels=1', [StringComparison]::Ordinal) -ge 0
+            }).Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing styled column chart signature")
+                continue
+            }
+
+            if (@($signatures | Where-Object {
+                ([string]$_).IndexOf('kind=Scatter', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('geometry=MarkerOnly', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('markers=1', [StringComparison]::Ordinal) -ge 0
+            }).Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing marker scatter chart signature")
+                continue
+            }
+
+            $verifiedSemanticRows++
+        }
+
+        $comparisonRows = @($baselineComparisons | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.baselineScenarioId -eq $scenarioId
+        })
+        if ($baselineComparisons.Count -gt 0 -and $comparisonRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+            continue
+        }
+        foreach ($comparison in $comparisonRows) {
+            if ($comparison.trust.passed -ne $true) {
+                $notes = @($comparison.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$comparison.skipReason
+                }
+                $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                continue
+            }
+            $verifiedBaselineRows++
+        }
+    }
+
+    $unavailableComparisons = @($baselineComparisons | Where-Object {
+        $_.scenarioId -eq $scenarioId -and
+        $_.status -eq 'word-baseline-unavailable'
+    })
+    if ($unavailableComparisons.Count -gt 0) {
+        $blocker = @($remainingBlockers | Where-Object {
+            $_.blockerId -eq 'chart-smartart-complex-word-baseline-fidelity' -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.status -eq 'word-baseline-unavailable' -and
+            $_.requiresWordBaseline -eq $true
+        }) | Select-Object -First 1
+        if (-not $blocker) {
+            $failures.Add("${scenarioId}: missing honest word-baseline-unavailable chart visual blocker")
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Chart visual proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Chart visual proof readiness: trusted semantic rows=$verifiedSemanticRows"
+    if ($baselineComparisons.Count -gt 0) {
+        Write-Host "Chart visual Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    }
+    else {
+        Write-Host "Chart visual Word-baseline policy rows: no Word baseline mode requested"
+    }
+    if ($unavailableComparisons.Count -gt 0) {
+        Write-Host "Chart visual Word-baseline unavailable blocker: verified"
+    }
+}
+
 function Assert-ReviewCompareCombineVisualProofReadiness {
     param(
         [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
@@ -2304,6 +2454,7 @@ Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TablePaginationPageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-SmartArtPolygonVisualProofReadiness $summaryJson $effectiveScenarioIds
+Assert-ChartVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-ReviewCompareCombineVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-ReviewProofingVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-EquationStructureVisualProofReadiness $summaryJson $effectiveScenarioIds
