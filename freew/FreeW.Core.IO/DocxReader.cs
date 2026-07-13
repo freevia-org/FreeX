@@ -1696,6 +1696,8 @@ public static class DocxReader
                 yield return ReadDelimiter(child);
             else if (child.Name == M + "m")
                 yield return MathRun.MatrixOf(ReadMatrix(child));
+            else if (child.Name == M + "eqArr")
+                yield return MathRun.EquationArrayOf(ReadEquationArray(child));
             else if (child.Name == M + "func")
                 yield return ReadFunctionApply(child);
             else if (child.Name == M + "groupChr")
@@ -1816,6 +1818,7 @@ public static class DocxReader
         element.Name == M + "bar" ||
         element.Name == M + "d" ||
         element.Name == M + "m" ||
+        element.Name == M + "eqArr" ||
         element.Name == M + "func" ||
         element.Name == M + "groupChr";
 
@@ -1967,6 +1970,22 @@ public static class DocxReader
             matrix.CellEquations.Add(equationRow);
         }
         return matrix;
+    }
+
+    /// <summary>
+    /// Reads an equation array (m:eqArr) into matrix-like one-cell rows, preserving structured m:e cells.
+    /// Mirrors <c>DocxWriter.BuildEquationArray</c>.
+    /// </summary>
+    private static MathMatrix ReadEquationArray(XElement eqArr)
+    {
+        var array = new MathMatrix();
+        foreach (var cell in eqArr.Elements(M + "e"))
+        {
+            array.Rows.Add([MathTextOf(cell)]);
+            array.CellEquations.Add([HasStructuredMathSlot(cell) ? ReadMathSlot(cell) : null]);
+        }
+
+        return array;
     }
 
     /// <summary>
