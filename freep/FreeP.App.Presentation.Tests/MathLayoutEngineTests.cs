@@ -29,6 +29,12 @@ public sealed class MathLayoutEngineTests
     private static MathNode TallFraction() =>
         new MathNode.Frac(Run("1"), Run("x"));
 
+    private static double GetEqArrayMarkerX(MathBox.Container eqArray, int rowIndex, int childIndex)
+    {
+        var row = (MathBox.Container)eqArray.Children[rowIndex];
+        return row.X + row.Children[childIndex].X;
+    }
+
     // ── HB1: n-ary integral (subSup / scripts-to-the-side) style ────────────
 
     [Fact]
@@ -593,6 +599,79 @@ public sealed class MathLayoutEngineTests
             "the row with a wider expression before m:aln shifts left to keep the marker aligned");
         thirdRow.X.Should().BeApproximately((container.Metrics.Width - thirdRow.Metrics.Width) / 2.0, 0.01,
             "rows without m:aln keep the previous centered equation-array behavior");
+    }
+
+    [Fact]
+    public void EqArray_RowSpacingRuleChangesVerticalGapWithoutChangingRowOrder()
+    {
+        var rows = new MathNode[]
+        {
+            Run("a"),
+            Run("b"),
+            Run("c")
+        };
+        var defaultEqArray = new MathNode.EqArray(rows);
+        var spacedEqArray = new MathNode.EqArray(
+            rows,
+            rowSpacingRule: MathNode.EqArray.EqArraySpacingRule.Double);
+
+        var defaultContainer = (MathBox.Container)MathLayoutEngine
+            .Layout(defaultEqArray, "Cambria Math", FontSizePt)
+            .Children[0];
+        var spacedContainer = (MathBox.Container)MathLayoutEngine
+            .Layout(spacedEqArray, "Cambria Math", FontSizePt)
+            .Children[0];
+
+        var defaultTexts = defaultContainer.Children.Cast<MathBox.Glyph>().Select(g => g.Text);
+        var spacedTexts = spacedContainer.Children.Cast<MathBox.Glyph>().Select(g => g.Text);
+
+        spacedContainer.Children[1].Y.Should().BeGreaterThan(defaultContainer.Children[1].Y,
+            "m:eqArrPr/m:rSpRule should increase the shared row gap");
+        spacedContainer.Metrics.Height.Should().BeGreaterThan(defaultContainer.Metrics.Height);
+        spacedTexts.Should().Equal(defaultTexts,
+            "spacing metadata must not reorder equation-array rows");
+    }
+
+    [Fact]
+    public void EqArray_BaseJustificationChangesReportedAscentWithoutMovingRowsOrAlignmentPoints()
+    {
+        var rows = new MathNode[]
+        {
+            new MathNode.Row(new MathNode[] { Run("mmmm"), Run("=1") }),
+            new MathNode.Row(new MathNode[] { Run("x"), Run("=22") }),
+            TallFraction()
+        };
+        var alignmentPoints = new int?[] { 1, 1, null };
+        var topEqArray = new MathNode.EqArray(
+            rows,
+            alignmentPoints,
+            baseJustification: MathNode.EqArray.EqArrayBaseJustification.Top);
+        var centerEqArray = new MathNode.EqArray(
+            rows,
+            alignmentPoints,
+            baseJustification: MathNode.EqArray.EqArrayBaseJustification.Center);
+        var bottomEqArray = new MathNode.EqArray(
+            rows,
+            alignmentPoints,
+            baseJustification: MathNode.EqArray.EqArrayBaseJustification.Bottom);
+
+        var top = (MathBox.Container)MathLayoutEngine.Layout(topEqArray, "Cambria Math", FontSizePt).Children[0];
+        var center = (MathBox.Container)MathLayoutEngine.Layout(centerEqArray, "Cambria Math", FontSizePt).Children[0];
+        var bottom = (MathBox.Container)MathLayoutEngine.Layout(bottomEqArray, "Cambria Math", FontSizePt).Children[0];
+
+        top.Children.Select(child => child.Y).Should().Equal(
+            center.Children.Select(child => child.Y),
+            "baseJc changes the equation-array baseline/ascent contract, not row layout");
+        bottom.Children.Select(child => child.Y).Should().Equal(center.Children.Select(child => child.Y));
+
+        GetEqArrayMarkerX(top, 0, 1).Should().BeApproximately(GetEqArrayMarkerX(top, 1, 1), 0.01,
+            "top baseline behavior must preserve direct m:aln alignment");
+        GetEqArrayMarkerX(bottom, 0, 1).Should().BeApproximately(GetEqArrayMarkerX(bottom, 1, 1), 0.01,
+            "bottom baseline behavior must preserve direct m:aln alignment");
+
+        top.Metrics.Ascent.Should().BeLessThan(center.Metrics.Ascent);
+        center.Metrics.Ascent.Should().BeLessThan(bottom.Metrics.Ascent);
+        bottom.Metrics.Ascent.Should().BeLessThanOrEqualTo(bottom.Metrics.Height);
     }
 
     [Fact]

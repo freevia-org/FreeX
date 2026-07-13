@@ -449,6 +449,22 @@ public abstract class MathNode
     /// </summary>
     public sealed class EqArray : MathNode
     {
+        public enum EqArrayBaseJustification
+        {
+            Top,
+            Center,
+            Bottom
+        }
+
+        public enum EqArraySpacingRule
+        {
+            Single = 0,
+            OneAndHalf = 1,
+            Double = 2,
+            Exactly = 3,
+            Multiple = 4
+        }
+
         /// <summary>The ordered row expressions from direct m:e children.</summary>
         public IReadOnlyList<MathNode> Rows { get; }
 
@@ -458,10 +474,27 @@ public abstract class MathNode
         /// </summary>
         public IReadOnlyList<int?> AlignmentPointIndices { get; }
 
-        public EqArray(IReadOnlyList<MathNode> rows, IReadOnlyList<int?>? alignmentPointIndices = null)
+        /// <summary>Vertical equation-array baseline justification from m:eqArrPr/m:baseJc.</summary>
+        public EqArrayBaseJustification BaseJustification { get; }
+
+        /// <summary>Optional row-spacing rule from m:eqArrPr/m:rSpRule.</summary>
+        public EqArraySpacingRule? RowSpacingRule { get; }
+
+        /// <summary>Optional row-spacing value from m:eqArrPr/m:rSp.</summary>
+        public int? RowSpacing { get; }
+
+        public EqArray(
+            IReadOnlyList<MathNode> rows,
+            IReadOnlyList<int?>? alignmentPointIndices = null,
+            EqArrayBaseJustification baseJustification = EqArrayBaseJustification.Center,
+            EqArraySpacingRule? rowSpacingRule = null,
+            int? rowSpacing = null)
         {
             Rows = rows;
             AlignmentPointIndices = alignmentPointIndices ?? System.Array.Empty<int?>();
+            BaseJustification = baseJustification;
+            RowSpacingRule = rowSpacingRule;
+            RowSpacing = rowSpacing;
         }
 
         public int? GetAlignmentPointIndex(int rowIndex) =>

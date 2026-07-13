@@ -622,6 +622,7 @@ public static class OmmlParser
 
     private static MathNode ParseEqArray(XElement el)
     {
+        var eqArrPr = el.Element(M + "eqArrPr");
         var rows = new List<MathNode>();
         var alignmentPointIndices = new List<int?>();
         foreach (var eEl in el.Elements(M + "e"))
@@ -631,7 +632,45 @@ public static class OmmlParser
             alignmentPointIndices.Add(alignmentPointIndex);
         }
 
-        return new MathNode.EqArray(rows, alignmentPointIndices);
+        return new MathNode.EqArray(
+            rows,
+            alignmentPointIndices,
+            ParseEqArrayBaseJustification(eqArrPr),
+            ParseEqArraySpacingRule(eqArrPr),
+            ParseEqArrayIntValue(eqArrPr, "rSp"));
+    }
+
+    private static MathNode.EqArray.EqArrayBaseJustification ParseEqArrayBaseJustification(XElement? eqArrPr)
+    {
+        var val = ReadVal(eqArrPr?.Element(M + "baseJc"));
+        return val switch
+        {
+            "top" => MathNode.EqArray.EqArrayBaseJustification.Top,
+            "bot" or "bottom" => MathNode.EqArray.EqArrayBaseJustification.Bottom,
+            _ => MathNode.EqArray.EqArrayBaseJustification.Center
+        };
+    }
+
+    private static MathNode.EqArray.EqArraySpacingRule? ParseEqArraySpacingRule(XElement? eqArrPr)
+    {
+        var val = ReadVal(eqArrPr?.Element(M + "rSpRule"));
+        return val switch
+        {
+            "0" => MathNode.EqArray.EqArraySpacingRule.Single,
+            "1" => MathNode.EqArray.EqArraySpacingRule.OneAndHalf,
+            "2" => MathNode.EqArray.EqArraySpacingRule.Double,
+            "3" => MathNode.EqArray.EqArraySpacingRule.Exactly,
+            "4" => MathNode.EqArray.EqArraySpacingRule.Multiple,
+            _ => null
+        };
+    }
+
+    private static int? ParseEqArrayIntValue(XElement? eqArrPr, string localName)
+    {
+        var val = ReadVal(eqArrPr?.Element(M + localName));
+        return int.TryParse(val, out var parsed) && parsed >= 0
+            ? parsed
+            : null;
     }
 
     private static (MathNode Row, int? AlignmentPointIndex) ParseEqArrayRow(XElement eEl)

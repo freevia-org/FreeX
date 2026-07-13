@@ -1201,13 +1201,18 @@ public static class MathLayoutEngine
     private static MathBox LayoutEqArray(MathNode.EqArray eqArray, string fontFamily, double fontSizePt)
     {
         double em = Em(fontSizePt);
-        double rowGap = em * 0.20;
+        double rowGap = ResolveMathArrayGap(
+            ToMathArraySpacingRule(eqArray.RowSpacingRule),
+            eqArray.RowSpacing,
+            em * 0.20);
 
         if (eqArray.Rows.Count == 0)
             return MakeGlyph("", fontFamily, fontSizePt, false);
 
         var rows = new List<MathBox>(eqArray.Rows.Count);
         var alignmentOffsets = new List<double?>(eqArray.Rows.Count);
+        var rowAsc = new double[eqArray.Rows.Count];
+        var rowDsc = new double[eqArray.Rows.Count];
         double maxRowW = 0;
         double maxLeft = 0;
         double maxRight = 0;
@@ -1221,6 +1226,8 @@ public static class MathLayoutEngine
             var alignmentOffset = GetEqArrayAlignmentOffset(row, rowBox, eqArray.GetAlignmentPointIndex(i));
             rows.Add(rowBox);
             alignmentOffsets.Add(alignmentOffset);
+            rowAsc[i] = rowBox.Metrics.Ascent;
+            rowDsc[i] = rowBox.Metrics.Descent;
             maxRowW = Math.Max(maxRowW, rowBox.Metrics.Width);
             if (alignmentOffset.HasValue)
             {
@@ -1238,9 +1245,13 @@ public static class MathLayoutEngine
         double alignmentOriginX = (totalW - alignedWidth) / 2.0;
         double sharedAlignmentX = alignmentOriginX + maxLeft;
 
-        // Like matrices, equation arrays are centered on the math axis. Clamp the
-        // ascent to the container height so descent remains non-negative for short arrays.
-        double ascent = Math.Min(totalH, totalH / 2.0 + em * 0.45);
+        double ascent = ResolveStackedArrayAscent(
+            ToMathArrayBaseJustification(eqArray.BaseJustification),
+            rowAsc,
+            rowDsc,
+            rowGap,
+            totalH,
+            em);
 
         var container = new MathBox.Container();
         container.Metrics.Width = totalW;
@@ -1286,15 +1297,13 @@ public static class MathLayoutEngine
     private static MathBox LayoutMatrix(MathNode.Matrix matrix, string fontFamily, double fontSizePt)
     {
         double em = Em(fontSizePt);
-        double cellGapH = ResolveMatrixGap(
-            matrix.ColumnGapRule,
+        double cellGapH = ResolveMathArrayGap(
+            ToMathArraySpacingRule(matrix.ColumnGapRule),
             matrix.ColumnGap,
-            em,
             em * 0.25);
-        double cellGapV = ResolveMatrixGap(
-            matrix.RowSpacingRule,
+        double cellGapV = ResolveMathArrayGap(
+            ToMathArraySpacingRule(matrix.RowSpacingRule),
             matrix.RowSpacing,
-            em,
             em * 0.20);
 
         if (matrix.Rows.Count == 0)
@@ -1343,7 +1352,13 @@ public static class MathLayoutEngine
         for (int r = 0; r < rowCount; r++) totalH += rowAsc[r] + rowDsc[r];
         totalH += cellGapV * Math.Max(0, rowCount - 1);
 
-        double ascent = ResolveMatrixAscent(matrix, rowAsc, rowDsc, cellGapV, totalH, em);
+        double ascent = ResolveStackedArrayAscent(
+            ToMathArrayBaseJustification(matrix.BaseJustification),
+            rowAsc,
+            rowDsc,
+            cellGapV,
+            totalH,
+            em);
 
         var container = new MathBox.Container();
         container.Metrics.Width  = totalW;
@@ -1375,27 +1390,26 @@ public static class MathLayoutEngine
         return container;
     }
 
-    private static double ResolveMatrixGap(
-        MathNode.Matrix.MatrixSpacingRule? rule,
+    private static double ResolveMathArrayGap(
+        MathArraySpacingRule? rule,
         int? value,
-        double em,
         double defaultGap)
     {
         if (!rule.HasValue && !value.HasValue)
             return defaultGap;
 
-        return (rule ?? MathNode.Matrix.MatrixSpacingRule.Single) switch
+        return (rule ?? MathArraySpacingRule.Single) switch
         {
-            MathNode.Matrix.MatrixSpacingRule.OneAndHalf => defaultGap * 1.5,
-            MathNode.Matrix.MatrixSpacingRule.Double => defaultGap * 2.0,
-            MathNode.Matrix.MatrixSpacingRule.Exactly => PointsToDip(value ?? 0),
-            MathNode.Matrix.MatrixSpacingRule.Multiple => defaultGap * Math.Max(0, value ?? 1),
+            MathArraySpacingRule.OneAndHalf => defaultGap * 1.5,
+            MathArraySpacingRule.Double => defaultGap * 2.0,
+            MathArraySpacingRule.Exactly => PointsToDip(value ?? 0),
+            MathArraySpacingRule.Multiple => defaultGap * Math.Max(0, value ?? 1),
             _ => defaultGap
         };
     }
 
-    private static double ResolveMatrixAscent(
-        MathNode.Matrix matrix,
+    private static double ResolveStackedArrayAscent(
+        MathArrayBaseJustification baseJustification,
         IReadOnlyList<double> rowAsc,
         IReadOnlyList<double> rowDsc,
         double rowGap,
@@ -1405,14 +1419,54 @@ public static class MathLayoutEngine
         if (rowAsc.Count == 0)
             return 0;
 
-        double ascent = matrix.BaseJustification switch
+        double ascent = baseJustification switch
         {
-            MathNode.Matrix.MatrixBaseJustification.Top => rowAsc[0],
-            MathNode.Matrix.MatrixBaseJustification.Bottom => GetLastRowBaseline(rowAsc, rowDsc, rowGap),
+            MathArrayBaseJustification.Top => rowAsc[0],
+            MathArrayBaseJustification.Bottom => GetLastRowBaseline(rowAsc, rowDsc, rowGap),
             _ => totalHeight / 2.0 + em * 0.45
         };
 
         return Math.Clamp(ascent, 0, totalHeight);
+    }
+
+    private static MathArrayBaseJustification ToMathArrayBaseJustification(
+        MathNode.Matrix.MatrixBaseJustification baseJustification) =>
+        baseJustification switch
+        {
+            MathNode.Matrix.MatrixBaseJustification.Top => MathArrayBaseJustification.Top,
+            MathNode.Matrix.MatrixBaseJustification.Bottom => MathArrayBaseJustification.Bottom,
+            _ => MathArrayBaseJustification.Center
+        };
+
+    private static MathArrayBaseJustification ToMathArrayBaseJustification(
+        MathNode.EqArray.EqArrayBaseJustification baseJustification) =>
+        baseJustification switch
+        {
+            MathNode.EqArray.EqArrayBaseJustification.Top => MathArrayBaseJustification.Top,
+            MathNode.EqArray.EqArrayBaseJustification.Bottom => MathArrayBaseJustification.Bottom,
+            _ => MathArrayBaseJustification.Center
+        };
+
+    private static MathArraySpacingRule? ToMathArraySpacingRule(MathNode.Matrix.MatrixSpacingRule? rule) =>
+        rule.HasValue ? (MathArraySpacingRule)(int)rule.Value : null;
+
+    private static MathArraySpacingRule? ToMathArraySpacingRule(MathNode.EqArray.EqArraySpacingRule? rule) =>
+        rule.HasValue ? (MathArraySpacingRule)(int)rule.Value : null;
+
+    private enum MathArrayBaseJustification
+    {
+        Top,
+        Center,
+        Bottom
+    }
+
+    private enum MathArraySpacingRule
+    {
+        Single = 0,
+        OneAndHalf = 1,
+        Double = 2,
+        Exactly = 3,
+        Multiple = 4
     }
 
     private static double GetLastRowBaseline(

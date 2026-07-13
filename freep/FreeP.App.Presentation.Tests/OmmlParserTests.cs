@@ -496,6 +496,43 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Parse_EqArrayProperties_ReadsBaseJustificationAndRowSpacingMetadata()
+    {
+        var node = Parse(
+            "<m:eqArr>" +
+            "<m:eqArrPr>" +
+            "<m:baseJc m:val=\"bot\"/>" +
+            "<m:rSpRule m:val=\"3\"/>" +
+            "<m:rSp m:val=\"18\"/>" +
+            "</m:eqArrPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r><m:aln/><m:r><m:t>=1</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>y</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Equal(MathNode.EqArray.EqArrayBaseJustification.Bottom, eqArray.BaseJustification);
+        Assert.Equal(MathNode.EqArray.EqArraySpacingRule.Exactly, eqArray.RowSpacingRule);
+        Assert.Equal(18, eqArray.RowSpacing);
+        Assert.Equal(new int?[] { 1, null }, eqArray.AlignmentPointIndices);
+        Assert.Equal(2, eqArray.Rows.Count);
+    }
+
+    [Fact]
+    public void Parse_EqArrayProperties_DefaultsMissingSpacingAndBaseJustification()
+    {
+        var node = Parse(
+            "<m:eqArr>" +
+            "<m:eqArrPr/>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Equal(MathNode.EqArray.EqArrayBaseJustification.Center, eqArray.BaseJustification);
+        Assert.Null(eqArray.RowSpacingRule);
+        Assert.Null(eqArray.RowSpacing);
+    }
+
+    [Fact]
     public void Parse_RunManualBreak_StartsNewEquationArrayRow()
     {
         var node = Parse(
