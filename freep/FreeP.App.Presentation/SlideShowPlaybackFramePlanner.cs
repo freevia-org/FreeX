@@ -53,6 +53,12 @@ public sealed record SlideShowShapeAnimationVisualFramePlan(
     int ClipSpokeCount,
     string EvidenceSummary);
 
+public sealed record SlideShowAnimationStepVisualCheckpointPlan(
+    string Checkpoint,
+    int ElapsedMs,
+    IReadOnlyList<SlideShowShapeAnimationVisualFramePlan> Frames,
+    string EvidenceSummary);
+
 public static class SlideShowPlaybackFramePlanner
 {
     public static IReadOnlyList<SlideShowShapeAnimationVisualFramePlan> PlanAnimationStepFrames(
@@ -65,6 +71,42 @@ public static class SlideShowPlaybackFramePlanner
 
         return SlideShowPlaybackPlanner.PlanAnimationStep(step)
             .Select(plan => PlanFrame(plan, elapsedMs, slideWidthDip, slideHeightDip))
+            .ToArray();
+    }
+
+    public static IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> PlanAnimationStepCheckpoints(
+        AnimationStep step,
+        double slideWidthDip,
+        double slideHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+
+        var plans = SlideShowPlaybackPlanner.PlanAnimationStep(step);
+        if (plans.Count == 0)
+        {
+            return Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
+        }
+
+        var totalDurationMs = plans.Max(plan => Math.Max(0, plan.DelayMs) + Math.Max(0, plan.DurationMs));
+        var elapsedTimes = new[]
+        {
+            ("start", 0),
+            ("midpoint", totalDurationMs / 2),
+            ("complete", totalDurationMs)
+        };
+
+        return elapsedTimes
+            .Select(checkpoint =>
+            {
+                var frames = plans
+                    .Select(plan => PlanFrame(plan, checkpoint.Item2, slideWidthDip, slideHeightDip))
+                    .ToArray();
+                return new SlideShowAnimationStepVisualCheckpointPlan(
+                    checkpoint.Item1,
+                    checkpoint.Item2,
+                    frames,
+                    BuildCheckpointEvidenceSummary(checkpoint.Item1, checkpoint.Item2, frames));
+            })
             .ToArray();
     }
 
@@ -340,6 +382,23 @@ public static class SlideShowPlaybackFramePlanner
             translateY,
             clipKind,
             clipProgress);
+
+    private static string BuildCheckpointEvidenceSummary(
+        string checkpoint,
+        int elapsedMs,
+        IReadOnlyList<SlideShowShapeAnimationVisualFramePlan> frames)
+    {
+        var activeCount = frames.Count(frame => !frame.IsBeforeStart && !frame.IsComplete);
+        var completeCount = frames.Count(frame => frame.IsComplete);
+        return string.Format(
+            CultureInfo.InvariantCulture,
+            "{0} at {1}ms: {2} frame(s); {3} active; {4} complete",
+            checkpoint,
+            elapsedMs,
+            frames.Count,
+            activeCount,
+            completeCount);
+    }
 
     private static double Lerp(double from, double to, double progress) =>
         from + (to - from) * Math.Clamp(progress, 0, 1);

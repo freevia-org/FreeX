@@ -850,4 +850,52 @@ public sealed class SlideShowPlaybackPlannerTests
         frames[1].Progress.Should().Be(0);
         frames[1].Opacity.Should().Be(0);
     }
+
+    [Fact]
+    public void PlanAnimationStepCheckpoints_ProjectsStepLevelPlaybackEvidence()
+    {
+        var step = new AnimationStep(
+        [
+            new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = 71,
+                    Kind = AnimationKind.Entrance,
+                    Preset = AnimationPreset.Fade,
+                    DurationMs = 200
+                },
+                StartDelayMs: 0),
+            new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = 72,
+                    Kind = AnimationKind.Entrance,
+                    Preset = AnimationPreset.FlyIn,
+                    Direction = AnimationDirection.FromBottom,
+                    DurationMs = 300
+                },
+                StartDelayMs: 400)
+        ]);
+
+        var checkpoints = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(
+            step,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        checkpoints.Select(checkpoint => checkpoint.Checkpoint)
+            .Should()
+            .Equal("start", "midpoint", "complete");
+        checkpoints.Select(checkpoint => checkpoint.ElapsedMs)
+            .Should()
+            .Equal(0, 350, 700);
+        checkpoints.Should().OnlyContain(checkpoint => checkpoint.Frames.Count == 2);
+
+        checkpoints[0].Frames[0].IsBeforeStart.Should().BeFalse();
+        checkpoints[0].Frames[1].IsBeforeStart.Should().BeTrue();
+        checkpoints[1].Frames[0].IsComplete.Should().BeTrue();
+        checkpoints[1].Frames[1].IsBeforeStart.Should().BeTrue();
+        checkpoints[2].Frames.Should().OnlyContain(frame => frame.IsComplete);
+        checkpoints[2].Frames[1].TranslateYFactor.Should().Be(0);
+        checkpoints[2].EvidenceSummary.Should().Be("complete at 700ms: 2 frame(s); 0 active; 2 complete");
+    }
 }

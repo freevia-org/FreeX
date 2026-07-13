@@ -59,6 +59,7 @@ public sealed class SlideShowWindow : Window
     private SlideShowRecordingExecutionState _recordingExecutionState;
     private SlideShowInkExecutionState _inkExecutionState;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
+    private IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> _lastAnimationStepFrameEvidence = Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
     private bool _isTornDown;
 
     // ── Visual tree ───────────────────────────────────────────────────────────────
@@ -295,6 +296,7 @@ public sealed class SlideShowWindow : Window
 
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
     internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
+    internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest => _lastAnimationStepFrameEvidence;
     internal SlideShowPlaybackRoute PlaybackRoute => _playbackRoute;
     internal int CurrentPresentationSlideIndex => _playbackRoute.GetSourceSlideIndex(_controller.CurrentSlideIndex);
 
@@ -1074,6 +1076,8 @@ public sealed class SlideShowWindow : Window
 
     private void PlayAnimationStep(AnimationStep step)
     {
+        _lastAnimationStepFrameEvidence = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(step, _slideDipW, _slideDipH);
+
         foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))
         {
             var anim = plan.Animation;
