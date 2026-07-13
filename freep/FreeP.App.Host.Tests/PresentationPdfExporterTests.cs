@@ -562,6 +562,45 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_SplitsCustomGeometryFillAndOutlineWhenOpacityDiffers()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100, Fill = true, Stroke = true };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 100, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 100, Y: 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        var slide = new Slide();
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x70AD47), alpha: 128)),
+            Outline = new ShapeOutline.Visible(
+                new ThemeAwareColor(SrgbColor.FromRgb(0x2F5597), alpha: 64),
+                widthPt: 1.75)
+        };
+        shape.CustomGeometry.Add(path);
+        slide.Shapes.Add(shape);
+        deck.Slides.Add(slide);
+
+        var groups = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops
+            .OfType<PdfOpacityGroup>()
+            .ToList();
+
+        groups.Should().HaveCount(2);
+        var fillGroup = groups.Single(group => group.Ops.OfType<PdfPath>().Single().FillColor is not null);
+        var strokeGroup = groups.Single(group => group.Ops.OfType<PdfPath>().Single().StrokeColor is not null);
+        fillGroup.Opacity.Should().BeApproximately(128 / 255.0, 0.0001);
+        strokeGroup.Opacity.Should().BeApproximately(64 / 255.0, 0.0001);
+    }
+
+    [Fact]
     public void BuildDocument_ExportsCustomGeometryArcAsCubicPdfPath()
     {
         var deck = Presentation.CreateEmpty();

@@ -1002,7 +1002,7 @@ public sealed class SlideCompositorTests
             OffsetYEmu = 100000,
             ExtentCxEmu = 900000,
             ExtentCyEmu = 500000,
-            Fill = new ShapeFill.Solid(new SrgbColor(0x12, 0x34, 0x56))
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x12, 0x34, 0x56), alpha: 140))
         };
         p.Slides[0].Shapes.Add(shape);
 
@@ -1014,6 +1014,7 @@ public sealed class SlideCompositorTests
         solid.Color.R.Should().Be(0x12);
         solid.Color.G.Should().Be(0x34);
         solid.Color.B.Should().Be(0x56);
+        solid.Alpha.Should().Be(140);
     }
 
     [Fact]
@@ -1178,7 +1179,7 @@ public sealed class SlideCompositorTests
             ExtentCxEmu = 900000,
             ExtentCyEmu = 500000,
             Outline = new ShapeOutline.Visible(
-                new SrgbColor(0x00, 0x00, 0x00),
+                new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0x00), alpha: 90),
                 widthPt: 1.5,
                 dash: OutlineDash.Dash)
         };
@@ -1190,6 +1191,7 @@ public sealed class SlideCompositorTests
         shapeOp.Outline.Should().BeOfType<ResolvedOutline.Visible>();
         var vis = (ResolvedOutline.Visible)shapeOp.Outline;
         vis.Dash.Should().Be(OutlineDash.Dash);
+        vis.Alpha.Should().Be(90);
         // 1.5pt â†’ DIP = 1.5 * 96/72 = 2.0 DIP
         vis.WidthDip.Should().BeApproximately(2.0, 0.05);
     }

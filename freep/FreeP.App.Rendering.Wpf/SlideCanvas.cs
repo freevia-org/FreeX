@@ -2011,7 +2011,7 @@ public sealed class SlideCanvas : FrameworkElement
         switch (fill)
         {
             case ResolvedFill.Solid s:
-                var sb = new SolidColorBrush(Color.FromRgb(s.Color.R, s.Color.G, s.Color.B));
+                var sb = new SolidColorBrush(Color.FromArgb(s.Alpha, s.Color.R, s.Color.G, s.Color.B));
                 if (sb.CanFreeze) sb.Freeze();
                 return sb;
             case ResolvedFill.Gradient g:
@@ -2229,7 +2229,7 @@ public sealed class SlideCanvas : FrameworkElement
     {
         ResolvedFill.None => null,
         ResolvedFill.Solid s => FreezeBrush(
-            new SolidColorBrush(Color.FromRgb(s.Color.R, s.Color.G, s.Color.B))),
+            new SolidColorBrush(Color.FromArgb(s.Alpha, s.Color.R, s.Color.G, s.Color.B))),
         ResolvedFill.Gradient g when g.Kind == GradientKind.Radial => MakeRadialGradientBrush(g),
         ResolvedFill.Gradient g => MakeLinearGradientBrush(g),
         ResolvedFill.Picture p => MakePictureBrush(p),
@@ -2479,7 +2479,7 @@ public sealed class SlideCanvas : FrameworkElement
     {
         if (outline is ResolvedOutline.Visible vis)
         {
-            var brush = new SolidColorBrush(Color.FromRgb(vis.Color.R, vis.Color.G, vis.Color.B));
+            var brush = new SolidColorBrush(Color.FromArgb(vis.Alpha, vis.Color.R, vis.Color.G, vis.Color.B));
             if (brush.CanFreeze) brush.Freeze();
             var pen = new Pen(brush, vis.WidthDip);
             pen.DashStyle = MapDashStyleWpf(vis.Dash);

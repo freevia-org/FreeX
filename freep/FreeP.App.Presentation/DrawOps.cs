@@ -270,7 +270,12 @@ public abstract class ResolvedFill
     public sealed class Solid : ResolvedFill
     {
         public SrgbColor Color { get; }
-        public Solid(SrgbColor color) => Color = color;
+        public byte Alpha { get; }
+        public Solid(SrgbColor color, byte alpha = 255)
+        {
+            Color = color;
+            Alpha = alpha;
+        }
     }
 
     /// <summary>A single resolved gradient stop with concrete sRGB color + position.</summary>
@@ -362,11 +367,13 @@ public abstract class ResolvedOutline
         public double WidthDip { get; }
         public OutlineDash Dash { get; }
         public SrgbColor Color { get; }
-        public Visible(SrgbColor color, double widthDip, OutlineDash dash)
+        public byte Alpha { get; }
+        public Visible(SrgbColor color, double widthDip, OutlineDash dash, byte alpha = 255)
         {
             Color = color;
             WidthDip = widthDip;
             Dash = dash;
+            Alpha = alpha;
         }
     }
 

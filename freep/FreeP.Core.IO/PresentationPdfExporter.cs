@@ -540,10 +540,16 @@ public static class PresentationPdfExporter
             if (fillColor is null && strokeColor is null)
                 continue;
 
-            AddWithOpacity(
-                ops,
-                new PdfPath(contours, fillColor, strokeColor, strokeWidth),
-                fillColor is not null ? fillOpacity : strokeOpacity);
+            if (fillColor is not null && strokeColor is not null && Math.Abs(fillOpacity - strokeOpacity) < 0.0001)
+            {
+                AddWithOpacity(ops, new PdfPath(contours, fillColor, strokeColor, strokeWidth), fillOpacity);
+                continue;
+            }
+
+            if (fillColor is not null)
+                AddWithOpacity(ops, new PdfPath(contours, fillColor, null, strokeWidth), fillOpacity);
+            if (strokeColor is not null)
+                AddWithOpacity(ops, new PdfPath(contours, null, strokeColor, strokeWidth), strokeOpacity);
         }
 
         return true;
@@ -855,7 +861,8 @@ public static class PresentationPdfExporter
             return;
         }
 
-        ops.Add(new PdfOpacityGroup(opacity, [op]));
+        if (opacity > 0.0)
+            ops.Add(new PdfOpacityGroup(opacity, [op]));
     }
 
     private static bool TryMapFill(ShapeFill? fill, out PdfColor color, out double opacity)

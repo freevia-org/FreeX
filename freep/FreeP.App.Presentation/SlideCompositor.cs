@@ -1023,7 +1023,9 @@ public static class SlideCompositor
         IReadOnlyDictionary<string, string>? effectiveClrMap = null) => fill switch
     {
         ShapeFill.None => ResolvedFill.None.Instance,
-        ShapeFill.Solid s => new ResolvedFill.Solid(ThemeColorResolver.Resolve(s.Color, theme, effectiveClrMap)),
+        ShapeFill.Solid s => new ResolvedFill.Solid(
+            ThemeColorResolver.Resolve(s.Color, theme, effectiveClrMap),
+            s.Color.Alpha),
         ShapeFill.Gradient g => new ResolvedFill.Gradient(
             g.Stops.Select(stop => new ResolvedFill.ResolvedGradientStop(
                 stop.Position,
@@ -1061,7 +1063,8 @@ public static class SlideCompositor
         ShapeOutline.Visible v => new ResolvedOutline.Visible(
             ThemeColorResolver.Resolve(v.Color, theme, effectiveClrMap),
             PointsToDip(v.WidthPt),
-            v.Dash),
+            v.Dash,
+            v.Color.Alpha),
         // Wave 22B: gradient outline — resolve each gradient stop color
         ShapeOutline.GradientVisible gv => new ResolvedOutline.Gradient(
             ResolveGradientFill(gv.Gradient, theme, effectiveClrMap),

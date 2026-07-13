@@ -81,6 +81,41 @@ public sealed class SlideCanvasTests
     }
 
     [StaFact]
+    public void SlideCanvas_SolidShapeFillAlpha_BlendsOverBackground()
+    {
+        var p = Presentation.CreateEmpty();
+        var slide = p.Slides[0];
+        slide.Background = new ShapeFill.Solid(SrgbColor.White);
+        slide.Shapes.Clear();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            AutoShapeKind = Free.Shared.Drawing.DrawingShapeKind.Rectangle,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = p.SlideSizeCxEmu,
+            ExtentCyEmu = p.SlideSizeCyEmu,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xFF0000), alpha: 128)),
+            Outline = ShapeOutline.None.Instance
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = slide };
+        canvas.Measure(new Size(100, 60));
+        canvas.Arrange(new Rect(0, 0, 100, 60));
+        canvas.UpdateLayout();
+
+        var rtb = new RenderTargetBitmap(100, 60, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(canvas);
+        var pixels = new byte[100 * 60 * 4];
+        rtb.CopyPixels(pixels, 100 * 4, 0);
+        var offset = ((30 * 100) + 50) * 4;
+
+        pixels[offset + 2].Should().BeGreaterThan(180);
+        pixels[offset + 1].Should().BeInRange((byte)80, (byte)180);
+        pixels[offset].Should().BeInRange((byte)80, (byte)180);
+    }
+
+    [StaFact]
     public void SlideCanvas_WithTextShape_DoesNotThrow()
     {
         var p = Presentation.CreateEmpty();

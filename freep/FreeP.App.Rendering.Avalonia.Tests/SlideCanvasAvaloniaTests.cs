@@ -1320,6 +1320,42 @@ public sealed class SlideCanvasAvaloniaTests
         thrown.Should().BeNull("gradient fill rendering must not throw");
     }
 
+    [Fact]
+    public async Task SlideCanvas_SolidFillAlpha_DoesNotThrow()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Background = new ShapeFill.Solid(SrgbColor.White);
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id = 2,
+                        Kind = SlideShapeKind.AutoShape,
+                        AutoShapeKind = DrawingShapeKind.Rectangle,
+                        OffsetXEmu = 457200,
+                        OffsetYEmu = 457200,
+                        ExtentCxEmu = 3657600,
+                        ExtentCyEmu = 2743200,
+                        Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0xFF0000), alpha: 128)),
+                        Outline = ShapeOutline.None.Instance
+                    });
+                });
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+        thrown.Should().BeNull("solid fill alpha rendering must not throw");
+    }
+
     // ── BA2: WordArt / text-effects double-draw regression tests ─────────────
 
     /// <summary>

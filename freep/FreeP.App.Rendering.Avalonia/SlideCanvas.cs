@@ -1957,7 +1957,7 @@ public sealed class SlideCanvas : Control
         return fill switch
         {
             ResolvedFill.Solid s =>
-                new SolidColorBrush(Color.FromRgb(s.Color.R, s.Color.G, s.Color.B)),
+                new SolidColorBrush(Color.FromArgb(s.Alpha, s.Color.R, s.Color.G, s.Color.B)),
             ResolvedFill.Gradient g when g.Kind == GradientKind.Radial =>
                 new RadialGradientBrush
                 {
@@ -2118,7 +2118,7 @@ public sealed class SlideCanvas : Control
     private static IBrush? MakeBrush(ResolvedFill fill, LayoutRect bounds) => fill switch
     {
         ResolvedFill.None      => null,
-        ResolvedFill.Solid s   => new SolidColorBrush(Color.FromRgb(s.Color.R, s.Color.G, s.Color.B)),
+        ResolvedFill.Solid s   => new SolidColorBrush(Color.FromArgb(s.Alpha, s.Color.R, s.Color.G, s.Color.B)),
         ResolvedFill.Gradient g when g.Kind == GradientKind.Radial => MakeRadialGradientBrush(g),
         ResolvedFill.Gradient g  => MakeLinearGradientBrush(g),
         ResolvedFill.Picture  p  => MakePictureBrush(p),
@@ -2279,7 +2279,7 @@ public sealed class SlideCanvas : Control
     {
         if (outline is ResolvedOutline.Visible vis)
         {
-            var brush = new SolidColorBrush(Color.FromRgb(vis.Color.R, vis.Color.G, vis.Color.B));
+            var brush = new SolidColorBrush(Color.FromArgb(vis.Alpha, vis.Color.R, vis.Color.G, vis.Color.B));
             return new Pen(brush, vis.WidthDip)
             {
                 DashStyle = vis.Dash switch
