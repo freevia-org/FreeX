@@ -240,6 +240,35 @@ public sealed class VisualEvidenceBaselinePolicyTests
     }
 
     [Fact]
+    public void WordBaselinePolicy_KeepsWordArtWatermarkProofsDirectlyComparable()
+    {
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.WordArtWatermarkVisualProofScenarioIds)
+        {
+            var row = BuildRow(
+                scenarioId,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId + "_p1.png",
+                pageNumber: 1,
+                pageCount: 1);
+
+            var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+            var comparison = FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                row,
+                FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                "COM ProgID 'Word.Application' is not registered");
+
+            policy.IsComparable.Should().BeTrue();
+            policy.BaselineScenarioId.Should().Be(scenarioId);
+            comparison.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            comparison.BaselineScenarioId.Should().Be(scenarioId);
+            comparison.BaselineId.Should().Be($"{scenarioId}/p1/{scenarioId}_p1.png");
+            comparison.CandidateBaselinePaths.Should().Contain([
+                $"{scenarioId}/{scenarioId}_p1.png",
+                $"{scenarioId}_p1.png"]);
+        }
+    }
+
+    [Fact]
     public void WordBaselineUnavailableComparison_ReportsCandidatesAndReasonWithoutFailingTrust()
     {
         var row = BuildRow(

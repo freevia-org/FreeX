@@ -256,6 +256,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
             .Concat(ChartSmartArtRendererScenarioIds)
             .Concat(WordArtWatermarkRendererScenarioIds)
             .ToArray();
+    public static IReadOnlyList<string> WordArtWatermarkVisualProofScenarioIds { get; } =
+    [
+        "wordart-watermark-stress",
+        "wordart-picture-watermark-layout"
+    ];
     public const string FloatingWrappingWpfScenarioId = "f2-01-float-wrap";
     public const string FloatingWrappingAvaloniaScenarioId = "page-composition-floating-image";
     public const string FloatingWrappingProofScenarioId = "floating-wrapping-visual-proof";

@@ -38,6 +38,9 @@
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/smartart-polygon-proof -ScenarioSet SmartArtPolygonVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/wordart-watermark-proof -ScenarioSet WordArtWatermarkVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/floating-wrapping-proof -ScenarioSet FloatingWrappingVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
@@ -171,6 +174,10 @@ $namedScenarioSets = @{
     )
     SmartArtPolygonVisualProof = @(
         'chart-smartart-complex'
+    )
+    WordArtWatermarkVisualProof = @(
+        'wordart-watermark-stress',
+        'wordart-picture-watermark-layout'
     )
     ReviewCompareCombineVisualProof = @(
         'review-compare-visual-proof',

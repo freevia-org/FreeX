@@ -1425,6 +1425,21 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void WordArtWatermarkVisualProofScenarioIds_CoverFocusedNoWordProofFamily()
+    {
+        FreeWVisualEvidenceManifestNormalizer.WordArtWatermarkVisualProofScenarioIds.Should().Equal(
+        [
+            "wordart-watermark-stress",
+            "wordart-picture-watermark-layout"
+        ]);
+
+        FreeWVisualEvidenceManifestNormalizer.WordArtWatermarkVisualProofScenarioIds.Should().OnlyContain(
+            scenarioId => FreeWVisualEvidenceManifestNormalizer.DrawingObjectVisualProofScenarioIds.Contains(
+                scenarioId,
+                StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void WordBaselineGenerationPlan_CoversBoundedGeneratedCorpus()
     {
         var root = CreateTempRoot();

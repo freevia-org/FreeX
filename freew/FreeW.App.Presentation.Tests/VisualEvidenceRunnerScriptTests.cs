@@ -45,6 +45,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("DrawingObjectVisualProof = @(");
         source.Should().Contain("ShapeObjectVisualProof = @(");
         source.Should().Contain("SmartArtPolygonVisualProof = @(");
+        source.Should().Contain("WordArtWatermarkVisualProof = @(");
         source.Should().Contain("ReviewCompareCombineVisualProof = @(");
         source.Should().Contain("ReviewProofingVisualProof = @(");
         source.Should().Contain("EquationStructureVisualProof = @(");
@@ -70,6 +71,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'wordart-picture-watermark-layout'");
         source.Should().Contain("freew-fidelity-corpus/runs/shape-object-proof");
         source.Should().Contain("freew-fidelity-corpus/runs/smartart-polygon-proof");
+        source.Should().Contain("freew-fidelity-corpus/runs/wordart-watermark-proof");
         source.Should().Contain("'review-compare-visual-proof'");
         source.Should().Contain("'review-combine-visual-proof'");
         source.Should().Contain("'review-proofing-visual-depth'");
