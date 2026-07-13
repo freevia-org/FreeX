@@ -109,6 +109,47 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void Write_AcceptsLinearGradientShapeAndPathOps()
+    {
+        var gradient = new PdfLinearGradient(
+            10,
+            20,
+            80,
+            70,
+            [
+                new PdfGradientStop(0, new PdfColor(0x11, 0x22, 0x33)),
+                new PdfGradientStop(0.5, new PdfColor(0x44, 0x55, 0x66)),
+                new PdfGradientStop(1, new PdfColor(0xAA, 0xBB, 0xCC)),
+            ]);
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfFillRectLinearGradient(10, 20, 30, 20, gradient, new PdfColor(0x11, 0x22, 0x33)),
+            new PdfStrokeEllipseLinearGradient(45, 20, 30, 20, gradient, new PdfColor(0xAA, 0xBB, 0xCC), 2),
+            new PdfPathLinearGradient(
+                [
+                    new PdfPathContour(
+                        new PdfPathPoint(10, 10),
+                        [
+                            PdfPathSegment.LineTo(new PdfPathPoint(20, 10)),
+                            PdfPathSegment.LineTo(new PdfPathPoint(20, 20)),
+                        ],
+                        Closed: true),
+                ],
+                gradient,
+                new PdfColor(0x11, 0x22, 0x33),
+                null,
+                new PdfColor(0xAA, 0xBB, 0xCC),
+                1),
+        });
+        using var stream = new MemoryStream();
+
+        var pageCount = SkiaPdfWriter.Write(new PdfContentDocument(new[] { page }), stream);
+
+        pageCount.Should().Be(1);
+        stream.Length.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void ApplyColorEffects_TransformsDecodedImagePixels()
     {
         using var bitmap = new SKBitmap(1, 1);

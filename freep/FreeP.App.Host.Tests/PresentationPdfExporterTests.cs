@@ -163,6 +163,97 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_MapsLinearGradientShapeFillAndOutlineToPdfGradientOps()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var fillGradient = new ShapeFill.Gradient(
+            [
+                new GradientStop(0.0, new ThemeAwareColor(SrgbColor.FromRgb(0x112233))),
+                new GradientStop(1.0, new ThemeAwareColor(SrgbColor.FromRgb(0xAABBCC))),
+            ],
+            GradientKind.Linear,
+            angleDegrees: 0);
+        var strokeGradient = new ShapeFill.Gradient(
+            [
+                new GradientStop(0.0, new ThemeAwareColor(SrgbColor.FromRgb(0x445566))),
+                new GradientStop(1.0, new ThemeAwareColor(SrgbColor.FromRgb(0xDDEEFF))),
+            ],
+            GradientKind.Linear,
+            angleDegrees: 90);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = fillGradient,
+            Outline = new ShapeOutline.GradientVisible(strokeGradient, widthPt: 2.25),
+        });
+        deck.Slides.Add(slide);
+
+        var ops = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+        var fill = ops.OfType<PdfFillRectLinearGradient>().Should().ContainSingle().Subject;
+        var stroke = ops.OfType<PdfStrokeRectLinearGradient>().Should().ContainSingle().Subject;
+
+        fill.X.Should().Be(72);
+        fill.Y.Should().Be(378);
+        fill.FallbackColor.Should().Be(new PdfColor(0x11, 0x22, 0x33));
+        fill.Gradient.StartX.Should().Be(72);
+        fill.Gradient.StartY.Should().Be(414);
+        fill.Gradient.EndX.Should().Be(216);
+        fill.Gradient.EndY.Should().Be(414);
+        fill.Gradient.Stops.Select(stop => (stop.Position, stop.Color)).Should().Equal(
+            (0.0, new PdfColor(0x11, 0x22, 0x33)),
+            (1.0, new PdfColor(0xAA, 0xBB, 0xCC)));
+        stroke.LineWidth.Should().Be(2.25);
+        stroke.FallbackColor.Should().Be(new PdfColor(0x44, 0x55, 0x66));
+        stroke.Gradient.StartX.Should().Be(144);
+        stroke.Gradient.StartY.Should().Be(450);
+        stroke.Gradient.EndX.Should().Be(144);
+        stroke.Gradient.EndY.Should().Be(378);
+        ops.OfType<PdfFillRect>().Should().BeEmpty();
+        ops.OfType<PdfStrokeRect>().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildDocument_KeepsSolidFallbackForRadialGradientFillAndOutline()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var gradient = new ShapeFill.Gradient(
+            [
+                new GradientStop(0.0, new ThemeAwareColor(SrgbColor.FromRgb(0x112233))),
+                new GradientStop(1.0, new ThemeAwareColor(SrgbColor.FromRgb(0xAABBCC))),
+            ],
+            GradientKind.Radial,
+            angleDegrees: 0);
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = gradient,
+            Outline = new ShapeOutline.GradientVisible(gradient, widthPt: 1.5),
+        });
+        deck.Slides.Add(slide);
+
+        var ops = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+
+        ops.OfType<PdfFillRectLinearGradient>().Should().BeEmpty();
+        ops.OfType<PdfStrokeRectLinearGradient>().Should().BeEmpty();
+        ops.OfType<PdfFillRect>().Should().ContainSingle(fill => fill.Color == new PdfColor(0x11, 0x22, 0x33));
+        ops.OfType<PdfStrokeRect>().Should().ContainSingle(stroke =>
+            stroke.Color == new PdfColor(0x11, 0x22, 0x33) &&
+            stroke.LineWidth == 1.5);
+    }
+
+    [Fact]
     public void ExportToBytes_EmitsShapeAlphaExtGStateForVectorGeometry()
     {
         var deck = Presentation.CreateEmpty();

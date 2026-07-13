@@ -160,6 +160,85 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsLinearGradientPatternResourcesForFillAndStrokeOps()
+    {
+        var gradient = new PdfLinearGradient(
+            10,
+            20,
+            90,
+            20,
+            [
+                new PdfGradientStop(0, new PdfColor(0x11, 0x22, 0x33)),
+                new PdfGradientStop(1, new PdfColor(0xAA, 0xBB, 0xCC)),
+            ]);
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfFillRectLinearGradient(10, 20, 50, 20, gradient, new PdfColor(0x11, 0x22, 0x33)),
+            new PdfStrokeRectLinearGradient(10, 20, 50, 20, gradient, new PdfColor(0x11, 0x22, 0x33), 1.5),
+        });
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("/Pattern << /P1 ");
+        pdf.Should().Contain("/ShadingType 2");
+        pdf.Should().Contain("/Coords [10 20 90 20]");
+        pdf.Should().Contain("/C0 [0.067 0.133 0.2]");
+        pdf.Should().Contain("/C1 [0.667 0.733 0.8]");
+        pdf.Should().Contain("/Pattern cs\n/P1 scn\n10 20 50 20 re f");
+        pdf.Should().Contain("/Pattern CS\n/P1 SCN\n1.5 w\n10 20 50 20 re S");
+    }
+
+    [Fact]
+    public void Write_EmitsMultiStopLinearGradientStitchingFunction()
+    {
+        var gradient = new PdfLinearGradient(
+            0,
+            0,
+            100,
+            0,
+            [
+                new PdfGradientStop(0, new PdfColor(0x00, 0x00, 0x00)),
+                new PdfGradientStop(0.5, new PdfColor(0x80, 0x80, 0x80)),
+                new PdfGradientStop(1, new PdfColor(0xFF, 0xFF, 0xFF)),
+            ]);
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfFillRectLinearGradient(0, 0, 100, 80, gradient, PdfColor.Black),
+        });
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })));
+
+        pdf.Should().Contain("/FunctionType 3");
+        pdf.Should().Contain("/Bounds [0.5]");
+        pdf.Should().Contain("/Encode [0 1 0 1]");
+    }
+
+    [Fact]
+    public void Write_FallsBackToSolidColorForDegenerateLinearGradient()
+    {
+        var gradient = new PdfLinearGradient(
+            10,
+            20,
+            10,
+            20,
+            [
+                new PdfGradientStop(0, new PdfColor(0x11, 0x22, 0x33)),
+                new PdfGradientStop(1, new PdfColor(0xAA, 0xBB, 0xCC)),
+            ]);
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfFillRectLinearGradient(10, 20, 50, 20, gradient, new PdfColor(0x44, 0x55, 0x66)),
+        });
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })));
+
+        pdf.Should().NotContain("/Pattern <<");
+        pdf.Should().Contain("0.267 0.333 0.4 rg");
+        pdf.Should().Contain("10 20 50 20 re f");
+    }
+
+    [Fact]
     public void Write_EmitsFilledAndStrokedEllipsePaths()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

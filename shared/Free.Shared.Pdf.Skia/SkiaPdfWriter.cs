@@ -121,12 +121,31 @@ public static class SkiaPdfWriter
                 break;
             }
 
+            case PdfFillRectLinearGradient fill:
+            {
+                var top = pageHeight - (float)(fill.Y + fill.Height);
+                ApplyLinearGradient(fillPaint, fill.Gradient, pageHeight, fill.FallbackColor);
+                canvas.DrawRect(new SKRect((float)fill.X, top, (float)(fill.X + fill.Width), top + (float)fill.Height), fillPaint);
+                fillPaint.Shader = null;
+                break;
+            }
+
             case PdfStrokeRect stroke:
             {
                 var top = pageHeight - (float)(stroke.Y + stroke.Height);
                 strokePaint.Color = ToSkColor(stroke.Color);
                 strokePaint.StrokeWidth = (float)stroke.LineWidth;
                 canvas.DrawRect(new SKRect((float)stroke.X, top, (float)(stroke.X + stroke.Width), top + (float)stroke.Height), strokePaint);
+                break;
+            }
+
+            case PdfStrokeRectLinearGradient stroke:
+            {
+                var top = pageHeight - (float)(stroke.Y + stroke.Height);
+                ApplyLinearGradient(strokePaint, stroke.Gradient, pageHeight, stroke.FallbackColor);
+                strokePaint.StrokeWidth = (float)stroke.LineWidth;
+                canvas.DrawRect(new SKRect((float)stroke.X, top, (float)(stroke.X + stroke.Width), top + (float)stroke.Height), strokePaint);
+                strokePaint.Shader = null;
                 break;
             }
 
@@ -142,6 +161,19 @@ public static class SkiaPdfWriter
                 break;
             }
 
+            case PdfFillEllipseLinearGradient fillEllipse:
+            {
+                var top = pageHeight - (float)(fillEllipse.Y + fillEllipse.Height);
+                ApplyLinearGradient(fillPaint, fillEllipse.Gradient, pageHeight, fillEllipse.FallbackColor);
+                canvas.DrawOval(new SKRect(
+                    (float)fillEllipse.X,
+                    top,
+                    (float)(fillEllipse.X + fillEllipse.Width),
+                    top + (float)fillEllipse.Height), fillPaint);
+                fillPaint.Shader = null;
+                break;
+            }
+
             case PdfStrokeEllipse strokeEllipse:
             {
                 var top = pageHeight - (float)(strokeEllipse.Y + strokeEllipse.Height);
@@ -152,6 +184,20 @@ public static class SkiaPdfWriter
                     top,
                     (float)(strokeEllipse.X + strokeEllipse.Width),
                     top + (float)strokeEllipse.Height), strokePaint);
+                break;
+            }
+
+            case PdfStrokeEllipseLinearGradient strokeEllipse:
+            {
+                var top = pageHeight - (float)(strokeEllipse.Y + strokeEllipse.Height);
+                ApplyLinearGradient(strokePaint, strokeEllipse.Gradient, pageHeight, strokeEllipse.FallbackColor);
+                strokePaint.StrokeWidth = (float)strokeEllipse.LineWidth;
+                canvas.DrawOval(new SKRect(
+                    (float)strokeEllipse.X,
+                    top,
+                    (float)(strokeEllipse.X + strokeEllipse.Width),
+                    top + (float)strokeEllipse.Height), strokePaint);
+                strokePaint.Shader = null;
                 break;
             }
 
@@ -177,6 +223,18 @@ public static class SkiaPdfWriter
                     (float)line.X1, pageHeight - (float)line.Y1,
                     (float)line.X2, pageHeight - (float)line.Y2,
                     strokePaint);
+                break;
+            }
+
+            case PdfLineLinearGradient line:
+            {
+                ApplyLinearGradient(strokePaint, line.Gradient, pageHeight, line.FallbackColor);
+                strokePaint.StrokeWidth = (float)line.LineWidth;
+                canvas.DrawLine(
+                    (float)line.X1, pageHeight - (float)line.Y1,
+                    (float)line.X2, pageHeight - (float)line.Y2,
+                    strokePaint);
+                strokePaint.Shader = null;
                 break;
             }
 
@@ -206,6 +264,33 @@ public static class SkiaPdfWriter
                     strokePaint.Color = ToSkColor(stroke);
                     strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
                     canvas.DrawPath(skPath, strokePaint);
+                }
+
+                break;
+            }
+
+            case PdfPathLinearGradient pdfPath:
+            {
+                using var skPath = ToSkPath(pdfPath.Contours, pageHeight);
+                if (pdfPath.FillFallbackColor is { } fillFallback)
+                {
+                    if (pdfPath.FillGradient is { } fillGradient)
+                        ApplyLinearGradient(fillPaint, fillGradient, pageHeight, fillFallback);
+                    else
+                        fillPaint.Color = ToSkColor(fillFallback);
+                    canvas.DrawPath(skPath, fillPaint);
+                    fillPaint.Shader = null;
+                }
+
+                if (pdfPath.StrokeFallbackColor is { } strokeFallback)
+                {
+                    if (pdfPath.StrokeGradient is { } strokeGradient)
+                        ApplyLinearGradient(strokePaint, strokeGradient, pageHeight, strokeFallback);
+                    else
+                        strokePaint.Color = ToSkColor(strokeFallback);
+                    strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
+                    canvas.DrawPath(skPath, strokePaint);
+                    strokePaint.Shader = null;
                 }
 
                 break;
@@ -353,9 +438,12 @@ public static class SkiaPdfWriter
     }
 
     private static SKPath ToSkPath(PdfPath pdfPath, float pageHeight)
+        => ToSkPath(pdfPath.Contours, pageHeight);
+
+    private static SKPath ToSkPath(IReadOnlyList<PdfPathContour> contours, float pageHeight)
     {
         var path = new SKPath();
-        foreach (var contour in pdfPath.Contours)
+        foreach (var contour in contours)
         {
             path.MoveTo((float)contour.Start.X, pageHeight - (float)contour.Start.Y);
             foreach (var segment in contour.Segments)
@@ -382,6 +470,57 @@ public static class SkiaPdfWriter
         }
 
         return path;
+    }
+
+    private static void ApplyLinearGradient(
+        SKPaint paint,
+        PdfLinearGradient gradient,
+        float pageHeight,
+        PdfColor fallbackColor)
+    {
+        paint.Color = ToSkColor(fallbackColor);
+        paint.Shader = null;
+        if (!TryNormalizeGradient(gradient, out var stops))
+            return;
+
+        var colors = stops.Select(stop => ToSkColor(stop.Color)).ToArray();
+        var positions = stops.Select(stop => (float)stop.Position).ToArray();
+        paint.Shader = SKShader.CreateLinearGradient(
+            new SKPoint((float)gradient.StartX, pageHeight - (float)gradient.StartY),
+            new SKPoint((float)gradient.EndX, pageHeight - (float)gradient.EndY),
+            colors,
+            positions,
+            SKShaderTileMode.Clamp);
+    }
+
+    private static bool TryNormalizeGradient(PdfLinearGradient gradient, out PdfGradientStop[] stops)
+    {
+        stops = [];
+        if (!IsFinite(gradient.StartX) ||
+            !IsFinite(gradient.StartY) ||
+            !IsFinite(gradient.EndX) ||
+            !IsFinite(gradient.EndY))
+            return false;
+
+        var dx = gradient.EndX - gradient.StartX;
+        var dy = gradient.EndY - gradient.StartY;
+        if ((dx * dx) + (dy * dy) < 0.000001)
+            return false;
+
+        stops = gradient.Stops
+            .Where(stop => IsFinite(stop.Position))
+            .Select(stop => new PdfGradientStop(Math.Clamp(stop.Position, 0.0, 1.0), stop.Color))
+            .OrderBy(stop => stop.Position)
+            .ToArray();
+        if (stops.Length == 0)
+            return false;
+        if (stops.Length == 1)
+            stops = [stops[0], new PdfGradientStop(1.0, stops[0].Color)];
+        if (stops[0].Position > 0.0)
+            stops = [new PdfGradientStop(0.0, stops[0].Color), .. stops];
+        if (stops[^1].Position < 1.0)
+            stops = [.. stops, new PdfGradientStop(1.0, stops[^1].Color)];
+        return true;
     }
 
     private static SKPaint CreateImagePaint(double opacity) =>
@@ -494,6 +633,9 @@ public static class SkiaPdfWriter
 
     private static double NormalizeCropFraction(double value) =>
         double.IsFinite(value) ? value : 0.0;
+
+    private static bool IsFinite(double value) =>
+        !double.IsNaN(value) && !double.IsInfinity(value);
 
     private static int Clamp(int value, int min, int max) =>
         Math.Max(min, Math.Min(value, max));

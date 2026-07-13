@@ -24,6 +24,34 @@ public abstract record PdfDrawOp;
 /// <summary>Fills an axis-aligned rectangle with a solid color.</summary>
 public sealed record PdfFillRect(double X, double Y, double Width, double Height, PdfColor Color) : PdfDrawOp;
 
+/// <summary>
+/// One color stop in a PDF linear gradient. Position is normalized to the [0, 1] gradient axis.
+/// </summary>
+public readonly record struct PdfGradientStop(double Position, PdfColor Color);
+
+/// <summary>
+/// Shared linear gradient model for fills and strokes. Coordinates are expressed in PDF user
+/// space and colors are interpolated along the line from start to end.
+/// </summary>
+public sealed record PdfLinearGradient(
+    double StartX,
+    double StartY,
+    double EndX,
+    double EndY,
+    IReadOnlyList<PdfGradientStop> Stops);
+
+/// <summary>
+/// Fills an axis-aligned rectangle with a linear gradient. <paramref name="FallbackColor"/> is
+/// used by callers/backends that cannot render the gradient.
+/// </summary>
+public sealed record PdfFillRectLinearGradient(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    PdfLinearGradient Gradient,
+    PdfColor FallbackColor) : PdfDrawOp;
+
 /// <summary>Strokes the outline of an axis-aligned rectangle with a solid color and line width.</summary>
 public sealed record PdfStrokeRect(
     double X,
@@ -33,8 +61,29 @@ public sealed record PdfStrokeRect(
     PdfColor Color,
     double LineWidth) : PdfDrawOp;
 
+/// <summary>
+/// Strokes the outline of an axis-aligned rectangle with a linear gradient.
+/// </summary>
+public sealed record PdfStrokeRectLinearGradient(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    PdfLinearGradient Gradient,
+    PdfColor FallbackColor,
+    double LineWidth) : PdfDrawOp;
+
 /// <summary>Fills an axis-aligned ellipse inside the supplied rectangular bounds.</summary>
 public sealed record PdfFillEllipse(double X, double Y, double Width, double Height, PdfColor Color) : PdfDrawOp;
+
+/// <summary>Fills an axis-aligned ellipse inside the supplied rectangular bounds with a linear gradient.</summary>
+public sealed record PdfFillEllipseLinearGradient(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    PdfLinearGradient Gradient,
+    PdfColor FallbackColor) : PdfDrawOp;
 
 /// <summary>Strokes an axis-aligned ellipse inside the supplied rectangular bounds.</summary>
 public sealed record PdfStrokeEllipse(
@@ -43,6 +92,16 @@ public sealed record PdfStrokeEllipse(
     double Width,
     double Height,
     PdfColor Color,
+    double LineWidth) : PdfDrawOp;
+
+/// <summary>Strokes an axis-aligned ellipse inside the supplied rectangular bounds with a linear gradient.</summary>
+public sealed record PdfStrokeEllipseLinearGradient(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    PdfLinearGradient Gradient,
+    PdfColor FallbackColor,
     double LineWidth) : PdfDrawOp;
 
 /// <summary>
@@ -66,6 +125,18 @@ public sealed record PdfLine(
     double X2,
     double Y2,
     PdfColor Color,
+    double LineWidth) : PdfDrawOp;
+
+/// <summary>
+/// Strokes a straight line with a linear gradient.
+/// </summary>
+public sealed record PdfLineLinearGradient(
+    double X1,
+    double Y1,
+    double X2,
+    double Y2,
+    PdfLinearGradient Gradient,
+    PdfColor FallbackColor,
     double LineWidth) : PdfDrawOp;
 
 /// <summary>
@@ -117,6 +188,18 @@ public sealed record PdfPath(
     IReadOnlyList<PdfPathContour> Contours,
     PdfColor? FillColor,
     PdfColor? StrokeColor,
+    double StrokeWidth) : PdfDrawOp;
+
+/// <summary>
+/// Draws arbitrary path contours with optional linear-gradient fill and/or stroke. Solid fallback
+/// colors are kept alongside each gradient so unsupported consumers can preserve prior behavior.
+/// </summary>
+public sealed record PdfPathLinearGradient(
+    IReadOnlyList<PdfPathContour> Contours,
+    PdfLinearGradient? FillGradient,
+    PdfColor? FillFallbackColor,
+    PdfLinearGradient? StrokeGradient,
+    PdfColor? StrokeFallbackColor,
     double StrokeWidth) : PdfDrawOp;
 
 /// <summary>

@@ -52,10 +52,11 @@ public static class PortablePdfWriter
         var fontResources = BuildFontResources(document);
         var imageResources = BuildImageResources(document);
         var opacityResources = BuildOpacityResources(document);
+        var patternResources = BuildPatternResources(document);
         var pages = document.Pages
-            .Select(page => (Content: RenderContentStream(page.Ops, imageResources.ByOp, opacityResources.ByOpacity), page.WidthPoints, page.HeightPoints))
+            .Select(page => (Content: RenderContentStream(page.Ops, imageResources.ByOp, opacityResources.ByOpacity, patternResources.ByGradient), page.WidthPoints, page.HeightPoints))
             .ToArray();
-        WritePdf(stream, pages, fontResources, imageResources.Resources, opacityResources.Resources, headerComment);
+        WritePdf(stream, pages, fontResources, imageResources.Resources, opacityResources.Resources, patternResources.Resources, headerComment);
     }
 
     /// <summary>Serializes <paramref name="document"/> to an in-memory byte array.</summary>
@@ -69,11 +70,12 @@ public static class PortablePdfWriter
     private static string RenderContentStream(
         IReadOnlyList<PdfDrawOp> ops,
         IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
-        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources)
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources)
     {
         var content = new StringBuilder();
         foreach (var op in ops)
-            AppendDrawOp(content, op, imageResources, opacityResources);
+            AppendDrawOp(content, op, imageResources, opacityResources, patternResources);
 
         return content.ToString();
     }
@@ -82,18 +84,28 @@ public static class PortablePdfWriter
         StringBuilder content,
         PdfDrawOp op,
         IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
-        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources)
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources)
     {
         switch (op)
         {
             case PdfFillRect fill:
                 AppendFilledRectangle(content, fill.X, fill.Y, fill.Width, fill.Height, fill.Color);
                 break;
+            case PdfFillRectLinearGradient fill:
+                AppendFilledRectangleLinearGradient(content, fill.X, fill.Y, fill.Width, fill.Height, fill.Gradient, patternResources, fill.FallbackColor);
+                break;
             case PdfStrokeRect stroke:
                 AppendStrokedRectangle(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth);
                 break;
+            case PdfStrokeRectLinearGradient stroke:
+                AppendStrokedRectangleLinearGradient(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Gradient, patternResources, stroke.FallbackColor, stroke.LineWidth);
+                break;
             case PdfFillEllipse fillEllipse:
                 AppendFilledEllipse(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, fillEllipse.Color);
+                break;
+            case PdfFillEllipseLinearGradient fillEllipse:
+                AppendFilledEllipseLinearGradient(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, fillEllipse.Gradient, patternResources, fillEllipse.FallbackColor);
                 break;
             case PdfStrokeEllipse strokeEllipse:
                 AppendStrokedEllipse(
@@ -105,11 +117,26 @@ public static class PortablePdfWriter
                     strokeEllipse.Color,
                     strokeEllipse.LineWidth);
                 break;
+            case PdfStrokeEllipseLinearGradient strokeEllipse:
+                AppendStrokedEllipseLinearGradient(
+                    content,
+                    strokeEllipse.X,
+                    strokeEllipse.Y,
+                    strokeEllipse.Width,
+                    strokeEllipse.Height,
+                    strokeEllipse.Gradient,
+                    patternResources,
+                    strokeEllipse.FallbackColor,
+                    strokeEllipse.LineWidth);
+                break;
             case PdfText text:
                 AppendText(content, text.X, text.Y, text.FontSize, FontResource(text.Face), text.Color, text.Text);
                 break;
             case PdfLine line:
                 AppendLine(content, line.X1, line.Y1, line.X2, line.Y2, line.Color, line.LineWidth);
+                break;
+            case PdfLineLinearGradient line:
+                AppendLineLinearGradient(content, line.X1, line.Y1, line.X2, line.Y2, line.Gradient, patternResources, line.FallbackColor, line.LineWidth);
                 break;
             case PdfFilledTriangle triangle:
                 AppendFilledTriangle(
@@ -125,12 +152,15 @@ public static class PortablePdfWriter
             case PdfPath path:
                 AppendPath(content, path);
                 break;
+            case PdfPathLinearGradient path:
+                AppendPathLinearGradient(content, path, patternResources);
+                break;
             case PdfRotationGroup group:
-                AppendRotationGroup(content, group, imageResources, opacityResources);
+                AppendRotationGroup(content, group, imageResources, opacityResources, patternResources);
                 break;
             case PdfOpacityGroup group:
                 opacityResources.TryGetValue(NormalizeOpacity(group.Opacity), out var groupOpacityResource);
-                AppendOpacityGroup(content, group, groupOpacityResource?.ResourceName, imageResources, opacityResources);
+                AppendOpacityGroup(content, group, groupOpacityResource?.ResourceName, imageResources, opacityResources, patternResources);
                 break;
             case PdfImage image when imageResources.TryGetValue(image, out var resource):
                 opacityResources.TryGetValue(NormalizeOpacity(image.Opacity), out var imageOpacityResource);
@@ -153,10 +183,11 @@ public static class PortablePdfWriter
         IReadOnlyList<(string ResourceName, string BaseFont)> fontResources,
         IReadOnlyList<PdfImageResource> imageResources,
         IReadOnlyList<PdfOpacityResource> opacityResources,
+        IReadOnlyList<PdfPatternResource> patternResources,
         string headerComment)
     {
         var objects = new List<PdfObject>();
-        var firstPageObjectId = 3 + fontResources.Count + imageResources.Count + opacityResources.Count;
+        var firstPageObjectId = 3 + fontResources.Count + imageResources.Count + opacityResources.Count + patternResources.Count;
         var pageObjectIds = Enumerable.Range(0, pages.Count)
             .Select(index => firstPageObjectId + (index * 2))
             .ToArray();
@@ -170,6 +201,8 @@ public static class PortablePdfWriter
             objects.Add(CreateImageObject(image));
         foreach (var opacity in opacityResources)
             objects.Add(CreateOpacityObject(opacity));
+        foreach (var pattern in patternResources)
+            objects.Add(CreatePatternObject(pattern));
 
         var fontResourceDictionary = string.Join(
             " ",
@@ -180,19 +213,25 @@ public static class PortablePdfWriter
         var opacityResourceDictionary = string.Join(
             " ",
             opacityResources.Select((opacity, index) => $"/{opacity.ResourceName} {index + 3 + fontResources.Count + imageResources.Count} 0 R"));
+        var patternResourceDictionary = string.Join(
+            " ",
+            patternResources.Select((pattern, index) => $"/{pattern.ResourceName} {index + 3 + fontResources.Count + imageResources.Count + opacityResources.Count} 0 R"));
         var xObjectResources = imageResources.Count == 0
             ? string.Empty
             : $" /XObject << {imageResourceDictionary} >>";
         var extGStateResources = opacityResources.Count == 0
             ? string.Empty
             : $" /ExtGState << {opacityResourceDictionary} >>";
+        var patternResourceDictionaryText = patternResources.Count == 0
+            ? string.Empty
+            : $" /Pattern << {patternResourceDictionary} >>";
 
         for (var index = 0; index < pages.Count; index++)
         {
             var pageObjectId = pageObjectIds[index];
             var contentObjectId = pageObjectId + 1;
             objects.Add(PdfObject.Ascii(
-                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {FormatNumber(pages[index].Width)} {FormatNumber(pages[index].Height)}] /Resources << /Font << {fontResourceDictionary} >>{xObjectResources}{extGStateResources} >> /Contents {contentObjectId} 0 R >>"));
+                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {FormatNumber(pages[index].Width)} {FormatNumber(pages[index].Height)}] /Resources << /Font << {fontResourceDictionary} >>{xObjectResources}{extGStateResources}{patternResourceDictionaryText} >> /Contents {contentObjectId} 0 R >>"));
 
             var pageStream = pages[index].Content.EndsWith("\n", StringComparison.Ordinal)
                 ? pages[index].Content
@@ -283,6 +322,27 @@ public static class PortablePdfWriter
         return new OpacityResourceSet(resources, byOpacity);
     }
 
+    private static PatternResourceSet BuildPatternResources(PdfContentDocument document)
+    {
+        var byGradient = new Dictionary<PdfLinearGradient, PdfPatternResource>(ReferenceEqualityComparer.Instance);
+        var resources = new List<PdfPatternResource>();
+
+        foreach (var gradient in document.Pages
+            .SelectMany(page => page.Ops)
+            .SelectMany(EnumerateOps)
+            .SelectMany(EnumerateGradients))
+        {
+            if (byGradient.ContainsKey(gradient) || !TryNormalizeGradient(gradient, out var normalized))
+                continue;
+
+            var resource = new PdfPatternResource($"P{resources.Count + 1}", normalized);
+            resources.Add(resource);
+            byGradient.Add(gradient, resource);
+        }
+
+        return new PatternResourceSet(resources, byGradient);
+    }
+
     private static bool TryCreateImageResource(string resourceName, PdfImage image, out PdfImageResource resource)
     {
         resource = default!;
@@ -337,6 +397,34 @@ public static class PortablePdfWriter
         }
     }
 
+    private static IEnumerable<PdfLinearGradient> EnumerateGradients(PdfDrawOp op)
+    {
+        switch (op)
+        {
+            case PdfFillRectLinearGradient fill:
+                yield return fill.Gradient;
+                break;
+            case PdfStrokeRectLinearGradient stroke:
+                yield return stroke.Gradient;
+                break;
+            case PdfFillEllipseLinearGradient fillEllipse:
+                yield return fillEllipse.Gradient;
+                break;
+            case PdfStrokeEllipseLinearGradient strokeEllipse:
+                yield return strokeEllipse.Gradient;
+                break;
+            case PdfLineLinearGradient line:
+                yield return line.Gradient;
+                break;
+            case PdfPathLinearGradient path:
+                if (path.FillGradient is { } fillGradient)
+                    yield return fillGradient;
+                if (path.StrokeGradient is { } strokeGradient)
+                    yield return strokeGradient;
+                break;
+        }
+    }
+
     private static PdfObject CreateImageObject(PdfImageResource image)
     {
         var header =
@@ -354,6 +442,72 @@ public static class PortablePdfWriter
     private static PdfObject CreateOpacityObject(PdfOpacityResource opacity) =>
         PdfObject.Ascii(
             $"<< /Type /ExtGState /ca {FormatNumber(opacity.Opacity)} /CA {FormatNumber(opacity.Opacity)} >>");
+
+    private static PdfObject CreatePatternObject(PdfPatternResource pattern)
+    {
+        var gradient = pattern.Gradient;
+        var stops = gradient.Stops;
+        var function = stops.Count == 2
+            ? BuildLinearInterpolationFunction(stops[0].Color, stops[1].Color)
+            : BuildStitchingFunction(stops);
+
+        return PdfObject.Ascii(
+            "<< /Type /Pattern /PatternType 2 " +
+            "/Shading << /ShadingType 2 /ColorSpace /DeviceRGB " +
+            $"/Coords [{FormatNumber(gradient.StartX)} {FormatNumber(gradient.StartY)} {FormatNumber(gradient.EndX)} {FormatNumber(gradient.EndY)}] " +
+            $"/Function {function} /Extend [true true] >> >>");
+    }
+
+    private static string BuildStitchingFunction(IReadOnlyList<PdfGradientStop> stops)
+    {
+        var functions = new List<string>(stops.Count - 1);
+        for (var i = 0; i < stops.Count - 1; i++)
+            functions.Add(BuildLinearInterpolationFunction(stops[i].Color, stops[i + 1].Color));
+
+        var bounds = string.Join(" ", stops.Skip(1).Take(stops.Count - 2).Select(stop => FormatNumber(stop.Position)));
+        var encode = string.Join(" ", Enumerable.Repeat("0 1", stops.Count - 1));
+        return $"<< /FunctionType 3 /Domain [0 1] /Functions [{string.Join(" ", functions)}] /Bounds [{bounds}] /Encode [{encode}] >>";
+    }
+
+    private static string BuildLinearInterpolationFunction(PdfColor start, PdfColor end) =>
+        "<< /FunctionType 2 /Domain [0 1] " +
+        $"/C0 [{FormatColorComponent(start.R)} {FormatColorComponent(start.G)} {FormatColorComponent(start.B)}] " +
+        $"/C1 [{FormatColorComponent(end.R)} {FormatColorComponent(end.G)} {FormatColorComponent(end.B)}] /N 1 >>";
+
+    private static bool TryNormalizeGradient(PdfLinearGradient gradient, out PdfLinearGradient normalized)
+    {
+        normalized = gradient;
+        if (!IsFinite(gradient.StartX) ||
+            !IsFinite(gradient.StartY) ||
+            !IsFinite(gradient.EndX) ||
+            !IsFinite(gradient.EndY) ||
+            DistanceSquared(gradient.StartX, gradient.StartY, gradient.EndX, gradient.EndY) < 0.000001)
+            return false;
+
+        var stops = gradient.Stops
+            .Where(stop => IsFinite(stop.Position))
+            .Select(stop => new PdfGradientStop(Math.Clamp(stop.Position, 0.0, 1.0), stop.Color))
+            .OrderBy(stop => stop.Position)
+            .ToList();
+        if (stops.Count == 0)
+            return false;
+        if (stops.Count == 1)
+            stops.Add(new PdfGradientStop(1.0, stops[0].Color));
+        if (stops[0].Position > 0.0)
+            stops.Insert(0, new PdfGradientStop(0.0, stops[0].Color));
+        if (stops[^1].Position < 1.0)
+            stops.Add(new PdfGradientStop(1.0, stops[^1].Color));
+
+        normalized = gradient with { Stops = stops };
+        return true;
+    }
+
+    private static double DistanceSquared(double x1, double y1, double x2, double y2)
+    {
+        var dx = x2 - x1;
+        var dy = y2 - y1;
+        return dx * dx + dy * dy;
+    }
 
     private static PdfImageResource DecodeJpeg(string resourceName, byte[] bytes)
     {
@@ -730,7 +884,8 @@ public static class PortablePdfWriter
         StringBuilder content,
         PdfRotationGroup group,
         IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
-        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources)
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources)
     {
         if (group.Ops.Count == 0)
             return;
@@ -739,7 +894,7 @@ public static class PortablePdfWriter
         AppendRotationTransform(content, group.CenterX, group.CenterY, group.RotationDegrees);
 
         foreach (var op in group.Ops)
-            AppendDrawOp(content, op, imageResources, opacityResources);
+            AppendDrawOp(content, op, imageResources, opacityResources, patternResources);
 
         content.AppendLine("Q");
     }
@@ -749,7 +904,8 @@ public static class PortablePdfWriter
         PdfOpacityGroup group,
         string? opacityResourceName,
         IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
-        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources)
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources)
     {
         if (group.Ops.Count == 0)
             return;
@@ -758,7 +914,7 @@ public static class PortablePdfWriter
         AppendOpacityState(content, opacityResourceName);
 
         foreach (var op in group.Ops)
-            AppendDrawOp(content, op, imageResources, opacityResources);
+            AppendDrawOp(content, op, imageResources, opacityResources, patternResources);
 
         content.AppendLine("Q");
     }
@@ -798,6 +954,28 @@ public static class PortablePdfWriter
         content.AppendLine("Q");
     }
 
+    private static void AppendFilledRectangleLinearGradient(
+        StringBuilder content,
+        double x,
+        double y,
+        double width,
+        double height,
+        PdfLinearGradient gradient,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources,
+        PdfColor fallbackColor)
+    {
+        if (!patternResources.TryGetValue(gradient, out var pattern))
+        {
+            AppendFilledRectangle(content, x, y, width, height, fallbackColor);
+            return;
+        }
+
+        content.AppendLine("q");
+        AppendFillPattern(content, pattern.ResourceName);
+        content.AppendLine($"{FormatNumber(x)} {FormatNumber(y)} {FormatNumber(width)} {FormatNumber(height)} re f");
+        content.AppendLine("Q");
+    }
+
     private static void AppendStrokedRectangle(
         StringBuilder content,
         double x,
@@ -809,6 +987,30 @@ public static class PortablePdfWriter
     {
         content.AppendLine("q");
         AppendRgb(content, color, "RG");
+        content.AppendLine($"{FormatNumber(lineWidth)} w");
+        content.AppendLine($"{FormatNumber(x)} {FormatNumber(y)} {FormatNumber(width)} {FormatNumber(height)} re S");
+        content.AppendLine("Q");
+    }
+
+    private static void AppendStrokedRectangleLinearGradient(
+        StringBuilder content,
+        double x,
+        double y,
+        double width,
+        double height,
+        PdfLinearGradient gradient,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources,
+        PdfColor fallbackColor,
+        double lineWidth)
+    {
+        if (!patternResources.TryGetValue(gradient, out var pattern))
+        {
+            AppendStrokedRectangle(content, x, y, width, height, fallbackColor, lineWidth);
+            return;
+        }
+
+        content.AppendLine("q");
+        AppendStrokePattern(content, pattern.ResourceName);
         content.AppendLine($"{FormatNumber(lineWidth)} w");
         content.AppendLine($"{FormatNumber(x)} {FormatNumber(y)} {FormatNumber(width)} {FormatNumber(height)} re S");
         content.AppendLine("Q");
@@ -832,6 +1034,31 @@ public static class PortablePdfWriter
         content.AppendLine("Q");
     }
 
+    private static void AppendFilledEllipseLinearGradient(
+        StringBuilder content,
+        double x,
+        double y,
+        double width,
+        double height,
+        PdfLinearGradient gradient,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources,
+        PdfColor fallbackColor)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+        if (!patternResources.TryGetValue(gradient, out var pattern))
+        {
+            AppendFilledEllipse(content, x, y, width, height, fallbackColor);
+            return;
+        }
+
+        content.AppendLine("q");
+        AppendFillPattern(content, pattern.ResourceName);
+        AppendEllipsePath(content, x, y, width, height);
+        content.AppendLine("f");
+        content.AppendLine("Q");
+    }
+
     private static void AppendStrokedEllipse(
         StringBuilder content,
         double x,
@@ -846,6 +1073,33 @@ public static class PortablePdfWriter
 
         content.AppendLine("q");
         AppendRgb(content, color, "RG");
+        content.AppendLine($"{FormatNumber(lineWidth)} w");
+        AppendEllipsePath(content, x, y, width, height);
+        content.AppendLine("S");
+        content.AppendLine("Q");
+    }
+
+    private static void AppendStrokedEllipseLinearGradient(
+        StringBuilder content,
+        double x,
+        double y,
+        double width,
+        double height,
+        PdfLinearGradient gradient,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources,
+        PdfColor fallbackColor,
+        double lineWidth)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+        if (!patternResources.TryGetValue(gradient, out var pattern))
+        {
+            AppendStrokedEllipse(content, x, y, width, height, fallbackColor, lineWidth);
+            return;
+        }
+
+        content.AppendLine("q");
+        AppendStrokePattern(content, pattern.ResourceName);
         content.AppendLine($"{FormatNumber(lineWidth)} w");
         AppendEllipsePath(content, x, y, width, height);
         content.AppendLine("S");
@@ -1024,6 +1278,31 @@ public static class PortablePdfWriter
         content.AppendLine("Q");
     }
 
+    private static void AppendLineLinearGradient(
+        StringBuilder content,
+        double x1,
+        double y1,
+        double x2,
+        double y2,
+        PdfLinearGradient gradient,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources,
+        PdfColor fallbackColor,
+        double lineWidth)
+    {
+        if (!patternResources.TryGetValue(gradient, out var pattern))
+        {
+            AppendLine(content, x1, y1, x2, y2, fallbackColor, lineWidth);
+            return;
+        }
+
+        content.AppendLine("q");
+        AppendStrokePattern(content, pattern.ResourceName);
+        content.AppendLine($"{FormatNumber(lineWidth)} w");
+        content.AppendLine($"{FormatNumber(x1)} {FormatNumber(y1)} m");
+        content.AppendLine($"{FormatNumber(x2)} {FormatNumber(y2)} l S");
+        content.AppendLine("Q");
+    }
+
     private static void AppendFilledTriangle(
         StringBuilder content,
         double x1,
@@ -1085,6 +1364,72 @@ public static class PortablePdfWriter
         content.AppendLine("Q");
     }
 
+    private static void AppendPathLinearGradient(
+        StringBuilder content,
+        PdfPathLinearGradient path,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> patternResources)
+    {
+        if (path.Contours.Count == 0 || (path.FillGradient is null && path.StrokeGradient is null))
+            return;
+
+        content.AppendLine("q");
+        PdfPatternResource? fillPattern = null;
+        var hasFillPattern = path.FillGradient is { } fillGradient &&
+            patternResources.TryGetValue(fillGradient, out fillPattern);
+        PdfPatternResource? strokePattern = null;
+        var hasStrokePattern = path.StrokeGradient is { } strokeGradient &&
+            patternResources.TryGetValue(strokeGradient, out strokePattern);
+
+        if (hasFillPattern)
+            AppendFillPattern(content, fillPattern!.ResourceName);
+        else if (path.FillFallbackColor is { } fillFallback)
+            AppendRgb(content, fillFallback, "rg");
+
+        if (hasStrokePattern)
+        {
+            AppendStrokePattern(content, strokePattern!.ResourceName);
+            content.AppendLine($"{FormatNumber(Math.Max(0.1, path.StrokeWidth))} w");
+        }
+        else if (path.StrokeFallbackColor is { } strokeFallback)
+        {
+            AppendRgb(content, strokeFallback, "RG");
+            content.AppendLine($"{FormatNumber(Math.Max(0.1, path.StrokeWidth))} w");
+        }
+
+        AppendPathContours(content, path.Contours);
+
+        var hasFill = hasFillPattern || path.FillFallbackColor is not null;
+        var hasStroke = hasStrokePattern || path.StrokeFallbackColor is not null;
+        content.AppendLine(hasFill && hasStroke ? "B" : hasFill ? "f" : "S");
+        content.AppendLine("Q");
+    }
+
+    private static void AppendPathContours(StringBuilder content, IReadOnlyList<PdfPathContour> contours)
+    {
+        foreach (var contour in contours)
+        {
+            content.AppendLine($"{FormatNumber(contour.Start.X)} {FormatNumber(contour.Start.Y)} m");
+            foreach (var segment in contour.Segments)
+            {
+                switch (segment.Kind)
+                {
+                    case PdfPathSegmentKind.Line:
+                        content.AppendLine($"{FormatNumber(segment.End.X)} {FormatNumber(segment.End.Y)} l");
+                        break;
+                    case PdfPathSegmentKind.CubicBezier:
+                        content.AppendLine(
+                            $"{FormatNumber(segment.Control1.X)} {FormatNumber(segment.Control1.Y)} " +
+                            $"{FormatNumber(segment.Control2.X)} {FormatNumber(segment.Control2.Y)} " +
+                            $"{FormatNumber(segment.End.X)} {FormatNumber(segment.End.Y)} c");
+                        break;
+                }
+            }
+
+            if (contour.Closed)
+                content.AppendLine("h");
+        }
+    }
+
     private static void AppendText(
         StringBuilder content,
         double x,
@@ -1109,6 +1454,18 @@ public static class PortablePdfWriter
     private static void AppendRgb(StringBuilder content, PdfColor color, string operatorName) =>
         content.AppendLine(
             $"{FormatNumber(color.R / 255d)} {FormatNumber(color.G / 255d)} {FormatNumber(color.B / 255d)} {operatorName}");
+
+    private static void AppendFillPattern(StringBuilder content, string resourceName)
+    {
+        content.AppendLine("/Pattern cs");
+        content.AppendLine($"/{resourceName} scn");
+    }
+
+    private static void AppendStrokePattern(StringBuilder content, string resourceName)
+    {
+        content.AppendLine("/Pattern CS");
+        content.AppendLine($"/{resourceName} SCN");
+    }
 
     private static string EncodeTextOperand(string text)
     {
@@ -1173,6 +1530,12 @@ public static class PortablePdfWriter
     private static string FormatNumber(double value) =>
         (Math.Abs(value) < 0.0005 ? 0d : value).ToString("0.###", CultureInfo.InvariantCulture);
 
+    private static string FormatColorComponent(byte value) =>
+        FormatNumber(value / 255d);
+
+    private static bool IsFinite(double value) =>
+        !double.IsNaN(value) && !double.IsInfinity(value);
+
     private static double NormalizeOpacity(double opacity) =>
         Math.Round(Math.Clamp(double.IsFinite(opacity) ? opacity : 1.0, 0.0, 1.0), 3);
 
@@ -1203,6 +1566,10 @@ public static class PortablePdfWriter
         IReadOnlyList<PdfOpacityResource> Resources,
         IReadOnlyDictionary<double, PdfOpacityResource> ByOpacity);
 
+    private sealed record PatternResourceSet(
+        IReadOnlyList<PdfPatternResource> Resources,
+        IReadOnlyDictionary<PdfLinearGradient, PdfPatternResource> ByGradient);
+
     private sealed record PdfImageResource(
         string ResourceName,
         int PixelWidth,
@@ -1212,6 +1579,8 @@ public static class PortablePdfWriter
         byte[] Data);
 
     private sealed record PdfOpacityResource(string ResourceName, double Opacity);
+
+    private sealed record PdfPatternResource(string ResourceName, PdfLinearGradient Gradient);
 
     private readonly record struct PdfImagePlacement(double X, double Y, double Width, double Height);
 

@@ -194,7 +194,24 @@ public static class PresentationPdfExporter
                         fill.Height,
                         color));
                     break;
+                case PdfFillRectLinearGradient fill:
+                    passOps.Add(new PdfFillRect(
+                        fill.X + offsetX,
+                        fill.Y + offsetY,
+                        fill.Width,
+                        fill.Height,
+                        color));
+                    break;
                 case PdfStrokeRect stroke:
+                    passOps.Add(new PdfStrokeRect(
+                        stroke.X + offsetX,
+                        stroke.Y + offsetY,
+                        stroke.Width,
+                        stroke.Height,
+                        color,
+                        stroke.LineWidth));
+                    break;
+                case PdfStrokeRectLinearGradient stroke:
                     passOps.Add(new PdfStrokeRect(
                         stroke.X + offsetX,
                         stroke.Y + offsetY,
@@ -211,7 +228,24 @@ public static class PresentationPdfExporter
                         fillEllipse.Height,
                         color));
                     break;
+                case PdfFillEllipseLinearGradient fillEllipse:
+                    passOps.Add(new PdfFillEllipse(
+                        fillEllipse.X + offsetX,
+                        fillEllipse.Y + offsetY,
+                        fillEllipse.Width,
+                        fillEllipse.Height,
+                        color));
+                    break;
                 case PdfStrokeEllipse strokeEllipse:
+                    passOps.Add(new PdfStrokeEllipse(
+                        strokeEllipse.X + offsetX,
+                        strokeEllipse.Y + offsetY,
+                        strokeEllipse.Width,
+                        strokeEllipse.Height,
+                        color,
+                        strokeEllipse.LineWidth));
+                    break;
+                case PdfStrokeEllipseLinearGradient strokeEllipse:
                     passOps.Add(new PdfStrokeEllipse(
                         strokeEllipse.X + offsetX,
                         strokeEllipse.Y + offsetY,
@@ -227,7 +261,23 @@ public static class PresentationPdfExporter
                         path.StrokeColor is null ? null : color,
                         path.StrokeWidth));
                     break;
+                case PdfPathLinearGradient path:
+                    passOps.Add(new PdfPath(
+                        OffsetContours(path.Contours, offsetX, offsetY),
+                        path.FillFallbackColor is null ? null : color,
+                        path.StrokeFallbackColor is null ? null : color,
+                        path.StrokeWidth));
+                    break;
                 case PdfLine line:
+                    passOps.Add(new PdfLine(
+                        line.X1 + offsetX,
+                        line.Y1 + offsetY,
+                        line.X2 + offsetX,
+                        line.Y2 + offsetY,
+                        color,
+                        line.LineWidth));
+                    break;
+                case PdfLineLinearGradient line:
                     passOps.Add(new PdfLine(
                         line.X1 + offsetX,
                         line.Y1 + offsetY,
@@ -273,7 +323,21 @@ public static class PresentationPdfExporter
                     passOps.Add(new PdfStrokeRect(fill.X, fill.Y, fill.Width, fill.Height, color, lineWidth));
                     break;
                 }
+                case PdfFillRectLinearGradient fill:
+                {
+                    var bounds = new ShapeBounds(fill.X, fill.Y, fill.Width, fill.Height);
+                    filledRects.Add(bounds);
+                    passOps.Add(new PdfStrokeRect(fill.X, fill.Y, fill.Width, fill.Height, color, lineWidth));
+                    break;
+                }
                 case PdfStrokeRect stroke:
+                {
+                    var bounds = new ShapeBounds(stroke.X, stroke.Y, stroke.Width, stroke.Height);
+                    if (!filledRects.Contains(bounds))
+                        passOps.Add(new PdfStrokeRect(stroke.X, stroke.Y, stroke.Width, stroke.Height, color, lineWidth));
+                    break;
+                }
+                case PdfStrokeRectLinearGradient stroke:
                 {
                     var bounds = new ShapeBounds(stroke.X, stroke.Y, stroke.Width, stroke.Height);
                     if (!filledRects.Contains(bounds))
@@ -287,7 +351,21 @@ public static class PresentationPdfExporter
                     passOps.Add(new PdfStrokeEllipse(fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, color, lineWidth));
                     break;
                 }
+                case PdfFillEllipseLinearGradient fillEllipse:
+                {
+                    var bounds = new ShapeBounds(fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height);
+                    filledEllipses.Add(bounds);
+                    passOps.Add(new PdfStrokeEllipse(fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, color, lineWidth));
+                    break;
+                }
                 case PdfStrokeEllipse strokeEllipse:
+                {
+                    var bounds = new ShapeBounds(strokeEllipse.X, strokeEllipse.Y, strokeEllipse.Width, strokeEllipse.Height);
+                    if (!filledEllipses.Contains(bounds))
+                        passOps.Add(new PdfStrokeEllipse(strokeEllipse.X, strokeEllipse.Y, strokeEllipse.Width, strokeEllipse.Height, color, lineWidth));
+                    break;
+                }
+                case PdfStrokeEllipseLinearGradient strokeEllipse:
                 {
                     var bounds = new ShapeBounds(strokeEllipse.X, strokeEllipse.Y, strokeEllipse.Width, strokeEllipse.Height);
                     if (!filledEllipses.Contains(bounds))
@@ -297,7 +375,13 @@ public static class PresentationPdfExporter
                 case PdfPath path:
                     passOps.Add(new PdfPath(path.Contours, null, color, lineWidth));
                     break;
+                case PdfPathLinearGradient path:
+                    passOps.Add(new PdfPath(path.Contours, null, color, lineWidth));
+                    break;
                 case PdfLine line:
+                    passOps.Add(new PdfLine(line.X1, line.Y1, line.X2, line.Y2, color, lineWidth));
+                    break;
+                case PdfLineLinearGradient line:
                     passOps.Add(new PdfLine(line.X1, line.Y1, line.X2, line.Y2, color, lineWidth));
                     break;
             }
@@ -383,19 +467,27 @@ public static class PresentationPdfExporter
 
         if (IsEllipseLike(shape))
         {
-            if (TryMapFill(shape.Fill, out var fill, out var fillOpacity))
+            if (TryMapFillLinearGradient(shape.Fill, x, y, width, height, out var fillGradient, out var fillFallback, out var fillOpacity))
+                AddWithOpacity(ops, new PdfFillEllipseLinearGradient(x, y, width, height, fillGradient, fillFallback), fillOpacity);
+            else if (TryMapFill(shape.Fill, out var fill, out fillOpacity))
                 AddWithOpacity(ops, new PdfFillEllipse(x, y, width, height, fill), fillOpacity);
 
-            if (TryMapOutline(shape.Outline, out var stroke, out var strokeWidth, out var strokeOpacity))
+            if (TryMapOutlineLinearGradient(shape.Outline, x, y, width, height, out var strokeGradient, out var strokeFallback, out var strokeWidth, out var strokeOpacity))
+                AddWithOpacity(ops, new PdfStrokeEllipseLinearGradient(x, y, width, height, strokeGradient, strokeFallback, strokeWidth), strokeOpacity);
+            else if (TryMapOutline(shape.Outline, out var stroke, out strokeWidth, out strokeOpacity))
                 AddWithOpacity(ops, new PdfStrokeEllipse(x, y, width, height, stroke, strokeWidth), strokeOpacity);
 
             return new ShapeBox(x, y, width, height);
         }
 
-        if (TryMapFill(shape.Fill, out var rectFill, out var rectFillOpacity))
+        if (TryMapFillLinearGradient(shape.Fill, x, y, width, height, out var rectFillGradient, out var rectFillFallback, out var rectFillOpacity))
+            AddWithOpacity(ops, new PdfFillRectLinearGradient(x, y, width, height, rectFillGradient, rectFillFallback), rectFillOpacity);
+        else if (TryMapFill(shape.Fill, out var rectFill, out rectFillOpacity))
             AddWithOpacity(ops, new PdfFillRect(x, y, width, height, rectFill), rectFillOpacity);
 
-        if (TryMapOutline(shape.Outline, out var rectStroke, out var rectStrokeWidth, out var rectStrokeOpacity))
+        if (TryMapOutlineLinearGradient(shape.Outline, x, y, width, height, out var rectStrokeGradient, out var rectStrokeFallback, out var rectStrokeWidth, out var rectStrokeOpacity))
+            AddWithOpacity(ops, new PdfStrokeRectLinearGradient(x, y, width, height, rectStrokeGradient, rectStrokeFallback, rectStrokeWidth), rectStrokeOpacity);
+        else if (TryMapOutline(shape.Outline, out var rectStroke, out rectStrokeWidth, out rectStrokeOpacity))
             AddWithOpacity(ops, new PdfStrokeRect(x, y, width, height, rectStroke, rectStrokeWidth), rectStrokeOpacity);
 
         return new ShapeBox(x, y, width, height);
@@ -483,8 +575,13 @@ public static class PresentationPdfExporter
         if (!IsConnectorLike(shape))
             return false;
 
-        if (!TryMapOutline(shape.Outline, out var stroke, out var strokeWidth, out var strokeOpacity))
+        var hasGradientStroke = TryMapOutlineLinearGradient(shape.Outline, x, y, width, height, out var strokeGradient, out var strokeFallback, out var strokeWidth, out var strokeOpacity);
+        PdfColor stroke = default;
+        var hasSolidStroke = !hasGradientStroke && TryMapOutline(shape.Outline, out stroke, out strokeWidth, out strokeOpacity);
+        if (!hasGradientStroke && !hasSolidStroke)
             return true;
+
+        var markerColor = hasGradientStroke ? strokeFallback : stroke;
 
         if (shape.AutoShapeKind == DrawingShapeKind.ElbowConnector
             && shape.ElbowRoute is { Count: >= 2 } route)
@@ -493,7 +590,12 @@ public static class PresentationPdfExporter
             {
                 var start = ToPdfPoint(route[i - 1], slideHeightPoints);
                 var routeEnd = ToPdfPoint(route[i], slideHeightPoints);
-                AddWithOpacity(ops, new PdfLine(start.X, start.Y, routeEnd.X, routeEnd.Y, stroke, strokeWidth), strokeOpacity);
+                AddWithOpacity(
+                    ops,
+                    hasGradientStroke
+                        ? new PdfLineLinearGradient(start.X, start.Y, routeEnd.X, routeEnd.Y, strokeGradient, strokeFallback, strokeWidth)
+                        : new PdfLine(start.X, start.Y, routeEnd.X, routeEnd.Y, stroke, strokeWidth),
+                    strokeOpacity);
             }
 
             if (TryGetLineEnds(shape.Outline, out var beginLineEnd, out var endLineEnd))
@@ -502,19 +604,24 @@ public static class PresentationPdfExporter
                 var second = ToPdfPoint(route[1], slideHeightPoints);
                 var penultimate = ToPdfPoint(route[^2], slideHeightPoints);
                 var last = ToPdfPoint(route[^1], slideHeightPoints);
-                AppendLineEndMarker(ops, beginLineEnd, first.X, first.Y, second.X, second.Y, stroke, strokeWidth, strokeOpacity);
-                AppendLineEndMarker(ops, endLineEnd, last.X, last.Y, penultimate.X, penultimate.Y, stroke, strokeWidth, strokeOpacity);
+                AppendLineEndMarker(ops, beginLineEnd, first.X, first.Y, second.X, second.Y, markerColor, strokeWidth, strokeOpacity);
+                AppendLineEndMarker(ops, endLineEnd, last.X, last.Y, penultimate.X, penultimate.Y, markerColor, strokeWidth, strokeOpacity);
             }
 
             return true;
         }
 
         var (x1, y1, x2, y2) = GetLineEndpoints(shape, x, y, width, height);
-        AddWithOpacity(ops, new PdfLine(x1, y1, x2, y2, stroke, strokeWidth), strokeOpacity);
+        AddWithOpacity(
+            ops,
+            hasGradientStroke
+                ? new PdfLineLinearGradient(x1, y1, x2, y2, strokeGradient, strokeFallback, strokeWidth)
+                : new PdfLine(x1, y1, x2, y2, stroke, strokeWidth),
+            strokeOpacity);
         if (TryGetLineEnds(shape.Outline, out var begin, out var lineEnd))
         {
-            AppendLineEndMarker(ops, begin, x1, y1, x2, y2, stroke, strokeWidth, strokeOpacity);
-            AppendLineEndMarker(ops, lineEnd, x2, y2, x1, y1, stroke, strokeWidth, strokeOpacity);
+            AppendLineEndMarker(ops, begin, x1, y1, x2, y2, markerColor, strokeWidth, strokeOpacity);
+            AppendLineEndMarker(ops, lineEnd, x2, y2, x1, y1, markerColor, strokeWidth, strokeOpacity);
         }
 
         return true;
@@ -531,8 +638,8 @@ public static class PresentationPdfExporter
         if (shape.Kind != SlideShapeKind.AutoShape || shape.CustomGeometry.Count == 0)
             return false;
 
-        var hasFill = TryMapFill(shape.Fill, out var fill, out var fillOpacity);
-        var hasStroke = TryMapOutline(shape.Outline, out var stroke, out var strokeWidth, out var strokeOpacity);
+        var fillStyle = MapFillStyle(shape.Fill, x, y, width, height);
+        var strokeStyle = MapOutlineStyle(shape.Outline, x, y, width, height);
 
         foreach (var path in shape.CustomGeometry)
         {
@@ -540,21 +647,51 @@ public static class PresentationPdfExporter
             if (contours.Count == 0)
                 continue;
 
-            var fillColor = path.Fill && hasFill ? fill : (PdfColor?)null;
-            var strokeColor = path.Stroke && hasStroke ? stroke : (PdfColor?)null;
-            if (fillColor is null && strokeColor is null)
+            var fill = path.Fill ? fillStyle : null;
+            var stroke = path.Stroke ? strokeStyle : null;
+            if (fill is null && stroke is null)
                 continue;
 
-            if (fillColor is not null && strokeColor is not null && Math.Abs(fillOpacity - strokeOpacity) < 0.0001)
+            if (fill?.Gradient is null && stroke?.Gradient is null)
             {
-                AddWithOpacity(ops, new PdfPath(contours, fillColor, strokeColor, strokeWidth), fillOpacity);
+                if (fill is not null && stroke is not null && Math.Abs(fill.Opacity - stroke.Opacity) < 0.0001)
+                {
+                    AddWithOpacity(ops, new PdfPath(contours, fill.FallbackColor, stroke.FallbackColor, stroke.StrokeWidth), fill.Opacity);
+                    continue;
+                }
+
+                if (fill is not null)
+                    AddWithOpacity(ops, new PdfPath(contours, fill.FallbackColor, null, stroke?.StrokeWidth ?? DefaultStrokeWidthPt), fill.Opacity);
+                if (stroke is not null)
+                    AddWithOpacity(ops, new PdfPath(contours, null, stroke.FallbackColor, stroke.StrokeWidth), stroke.Opacity);
                 continue;
             }
 
-            if (fillColor is not null)
-                AddWithOpacity(ops, new PdfPath(contours, fillColor, null, strokeWidth), fillOpacity);
-            if (strokeColor is not null)
-                AddWithOpacity(ops, new PdfPath(contours, null, strokeColor, strokeWidth), strokeOpacity);
+            if (fill is not null && stroke is not null && Math.Abs(fill.Opacity - stroke.Opacity) < 0.0001)
+            {
+                AddWithOpacity(
+                    ops,
+                    new PdfPathLinearGradient(
+                        contours,
+                        fill.Gradient,
+                        fill.FallbackColor,
+                        stroke.Gradient,
+                        stroke.FallbackColor,
+                        stroke.StrokeWidth),
+                    fill.Opacity);
+                continue;
+            }
+
+            if (fill is not null)
+                AddWithOpacity(
+                    ops,
+                    new PdfPathLinearGradient(contours, fill.Gradient, fill.FallbackColor, null, null, stroke?.StrokeWidth ?? DefaultStrokeWidthPt),
+                    fill.Opacity);
+            if (stroke is not null)
+                AddWithOpacity(
+                    ops,
+                    new PdfPathLinearGradient(contours, null, null, stroke.Gradient, stroke.FallbackColor, stroke.StrokeWidth),
+                    stroke.Opacity);
         }
 
         return true;
@@ -893,6 +1030,132 @@ public static class PresentationPdfExporter
         }
     }
 
+    private static PdfPaintStyle? MapFillStyle(
+        ShapeFill? fill,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        if (TryMapFillLinearGradient(fill, x, y, width, height, out var gradient, out var fallbackColor, out var opacity))
+            return new PdfPaintStyle(gradient, fallbackColor, StrokeWidth: 0, opacity);
+        if (TryMapFill(fill, out fallbackColor, out opacity))
+            return new PdfPaintStyle(Gradient: null, fallbackColor, StrokeWidth: 0, opacity);
+
+        return null;
+    }
+
+    private static PdfPaintStyle? MapOutlineStyle(
+        ShapeOutline? outline,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        if (TryMapOutlineLinearGradient(outline, x, y, width, height, out var gradient, out var fallbackColor, out var strokeWidth, out var opacity))
+            return new PdfPaintStyle(gradient, fallbackColor, strokeWidth, opacity);
+        if (TryMapOutline(outline, out fallbackColor, out strokeWidth, out opacity))
+            return new PdfPaintStyle(Gradient: null, fallbackColor, strokeWidth, opacity);
+
+        return null;
+    }
+
+    private static bool TryMapFillLinearGradient(
+        ShapeFill? fill,
+        double x,
+        double y,
+        double width,
+        double height,
+        out PdfLinearGradient gradient,
+        out PdfColor fallbackColor,
+        out double opacity)
+    {
+        if (fill is ShapeFill.Gradient source &&
+            TryMapLinearGradient(source, x, y, width, height, out gradient, out fallbackColor, out opacity))
+            return true;
+
+        gradient = default!;
+        fallbackColor = default;
+        opacity = 1.0;
+        return false;
+    }
+
+    private static bool TryMapOutlineLinearGradient(
+        ShapeOutline? outline,
+        double x,
+        double y,
+        double width,
+        double height,
+        out PdfLinearGradient gradient,
+        out PdfColor fallbackColor,
+        out double widthPt,
+        out double opacity)
+    {
+        if (outline is ShapeOutline.GradientVisible source &&
+            TryMapLinearGradient(source.Gradient, x, y, width, height, out gradient, out fallbackColor, out opacity))
+        {
+            widthPt = Math.Max(0.1, source.WidthPt);
+            return true;
+        }
+
+        gradient = default!;
+        fallbackColor = default;
+        widthPt = 0;
+        opacity = 1.0;
+        return false;
+    }
+
+    private static bool TryMapLinearGradient(
+        ShapeFill.Gradient source,
+        double x,
+        double y,
+        double width,
+        double height,
+        out PdfLinearGradient gradient,
+        out PdfColor fallbackColor,
+        out double opacity)
+    {
+        fallbackColor = ToPdfColor(source.StartColor);
+        opacity = ToPdfOpacity(source.StartColor);
+        gradient = default!;
+        if (source.Kind != GradientKind.Linear || width <= 0 || height <= 0)
+            return false;
+
+        var stops = source.Stops
+            .OrderBy(stop => stop.Position)
+            .Select(stop => new PdfGradientStop(stop.Position, ToPdfColor(stop.Color)))
+            .ToArray();
+        if (stops.Length < 2)
+            return false;
+
+        var (startX, startY, endX, endY) = LinearGradientAxis(x, y, width, height, source.AngleDegrees);
+        gradient = new PdfLinearGradient(startX, startY, endX, endY, stops);
+        return true;
+    }
+
+    private static (double StartX, double StartY, double EndX, double EndY) LinearGradientAxis(
+        double x,
+        double y,
+        double width,
+        double height,
+        double angleDegrees)
+    {
+        var radians = angleDegrees * Math.PI / 180.0;
+        var dx = Math.Cos(radians);
+        var dy = -Math.Sin(radians);
+        var halfLength = (Math.Abs(width * dx) + Math.Abs(height * dy)) / 2.0;
+        if (halfLength < 0.001)
+            halfLength = Math.Sqrt((width * width) + (height * height)) / 2.0;
+
+        var centerX = x + width / 2.0;
+        var centerY = y + height / 2.0;
+        return (
+            centerX - dx * halfLength,
+            centerY - dy * halfLength,
+            centerX + dx * halfLength,
+            centerY + dy * halfLength);
+    }
+
     private static bool TryMapOutline(ShapeOutline? outline, out PdfColor color, out double widthPt, out double opacity)
     {
         switch (outline)
@@ -939,6 +1202,12 @@ public static class PresentationPdfExporter
     private static double ToPdfOpacity(ThemeAwareColor color) => color.Alpha / 255.0;
 
     private static PdfColor ToPdfColor(SrgbColor color) => new(color.R, color.G, color.B);
+
+    private sealed record PdfPaintStyle(
+        PdfLinearGradient? Gradient,
+        PdfColor FallbackColor,
+        double StrokeWidth,
+        double Opacity);
 
     private sealed record ShapeBox(double X, double Y, double Width, double Height);
     private readonly record struct ShapeBounds(double X, double Y, double Width, double Height);
