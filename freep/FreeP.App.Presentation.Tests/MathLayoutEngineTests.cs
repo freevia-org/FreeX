@@ -1266,7 +1266,7 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
-    public void Row_TransparentZeroWidthPhantomAmbiguousMultiCharacterRun_DoesNotAddSpacing()
+    public void Row_TransparentZeroWidthPhantomMultiGlyphRelation_AddsSharedSpacingAdvanceWithoutGlyph()
     {
         var transparentLayout = MathLayoutEngine.Layout(
             new MathNode.Row(new MathNode[]
@@ -1287,8 +1287,18 @@ public sealed class MathLayoutEngineTests
             "Cambria Math",
             FontSizePt);
 
-        transparentLayout.Metrics.Width.Should().BeApproximately(packedLayout.Metrics.Width, 0.01,
-            "multi-character operator text remains ambiguous without PowerPoint-authoritative class evidence");
+        transparentLayout.Metrics.Width.Should().BeGreaterThan(packedLayout.Metrics.Width,
+            "common multi-glyph relation operators should use the same shared operator-class spacing as m:boxPr/m:opEmu");
+
+        var transparentContainer = Assert.IsType<MathBox.Container>(transparentLayout.Children[0]);
+        var packedContainer = Assert.IsType<MathBox.Container>(packedLayout.Children[0]);
+        transparentContainer.Children[2].X.Should().BeGreaterThan(packedContainer.Children[2].X,
+            "the following sibling should advance past the transparent multi-glyph relation spacing");
+
+        var ops = MathBoxRenderPlanner.Plan(transparentLayout, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text)
+            .Should().Equal(new[] { "x", "y" },
+                "transparent phantom spacing affects advance only and must not reintroduce hidden relation glyphs");
     }
 
     [Fact]

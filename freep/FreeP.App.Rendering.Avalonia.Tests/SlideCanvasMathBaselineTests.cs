@@ -350,6 +350,55 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_TransparentPhantomMultiGlyphRelation_UsesSharedSpacingPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var packedRow = new MathNode.Row(new MathNode[]
+                {
+                    new MathNode.Run("x"),
+                    new MathNode.Phantom(new MathNode.Run("->", isItalic: false), show: false, zeroWidth: true),
+                    new MathNode.Run("y")
+                });
+                var transparentRow = new MathNode.Row(new MathNode[]
+                {
+                    new MathNode.Run("x"),
+                    new MathNode.Phantom(new MathNode.Run("->", isItalic: false), show: false, zeroWidth: true, transparentSpacing: true),
+                    new MathNode.Run("y")
+                });
+
+                var packedBox = MathLayoutEngine.Layout(packedRow, "Cambria Math", 18.0);
+                var mathBox = MathLayoutEngine.Layout(transparentRow, "Cambria Math", 18.0);
+                mathBox.Metrics.Width.Should().BeGreaterThan(packedBox.Metrics.Width,
+                    "m:phantPr/m:transp multi-glyph relation spacing must be resolved in the shared math plan before Avalonia draws it");
+
+                var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+                ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Equal(new[] { "x", "y" },
+                    "hidden transparent phantom relation glyphs must not reach the Avalonia renderer");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "P = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render m:phantPr/m:transp relation spacing from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_HiddenPhantom_UsesSharedMetricOnlyPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

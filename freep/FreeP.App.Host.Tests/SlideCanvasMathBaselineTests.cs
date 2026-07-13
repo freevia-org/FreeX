@@ -273,6 +273,50 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_TransparentPhantomMultiGlyphRelation_UsesSharedSpacingPlan_DoesNotThrow()
+    {
+        var packedRow = new MathNode.Row(new MathNode[]
+        {
+            new MathNode.Run("x"),
+            new MathNode.Phantom(new MathNode.Run("->", isItalic: false), show: false, zeroWidth: true),
+            new MathNode.Run("y")
+        });
+        var transparentRow = new MathNode.Row(new MathNode[]
+        {
+            new MathNode.Run("x"),
+            new MathNode.Phantom(new MathNode.Run("->", isItalic: false), show: false, zeroWidth: true, transparentSpacing: true),
+            new MathNode.Run("y")
+        });
+
+        var packedBox = MathLayoutEngine.Layout(packedRow, "Cambria Math", 18.0);
+        var mathBox = MathLayoutEngine.Layout(transparentRow, "Cambria Math", 18.0);
+        mathBox.Metrics.Width.Should().BeGreaterThan(packedBox.Metrics.Width,
+            "m:phantPr/m:transp multi-glyph relation spacing must be resolved in the shared math plan before WPF draws it");
+
+        var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Equal(new[] { "x", "y" },
+            "hidden transparent phantom relation glyphs must not reach the WPF renderer");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "P = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_HiddenPhantom_UsesSharedMetricOnlyPlan_DoesNotThrow()
     {
         var mathNode = new MathNode.Phantom(

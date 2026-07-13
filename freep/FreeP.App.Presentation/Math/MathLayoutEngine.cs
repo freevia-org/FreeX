@@ -1631,10 +1631,33 @@ public static class MathLayoutEngine
     private static TransparentPhantomSpacingClass ClassifyTransparentPhantomSpacingRun(string text)
     {
         var trimmed = text.Trim();
-        if (trimmed.Length != 1)
+
+        if (IsCommonMultiGlyphRelationOperator(trimmed))
+            return TransparentPhantomSpacingClass.Relation;
+
+        return ClassifySingleGlyphOperatorRun(trimmed);
+    }
+
+    private static TransparentPhantomSpacingClass ClassifyOperatorEmulatorRun(string text)
+    {
+        var trimmed = text.Trim();
+
+        if (IsCommonMultiGlyphRelationOperator(trimmed))
+            return TransparentPhantomSpacingClass.Relation;
+
+        return ClassifySingleGlyphOperatorRun(trimmed);
+    }
+
+    private static bool IsCommonMultiGlyphRelationOperator(string text) =>
+        text is "==" or "===" or ":=" or "<=" or ">=" or "!=" or "<>" or "=>"
+            or "<=>" or "->" or "<-" or "<->";
+
+    private static TransparentPhantomSpacingClass ClassifySingleGlyphOperatorRun(string text)
+    {
+        if (text.Length != 1)
             return TransparentPhantomSpacingClass.None;
 
-        return trimmed[0] switch
+        return text[0] switch
         {
             '=' or '<' or '>' or '\u2264' or '\u2265' or '\u2260' or '\u2248' or '\u2208' or '\u2209' or '\u2282'
                 or '\u2283' or '\u2286' or '\u2287' or '\u2190' or '\u2192' or '\u2194' or '\u21d0' or '\u21d2'
@@ -1648,16 +1671,6 @@ public static class MathLayoutEngine
                 TransparentPhantomSpacingClass.Punctuation,
             _ => TransparentPhantomSpacingClass.None
         };
-    }
-
-    private static TransparentPhantomSpacingClass ClassifyOperatorEmulatorRun(string text)
-    {
-        var trimmed = text.Trim();
-        if (trimmed is "==" or "===" or ":=" or "<=" or ">=" or "!=" or "<>" or "=>"
-            or "<=>" or "->" or "<-" or "<->")
-            return TransparentPhantomSpacingClass.Relation;
-
-        return ClassifyTransparentPhantomSpacingRun(trimmed);
     }
 
     private enum OperatorClassGapSide

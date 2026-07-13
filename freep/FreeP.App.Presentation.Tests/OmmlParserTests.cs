@@ -881,6 +881,22 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Phantom_TransparentMultiGlyphOperator_PreservesRunForSharedSpacing()
+    {
+        var node = Parse(
+            "<m:phant>" +
+            "<m:phantPr><m:show m:val=\"0\"/><m:zeroWid/><m:transp/></m:phantPr>" +
+            "<m:e><m:r><m:t>-&gt;</m:t></m:r></m:e>" +
+            "</m:phant>");
+
+        var phantom = Assert.IsType<MathNode.Phantom>(node);
+        Assert.False(phantom.Show);
+        Assert.True(phantom.ZeroWidth);
+        Assert.True(phantom.TransparentSpacing);
+        Assert.Equal("->", Assert.IsType<MathNode.Run>(phantom.Base).Text);
+    }
+
+    [Fact]
     public void Phantom_WithMissingExpression_UsesFlattenedUnknownFallback()
     {
         var node = Parse("<m:phant><m:r><m:t>x</m:t></m:r></m:phant>");
