@@ -344,7 +344,10 @@ public sealed record FreeWVisualPageExpectation(
     string? FooterSlotName,
     bool HasFootnotes,
     bool HasEndnotes,
-    bool IsSyntheticPage);
+    bool IsSyntheticPage)
+{
+    public FreeWVisualEquationExpectation Equations { get; init; } = FreeWVisualEquationExpectation.Empty;
+}
 
 public sealed record FreeWVisualPixelStats(
     int Width,
@@ -413,7 +416,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 18;
+    public const int SchemaVersion = 19;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -563,6 +566,7 @@ public static class FreeWVisualEvidencePlanner
                 "radicals",
                 "n-ary-operators",
                 "matrices",
+                "equation-arrays",
                 "accents",
                 "bars",
                 "delimiters",
@@ -1091,6 +1095,7 @@ public static class FreeWVisualEvidencePlanner
         var drawingObjects = BuildDrawingObjectExpectation(document, surface, features.Columns.Count);
         var chartSmartArt = BuildChartSmartArtExpectation(document);
         var fields = BuildFieldExpectation(document);
+        var equations = BuildEquationExpectation(document);
         var headerFooters = BuildHeaderFooterExpectation(document, pageNumber, pageCount);
         var tableOfAuthorities = BuildTableOfAuthoritiesExpectation(document);
         var proofingDiagnostics = BuildProofingDiagnosticExpectation(document);
@@ -1117,7 +1122,10 @@ public static class FreeWVisualEvidencePlanner
             footerSlotName,
             hasFootnotes,
             hasEndnotes,
-            isSyntheticPage);
+            isSyntheticPage)
+        {
+            Equations = equations
+        };
     }
 
     public static FreeWVisualHeaderFooterExpectation BuildHeaderFooterExpectation(
@@ -1126,6 +1134,9 @@ public static class FreeWVisualEvidencePlanner
         int pageCount,
         IReadOnlyList<int>? blockPageAssignments = null) =>
         HeaderFooterVisualPlanner.BuildExpectation(document, pageNumber, pageCount, blockPageAssignments);
+
+    public static FreeWVisualEquationExpectation BuildEquationExpectation(TextDocument? document) =>
+        EquationVisualPlanner.BuildEvidence(document);
 
     public static FreeWVisualPageFeatureExpectation BuildPageFeatures(
         PageSettings page,

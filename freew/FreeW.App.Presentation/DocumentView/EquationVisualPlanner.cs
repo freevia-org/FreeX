@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -365,6 +366,33 @@ public sealed record EquationVisualPlan(
     IReadOnlyList<EquationVisualSegment> Segments,
     IReadOnlyList<EquationVisualElement> Elements);
 
+public sealed record FreeWVisualEquationExpectation(
+    int EquationCount,
+    int ElementCount,
+    int SegmentCount,
+    int NestedSlotCount,
+    int MaxNestedSlotDepth,
+    IReadOnlyList<string> ElementKindCounts,
+    IReadOnlyList<string> SegmentRoleCounts,
+    IReadOnlyList<string> BaselineRoleCounts,
+    IReadOnlyList<string> SegmentGeometrySignatures,
+    IReadOnlyList<string> ElementGeometrySignatures,
+    IReadOnlyList<string> SlotGeometrySignatures)
+{
+    public static FreeWVisualEquationExpectation Empty { get; } = new(
+        EquationCount: 0,
+        ElementCount: 0,
+        SegmentCount: 0,
+        NestedSlotCount: 0,
+        MaxNestedSlotDepth: 0,
+        ElementKindCounts: [],
+        SegmentRoleCounts: [],
+        BaselineRoleCounts: [],
+        SegmentGeometrySignatures: [],
+        ElementGeometrySignatures: [],
+        SlotGeometrySignatures: []);
+}
+
 public static class EquationVisualPlanner
 {
     public const string DefaultMathFontFamily = "Cambria Math, Cambria, Times New Roman, serif";
@@ -468,6 +496,57 @@ public static class EquationVisualPlanner
         ArgumentNullException.ThrowIfNull(equation);
 
         return Build(equation, depth: 0);
+    }
+
+    public static FreeWVisualEquationExpectation BuildEvidence(TextDocument? document)
+    {
+        if (document is null)
+            return FreeWVisualEquationExpectation.Empty;
+
+        var equations = EnumerateEquations(document).ToList();
+        return BuildEvidence(equations);
+    }
+
+    public static FreeWVisualEquationExpectation BuildEvidence(IReadOnlyList<Equation> equations)
+    {
+        ArgumentNullException.ThrowIfNull(equations);
+
+        if (equations.Count == 0)
+            return FreeWVisualEquationExpectation.Empty;
+
+        var plans = equations.Select(equation => Build(equation)).ToList();
+        var allElements = plans.SelectMany(EnumerateElements).ToList();
+        var allSegments = plans.SelectMany(EnumerateSegments).ToList();
+        var slotPlans = new List<(int EquationIndex, string OwnerPath, string SlotName, int Depth, EquationVisualPlan Plan)>();
+        for (var equationIndex = 0; equationIndex < plans.Count; equationIndex++)
+        {
+            CollectSlotPlans(
+                plans[equationIndex],
+                equationIndex + 1,
+                ownerPath: "eq=" + (equationIndex + 1).ToString(CultureInfo.InvariantCulture),
+                depth: 0,
+                slotPlans);
+        }
+
+        return new FreeWVisualEquationExpectation(
+            EquationCount: plans.Count,
+            ElementCount: allElements.Count,
+            SegmentCount: allSegments.Count,
+            NestedSlotCount: slotPlans.Count,
+            MaxNestedSlotDepth: slotPlans.Count == 0 ? 0 : slotPlans.Max(slot => slot.Depth),
+            ElementKindCounts: BuildCountSignatures(allElements.Select(element => element.Kind.ToString())),
+            SegmentRoleCounts: BuildCountSignatures(allSegments.Select(segment => segment.Role.ToString())),
+            BaselineRoleCounts: BuildCountSignatures(allSegments.Select(segment => segment.Style.BaselineRole.ToString())),
+            SegmentGeometrySignatures: plans
+                .SelectMany((plan, equationIndex) => BuildSegmentGeometrySignatures(plan, equationIndex + 1))
+                .ToList(),
+            ElementGeometrySignatures: plans
+                .SelectMany((plan, equationIndex) => BuildElementGeometrySignatures(plan, equationIndex + 1))
+                .ToList(),
+            SlotGeometrySignatures: slotPlans
+                .Select(slot => BuildSlotGeometrySignature(slot.EquationIndex, slot.OwnerPath, slot.SlotName, slot.Depth, slot.Plan))
+                .OrderBy(signature => signature, StringComparer.Ordinal)
+                .ToList());
     }
 
     private static EquationVisualPlan Build(Equation equation, int depth)
@@ -1033,5 +1112,329 @@ public static class EquationVisualPlanner
     {
         if (!string.IsNullOrEmpty(text))
             segments.Add(new EquationVisualSegment(text, role, style));
+    }
+
+    private static IEnumerable<Equation> EnumerateEquations(TextDocument document)
+    {
+        foreach (var paragraph in EnumerateParagraphs(document))
+        {
+            foreach (var run in paragraph.Runs)
+            {
+                if (run.Equation is not null)
+                    yield return run.Equation;
+            }
+        }
+    }
+
+    private static IEnumerable<Paragraph> EnumerateParagraphs(TextDocument document)
+    {
+        foreach (var block in document.Blocks)
+        {
+            if (block is Paragraph paragraph)
+            {
+                yield return paragraph;
+                continue;
+            }
+
+            if (block is Table table)
+            {
+                foreach (var row in table.Rows)
+                    foreach (var cell in row.Cells)
+                        foreach (var cellParagraph in cell.Paragraphs)
+                            yield return cellParagraph;
+            }
+        }
+    }
+
+    private static IEnumerable<EquationVisualElement> EnumerateElements(EquationVisualPlan plan)
+    {
+        foreach (var element in plan.Elements)
+        {
+            yield return element;
+
+            foreach (var slot in SlotPlans(element))
+                foreach (var child in EnumerateElements(slot.Plan))
+                    yield return child;
+        }
+    }
+
+    private static IEnumerable<EquationVisualSegment> EnumerateSegments(EquationVisualPlan plan)
+    {
+        foreach (var segment in plan.Segments)
+            yield return segment;
+
+        foreach (var element in plan.Elements)
+            foreach (var slot in SlotPlans(element))
+                foreach (var segment in EnumerateSegments(slot.Plan))
+                    yield return segment;
+    }
+
+    private static void CollectSlotPlans(
+        EquationVisualPlan plan,
+        int equationIndex,
+        string ownerPath,
+        int depth,
+        List<(int EquationIndex, string OwnerPath, string SlotName, int Depth, EquationVisualPlan Plan)> slots)
+    {
+        for (var elementIndex = 0; elementIndex < plan.Elements.Count; elementIndex++)
+        {
+            var element = plan.Elements[elementIndex];
+            var elementPath = ownerPath + "|el=" + (elementIndex + 1).ToString(CultureInfo.InvariantCulture);
+            foreach (var slot in SlotPlans(element))
+            {
+                var slotDepth = depth + 1;
+                slots.Add((equationIndex, elementPath, slot.Name, slotDepth, slot.Plan));
+                CollectSlotPlans(slot.Plan, equationIndex, elementPath + "|slot=" + slot.Name, slotDepth, slots);
+            }
+        }
+    }
+
+    private static IEnumerable<(string Name, EquationVisualPlan Plan)> SlotPlans(EquationVisualElement element)
+    {
+        if (element.ScriptBasePlan is not null)
+            yield return ("script-base", element.ScriptBasePlan);
+        if (element.ScriptSubscriptPlan is not null)
+            yield return ("script-subscript", element.ScriptSubscriptPlan);
+        if (element.ScriptSuperscriptPlan is not null)
+            yield return ("script-superscript", element.ScriptSuperscriptPlan);
+        if (element.NumeratorPlan is not null)
+            yield return ("fraction-numerator", element.NumeratorPlan);
+        if (element.DenominatorPlan is not null)
+            yield return ("fraction-denominator", element.DenominatorPlan);
+        if (element.RadicandPlan is not null)
+            yield return ("radical-radicand", element.RadicandPlan);
+        if (element.DegreePlan is not null)
+            yield return ("radical-degree", element.DegreePlan);
+        if (element.NAryLowerLimitPlan is not null)
+            yield return ("nary-lower-limit", element.NAryLowerLimitPlan);
+        if (element.NAryUpperLimitPlan is not null)
+            yield return ("nary-upper-limit", element.NAryUpperLimitPlan);
+        if (element.NAryOperandPlan is not null)
+            yield return ("nary-operand", element.NAryOperandPlan);
+        if (element.DelimiterContentPlan is not null)
+            yield return ("delimiter-content", element.DelimiterContentPlan);
+        if (element.FunctionArgumentPlan is not null)
+            yield return ("function-argument", element.FunctionArgumentPlan);
+        if (element.AccentBasePlan is not null)
+            yield return ("accent-base", element.AccentBasePlan);
+        if (element.BarBasePlan is not null)
+            yield return ("bar-base", element.BarBasePlan);
+        if (element.GroupCharBasePlan is not null)
+            yield return ("groupchar-base", element.GroupCharBasePlan);
+
+        foreach (var row in element.MatrixRows)
+            foreach (var cell in row.Cells)
+                if (cell.CellPlan is not null)
+                    yield return (
+                        "matrix-cell-r" + row.RowIndex.ToString(CultureInfo.InvariantCulture)
+                            + "c" + cell.ColumnIndex.ToString(CultureInfo.InvariantCulture),
+                        cell.CellPlan);
+    }
+
+    private static IReadOnlyList<string> BuildCountSignatures(IEnumerable<string> values) =>
+        values
+            .GroupBy(value => value, StringComparer.Ordinal)
+            .OrderBy(group => group.Key, StringComparer.Ordinal)
+            .Select(group => group.Key + "=" + group.Count().ToString(CultureInfo.InvariantCulture))
+            .ToList();
+
+    private static IEnumerable<string> BuildSegmentGeometrySignatures(
+        EquationVisualPlan plan,
+        int equationIndex)
+    {
+        for (var segmentIndex = 0; segmentIndex < plan.Segments.Count; segmentIndex++)
+        {
+            var segment = plan.Segments[segmentIndex];
+            yield return string.Join(
+                "|",
+                EqPart(equationIndex),
+                "seg=" + (segmentIndex + 1).ToString(CultureInfo.InvariantCulture),
+                "role=" + segment.Role,
+                "baseline=" + segment.Style.BaselineRole,
+                "offsetEm=" + FormatDouble(segment.Style.BaselineOffsetEm),
+                "scale=" + FormatDouble(segment.Style.FontSizeScale),
+                "italic=" + BoolFlag(segment.Style.Italic),
+                "text=" + NormalizeSignatureText(segment.Text));
+        }
+    }
+
+    private static IEnumerable<string> BuildElementGeometrySignatures(
+        EquationVisualPlan plan,
+        int equationIndex)
+    {
+        for (var elementIndex = 0; elementIndex < plan.Elements.Count; elementIndex++)
+        {
+            var element = plan.Elements[elementIndex];
+            yield return string.Join(
+                "|",
+                EqPart(equationIndex),
+                "el=" + (elementIndex + 1).ToString(CultureInfo.InvariantCulture),
+                "kind=" + element.Kind,
+                "roles=" + JoinRoles(element.Segments),
+                "baselines=" + JoinBaselines(element.Segments),
+                "scales=" + JoinScales(element.Segments),
+                BuildElementGeometryPart(element));
+        }
+    }
+
+    private static string BuildSlotGeometrySignature(
+        int equationIndex,
+        string ownerPath,
+        string slotName,
+        int depth,
+        EquationVisualPlan plan) =>
+        string.Join(
+            "|",
+            EqPart(equationIndex),
+            ownerPath,
+            "slot=" + slotName,
+            "depth=" + depth.ToString(CultureInfo.InvariantCulture),
+            "text=" + NormalizeSignatureText(plan.LinearText),
+            "segments=" + plan.Segments.Count.ToString(CultureInfo.InvariantCulture),
+            "elements=" + plan.Elements.Count.ToString(CultureInfo.InvariantCulture),
+            "roles=" + JoinRoles(plan.Segments),
+            "baselines=" + JoinBaselines(plan.Segments));
+
+    private static string BuildElementGeometryPart(EquationVisualElement element)
+    {
+        return element.Kind switch
+        {
+            EquationVisualElementKind.Segments when !string.IsNullOrEmpty(element.ScriptSubscriptText)
+                || !string.IsNullOrEmpty(element.ScriptSuperscriptText) =>
+                string.Join(
+                    "|",
+                    "geometry=script",
+                    "base=" + NormalizeSignatureText(element.BaseText),
+                    "subscript=" + NormalizeSignatureText(element.ScriptSubscriptText),
+                    "superscript=" + NormalizeSignatureText(element.ScriptSuperscriptText),
+                    "subOffsetEm=" + FormatDouble(SubscriptBaselineOffsetEm),
+                    "supOffsetEm=" + FormatDouble(SuperscriptBaselineOffsetEm),
+                    "scriptScale=" + FormatDouble(ScriptFontSizeScale)),
+            EquationVisualElementKind.Fraction =>
+                string.Join(
+                    "|",
+                    "geometry=fraction",
+                    "numerator=" + NormalizeSignatureText(element.Numerator),
+                    "bar=" + NormalizeSignatureText(FractionBarText),
+                    "denominator=" + NormalizeSignatureText(element.Denominator),
+                    "slotOrder=numerator,bar,denominator",
+                    "stackGapEm=0.12",
+                    "barThicknessEm=0.05"),
+            EquationVisualElementKind.Radical =>
+                string.Join(
+                    "|",
+                    "geometry=radical",
+                    "degree=" + NormalizeSignatureText(element.Degree),
+                    "sign=" + NormalizeSignatureText(RadicalSignText),
+                    "radicand=" + NormalizeSignatureText(element.Radicand),
+                    "degreeOffsetEm=" + FormatDouble(SuperscriptBaselineOffsetEm),
+                    "radicandScale=" + FormatDouble(StructureFontSizeScale)),
+            EquationVisualElementKind.NAry =>
+                string.Join(
+                    "|",
+                    "geometry=nary",
+                    "operator=" + NormalizeSignatureText(element.Operator),
+                    "lower=" + NormalizeSignatureText(element.LowerLimit),
+                    "upper=" + NormalizeSignatureText(element.UpperLimit),
+                    "operand=" + NormalizeSignatureText(element.Operand),
+                    "operatorScale=" + FormatDouble(LargeOperatorFontSizeScale),
+                    "operandScale=" + FormatDouble(StructureFontSizeScale)),
+            EquationVisualElementKind.Matrix or EquationVisualElementKind.EquationArray =>
+                string.Join(
+                    "|",
+                    "geometry=" + element.Kind.ToString().ToLowerInvariant(),
+                    "rows=" + element.MatrixRowCount.ToString(CultureInfo.InvariantCulture),
+                    "columns=" + element.MatrixColumnCount.ToString(CultureInfo.InvariantCulture),
+                    "cells=" + element.MatrixRows.Sum(row => row.Cells.Count).ToString(CultureInfo.InvariantCulture),
+                    "cellTexts=" + JoinCellTexts(element),
+                    "columnGapText=" + NormalizeSignatureText(MatrixColumnSeparatorText),
+                    "rowGapText=" + NormalizeSignatureText(MatrixRowSeparatorText),
+                    "openDelimiter=" + NormalizeSignatureText(element.Kind == EquationVisualElementKind.Matrix ? MatrixOpenDelimiterText : string.Empty),
+                    "closeDelimiter=" + NormalizeSignatureText(element.Kind == EquationVisualElementKind.Matrix ? MatrixCloseDelimiterText : string.Empty)),
+            EquationVisualElementKind.Accent =>
+                string.Join(
+                    "|",
+                    "geometry=accent",
+                    "mark=" + NormalizeSignatureText(AccentCueText(element.Accent)),
+                    "base=" + NormalizeSignatureText(element.BaseText),
+                    "markScale=" + FormatDouble(DecoratorFontSizeScale),
+                    "markPosition=top"),
+            EquationVisualElementKind.Bar =>
+                string.Join(
+                    "|",
+                    "geometry=bar",
+                    "mark=" + NormalizeSignatureText(element.BarTop ? OverbarCueText : UnderbarCueText),
+                    "base=" + NormalizeSignatureText(element.BaseText),
+                    "markScale=" + FormatDouble(DecoratorFontSizeScale),
+                    "markPosition=" + (element.BarTop ? "top" : "bottom")),
+            EquationVisualElementKind.Delimiter =>
+                string.Join(
+                    "|",
+                    "geometry=delimiter",
+                    "open=" + NormalizeSignatureText(element.OpenDelimiter),
+                    "content=" + NormalizeSignatureText(element.BaseText),
+                    "close=" + NormalizeSignatureText(element.CloseDelimiter),
+                    "delimiterScale=" + FormatDouble(DelimiterFontSizeScale)),
+            EquationVisualElementKind.GroupChar =>
+                string.Join(
+                    "|",
+                    "geometry=groupchar",
+                    "mark=" + NormalizeSignatureText(element.GroupCharacter),
+                    "base=" + NormalizeSignatureText(element.BaseText),
+                    "markPosition=" + (element.GroupCharacterTop ? "top" : "bottom"),
+                    "markScale=" + FormatDouble(DecoratorFontSizeScale)),
+            EquationVisualElementKind.FunctionApply =>
+                string.Join(
+                    "|",
+                    "geometry=function-apply",
+                    "name=" + NormalizeSignatureText(element.FunctionName),
+                    "open=" + NormalizeSignatureText(FunctionOpenDelimiterText),
+                    "argument=" + NormalizeSignatureText(element.FunctionArgument),
+                    "close=" + NormalizeSignatureText(FunctionCloseDelimiterText),
+                    "functionScale=" + FormatDouble(StructureFontSizeScale)),
+            _ => "geometry=segments|text=" + NormalizeSignatureText(element.LinearText)
+        };
+    }
+
+    private static string JoinRoles(IReadOnlyList<EquationVisualSegment> segments) =>
+        string.Join(",", segments.Select(segment => segment.Role.ToString()));
+
+    private static string JoinBaselines(IReadOnlyList<EquationVisualSegment> segments) =>
+        string.Join(",", segments.Select(segment =>
+            segment.Role + ":" + segment.Style.BaselineRole + "@" + FormatDouble(segment.Style.BaselineOffsetEm)));
+
+    private static string JoinScales(IReadOnlyList<EquationVisualSegment> segments) =>
+        string.Join(",", segments.Select(segment =>
+            segment.Role + ":" + FormatDouble(segment.Style.FontSizeScale)));
+
+    private static string JoinCellTexts(EquationVisualElement element) =>
+        string.Join(
+            ",",
+            element.MatrixRows.SelectMany(row => row.Cells.Select(cell =>
+                "r" + cell.RowIndex.ToString(CultureInfo.InvariantCulture)
+                    + "c" + cell.ColumnIndex.ToString(CultureInfo.InvariantCulture)
+                    + "=" + NormalizeSignatureText(cell.Text))));
+
+    private static string EqPart(int equationIndex) =>
+        "eq=" + equationIndex.ToString(CultureInfo.InvariantCulture);
+
+    private static string FormatDouble(double value) =>
+        value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    private static string BoolFlag(bool value) => value ? "1" : "0";
+
+    private static string NormalizeSignatureText(string? value)
+    {
+        var normalized = (value ?? string.Empty)
+            .Trim()
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal)
+            .Replace("\t", "\\t", StringComparison.Ordinal)
+            .Replace("|", "/", StringComparison.Ordinal)
+            .Replace(",", ";", StringComparison.Ordinal);
+
+        return string.Join(
+            " ",
+            normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
     }
 }

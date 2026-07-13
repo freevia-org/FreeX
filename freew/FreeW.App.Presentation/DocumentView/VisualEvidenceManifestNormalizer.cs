@@ -48,6 +48,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualDrawingObjectExpectation DrawingObjects,
     FreeWVisualChartSmartArtExpectation ChartSmartArt,
     FreeWVisualFieldExpectation Fields,
+    FreeWVisualEquationExpectation Equations,
     FreeWVisualHeaderFooterExpectation HeaderFooters,
     FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
     FreeWVisualProofingDiagnosticExpectation ProofingDiagnostics,
@@ -108,7 +109,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 26;
+    public const int SummarySchemaVersion = 27;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -365,6 +366,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
 
         AppendBackstagePrintEvidenceReadiness(sb, summary);
+        AppendEquationGeometryEvidence(sb, summary);
 
         sb.AppendLine();
         sb.AppendLine("## Evidence");
@@ -450,6 +452,45 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{EscapeMarkdown(row.Status)} | " +
                 $"{EscapeMarkdown(row.OutputSummary)} | " +
                 $"{EscapeMarkdown(row.Notes)} |");
+        }
+    }
+
+    private static void AppendEquationGeometryEvidence(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        var rows = summary.Evidence
+            .Where(row => row.Equations.EquationCount > 0)
+            .ToList();
+        if (rows.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## Equation Geometry Evidence");
+        sb.AppendLine();
+        sb.AppendLine("| Host | Scenario | Page | Counts | Roles | Geometry Signatures |");
+        sb.AppendLine("| --- | --- | ---: | --- | --- | --- |");
+        foreach (var row in rows)
+        {
+            var equations = row.Equations;
+            var counts = string.Join(
+                ", ",
+                $"{equations.EquationCount.ToString(CultureInfo.InvariantCulture)} equation(s)",
+                $"{equations.ElementCount.ToString(CultureInfo.InvariantCulture)} element(s)",
+                $"{equations.SegmentCount.ToString(CultureInfo.InvariantCulture)} segment(s)",
+                $"{equations.NestedSlotCount.ToString(CultureInfo.InvariantCulture)} nested slot(s)",
+                $"max depth {equations.MaxNestedSlotDepth.ToString(CultureInfo.InvariantCulture)}");
+            var roles = string.Join(
+                "; ",
+                "segments: " + FormatSummaries(equations.SegmentRoleCounts),
+                "baselines: " + FormatSummaries(equations.BaselineRoleCounts),
+                "elements: " + FormatSummaries(equations.ElementKindCounts));
+            var signatures = FormatSummaries(equations.ElementGeometrySignatures);
+
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.HostId)} | {EscapeMarkdown(row.ScenarioId)} | " +
+                $"{row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(counts)} | {EscapeMarkdown(roles)} | {EscapeMarkdown(signatures)} |");
         }
     }
 
@@ -1117,6 +1158,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             pageExpectation.DrawingObjects,
             pageExpectation.ChartSmartArt,
             pageExpectation.Fields,
+            pageExpectation.Equations,
             pageExpectation.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation,
             pageExpectation.TableOfAuthorities,
             pageExpectation.ProofingDiagnostics,
@@ -1155,6 +1197,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateHeaderFooterFeatureTags(row, rowFailures);
         ValidateProofingFeatureTags(row, rowFailures);
         ValidateReviewProtectionFeatureTags(row, rowFailures);
+        if (row.ExpectedFeatureTags.Contains("equations", StringComparer.OrdinalIgnoreCase)
+            && row.PageExpectation.Equations.EquationCount <= 0)
+        {
+            rowFailures.Add("scenario expects equation structures but no equation geometry evidence was recorded");
+        }
         if (features.Section.SectionOrdinal <= 0)
             rowFailures.Add("section ordinal must be positive");
         if (features.Section.SectionRelativePageNumber <= 0)
@@ -2102,7 +2149,77 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     continue;
 
                 ValidateRendererPairRow("equation renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateEquationPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
             }
+        }
+    }
+
+    private static void ValidateEquationPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"equation renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfEquations = wpf.Equations ?? FreeWVisualEquationExpectation.Empty;
+        var avaloniaEquations = avalonia.Equations ?? FreeWVisualEquationExpectation.Empty;
+        if (wpfEquations.EquationCount <= 0)
+            failures.Add($"{pairName} is missing WPF equation geometry evidence");
+        if (avaloniaEquations.EquationCount <= 0)
+            failures.Add($"{pairName} is missing Avalonia equation geometry evidence");
+
+        if (wpfEquations.EquationCount != avaloniaEquations.EquationCount)
+        {
+            failures.Add(
+                $"{pairName} equation counts differ: WPF {wpfEquations.EquationCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaEquations.EquationCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfEquations.ElementCount != avaloniaEquations.ElementCount)
+        {
+            failures.Add(
+                $"{pairName} equation element counts differ: WPF {wpfEquations.ElementCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaEquations.ElementCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfEquations.SegmentCount != avaloniaEquations.SegmentCount)
+        {
+            failures.Add(
+                $"{pairName} equation segment counts differ: WPF {wpfEquations.SegmentCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaEquations.SegmentCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfEquations.NestedSlotCount != avaloniaEquations.NestedSlotCount)
+        {
+            failures.Add(
+                $"{pairName} nested slot counts differ: WPF {wpfEquations.NestedSlotCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaEquations.NestedSlotCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfEquations.MaxNestedSlotDepth != avaloniaEquations.MaxNestedSlotDepth)
+        {
+            failures.Add(
+                $"{pairName} max nested slot depths differ: WPF {wpfEquations.MaxNestedSlotDepth.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaEquations.MaxNestedSlotDepth.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        ValidateEquationSignatureList(pairName, "element kind counts", wpfEquations.ElementKindCounts, avaloniaEquations.ElementKindCounts, failures);
+        ValidateEquationSignatureList(pairName, "segment role counts", wpfEquations.SegmentRoleCounts, avaloniaEquations.SegmentRoleCounts, failures);
+        ValidateEquationSignatureList(pairName, "baseline role counts", wpfEquations.BaselineRoleCounts, avaloniaEquations.BaselineRoleCounts, failures);
+        ValidateEquationSignatureList(pairName, "segment geometry signatures", wpfEquations.SegmentGeometrySignatures, avaloniaEquations.SegmentGeometrySignatures, failures);
+        ValidateEquationSignatureList(pairName, "element geometry signatures", wpfEquations.ElementGeometrySignatures, avaloniaEquations.ElementGeometrySignatures, failures);
+        ValidateEquationSignatureList(pairName, "slot geometry signatures", wpfEquations.SlotGeometrySignatures, avaloniaEquations.SlotGeometrySignatures, failures);
+    }
+
+    private static void ValidateEquationSignatureList(
+        string pairName,
+        string label,
+        IReadOnlyList<string> wpfSignatures,
+        IReadOnlyList<string> avaloniaSignatures,
+        List<string> failures)
+    {
+        var wpf = OrderedSummaries(wpfSignatures ?? []);
+        var avalonia = OrderedSummaries(avaloniaSignatures ?? []);
+        if (!wpf.SequenceEqual(avalonia, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} {label} differ: WPF '{FormatSummaries(wpf)}', Avalonia '{FormatSummaries(avalonia)}'");
         }
     }
 
@@ -3428,6 +3545,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"{row.ChartSmartArt.ChartCount.ToString(CultureInfo.InvariantCulture)} chart(s), " +
                 $"{row.ChartSmartArt.SmartArtCount.ToString(CultureInfo.InvariantCulture)} SmartArt");
+        }
+        if (row.Equations.EquationCount > 0)
+        {
+            parts.Add(
+                $"{row.Equations.EquationCount.ToString(CultureInfo.InvariantCulture)} equation(s), " +
+                $"{row.Equations.ElementCount.ToString(CultureInfo.InvariantCulture)} equation element(s), " +
+                $"{row.Equations.NestedSlotCount.ToString(CultureInfo.InvariantCulture)} nested slot(s), " +
+                $"max depth {row.Equations.MaxNestedSlotDepth.ToString(CultureInfo.InvariantCulture)}");
         }
         if (row.HeaderFooters.ImageCount > 0)
         {

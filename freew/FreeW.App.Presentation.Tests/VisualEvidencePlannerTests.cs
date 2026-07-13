@@ -132,6 +132,7 @@ public sealed class VisualEvidencePlannerTests
             "radicals",
             "n-ary-operators",
             "matrices",
+            "equation-arrays",
             "accents",
             "bars",
             "delimiters",
@@ -909,8 +910,76 @@ public sealed class VisualEvidencePlannerTests
             MathRunKind.Bar,
             MathRunKind.Delimiter,
             MathRunKind.Matrix,
+            MathRunKind.EquationArray,
             MathRunKind.FunctionApply,
             MathRunKind.GroupChar]);
+    }
+
+    [Fact]
+    public void EquationStructuresExpectation_IncludesSharedGeometryContract()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument();
+
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "equation-structures",
+            document.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "equation-structures_p1.png",
+            document: document);
+
+        var equations = expectation.Equations;
+        equations.EquationCount.Should().BeGreaterThanOrEqualTo(8);
+        equations.ElementKindCounts.Should().Contain([
+            "EquationArray=1",
+            "Fraction=1",
+            "FunctionApply=2",
+            "Matrix=1",
+            "NAry=2",
+            "Radical=1"]);
+        equations.SegmentRoleCounts.Should().Contain([
+            "FractionBar=1",
+            "MatrixCell=6",
+            "NAryLowerLimit=2",
+            "RadicalDegree=1",
+            "Superscript=2"]);
+        equations.BaselineRoleCounts.Should().Contain([
+            "Normal=55",
+            "Subscript=4",
+            "Superscript=5"]);
+        equations.ElementGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("geometry=fraction", StringComparison.Ordinal)
+            && signature.Contains("stackGapEm=0.12", StringComparison.Ordinal)
+            && signature.Contains("barThicknessEm=0.05", StringComparison.Ordinal));
+        equations.ElementGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("geometry=radical", StringComparison.Ordinal)
+            && signature.Contains("degree=3", StringComparison.Ordinal)
+            && signature.Contains("radicand=x + 1", StringComparison.Ordinal));
+        equations.ElementGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("geometry=nary", StringComparison.Ordinal)
+            && signature.Contains("operator=\u2211", StringComparison.Ordinal)
+            && signature.Contains("lower=i=1", StringComparison.Ordinal)
+            && signature.Contains("upper=n", StringComparison.Ordinal));
+        equations.ElementGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("geometry=matrix", StringComparison.Ordinal)
+            && signature.Contains("rows=2", StringComparison.Ordinal)
+            && signature.Contains("columns=2", StringComparison.Ordinal)
+            && signature.Contains("cells=4", StringComparison.Ordinal));
+        equations.ElementGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("geometry=equationarray", StringComparison.Ordinal)
+            && signature.Contains("rows=2", StringComparison.Ordinal)
+            && signature.Contains("cells=2", StringComparison.Ordinal));
+        equations.ElementGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("geometry=accent", StringComparison.Ordinal)
+            && signature.Contains("mark=^", StringComparison.Ordinal));
+        equations.ElementGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("geometry=delimiter", StringComparison.Ordinal)
+            && signature.Contains("open=[", StringComparison.Ordinal)
+            && signature.Contains("close=]", StringComparison.Ordinal));
+        equations.ElementGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("geometry=function-apply", StringComparison.Ordinal)
+            && signature.Contains("name=sin", StringComparison.Ordinal)
+            && signature.Contains("argument=x + y", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -2944,6 +3013,80 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("field renderer pair 'field-page-number-variants' page 2", StringComparison.Ordinal)
                 && f.Contains("complex field keywords differ", StringComparison.Ordinal)
                 && f.Contains("TITLE", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingEquationGeometryEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "equation-structures";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaWithDrift = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    Equations = avaloniaRow.PageExpectation.Equations with
+                    {
+                        ElementGeometrySignatures =
+                        [
+                            .. avaloniaRow.PageExpectation.Equations.ElementGeometrySignatures
+                                .Where(signature => !signature.Contains("geometry=radical", StringComparison.Ordinal))
+                        ]
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithDrift],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("equation renderer pair 'equation-structures' page 1", StringComparison.Ordinal)
+                && f.Contains("element geometry signatures differ", StringComparison.Ordinal)
+                && f.Contains("geometry=radical", StringComparison.Ordinal));
         }
         finally
         {
