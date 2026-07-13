@@ -118,6 +118,34 @@ public sealed class PresentationExportPlannerTests
         return presentation;
     }
 
+    private static Presentation BuildEffectDeck()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var slide = new Slide { Title = "Effect evidence" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x70AD47)),
+            Effects = new ShapeEffects
+            {
+                HasOuterShadow = true,
+                OuterShadowColor = SrgbColor.FromRgb(0x222222),
+                OuterShadowAlpha = 96,
+                OuterShadowDistEmu = DrawingMlCoordinateUnits.PointsToEmu(12),
+                OuterShadowDirDeg = 0,
+            },
+            Text = "Shadowed",
+        });
+        slide.Notes = MakeTextBody("Effect notes evidence.");
+        presentation.Slides.Add(slide);
+        return presentation;
+    }
+
     [Fact]
     public void PrintLayouts_CoverSlidesNotesAndPowerPointHandoutOptions()
     {
@@ -454,6 +482,32 @@ public sealed class PresentationExportPlannerTests
             path.FillColor == new PdfColor(0x70, 0xAD, 0x47) &&
             path.StrokeColor == new PdfColor(0x2F, 0x55, 0x97) &&
             path.StrokeWidth > 0);
+    }
+
+    [Fact]
+    public void NotesAndHandoutPdfRenderPlans_PreserveEffectOpacityGroups()
+    {
+        var deck = BuildEffectDeck();
+
+        var notesPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(deck);
+        var handoutPlan = PresentationHandoutPdfExporter.BuildRenderPlan(
+            deck,
+            new PresentationHandoutPdfExportRequest(
+                new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts, HandoutSlidesPerPage: 1)));
+
+        var notesGroup = notesPlan.Pages[0].Ops.OfType<PdfOpacityGroup>().Should().ContainSingle().Subject;
+        var handoutGroup = handoutPlan.Pages[0].Ops.OfType<PdfOpacityGroup>().Should().ContainSingle().Subject;
+
+        notesGroup.Opacity.Should().BeApproximately(96 / 255.0, 0.0001);
+        handoutGroup.Opacity.Should().BeApproximately(96 / 255.0, 0.0001);
+        notesGroup.Ops.OfType<PdfFillRect>().Should().ContainSingle(fill =>
+            fill.Color == new PdfColor(0x22, 0x22, 0x22) &&
+            fill.Width > 0 &&
+            fill.Height > 0);
+        handoutGroup.Ops.OfType<PdfFillRect>().Should().ContainSingle(fill =>
+            fill.Color == new PdfColor(0x22, 0x22, 0x22) &&
+            fill.Width > 0 &&
+            fill.Height > 0);
     }
 
     [Fact]

@@ -116,6 +116,12 @@ public static class PresentationHandoutPdfExporter
 
         foreach (var op in slidePage.Ops)
         {
+            foreach (var mappedOp in MapOp(op))
+                yield return mappedOp;
+        }
+
+        IEnumerable<PdfDrawOp> MapOp(PdfDrawOp op)
+        {
             switch (op)
             {
                 case PdfFillRect fill:
@@ -148,8 +154,53 @@ public static class PresentationHandoutPdfExporter
                         line.Color,
                         line.LineWidth * scale);
                     break;
+                case PdfFilledTriangle triangle:
+                    yield return new PdfFilledTriangle(
+                        MapX(triangle.X1),
+                        MapY(triangle.Y1),
+                        MapX(triangle.X2),
+                        MapY(triangle.Y2),
+                        MapX(triangle.X3),
+                        MapY(triangle.Y3),
+                        triangle.Color);
+                    break;
                 case PdfPath path:
                     yield return MapPath(path);
+                    break;
+                case PdfRotationGroup group:
+                {
+                    var children = group.Ops.SelectMany(MapOp).ToArray();
+                    if (children.Length > 0)
+                    {
+                        yield return new PdfRotationGroup(
+                            MapX(group.CenterX),
+                            MapY(group.CenterY),
+                            group.RotationDegrees,
+                            children);
+                    }
+
+                    break;
+                }
+                case PdfOpacityGroup group:
+                {
+                    var children = group.Ops.SelectMany(MapOp).ToArray();
+                    if (children.Length > 0)
+                        yield return new PdfOpacityGroup(group.Opacity, children);
+                    break;
+                }
+                case PdfImage image:
+                    yield return new PdfImage(
+                        MapX(image.X),
+                        MapY(image.Y),
+                        image.Width * scale,
+                        image.Height * scale,
+                        image.ImageBytes,
+                        image.ContentType,
+                        image.RotationDegrees,
+                        image.ClipKind,
+                        image.Opacity,
+                        image.SourceCrop,
+                        image.ColorEffects);
                     break;
             }
         }
