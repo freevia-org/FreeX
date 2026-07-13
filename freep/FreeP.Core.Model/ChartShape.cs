@@ -409,6 +409,18 @@ public sealed class ChartShape
     /// <summary>True when OOXML <c>c:varyColors</c> asks chart points to use independent fallback colors.</summary>
     public bool VaryColors { get; set; }
 
+    /// <summary>
+    /// Authored bar/column gap width percentage from <c>c:gapWidth/@val</c>.
+    /// Null preserves the planner default.
+    /// </summary>
+    public int? BarGapWidthPercent { get; set; }
+
+    /// <summary>
+    /// Authored clustered bar/column series overlap percentage from <c>c:overlap/@val</c>.
+    /// Null preserves the planner default.
+    /// </summary>
+    public int? BarOverlapPercent { get; set; }
+
     // ── Type-specific auxiliary fields ───────────────────────────────────────────
 
     /// <summary>

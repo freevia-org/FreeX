@@ -323,9 +323,21 @@ internal static class PptxChartWriter
             new XElement(C + "grouping", new XAttribute("val", grouping)),
             BuildVaryColorsEl(chart),
             seriesEls,
+            BuildBarGapWidthEl(chart),
+            BuildBarOverlapEl(chart),
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
     }
+
+    private static XElement? BuildBarGapWidthEl(ChartShape chart) =>
+        chart.BarGapWidthPercent is { } value
+            ? new XElement(C + "gapWidth", new XAttribute("val", Math.Clamp(value, 0, 500)))
+            : null;
+
+    private static XElement? BuildBarOverlapEl(ChartShape chart) =>
+        chart.BarOverlapPercent is { } value
+            ? new XElement(C + "overlap", new XAttribute("val", Math.Clamp(value, -100, 100)))
+            : null;
 
     private static XElement BuildLineChartEl(ChartShape chart, List<XElement> seriesEls,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>

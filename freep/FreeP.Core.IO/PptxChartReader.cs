@@ -323,6 +323,9 @@ internal static class PptxChartReader
             _                         => ChartType.ColumnClustered
         };
 
+        shape.BarGapWidthPercent = ReadBarGapWidth(el);
+        shape.BarOverlapPercent = ReadBarOverlap(el);
+
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 
@@ -869,6 +872,18 @@ internal static class PptxChartReader
     {
         var value = ParseNullableInt(chartEl.Element(C + "firstSliceAng")?.Attribute("val")?.Value);
         return value.HasValue ? Math.Clamp(value.Value, 0, 360) : null;
+    }
+
+    private static int? ReadBarGapWidth(XElement chartEl)
+    {
+        var value = ParseNullableInt(chartEl.Element(C + "gapWidth")?.Attribute("val")?.Value);
+        return value.HasValue ? Math.Clamp(value.Value, 0, 500) : null;
+    }
+
+    private static int? ReadBarOverlap(XElement chartEl)
+    {
+        var value = ParseNullableInt(chartEl.Element(C + "overlap")?.Attribute("val")?.Value);
+        return value.HasValue ? Math.Clamp(value.Value, -100, 100) : null;
     }
 
     private static ChartMarkerSymbol? ReadMarkerSymbol(string? value) =>
