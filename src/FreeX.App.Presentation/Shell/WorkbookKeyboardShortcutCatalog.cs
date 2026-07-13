@@ -5,6 +5,7 @@ public enum WorkbookShortcutRoute
     NewWorkbook,
     OpenWorkbook,
     SaveWorkbook,
+    PrintWorkbook,
     Copy,
     Cut,
     Paste,
@@ -121,6 +122,11 @@ public static class WorkbookKeyboardShortcutCatalog
             new WorkbookShortcutChord(WorkbookShortcutKey.S, WorkbookShortcutModifiers.Control),
             new WorkbookShortcutChord(WorkbookShortcutKey.S, WorkbookShortcutModifiers.Meta)),
         new(WorkbookShortcutRoute.SaveWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Shift)),
+        new(
+            WorkbookShortcutRoute.PrintWorkbook,
+            new WorkbookShortcutChord(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.P, WorkbookShortcutModifiers.Meta)),
+        new(WorkbookShortcutRoute.PrintWorkbook, new WorkbookShortcutChord(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift)),
         new(
             WorkbookShortcutRoute.Copy,
             new WorkbookShortcutChord(WorkbookShortcutKey.C, WorkbookShortcutModifiers.Control),

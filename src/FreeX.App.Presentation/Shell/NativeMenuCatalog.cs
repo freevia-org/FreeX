@@ -444,7 +444,7 @@ public static class NativeMenuCatalog
         new(
             NativeFileMenuItemId.Print,
             "Print_MenuItem",
-            new NativeMenuGesturePlan(NativeMenuGestureKey.P, NativeMenuGestureModifiers.Meta)),
+            NativeMenuGesture(WorkbookShortcutRoute.PrintWorkbook)),
         new(
             NativeFileMenuItemId.PrintPreview,
             "AvaloniaNativeMenu_PrintPreview",
@@ -1244,6 +1244,7 @@ public static class NativeMenuCatalog
             WorkbookShortcutKey.O => NativeMenuGestureKey.O,
             WorkbookShortcutKey.Oem3 => NativeMenuGestureKey.Oem3,
             WorkbookShortcutKey.OemPlus => NativeMenuGestureKey.OemPlus,
+            WorkbookShortcutKey.P => NativeMenuGestureKey.P,
             WorkbookShortcutKey.R => NativeMenuGestureKey.R,
             WorkbookShortcutKey.S => NativeMenuGestureKey.S,
             WorkbookShortcutKey.U => NativeMenuGestureKey.U,

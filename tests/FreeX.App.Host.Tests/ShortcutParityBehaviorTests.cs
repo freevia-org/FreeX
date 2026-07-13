@@ -13,13 +13,15 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class ShortcutParityBehaviorTests
 {
-    // --- Ctrl+P (Print Preview) ---
+    // --- Ctrl+P / Ctrl+Shift+F12 (Print) ---
 
-    [Fact]
-    public void CtrlP_IsRegisteredAsOpenPrintPreviewCommand()
+    [Theory]
+    [InlineData(Key.P, ModifierKeys.Control)]
+    [InlineData(Key.F12, ModifierKeys.Control | ModifierKeys.Shift)]
+    public void PrintShortcuts_AreRegisteredAsOpenPrintPreviewCommand(Key key, ModifierKeys modifiers)
     {
         KeyboardShortcutMatcher.TryGetCommandShortcut(
-            Key.P, Key.None, ModifierKeys.Control, out var shortcut)
+            key, Key.None, modifiers, out var shortcut)
             .Should().BeTrue();
 
         shortcut.Should().Be(KeyboardCommandShortcut.OpenPrintPreview);

@@ -387,6 +387,7 @@ public sealed class NativeMenuCatalogTests
     [InlineData(WorkbookShortcutRoute.NewWorkbook, NativeFileMenuItemId.NewWorkbook)]
     [InlineData(WorkbookShortcutRoute.OpenWorkbook, NativeFileMenuItemId.Open)]
     [InlineData(WorkbookShortcutRoute.SaveWorkbook, NativeFileMenuItemId.Save)]
+    [InlineData(WorkbookShortcutRoute.PrintWorkbook, NativeFileMenuItemId.Print)]
     [InlineData(WorkbookShortcutRoute.WorkbookStatistics, NativeFileMenuItemId.WorkbookStatistics)]
     public void SharedShortcutRoutes_DriveNativeFileMenuGestures(
         WorkbookShortcutRoute route,
@@ -591,6 +592,7 @@ public sealed class NativeMenuCatalogTests
             WorkbookShortcutKey.O => NativeMenuGestureKey.O,
             WorkbookShortcutKey.Oem3 => NativeMenuGestureKey.Oem3,
             WorkbookShortcutKey.OemPlus => NativeMenuGestureKey.OemPlus,
+            WorkbookShortcutKey.P => NativeMenuGestureKey.P,
             WorkbookShortcutKey.R => NativeMenuGestureKey.R,
             WorkbookShortcutKey.S => NativeMenuGestureKey.S,
             WorkbookShortcutKey.U => NativeMenuGestureKey.U,

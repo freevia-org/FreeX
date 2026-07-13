@@ -18,6 +18,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out route)");
         source.Should().Contain("WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route)");
         source.Should().Contain("case WorkbookShortcutRoute.Find:");
+        source.Should().Contain("case WorkbookShortcutRoute.PrintWorkbook:");
+        source.Should().Contain("await ShowPrintDialogAsync();");
         source.Should().Contain("case WorkbookShortcutRoute.ToggleBold:");
         source.Should().Contain("case WorkbookShortcutRoute.ActivatePreviousSheet:");
         source.Should().Contain("case WorkbookShortcutRoute.SelectNextSheetGroup:");
@@ -30,6 +32,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("CellBorderPreset.Outside");
         source.Should().Contain("CellBorderPreset.NoBorder");
         source.Should().NotContain("else if (e.Key == Key.F && HasOnlyCommandModifier");
+        source.Should().NotContain("else if (e.Key == Key.P && HasOnlyCommandModifier");
         source.Should().NotContain("else if (e.Key == Key.B && HasOnlyCommandModifier");
         source.Should().NotContain("else if (e.Key == Key.D && HasOnlyControlModifier");
         source.Should().NotContain("e.Key == Key.D7 && HasCommandAndShiftModifiers");

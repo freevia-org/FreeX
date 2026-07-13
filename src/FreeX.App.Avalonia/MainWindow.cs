@@ -22081,11 +22081,6 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             await CloseWorkbookAsync();
         }
-        else if (e.Key == Key.P && HasOnlyCommandModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            await ShowPrintDialogAsync();
-        }
         else if (e.Key == Key.P && HasCommandAndShiftModifiers(e.KeyModifiers))
         {
             e.Handled = true;
@@ -22121,6 +22116,10 @@ public sealed partial class MainWindow : Window
             case WorkbookShortcutRoute.SaveWorkbook:
                 e.Handled = true;
                 await SaveCurrentWorkbookAsync();
+                return true;
+            case WorkbookShortcutRoute.PrintWorkbook:
+                e.Handled = true;
+                await ShowPrintDialogAsync();
                 return true;
             case WorkbookShortcutRoute.Copy:
                 e.Handled = true;
