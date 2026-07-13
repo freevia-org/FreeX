@@ -2984,6 +2984,123 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildProofingPanePlan_FlagsRepeatedTerminalPunctuationWithSharedCorrections()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Hello!! Why?? Wait?!?"
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+
+        execution.Issues.Should().HaveCount(3);
+        execution.Issues.Select(issue => issue.Text).Should().Equal("!!", "??", "?!?");
+        execution.Issues.Select(issue => issue.Message).Should().OnlyContain(message =>
+            message == PresentationReviewWorkflowPlanner.ProofingRepeatedTerminalPunctuationMessage);
+        plan.Rows.Select(row => row.SuggestedReplacement).Should().Equal("!", "?", "?");
+        plan.SelectedRow!.CorrectionAction.IsEnabled.Should().BeTrue();
+
+        var mutation = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            plan.SelectedRow.Scope,
+            plan.SelectedRow.Start,
+            plan.SelectedRow.Length,
+            plan.SelectedRow.SuggestedReplacement);
+
+        mutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            plan.SelectedRow.Scope,
+            plan.SelectedRow.Start,
+            plan.SelectedRow.Length,
+            "!",
+            "Hello! Why?? Wait?!?",
+            null));
+        slide.Shapes.Single(shape => shape.Id == 4).Text
+            .Should().Be("Hello! Why?? Wait?!?");
+    }
+
+    [Fact]
+    public void BuildProofingExecutionPlan_RepeatedTerminalPunctuationScansAllProofingScopes()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Title!!";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Body",
+            Text = "Body!!"
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Results table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Cell!!") }
+                        }
+                    }
+                }
+            }
+        });
+        slide.Notes = TextBody("Notes!!");
+        slide.Comments.Add(new SlideComment
+        {
+            Text = "Comment!!",
+            Replies =
+            {
+                new SlideCommentReply { Text = "Reply!!" }
+            }
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+
+        execution.Issues.Should().HaveCount(6);
+        execution.Issues.Select(issue => issue.Scope.Kind).Should().Equal(
+            PresentationProofingScopeKind.SlideTitle,
+            PresentationProofingScopeKind.ShapeText,
+            PresentationProofingScopeKind.TableCellText,
+            PresentationProofingScopeKind.SpeakerNotes,
+            PresentationProofingScopeKind.Comment,
+            PresentationProofingScopeKind.CommentReply);
+        execution.Issues.Select(issue => issue.Text).Should().OnlyContain(text => text == "!!");
+        execution.Issues.Select(issue => issue.Message).Should().OnlyContain(message =>
+            message == PresentationReviewWorkflowPlanner.ProofingRepeatedTerminalPunctuationMessage);
+        plan.Rows.Select(row => row.SuggestedReplacement).Should().OnlyContain(replacement => replacement == "!");
+    }
+
+    [Fact]
+    public void BuildProofingExecutionPlan_RepeatedTerminalPunctuationAvoidsGuardedText()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Ellipsis ... Stays. Decimal 3.14 Stays. Version 1.2.3 Stays. Visit https://example.com/path??x=1 Stays. Also www.example.com/a??b Stays. Email user??@example.com Stays. Mail mailto:user??@example.com Stays. Intentional really?! Stays and no!? Stays."
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+
+        execution.Issues.Should().NotContain(issue =>
+            issue.Message == PresentationReviewWorkflowPlanner.ProofingRepeatedTerminalPunctuationMessage);
+    }
+
+    [Fact]
     public void BuildProofingPanePlan_FlagsListPunctuationSpacingWithSharedCorrections()
     {
         var presentation = Presentation.CreateEmpty();

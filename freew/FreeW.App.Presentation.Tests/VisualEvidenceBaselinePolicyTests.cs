@@ -95,6 +95,28 @@ public sealed class VisualEvidenceBaselinePolicyTests
     }
 
     [Fact]
+    public void WordBaselinePolicy_KeepsTablePageCompositionStressDirectlyComparable()
+    {
+        var row = BuildRow(
+            "table-page-composition-stress",
+            FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+            "table-page-composition-stress_p2.png",
+            pageNumber: 2,
+            pageCount: 2);
+
+        var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+        var candidates = FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(row);
+
+        policy.IsComparable.Should().BeTrue();
+        policy.BaselineScenarioId.Should().Be("table-page-composition-stress");
+        FreeWVisualBaselineComparisonPlanner.BuildBaselineMatchKey(row)
+            .Should().Be("table-page-composition-stress/p2/table-page-composition-stress_p2.png");
+        candidates.Should().Contain([
+            "table-page-composition-stress/table-page-composition-stress_p2.png",
+            "table-page-composition-stress_p2.png"]);
+    }
+
+    [Fact]
     public void WordBaselinePolicy_KeepsReferencesHeavyFieldsDirectlyComparable()
     {
         var row = BuildRow(
