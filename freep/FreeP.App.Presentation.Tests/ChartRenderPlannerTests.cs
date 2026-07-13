@@ -1790,6 +1790,48 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildBubblePrimitivePlan_MissingXCoordinatesUsePointIndexFallback()
+    {
+        var series = new ChartSeries { Name = "Bubble" };
+        series.Values.AddRange(new double?[] { 10, 20, 30 });
+        series.BubbleSizes.AddRange(new double?[] { 25, 100, 25 });
+
+        var chart = new ChartShape { ChartType = ChartType.Bubble };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 120, 60));
+
+        plan.Bubbles.Should().HaveCount(3);
+        plan.Bubbles.Select(b => b.PointIndex).Should().Equal(0, 1, 2);
+        plan.Bubbles[0].Center.Should().Be(new ChartPlanPoint(0, 45));
+        plan.Bubbles[1].Center.X.Should().BeApproximately(48, 0.0001);
+        plan.Bubbles[1].Center.Y.Should().BeApproximately(30, 0.0001);
+        plan.Bubbles[1].Radius.Should().BeApproximately(7.5, 0.0001);
+        plan.Bubbles[2].Center.X.Should().BeApproximately(96, 0.0001);
+        plan.Bubbles[2].Center.Y.Should().BeApproximately(15, 0.0001);
+    }
+
+    [Fact]
+    public void BuildBubblePrimitivePlan_MissingYCoordinatesRemainUnplanned()
+    {
+        var series = new ChartSeries { Name = "Bubble" };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        series.BubbleSizes.AddRange(new double?[] { 25, 100, 25 });
+
+        var chart = new ChartShape { ChartType = ChartType.Bubble };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 120, 60));
+
+        plan.Bubbles.Should().HaveCount(2);
+        plan.Bubbles.Select(b => b.PointIndex).Should().Equal(0, 2);
+    }
+
+    [Fact]
     public void BuildRadarPrimitivePlan_PlansRingsSpokesLabelsAndSeries()
     {
         var series = new ChartSeries { Name = "Radar" };

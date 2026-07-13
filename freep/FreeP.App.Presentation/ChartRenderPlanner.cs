@@ -1986,7 +1986,7 @@ public static partial class ChartRenderPlanner
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return EmptyBubblePrimitivePlan();
 
-        var (xMin, xMax, xUnit) = ComputeScatterAxisRange(chart, useX: true);
+        var (xMin, xMax, xUnit) = ComputeBubbleXAxisRange(chart);
         var (yMin, yMax, yUnit) = ComputePrimaryValueAxisRange(chart);
         double xRange = xMax - xMin;
         double yRange = yMax - yMin;
@@ -2017,10 +2017,10 @@ public static partial class ChartRenderPlanner
             int pointCount = Math.Max(series.XValues.Count, series.Values.Count);
             for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
             {
-                double? xValue = pointIndex < series.XValues.Count ? series.XValues[pointIndex] : null;
+                double xValue = ResolveBubbleXValue(series, pointIndex);
                 double? yValue = pointIndex < series.Values.Count ? series.Values[pointIndex] : null;
                 double? bubbleValue = pointIndex < series.BubbleSizes.Count ? series.BubbleSizes[pointIndex] : null;
-                if (!xValue.HasValue || !yValue.HasValue)
+                if (!yValue.HasValue)
                     continue;
                 if (bubbleValue < 0 && !chart.ShowNegativeBubbles)
                     continue;
@@ -2034,7 +2034,7 @@ public static partial class ChartRenderPlanner
                     seriesIndex,
                     pointIndex,
                     new ChartPlanPoint(
-                        plot.X + (xValue.Value - xMin) / xRange * plot.Width,
+                        plot.X + (xValue - xMin) / xRange * plot.Width,
                         plot.Bottom - (yValue.Value - yMin) / yRange * plot.Height),
                     radius,
                     ResolvePointFill(series, seriesIndex, pointIndex, seriesColors, BubbleFillAlpha, fillPlans, ShouldVaryPointColors(chart)),
@@ -2060,6 +2060,39 @@ public static partial class ChartRenderPlanner
             yLabels,
             bubbles);
     }
+
+    private static (double min, double max, double majorUnit) ComputeBubbleXAxisRange(ChartShape chart)
+    {
+        double dataMin = 0;
+        double dataMax = 0;
+        bool any = false;
+
+        foreach (var series in chart.Series)
+        {
+            int pointCount = Math.Max(series.XValues.Count, series.Values.Count);
+            for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
+            {
+                if (pointIndex >= series.Values.Count || !series.Values[pointIndex].HasValue)
+                    continue;
+
+                double xValue = ResolveBubbleXValue(series, pointIndex);
+                dataMin = Math.Min(dataMin, xValue);
+                dataMax = Math.Max(dataMax, xValue);
+                any = true;
+            }
+        }
+
+        if (!any)
+            return (0, 1, 1);
+
+        double min = dataMin >= 0 ? 0 : dataMin;
+        return ComputeNiceRange(min, dataMax);
+    }
+
+    private static double ResolveBubbleXValue(ChartSeries series, int pointIndex) =>
+        pointIndex < series.XValues.Count && series.XValues[pointIndex].HasValue
+            ? series.XValues[pointIndex]!.Value
+            : pointIndex;
 
     private static double ComputeBubbleRadius(
         double bubbleValue,
