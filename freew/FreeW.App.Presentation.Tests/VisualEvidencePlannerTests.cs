@@ -80,10 +80,12 @@ public sealed class VisualEvidencePlannerTests
             "review",
             "proofing",
             "comments-only-protection",
+            "marked-as-final",
+            "final-advisory-read-only",
             "review-protection-state",
             "protection-command-matrix",
             "proofing-replacement-blocked",
-            "comment-workflow-allowed"]);
+            "comment-workflow-blocked"]);
         reviewProtectionScenario.ExpectedOutputNamePattern.Should()
             .Be("review-protection-proofing-comments-only_p{page}.png");
         reviewProtectionScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
@@ -532,7 +534,7 @@ public sealed class VisualEvidencePlannerTests
         ]);
 
         reviewProtection.Protection.Mode.Should().Be(ProtectionMode.CommentsOnly);
-        reviewProtection.MarkedAsFinal.Should().BeFalse();
+        reviewProtection.MarkedAsFinal.Should().BeTrue();
         var reviewProtectionExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
             "review-protection-proofing-comments-only",
             reviewProtection.Page,
@@ -546,60 +548,65 @@ public sealed class VisualEvidencePlannerTests
         reviewProtectionExpectation.ProofingDiagnostics.DiagnosticCount.Should().Be(4);
         reviewProtectionExpectation.ReviewProtection.ProtectionMode.Should().Be(nameof(ProtectionMode.CommentsOnly));
         reviewProtectionExpectation.ReviewProtection.IsProtected.Should().BeTrue();
-        reviewProtectionExpectation.ReviewProtection.IsMarkedAsFinal.Should().BeFalse();
-        reviewProtectionExpectation.ReviewProtection.MarkAsFinal.IsChecked.Should().BeFalse();
+        reviewProtectionExpectation.ReviewProtection.IsMarkedAsFinal.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.MarkAsFinal.IsChecked.Should().BeTrue();
         reviewProtectionExpectation.ReviewProtection.RestrictEditing.IsChecked.Should().BeTrue();
         reviewProtectionExpectation.ReviewProtection.IsBodyEditingLocked.Should().BeTrue();
         reviewProtectionExpectation.ReviewProtection.IsBodyFormattingLocked.Should().BeTrue();
         reviewProtectionExpectation.ReviewProtection.IsHistoryLocked.Should().BeTrue();
-        reviewProtectionExpectation.ReviewProtection.IsCommentWorkflowAllowed.Should().BeTrue();
+        reviewProtectionExpectation.ReviewProtection.IsCommentWorkflowAllowed.Should().BeFalse();
         reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
             operation.Operation == nameof(RestrictEditingOperationKind.BodyTextEdit)
             && operation.MutationKind == "None"
             && !operation.IsAllowed
-            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.MarkedAsFinal));
         reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
             operation.Operation == nameof(RestrictEditingOperationKind.BodyFormatting)
             && operation.MutationKind == "None"
             && !operation.IsAllowed
-            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.MarkedAsFinal));
         reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
             operation.Operation == nameof(RestrictEditingOperationKind.ProofingReplacement)
             && operation.MutationKind == "None"
             && !operation.IsAllowed
-            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.MarkedAsFinal));
         reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
             operation.Operation == nameof(RestrictEditingOperationKind.HistoryUndo)
             && operation.MutationKind == nameof(DocumentCommandMutationKind.BodyText)
             && !operation.IsAllowed
-            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.MarkedAsFinal));
         reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
             operation.Operation == nameof(RestrictEditingOperationKind.HistoryRedo)
             && operation.MutationKind == nameof(DocumentCommandMutationKind.BodyFormatting)
             && !operation.IsAllowed
-            && operation.BlockReason == nameof(RestrictEditingBlockReason.CommentsOnly));
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.MarkedAsFinal));
         reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
             operation.Operation == nameof(RestrictEditingOperationKind.CommentInsert)
-            && operation.IsAllowed);
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.MarkedAsFinal));
         reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
             operation.Operation == nameof(RestrictEditingOperationKind.CommentReply)
-            && operation.IsAllowed);
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.MarkedAsFinal));
         reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
             operation.Operation == nameof(RestrictEditingOperationKind.CommentResolve)
-            && operation.IsAllowed);
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.MarkedAsFinal));
         reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
             operation.Operation == nameof(RestrictEditingOperationKind.CommentDelete)
-            && operation.IsAllowed);
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.MarkedAsFinal));
         reviewProtectionExpectation.ReviewProtection.Operations.Should().Contain(operation =>
             operation.Operation == nameof(RestrictEditingOperationKind.HistoryUndo)
             && operation.MutationKind == nameof(DocumentCommandMutationKind.Comment)
-            && operation.IsAllowed);
+            && !operation.IsAllowed
+            && operation.BlockReason == nameof(RestrictEditingBlockReason.MarkedAsFinal));
         reviewProtectionExpectation.ReviewProtection.StableSignatures.Should().Contain([
-            "operation=BodyTextEdit|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
-            "operation=BodyFormatting|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
-            "operation=ProofingReplacement|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
-            "operation=HistoryUndo|mutation=BodyText|allowed=0|requiresTrackedChanges=0|blockReason=CommentsOnly|protection=CommentsOnly",
-            "operation=CommentInsert|mutation=None|allowed=1|requiresTrackedChanges=0|blockReason=None|protection=CommentsOnly"
+            "operation=BodyTextEdit|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=MarkedAsFinal|protection=CommentsOnly",
+            "operation=BodyFormatting|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=MarkedAsFinal|protection=CommentsOnly",
+            "operation=ProofingReplacement|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=MarkedAsFinal|protection=CommentsOnly",
+            "operation=HistoryUndo|mutation=BodyText|allowed=0|requiresTrackedChanges=0|blockReason=MarkedAsFinal|protection=CommentsOnly",
+            "operation=CommentInsert|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=MarkedAsFinal|protection=CommentsOnly"
         ]);
     }
 
@@ -4229,28 +4236,32 @@ public sealed class VisualEvidencePlannerTests
             summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.DiagnosticCount == 4);
             summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.ProtectionMode == nameof(ProtectionMode.CommentsOnly));
             summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.RestrictEditing.IsChecked);
-            summary.Evidence.Should().OnlyContain(row => !row.ReviewProtection.MarkAsFinal.IsChecked);
-            summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.IsCommentWorkflowAllowed);
+            summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.MarkAsFinal.IsChecked);
+            summary.Evidence.Should().OnlyContain(row => row.ReviewProtection.IsMarkedAsFinal);
+            summary.Evidence.Should().OnlyContain(row => !row.ReviewProtection.IsCommentWorkflowAllowed);
             summary.Evidence.SelectMany(row => row.ReviewProtection.StableSignatures)
                 .Should().Contain(signature =>
                     signature.Contains("operation=ProofingReplacement", StringComparison.Ordinal)
                     && signature.Contains("allowed=0", StringComparison.Ordinal)
-                    && signature.Contains("blockReason=CommentsOnly", StringComparison.Ordinal));
+                    && signature.Contains("blockReason=MarkedAsFinal", StringComparison.Ordinal));
             summary.Evidence.SelectMany(row => row.ReviewProtection.StableSignatures)
                 .Should().Contain(signature =>
                     signature.Contains("operation=HistoryUndo", StringComparison.Ordinal)
                     && signature.Contains("mutation=Comment", StringComparison.Ordinal)
-                    && signature.Contains("allowed=1", StringComparison.Ordinal));
+                    && signature.Contains("allowed=0", StringComparison.Ordinal)
+                    && signature.Contains("blockReason=MarkedAsFinal", StringComparison.Ordinal));
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(summary);
             using var doc = JsonDocument.Parse(json);
             var firstProtection = doc.RootElement.GetProperty("evidence")[0].GetProperty("reviewProtection");
             firstProtection.GetProperty("protectionMode").GetString().Should().Be(nameof(ProtectionMode.CommentsOnly));
             firstProtection.GetProperty("restrictEditing").GetProperty("isChecked").GetBoolean().Should().BeTrue();
-            firstProtection.GetProperty("markAsFinal").GetProperty("isChecked").GetBoolean().Should().BeFalse();
+            firstProtection.GetProperty("isMarkedAsFinal").GetBoolean().Should().BeTrue();
+            firstProtection.GetProperty("markAsFinal").GetProperty("isChecked").GetBoolean().Should().BeTrue();
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
             markdown.Should().Contain("protection CommentsOnly");
+            markdown.Should().Contain("Mark as Final checked");
         }
         finally
         {

@@ -54,11 +54,16 @@ public sealed class RestrictEditingEnforcementPolicyTests
 
     [Theory]
     [InlineData(RestrictEditingOperationKind.BodyTextEdit)]
+    [InlineData(RestrictEditingOperationKind.BodyTextDelete)]
     [InlineData(RestrictEditingOperationKind.ProofingReplacement)]
     [InlineData(RestrictEditingOperationKind.BodyFormatting)]
     [InlineData(RestrictEditingOperationKind.CommentInsert)]
+    [InlineData(RestrictEditingOperationKind.CommentReply)]
+    [InlineData(RestrictEditingOperationKind.CommentResolve)]
+    [InlineData(RestrictEditingOperationKind.CommentDelete)]
     [InlineData(RestrictEditingOperationKind.FormFieldEdit)]
     [InlineData(RestrictEditingOperationKind.HistoryUndo)]
+    [InlineData(RestrictEditingOperationKind.HistoryRedo)]
     public void Mark_as_final_blocks_document_mutations_until_cleared(RestrictEditingOperationKind operation)
     {
         var policy = RestrictEditingEnforcementPolicy.From(ProtectionSettings.Unprotected, isMarkedAsFinal: true);
@@ -68,6 +73,9 @@ public sealed class RestrictEditingEnforcementPolicyTests
         decision.IsAllowed.Should().BeFalse();
         decision.BlockReason.Should().Be(RestrictEditingBlockReason.MarkedAsFinal);
         policy.IsBodyEditingLocked.Should().BeTrue();
+        policy.IsCommentWorkflowAllowed.Should().BeFalse();
+        policy.IsHistoryLocked.Should().BeTrue();
+        policy.ShouldForceTrackChanges.Should().BeFalse();
     }
 
     [Fact]

@@ -580,9 +580,9 @@ public static class FreeWVisualEvidenceDocumentFactory
     {
         var doc = BuildReviewProofingVisualDepthDocument();
         doc.Properties.Title = "Review Protection Proofing Evidence";
-        doc.Properties.Comments = "Bounded CommentsOnly protection state plus review/proofing visual evidence.";
+        doc.Properties.Comments = "Bounded CommentsOnly protection state plus Mark as Final review/proofing visual evidence.";
         doc.Protection = new ProtectionSettings(ProtectionMode.CommentsOnly);
-        doc.MarkedAsFinal = false;
+        doc.MarkedAsFinal = true;
         return doc;
     }
 
