@@ -62,6 +62,26 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void ComputePrimaryValueAxisRange_HundredPercentStackedDefaultsToPercentAxis()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnStacked100);
+
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart)
+            .Should().Be((0, 1, 0.25));
+    }
+
+    [Fact]
+    public void ComputePrimaryValueAxisRange_HundredPercentStackedRespectsAuthoredAxisBounds()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnStacked100);
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 2;
+
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart)
+            .Should().Be((0, 2.5, 0.5));
+    }
+
+    [Fact]
     public void ComputeScatterAxisRange_UsesXValuesWhenRequested()
     {
         var series = new ChartSeries { Name = "Scatter" };
@@ -1041,6 +1061,28 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildColumnPrimitives_HundredPercentStackedNormalizesEachCategory()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnStacked100 };
+        chart.Categories.Add("Q1");
+        var first = new ChartSeries { Name = "Actual" };
+        first.Values.Add(20);
+        var second = new ChartSeries { Name = "Forecast" };
+        second.Values.Add(30);
+        chart.Series.Add(first);
+        chart.Series.Add(second);
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 100, 100));
+
+        var actual = primitives.Single(p => p.SeriesIndex == 0);
+        var forecast = primitives.Single(p => p.SeriesIndex == 1);
+        actual.Bounds.Should().Be(new ChartPlanRect(30, 60, 40, 40));
+        forecast.Bounds.Should().Be(new ChartPlanRect(30, 0, 40, 60));
+    }
+
+    [Fact]
     public void BuildColumnPrimitives_UsesPointGradientFillPlan()
     {
         var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
@@ -1149,6 +1191,28 @@ public sealed class ChartRenderPlannerTests
         second.Bounds.Y.Should().BeApproximately(68.75, 0.0001);
         second.Bounds.Height.Should().BeApproximately(3.1667, 0.0001);
         second.Bounds.Bottom.Should().BeLessThan(first.Bounds.Y, "negative overlap leaves a visible gap between series bars");
+    }
+
+    [Fact]
+    public void BuildBarPrimitives_HundredPercentStackedNormalizesEachCategory()
+    {
+        var chart = new ChartShape { ChartType = ChartType.BarStacked100 };
+        chart.Categories.Add("Q1");
+        var first = new ChartSeries { Name = "Actual" };
+        first.Values.Add(20);
+        var second = new ChartSeries { Name = "Forecast" };
+        second.Values.Add(30);
+        chart.Series.Add(first);
+        chart.Series.Add(second);
+
+        var primitives = ChartRenderPlanner.BuildBarPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var actual = primitives.Single(p => p.SeriesIndex == 0);
+        var forecast = primitives.Single(p => p.SeriesIndex == 1);
+        actual.Bounds.Should().Be(new ChartPlanRect(0, 30, 80, 40));
+        forecast.Bounds.Should().Be(new ChartPlanRect(80, 30, 120, 40));
     }
 
     [Fact]
@@ -1811,6 +1875,36 @@ public sealed class ChartRenderPlannerTests
         var label = planned.Single(p => p.SeriesIndex == 1 && p.CategoryIndex == 0);
         label.Bounds.X.Should().BeApproximately(33.3333, 0.0001);
         label.Bounds.Width.Should().BeApproximately(66.6667, 0.0001);
+    }
+
+    [Fact]
+    public void BuildDataLabelPlans_HundredPercentStackedColumnLabelsUseNormalizedBounds()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnStacked100,
+            DataLabels = new ChartDataLabels
+            {
+                ShowValue = true,
+                ShowPercent = true,
+                Position = DataLabelPosition.Center
+            }
+        };
+        chart.Categories.Add("Q1");
+        var first = new ChartSeries { Name = "Actual" };
+        first.Values.Add(20);
+        var second = new ChartSeries { Name = "Forecast" };
+        second.Values.Add(30);
+        chart.Series.Add(first);
+        chart.Series.Add(second);
+
+        var planned = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 100, 100));
+
+        var label = planned.Single(p => p.SeriesIndex == 1);
+        label.Text.Should().Be("30 60%");
+        label.Bounds.Should().Be(new ChartPlanRect(30, 24.5, 40, 11));
     }
 
     private static ChartShape MakeTwoSeriesChart(ChartType chartType)
