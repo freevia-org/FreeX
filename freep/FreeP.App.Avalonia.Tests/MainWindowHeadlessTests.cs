@@ -3941,14 +3941,18 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
-    public async Task Review_comment_mention_insertion_routes_through_shared_mutation_plan()
+    public async Task Review_comment_visible_mention_actions_route_through_shared_mutation_plan()
     {
-        PresentationCommentMentionPickerPlan? picker = null;
         PresentationCommentMentionInsertionPlan? insertion = null;
-        PresentationCommentMutationPlan? mutation = null;
         PresentationCommentPanePlan? panePlan = null;
         SlideComment? editedComment = null;
+        SlideComment? repliedComment = null;
         var dirtyAfterMention = false;
+        var invokedEdit = false;
+        var invokedReply = false;
+        string[] mentionActionsBeforeEdit = [];
+        string[] mentionLinesAfterEdit = [];
+        string[] mentionLinesAfterReply = [];
 
         var ran = await OnUiThread(() =>
         {
@@ -3969,29 +3973,34 @@ public sealed class MainWindowHeadlessTests
             });
             window.SetSelectedReviewCommentIndexForTests(0);
 
-            picker = window.BuildCommentMentionPickerPlanForTests("nor");
-            mutation = window.InsertMentionInSelectedCommentForTests(
-                "Please ask @No".Length,
-                picker.Candidates.Single());
+            mentionActionsBeforeEdit = window.ReviewCommentsPaneRenderedMentionActions.ToArray();
+            invokedEdit = window.InvokeReviewCommentPaneMentionActionForTests("comment-mention:edit");
             insertion = window.LastCommentMentionInsertionPlan;
             editedComment = window.Editor.CurrentSlide.Comments[0];
             panePlan = window.LastCommentPanePlan;
+            mentionLinesAfterEdit = window.ReviewCommentsPaneRenderedMentionLines.ToArray();
             dirtyAfterMention = window.IsDirty;
+            invokedReply = window.InvokeReviewCommentPaneMentionActionForTests("comment-mention:reply");
+            repliedComment = window.Editor.CurrentSlide.Comments[0];
+            mentionLinesAfterReply = window.ReviewCommentsPaneRenderedMentionLines.ToArray();
         });
 
         if (!ran) return;
-        picker.Should().NotBeNull();
-        picker!.Candidates.Should().ContainSingle().Which.DisplayName.Should().Be("Nora Reviewer");
+        mentionActionsBeforeEdit.Should().Contain("comment-mention:edit|@Nora.Reviewer|True");
+        invokedEdit.Should().BeTrue();
+        invokedReply.Should().BeTrue();
         insertion.Should().NotBeNull();
         insertion!.UpdatedText.Should().Be("Please ask @Nora.Reviewer ");
-        mutation.Should().NotBeNull();
-        mutation!.ShouldApply.Should().BeTrue();
-        mutation.Intent.Should().Be(PresentationReviewWorkflowIntentKind.EditComment);
         editedComment.Should().NotBeNull();
         editedComment!.Text.Should().Be("Please ask @Nora.Reviewer");
+        repliedComment.Should().NotBeNull();
+        repliedComment!.Replies.Should().ContainSingle().Which.Text.Should().Be("@Alice.Writer");
         panePlan.Should().NotBeNull();
         panePlan!.SelectedComment!.MentionCount.Should().Be(1);
         panePlan.SelectedComment.MentionDetailSummary.Should().Be("Mentions: @Nora.Reviewer");
+        mentionLinesAfterEdit.Should().Contain("Mentions: @Nora.Reviewer");
+        mentionLinesAfterReply.Should().Contain("Mentions: @Nora.Reviewer");
+        mentionLinesAfterReply.Should().Contain("Mentions: @Alice.Writer");
         dirtyAfterMention.Should().BeTrue();
     }
 

@@ -1196,7 +1196,7 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
-    public void MainWindow_InsertMentionInSelectedComment_UsesSharedPickerAndRefreshesPane()
+    public void MainWindow_VisibleMentionActions_UseSharedPickerAndRefreshPane()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
         try
@@ -1216,22 +1216,30 @@ public sealed class ReviewWorkflowAdapterTests
                 Idx = 2
             });
             window.SetSelectedReviewCommentIndexForTests(0);
-            var picker = window.BuildCommentMentionPickerPlanForTests("nor");
-            var candidate = picker.Candidates.Single();
+            window.ReviewCommentPaneRenderedMentionActions.Should().Contain(
+                "comment-mention:edit:@Nora.Reviewer:True");
 
-            var mutation = window.InsertMentionInSelectedCommentForTests(
-                "Please ask @No".Length,
-                candidate);
+            var invokedEdit = window.InvokeReviewCommentPaneMentionActionForTests("comment-mention:edit");
 
-            picker.SummaryLabel.Should().Be("1 mention candidate");
-            mutation.ShouldApply.Should().BeTrue();
-            mutation.Intent.Should().Be(PresentationReviewWorkflowIntentKind.EditComment);
+            invokedEdit.Should().BeTrue();
             window.LastCommentMentionInsertionPlan.Should().NotBeNull();
+            window.LastCommentMentionInsertionPlan!.Candidate!.DisplayName.Should().Be("Nora Reviewer");
             window.LastCommentMentionInsertionPlan!.UpdatedText.Should().Be("Please ask @Nora.Reviewer ");
             window.Editor.CurrentSlide.Comments[0].Text.Should().Be("Please ask @Nora.Reviewer");
             window.LastCommentPanePlan!.SelectedComment!.MentionCount.Should().Be(1);
             window.LastCommentPanePlan.SelectedComment.MentionDetailSummary.Should().Be("Mentions: @Nora.Reviewer");
+            window.ReviewCommentPaneRenderedMentionLines.Should().Contain("Mentions: @Nora.Reviewer");
             window.IsDirty.Should().BeTrue();
+
+            var invokedReply = window.InvokeReviewCommentPaneMentionActionForTests("comment-mention:reply");
+
+            invokedReply.Should().BeTrue();
+            window.Editor.CurrentSlide.Comments[0].Replies.Should().ContainSingle();
+            window.Editor.CurrentSlide.Comments[0].Replies[0].Text.Should().Be("@Alice.Writer");
+            window.LastCommentPanePlan!.SelectedComment!.Replies.Single().MentionDetailSummary.Should()
+                .Be("Mentions: @Alice.Writer");
+            window.ReviewCommentPaneRenderedMentionLines.Should().Contain("Mentions: @Nora.Reviewer");
+            window.ReviewCommentPaneRenderedMentionLines.Should().Contain("Mentions: @Alice.Writer");
         }
         finally
         {

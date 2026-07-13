@@ -296,6 +296,33 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildCommentMentionPickerPlanForInsertionContext_UsesPartialMentionBeforeCaret()
+    {
+        var slides = new[] { new Slide { Title = "Review" } };
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Alice Writer",
+            Initials = "AW",
+            Text = "Please ask @No"
+        });
+        slides[0].Comments.Add(new SlideComment
+        {
+            Author = "Nora Reviewer",
+            Initials = "NR",
+            Text = "Available for review."
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentMentionPickerPlanForInsertionContext(
+            slides,
+            "Please ask @No",
+            "Please ask @No".Length);
+
+        plan.Query.Should().Be("No");
+        plan.Candidates.Should().ContainSingle().Which.DisplayName.Should().Be("Nora Reviewer");
+        plan.DefaultCandidate!.InsertToken.Should().Be("Nora.Reviewer");
+    }
+
+    [Fact]
     public void BuildCommentMentionInsertionPlan_ReplacesPartialMentionToken()
     {
         var candidate = new PresentationCommentMentionCandidate(

@@ -241,6 +241,26 @@ public sealed class MainWindow : Window
     internal IReadOnlyList<string> ReviewCommentPaneFilterStates =>
         LastCommentPanePlan?.Filters.Select(filter =>
             $"{filter.Kind}|{filter.Label}|{filter.Count}|{filter.IsSelected}|{filter.HasMatches}").ToArray() ?? [];
+    internal IReadOnlyList<string> ReviewCommentPaneRenderedMentionLines =>
+        EnumerateCommentPaneText(_commentListPanel)
+            .Where(text => text.StartsWith("Mentions:", StringComparison.Ordinal))
+            .ToArray();
+    internal IReadOnlyList<string> ReviewCommentPaneRenderedMentionActions =>
+        EnumerateCommentPaneButtons(_commentListPanel)
+            .Where(button => button.Tag is string tag &&
+                tag.StartsWith("comment-mention:", StringComparison.Ordinal))
+            .Select(button => $"{button.Tag}:{button.Content}:{button.IsEnabled}")
+            .ToArray();
+    internal bool InvokeReviewCommentPaneMentionActionForTests(string tag)
+    {
+        var button = EnumerateCommentPaneButtons(_commentListPanel)
+            .FirstOrDefault(candidate => string.Equals(candidate.Tag as string, tag, StringComparison.Ordinal));
+        if (button is null)
+            return false;
+
+        button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        return true;
+    }
     internal bool IsReadingOrderPaneVisible => _readingOrderPaneHost?.Visibility == Visibility.Visible;
     internal int ReadingOrderPaneItemCount => LastReadingOrderPlan?.Items.Count ?? 0;
     internal string ReadingOrderPaneHeading => _readingOrderPaneHeading?.Text ?? string.Empty;
@@ -1238,6 +1258,7 @@ public sealed class MainWindow : Window
                 var card = new StackPanel();
                 card.Children.Add(headerPanel);
                 card.Children.Add(bodyText);
+                AddMentionDetail(card, cm.MentionDetailSummary, new Thickness(16, 0, 6, 6));
                 AddEditCommentInput(card, cm);
                 AddReplyRows(card, cm);
                 AddReplyInput(card, cm);
@@ -1311,12 +1332,19 @@ public sealed class MainWindow : Window
         if (!cm.IsSelected || !cm.CanEdit)
             return;
 
+        var editText = GetCommentText(cm.CommentIndex) ?? cm.TextPreview;
         var input = new TextBox
         {
-            Text = GetCommentText(cm.CommentIndex) ?? cm.TextPreview,
+            Text = editText,
+            CaretIndex = editText.Length,
             MinWidth = 220,
             Margin = new Thickness(16, 0, 6, 6)
         };
+        var mentionButton = BuildCommentMentionButton(
+            "comment-mention:edit",
+            () => input.Text,
+            () => ResolveCommentInputCaret(input.Text, input.CaretIndex),
+            updatedText => EditSelectedComment(updatedText));
         var button = new Button
         {
             Content = "Save",
@@ -1330,6 +1358,7 @@ public sealed class MainWindow : Window
             Orientation = Orientation.Horizontal
         };
         row.Children.Add(input);
+        row.Children.Add(mentionButton);
         row.Children.Add(button);
         card.Children.Add(row);
     }
@@ -1347,6 +1376,7 @@ public sealed class MainWindow : Window
                 Margin = new Thickness(26, 0, 6, 4),
             };
             card.Children.Add(row);
+            AddMentionDetail(card, reply.MentionDetailSummary, new Thickness(26, 0, 6, 4));
         }
     }
 
@@ -1365,6 +1395,11 @@ public sealed class MainWindow : Window
             MinWidth = 180,
             Margin = new Thickness(0, 0, 6, 0),
         };
+        var mentionButton = BuildCommentMentionButton(
+            "comment-mention:reply",
+            () => input.Text,
+            () => ResolveCommentInputCaret(input.Text, input.CaretIndex),
+            updatedText => ReplyToSelectedComment(updatedText));
         var button = new System.Windows.Controls.Button
         {
             Content = "Reply",
@@ -1372,8 +1407,145 @@ public sealed class MainWindow : Window
         };
         button.Click += (_, _) => ReplyToSelectedComment(input.Text);
         row.Children.Add(input);
+        row.Children.Add(mentionButton);
         row.Children.Add(button);
         card.Children.Add(row);
+    }
+
+    private static void AddMentionDetail(StackPanel card, string mentionDetailSummary, Thickness margin)
+    {
+        if (string.Equals(mentionDetailSummary, "No mentions", StringComparison.Ordinal))
+            return;
+
+        card.Children.Add(new TextBlock
+        {
+            Text = mentionDetailSummary,
+            FontSize = 10,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
+            Margin = margin,
+        });
+    }
+
+    private Button BuildCommentMentionButton(
+        string tag,
+        Func<string?> getText,
+        Func<int> getCaretIndex,
+        Func<string, PresentationCommentMutationPlan> applyUpdatedText)
+    {
+        var mentionPicker = BuildCommentMentionPickerPlanForCurrentInput(getText, getCaretIndex);
+        var candidate = mentionPicker.DefaultCandidate;
+        var button = new Button
+        {
+            Content = candidate?.Label ?? "@",
+            MinWidth = 72,
+            Margin = new Thickness(0, 0, 6, 6),
+            IsEnabled = candidate is not null,
+            Tag = tag,
+        };
+        button.Click += (_, _) =>
+        {
+            LastCommentMentionPickerPlan = BuildCommentMentionPickerPlanForCurrentInput(getText, getCaretIndex);
+            var selectedCandidate = LastCommentMentionPickerPlan.DefaultCandidate;
+            LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
+                getText(),
+                getCaretIndex(),
+                selectedCandidate);
+            if (LastCommentMentionInsertionPlan.ShouldApply)
+            {
+                applyUpdatedText(LastCommentMentionInsertionPlan.UpdatedText);
+            }
+        };
+        return button;
+    }
+
+    private PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForCurrentInput(
+        Func<string?> getText,
+        Func<int> getCaretIndex)
+    {
+        LastCommentMentionPickerPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionPickerPlanForInsertionContext(
+            _presentation.Slides,
+            getText(),
+            getCaretIndex());
+        return LastCommentMentionPickerPlan;
+    }
+
+    private static int ResolveCommentInputCaret(string? text, int caretIndex)
+    {
+        var currentText = text ?? string.Empty;
+        return caretIndex == 0 && currentText.Length > 0 ? currentText.Length : caretIndex;
+    }
+
+    private static IEnumerable<string> EnumerateCommentPaneText(DependencyObject? control)
+    {
+        if (control is null)
+            yield break;
+
+        if (control is TextBlock textBlock)
+        {
+            yield return textBlock.Text;
+        }
+
+        if (control is Panel panel)
+        {
+            foreach (UIElement child in panel.Children)
+            {
+                foreach (var text in EnumerateCommentPaneText(child))
+                {
+                    yield return text;
+                }
+            }
+        }
+        else if (control is ContentControl { Content: DependencyObject content })
+        {
+            foreach (var text in EnumerateCommentPaneText(content))
+            {
+                yield return text;
+            }
+        }
+        else if (control is Decorator { Child: DependencyObject child })
+        {
+            foreach (var text in EnumerateCommentPaneText(child))
+            {
+                yield return text;
+            }
+        }
+    }
+
+    private static IEnumerable<Button> EnumerateCommentPaneButtons(DependencyObject? control)
+    {
+        if (control is null)
+            yield break;
+
+        if (control is Button button)
+        {
+            yield return button;
+        }
+
+        if (control is Panel panel)
+        {
+            foreach (UIElement child in panel.Children)
+            {
+                foreach (var descendant in EnumerateCommentPaneButtons(child))
+                {
+                    yield return descendant;
+                }
+            }
+        }
+        else if (control is ContentControl { Content: DependencyObject content })
+        {
+            foreach (var descendant in EnumerateCommentPaneButtons(content))
+            {
+                yield return descendant;
+            }
+        }
+        else if (control is Decorator { Child: DependencyObject child })
+        {
+            foreach (var descendant in EnumerateCommentPaneButtons(child))
+            {
+                yield return descendant;
+            }
+        }
     }
 
     private void OnCommentOverlayLoaded(object sender, RoutedEventArgs e)

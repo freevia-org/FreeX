@@ -110,6 +110,8 @@ public sealed record PresentationCommentMentionPickerPlan(
 {
     public bool HasCandidates => Candidates.Count > 0;
 
+    public PresentationCommentMentionCandidate? DefaultCandidate => HasCandidates ? Candidates[0] : null;
+
     public string SummaryLabel => HasCandidates
         ? PresentationCommentMetadataPolicy.BuildCountSummary(Candidates.Count, "mention candidate")
         : "No mention candidates";
@@ -1092,6 +1094,17 @@ public static class PresentationReviewWorkflowPlanner
         return new PresentationCommentMentionPickerPlan(normalizedQuery, filtered);
     }
 
+    public static PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForInsertionContext(
+        IReadOnlyList<Slide> slides,
+        string? text,
+        int caretIndex,
+        string? currentAuthor = null,
+        string? currentInitials = null)
+    {
+        var query = ExtractMentionQueryBeforeCaret(text, caretIndex);
+        return BuildCommentMentionPickerPlan(slides, query, currentAuthor, currentInitials);
+    }
+
     public static PresentationCommentMentionInsertionPlan BuildCommentMentionInsertionPlan(
         string? text,
         int caretIndex,
@@ -1166,6 +1179,26 @@ public static class PresentationReviewWorkflowPlanner
             0,
             candidate,
             null);
+    }
+
+    private static string? ExtractMentionQueryBeforeCaret(string? text, int caretIndex)
+    {
+        var original = text ?? string.Empty;
+        var safeCaret = Math.Clamp(caretIndex, 0, original.Length);
+        var tokenStart = safeCaret;
+        while (tokenStart > 0 && IsMentionCharacter(original[tokenStart - 1]))
+        {
+            tokenStart--;
+        }
+
+        if (tokenStart > 0 &&
+            original[tokenStart - 1] == '@' &&
+            HasMentionBoundaryBefore(original, tokenStart - 1))
+        {
+            return original[tokenStart..safeCaret];
+        }
+
+        return null;
     }
 
     public static PresentationCommentMutationPlan BuildResolveCommentPlan(
