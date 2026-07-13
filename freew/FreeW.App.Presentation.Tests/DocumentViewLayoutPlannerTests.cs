@@ -104,6 +104,65 @@ public sealed class DocumentViewLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildDropCapLayoutPlan_DroppedReservesFirstLinesBesideCap()
+    {
+        var paragraph = new Paragraph("Hello world");
+        DropCap.ApplyDropCap(
+            paragraph,
+            DropCapPosition.Dropped,
+            sizePt: 42,
+            lineSpan: 3,
+            distanceFromTextPt: 6);
+
+        var plan = DocumentViewLayoutPlanner.BuildDropCapLayoutPlan(
+            paragraph,
+            blockIndex: 7,
+            paragraphLeftDip: 100,
+            paragraphTopDip: 24,
+            textWidthDip: 320,
+            defaultLineHeightDip: 18);
+
+        plan.Should().NotBeNull();
+        plan!.BlockIndex.Should().Be(7);
+        plan.RunIndex.Should().Be(0);
+        plan.LeadingGlyph.Should().Be("H");
+        plan.IsDropped.Should().BeTrue();
+        plan.LineSpan.Should().Be(3);
+        plan.CapBox.LeftDip.Should().BeApproximately(100, 0.001);
+        plan.TextReservation.HeightDip.Should().BeApproximately(54, 0.001);
+        plan.BodyTextLeftInsetDip.Should().BeGreaterThan(0);
+        plan.BodyTextWidthDip.Should().BeLessThan(320);
+    }
+
+    [Fact]
+    public void BuildDropCapLayoutPlan_InMarginPlacesCapOutsideColumnWithoutShrinkingBody()
+    {
+        var paragraph = new Paragraph("Margin");
+        DropCap.ApplyDropCap(
+            paragraph,
+            DropCapPosition.InMargin,
+            sizePt: 48,
+            lineSpan: 4,
+            distanceFromTextPt: 9);
+
+        var plan = DocumentViewLayoutPlanner.BuildDropCapLayoutPlan(
+            paragraph,
+            blockIndex: 2,
+            paragraphLeftDip: 120,
+            paragraphTopDip: 40,
+            textWidthDip: 360,
+            defaultLineHeightDip: 20);
+
+        plan.Should().NotBeNull();
+        plan!.IsInMargin.Should().BeTrue();
+        plan.LineSpan.Should().Be(4);
+        plan.CapBox.RightDip.Should().BeLessThan(120);
+        plan.TextReservation.RightDip.Should().BeApproximately(120, 0.001);
+        plan.BodyTextLeftInsetDip.Should().Be(0);
+        plan.BodyTextWidthDip.Should().BeApproximately(360, 0.001);
+    }
+
+    [Fact]
     public void BuildTableLayoutPlans_RecordsSharedWordTableContracts()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
@@ -971,6 +1030,8 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingWrapReservation(");
         hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingWrapReservationTextWidthDip(");
+        hostSource.Should().Contain("DocumentViewLayoutPlanner.BuildDropCapLayoutPlan(");
+        hostSource.Should().NotContain("Formatting.FontSizePt ?? 0) >= DropCap.DefaultSizePt");
         hostSource.Should().Contain("DrawingObjectVisualPlanner.BuildVisualPlan(");
         hostSource.Should().Contain("BuildGroupPlannedChildVisual(");
         hostSource.Should().Contain("DrawingObjectVisualKind.Image when child is InlineImage image");
@@ -989,6 +1050,8 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.HitTestFloatingObject(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingGroupChildSnapshots(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingTextWrapLinePlan(");
+        avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildDropCapLayoutPlan(");
+        avaloniaSource.Should().Contain("_dropCapLayoutPlans.Add(dropCapPlan)");
         avaloniaSource.Should().NotContain("DocumentViewLayoutPlanner.BuildSquareTightWrapExclusion(");
         avaloniaSource.Should().NotContain("DocumentViewLayoutPlanner.BuildTopAndBottomWrapExclusionBottom(");
         avaloniaSource.Should().Contain("DocumentViewLayoutPlanner.BuildFloatingHandleRects(");

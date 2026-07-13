@@ -17,6 +17,11 @@ public class DropCapTests
         cap.Text.Should().Be("H");
         cap.Formatting.Bold.Should().BeTrue();
         cap.Formatting.FontSizePt.Should().Be(DropCap.DefaultSizePt);
+        paragraph.DropCap.Should().Be(new DropCapLayoutIntent(
+            DropCapPosition.Dropped,
+            DropCap.DefaultLineSpan,
+            DropCap.DefaultSizePt,
+            DropCap.DefaultDistanceFromTextPt));
 
         var rest = paragraph.Runs[1];
         rest.Text.Should().Be("ello world");
@@ -50,6 +55,27 @@ public class DropCapTests
     }
 
     [Fact]
+    public void ApplyDropCap_InMarginRetainsDistinctLayoutIntent()
+    {
+        var paragraph = new Paragraph("Margin");
+
+        DropCap.ApplyDropCap(
+            paragraph,
+            DropCapPosition.InMargin,
+            sizePt: 48,
+            lineSpan: 4,
+            distanceFromTextPt: 9);
+
+        paragraph.Runs[0].Text.Should().Be("M");
+        paragraph.Runs[0].Formatting.FontSizePt.Should().Be(48);
+        paragraph.DropCap.Should().Be(new DropCapLayoutIntent(
+            DropCapPosition.InMargin,
+            4,
+            48,
+            9));
+    }
+
+    [Fact]
     public void ApplyDropCap_SingleCharacterRun_EnlargesInPlace()
     {
         var doc = new TextDocument();
@@ -62,6 +88,7 @@ public class DropCapTests
         paragraph.Runs[0].Text.Should().Be("A");
         paragraph.Runs[0].Formatting.Bold.Should().BeTrue();
         paragraph.Runs[0].Formatting.FontSizePt.Should().Be(DropCap.DefaultSizePt);
+        paragraph.DropCap.Should().NotBeNull();
     }
 
     [Fact]
@@ -74,6 +101,7 @@ public class DropCapTests
         DropCap.ApplyDropCap(paragraph);
 
         paragraph.Runs.Should().BeEmpty();
+        paragraph.DropCap.Should().BeNull();
     }
 
     [Fact]
@@ -83,12 +111,14 @@ public class DropCapTests
         var paragraph = new Paragraph();
         paragraph.Runs.Add(new Run("Bold ", new RunFormatting { Bold = true, FontSizePt = 18 }));
         paragraph.Runs.Add(new Run("and italic", new RunFormatting { Italic = true, ColorHex = "#FF0000" }));
+        paragraph.DropCap = new DropCapLayoutIntent(DropCapPosition.Dropped, 3, 42, 6);
         doc.Blocks.Add(paragraph);
 
         DropCap.ClearFormatting(paragraph);
 
         paragraph.PlainText.Should().Be("Bold and italic");
         paragraph.Runs.Should().OnlyContain(r => r.Formatting == RunFormatting.Default);
+        paragraph.DropCap.Should().BeNull();
     }
 
     [Fact]

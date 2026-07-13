@@ -1764,6 +1764,12 @@ public sealed class Paragraph : Block
     public string? StyleId { get; set; }
 
     /// <summary>
+    /// Optional renderer-neutral drop-cap intent for the paragraph's leading glyph. The leading run is
+    /// still represented normally in <see cref="Runs"/>; this metadata carries placement and wrapping.
+    /// </summary>
+    public DropCapLayoutIntent? DropCap { get; set; }
+
+    /// <summary>
     /// Optional bookmark name marking this paragraph as a navigation target. When non-null the
     /// paragraph is bracketed by w:bookmarkStart/w:bookmarkEnd on save, and runs elsewhere can point
     /// to it via <see cref="Run.HyperlinkAnchor"/>. Bookmarks are invisible markers (no glyphs).

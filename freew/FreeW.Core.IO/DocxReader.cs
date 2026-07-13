@@ -1153,6 +1153,7 @@ public static class DocxReader
         {
             paragraph.StyleId = pPr.Element(W + "pStyle")?.Attribute(W + "val")?.Value;
             paragraph.Formatting = ReadParagraphFormatting(pPr, numbering, docDefaults, startOverrides);
+            paragraph.DropCap = ReadDropCapIntent(pPr);
             // A paragraph whose formatting was changed under Track Changes carries a w:pPrChange as the
             // last child of its w:pPr; parse the author/date and the nested previous w:pPr into the model.
             ApplyParagraphFormatRevision(paragraph, pPr);
@@ -1330,7 +1331,37 @@ public static class DocxReader
             }
         }
 
+        if (paragraph.DropCap is { } dropCap
+            && paragraph.Runs.FirstOrDefault(run => run.Text.Length > 0)?.Formatting.FontSizePt is { } sizePt)
+            paragraph.DropCap = dropCap with { SizePt = sizePt };
+
         return paragraph;
+    }
+
+    private static DropCapLayoutIntent? ReadDropCapIntent(XElement pPr)
+    {
+        var framePr = pPr.Element(W + "framePr");
+        var token = framePr?.Attribute(W + "dropCap")?.Value;
+        var position = token switch
+        {
+            "drop" => DropCapPosition.Dropped,
+            "margin" => DropCapPosition.InMargin,
+            _ => (DropCapPosition?)null
+        };
+        if (position is null)
+            return null;
+
+        var lineSpan = framePr!.Attribute(W + "lines") is { } lines
+            ? Math.Max(1, ParseInt(lines.Value))
+            : DropCap.DefaultLineSpan;
+        var distancePt = framePr.Attribute(W + "hSpace") is { } hSpace
+            ? DxaToPoints(hSpace.Value)
+            : DropCap.DefaultDistanceFromTextPt;
+        return new DropCapLayoutIntent(
+            position.Value,
+            lineSpan,
+            DropCap.DefaultSizePt,
+            Math.Max(0, distancePt));
     }
 
     /// <summary>

@@ -69,6 +69,7 @@ public static class DocumentMerge
             BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
+            DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         foreach (var run in source.Runs)

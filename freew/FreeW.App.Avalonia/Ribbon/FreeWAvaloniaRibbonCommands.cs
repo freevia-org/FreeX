@@ -844,9 +844,12 @@ internal static class FreeWAvaloniaRibbonCommands
         // Dropped / In Margin both enlarge the leading letter (the in-margin float geometry is an
         // approximation — render-deferred); None clears the paragraph's run formatting.
         r.Register("freew.drop-cap",           new ActionRibbonCommand(() => { /* dropdown opener */ }));
-        r.Register("freew.drop-cap.dropped",   new ActionRibbonCommand(() => editor.ApplyDropCap()));
-        r.Register("freew.drop-cap.in-margin", new ActionRibbonCommand(() => editor.ApplyDropCap()));
+        r.Register("freew.drop-cap.dropped",   new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
+        r.Register("freew.drop-cap.in-margin", new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
         r.Register("freew.drop-cap.none",      new ActionRibbonCommand(editor.ClearDropCap));
+        r.Register("freew.drop-cap-dropped",   new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
+        r.Register("freew.drop-cap-in-margin", new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
+        r.Register("freew.drop-cap-none",      new ActionRibbonCommand(editor.ClearDropCap));
 
         // ── Quick Parts ──────────────────────────────────────────────────────
         // Document-property / date fields insert directly; the snippet entry opens a dialog (shell callback).

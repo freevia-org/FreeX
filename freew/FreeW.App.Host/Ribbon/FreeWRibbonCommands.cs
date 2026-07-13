@@ -1467,10 +1467,13 @@ internal static class FreeWRibbonCommands
         // Drop Cap top-level button: apply default (Dropped, 3 lines, 42 pt). Dropdown items:
         // Dropped / In Margin (apply with explicit position) / None (remove) / Options dialog.
         registry.Register("freew.drop-cap",          new ActionRibbonCommand(() => editor.ApplyDropCap()));
-        registry.Register("freew.drop-cap-dropped",  new ActionRibbonCommand(() => editor.ApplyDropCap()));
-        registry.Register("freew.drop-cap-in-margin",new ActionRibbonCommand(() => editor.ApplyDropCap()));
+        registry.Register("freew.drop-cap-dropped",  new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
+        registry.Register("freew.drop-cap-in-margin",new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
         registry.Register("freew.drop-cap-none",     new ActionRibbonCommand(() => editor.ClearDropCap()));
         registry.Register("freew.drop-cap-options",  new DropCapOptionsCommand(editor));
+        registry.Register("freew.drop-cap.dropped",  new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.Dropped)));
+        registry.Register("freew.drop-cap.in-margin",new ActionRibbonCommand(() => editor.ApplyDropCap(DropCapPosition.InMargin)));
+        registry.Register("freew.drop-cap.none",     new ActionRibbonCommand(() => editor.ClearDropCap()));
 
         // Insert > Text Box gallery: preset-styled text boxes.  Simple is the plain box (matches the
         // existing freew.shape-textbox behaviour); Sidebar/Banded adds a dark accent fill; Quote
@@ -4215,7 +4218,7 @@ internal static class FreeWRibbonCommands
             var result = DropCapOptionsDialog.Ask(Window.GetWindow(editor));
             if (result is null)
                 return;
-            if (result.Position == DropCapPosition.None)
+            if (result.Position == DropCapDialogPosition.None)
             {
                 editor.ClearDropCap();
                 return;
@@ -4224,7 +4227,10 @@ internal static class FreeWRibbonCommands
             // line therefore adds ~12 pt to the cap height — a reasonable approximation without live
             // pagination).  Clamp to a sensible range.
             var sizePt = Math.Max(14, result.LinesToDrop * 14.4);
-            editor.ApplyDropCap(sizePt);
+            var position = result.Position == DropCapDialogPosition.InMargin
+                ? DropCapPosition.InMargin
+                : DropCapPosition.Dropped;
+            editor.ApplyDropCap(position, sizePt, result.LinesToDrop, result.DistanceFromTextPt);
         }
     }
 
@@ -9179,11 +9185,11 @@ internal static class FreeWRibbonCommands
     // -----------------------------------------------------------------------------------------
 
     /// <summary>Drop-cap position choices matching Word's Drop Cap Options dialog.</summary>
-    private enum DropCapPosition { None, Dropped, InMargin }
+    private enum DropCapDialogPosition { None, Dropped, InMargin }
 
     /// <summary>Result returned by <see cref="DropCapOptionsDialog.Ask"/>.</summary>
     private sealed record DropCapOptionsResult(
-        DropCapPosition Position,
+        DropCapDialogPosition Position,
         string? Font,
         int LinesToDrop,
         double DistanceFromTextPt);
@@ -9250,9 +9256,9 @@ internal static class FreeWRibbonCommands
 
             ok.Click += (_, _) =>
             {
-                var position = rbNone.IsChecked == true     ? DropCapPosition.None
-                             : rbInMargin.IsChecked == true ? DropCapPosition.InMargin
-                             :                                DropCapPosition.Dropped;
+                var position = rbNone.IsChecked == true     ? DropCapDialogPosition.None
+                             : rbInMargin.IsChecked == true ? DropCapDialogPosition.InMargin
+                             :                                DropCapDialogPosition.Dropped;
                 _ = int.TryParse(linesBox.Text, out var lines);
                 lines = Math.Clamp(lines, 1, 10);
                 _ = double.TryParse(distanceBox.Text, out var dist);

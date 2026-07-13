@@ -202,6 +202,50 @@ public sealed class InsertDepthCommandTests
         var firstRun = para.Runs[0];
         firstRun.Formatting.FontSizePt.Should().BeNull("drop cap size should be cleared");
         firstRun.Formatting.Bold.Should().BeFalse("drop cap bold should be cleared");
+        para.DropCap.Should().BeNull("None removes the shared layout intent too");
+    }
+
+    [StaFact]
+    public void DropCapCommands_StampDistinctSharedLayoutIntent()
+    {
+        var view = EmptyView();
+        view.Model.Blocks.Clear();
+        view.Model.Blocks.Add(new Paragraph("Hello world"));
+        view.LoadModel(view.Model);
+        var registry = FreeWRibbonCommands.Build(view, new RibbonStateStore());
+
+        registry.TryGet("freew.drop-cap-in-margin", out var inMargin).Should().BeTrue();
+        inMargin!.Execute(RibbonCommandContext.Empty);
+
+        var paragraph = view.Model.Blocks.OfType<Paragraph>().Single();
+        paragraph.DropCap.Should().NotBeNull();
+        paragraph.DropCap!.Position.Should().Be(DropCapPosition.InMargin);
+
+        registry.TryGet("freew.drop-cap-dropped", out var dropped).Should().BeTrue();
+        dropped!.Execute(RibbonCommandContext.Empty);
+
+        paragraph = view.Model.Blocks.OfType<Paragraph>().Single();
+        paragraph.DropCap.Should().NotBeNull();
+        paragraph.DropCap!.Position.Should().Be(DropCapPosition.Dropped);
+    }
+
+    [StaFact]
+    public void DropCapFloaterCommitReadback_PreservesLeadingCharacterAndIntent()
+    {
+        var view = EmptyView();
+        view.Model.Blocks.Clear();
+        view.Model.Blocks.Add(new Paragraph("Hello world"));
+        view.LoadModel(view.Model);
+
+        view.ApplyDropCap(DropCapPosition.InMargin, sizePt: 48, lineSpan: 4, distanceFromTextPt: 9);
+        view.CommitToModel();
+
+        var paragraph = view.Model.Blocks.OfType<Paragraph>().Single();
+        paragraph.PlainText.Should().Be("Hello world");
+        paragraph.Runs[0].Text.Should().Be("H");
+        paragraph.Runs[0].Formatting.FontSizePt.Should().Be(48);
+        paragraph.Runs[1].Text.Should().Be("ello world");
+        paragraph.DropCap.Should().Be(new DropCapLayoutIntent(DropCapPosition.InMargin, 4, 48, 9));
     }
 
     // ── Parity: new command ids are registered ───────────────────────────────────────────────
@@ -229,6 +273,9 @@ public sealed class InsertDepthCommandTests
             "freew.drop-cap-in-margin",
             "freew.drop-cap-none",
             "freew.drop-cap-options",
+            "freew.drop-cap.dropped",
+            "freew.drop-cap.in-margin",
+            "freew.drop-cap.none",
         };
 
         foreach (var id in expectedIds)

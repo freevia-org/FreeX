@@ -2171,6 +2171,10 @@ public static class DocxWriter
         // Force a page break before this paragraph (w:pageBreakBefore); Word honours it when paginating.
         if (f.PageBreakBefore)
             pPr.Add(new XElement(W + "pageBreakBefore"));
+        // Word persists drop caps as paragraph frame properties (w:framePr), after pageBreakBefore
+        // and before widowControl in CT_PPr order. Size still lives on the leading run's rPr.
+        if (paragraph.DropCap is { } dropCap)
+            pPr.Add(BuildDropCapFrameProperties(dropCap));
         // Widow/orphan control (w:widowControl); only emitted when enabled (FreeW defaults it off).
         if (f.WidowControl)
             pPr.Add(new XElement(W + "widowControl"));
@@ -2326,6 +2330,14 @@ public static class DocxWriter
 
         return pPr.HasElements ? pPr : null;
     }
+
+    private static XElement BuildDropCapFrameProperties(DropCapLayoutIntent dropCap) =>
+        new(W + "framePr",
+            new XAttribute(W + "dropCap", dropCap.Position == DropCapPosition.InMargin ? "margin" : "drop"),
+            new XAttribute(W + "lines", Math.Max(1, dropCap.LineSpan)),
+            dropCap.DistanceFromTextPt > 0
+                ? new XAttribute(W + "hSpace", PointsToDxa(dropCap.DistanceFromTextPt))
+                : null);
 
     /// <summary>
     /// Builds one <c>w:tab</c> for a paragraph tab stop: alignment in <c>w:val</c>, position in

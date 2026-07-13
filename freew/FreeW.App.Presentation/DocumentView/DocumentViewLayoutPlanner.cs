@@ -271,6 +271,23 @@ public sealed record DocumentFloatRect(double XDip, double YDip, double WidthDip
             HeightDip + 2 * paddingDip);
 }
 
+public sealed record DocumentDropCapLayoutPlan(
+    int BlockIndex,
+    int RunIndex,
+    DropCapPosition Position,
+    string LeadingGlyph,
+    int LineSpan,
+    double FontSizeDip,
+    double DistanceFromTextDip,
+    DocumentFloatRect CapBox,
+    DocumentFloatRect TextReservation,
+    double BodyTextLeftInsetDip,
+    double BodyTextWidthDip)
+{
+    public bool IsDropped => Position == DropCapPosition.Dropped;
+    public bool IsInMargin => Position == DropCapPosition.InMargin;
+}
+
 public sealed record DocumentFloatingHandleRect(
     DocumentFloatingHandle Handle,
     DocumentFloatRect Rect);
@@ -424,6 +441,64 @@ public static class DocumentViewLayoutPlanner
             Math.Max(1, columnWidthDip),
             gapDip,
             page.ColumnsLineBetween);
+    }
+
+    public static DocumentDropCapLayoutPlan? BuildDropCapLayoutPlan(
+        Paragraph paragraph,
+        int blockIndex,
+        double paragraphLeftDip,
+        double paragraphTopDip,
+        double textWidthDip,
+        double defaultLineHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(paragraph);
+        if (paragraph.DropCap is not { } intent)
+            return null;
+
+        var runIndex = paragraph.Runs.FindIndex(run => run.Text.Length > 0);
+        if (runIndex < 0)
+            return null;
+
+        var safeTextWidth = Math.Max(DefaultMinimumLineWidthDip, textWidthDip);
+        var lineSpan = Math.Max(1, intent.LineSpan);
+        var lineHeight = Math.Max(1, defaultLineHeightDip);
+        var fontSizeDip = RoundDip(PageLayout.PointsToDip(Math.Max(1, intent.SizePt)));
+        var distanceDip = RoundDip(PageLayout.PointsToDip(Math.Max(0, intent.DistanceFromTextPt)));
+        var capHeightDip = RoundDip(Math.Max(fontSizeDip, lineHeight * lineSpan));
+        var capWidthDip = RoundDip(Math.Max(lineHeight, fontSizeDip * 0.62));
+        var reservationHeightDip = RoundDip(lineHeight * lineSpan);
+
+        var (capX, bodyInset, reservationX, reservationWidth) = intent.Position switch
+        {
+            DropCapPosition.InMargin => (
+                paragraphLeftDip - capWidthDip - distanceDip,
+                0.0,
+                paragraphLeftDip - capWidthDip - distanceDip,
+                capWidthDip + distanceDip),
+            _ => (
+                paragraphLeftDip,
+                capWidthDip + distanceDip,
+                paragraphLeftDip,
+                capWidthDip + distanceDip)
+        };
+        var bodyWidth = Math.Max(DefaultMinimumLineWidthDip, safeTextWidth - bodyInset);
+
+        return new DocumentDropCapLayoutPlan(
+            blockIndex,
+            runIndex,
+            intent.Position,
+            paragraph.Runs[runIndex].Text[0].ToString(),
+            lineSpan,
+            fontSizeDip,
+            distanceDip,
+            new DocumentFloatRect(RoundDip(capX), RoundDip(paragraphTopDip), capWidthDip, capHeightDip),
+            new DocumentFloatRect(
+                RoundDip(reservationX),
+                RoundDip(paragraphTopDip),
+                RoundDip(reservationWidth),
+                reservationHeightDip),
+            RoundDip(bodyInset),
+            RoundDip(bodyWidth));
     }
 
     public static IReadOnlyList<DocumentGridlineSegment> BuildGridlines(

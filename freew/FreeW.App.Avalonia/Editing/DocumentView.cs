@@ -131,6 +131,7 @@ public sealed class DocumentView : Control
     private readonly List<FloatingSmartArtData> _floatingSmartArts = new();
     private readonly List<FloatingGroupData>    _floatingGroups    = new();
     private readonly List<DocumentFloatingObjectSnapshot> _floatingSnapshots = new();
+    private readonly List<DocumentDropCapLayoutPlan> _dropCapLayoutPlans = new();
     // AV-WRAP: unified list of wrap-exclusion zones (Square/Tight/TopAndBottom only).
     // Populated during Collect* calls; consulted by EmitLinePaged and LayoutParagraphPaged.
     // Each entry is a page-space rect + the wrapping mode (Behind/InFront entries are never added).
@@ -654,6 +655,7 @@ public sealed class DocumentView : Control
     public int BlockCount => _doc.Blocks.Count;
     public int ParagraphCount => _doc.Blocks.Count(b => b is Paragraph);
     public int PlacedGlyphCount => _placed.Count(p => !p.Sentinel);
+    public IReadOnlyList<DocumentDropCapLayoutPlan> DropCapLayoutPlans => _dropCapLayoutPlans;
     public string PlainText => _doc.PlainText;
 
     /// <summary>
@@ -3016,6 +3018,7 @@ public sealed class DocumentView : Control
         _floatingSmartArts.Clear();
         _floatingGroups.Clear();
         _floatingSnapshots.Clear();
+        _dropCapLayoutPlans.Clear();
         _wrapExclusions.Clear();
         _inlineCharts.Clear();
         _inlineWordArts.Clear();
@@ -3130,6 +3133,7 @@ public sealed class DocumentView : Control
                 _floatingSmartArts.Clear();
                 _floatingGroups.Clear();
                 _floatingSnapshots.Clear();
+                _dropCapLayoutPlans.Clear();
                 _wrapExclusions.Clear();
                 _inlineCharts.Clear();
                 _inlineWordArts.Clear();
@@ -4386,6 +4390,20 @@ public sealed class DocumentView : Control
         var firstLineHeight = ApplyLineSpacing(firstLineNaturalH, pf);
         var anchorContentY = PeekFirstLineContentY(firstLineHeight);
         CollectFloatingObjects(blockIndex, paragraph, anchorContentY);
+        var dropCapPlan = DocumentViewLayoutPlanner.BuildDropCapLayoutPlan(
+            paragraph,
+            blockIndex,
+            _contentLeft + paraLeftInset,
+            ContentYToPageSpaceY(anchorContentY),
+            availableWidth,
+            firstLineHeight);
+        if (dropCapPlan is not null)
+            _dropCapLayoutPlans.Add(dropCapPlan);
+
+        double DropCapLineInset(int currentLineIndex) =>
+            dropCapPlan is { IsDropped: true } && currentLineIndex < dropCapPlan.LineSpan
+                ? dropCapPlan.BodyTextLeftInsetDip
+                : 0.0;
 
         if (marker is not null)
         {
@@ -4454,6 +4472,7 @@ public sealed class DocumentView : Control
             // (lineWidth + paraLeftInset + lineExtraInset) is available for ComputeTabMeasuredWidth.
             var lineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
                                  (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
+            lineExtraInset += DropCapLineInset(lineIndex);
 
             // AV-TAB: resolve tab advance lazily at the wrapping loop so measured[] reflects the
             // actual pen position at the time each tab is encountered on its line.
@@ -4467,7 +4486,7 @@ public sealed class DocumentView : Control
 
             // Effective alignment / wrap width for this line so the right edge always lands at
             // the right margin regardless of indent variant.
-            var lineAlignWidth = availableWidth - lineExtraInset;
+            var lineAlignWidth = Math.Max(20, availableWidth - lineExtraInset);
             // AV-WRAP: reduce lineAvail further for any Square/Tight exclusion zones.
             var lineH2 = DefaultFontSizePt * PxPerPoint * 1.3;
             for (var c2 = lineStart; c2 <= i && c2 < heights.Length; c2++)
@@ -4491,6 +4510,7 @@ public sealed class DocumentView : Control
                 // BP1 fix: the new lineIndex may change lineExtraInset — recompute it now.
                 var newLineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
                                        (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
+                newLineExtraInset += DropCapLineInset(lineIndex);
                 for (var k = lineStart; k < i; k++)
                 {
                     if (cells[k].Ch == '\t' && reviewPolicy.IsRevisionTextVisible(cells[k].Revision))
@@ -4507,7 +4527,8 @@ public sealed class DocumentView : Control
             // Last (or only) line of the paragraph.
             var lineExtraInset = (lineIndex == 0 && indentFirst > 0) ? indentFirst :
                                  (lineIndex  > 0 && indentFirst < 0) ? -indentFirst : 0.0;
-            var lineAlignWidth = availableWidth - lineExtraInset;
+            lineExtraInset += DropCapLineInset(lineIndex);
+            var lineAlignWidth = Math.Max(20, availableWidth - lineExtraInset);
             // AV-WRAP: push past any TopAndBottom exclusion zones before emitting the last line.
             if (_wrapExclusions.Count > 0)
             {
@@ -11795,12 +11816,18 @@ public sealed class DocumentView : Control
     /// host's Insert &gt; Drop Cap. The enlarged leading run already renders via the normal run path (font
     /// size is honoured); Word's true margin-float drop-cap geometry is an approximation here.
     /// </summary>
-    public void ApplyDropCap(double sizePt = DropCap.DefaultSizePt)
+    public void ApplyDropCap(
+        DropCapPosition position = DropCapPosition.Dropped,
+        double sizePt = DropCap.DefaultSizePt,
+        int lineSpan = DropCap.DefaultLineSpan,
+        double distanceFromTextPt = DropCap.DefaultDistanceFromTextPt)
     {
         var index = _caret.Block;
         if (index < 0 || index >= _doc.Blocks.Count || _doc.Blocks[index] is not Paragraph p || !IsEditable(p))
             return;
-        _bus.Execute(new ReplaceParagraphRunsCommand(index, para => DropCap.ApplyDropCap(para, sizePt)));
+        _bus.Execute(new ReplaceParagraphRunsCommand(
+            index,
+            para => DropCap.ApplyDropCap(para, position, sizePt, lineSpan, distanceFromTextPt)));
         Focus();
     }
 

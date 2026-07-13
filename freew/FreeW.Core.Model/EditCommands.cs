@@ -194,14 +194,16 @@ public sealed class SetRunFormattingCommand(int paragraphIndex, int runIndex, Ru
 }
 
 /// <summary>
-/// Replace a paragraph's run list wholesale (snapshotting the prior runs for undo). Used by edits
-/// that restructure a paragraph's runs — e.g. applying a drop cap, which splits the first run so the
-/// leading letter becomes its own enlarged run. The replacement runs are produced by
-/// <paramref name="rebuild"/> from the paragraph; on undo the exact original run objects are restored.
+/// Replace a paragraph's run list wholesale (snapshotting the prior runs and drop-cap intent for
+/// undo). Used by edits that restructure a paragraph's runs — e.g. applying a drop cap, which splits
+/// the first run so the leading letter becomes its own enlarged run. The replacement runs are
+/// produced by <paramref name="rebuild"/> from the paragraph; on undo the exact original run objects
+/// and prior drop-cap intent are restored.
 /// </summary>
 public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Paragraph> rebuild) : IDocumentCommand
 {
     private List<Run>? _previous;
+    private DropCapLayoutIntent? _previousDropCap;
 
     public string Label => "Format";
 
@@ -209,6 +211,7 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
     {
         var paragraph = (Paragraph)context.Document.Blocks[paragraphIndex];
         _previous = [.. paragraph.Runs];
+        _previousDropCap = paragraph.DropCap;
         rebuild(paragraph);
     }
 
@@ -216,9 +219,11 @@ public sealed class ReplaceParagraphRunsCommand(int paragraphIndex, Action<Parag
     {
         if (_previous is null)
             return;
-        var runs = ((Paragraph)context.Document.Blocks[paragraphIndex]).Runs;
+        var paragraph = (Paragraph)context.Document.Blocks[paragraphIndex];
+        var runs = paragraph.Runs;
         runs.Clear();
         runs.AddRange(_previous);
+        paragraph.DropCap = _previousDropCap;
     }
 }
 

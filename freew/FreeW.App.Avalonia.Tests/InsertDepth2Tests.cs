@@ -99,6 +99,7 @@ public sealed class InsertDepth2Tests
             "freew.edit-hyperlink", "freew.remove-hyperlink", "freew.hyperlink-tooltip", "freew.link-bookmark",
             "freew.cover-page", "freew.cover-page.default", "freew.cover-page.banded", "freew.cover-page.motion",
             "freew.drop-cap", "freew.drop-cap.dropped", "freew.drop-cap.in-margin", "freew.drop-cap.none",
+            "freew.drop-cap-dropped", "freew.drop-cap-in-margin", "freew.drop-cap-none",
             "freew.quick-parts", "freew.quick-parts.title", "freew.quick-parts.author",
             "freew.quick-parts.subject", "freew.quick-parts.date", "freew.quick-parts.snippet",
             "freew.equation", "freew.equation.default", "freew.equation.fraction", "freew.equation.script",
@@ -363,6 +364,11 @@ public sealed class InsertDepth2Tests
         para.Runs[0].Text.Should().Be("H");
         para.Runs[0].Formatting.FontSizePt.Should().Be(DropCap.DefaultSizePt);
         para.Runs[0].Formatting.Bold.Should().BeTrue();
+        para.DropCap.Should().Be(new DropCapLayoutIntent(
+            DropCapPosition.Dropped,
+            DropCap.DefaultLineSpan,
+            DropCap.DefaultSizePt,
+            DropCap.DefaultDistanceFromTextPt));
         para.PlainText.Should().Be("Hello", "the visible text is unchanged");
     }
 
@@ -377,6 +383,7 @@ public sealed class InsertDepth2Tests
         var para = (Paragraph)view.Document.Blocks[0];
         para.Runs.Count.Should().Be(1, "Undo should restore the single run");
         para.Runs[0].Formatting.FontSizePt.Should().NotBe(DropCap.DefaultSizePt);
+        para.DropCap.Should().BeNull();
     }
 
     [Fact]
@@ -391,6 +398,49 @@ public sealed class InsertDepth2Tests
         var para = (Paragraph)view.Document.Blocks[0];
         para.Runs.All(run => !run.Formatting.Bold && run.Formatting.FontSizePt == RunFormatting.Default.FontSizePt)
             .Should().BeTrue("None resets every run's formatting to the default");
+        para.DropCap.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Drop_cap_layout_plans_distinguish_dropped_and_in_margin_modes()
+    {
+        DropCapPosition? droppedPosition = null;
+        DropCapPosition? inMarginPosition = null;
+        double droppedInset = -1;
+        double inMarginInset = -1;
+        double inMarginRight = -1;
+        double inMarginColumnLeft = -1;
+        var hyphenAliasWorked = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var droppedView = MakeView("Hello world from a wrapped paragraph");
+            var droppedRegistry = FreeWRibbon.BuildRegistry(droppedView, Callbacks());
+            Exec(droppedRegistry, "freew.drop-cap.dropped");
+            droppedView.Measure(new global::Avalonia.Size(816, 4000));
+            var droppedPlan = droppedView.DropCapLayoutPlans.Single();
+            droppedPosition = ((Paragraph)droppedView.Document.Blocks[0]).DropCap?.Position;
+            droppedInset = droppedPlan.BodyTextLeftInsetDip;
+
+            var inMarginView = MakeView("Margin body text keeps its column");
+            var inMarginRegistry = FreeWRibbon.BuildRegistry(inMarginView, Callbacks());
+            hyphenAliasWorked = inMarginRegistry.TryGet("freew.drop-cap-in-margin", out _);
+            Exec(inMarginRegistry, "freew.drop-cap-in-margin");
+            inMarginView.Measure(new global::Avalonia.Size(816, 4000));
+            var inMarginPlan = inMarginView.DropCapLayoutPlans.Single();
+            inMarginPosition = ((Paragraph)inMarginView.Document.Blocks[0]).DropCap?.Position;
+            inMarginInset = inMarginPlan.BodyTextLeftInsetDip;
+            inMarginRight = inMarginPlan.TextReservation.RightDip;
+            inMarginColumnLeft = inMarginPlan.CapBox.RightDip + inMarginPlan.DistanceFromTextDip;
+        });
+
+        ran.Should().BeTrue();
+        hyphenAliasWorked.Should().BeTrue("Avalonia should accept the WPF-style drop-cap command aliases");
+        droppedPosition.Should().Be(DropCapPosition.Dropped);
+        droppedInset.Should().BeGreaterThan(0);
+        inMarginPosition.Should().Be(DropCapPosition.InMargin);
+        inMarginInset.Should().Be(0);
+        inMarginRight.Should().BeApproximately(inMarginColumnLeft, 0.001);
     }
 
     // ── Quick Parts (document-property fields + snippet) ───────────────────────

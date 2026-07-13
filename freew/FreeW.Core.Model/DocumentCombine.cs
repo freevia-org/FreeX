@@ -117,6 +117,7 @@ public static class DocumentCombine
             BlockContentControl = bParagraph.BlockContentControl ?? aParagraph?.BlockContentControl,
             Formatting = bParagraph.Formatting,
             StyleId = bParagraph.StyleId,
+            DropCap = bParagraph.DropCap,
         };
         merged.BookmarkNames.AddRange(bParagraph.BookmarkNames);
 
@@ -238,6 +239,7 @@ public static class DocumentCombine
             BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
+            DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         foreach (var run in source.Runs)

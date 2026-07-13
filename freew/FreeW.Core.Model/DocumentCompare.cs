@@ -217,6 +217,7 @@ public static class DocumentCompare
             BlockContentControl = revised.BlockContentControl,
             Formatting = revised.Formatting,
             StyleId = revised.StyleId,
+            DropCap = revised.DropCap,
         };
         result.BookmarkNames.AddRange(revised.BookmarkNames);
 
@@ -299,6 +300,7 @@ public static class DocumentCompare
             BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
+            DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         // An empty paragraph (no runs) still needs to register as inserted/deleted; the paragraph stays
@@ -415,6 +417,7 @@ public static class DocumentCompare
             BlockContentControl = source.BlockContentControl,
             Formatting = source.Formatting,
             StyleId = source.StyleId,
+            DropCap = source.DropCap,
         };
         clone.BookmarkNames.AddRange(source.BookmarkNames);
         foreach (var run in source.Runs)

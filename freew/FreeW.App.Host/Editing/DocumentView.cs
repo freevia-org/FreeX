@@ -3567,14 +3567,20 @@ public sealed class DocumentView : RichTextBox
     /// through the undo/redo bus (reversible) and re-renders so the enlarged letter shows immediately.
     /// No-op outside a paragraph or on a paragraph with no leading text run.
     /// </summary>
-    public void ApplyDropCap(double sizePt = DropCap.DefaultSizePt)
+    public void ApplyDropCap(
+        DropCapPosition position = DropCapPosition.Dropped,
+        double sizePt = DropCap.DefaultSizePt,
+        int lineSpan = DropCap.DefaultLineSpan,
+        double distanceFromTextPt = DropCap.DefaultDistanceFromTextPt)
     {
         Focus();
         CommitToModel();
         var index = SelectedModelParagraphIndices().FirstOrDefault(-1);
         if (index < 0 || index >= _model.Blocks.Count || _model.Blocks[index] is not ModelParagraph)
             return;
-        _commands.Execute(new ReplaceParagraphRunsCommand(index, p => DropCap.ApplyDropCap(p, sizePt)));
+        _commands.Execute(new ReplaceParagraphRunsCommand(
+            index,
+            p => DropCap.ApplyDropCap(p, position, sizePt, lineSpan, distanceFromTextPt)));
     }
 
     /// <summary>
@@ -6131,7 +6137,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null);
 
     private sealed record RenderedTabStopSpan(
         ParagraphTabStopPlacementPlan Plan,
@@ -6338,7 +6344,8 @@ public sealed class DocumentView : RichTextBox
             // are preserved across edits via the paragraph Tag (see ParagraphTag).
             BookmarkName = wpfParagraph.Tag is ParagraphTag { BookmarkName: { Length: > 0 } name } ? name : null,
             StyleId = wpfParagraph.Tag is ParagraphTag { StyleId: { Length: > 0 } styleId } ? styleId : null,
-            SectionBreak = wpfParagraph.Tag is ParagraphTag { SectionBreak: { } sec } ? sec : null
+            SectionBreak = wpfParagraph.Tag is ParagraphTag { SectionBreak: { } sec } ? sec : null,
+            DropCap = wpfParagraph.Tag is ParagraphTag { DropCap: { } dropCap } ? dropCap : null
         };
         foreach (var inline in wpfParagraph.Inlines)
             ReadInline(modelParagraph, inline, hyperlinkUrl: null, hyperlinkAnchor: null);
@@ -6458,6 +6465,9 @@ public sealed class DocumentView : RichTextBox
             case Floater floater when HasFloatingWrapReservationMarker(floater):
                 ReadFloatingWrapReservationFloater(modelParagraph, floater, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
                 break;
+            case Floater floater:
+                ReadFloaterInlineContent(modelParagraph, floater, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
+                break;
             case WpfRun { Tag: AnchorMarker marker }:
                 AddAnchorMarkerRun(modelParagraph, marker, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
                 break;
@@ -6562,6 +6572,13 @@ public sealed class DocumentView : RichTextBox
                 modelParagraph.Runs.Add(new ModelRun(StripSoftHyphens(run.Text), ReadRunFormatting(run)) { HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip });
                 break;
         }
+    }
+
+    private static void ReadFloaterInlineContent(ModelParagraph modelParagraph, Floater floater, string? hyperlinkUrl, string? hyperlinkAnchor, string? hyperlinkTooltip)
+    {
+        foreach (var paragraph in floater.Blocks.OfType<WpfParagraph>())
+            foreach (var inline in paragraph.Inlines)
+                ReadInline(modelParagraph, inline, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
     }
 
     private static ModelRun WithHyperlink(ModelRun run, string? url, string? anchor, string? tooltip)
@@ -7470,49 +7487,47 @@ public sealed class DocumentView : RichTextBox
         var borderNeedsTag = paraFmt.Border is { } b
             && (b.LineStyle != BorderLineStyle.Single || !b.Top || !b.Left || !b.Bottom || !b.Right);
         var shadingNeedsTag = paraFmt.ShadingColorHex is { Length: > 0 } && paraFmt.ShadingPattern != ShadingPattern.Clear;
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag || paraFmt.SuppressAutoHyphens || paragraph.SectionBreak is not null)
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag || paraFmt.SuppressAutoHyphens || paragraph.SectionBreak is not null || paragraph.DropCap is not null)
             wpf.Tag = new ParagraphTag(
                 paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl,
                 paragraph.StyleId, paraFmt.ListLevel,
                 borderNeedsTag ? paraFmt.Border : null,
                 shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
                 paraFmt.SuppressAutoHyphens,
-                paragraph.SectionBreak);
+                paragraph.SectionBreak,
+                paragraph.DropCap);
 
-        // Drop-cap detection: the first text run whose FontSizePt is at or above the drop-cap
-        // threshold (42 pt by default) is treated as a drop cap. WPF's Floater (inline-level
-        // float) is used to sink the large letter into the left margin so subsequent inline
-        // content wraps to its right — the standard FlowDocument drop-cap pattern.
-        // Limitation: the Floater reserves a column-width proportional to its content; pixel-
-        // perfect N-line depth matching Word's exact line wrapping is not achievable without a
-        // custom panel, but the visual result is correct (letter is dropped and body wraps).
         var runs = paragraph.Runs;
-        var firstTextIdx = runs.FindIndex(r => r.Text.Length > 0);
-        var hasDropCap = !inTableCell
-            && firstTextIdx >= 0
-            && (runs[firstTextIdx].Formatting.FontSizePt ?? 0) >= DropCap.DefaultSizePt
-            && runs.Count > firstTextIdx + 1;
+        var dropCapPlan = !inTableCell
+            ? DocumentViewLayoutPlanner.BuildDropCapLayoutPlan(
+                paragraph,
+                sourceBlockIndex ?? -1,
+                paragraphLeftDip: 0,
+                paragraphTopDip: 0,
+                textWidthDip: Math.Max(120, document.Page.WidthPt * PxPerPoint),
+                defaultLineHeightDip: DefaultFontSizePt * PxPerPoint * 1.3)
+            : null;
 
-        if (hasDropCap)
+        if (dropCapPlan is not null && runs.Count > dropCapPlan.RunIndex)
         {
             // Emit any pre-cap runs (e.g. image/marker runs before the large letter) inline.
-            for (var i = 0; i < firstTextIdx; i++)
+            for (var i = 0; i < dropCapPlan.RunIndex; i++)
                 wpf.Inlines.Add(BuildRun(runs[i], paragraph, document, sourceBlockIndex, i));
 
-            // Build the cap run and host it in a Floater so body text wraps around it.
-            var capInline = BuildRun(runs[firstTextIdx], paragraph, document, sourceBlockIndex, firstTextIdx);
-            var capPara = new WpfParagraph(capInline) { Margin = new Thickness(0, 0, 4, 0) };
+            var capInline = BuildRun(runs[dropCapPlan.RunIndex], paragraph, document, sourceBlockIndex, dropCapPlan.RunIndex);
+            var capPara = new WpfParagraph(capInline)
+            {
+                Margin = new Thickness(0, 0, dropCapPlan.DistanceFromTextDip, 0)
+            };
             var floater = new System.Windows.Documents.Floater(capPara)
             {
                 HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
-                // Width is sized to the cap's em: FontSizePt * PxPerPoint * 1.1 gives a little
-                // breathing room. NaN lets WPF size it to the content, which works correctly.
-                Width = double.NaN,
+                Width = Math.Max(1, dropCapPlan.CapBox.WidthDip),
             };
             wpf.Inlines.Add(floater);
 
             // Emit the remaining runs after the cap.
-            for (var i = firstTextIdx + 1; i < runs.Count; i++)
+            for (var i = dropCapPlan.RunIndex + 1; i < runs.Count; i++)
                 wpf.Inlines.Add(BuildRun(runs[i], paragraph, document, sourceBlockIndex, i));
         }
         else
