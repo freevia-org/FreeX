@@ -1523,10 +1523,17 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 rowFailures.Add("scenario expects CommentsOnly protection but the page expectation records a different protection mode");
             if (!protection.IsProtected)
                 rowFailures.Add("scenario expects active editing restrictions but the page expectation records an unprotected document");
-            if (protection.IsMarkedAsFinal || protection.MarkAsFinal.IsChecked)
-                rowFailures.Add("scenario expects Mark as Final to be unchecked for the CommentsOnly protection slice");
             if (!protection.RestrictEditing.IsChecked)
                 rowFailures.Add("scenario expects Restrict Editing checked but the page expectation records it unchecked");
+        }
+
+        if (tags.Contains("marked-as-final", StringComparer.OrdinalIgnoreCase)
+            || tags.Contains("final-advisory-read-only", StringComparer.OrdinalIgnoreCase))
+        {
+            if (!protection.IsMarkedAsFinal)
+                rowFailures.Add("scenario expects Mark as Final but the page expectation records it disabled");
+            if (!protection.MarkAsFinal.IsChecked)
+                rowFailures.Add("scenario expects Mark as Final checked but the page expectation records it unchecked");
         }
 
         if (tags.Contains("body-edit-blocked", StringComparer.OrdinalIgnoreCase))
@@ -1549,6 +1556,24 @@ public static class FreeWVisualEvidenceManifestNormalizer
             RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryUndo), nameof(DocumentCommandMutationKind.Comment), isAllowed: true);
             RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryRedo), nameof(DocumentCommandMutationKind.Comment), isAllowed: true);
         }
+        if (tags.Contains("comment-workflow-blocked", StringComparer.OrdinalIgnoreCase))
+        {
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentInsert), "None", isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentReply), "None", isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentResolve), "None", isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.CommentDelete), "None", isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryUndo), nameof(DocumentCommandMutationKind.Comment), isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryRedo), nameof(DocumentCommandMutationKind.Comment), isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+        }
+
+        if (tags.Contains("final-advisory-read-only", StringComparer.OrdinalIgnoreCase))
+        {
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.BodyTextEdit), "None", isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.BodyFormatting), "None", isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.ProofingReplacement), "None", isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryUndo), nameof(DocumentCommandMutationKind.BodyText), isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+            RequireProtectionDecision(rowFailures, protection, nameof(RestrictEditingOperationKind.HistoryRedo), nameof(DocumentCommandMutationKind.BodyFormatting), isAllowed: false, blockReason: nameof(RestrictEditingBlockReason.MarkedAsFinal));
+        }
     }
 
     private static void RequireProtectionDecision(
@@ -1556,7 +1581,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
         FreeWVisualReviewProtectionExpectation protection,
         string operation,
         string mutationKind,
-        bool isAllowed)
+        bool isAllowed,
+        string? blockReason = null)
     {
         var decision = protection.Operations.SingleOrDefault(item =>
             string.Equals(item.Operation, operation, StringComparison.Ordinal)
@@ -1571,6 +1597,13 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             rowFailures.Add(
                 $"scenario expects protection decision {operation}/{mutationKind} allowed={BoolFlag(isAllowed)} but the page expectation records allowed={BoolFlag(decision.IsAllowed)}");
+        }
+
+        if (blockReason is not null
+            && !string.Equals(decision.BlockReason, blockReason, StringComparison.Ordinal))
+        {
+            rowFailures.Add(
+                $"scenario expects protection decision {operation}/{mutationKind} blockReason={blockReason} but the page expectation records blockReason={decision.BlockReason}");
         }
     }
 
@@ -3360,6 +3393,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add(
                 $"protection {row.ReviewProtection.ProtectionMode}, " +
                 $"{row.ReviewProtection.Operations.Count.ToString(CultureInfo.InvariantCulture)} command decision(s)");
+        }
+        if (row.ReviewProtection.IsMarkedAsFinal || row.ReviewProtection.MarkAsFinal.IsChecked)
+        {
+            parts.Add("Mark as Final checked");
         }
 
         return string.Join(", ", parts);
