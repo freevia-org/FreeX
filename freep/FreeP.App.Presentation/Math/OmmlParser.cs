@@ -342,8 +342,20 @@ public static class OmmlParser
     {
         var fNameEl = el.Element(M + "fName") ?? el;
         var eEl     = el.Element(M + "e")     ?? el;
-        return new MathNode.Func(ParseRow(fNameEl), ParseRow(eEl));
+        return new MathNode.Func(NormalizeFunctionName(ParseRow(fNameEl)), ParseRow(eEl));
     }
+
+    private static MathNode NormalizeFunctionName(MathNode node) =>
+        node switch
+        {
+            MathNode.Run run => new MathNode.Run(
+                run.Text,
+                isItalic: false,
+                isBold: run.IsBold,
+                alphabet: run.Alphabet),
+            MathNode.Row row => new MathNode.Row(row.Children.Select(NormalizeFunctionName).ToArray()),
+            _ => node
+        };
 
     // ── m:d delimiter ─────────────────────────────────────────────────────
 
