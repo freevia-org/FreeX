@@ -795,6 +795,8 @@ public static class PresentationReviewWorkflowPlanner
         "Use a single terminal punctuation mark.";
     public const string ProofingArticleAgreementMessage =
         "Use the article that matches the next word.";
+    public const string ProofingSubjectVerbAgreementMessage =
+        "Use the verb form that matches the subject.";
     public const string SlideTitleMissingSlideMessage =
         "Slide title target slide was not found.";
     public const string SlideTitleEmptyMessage =
@@ -2648,6 +2650,9 @@ public static class PresentationReviewWorkflowPlanner
 
         foreach (var articleAgreement in ScanArticleAgreement(scope.Text))
             yield return articleAgreement;
+
+        foreach (var subjectVerbAgreement in ScanSubjectVerbAgreement(scope.Text))
+            yield return subjectVerbAgreement;
     }
 
     private static string SuggestProofingReplacement(string text)
@@ -2670,9 +2675,236 @@ public static class PresentationReviewWorkflowPlanner
         if (TryBuildArticleAgreementReplacement(text, out var articleAgreementReplacement))
             return articleAgreementReplacement;
 
+        if (TryBuildSubjectVerbAgreementReplacement(text, out var subjectVerbAgreementReplacement))
+            return subjectVerbAgreementReplacement;
+
         return TryBuildRepeatedWordReplacement(text, out var repeatedWordReplacement)
             ? repeatedWordReplacement
             : string.Empty;
+    }
+
+    private static IEnumerable<PresentationProofingIssueMatch> ScanSubjectVerbAgreement(string text)
+    {
+        var words = EnumerateProofingWords(text).ToArray();
+        for (var index = 0; index < words.Length - 1; index++)
+        {
+            var subject = words[index];
+            var verb = words[index + 1];
+            var determiner = index > 0 ? words[index - 1] : (ProofingWordSpan?)null;
+
+            if (TryBuildSubjectVerbAgreementReplacement(text, determiner, subject, verb, out var start, out var length, out _))
+            {
+                yield return new PresentationProofingIssueMatch(
+                    start,
+                    length,
+                    text.Substring(start, length),
+                    ProofingSubjectVerbAgreementMessage);
+            }
+        }
+    }
+
+    private static bool TryBuildSubjectVerbAgreementReplacement(string text, out string replacement)
+    {
+        var words = EnumerateProofingWords(text).ToArray();
+        if (words.Length is < 2 or > 3)
+        {
+            replacement = string.Empty;
+            return false;
+        }
+
+        var hasDeterminer = words.Length == 3;
+        var determiner = hasDeterminer ? words[0] : (ProofingWordSpan?)null;
+        var subject = words[hasDeterminer ? 1 : 0];
+        var verb = words[hasDeterminer ? 2 : 1];
+        if (!TryBuildSubjectVerbAgreementReplacement(text, determiner, subject, verb, out _, out _, out replacement))
+        {
+            replacement = string.Empty;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryBuildSubjectVerbAgreementReplacement(
+        string text,
+        ProofingWordSpan? determiner,
+        ProofingWordSpan subject,
+        ProofingWordSpan verb,
+        out int start,
+        out int length,
+        out string replacement)
+    {
+        start = 0;
+        length = 0;
+        replacement = string.Empty;
+
+        if (!HasOnlyHorizontalWhitespaceBetween(text, subject, verb) ||
+            !TryResolveProofingVerbAgreement(verb.Text, out var verbNumber, out var singularVerb, out var pluralVerb) ||
+            IsGuardedSubjectVerbAgreementToken(text, subject) ||
+            IsGuardedSubjectVerbAgreementToken(text, verb) ||
+            !TryResolveProofingSubjectNumber(subject.Text, determiner?.Text, out var subjectNumber))
+        {
+            return false;
+        }
+
+        var phraseStart = subject.Start;
+        if (determiner is { } determinerValue)
+        {
+            if (!HasOnlyHorizontalWhitespaceBetween(text, determinerValue, subject) ||
+                !IsSubjectVerbAgreementDeterminer(determinerValue.Text) ||
+                IsGuardedSubjectVerbAgreementToken(text, determinerValue))
+            {
+                return false;
+            }
+
+            phraseStart = determinerValue.Start;
+        }
+
+        var phraseLength = verb.Start + verb.Length - phraseStart;
+        if (IsGuardedSubjectVerbAgreementRange(text, phraseStart, phraseLength) ||
+            subjectNumber == verbNumber)
+        {
+            return false;
+        }
+
+        var desiredVerb = subjectNumber == ProofingSubjectNumber.Singular ? singularVerb : pluralVerb;
+        start = phraseStart;
+        length = phraseLength;
+        replacement = ReplaceTextRange(
+            text.Substring(phraseStart, phraseLength),
+            verb.Start - phraseStart,
+            verb.Length,
+            MatchReplacementCasing(verb.Text, desiredVerb));
+        return true;
+    }
+
+    private static bool TryResolveProofingVerbAgreement(
+        string verb,
+        out ProofingSubjectNumber number,
+        out string singularVerb,
+        out string pluralVerb)
+    {
+        number = ProofingSubjectNumber.Singular;
+        singularVerb = string.Empty;
+        pluralVerb = string.Empty;
+
+        switch (verb.ToLowerInvariant())
+        {
+            case "is":
+                singularVerb = "is";
+                pluralVerb = "are";
+                return true;
+            case "are":
+                number = ProofingSubjectNumber.Plural;
+                singularVerb = "is";
+                pluralVerb = "are";
+                return true;
+            case "was":
+                singularVerb = "was";
+                pluralVerb = "were";
+                return true;
+            case "were":
+                number = ProofingSubjectNumber.Plural;
+                singularVerb = "was";
+                pluralVerb = "were";
+                return true;
+            case "has":
+                singularVerb = "has";
+                pluralVerb = "have";
+                return true;
+            case "have":
+                number = ProofingSubjectNumber.Plural;
+                singularVerb = "has";
+                pluralVerb = "have";
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryResolveProofingSubjectNumber(
+        string subject,
+        string? determiner,
+        out ProofingSubjectNumber number)
+    {
+        number = ProofingSubjectNumber.Singular;
+        var normalizedSubject = subject.ToLowerInvariant();
+        var normalizedDeterminer = determiner?.ToLowerInvariant();
+
+        if (normalizedSubject.Any(char.IsDigit) ||
+            IsAllCapsProofingTerm(subject) ||
+            IsAmbiguousProofingSubject(normalizedSubject))
+        {
+            return false;
+        }
+
+        if (ProofingSingularSubjects.Contains(normalizedSubject))
+            return ResolveDeterminerAgreement(normalizedDeterminer, ProofingSubjectNumber.Singular, out number);
+
+        if (ProofingPluralSubjects.Contains(normalizedSubject))
+            return ResolveDeterminerAgreement(normalizedDeterminer, ProofingSubjectNumber.Plural, out number);
+
+        if (normalizedSubject.EndsWith('s') &&
+            normalizedSubject.Length > 3 &&
+            !normalizedSubject.EndsWith("ss", StringComparison.Ordinal) &&
+            ProofingSingularSubjects.Contains(normalizedSubject[..^1]))
+        {
+            return ResolveDeterminerAgreement(normalizedDeterminer, ProofingSubjectNumber.Plural, out number);
+        }
+
+        return false;
+    }
+
+    private static bool ResolveDeterminerAgreement(
+        string? determiner,
+        ProofingSubjectNumber subjectNumber,
+        out ProofingSubjectNumber number)
+    {
+        number = subjectNumber;
+        return determiner switch
+        {
+            null or "the" => true,
+            "a" or "an" or "this" or "that" => subjectNumber == ProofingSubjectNumber.Singular,
+            "these" or "those" => subjectNumber == ProofingSubjectNumber.Plural,
+            _ => false
+        };
+    }
+
+    private static bool IsSubjectVerbAgreementDeterminer(string text)
+        => string.Equals(text, "the", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "a", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "an", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "this", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "that", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "these", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "those", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAmbiguousProofingSubject(string normalizedSubject)
+        => normalizedSubject is "i" or "you" or "we" or "they" or "it" or "he" or "she" or "this" or "that" or "these" or "those" or "series" or "data" or "analysis";
+
+    private static bool IsGuardedSubjectVerbAgreementToken(string text, ProofingWordSpan word)
+        => TryGetUrlOrEmailCoreEnd(text, word.Start, out _) ||
+            word.Text.Length <= 1 ||
+            word.Text.Any(ch => ch is '\'' or '`' or '_' or '-') ||
+            IsGuardedSubjectVerbAgreementBoundary(text, word.Start - 1) ||
+            IsGuardedSubjectVerbAgreementBoundary(text, word.Start + word.Length);
+
+    private static bool IsGuardedSubjectVerbAgreementRange(string text, int start, int length)
+        => IsGuardedSubjectVerbAgreementBoundary(text, start - 1) ||
+            IsGuardedSubjectVerbAgreementBoundary(text, start + length);
+
+    private static bool IsGuardedSubjectVerbAgreementBoundary(string text, int index)
+    {
+        if (index < 0 || index >= text.Length)
+            return false;
+
+        return text[index] is '"' or '\'' or '`' or '/' or '\\' or '@' or '#';
+    }
+
+    private enum ProofingSubjectNumber
+    {
+        Singular,
+        Plural
     }
 
     private static IEnumerable<PresentationProofingIssueMatch> ScanArticleAgreement(string text)
@@ -3224,6 +3456,62 @@ public static class PresentationReviewWorkflowPlanner
             ["recieve"] = "receive",
             ["adress"] = "address",
             ["occured"] = "occurred",
+        };
+
+    private static readonly IReadOnlySet<string> ProofingSingularSubjects =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "agenda",
+            "bullet",
+            "cell",
+            "chart",
+            "comment",
+            "deck",
+            "figure",
+            "graph",
+            "image",
+            "item",
+            "note",
+            "plan",
+            "reply",
+            "report",
+            "result",
+            "review",
+            "section",
+            "shape",
+            "slide",
+            "table",
+            "template",
+            "title",
+            "topic",
+        };
+
+    private static readonly IReadOnlySet<string> ProofingPluralSubjects =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "agendas",
+            "bullets",
+            "cells",
+            "charts",
+            "comments",
+            "decks",
+            "figures",
+            "graphs",
+            "images",
+            "items",
+            "notes",
+            "plans",
+            "replies",
+            "reports",
+            "results",
+            "reviews",
+            "sections",
+            "shapes",
+            "slides",
+            "tables",
+            "templates",
+            "titles",
+            "topics",
         };
 
     private static IReadOnlyList<PresentationReviewWorkflowActionPlan> BuildReadingOrderActions(

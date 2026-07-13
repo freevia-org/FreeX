@@ -3619,6 +3619,115 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildProofingPanePlan_FlagsSubjectVerbAgreementAcrossSharedProofingScopes()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "The slides is ready";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Body",
+            Text = "This chart are useful"
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Results table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Reports has owners") }
+                        }
+                    }
+                }
+            }
+        });
+        slide.Notes = TextBody("The plan have milestones");
+        slide.Comments.Add(new SlideComment
+        {
+            Text = "The tables was updated",
+            Replies =
+            {
+                new SlideCommentReply { Text = "This slide were final" }
+            }
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+
+        execution.Issues.Should().HaveCount(6);
+        execution.Issues.Select(issue => issue.Scope.Kind).Should().Equal(
+            PresentationProofingScopeKind.SlideTitle,
+            PresentationProofingScopeKind.ShapeText,
+            PresentationProofingScopeKind.TableCellText,
+            PresentationProofingScopeKind.SpeakerNotes,
+            PresentationProofingScopeKind.Comment,
+            PresentationProofingScopeKind.CommentReply);
+        execution.Issues.Select(issue => issue.Text).Should().Equal(
+            "The slides is",
+            "This chart are",
+            "Reports has",
+            "The plan have",
+            "The tables was",
+            "This slide were");
+        execution.Issues.Select(issue => issue.Message).Should().OnlyContain(message =>
+            message == PresentationReviewWorkflowPlanner.ProofingSubjectVerbAgreementMessage);
+        plan.Rows.Select(row => row.SuggestedReplacement).Should().Equal(
+            "The slides are",
+            "This chart is",
+            "Reports have",
+            "The plan has",
+            "The tables were",
+            "This slide was");
+        plan.SelectedRow!.CorrectionAction.IsEnabled.Should().BeTrue();
+
+        var mutation = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            plan.SelectedRow.Scope,
+            plan.SelectedRow.Start,
+            plan.SelectedRow.Length,
+            plan.SelectedRow.SuggestedReplacement);
+
+        mutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            plan.SelectedRow.Scope,
+            0,
+            13,
+            "The slides are",
+            "The slides are ready",
+            null));
+        slide.Title.Should().Be("The slides are ready");
+    }
+
+    [Fact]
+    public void BuildProofingExecutionPlan_SubjectVerbAgreementAvoidsGuardedAndAmbiguousText()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "This chart is correct. The slides are ready. They is ambiguous. Data is imported. " +
+                "The series are related. The 2026 reports has numbers. The URL has docs. " +
+                "\"The slides is quoted.\" `The chart are code` https://example.com/slides-is-ready " +
+                "This unknown are skipped. These chart are skipped."
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+
+        execution.Issues.Should().NotContain(issue =>
+            issue.Message == PresentationReviewWorkflowPlanner.ProofingSubjectVerbAgreementMessage);
+    }
+
+    [Fact]
     public void BuildProofingExecutionPlan_RepeatedTerminalPunctuationScansAllProofingScopes()
     {
         var presentation = Presentation.CreateEmpty();
