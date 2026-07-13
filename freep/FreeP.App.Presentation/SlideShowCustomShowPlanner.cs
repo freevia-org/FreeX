@@ -64,6 +64,17 @@ public sealed record SlideShowCustomShowMutationResult(
         new(false, errorMessage, -1, null);
 }
 
+public sealed record SlideShowCustomShowDragReorderPlan(
+    bool IsValid,
+    bool ShouldApplyMutation,
+    int SourceSlideIndex,
+    string SourceSlideId,
+    int TargetDropIndex,
+    int TargetSlideIndex,
+    int SelectedSlideIndex,
+    IReadOnlyList<string> SlideIds,
+    string? ErrorMessage);
+
 public sealed class SlideShowPlaybackRoute
 {
     public SlideShowPlaybackRoute(
@@ -264,6 +275,70 @@ public static class SlideShowCustomShowPlanner
             customShowIndex,
             customShow,
             selectedSlideIndex: clampedTargetIndex);
+    }
+
+    public static SlideShowCustomShowDragReorderPlan BuildCustomShowSlideDragReorderPlan(
+        IReadOnlyList<string> slideIds,
+        int sourceSlideIndex,
+        string? sourceSlideId,
+        int targetDropIndex)
+    {
+        ArgumentNullException.ThrowIfNull(slideIds);
+
+        var normalizedSourceSlideId = string.IsNullOrWhiteSpace(sourceSlideId)
+            ? string.Empty
+            : sourceSlideId.Trim();
+        if (string.IsNullOrEmpty(normalizedSourceSlideId) ||
+            sourceSlideIndex < 0 ||
+            sourceSlideIndex >= slideIds.Count ||
+            !string.Equals(slideIds[sourceSlideIndex], normalizedSourceSlideId, StringComparison.Ordinal))
+        {
+            return new SlideShowCustomShowDragReorderPlan(
+                IsValid: false,
+                ShouldApplyMutation: false,
+                SourceSlideIndex: sourceSlideIndex,
+                SourceSlideId: normalizedSourceSlideId,
+                TargetDropIndex: Math.Clamp(targetDropIndex, 0, slideIds.Count),
+                TargetSlideIndex: -1,
+                SelectedSlideIndex: NormalizeSelectedSlideIndex(sourceSlideIndex, slideIds.Count),
+                SlideIds: slideIds.ToArray(),
+                ErrorMessage: MissingCustomShowSlideMessage);
+        }
+
+        var clampedDropIndex = Math.Clamp(targetDropIndex, 0, slideIds.Count);
+        var targetSlideIndex = clampedDropIndex > sourceSlideIndex
+            ? clampedDropIndex - 1
+            : clampedDropIndex;
+        targetSlideIndex = Math.Clamp(targetSlideIndex, 0, slideIds.Count - 1);
+
+        if (targetSlideIndex == sourceSlideIndex)
+        {
+            return new SlideShowCustomShowDragReorderPlan(
+                IsValid: true,
+                ShouldApplyMutation: false,
+                SourceSlideIndex: sourceSlideIndex,
+                SourceSlideId: normalizedSourceSlideId,
+                TargetDropIndex: clampedDropIndex,
+                TargetSlideIndex: targetSlideIndex,
+                SelectedSlideIndex: sourceSlideIndex,
+                SlideIds: slideIds.ToArray(),
+                ErrorMessage: null);
+        }
+
+        var reorderedSlideIds = slideIds.ToList();
+        reorderedSlideIds.RemoveAt(sourceSlideIndex);
+        reorderedSlideIds.Insert(targetSlideIndex, normalizedSourceSlideId);
+
+        return new SlideShowCustomShowDragReorderPlan(
+            IsValid: true,
+            ShouldApplyMutation: true,
+            SourceSlideIndex: sourceSlideIndex,
+            SourceSlideId: normalizedSourceSlideId,
+            TargetDropIndex: clampedDropIndex,
+            TargetSlideIndex: targetSlideIndex,
+            SelectedSlideIndex: targetSlideIndex,
+            SlideIds: reorderedSlideIds,
+            ErrorMessage: null);
     }
 
     public static SlideShowLaunchPlan BuildLaunchPlan(
@@ -584,6 +659,11 @@ public static class SlideShowCustomShowPlanner
         string.IsNullOrWhiteSpace(name)
             ? string.Empty
             : name.Trim();
+
+    private static int NormalizeSelectedSlideIndex(int selectedSlideIndex, int slideCount) =>
+        slideCount == 0
+            ? -1
+            : Math.Clamp(selectedSlideIndex, 0, slideCount - 1);
 
     private static bool TryParseCustomShowIndex(string choiceId, out int index)
     {

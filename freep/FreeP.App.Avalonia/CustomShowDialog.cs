@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using FreeP.App.Compositor;
@@ -9,6 +10,8 @@ namespace FreeP.App.Avalonia;
 
 internal sealed class CustomShowDialog : Window
 {
+    private const double DragStartThreshold = 4;
+
     private readonly MainWindow _host;
     private readonly ListBox _showList = new();
     private readonly TextBox _nameBox = new();
@@ -23,6 +26,9 @@ internal sealed class CustomShowDialog : Window
     private readonly Button _moveDownButton;
     private readonly List<CheckBox> _slideCheckBoxes = new();
     private IReadOnlyList<SlideShowCustomShowSlideOption> _availableSlides = Array.Empty<SlideShowCustomShowSlideOption>();
+    private Point? _customShowSlideDragStartPoint;
+    private int _customShowSlideDragSourceIndex = -1;
+    private bool _customShowSlideDragActive;
 
     public CustomShowDialog(MainWindow host)
     {
@@ -44,6 +50,12 @@ internal sealed class CustomShowDialog : Window
 
         _customShowSlideList.MinHeight = 92;
         _customShowSlideList.SelectionChanged += (_, _) => UpdateMoveButtons();
+        DragDrop.SetAllowDrop(_customShowSlideList, true);
+        _customShowSlideList.PointerPressed += OnCustomShowSlideListPointerPressed;
+        _customShowSlideList.PointerMoved += OnCustomShowSlideListPointerMoved;
+        _customShowSlideList.PointerReleased += OnCustomShowSlideListPointerReleased;
+        _customShowSlideList.AddHandler(DragDrop.DragOverEvent, OnCustomShowSlideListDragOver);
+        _customShowSlideList.AddHandler(DragDrop.DropEvent, OnCustomShowSlideListDrop);
 
         _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
         _validationText.TextWrapping = TextWrapping.Wrap;
@@ -76,6 +88,11 @@ internal sealed class CustomShowDialog : Window
     internal void MoveSelectedCustomShowSlideUpForTests() => OnMoveSelectedSlide(-1);
 
     internal void MoveSelectedCustomShowSlideDownForTests() => OnMoveSelectedSlide(1);
+
+    internal SlideShowCustomShowDragReorderPlan DragReorderCustomShowSlideForTests(
+        int sourceSlideIndex,
+        int targetDropIndex) =>
+        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
 
     private Control BuildContent()
     {
@@ -322,11 +339,168 @@ internal sealed class CustomShowDialog : Window
             return;
         }
 
+        var targetDropIndex = selectedSlide.Index + offset + (offset > 0 ? 1 : 0);
+        ApplyCustomShowSlideDragReorder(selectedSlide.Index, targetDropIndex);
+    }
+
+    private void OnCustomShowSlideListPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        var point = e.GetCurrentPoint(_customShowSlideList);
+        var item = FindControlAncestor<ListBoxItem>(e.Source);
+        if (point.Properties.IsLeftButtonPressed &&
+            item?.DataContext is CustomShowSlideListItem slide)
+        {
+            _customShowSlideDragStartPoint = point.Position;
+            _customShowSlideDragSourceIndex = slide.Index;
+            _customShowSlideDragActive = false;
+            return;
+        }
+
+        ResetCustomShowSlideDrag();
+    }
+
+    private void OnCustomShowSlideListPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var point = e.GetCurrentPoint(_customShowSlideList);
+        if (_customShowSlideDragStartPoint is not { } dragStartPoint ||
+            _customShowSlideDragSourceIndex < 0 ||
+            !point.Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        if (Math.Abs(point.Position.X - dragStartPoint.X) < DragStartThreshold &&
+            Math.Abs(point.Position.Y - dragStartPoint.Y) < DragStartThreshold)
+        {
+            return;
+        }
+
+        _customShowSlideDragActive = true;
+        e.Handled = true;
+    }
+
+    private void OnCustomShowSlideListPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_customShowSlideDragActive || _customShowSlideDragSourceIndex < 0)
+        {
+            ResetCustomShowSlideDrag();
+            return;
+        }
+
+        var sourceSlideIndex = _customShowSlideDragSourceIndex;
+        var targetDropIndex = ResolveCustomShowSlideDropIndex(e);
+        ResetCustomShowSlideDrag();
+        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
+        e.Handled = true;
+    }
+
+    private void OnCustomShowSlideListDragOver(object? sender, DragEventArgs e)
+    {
+        e.DragEffects = _customShowSlideDragSourceIndex >= 0
+            ? DragDropEffects.Move
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnCustomShowSlideListDrop(object? sender, DragEventArgs e)
+    {
+        if (_customShowSlideDragSourceIndex < 0)
+        {
+            return;
+        }
+
+        var sourceSlideIndex = _customShowSlideDragSourceIndex;
+        var targetDropIndex = ResolveCustomShowSlideDropIndex(e);
+        ResetCustomShowSlideDrag();
+        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
+        e.Handled = true;
+    }
+
+    private int ResolveCustomShowSlideDropIndex(PointerEventArgs e)
+    {
+        var item = FindControlAncestor<ListBoxItem>(e.Source);
+        if (item?.DataContext is CustomShowSlideListItem slide)
+        {
+            var position = e.GetPosition(item);
+            return position.Y > item.Bounds.Height / 2
+                ? slide.Index + 1
+                : slide.Index;
+        }
+
+        return _customShowSlideList.Items.Count;
+    }
+
+    private int ResolveCustomShowSlideDropIndex(DragEventArgs e)
+    {
+        var item = FindControlAncestor<ListBoxItem>(e.Source);
+        if (item?.DataContext is CustomShowSlideListItem slide)
+        {
+            var position = e.GetPosition(item);
+            return position.Y > item.Bounds.Height / 2
+                ? slide.Index + 1
+                : slide.Index;
+        }
+
+        return _customShowSlideList.Items.Count;
+    }
+
+    private void ResetCustomShowSlideDrag()
+    {
+        _customShowSlideDragStartPoint = null;
+        _customShowSlideDragSourceIndex = -1;
+        _customShowSlideDragActive = false;
+    }
+
+    private SlideShowCustomShowDragReorderPlan ApplyCustomShowSlideDragReorder(
+        int sourceSlideIndex,
+        int targetDropIndex)
+    {
+        if (SelectedShow is null)
+        {
+            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
+            return new SlideShowCustomShowDragReorderPlan(
+                IsValid: false,
+                ShouldApplyMutation: false,
+                SourceSlideIndex: sourceSlideIndex,
+                SourceSlideId: string.Empty,
+                TargetDropIndex: targetDropIndex,
+                TargetSlideIndex: -1,
+                SelectedSlideIndex: -1,
+                SlideIds: Array.Empty<string>(),
+                ErrorMessage: SlideShowCustomShowPlanner.MissingCustomShowMessage);
+        }
+
+        var slideItems = _customShowSlideList.Items
+            .OfType<CustomShowSlideListItem>()
+            .ToArray();
+        var sourceSlideId = sourceSlideIndex >= 0 && sourceSlideIndex < slideItems.Length
+            ? slideItems[sourceSlideIndex].SlideId
+            : string.Empty;
+        var plan = SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(
+            slideItems.Select(item => item.SlideId).ToArray(),
+            sourceSlideIndex,
+            sourceSlideId,
+            targetDropIndex);
+
+        if (!plan.IsValid)
+        {
+            SetValidation(plan.ErrorMessage);
+            return plan;
+        }
+
+        if (!plan.ShouldApplyMutation)
+        {
+            _customShowSlideList.SelectedIndex = plan.SelectedSlideIndex;
+            SetValidation(null);
+            return plan;
+        }
+
         ApplyMutationResult(_host.MoveCustomShowSlide(
             SelectedShow.Index,
-            selectedSlide.Index,
-            selectedSlide.SlideId,
-            selectedSlide.Index + offset));
+            plan.SourceSlideIndex,
+            plan.SourceSlideId,
+            plan.TargetSlideIndex));
+        return plan;
     }
 
     private void OnDelete()
@@ -438,6 +612,20 @@ internal sealed class CustomShowDialog : Window
         };
         button.Click += (_, _) => onClick();
         return button;
+    }
+
+    private static T? FindControlAncestor<T>(object? source)
+        where T : Control
+    {
+        for (var current = source as Control; current is not null; current = current.Parent as Control)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+        }
+
+        return null;
     }
 
     private sealed record CustomShowListItem(int Index, string Name, int SlideCount, string DisplayText)

@@ -441,6 +441,150 @@ public sealed class SlideShowCustomShowPlannerTests
         customShow.SlideIds.Should().Equal(presentation.Slides[0].Id, presentation.Slides[1].Id);
     }
 
+    [Fact]
+    public void BuildCustomShowSlideDragReorderPlan_MapsDropIndexToExistingMoveTargetAndPreservesDuplicates()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix", "Close");
+        var slideIds = new[]
+        {
+            presentation.Slides[2].Id,
+            presentation.Slides[0].Id,
+            presentation.Slides[2].Id,
+            presentation.Slides[1].Id
+        };
+
+        var plan = SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(
+            slideIds,
+            sourceSlideIndex: 0,
+            sourceSlideId: presentation.Slides[2].Id,
+            targetDropIndex: 4);
+
+        plan.Should().Match<SlideShowCustomShowDragReorderPlan>(candidate =>
+            candidate.IsValid &&
+            candidate.ShouldApplyMutation &&
+            candidate.SourceSlideIndex == 0 &&
+            candidate.SourceSlideId == presentation.Slides[2].Id &&
+            candidate.TargetDropIndex == 4 &&
+            candidate.TargetSlideIndex == 3 &&
+            candidate.SelectedSlideIndex == 3 &&
+            candidate.ErrorMessage == null);
+        plan.SlideIds.Should().Equal(
+            presentation.Slides[0].Id,
+            presentation.Slides[2].Id,
+            presentation.Slides[1].Id,
+            presentation.Slides[2].Id);
+    }
+
+    [Fact]
+    public void BuildCustomShowSlideDragReorderPlan_ClampsDropBounds()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
+        var slideIds = presentation.Slides.Select(slide => slide.Id).ToArray();
+
+        var beforeStart = SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(
+            slideIds,
+            sourceSlideIndex: 2,
+            sourceSlideId: presentation.Slides[2].Id,
+            targetDropIndex: -20);
+        var pastEnd = SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(
+            slideIds,
+            sourceSlideIndex: 0,
+            sourceSlideId: presentation.Slides[0].Id,
+            targetDropIndex: 99);
+
+        beforeStart.Should().Match<SlideShowCustomShowDragReorderPlan>(plan =>
+            plan.IsValid &&
+            plan.ShouldApplyMutation &&
+            plan.TargetDropIndex == 0 &&
+            plan.TargetSlideIndex == 0 &&
+            plan.SelectedSlideIndex == 0);
+        beforeStart.SlideIds.Should().Equal(
+            presentation.Slides[2].Id,
+            presentation.Slides[0].Id,
+            presentation.Slides[1].Id);
+
+        pastEnd.Should().Match<SlideShowCustomShowDragReorderPlan>(plan =>
+            plan.IsValid &&
+            plan.ShouldApplyMutation &&
+            plan.TargetDropIndex == 3 &&
+            plan.TargetSlideIndex == 2 &&
+            plan.SelectedSlideIndex == 2);
+        pastEnd.SlideIds.Should().Equal(
+            presentation.Slides[1].Id,
+            presentation.Slides[2].Id,
+            presentation.Slides[0].Id);
+    }
+
+    [Fact]
+    public void BuildCustomShowSlideDragReorderPlan_TreatsAdjacentDropBoundariesAsNoOps()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
+        var slideIds = presentation.Slides.Select(slide => slide.Id).ToArray();
+
+        var beforeOwnRow = SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(
+            slideIds,
+            sourceSlideIndex: 1,
+            sourceSlideId: presentation.Slides[1].Id,
+            targetDropIndex: 1);
+        var afterOwnRow = SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(
+            slideIds,
+            sourceSlideIndex: 1,
+            sourceSlideId: presentation.Slides[1].Id,
+            targetDropIndex: 2);
+
+        beforeOwnRow.Should().Match<SlideShowCustomShowDragReorderPlan>(plan =>
+            plan.IsValid &&
+            !plan.ShouldApplyMutation &&
+            plan.SourceSlideIndex == 1 &&
+            plan.SourceSlideId == presentation.Slides[1].Id &&
+            plan.TargetDropIndex == 1 &&
+            plan.TargetSlideIndex == 1 &&
+            plan.SelectedSlideIndex == 1 &&
+            plan.ErrorMessage == null);
+        beforeOwnRow.SlideIds.Should().Equal(slideIds);
+
+        afterOwnRow.Should().Match<SlideShowCustomShowDragReorderPlan>(plan =>
+            plan.IsValid &&
+            !plan.ShouldApplyMutation &&
+            plan.SourceSlideIndex == 1 &&
+            plan.SourceSlideId == presentation.Slides[1].Id &&
+            plan.TargetDropIndex == 2 &&
+            plan.TargetSlideIndex == 1 &&
+            plan.SelectedSlideIndex == 1 &&
+            plan.ErrorMessage == null);
+        afterOwnRow.SlideIds.Should().Equal(slideIds);
+    }
+
+    [Fact]
+    public void BuildCustomShowSlideDragReorderPlan_RejectsInvalidOrStaleSourceRows()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
+        var slideIds = presentation.Slides.Select(slide => slide.Id).ToArray();
+
+        var missingIndex = SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(
+            slideIds,
+            sourceSlideIndex: 5,
+            sourceSlideId: presentation.Slides[0].Id,
+            targetDropIndex: 1);
+        var staleId = SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(
+            slideIds,
+            sourceSlideIndex: 0,
+            sourceSlideId: presentation.Slides[2].Id,
+            targetDropIndex: 1);
+
+        missingIndex.IsValid.Should().BeFalse();
+        missingIndex.ShouldApplyMutation.Should().BeFalse();
+        missingIndex.ErrorMessage.Should().Be(SlideShowCustomShowPlanner.MissingCustomShowSlideMessage);
+        missingIndex.TargetDropIndex.Should().Be(1);
+        missingIndex.SelectedSlideIndex.Should().Be(2);
+        missingIndex.SlideIds.Should().Equal(slideIds);
+
+        staleId.IsValid.Should().BeFalse();
+        staleId.ErrorMessage.Should().Be(SlideShowCustomShowPlanner.MissingCustomShowSlideMessage);
+        staleId.SelectedSlideIndex.Should().Be(0);
+        staleId.SlideIds.Should().Equal(slideIds);
+    }
+
     private static Presentation MakePresentation(params string[] titles)
     {
         var presentation = Presentation.CreateEmpty();

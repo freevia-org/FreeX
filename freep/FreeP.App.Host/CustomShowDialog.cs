@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using FreeP.App.Compositor;
 
@@ -21,6 +22,8 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly Button _moveDownButton;
     private readonly List<CheckBox> _slideCheckBoxes = new();
     private IReadOnlyList<SlideShowCustomShowSlideOption> _availableSlides = Array.Empty<SlideShowCustomShowSlideOption>();
+    private Point? _customShowSlideDragStartPoint;
+    private int _customShowSlideDragSourceIndex = -1;
 
     public CustomShowDialog(MainWindow host)
     {
@@ -42,6 +45,11 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         _customShowSlideList.MinHeight = 92;
         _customShowSlideList.SelectionChanged += (_, _) => UpdateMoveButtons();
+        _customShowSlideList.AllowDrop = true;
+        _customShowSlideList.PreviewMouseLeftButtonDown += OnCustomShowSlideListMouseLeftButtonDown;
+        _customShowSlideList.PreviewMouseMove += OnCustomShowSlideListMouseMove;
+        _customShowSlideList.DragOver += OnCustomShowSlideListDragOver;
+        _customShowSlideList.Drop += OnCustomShowSlideListDrop;
 
         _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
         _validationText.TextWrapping = TextWrapping.Wrap;
@@ -74,6 +82,11 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public void MoveSelectedCustomShowSlideUpForTests() => OnMoveSelectedSlide(-1);
 
     public void MoveSelectedCustomShowSlideDownForTests() => OnMoveSelectedSlide(1);
+
+    public SlideShowCustomShowDragReorderPlan DragReorderCustomShowSlideForTests(
+        int sourceSlideIndex,
+        int targetDropIndex) =>
+        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
 
     private UIElement BuildContent()
     {
@@ -295,11 +308,131 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return;
         }
 
+        var targetDropIndex = selectedSlide.Index + offset + (offset > 0 ? 1 : 0);
+        ApplyCustomShowSlideDragReorder(selectedSlide.Index, targetDropIndex);
+    }
+
+    private void OnCustomShowSlideListMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var item = FindVisualAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
+        if (item?.DataContext is CustomShowSlideListItem slide)
+        {
+            _customShowSlideDragStartPoint = e.GetPosition(_customShowSlideList);
+            _customShowSlideDragSourceIndex = slide.Index;
+            return;
+        }
+
+        _customShowSlideDragStartPoint = null;
+        _customShowSlideDragSourceIndex = -1;
+    }
+
+    private void OnCustomShowSlideListMouseMove(object sender, MouseEventArgs e)
+    {
+        if (_customShowSlideDragStartPoint is not { } dragStartPoint ||
+            _customShowSlideDragSourceIndex < 0 ||
+            e.LeftButton != MouseButtonState.Pressed)
+        {
+            return;
+        }
+
+        var position = e.GetPosition(_customShowSlideList);
+        if (Math.Abs(position.X - dragStartPoint.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(position.Y - dragStartPoint.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        var sourceIndex = _customShowSlideDragSourceIndex;
+        _customShowSlideDragStartPoint = null;
+        _customShowSlideDragSourceIndex = -1;
+        DragDrop.DoDragDrop(_customShowSlideList, sourceIndex, DragDropEffects.Move);
+    }
+
+    private void OnCustomShowSlideListDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(typeof(int))
+            ? DragDropEffects.Move
+            : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnCustomShowSlideListDrop(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(typeof(int)))
+        {
+            return;
+        }
+
+        var sourceSlideIndex = (int)e.Data.GetData(typeof(int))!;
+        var targetDropIndex = ResolveCustomShowSlideDropIndex(e);
+        ApplyCustomShowSlideDragReorder(sourceSlideIndex, targetDropIndex);
+        e.Handled = true;
+    }
+
+    private int ResolveCustomShowSlideDropIndex(DragEventArgs e)
+    {
+        var item = FindVisualAncestor<ListBoxItem>(e.OriginalSource as DependencyObject);
+        if (item?.DataContext is CustomShowSlideListItem slide)
+        {
+            var position = e.GetPosition(item);
+            return position.Y > item.ActualHeight / 2
+                ? slide.Index + 1
+                : slide.Index;
+        }
+
+        return _customShowSlideList.Items.Count;
+    }
+
+    private SlideShowCustomShowDragReorderPlan ApplyCustomShowSlideDragReorder(
+        int sourceSlideIndex,
+        int targetDropIndex)
+    {
+        if (SelectedShow is null)
+        {
+            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
+            return new SlideShowCustomShowDragReorderPlan(
+                IsValid: false,
+                ShouldApplyMutation: false,
+                SourceSlideIndex: sourceSlideIndex,
+                SourceSlideId: string.Empty,
+                TargetDropIndex: targetDropIndex,
+                TargetSlideIndex: -1,
+                SelectedSlideIndex: -1,
+                SlideIds: Array.Empty<string>(),
+                ErrorMessage: SlideShowCustomShowPlanner.MissingCustomShowMessage);
+        }
+
+        var slideItems = _customShowSlideList.Items
+            .OfType<CustomShowSlideListItem>()
+            .ToArray();
+        var sourceSlideId = sourceSlideIndex >= 0 && sourceSlideIndex < slideItems.Length
+            ? slideItems[sourceSlideIndex].SlideId
+            : string.Empty;
+        var plan = SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(
+            slideItems.Select(item => item.SlideId).ToArray(),
+            sourceSlideIndex,
+            sourceSlideId,
+            targetDropIndex);
+
+        if (!plan.IsValid)
+        {
+            SetValidation(plan.ErrorMessage);
+            return plan;
+        }
+
+        if (!plan.ShouldApplyMutation)
+        {
+            _customShowSlideList.SelectedIndex = plan.SelectedSlideIndex;
+            SetValidation(null);
+            return plan;
+        }
+
         ApplyMutationResult(_host.MoveCustomShowSlide(
             SelectedShow.Index,
-            selectedSlide.Index,
-            selectedSlide.SlideId,
-            selectedSlide.Index + offset));
+            plan.SourceSlideIndex,
+            plan.SourceSlideId,
+            plan.TargetSlideIndex));
+        return plan;
     }
 
     private void OnDelete()
@@ -418,6 +551,20 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     {
         Grid.SetRow(element, row);
         return element;
+    }
+
+    private static T? FindVisualAncestor<T>(DependencyObject? source)
+        where T : DependencyObject
+    {
+        for (var current = source; current is not null; current = VisualTreeHelper.GetParent(current))
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+        }
+
+        return null;
     }
 
     private sealed record CustomShowListItem(int Index, string Name, int SlideCount, string DisplayText)

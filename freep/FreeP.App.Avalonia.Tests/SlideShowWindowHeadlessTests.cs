@@ -1085,6 +1085,74 @@ public sealed class SlideShowWindowHeadlessTests
     }
 
     [Fact]
+    public async Task CustomShowDialog_drag_reorder_uses_shared_planner_and_existing_move_mutation()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.App.Avalonia",
+            "CustomShowDialog.cs"));
+        source.Should().Contain("DragDrop.SetAllowDrop(_customShowSlideList, true)");
+        source.Should().Contain("_customShowSlideList.PointerPressed += OnCustomShowSlideListPointerPressed");
+        source.Should().Contain("_customShowSlideList.PointerMoved += OnCustomShowSlideListPointerMoved");
+        source.Should().Contain("_customShowSlideList.PointerReleased += OnCustomShowSlideListPointerReleased");
+        source.Should().Contain("_customShowSlideList.AddHandler(DragDrop.DropEvent, OnCustomShowSlideListDrop)");
+        source.Should().Contain("ResolveCustomShowSlideDropIndex(e)");
+        source.Should().Contain("SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(");
+        source.Should().Contain("_host.MoveCustomShowSlide(");
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            CustomShowDialog? dialog = null;
+            try
+            {
+                var presentation = window.Editor.Presentation;
+                presentation.Slides.Clear();
+                presentation.Slides.Add(new Slide { Title = "Intro" });
+                presentation.Slides.Add(new Slide { Title = "Deep dive" });
+                presentation.Slides.Add(new Slide { Title = "Appendix" });
+
+                var create = window.CreateCustomShow(
+                    "Executive review",
+                    new[]
+                    {
+                        presentation.Slides[2].Id,
+                        presentation.Slides[0].Id,
+                        presentation.Slides[2].Id
+                    });
+                create.Succeeded.Should().BeTrue();
+
+                dialog = new CustomShowDialog(window);
+
+                var plan = dialog.DragReorderCustomShowSlideForTests(
+                    sourceSlideIndex: 0,
+                    targetDropIndex: 3);
+
+                plan.IsValid.Should().BeTrue();
+                plan.ShouldApplyMutation.Should().BeTrue();
+                plan.SourceSlideId.Should().Be(presentation.Slides[2].Id);
+                plan.TargetDropIndex.Should().Be(3);
+                plan.TargetSlideIndex.Should().Be(2);
+                plan.SlideIds.Should().Equal(
+                    presentation.Slides[0].Id,
+                    presentation.Slides[2].Id,
+                    presentation.Slides[2].Id);
+                presentation.CustomShows[0].SlideIds.Should().Equal(plan.SlideIds);
+                dialog.SelectedCustomShowSlideIndex.Should().Be(2);
+                dialog.ValidationMessage.Should().BeEmpty();
+            }
+            finally
+            {
+                dialog?.Close();
+                window.Close();
+            }
+        });
+
+        if (!ran) return;
+    }
+
+    [Fact]
     public void RibbonDefinition_has_slideshow_group()
     {
         var definition = FreePRibbonAvalonia.Build();

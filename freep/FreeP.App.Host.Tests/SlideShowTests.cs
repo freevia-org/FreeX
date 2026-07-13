@@ -1,4 +1,5 @@
 using System.Windows;
+using System.IO;
 using System.Text;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
@@ -1388,6 +1389,84 @@ public sealed partial class SlideShowMainWindowCustomShowTests
             dialog?.Close();
             window.Close();
         }
+    }
+
+    [StaFact]
+    public void CustomShowDialog_DragReorder_UsesSharedPlannerAndExistingMoveMutation()
+    {
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Host", "CustomShowDialog.cs"));
+        source.Should().Contain("_customShowSlideList.AllowDrop = true");
+        source.Should().Contain("_customShowSlideList.PreviewMouseLeftButtonDown += OnCustomShowSlideListMouseLeftButtonDown");
+        source.Should().Contain("_customShowSlideList.PreviewMouseMove += OnCustomShowSlideListMouseMove");
+        source.Should().Contain("_customShowSlideList.Drop += OnCustomShowSlideListDrop");
+        source.Should().Contain("ResolveCustomShowSlideDropIndex(e)");
+        source.Should().Contain("SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(");
+        source.Should().Contain("_host.MoveCustomShowSlide(");
+
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        CustomShowDialog? dialog = null;
+        try
+        {
+            var presentation = window.Editor.Presentation;
+            presentation.Slides.Clear();
+            presentation.Slides.Add(new Slide { Title = "Intro" });
+            presentation.Slides.Add(new Slide { Title = "Deep dive" });
+            presentation.Slides.Add(new Slide { Title = "Appendix" });
+
+            var create = window.CreateCustomShow(
+                "Executive review",
+                new[]
+                {
+                    presentation.Slides[2].Id,
+                    presentation.Slides[0].Id,
+                    presentation.Slides[2].Id
+                });
+            create.Succeeded.Should().BeTrue();
+
+            dialog = new CustomShowDialog(window);
+
+            var plan = dialog.DragReorderCustomShowSlideForTests(
+                sourceSlideIndex: 0,
+                targetDropIndex: 3);
+
+            plan.IsValid.Should().BeTrue();
+            plan.ShouldApplyMutation.Should().BeTrue();
+            plan.SourceSlideId.Should().Be(presentation.Slides[2].Id);
+            plan.TargetDropIndex.Should().Be(3);
+            plan.TargetSlideIndex.Should().Be(2);
+            plan.SlideIds.Should().Equal(
+                presentation.Slides[0].Id,
+                presentation.Slides[2].Id,
+                presentation.Slides[2].Id);
+            presentation.CustomShows[0].SlideIds.Should().Equal(plan.SlideIds);
+            dialog.SelectedCustomShowSlideIndex.Should().Be(2);
+            dialog.ValidationMessage.Should().BeEmpty();
+        }
+        finally
+        {
+            dialog?.Close();
+            window.Close();
+        }
+    }
+
+    private static string FindRepoFile(params string[] relativeParts)
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            var parts = new string[relativeParts.Length + 1];
+            parts[0] = directory.FullName;
+            relativeParts.CopyTo(parts, 1);
+
+            var candidate = Path.Combine(parts);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        throw new FileNotFoundException(
+            "Could not locate repository file.",
+            Path.Combine(relativeParts));
     }
 }
 
