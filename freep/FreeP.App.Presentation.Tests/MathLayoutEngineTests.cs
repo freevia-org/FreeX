@@ -193,6 +193,44 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Nary_GrowOperator_WithTallOperand_IncreasesSharedOperatorSize()
+    {
+        var noGrow = new MathNode.Nary("S", false, null, null, TallFraction());
+        var grow = new MathNode.Nary("S", false, null, null, TallFraction(), growOperator: true);
+
+        var noGrowLayout = MathLayoutEngine.Layout(noGrow, "Cambria Math", FontSizePt);
+        var growLayout = MathLayoutEngine.Layout(grow, "Cambria Math", FontSizePt);
+
+        var noGrowContainer = Assert.IsType<MathBox.Container>(noGrowLayout.Children[0]);
+        var growContainer = Assert.IsType<MathBox.Container>(growLayout.Children[0]);
+        var noGrowOperator = Assert.IsType<MathBox.Glyph>(noGrowContainer.Children[0]);
+        var growOperator = Assert.IsType<MathBox.Glyph>(growContainer.Children[0]);
+
+        growOperator.FontSizePt.Should().BeGreaterThan(noGrowOperator.FontSizePt,
+            "m:naryPr/m:grow should vertically scale the n-ary operator for tall operands in shared layout");
+        growOperator.Metrics.Height.Should().BeGreaterThan(noGrowOperator.Metrics.Height);
+        growLayout.Metrics.Height.Should().BeGreaterThan(noGrowLayout.Metrics.Height);
+    }
+
+    [Fact]
+    public void OmmlNaryGrow_RenderPlanCarriesScaledOperatorGlyph()
+    {
+        var node = ParseOmml(
+            "<m:nary>" +
+            "<m:naryPr><m:chr m:val=\"S\"/><m:grow/></m:naryPr>" +
+            "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+            "</m:nary>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var op = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single(g => g.Text == "S");
+
+        op.FontSizePt.Should().BeGreaterThan(FontSizePt * 1.50,
+            "the renderer-neutral draw plan should carry the grown n-ary operator size to both hosts");
+    }
+
+    [Fact]
     public void Run_WithBoldStyle_LayoutAndRenderPlanCarryBoldMetadata()
     {
         var layout = MathLayoutEngine.Layout(Run("x", isItalic: false, isBold: true), "Cambria Math", FontSizePt);

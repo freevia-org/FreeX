@@ -660,15 +660,15 @@ public static class MathLayoutEngine
     private static MathBox LayoutNary(MathNode.Nary nary, string fontFamily, double fontSizePt)
     {
         double em = Em(fontSizePt);
-        double opSizePt   = fontSizePt * 1.50;  // enlarged operator
         double limSizePt  = fontSizePt * 0.65;  // limit labels
 
+        var operandBox = LayoutNode(nary.Operand, fontFamily, fontSizePt);
+        double opSizePt = ResolveNaryOperatorSizePt(fontSizePt, operandBox, nary.GrowOperator);
         var opBox = MakeGlyph(nary.OperatorChar, fontFamily, opSizePt, isItalic: false);
         MathBox? subLimBox = nary.SubLimit is not null
             ? LayoutNode(nary.SubLimit, fontFamily, limSizePt) : null;
         MathBox? supLimBox = nary.SupLimit is not null
             ? LayoutNode(nary.SupLimit, fontFamily, limSizePt) : null;
-        var operandBox = LayoutNode(nary.Operand, fontFamily, fontSizePt);
 
         double opColW = opBox.Metrics.Width;
         if (subLimBox is not null) opColW = Math.Max(opColW, subLimBox.Metrics.Width);
@@ -803,6 +803,16 @@ public static class MathLayoutEngine
     }
 
     // ── Function layout ───────────────────────────────────────────────────
+
+    private static double ResolveNaryOperatorSizePt(double fontSizePt, MathBox operandBox, bool growOperator)
+    {
+        double defaultOperatorSizePt = fontSizePt * 1.50;
+        if (!growOperator)
+            return defaultOperatorSizePt;
+
+        double operandHeightPt = operandBox.Metrics.Height * (72.0 / 96.0);
+        return Math.Max(defaultOperatorSizePt, operandHeightPt);
+    }
 
     private static MathBox LayoutLimit(MathNode.Limit limit, string fontFamily, double fontSizePt)
     {

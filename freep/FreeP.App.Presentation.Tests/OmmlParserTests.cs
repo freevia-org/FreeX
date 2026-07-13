@@ -100,6 +100,43 @@ public sealed class OmmlParserTests
         Assert.Equal("x", Assert.IsType<MathNode.Run>(nary.Operand).Text);
     }
 
+    [Fact]
+    public void Nary_WithNoGrow_DefaultsOperatorGrowthOff()
+    {
+        var node = Parse("<m:nary><m:naryPr/><m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>");
+
+        var nary = Assert.IsType<MathNode.Nary>(node);
+        Assert.False(nary.GrowOperator, "absent m:naryPr/m:grow defaults off for n-ary operator growth.");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("1")]
+    [InlineData("on")]
+    [InlineData("true")]
+    public void Nary_WithGrowOn_PreservesOperatorGrowthFlag(string val)
+    {
+        var grow = string.IsNullOrEmpty(val)
+            ? "<m:grow/>"
+            : $"<m:grow m:val=\"{val}\"/>";
+        var node = Parse($"<m:nary><m:naryPr>{grow}</m:naryPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>");
+
+        var nary = Assert.IsType<MathNode.Nary>(node);
+        Assert.True(nary.GrowOperator);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("off")]
+    [InlineData("false")]
+    public void Nary_WithGrowOff_DoesNotRequestOperatorGrowth(string val)
+    {
+        var node = Parse($"<m:nary><m:naryPr><m:grow m:val=\"{val}\"/></m:naryPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:nary>");
+
+        var nary = Assert.IsType<MathNode.Nary>(node);
+        Assert.False(nary.GrowOperator);
+    }
+
     // m:radPr/m:degHide CT_OnOff semantics.
 
     [Fact]

@@ -170,14 +170,24 @@ public abstract class MathNode
         /// <summary>True for ?/? style (limits above/below); false for ? style (as scripts).</summary>
         public bool LimitsAboveBelow { get; }
 
+        /// <summary>True when m:naryPr/m:grow requests vertical operator growth.</summary>
+        public bool GrowOperator { get; }
+
         public MathNode? SubLimit { get; }
         public MathNode? SupLimit { get; }
         public MathNode Operand { get; }
 
-        public Nary(string operatorChar, bool limitsAboveBelow, MathNode? subLimit, MathNode? supLimit, MathNode operand)
+        public Nary(
+            string operatorChar,
+            bool limitsAboveBelow,
+            MathNode? subLimit,
+            MathNode? supLimit,
+            MathNode operand,
+            bool growOperator = false)
         {
             OperatorChar = operatorChar;
             LimitsAboveBelow = limitsAboveBelow;
+            GrowOperator = growOperator;
             SubLimit = subLimit;
             SupLimit = supLimit;
             Operand = operand;

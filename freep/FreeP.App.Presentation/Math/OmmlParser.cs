@@ -321,8 +321,13 @@ public static class OmmlParser
         if (subEl is not null && !subHidden) subLimit = ParseRow(subEl);
         if (supEl is not null && !supHidden) supLimit = ParseRow(supEl);
 
+        // m:grow is CT_OnOff. For n-ary operators, absent means off; present with
+        // absent val means on. The shared layout uses this to grow the operator
+        // toward tall operands without renderer-local math policy.
+        bool growOperator = IsOnOffOn(naryPr?.Element(M + "grow"));
+
         var eEl = el.Element(M + "e") ?? el;
-        return new MathNode.Nary(opChar, aboveBelow, subLimit, supLimit, ParseRow(eEl));
+        return new MathNode.Nary(opChar, aboveBelow, subLimit, supLimit, ParseRow(eEl), growOperator);
     }
 
     // ── m:func ────────────────────────────────────────────────────────────
