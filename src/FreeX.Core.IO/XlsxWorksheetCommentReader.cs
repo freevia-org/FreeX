@@ -99,9 +99,16 @@ internal static class XlsxWorksheetCommentReader
                     continue;
                 }
 
+                // R37-io-comments-legacy-vml-2-3: the <text> element is CT_Rst, which allows
+                // <rPh>/<t> phonetic-guide (furigana/pinyin reading-hint) runs alongside the
+                // visible <r>/<t> runs. Real Excel only ever displays the visible run text as the
+                // comment's text -- a plain Descendants("t") would also pull in the <rPh> text and
+                // corrupt the modeled comment text for Japanese/Chinese-authored comments that
+                // carry a phonetic guide, so exclude any <t> whose parent is <rPh>.
                 var text = string.Concat(comment
                     .Element(worksheetNs + "text")?
                     .Descendants(worksheetNs + "t")
+                    .Where(t => t.Parent?.Name != worksheetNs + "rPh")
                     .Select(element => element.Value) ?? []);
                 if (text.Length == 0)
                     continue;

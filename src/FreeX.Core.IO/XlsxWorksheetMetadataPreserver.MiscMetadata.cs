@@ -9,17 +9,34 @@ namespace FreeX.Core.IO;
 internal static partial class XlsxWorksheetMetadataPreserver
 {
     // Worksheet page break, calculation, phonetic, and custom-property native metadata preservation.
+    //
+    // NOTE: this returns the FULL (unfiltered) set of live break ids from the model, not just the
+    // subset that XlsxWorksheetPageBreakIdReader.IsSupported/the modeled writer currently round-trip
+    // (id >= 2). A manual break placed immediately after row 1 / column A is a completely normal,
+    // common Excel value (id == 1), and the live model can and does represent it (see
+    // XlsxFileAdapter's `if (rowBreak > 0) sheet.RowPageBreaks.Add(...)` load path). Filtering it out
+    // here would make MergeWorksheetBreaks unable to tell "the user removed break id=1" apart from
+    // "break id=1 can never be modeled", permanently resurrecting it from the source package. Ids that
+    // truly can never be modeled (e.g. id == 0, which has no corresponding row/column) are handled by
+    // ShouldRetainUnsupportedBreak below, independent of what this set contains.
     private static HashSet<uint> GetModeledWorksheetBreakIds(Workbook workbook, string sheetName, bool rowBreaks)
     {
         var sheet = workbook.GetSheet(sheetName);
         if (sheet is null)
             return [];
 
-        var maxBreakId = rowBreaks ? CellAddress.MaxRow : CellAddress.MaxCol;
-        return (rowBreaks ? sheet.RowPageBreaks : sheet.ColumnPageBreaks)
-            .Where(id => XlsxWorksheetPageBreakIdReader.IsSupported(id, maxBreakId))
-            .ToHashSet();
+        return (rowBreaks ? sheet.RowPageBreaks : sheet.ColumnPageBreaks).ToHashSet();
     }
+
+    // Decides whether to retain (from the pristine source package) a break whose id fails the shared
+    // reader/writer's IsSupported(id >= 2) check. Ids that are structurally unaddressable (0, or beyond
+    // the sheet's row/column limit) can never appear in the live model at all, so there is no way to
+    // detect "the user removed it" for them -- they must always be preserved verbatim. An addressable-
+    // but-"unsupported" id (in practice just id == 1: the break falls right after row 1 / column A) CAN
+    // appear in the live model (GetModeledWorksheetBreakIds above returns it unfiltered), so for that
+    // case we honor the live model instead of unconditionally resurrecting the source break.
+    private static bool ShouldRetainUnsupportedBreak(uint maxBreakId, uint rawId, HashSet<uint> modeledBreakIds) =>
+        rawId < 1 || rawId > maxBreakId || modeledBreakIds.Contains(rawId);
 
     private static bool MergeWorksheetBreaks(
         XElement sourceBreaks,
@@ -34,11 +51,12 @@ internal static partial class XlsxWorksheetMetadataPreserver
             var retainedBreaks = sourceBreaks
                 .Elements(workbookNs + "brk")
                 .Where(sourceBreak =>
-                    !XlsxWorksheetPageBreakIdReader.TryReadSupportedId(
+                    XlsxWorksheetPageBreakIdReader.TryReadSupportedId(
                         sourceBreak,
                         maxBreakId,
-                        out var sourceId) ||
-                    modeledBreakIds.Contains(sourceId))
+                        out var sourceId)
+                        ? modeledBreakIds.Contains(sourceId)
+                        : ShouldRetainUnsupportedBreak(maxBreakId, sourceId, modeledBreakIds))
                 .Select(sourceBreak => new XElement(sourceBreak))
                 .ToList();
             if (retainedBreaks.Count == 0)
@@ -108,6 +126,9 @@ internal static partial class XlsxWorksheetMetadataPreserver
                 changed = true;
                 continue;
             }
+
+            if (!ShouldRetainUnsupportedBreak(maxBreakId, sourceId, modeledBreakIds))
+                continue;
 
             if (!string.IsNullOrWhiteSpace(id) &&
                 targetBreaksByRawId.ContainsKey(id))

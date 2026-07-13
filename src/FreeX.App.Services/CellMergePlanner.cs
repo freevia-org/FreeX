@@ -50,21 +50,8 @@ public static class CellMergePlanner
         // that MergeCellsCommand raises for a genuine overlapping-merge request. A selection that only
         // partially overlaps an existing region (straddles its boundary without being fully covered by
         // it) is still a real conflict and falls through unchanged to the normal merge path below.
-        if (sheet is not null)
-        {
-            GridRange? coveringRegion = null;
-            foreach (var region in sheet.MergedRegions)
-            {
-                if (region.Contains(range))
-                {
-                    coveringRegion = region;
-                    break;
-                }
-            }
-
-            if (coveringRegion is { } toggleRegion)
-                return [new UnmergeCellsCommand(sheetId, toggleRegion)];
-        }
+        if (sheet is not null && FindCoveringRegion(sheet, range) is { } toggleRegion)
+            return [new UnmergeCellsCommand(sheetId, toggleRegion)];
 
         var commands = new List<IWorkbookCommand>();
         if (contentResolution == MergeCellContentResolution.ConcatenateAllCells && sheet is not null)
@@ -92,10 +79,35 @@ public static class CellMergePlanner
             if (HasLiveSpillTarget(sheet, range))
                 return [RejectSpillOverlapCommand.Instance];
 
+            // Same "Merge & Center" toggle gesture (see CreateMergeAndCenterCommands above): re-invoking
+            // "Merge Cells" -- or, via the per-row loop in the WPF host / Avalonia shell, "Merge Across"
+            // -- on a selection that is already fully covered by an existing merged region unmerges it,
+            // instead of falling through to MergeCellsCommand and failing with "Range overlaps an
+            // existing merged region.", matching real Excel where all three merge commands toggle the
+            // same merged/unmerged state.
+            if (FindCoveringRegion(sheet, range) is { } toggleRegion)
+                return [new UnmergeCellsCommand(sheetId, toggleRegion)];
+
             return range.CellCount <= 1 ? [] : [new MergeCellsCommand(sheetId, range)];
         }
 
         return CreateUnmergeCommands(sheet, sheetId, range);
+    }
+
+    /// <summary>
+    /// Finds the existing merged region (if any) that fully covers <paramref name="range"/> -- i.e. the
+    /// selection is entirely inside one existing merge (including the degenerate case where the
+    /// selection IS that merge). Used by the merge commands' Excel-parity toggle-to-unmerge gesture.
+    /// </summary>
+    private static GridRange? FindCoveringRegion(Sheet sheet, GridRange range)
+    {
+        foreach (var region in sheet.MergedRegions)
+        {
+            if (region.Contains(range))
+                return region;
+        }
+
+        return null;
     }
 
     public static IReadOnlyList<IWorkbookCommand> CreateFormatCellsMergeCommands(

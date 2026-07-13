@@ -608,6 +608,10 @@ public static partial class BuiltInFunctions
     {
         if (value is ErrorValue e) return (0, 0, "i", e);
         if (value is BoolValue) return (0, 0, "i", ErrorValue.Value);
+        // A blank cell flowing in through a range argument (e.g. IMSUM(A1:A3) with a gap)
+        // is treated as the complex number 0, matching Excel's usual blank-in-range handling
+        // for numeric-aggregate functions rather than erroring out the whole computation.
+        if (value is BlankValue) return (0, 0, "i", null);
         if (TryCellNumber(value, out var number))
             return double.IsFinite(number)
                 ? (number, 0, "i", null)

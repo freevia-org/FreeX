@@ -801,7 +801,31 @@ internal static class XlsxWorkbookMetadataPreserver
 
             var key = DefinedNameKey(candidate);
             if (existingKeys.Contains(key))
+            {
+                // This name was already re-emitted into the target by the full-rebuild name
+                // write-back (e.g. a formula/constant-refersTo name via NamedFormulas, which has no
+                // Hidden/Comment metadata slot on the model - unlike plain ranges'
+                // NamedRangeMetadataByName). Backfill any attribute (hidden, comment, ...) present on
+                // the pristine source element but missing from the freshly-written one, mirroring
+                // RestorePatchWorkbookDefinedNames' backfill for the patch-save path, so a live,
+                // unchanged name's hidden/comment attributes survive a full rebuild too.
+                var existingElement = targetDefinedNames?
+                    .Elements(workbookNs + "definedName")
+                    .FirstOrDefault(element => string.Equals(DefinedNameKey(element), key, StringComparison.OrdinalIgnoreCase));
+                if (existingElement is not null)
+                {
+                    foreach (var attribute in candidate.Attributes())
+                    {
+                        if (existingElement.Attribute(attribute.Name) is not null)
+                            continue;
+
+                        existingElement.SetAttributeValue(attribute.Name, attribute.Value);
+                        changed = true;
+                    }
+                }
+
                 continue;
+            }
 
             // Liveness gate: never resurrect a model-representable name the user deleted from the
             // Name Manager. Names FreeX cannot round-trip through the model (validator-rejected, or

@@ -489,6 +489,49 @@ public partial class GridView
         return _mergeLookup.TryGetValue((row, col), out var r) ? r : null;
     }
 
+    /// <summary>
+    /// Excel's deterministic weight ranking for resolving two conflicting border styles that
+    /// both describe the same physical grid edge (one from each of the two adjoining cells),
+    /// heaviest/most-prominent first. An unrecognized style ranks lowest (last).
+    /// </summary>
+    private static readonly BorderStyle[] BorderEdgePrecedence =
+    {
+        BorderStyle.Double,
+        BorderStyle.Thick,
+        BorderStyle.Medium,
+        BorderStyle.MediumDashDotDot,
+        BorderStyle.MediumDashDot,
+        BorderStyle.MediumDashed,
+        BorderStyle.SlantDashDot,
+        BorderStyle.Thin,
+        BorderStyle.DashDotDot,
+        BorderStyle.DashDot,
+        BorderStyle.Dashed,
+        BorderStyle.Dotted,
+        BorderStyle.Hair,
+        BorderStyle.None,
+    };
+
+    private static int BorderEdgePrecedenceRank(BorderStyle style)
+    {
+        var index = Array.IndexOf(BorderEdgePrecedence, style);
+        return index < 0 ? BorderEdgePrecedence.Length : index;
+    }
+
+    /// <summary>
+    /// Resolves which of two <see cref="CellBorder"/> values describing the same shared grid
+    /// edge (one owned by each neighboring cell) should actually be painted, matching Excel's
+    /// deterministic "heavier style wins" rule instead of whichever cell happens to be drawn
+    /// last. Symmetric in its two arguments, so both neighboring cells compute the identical
+    /// winner regardless of render/iteration order.
+    /// </summary>
+    private static CellBorder ResolveBorderEdgeWinner(CellBorder mine, CellBorder neighbor)
+    {
+        if (mine.Style == BorderStyle.None) return neighbor;
+        if (neighbor.Style == BorderStyle.None) return mine;
+        return BorderEdgePrecedenceRank(mine.Style) <= BorderEdgePrecedenceRank(neighbor.Style) ? mine : neighbor;
+    }
+
     private void RenderCells(DrawingContext dc)
     {
         var viewport = Viewport!;
@@ -529,7 +572,18 @@ public partial class GridView
                 visibleBottom);
         }
 
-        // Pass 2: explicit cell borders
+        // Pass 2: explicit cell borders.
+        // Build a lookup (by row/col) of every cell that carries a visible border, so that
+        // adjacent-edge conflicts (finding 2-4) and merge-membership (finding 2-3) can be
+        // resolved from the actual neighboring style rather than from draw order.
+        Dictionary<(uint Row, uint Col), CellStyle>? borderStyleLookup = null;
+        foreach (var borderCell in viewport.Cells)
+        {
+            if (borderCell.Style is not { } borderCellStyle || !HasVisibleCellBorder(borderCellStyle)) continue;
+            borderStyleLookup ??= new Dictionary<(uint Row, uint Col), CellStyle>();
+            borderStyleLookup[(borderCell.Row, borderCell.Col)] = borderCellStyle;
+        }
+
         foreach (var cell in viewport.Cells)
         {
             if (cell.Style is not { } style || !HasVisibleCellBorder(style)) continue;
@@ -544,10 +598,52 @@ public partial class GridView
             if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
                 continue;
 
-            DrawBorderEdge(dc, style.BorderTop,    new Point(x,     y),     new Point(x + w, y),     _brushCache, _borderPenCache);
-            DrawBorderEdge(dc, style.BorderBottom, new Point(x,     y + h), new Point(x + w, y + h), _brushCache, _borderPenCache);
-            DrawBorderEdge(dc, style.BorderLeft,   new Point(x,     y),     new Point(x,     y + h), _brushCache, _borderPenCache);
-            DrawBorderEdge(dc, style.BorderRight,  new Point(x + w, y),     new Point(x + w, y + h), _brushCache, _borderPenCache);
+            // Merge membership: suppress edges that fall strictly inside the merged region
+            // (i.e. another cell of the same merge sits on that side) so only the merge's
+            // outer perimeter is ever drawn -- matching Excel, which never shows an interior
+            // line through a merged cell.
+            var merge = hasMergedSurfaces ? FindMerge(cell.Row, cell.Col) : null;
+            var suppressTop = merge is { } mTop && cell.Row > mTop.Start.Row;
+            var suppressBottom = merge is { } mBottom && cell.Row < mBottom.End.Row;
+            var suppressLeft = merge is { } mLeft && cell.Col > mLeft.Start.Col;
+            var suppressRight = merge is { } mRight && cell.Col < mRight.End.Col;
+
+            if (!suppressTop)
+            {
+                var neighborBottom = borderStyleLookup is not null &&
+                    borderStyleLookup.TryGetValue((cell.Row - 1, cell.Col), out var aboveStyle)
+                    ? aboveStyle.BorderBottom
+                    : default;
+                var winner = ResolveBorderEdgeWinner(style.BorderTop, neighborBottom);
+                DrawBorderEdge(dc, winner, new Point(x, y), new Point(x + w, y), _brushCache, _borderPenCache);
+            }
+            if (!suppressBottom)
+            {
+                var neighborTop = borderStyleLookup is not null &&
+                    borderStyleLookup.TryGetValue((cell.Row + 1, cell.Col), out var belowStyle)
+                    ? belowStyle.BorderTop
+                    : default;
+                var winner = ResolveBorderEdgeWinner(style.BorderBottom, neighborTop);
+                DrawBorderEdge(dc, winner, new Point(x, y + h), new Point(x + w, y + h), _brushCache, _borderPenCache);
+            }
+            if (!suppressLeft)
+            {
+                var neighborRight = borderStyleLookup is not null &&
+                    borderStyleLookup.TryGetValue((cell.Row, cell.Col - 1), out var leftStyle)
+                    ? leftStyle.BorderRight
+                    : default;
+                var winner = ResolveBorderEdgeWinner(style.BorderLeft, neighborRight);
+                DrawBorderEdge(dc, winner, new Point(x, y), new Point(x, y + h), _brushCache, _borderPenCache);
+            }
+            if (!suppressRight)
+            {
+                var neighborLeft = borderStyleLookup is not null &&
+                    borderStyleLookup.TryGetValue((cell.Row, cell.Col + 1), out var rightStyle)
+                    ? rightStyle.BorderLeft
+                    : default;
+                var winner = ResolveBorderEdgeWinner(style.BorderRight, neighborLeft);
+                DrawBorderEdge(dc, winner, new Point(x + w, y), new Point(x + w, y + h), _brushCache, _borderPenCache);
+            }
             if (style.BorderDiagonalDown.Style != BorderStyle.None)
                 DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(x, y), new Point(x + w, y + h), _brushCache);
             if (style.BorderDiagonalUp.Style != BorderStyle.None)

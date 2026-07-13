@@ -19,14 +19,22 @@ public static partial class BuiltInFunctions
     /// operator strings ">5", ">=5", "<5", "<=5", "<>5", "=text",
     /// and simple wildcard strings using * and ?.
     /// </summary>
-    private static bool MatchesCriteria(ScalarValue cellValue, ScalarValue criteria)
+    /// <param name="textPrefixMatch">
+    /// When true, a bare (non-wildcard, non-numeric, non-operator) text criterion matches
+    /// any cell whose text BEGINS WITH the criterion (case-insensitive), per Excel's
+    /// documented database/Advanced-Filter criteria-range behavior (e.g. "Dav" matches
+    /// "Davolio"). When false (the default, used by COUNTIF/SUMIF/etc. via
+    /// <see cref="CompileCriteria"/>), a bare text criterion requires exact equality —
+    /// only an explicit "=text" criterion forces exact match either way.
+    /// </param>
+    private static bool MatchesCriteria(ScalarValue cellValue, ScalarValue criteria, bool textPrefixMatch = false)
     {
-        var matcher = CompileCriteria(criteria);
+        var matcher = CompileCriteria(criteria, textPrefixMatch);
         return matcher.Matches(cellValue);
     }
 
-    internal static CriteriaMatcher CompileCriteria(ScalarValue criteria) =>
-        CriteriaMatcher.Create(criteria);
+    internal static CriteriaMatcher CompileCriteria(ScalarValue criteria, bool textPrefixMatch = false) =>
+        CriteriaMatcher.Create(criteria, textPrefixMatch);
 
     private enum CriteriaMatcherKind : byte
     {
@@ -34,6 +42,7 @@ public static partial class BuiltInFunctions
         NumberEquals,
         BoolEquals,
         TextEquals,
+        TextBeginsWith,
         NumericOrTextEquals,
         WildcardText,
         NumericComparison,
@@ -69,7 +78,7 @@ public static partial class BuiltInFunctions
             _bool = boolean;
         }
 
-        public static CriteriaMatcher Create(ScalarValue criteria)
+        public static CriteriaMatcher Create(ScalarValue criteria, bool textPrefixMatch = false)
         {
             // Excel: a criteria that comes from an empty cell (BlankValue) matches cells equal to 0,
             // NOT blank cells. This is distinct from the empty string "" (TextValue) which matches blanks.
@@ -116,7 +125,9 @@ public static partial class BuiltInFunctions
             if (TryParseCriteriaNumber(crit, out var numericCriteria))
                 return new CriteriaMatcher(CriteriaMatcherKind.NumericOrTextEquals, text: crit, number: numericCriteria);
 
-            return new CriteriaMatcher(CriteriaMatcherKind.TextEquals, text: crit);
+            return textPrefixMatch
+                ? new CriteriaMatcher(CriteriaMatcherKind.TextBeginsWith, text: crit)
+                : new CriteriaMatcher(CriteriaMatcherKind.TextEquals, text: crit);
         }
 
         public bool Matches(ScalarValue cellValue) => _kind switch
@@ -129,6 +140,9 @@ public static partial class BuiltInFunctions
 
             CriteriaMatcherKind.TextEquals =>
                 string.Equals(CriteriaComparableText(cellValue), _text, StringComparison.OrdinalIgnoreCase),
+
+            CriteriaMatcherKind.TextBeginsWith =>
+                CriteriaComparableText(cellValue).StartsWith(_text, StringComparison.OrdinalIgnoreCase),
 
             CriteriaMatcherKind.NumericOrTextEquals =>
                 TryCellNumber(cellValue, out double comparableNumber)

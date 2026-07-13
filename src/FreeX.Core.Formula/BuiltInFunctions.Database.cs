@@ -61,7 +61,10 @@ public static partial class BuiltInFunctions
             if (dbCol < 0) return false;
 
             var cellValue = database.Cells[dataRow, dbCol];
-            if (!MatchesCriteria(cellValue, critCell)) return false;
+            // Excel's database/Advanced-Filter criteria treat a bare (non-wildcard, non-numeric,
+            // non-operator) text criterion as a "begins with" match (e.g. "Dav" matches "Davolio"),
+            // unlike COUNTIF/SUMIF's plain-text criteria which require exact equality.
+            if (!MatchesCriteria(cellValue, critCell, textPrefixMatch: true)) return false;
         }
         return true;
     }
@@ -185,8 +188,14 @@ public static partial class BuiltInFunctions
     private static ScalarValue DCount(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        // Mirrors plain COUNT: ignore an error in a matched field cell rather than
-        // propagating it -- only numeric matches are counted.
+        // A field that doesn't resolve to a database column is a #VALUE! error, matching
+        // every other D-function (DSUM/DAVERAGE/etc. via DatabaseExtractNumeric). This must
+        // be checked explicitly because, unlike those, DCount/DCountA below deliberately
+        // ignore DatabaseExtract's per-matched-cell error (mirrors plain COUNT: ignore an
+        // error in a matched field cell rather than propagating it -- only numeric matches
+        // are counted) -- so the field-resolution failure can't be told apart from "no
+        // matches" just by looking at DatabaseExtract's returned Error/matches.
+        if (ResolveDatabaseField(db, f) is null) return ErrorValue.Value;
         var (matches, _, _) = DatabaseExtract(db, f, cr);
         int count = 0;
         foreach (var v in matches)
@@ -197,6 +206,8 @@ public static partial class BuiltInFunctions
     private static ScalarValue DCountA(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
+        // See DCount: an unresolvable field is #VALUE!, matching every sibling D-function.
+        if (ResolveDatabaseField(db, f) is null) return ErrorValue.Value;
         // Mirrors plain COUNTA: an error in a matched field cell still counts as a
         // non-blank present value rather than being propagated.
         var (matches, _, _) = DatabaseExtract(db, f, cr);

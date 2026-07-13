@@ -106,6 +106,10 @@ public static partial class BuiltInFunctions
         Add(UnitCategory.Temperature, "K", double.NaN);
         Add(UnitCategory.Temperature, "Rank", double.NaN);
         Add(UnitCategory.Temperature, "Reau", double.NaN);
+        // Excel also documents "cel"/"fah"/"kel" as alternate abbreviations for C/F/K.
+        Add(UnitCategory.Temperature, "cel", double.NaN);
+        Add(UnitCategory.Temperature, "fah", double.NaN);
+        Add(UnitCategory.Temperature, "kel", double.NaN);
 
         // Area (base = m^2)
         Add(UnitCategory.Area, "m2", 1);
@@ -275,9 +279,9 @@ public static partial class BuiltInFunctions
             // Convert input to Kelvin, then to target.
             double k = from switch
             {
-                "C"    => n + 273.15,
-                "F"    => (n - 32) * 5.0 / 9.0 + 273.15,
-                "K"    => n,
+                "C" or "cel" => n + 273.15,
+                "F" or "fah" => (n - 32) * 5.0 / 9.0 + 273.15,
+                "K" or "kel" => n,
                 "Rank" => n * 5.0 / 9.0,
                 "Reau" => n * 5.0 / 4.0 + 273.15,
                 _      => double.NaN
@@ -285,9 +289,9 @@ public static partial class BuiltInFunctions
             if (!double.IsFinite(k)) return ErrorValue.NA;
             double r = to switch
             {
-                "C"    => k - 273.15,
-                "F"    => (k - 273.15) * 9.0 / 5.0 + 32,
-                "K"    => k,
+                "C" or "cel" => k - 273.15,
+                "F" or "fah" => (k - 273.15) * 9.0 / 5.0 + 32,
+                "K" or "kel" => k,
                 "Rank" => k * 9.0 / 5.0,
                 "Reau" => (k - 273.15) * 4.0 / 5.0,
                 _      => double.NaN
@@ -604,6 +608,397 @@ public static partial class BuiltInFunctions
         if (truncated < long.MinValue || truncated > long.MaxValue) return false;
         value = (long)truncated;
         return true;
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // BESSELI/BESSELJ/BESSELK/BESSELY — registered here (rather than in the
+    // Functions dictionary literal in BuiltInFunctions.cs, which is out of
+    // scope for this fix) via a static constructor on the shared partial
+    // class. Field initializers across all partial declarations run before
+    // any explicit static constructor body, so `Functions` is guaranteed to
+    // already contain its literal entries by the time this body executes.
+    // ════════════════════════════════════════════════════════════════════════
+
+    static BuiltInFunctions()
+    {
+        Functions["BESSELJ"] = (BesselJFunc, 2, 2);
+        Functions["BESSELI"] = (BesselIFunc, 2, 2);
+        Functions["BESSELY"] = (BesselYFunc, 2, 2);
+        Functions["BESSELK"] = (BesselKFunc, 2, 2);
+    }
+
+    // Guard against pathological orders that would make the O(n) recurrences below
+    // spin for an unreasonable amount of time (Excel itself overflows to #NUM! long
+    // before n reaches values like this).
+    private const long MaxBesselOrder = 100_000;
+
+    private static ScalarValue BesselJFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], (x, n) => BesselScalar(x, n, requirePositiveX: false, BesselJ));
+    }
+
+    private static ScalarValue BesselIFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], (x, n) => BesselScalar(x, n, requirePositiveX: false, BesselI));
+    }
+
+    private static ScalarValue BesselYFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], (x, n) => BesselScalar(x, n, requirePositiveX: true, BesselY));
+    }
+
+    private static ScalarValue BesselKFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        if (args[1] is ErrorValue e1) return e1;
+        return MapBinaryMathArgs(args[0], args[1], (x, n) => BesselScalar(x, n, requirePositiveX: true, BesselK));
+    }
+
+    private static ScalarValue BesselScalar(ScalarValue xValue, ScalarValue nValue, bool requirePositiveX, Func<int, double, double> fn)
+    {
+        if (xValue is ErrorValue e0) return e0;
+        if (nValue is ErrorValue e1) return e1;
+
+        double x = ToNumber(xValue);
+        if (!double.IsFinite(x)) return ErrorValue.Num;
+        if (!TryGetEngineeringTruncatedInteger(nValue, out var n) || n < 0 || n > MaxBesselOrder) return ErrorValue.Num;
+        if (requirePositiveX && x <= 0) return ErrorValue.Num;
+
+        double result = fn((int)n, x);
+        return double.IsFinite(result) ? NumberResult(result) : ErrorValue.Num;
+    }
+
+    // ── Bessel function of the first kind, J_n(x) ───────────────────────────
+    // Standard published rational-approximation / recurrence algorithms
+    // (Abramowitz & Stegun 9.4; the same formulas underlie the widely used
+    // "Numerical Recipes" bessj0/bessj1/bessj routines).
+
+    private static double BesselJ(int n, double x) => n switch
+    {
+        0 => BesselJ0(x),
+        1 => BesselJ1(x),
+        _ => BesselJN(n, x)
+    };
+
+    private static double BesselJ0(double x)
+    {
+        double ax = Math.Abs(x);
+        if (ax < 8.0)
+        {
+            double y = x * x;
+            double ans1 = 57568490574.0 + y * (-13362590354.0 + y * (651619640.7
+                + y * (-11214424.18 + y * (77392.33017 + y * -184.9052456))));
+            double ans2 = 57568490411.0 + y * (1029532985.0 + y * (9494680.718
+                + y * (59272.64853 + y * (267.8532712 + y))));
+            return ans1 / ans2;
+        }
+        else
+        {
+            double z = 8.0 / ax;
+            double y = z * z;
+            double xx = ax - 0.785398164;
+            double ans1 = 1.0 + y * (-0.1098628627e-2 + y * (0.2734510407e-4
+                + y * (-0.2073370639e-5 + y * 0.2093887211e-6)));
+            double ans2 = -0.1562499995e-1 + y * (0.1430488765e-3
+                + y * (-0.6911147651e-5 + y * (0.7621095161e-6 - y * 0.934935152e-7)));
+            return Math.Sqrt(0.636619772 / ax) * (Math.Cos(xx) * ans1 - z * Math.Sin(xx) * ans2);
+        }
+    }
+
+    private static double BesselJ1(double x)
+    {
+        double ax = Math.Abs(x);
+        double ans;
+        if (ax < 8.0)
+        {
+            double y = x * x;
+            double ans1 = x * (72362614232.0 + y * (-7895059235.0 + y * (242396853.1
+                + y * (-2972611.439 + y * (15704.48260 + y * -30.16036606)))));
+            double ans2 = 144725228442.0 + y * (2300535178.0 + y * (18583304.74
+                + y * (99447.43394 + y * (376.9991397 + y))));
+            ans = ans1 / ans2;
+        }
+        else
+        {
+            double z = 8.0 / ax;
+            double y = z * z;
+            double xx = ax - 2.356194491;
+            double ans1 = 1.0 + y * (0.183105e-2 + y * (-0.3516396496e-4
+                + y * (0.2457520174e-5 + y * -0.240337019e-6)));
+            double ans2 = 0.04687499995 + y * (-0.2002690873e-3
+                + y * (0.8449199096e-5 + y * (-0.88228987e-6 + y * 0.105787412e-6)));
+            ans = Math.Sqrt(0.636619772 / ax) * (Math.Cos(xx) * ans1 - z * Math.Sin(xx) * ans2);
+            if (x < 0.0) ans = -ans;
+        }
+        return ans;
+    }
+
+    private static double BesselJN(int n, double x)
+    {
+        const double Acc = 40.0;
+        const double BigNo = 1.0e10;
+        const double BigNi = 1.0e-10;
+
+        double ax = Math.Abs(x);
+        if (ax == 0.0) return 0.0;
+
+        double ans;
+        if (ax > n)
+        {
+            double tox = 2.0 / ax;
+            double bjm = BesselJ0(ax);
+            double bj = BesselJ1(ax);
+            for (int j = 1; j < n; j++)
+            {
+                double bjp = j * tox * bj - bjm;
+                bjm = bj;
+                bj = bjp;
+            }
+            ans = bj;
+        }
+        else
+        {
+            double tox = 2.0 / ax;
+            int m = 2 * ((n + (int)Math.Sqrt(Acc * n)) / 2);
+            bool jsum = false;
+            double bjpAns = 0.0, sum = 0.0, bjp = 0.0, bj = 1.0;
+            for (int j = m; j > 0; j--)
+            {
+                double bjm = j * tox * bj - bjp;
+                bjp = bj;
+                bj = bjm;
+                if (Math.Abs(bj) > BigNo)
+                {
+                    bj *= BigNi;
+                    bjp *= BigNi;
+                    bjpAns *= BigNi;
+                    sum *= BigNi;
+                }
+                if (jsum) sum += bj;
+                jsum = !jsum;
+                if (j == n) bjpAns = bjp;
+            }
+            sum = 2.0 * sum - bj;
+            ans = bjpAns / sum;
+        }
+
+        return x < 0.0 && (n & 1) != 0 ? -ans : ans;
+    }
+
+    // ── Bessel function of the second kind, Y_n(x) — requires x > 0 ────────
+
+    private static double BesselY(int n, double x) => n switch
+    {
+        0 => BesselY0(x),
+        1 => BesselY1(x),
+        _ => BesselYN(n, x)
+    };
+
+    private static double BesselY0(double x)
+    {
+        if (x < 8.0)
+        {
+            double y = x * x;
+            double ans1 = -2957821389.0 + y * (7062834065.0 + y * (-512359803.6
+                + y * (10879881.29 + y * (-86327.92757 + y * 228.4622733))));
+            double ans2 = 40076544269.0 + y * (745249964.8 + y * (7189466.438
+                + y * (47447.26470 + y * (226.1030244 + y))));
+            return (ans1 / ans2) + 0.636619772 * BesselJ0(x) * Math.Log(x);
+        }
+        else
+        {
+            double z = 8.0 / x;
+            double y = z * z;
+            double xx = x - 0.785398164;
+            double ans1 = 1.0 + y * (-0.1098628627e-2 + y * (0.2734510407e-4
+                + y * (-0.2073370639e-5 + y * 0.2093887211e-6)));
+            double ans2 = -0.1562499995e-1 + y * (0.1430488765e-3
+                + y * (-0.6911147651e-5 + y * (0.7621095161e-6 + y * -0.934945152e-7)));
+            return Math.Sqrt(0.636619772 / x) * (Math.Sin(xx) * ans1 + z * Math.Cos(xx) * ans2);
+        }
+    }
+
+    private static double BesselY1(double x)
+    {
+        if (x < 8.0)
+        {
+            double y = x * x;
+            double ans1 = x * (-4.900604943e13 + y * (1.275274390e13
+                + y * (-5.153438139e11 + y * (7.349264551e9
+                + y * (-4.237922726e7 + y * 8.511937935e4)))));
+            double ans2 = 2.499580570e14 + y * (4.244419664e12
+                + y * (3.733650367e10 + y * (2.245904002e8
+                + y * (1.020426050e6 + y * (3.549632885e3 + y)))));
+            return (ans1 / ans2) + 0.636619772 * (BesselJ1(x) * Math.Log(x) - 1.0 / x);
+        }
+        else
+        {
+            double z = 8.0 / x;
+            double y = z * z;
+            double xx = x - 2.356194491;
+            double ans1 = 1.0 + y * (0.183105e-2 + y * (-0.3516396496e-4
+                + y * (0.2457520174e-5 + y * -0.240337019e-6)));
+            double ans2 = 0.04687499995 + y * (-0.2002690873e-3
+                + y * (0.8449199096e-5 + y * (-0.88228987e-6 + y * 0.105787412e-6)));
+            return Math.Sqrt(0.636619772 / x) * (Math.Sin(xx) * ans1 + z * Math.Cos(xx) * ans2);
+        }
+    }
+
+    private static double BesselYN(int n, double x)
+    {
+        double tox = 2.0 / x;
+        double by = BesselY1(x);
+        double bym = BesselY0(x);
+        for (int j = 1; j < n; j++)
+        {
+            double byp = j * tox * by - bym;
+            bym = by;
+            by = byp;
+        }
+        return by;
+    }
+
+    // ── Modified Bessel function of the first kind, I_n(x) ──────────────────
+
+    private static double BesselI(int n, double x) => n switch
+    {
+        0 => BesselI0(x),
+        1 => BesselI1(x),
+        _ => BesselIN(n, x)
+    };
+
+    private static double BesselI0(double x)
+    {
+        double ax = Math.Abs(x);
+        if (ax < 3.75)
+        {
+            double y = x / 3.75;
+            y *= y;
+            return 1.0 + y * (3.5156229 + y * (3.0899424 + y * (1.2067492
+                + y * (0.2659732 + y * (0.360768e-1 + y * 0.45813e-2)))));
+        }
+        else
+        {
+            double y = 3.75 / ax;
+            return (Math.Exp(ax) / Math.Sqrt(ax)) * (0.39894228 + y * (0.1328592e-1
+                + y * (0.225319e-2 + y * (-0.157565e-2 + y * (0.916281e-2
+                + y * (-0.2057706e-1 + y * (0.2635537e-1 + y * (-0.1647633e-1
+                + y * 0.392377e-2))))))));
+        }
+    }
+
+    private static double BesselI1(double x)
+    {
+        double ax = Math.Abs(x);
+        double ans;
+        if (ax < 3.75)
+        {
+            double y = x / 3.75;
+            y *= y;
+            ans = ax * (0.5 + y * (0.87890594 + y * (0.51498869 + y * (0.15084934
+                + y * (0.2658733e-1 + y * (0.301532e-2 + y * 0.32411e-3))))));
+        }
+        else
+        {
+            double y = 3.75 / ax;
+            double poly = 0.2282967e-1 + y * (-0.2895312e-1 + y * (0.1787654e-1 - y * 0.420059e-2));
+            poly = 0.39894228 + y * (-0.3988024e-1 + y * (-0.362018e-2
+                + y * (0.163801e-2 + y * (-0.1031555e-1 + y * poly))));
+            ans = poly * (Math.Exp(ax) / Math.Sqrt(ax));
+        }
+        return x < 0.0 ? -ans : ans;
+    }
+
+    private static double BesselIN(int n, double x)
+    {
+        const double Acc = 40.0;
+        const double BigNo = 1.0e10;
+        const double BigNi = 1.0e-10;
+
+        if (x == 0.0) return 0.0;
+
+        double tox = 2.0 / Math.Abs(x);
+        double bip = 0.0, ans = 0.0, bi = 1.0;
+        for (int j = 2 * (n + (int)Math.Sqrt(Acc * n)); j > 0; j--)
+        {
+            double bim = bip + j * tox * bi;
+            bip = bi;
+            bi = bim;
+            if (Math.Abs(bi) > BigNo)
+            {
+                ans *= BigNi;
+                bi *= BigNi;
+                bip *= BigNi;
+            }
+            if (j == n) ans = bip;
+        }
+        ans *= BesselI0(x) / bi;
+        return x < 0.0 && (n & 1) != 0 ? -ans : ans;
+    }
+
+    // ── Modified Bessel function of the second kind, K_n(x) — requires x > 0 ─
+
+    private static double BesselK(int n, double x) => n switch
+    {
+        0 => BesselK0(x),
+        1 => BesselK1(x),
+        _ => BesselKN(n, x)
+    };
+
+    private static double BesselK0(double x)
+    {
+        if (x <= 2.0)
+        {
+            double y = x * x / 4.0;
+            return (-Math.Log(x / 2.0) * BesselI0(x)) + (-0.57721566 + y * (0.42278420
+                + y * (0.23069756 + y * (0.3488590e-1 + y * (0.262698e-2
+                + y * (0.10750e-3 + y * 0.74e-5))))));
+        }
+        else
+        {
+            double y = 2.0 / x;
+            return (Math.Exp(-x) / Math.Sqrt(x)) * (1.25331414 + y * (-0.7832358e-1
+                + y * (0.2189568e-1 + y * (-0.1062446e-1 + y * (0.587872e-2
+                + y * (-0.251540e-2 + y * 0.53208e-3))))));
+        }
+    }
+
+    private static double BesselK1(double x)
+    {
+        if (x <= 2.0)
+        {
+            double y = x * x / 4.0;
+            return (Math.Log(x / 2.0) * BesselI1(x)) + (1.0 / x) * (1.0 + y * (0.15443144
+                + y * (-0.67278579 + y * (-0.18156897 + y * (-0.1919402e-1
+                + y * (-0.110404e-2 + y * -0.4686e-4))))));
+        }
+        else
+        {
+            double y = 2.0 / x;
+            return (Math.Exp(-x) / Math.Sqrt(x)) * (1.25331414 + y * (0.23498619
+                + y * (-0.3655620e-1 + y * (0.1504268e-1 + y * (-0.780353e-2
+                + y * (0.325614e-2 + y * -0.68245e-3))))));
+        }
+    }
+
+    private static double BesselKN(int n, double x)
+    {
+        double tox = 2.0 / x;
+        double bkm = BesselK0(x);
+        double bk = BesselK1(x);
+        for (int j = 1; j < n; j++)
+        {
+            double bkp = bkm + j * tox * bk;
+            bkm = bk;
+            bk = bkp;
+        }
+        return bk;
     }
 
 }

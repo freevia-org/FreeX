@@ -11,13 +11,17 @@ public static class PasteLinkService
         bool transpose) =>
         CreateLinkedCells(sourceRange, destination, destinationRange: null, sourceSheetName, transpose);
 
-    // R36-commands-paste-special-4-2: when the caller knows the full destination selection (not
-    // just its top-left anchor), tile the linked-formula footprint across every whole repeat of
-    // the source range that fits the selection -- mirroring how
-    // PasteCommandFactory.CreateInternalPasteCommand tiles Values/Formulas/Formats/All onto a
-    // destination selection that is a whole multiple of the copied range, instead of only ever
-    // filling the selection's top-left cell. A trailing partial tile (selection size not an
-    // exact multiple of the source range) is left untouched, matching that same tiling behavior.
+    // R36-commands-paste-special-4-2 / R37-meta-3: when the caller knows the full destination
+    // selection (not just its top-left anchor), tile the linked-formula footprint across the
+    // ENTIRE destination selection -- mirroring how
+    // PasteCommandFactory.CreateInternalPasteCommand's EnumerateTiledAddresses tiles
+    // Values/Formulas/Formats/All: every destination cell in the selection gets a linked formula,
+    // with the source cell chosen by wrapping the offset modulo the source range's row/column
+    // count. Unlike an earlier version of this method, a destination selection that is NOT an
+    // exact whole multiple of the source range is NOT left with an untouched trailing partial
+    // tile -- the last (partial) tile wraps back to the start of the source range, exactly like
+    // EnumerateTiledAddresses does for Values/Formulas/Formats/All, so Paste Link produces the
+    // same destination footprint as an ordinary paste of the same source onto the same selection.
     public static IReadOnlyList<(CellAddress Address, Cell Cell)> CreateLinkedCells(
         GridRange sourceRange,
         CellAddress destination,
@@ -37,34 +41,29 @@ public static class PasteLinkService
             return [];
 
         var linkedCells = new List<(CellAddress Address, Cell Cell)>();
-        for (var rowTileOffset = 0U; rowTileOffset + pasteRowCount <= targetRowCount; rowTileOffset += pasteRowCount)
+        for (var rowOffset = 0U; rowOffset < targetRowCount; rowOffset++)
         {
-            for (var colTileOffset = 0U; colTileOffset + pasteColCount <= targetColCount; colTileOffset += pasteColCount)
+            for (var colOffset = 0U; colOffset < targetColCount; colOffset++)
             {
-                for (uint row = sourceRange.Start.Row; row <= sourceRange.End.Row; row++)
-                {
-                    for (uint col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
-                    {
-                        var rowOffset = row - sourceRange.Start.Row;
-                        var colOffset = col - sourceRange.Start.Col;
-                        // rowTileOffset/colTileOffset are already expressed in TARGET (post-transpose)
-                        // row/col space (they are bounded by pasteRowCount/pasteColCount, which swap
-                        // source row/col counts under transpose) -- so they always add to
-                        // destination.Row/destination.Col respectively. Only the within-tile
-                        // rowOffset/colOffset (still in SOURCE space) need to swap under transpose.
-                        var target = transpose
-                            ? new CellAddress(
-                                destination.Sheet,
-                                destination.Row + rowTileOffset + colOffset,
-                                destination.Col + colTileOffset + rowOffset)
-                            : new CellAddress(
-                                destination.Sheet,
-                                destination.Row + rowTileOffset + rowOffset,
-                                destination.Col + colTileOffset + colOffset);
-                        var sourceAddress = new CellAddress(sourceRange.Start.Sheet, row, col);
-                        linkedCells.Add((target, Cell.FromFormula($"{SheetNameFormatter.QuoteIfNeeded(sourceSheetName)}!{sourceAddress.ToA1()}")));
-                    }
-                }
+                // Same wraparound formula as PasteCommandFactory.EnumerateTiledAddresses: the
+                // offset within the (possibly transposed) destination footprint is reduced modulo
+                // the corresponding SOURCE dimension so a trailing partial tile wraps back to the
+                // start of the source range instead of being skipped.
+                var sourceRowOffset = transpose
+                    ? colOffset % sourceRange.RowCount
+                    : rowOffset % sourceRange.RowCount;
+                var sourceColOffset = transpose
+                    ? rowOffset % sourceRange.ColCount
+                    : colOffset % sourceRange.ColCount;
+                var sourceAddress = new CellAddress(
+                    sourceRange.Start.Sheet,
+                    sourceRange.Start.Row + sourceRowOffset,
+                    sourceRange.Start.Col + sourceColOffset);
+                var target = new CellAddress(
+                    destination.Sheet,
+                    destination.Row + rowOffset,
+                    destination.Col + colOffset);
+                linkedCells.Add((target, Cell.FromFormula($"{SheetNameFormatter.QuoteIfNeeded(sourceSheetName)}!{sourceAddress.ToA1()}")));
             }
         }
 

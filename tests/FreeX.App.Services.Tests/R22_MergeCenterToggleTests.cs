@@ -96,11 +96,12 @@ public sealed class R22_merge_center_toggle_Tests
             new CellAddress(sheet.Id, 2, 3)); // C2
         sheet.AddMergedRegion(existingMerge);
 
-        // Selection straddles the existing merge's boundary (B2:D2) without being covered by it, and
-        // without covering it either from the "toggle" perspective — this is a genuine conflicting
-        // merge request, so it must still be rejected the same way real Excel rejects it.
+        // Genuine partial overlap: the selection C2:D2 starts INSIDE the existing B2:C2 merge (shares
+        // C2) and extends out past its right boundary to D2, so neither range contains the other. This
+        // is a real conflict Excel rejects — distinct from a selection that fully CONTAINS the existing
+        // merge (e.g. B2:D2), which Excel instead absorbs (see MergeCellsCommand's containment path).
         var straddlingRange = new GridRange(
-            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 2, 3),
             new CellAddress(sheet.Id, 2, 4));
 
         var commands = CellMergePlanner.CreateMergeAndCenterCommands(

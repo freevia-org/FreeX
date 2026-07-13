@@ -8,6 +8,7 @@ public sealed class MergeCellsCommand : IWorkbookCommand
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
     private List<(CellAddress Address, Cell? OldCell)>? _snapshot;
+    private List<GridRange>? _absorbedRegions;
 
     public string Label => "Merge Cells";
 
@@ -23,10 +24,24 @@ public sealed class MergeCellsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatCells) is { } protectedOutcome)
             return protectedOutcome;
 
+        // Real Excel allows merging a range that fully CONTAINS one or more smaller existing merged
+        // regions: the smaller region(s) are silently absorbed (un-merged) and replaced by the single
+        // new merge over the full selection. Only a genuinely PARTIAL overlap -- the new range
+        // straddles an existing region's boundary without fully containing it -- is a real conflict
+        // and still gets rejected, matching Excel's "That would remove merged cells..." refusal.
+        var absorbed = new List<GridRange>();
         foreach (var existing in sheet.MergedRegions)
         {
-            if (Overlaps(_range, existing))
-                return new CommandOutcome(false, "Range overlaps an existing merged region.");
+            if (!Overlaps(_range, existing))
+                continue;
+
+            if (_range.Contains(existing))
+            {
+                absorbed.Add(existing);
+                continue;
+            }
+
+            return new CommandOutcome(false, "Range overlaps an existing merged region.");
         }
 
         foreach (var table in sheet.StructuredTables)
@@ -38,6 +53,10 @@ public sealed class MergeCellsCommand : IWorkbookCommand
         _snapshot = [];
         foreach (var addr in _range.AllCells())
             _snapshot.Add((addr, sheet.GetCell(addr)?.Clone()));
+
+        foreach (var region in absorbed)
+            sheet.RemoveMergedRegion(region);
+        _absorbedRegions = absorbed;
 
         var topLeft = _range.Start;
         foreach (var addr in _range.AllCells())
@@ -56,6 +75,12 @@ public sealed class MergeCellsCommand : IWorkbookCommand
         var sheet = ctx.GetSheet(_sheetId);
 
         sheet.RemoveMergedRegion(_range);
+
+        if (_absorbedRegions is not null)
+        {
+            foreach (var region in _absorbedRegions)
+                sheet.AddMergedRegion(region);
+        }
 
         foreach (var (addr, oldCell) in _snapshot)
         {

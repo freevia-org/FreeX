@@ -372,6 +372,16 @@ internal static class XlsxWorksheetOleControlNormalizer
         var worksheetChanged = false;
         foreach (var oleObject in oleObjects.ToList())
         {
+            // A pure-link <oleObject link="..."> with no r:id has no embed relationship to
+            // rebind by design (see ShouldRemoveRelationshipBackedElement). Leave it untouched
+            // rather than treating the absent relationship as "orphaned" and removing it, or
+            // stealing an unrelated embedded object's relationship id for it.
+            if (oleObject.Attribute(RelNs + "id") is null &&
+                !string.IsNullOrWhiteSpace(oleObject.Attribute("link")?.Value))
+            {
+                continue;
+            }
+
             var relationship = FindUnusedValidPackageRelationship(
                 oleObjectRelationships,
                 [oleObject.Attribute(RelNs + "id")?.Value],

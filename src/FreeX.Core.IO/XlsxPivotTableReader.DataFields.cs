@@ -33,8 +33,13 @@ internal static partial class XlsxPivotTableReader
                     // CT_DataField's real OOXML attribute is showDataAs (ST_ShowDataAs), not showValuesAs --
                     // see ReadPivotShowDataAs below. The earlier showValuesAs name/tokens were a FreeX-only
                     // invention real Excel never writes or recognizes, so "Show Values As" silently vanished
-                    // on any exchange with a real Excel file (R36-io-pivot-cache-2-1).
-                    ReadPivotShowDataAs(field.Attribute("showDataAs")?.Value),
+                    // on any exchange with a real Excel file (R36-io-pivot-cache-2-1). showDataAs is read
+                    // first as the primary (real-Excel) attribute; when absent we fall back to the legacy
+                    // FreeX-only showValuesAs attribute so pivots saved by pre-r36 FreeX builds still load
+                    // their Show-Values-As setting (R37-meta-1).
+                    field.Attribute("showDataAs") is { } showDataAsAttribute
+                        ? ReadPivotShowDataAs(showDataAsAttribute.Value)
+                        : ReadPivotShowValuesAs(field.Attribute("showValuesAs")?.Value),
                     XlsxXmlAttributeReader.ReadIntAttribute(field, "baseField"),
                     field.Attribute("baseItem")?.Value,
                     numberFormatId is not null && numberFormatCatalog.TryGetValue(numberFormatId.Value, out var formatCode)

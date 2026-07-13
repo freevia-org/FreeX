@@ -96,7 +96,18 @@ public static class FindReplaceService
                 workbook: workbook,
                 skipNumberValues: skipNumbers))
             {
-                bool isMatch = IsTextMatch(candidate.Text, searchText, comparison, matchEntireCell);
+                // Excel's "Look in: Formulas" match text is the formula-bar text, which always
+                // includes the leading '=' that Cell.FormulaText intentionally omits (see
+                // Cell.cs). candidate.Text (from FindReplaceSearchPlanner) is the bare,
+                // '='-less FormulaText for a formula cell, so it must be re-prefixed here before
+                // matching -- otherwise Match-entire-cell-contents in Formulas mode is inverted
+                // relative to Excel (a search including '=' never matches; one omitting it always
+                // does). A plain Contains/unanchored-wildcard match is unaffected by the extra
+                // leading character, so this is safe to apply unconditionally.
+                var matchText = options.LookIn == FindLookIn.Formulas && sheet.GetCell(candidate.Address) is { HasFormula: true } formulaCell
+                    ? "=" + formulaCell.FormulaText
+                    : candidate.Text;
+                bool isMatch = IsTextMatch(matchText, searchText, comparison, matchEntireCell);
 
                 if (isMatch && FindReplaceSearchPlanner.MatchesRequiredFormat(workbook, sheet, candidate.Address, options.RequiredFormat))
                 {
@@ -352,15 +363,29 @@ public static class FindReplaceService
         // FindReplaceSearchPlanner.EnumerateSearchTexts used to find the match (Excel's
         // "Look in: Formulas" replaces constants too — it is the ONLY replace mode Excel offers,
         // and it must not silently skip the very matches Find reported).
+        //
+        // A formula cell's currentText carries the leading '=' that Cell.FormulaText itself
+        // omits (see Cell.cs) -- Excel's formula-bar text, which is what Look-in-Formulas
+        // matches against, always starts with '='. Without it, Match-entire-cell-contents would
+        // be inverted vs Excel (see Find(), which applies the same prefix before matching).
         var currentText = lookIn switch
         {
-            FindLookIn.Formulas => cell.HasFormula ? cell.FormulaText : GetDisplayText(cell.Value),
+            FindLookIn.Formulas => cell.HasFormula ? "=" + cell.FormulaText : GetDisplayText(cell.Value),
             FindLookIn.Values => cell.HasFormula
                 ? null
                 : workbook is not null
                     ? GetDisplayTextFormatted(cell, workbook)
                     : GetDisplayText(cell.Value),
             _ => null
+        };
+        // True exactly when currentText came from the bare, invariant GetDisplayText helper
+        // (as opposed to the '='-prefixed formula text or the number-format-aware
+        // GetDisplayTextFormatted) -- see the DateTimeValue time-of-day preservation below.
+        var usedInvariantDisplayText = lookIn switch
+        {
+            FindLookIn.Formulas => !cell.HasFormula,
+            FindLookIn.Values => !cell.HasFormula && workbook is null,
+            _ => false
         };
         if (currentText is null ||
             !TryCreateReplacementText(currentText, searchText, replaceText, comparison, matchEntireCell, out var newText))
@@ -369,7 +394,10 @@ public static class FindReplaceService
         if (lookIn == FindLookIn.Formulas && cell.HasFormula)
         {
             newCell = cell.Clone();
-            newCell.FormulaText = newText;
+            // FormulaText storage always omits the leading '=' (see Cell.cs), but currentText/
+            // newText here carry it to match Excel's formula-bar semantics -- strip it back off
+            // before storing.
+            newCell.FormulaText = newText.StartsWith('=') ? newText[1..] : newText;
             // Clear the stale cached value so the cell shows blank rather than the old
             // result until the host triggers recalculation after the replace command.
             newCell.Value = BlankValue.Instance;
@@ -389,13 +417,37 @@ public static class FindReplaceService
         // to preserve the leading zero), exactly like PasteCommandFactory.IsDestinationTextFormatted.
         var isDestinationTextFormatted =
             workbook is not null && workbook.GetStyle(cell.StyleId).NumberFormat == "@";
-        ScalarValue newValue = newText.Length == 0
-            ? BlankValue.Instance
-            : isDestinationTextFormatted
-                ? new TextValue(newText)
-                : ExcelTextNumberParser.TryParse(newText, out var number, workbook?.Uses1904DateSystem ?? false)
-                    ? new NumberValue(number)
-                    : new TextValue(newText);
+        ScalarValue newValue;
+        if (newText.Length == 0)
+        {
+            newValue = BlankValue.Instance;
+        }
+        else if (isDestinationTextFormatted)
+        {
+            newValue = new TextValue(newText);
+        }
+        else if (ExcelTextNumberParser.TryParse(newText, out var number, workbook?.Uses1904DateSystem ?? false))
+        {
+            // GetDisplayText's DateTimeValue rendering ("yyyy-MM-dd") is date-only and drops any
+            // time-of-day fraction, so a literal date/time cell matched/replaced through that
+            // invariant text (Formulas-mode's constant-cell fallback, or Values-mode with no
+            // workbook supplied) must not have its stored time silently zeroed out when the
+            // replacement text itself carries no time component -- re-attach the cell's original
+            // fractional day. A replacement that DOES specify its own time (contains ':' or an
+            // AM/PM designator) is left alone and used as-is.
+            if (usedInvariantDisplayText && cell.Value is DateTimeValue originalDateTime && !ContainsTimeComponent(newText))
+            {
+                var originalTimeFraction = originalDateTime.Value - Math.Floor(originalDateTime.Value);
+                if (originalTimeFraction != 0)
+                    number = Math.Floor(number) + originalTimeFraction;
+            }
+
+            newValue = new NumberValue(number);
+        }
+        else
+        {
+            newValue = new TextValue(newText);
+        }
 
         newCell = cell.Clone();
         newCell.Value = newValue;
@@ -650,6 +702,17 @@ public static class FindReplaceService
         ErrorValue err => err.Code,
         _ => null
     };
+
+    /// <summary>
+    /// Heuristic check for whether replacement text itself specifies a time-of-day component (a
+    /// colon-separated time, or an AM/PM designator) -- used by <see cref="TryCreateReplacementCell"/>
+    /// to decide whether a literal date/time cell's original fractional day should be re-attached
+    /// after a replace whose text came from the date-only <see cref="GetDisplayText"/> rendering.
+    /// </summary>
+    private static bool ContainsTimeComponent(string text) =>
+        text.Contains(':') ||
+        text.Contains("AM", StringComparison.OrdinalIgnoreCase) ||
+        text.Contains("PM", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Number-format-aware display text for Values-mode replace, mirroring

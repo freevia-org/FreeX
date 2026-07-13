@@ -10,6 +10,7 @@ using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.SheetUI;
 using FreeX.Core.Commands;
+using FreeX.Core.Model;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
@@ -36,10 +37,17 @@ public sealed partial class MainWindow
     // selected rows/columns, nesting the outline level the same way WPF's CreateGroupCommand does
     // (MainWindow.OutlineCommands.cs): a whole-column selection groups by column instead of
     // marking every row on the sheet, and the level is the next nesting depth (existing deepest
-    // level in the range + 1), not always a hardcoded 1. Ungroup clears the worksheet outline.
-    // Routed through the generic review-command executor so both get undo/redo. Kept in the
-    // Avalonia shell (no WorkbookSession change) to avoid churn with the concurrently-active
-    // FreeW/macOS sessions.
+    // level in the range + 1), not always a hardcoded 1. Ungroup (data.ungroup / the "Ungroup"
+    // submenu item / the grid context-menu Ungroup action -- all wired to ClearWorksheetOutline())
+    // is scoped to the current selection, mirroring the WPF host's Ungroup fix
+    // (MainWindow.OutlineCommands.cs): it decrements the deepest existing outline level in the
+    // selected row/column range by one, leaving unrelated groups elsewhere on the sheet untouched
+    // (R37-commands-outline-subtotal-2-1). The separate "Clear Outline" menu item shares this same
+    // entry point but is invoked without a deliberate multi-row/column selection (a bare active
+    // cell), so a trivial single-cell selection still falls back to the legacy whole-sheet clear
+    // that command requires. Routed through the generic review-command executor so both get
+    // undo/redo. Kept in the Avalonia shell (no WorkbookSession change) to avoid churn with the
+    // concurrently-active FreeW/macOS sessions.
 
     private void GroupSelectedRows()
     {
@@ -69,10 +77,57 @@ public sealed partial class MainWindow
 
     private void ClearWorksheetOutline()
     {
+        var range = _session.SelectedRange;
+        var sheet = _session.ActiveSheet;
+
+        if (!IsSingleCellSelection(range))
+        {
+            if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
+            {
+                var newColLevel = GetUngroupedOutlineLevel(sheet.ColOutlineLevels, range.Start.Col, range.End.Col);
+                var colResult = _session.ExecuteReviewCommand(
+                    new GroupColumnsCommand(sheet.Id, range.Start.Col, range.End.Col, newColLevel));
+                RefreshShell(colResult.Success
+                    ? $"Ungrouped columns {range.Start.Col}–{range.End.Col}"
+                    : colResult.ErrorMessage ?? "Could not ungroup columns.");
+                return;
+            }
+
+            var newRowLevel = GetUngroupedOutlineLevel(sheet.RowOutlineLevels, range.Start.Row, range.End.Row);
+            var rowResult = _session.ExecuteReviewCommand(
+                new GroupRowsCommand(sheet.Id, range.Start.Row, range.End.Row, newRowLevel));
+            RefreshShell(rowResult.Success
+                ? $"Ungrouped rows {range.Start.Row}–{range.End.Row}"
+                : rowResult.ErrorMessage ?? "Could not ungroup rows.");
+            return;
+        }
+
         var result = _session.ExecuteReviewCommand(new ClearWorksheetOutlineCommand(_session.ActiveSheet.Id));
         RefreshShell(result.Success
             ? "Cleared the worksheet outline."
             : result.ErrorMessage ?? "Could not clear the outline.");
+    }
+
+    private static bool IsSingleCellSelection(GridRange range) =>
+        range.Start.Row == range.End.Row && range.Start.Col == range.End.Col;
+
+    /// <summary>
+    /// Excel's Ungroup decrements the deepest outline level found across the given row/column
+    /// range by exactly one (never straight to 0), so a range that is only the innermost part of a
+    /// wider, still-nested group drops out of just its own nesting level and remains part of the
+    /// outer group. Mirrors <see cref="OutlineGroupingPlanner.GetNextOutlineLevel"/>'s "deepest
+    /// level already present in the range" scan, but subtracts instead of adds.
+    /// </summary>
+    private static int GetUngroupedOutlineLevel(IReadOnlyDictionary<uint, int> levels, uint start, uint end)
+    {
+        var maxLevel = 0;
+        for (var i = start; i <= end; i++)
+        {
+            if (levels.TryGetValue(i, out var level) && level > maxLevel)
+                maxLevel = level;
+        }
+
+        return Math.Max(maxLevel - 1, 0);
     }
 
     // Data ▸ Outline ▸ Settings (the small dialog launched from Excel's Outline group). The three

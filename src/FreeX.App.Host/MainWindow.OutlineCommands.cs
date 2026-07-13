@@ -22,12 +22,7 @@ public partial class MainWindow
     private void UngroupRowsBtn_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
-        if (!TryExecuteRepeatableCurrentRangeCommand(
-                "Ungroup",
-                range,
-                currentRange => OutlineGroupingService.GetGroupingAxis(currentRange) == OutlineGroupingAxis.Columns
-                    ? new GroupColumnsCommand(_currentSheetId, currentRange.Start.Col, currentRange.End.Col, 0)
-                    : new GroupRowsCommand(_currentSheetId, currentRange.Start.Row, currentRange.End.Row, 0)))
+        if (!TryExecuteRepeatableCurrentRangeCommand("Ungroup", range, CreateUngroupCommand))
             return;
 
         UpdateViewport();
@@ -126,5 +121,40 @@ public partial class MainWindow
 
         int rowLevel = OutlineGroupingPlanner.GetNextOutlineLevel(range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
         return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel, preserveExistingHierarchy: true);
+    }
+
+    // Excel's Ungroup decrements the deepest outline level found across the selected row/column
+    // range by exactly one -- never straight to level 0 -- so a selection that is only the
+    // innermost part of a wider, still-nested group drops out of just its own nesting level and
+    // remains part of the outer group (R37-commands-outline-subtotal-2-3). Previously this always
+    // passed a literal 0, which unconditionally removed every row/column in the selection from
+    // RowOutlineLevels/ColOutlineLevels regardless of its current level, wiping all nesting depth
+    // in one click.
+    private IWorkbookCommand CreateUngroupCommand(GridRange range)
+    {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+        if (sheet is null)
+            return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, 0);
+
+        if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
+        {
+            int newLevel = GetUngroupedOutlineLevel(sheet.ColOutlineLevels, range.Start.Col, range.End.Col);
+            return new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, newLevel);
+        }
+
+        int rowLevel = GetUngroupedOutlineLevel(sheet.RowOutlineLevels, range.Start.Row, range.End.Row);
+        return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel);
+    }
+
+    private static int GetUngroupedOutlineLevel(IReadOnlyDictionary<uint, int> levels, uint start, uint end)
+    {
+        var maxLevel = 0;
+        for (var i = start; i <= end; i++)
+        {
+            if (levels.TryGetValue(i, out var level) && level > maxLevel)
+                maxLevel = level;
+        }
+
+        return Math.Max(maxLevel - 1, 0);
     }
 }

@@ -378,6 +378,10 @@ internal static class XlsxNamedRangeMapper
                 var element = new XElement(workbookNs + "definedName", new XAttribute("name", entry.Name), entry.Text);
                 if (entry.LocalSheetId is { } localSheetId)
                     element.SetAttributeValue("localSheetId", localSheetId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                if (entry.Hidden)
+                    element.SetAttributeValue("hidden", "1");
+                if (!string.IsNullOrEmpty(entry.Comment))
+                    element.SetAttributeValue("comment", entry.Comment);
                 definedNames.Add(element);
                 existingByKey[key] = element;
                 changed = true;
@@ -433,7 +437,13 @@ internal static class XlsxNamedRangeMapper
                 !TryFormatRangeAddress(workbook, range, xlWorkbook: null, out var address))
                 continue;
 
-            yield return new DefinedNameEntry(name, null, address);
+            var hasMetadata = workbook.TryGetNamedRangeMetadata(name, out var metadata);
+            yield return new DefinedNameEntry(
+                name,
+                null,
+                address,
+                hasMetadata && metadata.Hidden,
+                hasMetadata ? metadata.Comment : null);
         }
 
         foreach (var (key, range) in workbook.ScopedNamedRanges)
@@ -443,7 +453,13 @@ internal static class XlsxNamedRangeMapper
                 !TryFormatRangeAddress(workbook, range, xlWorkbook: null, out var address))
                 continue;
 
-            yield return new DefinedNameEntry(key.Name, localSheetId, address);
+            var hasMetadata = workbook.TryGetScopedNamedRangeMetadata(key.Name, key.Sheet, out var metadata);
+            yield return new DefinedNameEntry(
+                key.Name,
+                localSheetId,
+                address,
+                hasMetadata && metadata.Hidden,
+                hasMetadata ? metadata.Comment : null);
         }
 
         foreach (var (name, formulaText) in workbook.NamedFormulas)
@@ -451,7 +467,7 @@ internal static class XlsxNamedRangeMapper
             if (IsExcelReservedDefinedName(name) || workbook.ValidateNamedRangeName(name) is not null)
                 continue;
 
-            yield return new DefinedNameEntry(name, null, FormatDefinedNameFormulaForXml(formulaText));
+            yield return new DefinedNameEntry(name, null, FormatDefinedNameFormulaForXml(formulaText), false, null);
         }
 
         foreach (var (key, formulaText) in workbook.ScopedNamedFormulas)
@@ -461,7 +477,7 @@ internal static class XlsxNamedRangeMapper
                 !TryGetLocalSheetId(workbook, key.Sheet, out var localSheetId))
                 continue;
 
-            yield return new DefinedNameEntry(key.Name, localSheetId, FormatDefinedNameFormulaForXml(formulaText));
+            yield return new DefinedNameEntry(key.Name, localSheetId, FormatDefinedNameFormulaForXml(formulaText), false, null);
         }
     }
 
@@ -706,7 +722,7 @@ internal static class XlsxNamedRangeMapper
         return trimmed.StartsWith('=') ? trimmed[1..].Trim() : trimmed;
     }
 
-    private sealed record DefinedNameEntry(string Name, int? LocalSheetId, string Text);
+    private sealed record DefinedNameEntry(string Name, int? LocalSheetId, string Text, bool Hidden = false, string? Comment = null);
 
     internal static bool IsExcelReservedDefinedName(string? name)
     {

@@ -109,6 +109,27 @@ public sealed partial class MainWindow
         var sheet = _session.ActiveSheet;
         var sheetId = sheet.Id;
 
+        // Analyze the WHOLE selection once up front, matching the WPF host's
+        // TryResolveMergeContentResolution and this file's own MergeSelectedRangeAsync above, so
+        // multi-cell rows (e.g. A1:C1 = "Jan"/"Feb"/"Mar") get the "Merging cells only keeps the
+        // upper-leftmost value" confirmation instead of the per-row merges below silently discarding
+        // every non-left-most value in each row with zero warning.
+        var contentResolution = MergeCellContentResolution.KeepFirstCell;
+        var contentPlan = CellMergePlanner.AnalyzeContent(sheet, range);
+        if (contentPlan.WouldLoseContent)
+        {
+            var choice = await ShowMergeCellsContentWarningDialogAsync(contentPlan);
+            if (choice == MergeCellsWarningChoice.Cancel)
+            {
+                RefreshShell(_statusText.Text ?? UiText.Get("TableLoc_Ready"));
+                return;
+            }
+
+            contentResolution = choice == MergeCellsWarningChoice.ConcatenateAllCells
+                ? MergeCellContentResolution.ConcatenateAllCells
+                : MergeCellContentResolution.KeepFirstCell;
+        }
+
         // Build one horizontal merge per row. Each per-row range spans the full selected column span.
         var rowCommands = new List<IWorkbookCommand>();
         for (var row = range.Start.Row; row <= range.End.Row; row++)
@@ -117,10 +138,9 @@ public sealed partial class MainWindow
                 new CellAddress(sheetId, row, range.Start.Col),
                 new CellAddress(sheetId, row, range.End.Col));
 
-            // Per-row merge with no centering. KeepFirstCell mirrors Excel's Merge Across, which keeps
-            // each row's left-most value and discards the rest without prompting per row.
+            // Per-row merge with no centering, using the resolution chosen (once) above.
             rowCommands.Add(BuildMergeWithoutCenterCommand(
-                sheet, sheetId, rowRange, MergeCellContentResolution.KeepFirstCell));
+                sheet, sheetId, rowRange, contentResolution));
         }
 
         if (rowCommands.Count == 0)
@@ -144,10 +164,17 @@ public sealed partial class MainWindow
 
     /// <summary>
     /// Builds the command(s) to merge <paramref name="range"/> into one region WITHOUT re-centering.
-    /// This deliberately omits the center <see cref="ApplyStyleCommand"/> that
+    /// Delegates to <see cref="FreeX.App.Services.CellMergePlanner.CreateFormatCellsMergeCommands"/>
+    /// (mergeCells: true) rather than duplicating its merge/concatenate logic here, so "Merge Cells"
+    /// and, via the per-row loop in <see cref="MergeAcrossSelectedRangeAsync"/>, "Merge Across" pick up
+    /// the same Excel-parity toggle-to-unmerge gesture that planner implements: re-invoking either
+    /// command on a selection that is already fully covered by an existing merged region unmerges it
+    /// instead of failing with "Range overlaps an existing merged region.". The center
+    /// <see cref="ApplyStyleCommand"/> that
     /// <see cref="FreeX.App.Services.CellMergePlanner.CreateMergeAndCenterCommands(Sheet?, SheetId, GridRange, MergeCellContentResolution)"/>
-    /// appends, while reusing the same concatenation logic. A degenerate (single-cell) range produces a
-    /// no-op composite, which the edit service treats as a successful empty command.
+    /// appends is filtered out by CreateFormatCellsMergeCommands for the concatenate path, and never
+    /// added on the keep-first-cell path, so no re-centering leaks in here. A degenerate (single-cell)
+    /// range produces a no-op composite, which the edit service treats as a successful empty command.
     /// </summary>
     private static IWorkbookCommand BuildMergeWithoutCenterCommand(
         Sheet sheet,
@@ -155,17 +182,8 @@ public sealed partial class MainWindow
         GridRange range,
         MergeCellContentResolution contentResolution)
     {
-        var commands = new List<IWorkbookCommand>();
-
-        if (contentResolution == MergeCellContentResolution.ConcatenateAllCells)
-        {
-            var contentPlan = CellMergePlanner.AnalyzeContent(sheet, range);
-            if (!string.IsNullOrEmpty(contentPlan.ConcatenatedText))
-                commands.Add(EditCellsCommand.ForValue(sheetId, range.Start, new TextValue(contentPlan.ConcatenatedText)));
-        }
-
-        if (range.CellCount > 1)
-            commands.Add(new MergeCellsCommand(sheetId, range));
+        var commands = CellMergePlanner.CreateFormatCellsMergeCommands(
+            sheet, sheetId, range, mergeCells: true, contentResolution);
 
         return commands.Count == 1
             ? commands[0]

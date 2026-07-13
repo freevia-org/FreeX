@@ -312,7 +312,13 @@ public static partial class BuiltInFunctions
         }
 
         double factor = Math.Pow(10, digits);
-        if (!double.IsFinite(factor)) return 0.0;
+        // A very-negative digits underflows factor to a *finite* 0.0 (rather than
+        // overflowing to Infinity like ROUND's mirrored -digits exponent does), which
+        // would otherwise turn the final division into 0/0 = NaN -> #NUM!. Excel treats
+        // an extreme negative num_digits as simply zeroing out the number's magnitude,
+        // matching RoundWithExcelDigits's behavior for the same inputs, so guard on
+        // factor == 0 too and return 0 directly.
+        if (!double.IsFinite(factor) || factor == 0) return 0.0;
         return (number >= 0 ? Math.Floor(number * factor) : Math.Ceiling(number * factor)) / factor;
     }
 
@@ -344,7 +350,9 @@ public static partial class BuiltInFunctions
         }
 
         double factor = Math.Pow(10, digits);
-        if (!double.IsFinite(factor)) return 0.0;
+        // See the matching comment in TruncateWithExcelDigits: a very-negative digits
+        // underflows factor to a finite 0.0, which would otherwise produce 0/0 = NaN.
+        if (!double.IsFinite(factor) || factor == 0) return 0.0;
         return (number >= 0 ? Math.Ceiling(number * factor) : Math.Floor(number * factor)) / factor;
     }
 

@@ -230,8 +230,8 @@ internal static class XlsxLegacyCommentPreserver
         // note to a new address (RowColumnShiftHelpers.ShiftCommentRows*/Columns* already
         // relocated the model's Sheet.Comments key). Queue them for a shift-aware, text-matching
         // fallback pass below instead of dropping them immediately, so rich-text formatting and
-        // custom authors survive the shift (mirrors PreserveReconciledVmlDrawing's
-        // TryFindShiftedSourceShape for the VML side).
+        // custom authors survive the shift (mirrors PreserveReconciledVmlDrawing's shift-aware
+        // fallback pass for the VML side).
         var unmatchedSourceEntries = new List<(XElement Element, string PlainText, CellAddress OldAddress)>();
 
         foreach (var (sourceRef, sourceElement) in sourceCommentElements)
@@ -480,9 +480,28 @@ internal static class XlsxLegacyCommentPreserver
     }
 
     private static string ReadCommentPlainText(XElement commentElement, XNamespace workbookNs) =>
-        string.Concat(commentElement.Element(workbookNs + "text")?
-            .Descendants(workbookNs + "t")
-            .Select(t => t.Value) ?? []);
+        ExtractCommentPlainText(commentElement.Element(workbookNs + "text"), workbookNs);
+
+    /// <summary>
+    /// Extracts a comment's visible plain text from its <c>&lt;text&gt;</c> (CT_Rst) element,
+    /// concatenating direct <c>&lt;t&gt;</c> text and <c>&lt;r&gt;/&lt;t&gt;</c> run text but
+    /// excluding any <c>&lt;rPh&gt;/&lt;t&gt;</c> phonetic-guide (furigana/pinyin reading-hint)
+    /// text, which CT_Rst allows alongside the visible runs but which real Excel never displays
+    /// as part of the comment's text.
+    /// </summary>
+    /// <remarks>
+    /// R37-io-comments-legacy-vml-2-3: a plain <c>Descendants("t")</c> walks the entire subtree
+    /// and would also pick up the <c>&lt;t&gt;</c> nested inside <c>&lt;rPh&gt;</c>, corrupting
+    /// the modeled/compared text for any Japanese/Chinese-authored comment that carries a
+    /// phonetic guide.
+    /// </remarks>
+    private static string ExtractCommentPlainText(XElement? textElement, XNamespace workbookNs) =>
+        textElement is null
+            ? ""
+            : string.Concat(textElement
+                .Descendants(workbookNs + "t")
+                .Where(t => t.Parent?.Name != workbookNs + "rPh")
+                .Select(t => t.Value));
 
     private static bool TryGetModeledCommentText(Sheet sheet, string reference, out string text)
     {
@@ -807,7 +826,7 @@ internal static class XlsxLegacyCommentPreserver
 
         // Index the pristine source comments' text by their OLD 0-based (row, col), so a note
         // whose cell moved since the source package was written can still be matched to its
-        // source shape (see TryFindShiftedSourceShape below).
+        // source shape (see the shift-aware fallback pass below).
         var sourceTextByOldCell = IndexSourceCommentTextByCell(sourceCommentsXml, sheet, workbookNs);
 
         // Find ClosedXML's generated VML for new notes by scanning ALL VML entries in the target
@@ -821,13 +840,15 @@ internal static class XlsxLegacyCommentPreserver
         // the SAME cell; if none (the note's address shifted), try to find the source shape at
         // its OLD cell by matching comment text and retarget it to the new cell; fall back to the
         // target shape for genuinely new notes.
+        //
+        // Pass 1: direct (row, col) match against the unshifted source index.
         var reconciledShapes = new List<XElement>(sheet.Comments.Count);
         var consumedSourceCells = new HashSet<(uint Row, uint Col)>();
+        var unmatched = new List<(CellAddress Address, string ModelText, (uint Row, uint Col) Key)>();
         foreach (var (address, modelText) in sheet.Comments)
         {
             // CellAddress rows/cols are 1-based; VML ClientData uses 0-based.
             var key = (Row: address.Row - 1, Col: address.Col - 1);
-            XElement? shape;
             // R32-io-hyperlink-comment-deep-2: a direct (row,col) match against the UNSHIFTED
             // source index is only valid when the shape actually belongs to THIS comment. When a
             // row/col insert shifts two adjacent notes, one note's NEW cell can coincide with a
@@ -838,29 +859,63 @@ internal static class XlsxLegacyCommentPreserver
                 (!sourceTextByOldCell.TryGetValue(key, out var sourceTextAtKey) ||
                  string.Equals(sourceTextAtKey, modelText, StringComparison.Ordinal)))
             {
-                shape = new XElement(sourceShape); // deep-clone; preserves geometry
+                var shape = new XElement(sourceShape); // deep-clone; preserves geometry
                 consumedSourceCells.Add(key);
-            }
-            else if (TryFindShiftedSourceShape(
-                         sourceShapesByCell, sourceTextByOldCell, consumedSourceCells, modelText,
-                         out var shiftedKey, out var shiftedShape))
-            {
-                shape = new XElement(shiftedShape); // deep-clone; preserves geometry across the shift
-                RetargetNoteShapeToCell(shape, key.Row, key.Col);
-                consumedSourceCells.Add(shiftedKey);
-            }
-            else if (targetShapesByCell.TryGetValue(key, out var targetShape))
-            {
-                shape = new XElement(targetShape); // deep-clone; new note default geometry
+                ApplyVisibleFlag(shape, sheet.ShownComments.Contains(address));
+                reconciledShapes.Add(shape);
             }
             else
+            {
+                unmatched.Add((address, modelText, key));
+            }
+        }
+
+        // Pass 2: shift-aware fallback, grouped by text so identical-text notes are disambiguated
+        // by relative address order instead of by dictionary/enumeration order (mirrors the
+        // R33-meta-2 fix in TryBuildReconciledCommentsXml above — see its comment for rationale).
+        // Within each same-text group, sort the current (new) addresses ascending and the
+        // candidate OLD addresses ascending, then pair index-for-index so each note keeps its own
+        // geometry across the shift rather than risking a swap with a same-text sibling.
+        var stillUnmatched = new List<(CellAddress Address, (uint Row, uint Col) Key)>();
+        foreach (var group in unmatched.GroupBy(u => u.ModelText, StringComparer.Ordinal))
+        {
+            var modelText = group.Key;
+            var newEntries = group.OrderBy(u => u.Address).ToList();
+            var candidateKeys = sourceTextByOldCell
+                .Where(pair => !consumedSourceCells.Contains(pair.Key) &&
+                    string.Equals(pair.Value, modelText, StringComparison.Ordinal) &&
+                    sourceShapesByCell.ContainsKey(pair.Key))
+                .Select(pair => pair.Key)
+                .OrderBy(k => k)
+                .ToList();
+
+            var pairCount = Math.Min(newEntries.Count, candidateKeys.Count);
+            for (var i = 0; i < pairCount; i++)
+            {
+                var (address, _, key) = newEntries[i];
+                var oldKey = candidateKeys[i];
+                var shape = new XElement(sourceShapesByCell[oldKey]); // deep-clone; preserves geometry across the shift
+                RetargetNoteShapeToCell(shape, key.Row, key.Col);
+                consumedSourceCells.Add(oldKey);
+                ApplyVisibleFlag(shape, sheet.ShownComments.Contains(address));
+                reconciledShapes.Add(shape);
+            }
+
+            for (var i = pairCount; i < newEntries.Count; i++)
+                stillUnmatched.Add((newEntries[i].Address, newEntries[i].Key));
+        }
+
+        // Pass 3: genuinely new notes — fall back to ClosedXML's generated target shape.
+        foreach (var (address, key) in stillUnmatched)
+        {
+            if (!targetShapesByCell.TryGetValue(key, out var targetShape))
             {
                 // If neither source nor target has a shape for this address, skip (ClosedXML may not
                 // have generated one yet — the package will still be valid, just missing a box).
                 continue;
             }
 
-            // Apply ShownComments model state: set or clear the <x:Visible/> element.
+            var shape = new XElement(targetShape); // deep-clone; new note default geometry
             ApplyVisibleFlag(shape, sheet.ShownComments.Contains(address));
             reconciledShapes.Add(shape);
         }
@@ -907,8 +962,17 @@ internal static class XlsxLegacyCommentPreserver
 
     /// <summary>
     /// Sets or clears the <c>&lt;x:Visible/&gt;</c> element within the first
-    /// <c>ObjectType="Note"</c> ClientData child of the given VML shape.
+    /// <c>ObjectType="Note"</c> ClientData child of the given VML shape, AND keeps the shape's
+    /// CSS <c>visibility</c> style property in sync with it.
     /// </summary>
+    /// <remarks>
+    /// R37-io-comments-legacy-vml-2-1: real Excel always writes both the ClientData
+    /// <c>&lt;x:Visible/&gt;</c> flag AND a matching <c>style="...;visibility:visible|hidden"</c>
+    /// CSS property on the shape, and Excel (and any other VML-conformant renderer) treats the CSS
+    /// property as the box's actual paint state. Previously only the ClientData flag was toggled,
+    /// so a pin/unpin round trip left the shape's real on-screen visibility unchanged in Excel even
+    /// though FreeX's own reader (which only looks at ClientData) believed the toggle worked.
+    /// </remarks>
     private static void ApplyVisibleFlag(XElement shape, bool isPinned)
     {
         var clientData = shape.Elements(ExcelVmlNs + "ClientData")
@@ -923,6 +987,47 @@ internal static class XlsxLegacyCommentPreserver
             clientData.Add(new XElement(ExcelVmlNs + "Visible"));
         else if (!isPinned && visibleElement is not null)
             visibleElement.Remove();
+
+        ApplyVisibilityStyle(shape, isPinned);
+    }
+
+    /// <summary>
+    /// Rewrites (or appends) the <c>visibility:</c> CSS property inside the VML shape's
+    /// <c>style</c> attribute so it matches <paramref name="isPinned"/> — <c>visible</c> when
+    /// pinned, <c>hidden</c> otherwise — without disturbing any other CSS properties already
+    /// present (position, margins, size, z-index, etc).
+    /// </summary>
+    private static void ApplyVisibilityStyle(XElement shape, bool isPinned)
+    {
+        var newValue = isPinned ? "visible" : "hidden";
+        var styleAttribute = shape.Attribute("style");
+        var styleValue = styleAttribute?.Value ?? "";
+
+        var properties = styleValue.Length == 0
+            ? []
+            : styleValue.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        var found = false;
+        var rebuilt = new List<string>(properties.Length + 1);
+        foreach (var property in properties)
+        {
+            var colonIndex = property.IndexOf(':');
+            if (colonIndex >= 0 &&
+                string.Equals(property[..colonIndex].Trim(), "visibility", StringComparison.OrdinalIgnoreCase))
+            {
+                rebuilt.Add($"visibility:{newValue}");
+                found = true;
+            }
+            else
+            {
+                rebuilt.Add(property);
+            }
+        }
+
+        if (!found)
+            rebuilt.Add($"visibility:{newValue}");
+
+        shape.SetAttributeValue("style", string.Join(";", rebuilt));
     }
 
     /// <summary>
@@ -979,43 +1084,8 @@ internal static class XlsxLegacyCommentPreserver
     }
 
     /// <summary>
-    /// GAP 4 shift fix: finds the source VML note shape for a note whose cell address moved since
-    /// the source package was written (a row/column insert, delete, sort, or move already
-    /// relocated the note's key in <see cref="Sheet.Comments"/>, but the on-disk VML shape is still
-    /// anchored to the note's OLD cell). Matches by comment text — a stable key that survives the
-    /// address shift as long as the note's text itself was not also edited in the same save.
-    /// Skips any old cell already claimed (by an unmoved note or an earlier shifted match) so the
-    /// same source shape is never reused for two different current addresses.
-    /// </summary>
-    private static bool TryFindShiftedSourceShape(
-        Dictionary<(uint Row, uint Col), XElement> sourceShapesByCell,
-        Dictionary<(uint Row, uint Col), string> sourceTextByOldCell,
-        HashSet<(uint Row, uint Col)> consumedSourceCells,
-        string modelText,
-        out (uint Row, uint Col) matchedKey,
-        out XElement matchedShape)
-    {
-        foreach (var (oldKey, oldText) in sourceTextByOldCell)
-        {
-            if (consumedSourceCells.Contains(oldKey))
-                continue;
-            if (!string.Equals(oldText, modelText, StringComparison.Ordinal))
-                continue;
-            if (!sourceShapesByCell.TryGetValue(oldKey, out var shape))
-                continue;
-
-            matchedKey = oldKey;
-            matchedShape = shape;
-            return true;
-        }
-
-        matchedKey = default;
-        matchedShape = null!;
-        return false;
-    }
-
-    /// <summary>
-    /// Retargets a note shape reused from its OLD cell (via <see cref="TryFindShiftedSourceShape"/>)
+    /// Retargets a note shape reused from its OLD cell (via the shift-aware fallback pass in
+    /// <see cref="PreserveReconciledVmlDrawing"/>)
     /// to its NEW 0-based (row, col): updates ClientData <c>&lt;x:Row&gt;</c>/<c>&lt;x:Column&gt;</c>
     /// (which <see cref="XlsxWorksheetCommentVisibilityReader"/> reads back as the authoritative
     /// cell a pinned note belongs to) and shifts the <c>&lt;x:Anchor&gt;</c> cell-offset pair by the
@@ -1414,7 +1484,7 @@ internal static class XlsxLegacyCommentPreserver
             .Where(comment => !string.IsNullOrWhiteSpace(comment.Attribute("ref")?.Value))
             .ToDictionary(
                 comment => comment.Attribute("ref")!.Value,
-                comment => string.Concat(comment.Element(workbookNs + "text")?.Descendants(workbookNs + "t").Select(text => text.Value) ?? []),
+                comment => ExtractCommentPlainText(comment.Element(workbookNs + "text"), workbookNs),
                 StringComparer.OrdinalIgnoreCase) ?? [];
     }
 

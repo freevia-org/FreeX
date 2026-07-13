@@ -71,38 +71,74 @@ public partial class GridView
     {
         if (border.Style == BorderStyle.None) return;
 
+        Pen pen;
         if (borderPenCache is not null && borderPenCache.TryGetValue(border, out var cachedPen))
         {
-            dc.DrawLine(cachedPen, p1, p2);
+            pen = cachedPen;
+        }
+        else
+        {
+            double thickness = border.Style switch
+            {
+                BorderStyle.Hair => 0.25,
+                BorderStyle.Thin => 0.5,
+                BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot => 1.5,
+                BorderStyle.Thick => 2.5,
+                _ => 0.5
+            };
+
+            DashStyle dash = border.Style switch
+            {
+                BorderStyle.Dashed or BorderStyle.MediumDashed => DashStyles.Dash,
+                BorderStyle.Dotted => DashStyles.Dot,
+                BorderStyle.DashDot or BorderStyle.MediumDashDot => DashStyles.DashDot,
+                BorderStyle.DashDotDot or BorderStyle.MediumDashDotDot => DashStyles.DashDotDot,
+                BorderStyle.SlantDashDot => DashStyles.DashDot,   // WPF approximation of slant dash-dot
+                BorderStyle.Hair => DashStyles.Solid,
+                _ => DashStyles.Solid
+            };
+
+            pen = new Pen(BrushForCellColor(border.Color, brushCache), thickness) { DashStyle = dash };
+            if (pen.CanFreeze)
+                pen.Freeze();
+            borderPenCache?.Add(border, pen);
+        }
+
+        if (border.Style == BorderStyle.Double)
+        {
+            DrawDoubleBorderLines(dc, pen, p1, p2);
             return;
         }
 
-        double thickness = border.Style switch
-        {
-            BorderStyle.Hair => 0.25,
-            BorderStyle.Thin => 0.5,
-            BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot => 1.5,
-            BorderStyle.Thick => 2.5,
-            _ => 0.5
-        };
-
-        DashStyle dash = border.Style switch
-        {
-            BorderStyle.Dashed or BorderStyle.MediumDashed => DashStyles.Dash,
-            BorderStyle.Dotted => DashStyles.Dot,
-            BorderStyle.DashDot or BorderStyle.MediumDashDot => DashStyles.DashDot,
-            BorderStyle.DashDotDot or BorderStyle.MediumDashDotDot => DashStyles.DashDotDot,
-            BorderStyle.SlantDashDot => DashStyles.DashDot,   // WPF approximation of slant dash-dot
-            BorderStyle.Hair => DashStyles.Solid,
-            _ => DashStyles.Solid
-        };
-
-        var pen = new Pen(BrushForCellColor(border.Color, brushCache), thickness) { DashStyle = dash };
-        if (pen.CanFreeze)
-            pen.Freeze();
-        borderPenCache?.Add(border, pen);
-
         dc.DrawLine(pen, p1, p2);
+    }
+
+    /// <summary>
+    /// Renders Excel's "Double" border style as two thin parallel lines separated by a small
+    /// gap, straddling the requested edge, instead of a single solid line. Works for horizontal,
+    /// vertical, and diagonal edges alike by offsetting perpendicular to the edge direction, so
+    /// the same helper serves <see cref="BorderStyle.Double"/> top/bottom/left/right edges as
+    /// well as diagonal borders.
+    /// </summary>
+    private static void DrawDoubleBorderLines(DrawingContext dc, Pen pen, Point p1, Point p2)
+    {
+        const double gap = 1.0; // DIPs between the centerlines of the two strokes
+
+        var dx = p2.X - p1.X;
+        var dy = p2.Y - p1.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 1e-6)
+        {
+            // Degenerate (zero-length) edge: nothing to offset a second line against.
+            dc.DrawLine(pen, p1, p2);
+            return;
+        }
+
+        var offsetX = -dy / length * (gap / 2.0);
+        var offsetY = dx / length * (gap / 2.0);
+
+        dc.DrawLine(pen, new Point(p1.X + offsetX, p1.Y + offsetY), new Point(p2.X + offsetX, p2.Y + offsetY));
+        dc.DrawLine(pen, new Point(p1.X - offsetX, p1.Y - offsetY), new Point(p2.X - offsetX, p2.Y - offsetY));
     }
 
     private static bool HasVisibleCellBorder(CellStyle style) =>
