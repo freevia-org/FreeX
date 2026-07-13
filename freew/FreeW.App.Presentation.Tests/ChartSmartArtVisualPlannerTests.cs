@@ -279,14 +279,28 @@ public sealed class ChartSmartArtVisualPlannerTests
 
         var pyramid = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
         pyramid.LayoutId = "pyramid1";
-        var pyramidGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(pyramid).LayoutGeometry!;
+        var pyramidPlan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(pyramid);
+        var pyramidGeometry = pyramidPlan.LayoutGeometry!;
         pyramidGeometry.Kind.Should().Be(SmartArtLayoutGeometryKind.Pyramid);
         pyramidGeometry.Nodes[0].X.Should().BeApproximately(61, 0.01);
         pyramidGeometry.Nodes[0].Width.Should().BeApproximately(54, 0.01);
         pyramidGeometry.Nodes[3].X.Should().BeApproximately(8, 0.01);
         pyramidGeometry.Nodes[3].Width.Should().BeApproximately(160, 0.01);
         pyramidGeometry.Nodes.Select(n => n.Y).Should().ContainInOrder(8, 42, 76, 110);
+        pyramidGeometry.Nodes.Should().OnlyContain(n => n.HasPolygon);
+        pyramidGeometry.Nodes[0].PolygonPoints.Select(p => (p.X, p.Y)).Should().ContainInOrder(
+            (61, 8),
+            (115, 8),
+            (128.25, 38),
+            (47.75, 38));
+        pyramidGeometry.Nodes[3].PolygonPoints.Select(p => (p.X, p.Y)).Should().ContainInOrder(
+            (21.25, 110),
+            (154.75, 110),
+            (168, 140),
+            (8, 140));
         pyramidGeometry.Connectors.Should().BeEmpty();
+        ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(pyramidPlan)
+            .Should().Contain("polygons=0=61:8;115:8;128.25:38;47.75:38");
 
         var matrix = SmartArt.Create(SmartArtKind.List, ["A", "B", "C", "D"]);
         matrix.LayoutId = "matrix1";

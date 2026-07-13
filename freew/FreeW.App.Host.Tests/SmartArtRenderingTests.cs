@@ -247,7 +247,7 @@ public sealed class SmartArtRenderingTests
     }
 
     [StaFact]
-    public void BasicPyramidLayout_RendersSharedWideningBandApproximation()
+    public void BasicPyramidLayout_RendersSharedPolygonBands()
     {
         var sa = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
         sa.LayoutId = "pyramid1";
@@ -258,13 +258,25 @@ public sealed class SmartArtRenderingTests
         var lower = NodeBorder(view, "Lower");
         var bottom = NodeBorder(view, "Base");
 
-        Assert.True(Canvas.GetTop(middle) > Canvas.GetTop(top), "second shared pyramid-approximation band should be below the first");
-        Assert.True(Canvas.GetTop(lower) > Canvas.GetTop(middle), "third shared pyramid-approximation band should be below the second");
-        Assert.True(Canvas.GetTop(bottom) > Canvas.GetTop(lower), "base shared pyramid-approximation band should be last");
-        Assert.True(top.Width < middle.Width, "top approximation band should be narrower than the second band");
-        Assert.True(middle.Width < lower.Width, "middle approximation band should be narrower than the third band");
-        Assert.True(lower.Width < bottom.Width, "lower approximation band should be narrower than the base");
-        Assert.True(Canvas.GetLeft(top) > Canvas.GetLeft(bottom), "top approximation band should be centered inside the base width");
+        Assert.True(Canvas.GetTop(middle) > Canvas.GetTop(top), "second shared pyramid band should be below the first");
+        Assert.True(Canvas.GetTop(lower) > Canvas.GetTop(middle), "third shared pyramid band should be below the second");
+        Assert.True(Canvas.GetTop(bottom) > Canvas.GetTop(lower), "base shared pyramid band should be last");
+        Assert.True(top.Width < middle.Width, "top text bounds should be narrower than the second band");
+        Assert.True(middle.Width < lower.Width, "middle text bounds should be narrower than the third band");
+        Assert.True(lower.Width < bottom.Width, "lower text bounds should be narrower than the base");
+        Assert.True(Canvas.GetLeft(top) > Canvas.GetLeft(bottom), "top text bounds should be centered inside the base width");
+
+        var polygons = LogicalDescendants<Polygon>(view.Document)
+            .Where(p => p.Points.Count >= 4)
+            .ToList();
+
+        Assert.True(polygons.Count >= 4,
+            $"expected WPF to render shared polygon bands for Basic Pyramid; got {polygons.Count}");
+        Assert.InRange(polygons[0].Points[0].X, 60.9, 61.1);
+        Assert.InRange(polygons[0].Points[2].X, 128.2, 128.3);
+        Assert.True(polygons[0].Points[3].X < polygons[0].Points[0].X
+            && polygons[0].Points[2].X > polygons[0].Points[1].X,
+            "top shared pyramid polygon should widen from top edge to bottom edge");
     }
 
     [StaTheory]

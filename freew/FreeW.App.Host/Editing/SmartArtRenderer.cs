@@ -108,6 +108,31 @@ internal static class SmartArtRenderer
         return box;
     }
 
+    private static Border MakeNodeTextBox(
+        SmartArtNodeVisualPlan node,
+        Thickness margin,
+        Thickness padding,
+        double width)
+    {
+        return new Border
+        {
+            Background = Brushes.Transparent,
+            Margin = margin,
+            Padding = padding,
+            Width = width,
+            Child = new TextBlock
+            {
+                Text = node.Text,
+                Foreground = new SolidColorBrush(ParseHex(node.TextHex)),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 11,
+                TextAlignment = System.Windows.TextAlignment.Center
+            }
+        };
+    }
+
     // ── Layout renderers ─────────────────────────────────────────────────────────────────────────────
 
     // List layouts: vertical stack of labelled boxes.
@@ -351,16 +376,33 @@ internal static class SmartArtRenderer
             if (nodeGeometry.NodeIndex < 0 || nodeGeometry.NodeIndex >= plan.Nodes.Count)
                 continue;
 
-            var box = MakeNodeBox(
-                plan.Nodes[nodeGeometry.NodeIndex],
-                strokeThickness,
-                margin: new Thickness(0),
-                padding: new Thickness(4, 2, 4, 2),
-                width: nodeGeometry.Width);
-            box.Height = nodeGeometry.Height;
-            Canvas.SetLeft(box, nodeGeometry.X);
-            Canvas.SetTop(box, nodeGeometry.Y);
-            canvas.Children.Add(box);
+            var node = plan.Nodes[nodeGeometry.NodeIndex];
+            if (nodeGeometry.HasPolygon)
+            {
+                canvas.Children.Add(MakePlannedPolygon(node, nodeGeometry, strokeThickness));
+                var label = MakeNodeTextBox(
+                    node,
+                    margin: new Thickness(0),
+                    padding: new Thickness(4, 2, 4, 2),
+                    width: nodeGeometry.Width);
+                label.Height = nodeGeometry.Height;
+                Canvas.SetLeft(label, nodeGeometry.X);
+                Canvas.SetTop(label, nodeGeometry.Y);
+                canvas.Children.Add(label);
+            }
+            else
+            {
+                var box = MakeNodeBox(
+                    node,
+                    strokeThickness,
+                    margin: new Thickness(0),
+                    padding: new Thickness(4, 2, 4, 2),
+                    width: nodeGeometry.Width);
+                box.Height = nodeGeometry.Height;
+                Canvas.SetLeft(box, nodeGeometry.X);
+                Canvas.SetTop(box, nodeGeometry.Y);
+                canvas.Children.Add(box);
+            }
         }
 
         return new Viewbox
@@ -369,6 +411,35 @@ internal static class SmartArtRenderer
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,
             Child = canvas
+        };
+    }
+
+    private static Polygon MakePlannedPolygon(
+        SmartArtNodeVisualPlan node,
+        SmartArtLayoutNodeGeometry nodeGeometry,
+        double strokeThickness)
+    {
+        Effect? effect = null;
+        if (node.ShadowOpacity > 0)
+        {
+            effect = new DropShadowEffect
+            {
+                BlurRadius = node.ShadowBlur,
+                ShadowDepth = node.ShadowDepth,
+                Opacity = node.ShadowOpacity,
+                Color = Colors.Black
+            };
+        }
+
+        return new Polygon
+        {
+            Points = new PointCollection(nodeGeometry.PolygonPoints.Select(point => new Point(point.X, point.Y))),
+            Fill = new SolidColorBrush(ParseHex(node.FillHex)),
+            Stroke = node.BorderThickness > 0 ? new SolidColorBrush(ParseHex(node.BorderHex)) : null,
+            StrokeThickness = node.BorderThickness > 0
+                ? node.BorderThickness
+                : Math.Max(0, strokeThickness),
+            Effect = effect
         };
     }
 

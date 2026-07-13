@@ -96,12 +96,31 @@ public enum SmartArtLayoutConnectorKind
     Arrow
 }
 
+public sealed record SmartArtLayoutPoint(
+    double X,
+    double Y);
+
 public sealed record SmartArtLayoutNodeGeometry(
     int NodeIndex,
     double X,
     double Y,
     double Width,
-    double Height);
+    double Height,
+    IReadOnlyList<SmartArtLayoutPoint> PolygonPoints)
+{
+    public SmartArtLayoutNodeGeometry(
+        int NodeIndex,
+        double X,
+        double Y,
+        double Width,
+        double Height)
+        : this(NodeIndex, X, Y, Width, Height, [])
+    {
+    }
+
+    public bool HasPolygon => PolygonPoints.Count > 0;
+}
+
 
 public sealed record SmartArtLayoutConnectorGeometry(
     int SourceNodeIndex,
@@ -745,8 +764,7 @@ public static class ChartSmartArtVisualPlanner
 
     private static SmartArtLayoutGeometryPlan BuildPyramidGeometry(int nodeCount)
     {
-        // Bounded Word-common approximation: shared renderers consume centered widening rectangles,
-        // not Word's exact trapezoid/polygon band geometry.
+        // Shared Basic Pyramid approximation: centered text bounds plus renderer-neutral band polygons.
         const double margin = 8;
         const double minBandWidth = 54;
         const double maxBandWidth = 160;
@@ -762,12 +780,20 @@ public static class ChartSmartArtVisualPlanner
             var width = nodeCount == 1
                 ? maxBandWidth
                 : minBandWidth + widthRange * i / divisor;
+            var topWidth = nodeCount == 1
+                ? maxBandWidth
+                : minBandWidth + widthRange * i / nodeCount;
+            var bottomWidth = nodeCount == 1
+                ? maxBandWidth
+                : minBandWidth + widthRange * (i + 1) / nodeCount;
+            var y = margin + i * (bandHeight + gap);
             nodes.Add(new SmartArtLayoutNodeGeometry(
                 i,
                 margin + (maxBandWidth - width) / 2,
-                margin + i * (bandHeight + gap),
+                y,
                 width,
-                bandHeight));
+                bandHeight,
+                BuildCenteredBandPolygon(margin, maxBandWidth, topWidth, bottomWidth, y, bandHeight)));
         }
 
         var naturalWidth = nodeCount == 0 ? 0 : margin * 2 + maxBandWidth;
@@ -780,6 +806,25 @@ public static class ChartSmartArtVisualPlanner
             [],
             naturalWidth,
             naturalHeight);
+    }
+
+    private static IReadOnlyList<SmartArtLayoutPoint> BuildCenteredBandPolygon(
+        double margin,
+        double maxWidth,
+        double topWidth,
+        double bottomWidth,
+        double y,
+        double height)
+    {
+        var topLeft = margin + (maxWidth - topWidth) / 2;
+        var bottomLeft = margin + (maxWidth - bottomWidth) / 2;
+        return
+        [
+            new SmartArtLayoutPoint(topLeft, y),
+            new SmartArtLayoutPoint(topLeft + topWidth, y),
+            new SmartArtLayoutPoint(bottomLeft + bottomWidth, y + height),
+            new SmartArtLayoutPoint(bottomLeft, y + height)
+        ];
     }
 
     private static SmartArtLayoutGeometryPlan BuildMatrixGeometry(int nodeCount)
@@ -917,6 +962,17 @@ public static class ChartSmartArtVisualPlanner
                 FormatSignatureDouble(node.Width),
                 FormatSignatureDouble(node.Height))));
 
+        var polygonSignature = string.Join(
+            ",",
+            geometry.Nodes
+                .Where(node => node.HasPolygon)
+                .Select(node => node.NodeIndex.ToString(CultureInfo.InvariantCulture)
+                    + "="
+                    + string.Join(
+                        ";",
+                        node.PolygonPoints.Select(point =>
+                            FormatSignatureDouble(point.X) + ":" + FormatSignatureDouble(point.Y)))));
+
         var connectorSignature = string.Join(
             ",",
             geometry.Connectors.Select(connector => string.Join(
@@ -936,6 +992,7 @@ public static class ChartSmartArtVisualPlanner
             "connectors=" + geometry.Connectors.Count.ToString(CultureInfo.InvariantCulture),
             "size=" + FormatSignatureDouble(geometry.NaturalWidth) + "x" + FormatSignatureDouble(geometry.NaturalHeight),
             "boxes=" + nodeSignature,
+            "polygons=" + polygonSignature,
             "lines=" + connectorSignature);
     }
 

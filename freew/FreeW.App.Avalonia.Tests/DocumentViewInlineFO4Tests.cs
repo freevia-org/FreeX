@@ -580,16 +580,19 @@ public sealed class DocumentViewInlineFO4Tests
     }
 
     [Theory]
-    [InlineData("list1", "BasicList", 0)]
-    [InlineData("vertbullet1", "VerticalBulletList", 0)]
-    [InlineData("process1", "BasicProcess", 2)]
-    [InlineData("pyramid1", "Pyramid", 0)]
+    [InlineData("list1", "BasicList", 0, 0, 0)]
+    [InlineData("vertbullet1", "VerticalBulletList", 0, 0, 0)]
+    [InlineData("process1", "BasicProcess", 2, 0, 0)]
+    [InlineData("pyramid1", "Pyramid", 0, 3, 4)]
     public async Task Inline_smartart_carries_basic_shared_layout_geometry(
         string layoutId,
         string expectedKind,
-        int expectedConnectors)
+        int expectedConnectors,
+        int expectedPolygonNodes,
+        int expectedFirstPolygonPointCount)
     {
-        (string? LayoutId, string? GeometryKind, int NodeCount, int ConnectorCount) values = default;
+        (string? LayoutId, string? GeometryKind, int NodeCount, int ConnectorCount,
+            int PolygonNodeCount, int FirstPolygonPointCount) values = default;
         var ran = await OnUiThread(() =>
         {
             var smartArtKind = layoutId == "process1" ? SmartArtKind.Process : SmartArtKind.List;
@@ -600,7 +603,13 @@ public sealed class DocumentViewInlineFO4Tests
             view.LoadDocument(doc);
             view.Measure(new Size(816, 2000));
             var geometry = view.InlineSmartArtLayoutGeometries.Single();
-            values = (geometry.LayoutId, geometry.GeometryKind, geometry.GeometryNodeCount, geometry.GeometryConnectorCount);
+            values = (
+                geometry.LayoutId,
+                geometry.GeometryKind,
+                geometry.GeometryNodeCount,
+                geometry.GeometryConnectorCount,
+                geometry.PolygonNodeCount,
+                geometry.FirstPolygonPointCount);
         });
 
         if (!ran) return;
@@ -608,6 +617,8 @@ public sealed class DocumentViewInlineFO4Tests
         values.GeometryKind.Should().Be(expectedKind);
         values.NodeCount.Should().Be(3);
         values.ConnectorCount.Should().Be(expectedConnectors);
+        values.PolygonNodeCount.Should().Be(expectedPolygonNodes);
+        values.FirstPolygonPointCount.Should().Be(expectedFirstPolygonPointCount);
     }
 
     [Fact]

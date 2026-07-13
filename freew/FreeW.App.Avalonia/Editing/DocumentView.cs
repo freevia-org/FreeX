@@ -2485,7 +2485,8 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Snapshot of shared layout geometry plans used by floating SmartArt diagrams.</summary>
-    public IReadOnlyList<(string LayoutId, string? GeometryKind, int GeometryNodeCount, int GeometryConnectorCount)> FloatingSmartArtLayoutGeometries
+    public IReadOnlyList<(string LayoutId, string? GeometryKind, int GeometryNodeCount, int GeometryConnectorCount,
+        int PolygonNodeCount, int FirstPolygonPointCount)> FloatingSmartArtLayoutGeometries
     {
         get
         {
@@ -2495,7 +2496,9 @@ public sealed class DocumentView : Control
                     s.LayoutId,
                     s.LayoutGeometry?.Kind.ToString(),
                     s.LayoutGeometry?.Nodes.Count ?? 0,
-                    s.LayoutGeometry?.Connectors.Count ?? 0))
+                    s.LayoutGeometry?.Connectors.Count ?? 0,
+                    s.LayoutGeometry?.Nodes.Count(n => n.HasPolygon) ?? 0,
+                    s.LayoutGeometry?.Nodes.FirstOrDefault(n => n.HasPolygon)?.PolygonPoints.Count ?? 0))
                 .ToList();
         }
     }
@@ -2600,7 +2603,8 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>Snapshot of shared layout geometry plans used by inline SmartArt diagrams.</summary>
-    public IReadOnlyList<(string LayoutId, string? GeometryKind, int GeometryNodeCount, int GeometryConnectorCount)> InlineSmartArtLayoutGeometries
+    public IReadOnlyList<(string LayoutId, string? GeometryKind, int GeometryNodeCount, int GeometryConnectorCount,
+        int PolygonNodeCount, int FirstPolygonPointCount)> InlineSmartArtLayoutGeometries
     {
         get
         {
@@ -2610,7 +2614,9 @@ public sealed class DocumentView : Control
                     s.LayoutId,
                     s.LayoutGeometry?.Kind.ToString(),
                     s.LayoutGeometry?.Nodes.Count ?? 0,
-                    s.LayoutGeometry?.Connectors.Count ?? 0))
+                    s.LayoutGeometry?.Connectors.Count ?? 0,
+                    s.LayoutGeometry?.Nodes.Count(n => n.HasPolygon) ?? 0,
+                    s.LayoutGeometry?.Nodes.FirstOrDefault(n => n.HasPolygon)?.PolygonPoints.Count ?? 0))
                 .ToList();
         }
     }
@@ -15533,6 +15539,11 @@ public sealed class DocumentView : Control
                 node.Width * scale,
                 node.Height * scale);
 
+        IReadOnlyList<Point> ScalePolygon(SmartArtLayoutNodeGeometry node) =>
+            node.PolygonPoints
+                .Select(point => ScalePoint(point.X, point.Y))
+                .ToList();
+
         foreach (var connector in layout.Connectors)
         {
             if (connector.SourceNodeIndex < 0 || connector.SourceNodeIndex >= sd.NodePlans.Count)
@@ -15552,7 +15563,10 @@ public sealed class DocumentView : Control
                 continue;
 
             var nodeRect = ScaleRect(node);
-            DrawSmartArtNodeBox(context, sd, node.NodeIndex, nodeRect);
+            if (node.HasPolygon)
+                DrawSmartArtNodePolygon(context, sd, node.NodeIndex, ScalePolygon(node));
+            else
+                DrawSmartArtNodeBox(context, sd, node.NodeIndex, nodeRect);
             DrawSmartArtNodeText(context, sd.NodeTexts[node.NodeIndex], nodeRect, SmartArtTextColorAt(sd, node.NodeIndex));
         }
     }
@@ -15652,6 +15666,50 @@ public sealed class DocumentView : Control
         }
 
         context.DrawRectangle(fill, borderPen, new RoundedRect(nodeRect, radius));
+    }
+
+    private static void DrawSmartArtNodePolygon(
+        DrawingContext context,
+        FloatingSmartArtData smartArt,
+        int nodeIndex,
+        IReadOnlyList<Point> points)
+    {
+        if (points.Count < 3)
+            return;
+
+        var plan = SmartArtPlanAt(smartArt, nodeIndex);
+        var fill = new SolidColorBrush(plan is null ? SmartArtFillAt(smartArt, nodeIndex) : ToAvaloniaChartColor(plan.FillHex));
+        var borderPen = plan is { BorderThickness: > 0 }
+            ? new Pen(new SolidColorBrush(ToAvaloniaChartColor(plan.BorderHex)), plan.BorderThickness)
+            : null;
+
+        if (plan is { ShadowOpacity: > 0 })
+        {
+            var depth = Math.Clamp(plan.ShadowDepth, 0, 5);
+            var shadowPoints = points
+                .Select(point => new Point(point.X + depth, point.Y + depth))
+                .ToList();
+            context.DrawGeometry(
+                EffectBrush(Colors.Black, plan.ShadowOpacity * 0.18),
+                null,
+                BuildSmartArtPolygonGeometry(shadowPoints));
+        }
+
+        context.DrawGeometry(fill, borderPen, BuildSmartArtPolygonGeometry(points));
+    }
+
+    private static StreamGeometry BuildSmartArtPolygonGeometry(IReadOnlyList<Point> points)
+    {
+        var geometry = new StreamGeometry();
+        using (var geometryContext = geometry.Open())
+        {
+            geometryContext.BeginFigure(points[0], true);
+            for (var i = 1; i < points.Count; i++)
+                geometryContext.LineTo(points[i]);
+            geometryContext.EndFigure(true);
+        }
+
+        return geometry;
     }
 
     private static Color SmartArtTextColorAt(FloatingSmartArtData smartArt, int index) =>
