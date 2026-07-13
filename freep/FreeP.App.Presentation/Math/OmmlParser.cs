@@ -253,13 +253,15 @@ public static class OmmlParser
 
     private static MathNode ParseSubSup(XElement el)
     {
+        var subSupPr = el.Element(M + "sSubSupPr");
         var eEl   = el.Element(M + "e")   ?? el;
         var subEl = el.Element(M + "sub") ?? el;
         var supEl = el.Element(M + "sup") ?? el;
         return new MathNode.SubSup(
             ParseRow(eEl),
             ParseRow(subEl),
-            ParseRow(supEl));
+            ParseRow(supEl),
+            alignScripts: IsOnOffOn(subSupPr?.Element(M + "alnScr")));
     }
 
     // ── m:rad radical ─────────────────────────────────────────────────────

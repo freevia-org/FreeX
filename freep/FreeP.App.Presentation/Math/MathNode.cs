@@ -121,9 +121,14 @@ public abstract class MathNode
         public MathNode Base { get; }
         public new MathNode Sub { get; }
         public new MathNode Sup { get; }
-        public SubSup(MathNode @base, MathNode sub, MathNode sup)
+
+        /// <summary>True when <c>m:sSubSupPr/m:alnScr</c> aligns the script stack by right edge.</summary>
+        public bool AlignScripts { get; }
+
+        public SubSup(MathNode @base, MathNode sub, MathNode sup, bool alignScripts = false)
         {
             Base = @base; Sub = sub; Sup = sup;
+            AlignScripts = alignScripts;
         }
     }
 

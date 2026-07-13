@@ -644,6 +644,45 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_SubSupAlignScripts_UsesSharedRightAlignedScriptPlan_DoesNotThrow()
+    {
+        var mathNode = ParseOmml(
+            "<m:sSubSup>" +
+            "<m:sSubSupPr><m:alnScr/></m:sSubSupPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "<m:sub><m:r><m:t>wide</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>2</m:t></m:r></m:sup>" +
+            "</m:sSubSup>");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+        var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "x", "2", "wide" },
+            "m:sSubSupPr/m:alnScr glyph ordering must be resolved in the shared MathBox plan before WPF draws it");
+        glyphs.Single(g => g.Text == "2").X.Should().BeGreaterThan(glyphs.Single(g => g.Text == "wide").X,
+            "the shorter superscript should be shifted right by the shared alignment plan before WPF draws");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "S = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_LimitUpperAndLower_UseSharedCenteredLimitPlan_DoesNotThrow()
     {
         var lowerNode = ParseOmml(

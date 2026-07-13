@@ -771,6 +771,50 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_SubSupAlignScripts_UsesSharedRightAlignedScriptPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:sSubSup>" +
+                    "<m:sSubSupPr><m:alnScr/></m:sSubSupPr>" +
+                    "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                    "<m:sub><m:r><m:t>wide</m:t></m:r></m:sub>" +
+                    "<m:sup><m:r><m:t>2</m:t></m:r></m:sup>" +
+                    "</m:sSubSup>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .ToList();
+
+                glyphs.Select(g => g.Text).Should().Equal(new[] { "x", "2", "wide" },
+                    "m:sSubSupPr/m:alnScr glyph ordering must be resolved in the shared MathBox plan before Avalonia draws it");
+                glyphs.Single(g => g.Text == "2").X.Should().BeGreaterThan(glyphs.Single(g => g.Text == "wide").X,
+                    "the shorter superscript should be shifted right by the shared alignment plan before Avalonia draws");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "S = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 120));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render aligned m:sSubSup math from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_LimitUpperAndLower_UseSharedCenteredLimitPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

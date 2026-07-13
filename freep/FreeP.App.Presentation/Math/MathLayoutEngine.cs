@@ -531,8 +531,8 @@ public static class MathLayoutEngine
         container.Metrics.Ascent = baseline + deficit;
 
         baseBox.X = 0; baseBox.Y = baseY;
-        supBox.X = scriptX; supBox.Y = supY;
-        subBox.X = scriptX; subBox.Y = subY;
+        supBox.X = ResolveSubSupScriptX(scriptX, scriptW, supBox.Metrics.Width, ss.AlignScripts); supBox.Y = supY;
+        subBox.X = ResolveSubSupScriptX(scriptX, scriptW, subBox.Metrics.Width, ss.AlignScripts); subBox.Y = subY;
 
         container.Children.Add(baseBox);
         container.Children.Add(supBox);
@@ -541,6 +541,11 @@ public static class MathLayoutEngine
     }
 
     // ── Radical layout ────────────────────────────────────────────────────
+
+    private static double ResolveSubSupScriptX(double scriptX, double scriptW, double scriptBoxWidth, bool alignScripts) =>
+        alignScripts
+            ? scriptX + scriptW - scriptBoxWidth
+            : scriptX;
 
     private static MathBox LayoutPreSubSup(MathNode.PreSubSup ps, string fontFamily, double fontSizePt)
     {

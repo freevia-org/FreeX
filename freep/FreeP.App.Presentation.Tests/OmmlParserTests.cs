@@ -821,6 +821,40 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void SSubSup_WithAlignScriptsOn_PreservesSharedAlignmentFlag()
+    {
+        var node = Parse(
+            "<m:sSubSup>" +
+            "<m:sSubSupPr><m:alnScr/></m:sSubSupPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "<m:sub><m:r><m:t>wide</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>2</m:t></m:r></m:sup>" +
+            "</m:sSubSup>");
+
+        var subSup = Assert.IsType<MathNode.SubSup>(node);
+        Assert.True(subSup.AlignScripts);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(subSup.Base).Text);
+        Assert.Equal("wide", Assert.IsType<MathNode.Run>(subSup.Sub).Text);
+        Assert.Equal("2", Assert.IsType<MathNode.Run>(subSup.Sup).Text);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("off")]
+    [InlineData("false")]
+    public void SSubSup_WithAlignScriptsOff_UsesExistingUnalignedLayoutFlag(string val)
+    {
+        var node = Parse(
+            $"<m:sSubSup><m:sSubSupPr><m:alnScr m:val=\"{val}\"/></m:sSubSupPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "<m:sub><m:r><m:t>i</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>2</m:t></m:r></m:sup>" +
+            "</m:sSubSup>");
+
+        Assert.False(Assert.IsType<MathNode.SubSup>(node).AlignScripts);
+    }
+
+    [Fact]
     public void Box_PreservesNestedFractionAndRadicalChild()
     {
         var node = Parse(

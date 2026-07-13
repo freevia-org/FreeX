@@ -392,6 +392,56 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void SubSup_WithAlignScripts_RightAlignsSharedScriptColumn()
+    {
+        var aligned = new MathNode.SubSup(Run("x"), Run("wide"), Run("2"), alignScripts: true);
+        var unaligned = new MathNode.SubSup(Run("x"), Run("wide"), Run("2"));
+
+        var alignedBox = MathLayoutEngine.Layout(aligned, "Cambria Math", FontSizePt);
+        var unalignedBox = MathLayoutEngine.Layout(unaligned, "Cambria Math", FontSizePt);
+
+        var alignedContainer = Assert.IsType<MathBox.Container>(alignedBox.Children[0]);
+        var unalignedContainer = Assert.IsType<MathBox.Container>(unalignedBox.Children[0]);
+        var alignedSup = alignedContainer.Children[1];
+        var alignedSub = alignedContainer.Children[2];
+        var unalignedSup = unalignedContainer.Children[1];
+
+        alignedSup.X.Should().BeGreaterThan(unalignedSup.X,
+            "m:sSubSupPr/m:alnScr should right-align the shorter script within the shared script column");
+        (alignedSup.X + alignedSup.Metrics.Width).Should().BeApproximately(
+            alignedSub.X + alignedSub.Metrics.Width,
+            0.01,
+            "aligned sub/sup script right edges should match in shared layout");
+        alignedBox.Metrics.Width.Should().BeApproximately(unalignedBox.Metrics.Width, 0.01,
+            "script alignment should reposition glyphs inside the same shared script column");
+    }
+
+    [Fact]
+    public void OmmlSubSupAlignScripts_RenderPlanCarriesRightAlignedScriptGlyphs()
+    {
+        var node = ParseOmml(
+            "<m:sSubSup>" +
+            "<m:sSubSupPr><m:alnScr/></m:sSubSupPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "<m:sub><m:r><m:t>wide</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>2</m:t></m:r></m:sup>" +
+            "</m:sSubSup>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var glyphs = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "x", "2", "wide" });
+        var sup = glyphs.Single(g => g.Text == "2");
+        var sub = glyphs.Single(g => g.Text == "wide");
+        sup.X.Should().BeGreaterThan(glyphs.Single(g => g.Text == "x").X,
+            "the aligned script still sits to the right of the base expression");
+        sup.X.Should().BeGreaterThan(sub.X,
+            "right-edge alignment should shift the shorter superscript right within the shared script column");
+    }
+
+    [Fact]
     public void PreSubSup_PlacesScriptStackLeftOfBase_WithSupAboveSub()
     {
         var pre = new MathNode.PreSubSup(Run("x"), Run("i"), Run("2"));
