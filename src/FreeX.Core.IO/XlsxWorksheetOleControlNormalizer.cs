@@ -303,9 +303,26 @@ internal static class XlsxWorksheetOleControlNormalizer
         return changed;
     }
 
-    private static bool ShouldRemoveRelationshipBackedElement(XElement element) =>
-        element.Attribute(RelNs + "id") is null ||
-        element.Attribute("shapeId") is null;
+    /// <summary>
+    /// An ActiveX <c>&lt;control&gt;</c> always requires its <c>r:id</c> relationship to a
+    /// <c>ctrlProp</c> part, so a missing <c>r:id</c> means it's orphaned/invalid and should be
+    /// removed. A <c>&lt;oleObject&gt;</c>, however, can legitimately have NO <c>r:id</c> at all
+    /// when it is a LINKED object (created via Insert &gt; Object &gt; Create from File &gt; Link
+    /// to file): per CT_OleObject, <c>r:id</c> is optional precisely because a linked object has no
+    /// embedded <c>xl/embeddings/*.bin</c> part to relate to — its target lives in the <c>link</c>
+    /// attribute instead. Only remove such an element when it has NEITHER an embed relationship NOR
+    /// a link target (i.e. it is invalid under either interpretation of the schema).
+    /// </summary>
+    private static bool ShouldRemoveRelationshipBackedElement(XElement element)
+    {
+        if (element.Attribute("shapeId") is null)
+            return true;
+
+        if (element.Attribute(RelNs + "id") is not null)
+            return false;
+
+        return string.IsNullOrWhiteSpace(element.Attribute("link")?.Value);
+    }
 
     private static bool RebindOleObjectRelationships(
         ZipArchive archive,

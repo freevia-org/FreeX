@@ -53,7 +53,8 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisCustomDisplayUnit,
                 chartNs,
                 drawingNs,
-                verbatimTitle: TryParseVerbatimAxisTitleXml(chart.XAxisTitleVerbatimXml));
+                verbatimTitle: TryParseVerbatimAxisTitleXml(chart.XAxisTitleVerbatimXml),
+                showDisplayUnitLabel: chart.ShowXAxisDisplayUnitLabel);
             yield return ToValueAxisXml(
                 chart.YAxisTitle,
                 chart.YAxisTitleLayout,
@@ -96,7 +97,8 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisCustomDisplayUnit,
                 chartNs,
                 drawingNs,
-                verbatimTitle: TryParseVerbatimAxisTitleXml(chart.YAxisTitleVerbatimXml));
+                verbatimTitle: TryParseVerbatimAxisTitleXml(chart.YAxisTitleVerbatimXml),
+                showDisplayUnitLabel: chart.ShowYAxisDisplayUnitLabel);
             var scatterSecondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
             if (chart.Type == ChartType.Scatter && scatterSecondaryIndexes.Count > 0)
             {
@@ -141,7 +143,8 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisDisplayUnit,
                     chart.YAxisCustomDisplayUnit,
                     chartNs,
-                    drawingNs);
+                    drawingNs,
+                    showDisplayUnitLabel: chart.ShowYAxisDisplayUnitLabel);
             }
             yield break;
         }
@@ -212,7 +215,8 @@ internal static partial class XlsxChartXmlWriter
             chartNs,
             drawingNs,
             useExcelNativeMajorGridlineStyle: ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart),
-            verbatimTitle: TryParseVerbatimAxisTitleXml(chart.YAxisTitleVerbatimXml));
+            verbatimTitle: TryParseVerbatimAxisTitleXml(chart.YAxisTitleVerbatimXml),
+            showDisplayUnitLabel: chart.ShowYAxisDisplayUnitLabel);
 
         var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
         if (secondaryIndexes.Count > 0)
@@ -228,6 +232,18 @@ internal static partial class XlsxChartXmlWriter
             var secondaryAxisNumberFormat = secondaryHasOwnNumberFormat ? chart.SecondaryAxisNumberFormat : valueAxisNumberFormat.Format;
             var secondaryAxisNumberFormatCode = chart.SecondaryAxisNumberFormatCode ?? valueAxisNumberFormat.FormatCode;
             var secondaryAxisNumberFormatSourceLinked = chart.SecondaryAxisNumberFormatSourceLinked ?? valueAxisNumberFormat.SourceLinked;
+            // R36-io-chart-axis-scaling-2-2: same "prefer own captured value, else clone primary (Y)
+            // axis" pattern as the number-format fields above, extended to orientation/log-scale/
+            // tick-style/crossing so a round-tripped secondary axis keeps its own reversed/log/crossing
+            // settings instead of picking up whatever the primary axis currently has.
+            var secondaryAxisReverseOrder = chart.SecondaryAxisReverseOrder ?? chart.YAxisReverseOrder;
+            var secondaryAxisLogScale = chart.SecondaryAxisLogScale ?? chart.YAxisLogScale;
+            var secondaryAxisLogBase = chart.SecondaryAxisLogBase ?? chart.YAxisLogBase;
+            var secondaryAxisMajorTickStyle = chart.SecondaryAxisMajorTickStyle ?? chart.YAxisMajorTickStyle;
+            var secondaryAxisMinorTickStyle = chart.SecondaryAxisMinorTickStyle ?? chart.YAxisMinorTickStyle;
+            var secondaryAxisCrosses = chart.SecondaryAxisCrosses ?? chart.YAxisCrosses;
+            var secondaryAxisCrossesAt = chart.SecondaryAxisCrossesAt ?? chart.YAxisCrossesAt;
+            var secondaryAxisCrossBetween = chart.SecondaryAxisCrossBetween ?? chart.YAxisCrossBetween;
             yield return ToValueAxisXml(
                 chart.SecondaryAxisTitle,
                 null,
@@ -239,9 +255,9 @@ internal static partial class XlsxChartXmlWriter
                 secondaryAxisMaximum,
                 chart.YAxisMajorUnit,
                 chart.YAxisMinorUnit,
-                chart.YAxisLogScale,
-                chart.YAxisLogBase,
-                chart.YAxisReverseOrder,
+                secondaryAxisLogScale,
+                secondaryAxisLogBase,
+                secondaryAxisReverseOrder,
                 secondaryAxisNumberFormat,
                 secondaryAxisNumberFormatCode,
                 secondaryAxisNumberFormatSourceLinked,
@@ -250,8 +266,8 @@ internal static partial class XlsxChartXmlWriter
                 null,
                 null,
                 chart.YAxisGridlineThickness,
-                chart.YAxisMajorTickStyle,
-                chart.YAxisMinorTickStyle,
+                secondaryAxisMajorTickStyle,
+                secondaryAxisMinorTickStyle,
                 chart.YAxisLineColor,
                 chart.YAxisLineThickness,
                 chart.ShowYAxisLabels,
@@ -263,13 +279,14 @@ internal static partial class XlsxChartXmlWriter
                 chart.AxisTitleTextThemeColor,
                 chart.AxisTitleTextColor,
                 chart.AxisTitleFontSize,
-                chart.YAxisCrosses,
-                chart.YAxisCrossesAt,
-                chart.YAxisCrossBetween,
+                secondaryAxisCrosses,
+                secondaryAxisCrossesAt,
+                secondaryAxisCrossBetween,
                 chart.YAxisDisplayUnit,
                 chart.YAxisCustomDisplayUnit,
                 chartNs,
-                drawingNs);
+                drawingNs,
+                showDisplayUnitLabel: chart.ShowYAxisDisplayUnitLabel);
         }
 
         if (UsesSeriesAxis(chart.Type))
@@ -355,7 +372,8 @@ internal static partial class XlsxChartXmlWriter
         XNamespace chartNs,
         XNamespace drawingNs,
         bool useExcelNativeMajorGridlineStyle = false,
-        XElement? verbatimTitle = null) =>
+        XElement? verbatimTitle = null,
+        bool showDisplayUnitLabel = false) =>
         new(chartNs + "valAx",
             new XElement(chartNs + "axId", new XAttribute("val", axisId)),
             new XElement(chartNs + "scaling",
@@ -381,7 +399,7 @@ internal static partial class XlsxChartXmlWriter
             ToAxisCrossBetweenXml(crossBetween, chartNs),
             ToAxisUnitXml("majorUnit", majorUnit, chartNs),
             ToAxisUnitXml("minorUnit", minorUnit, chartNs),
-            ToAxisDisplayUnitXml(displayUnit, customDisplayUnit, chartNs));
+            ToAxisDisplayUnitXml(displayUnit, customDisplayUnit, showDisplayUnitLabel, chartNs));
 
     private static XElement ToSeriesAxisXml(XNamespace chartNs) =>
         new(chartNs + "serAx",
@@ -627,16 +645,24 @@ internal static partial class XlsxChartXmlWriter
             _ => "months"
         };
 
-    private static XElement? ToAxisDisplayUnitXml(ChartAxisDisplayUnit? unit, double? customUnit, XNamespace chartNs)
+    private static XElement? ToAxisDisplayUnitXml(ChartAxisDisplayUnit? unit, double? customUnit, XNamespace chartNs) =>
+        ToAxisDisplayUnitXml(unit, customUnit, showLabel: false, chartNs);
+
+    // R36-io-chart-axis-scaling-2-3: emit <c:dispUnitsLbl/> when the source file had Excel's "Show
+    // display units label on chart" checkbox set, so the visible caption (e.g. "Thousands") round-trips
+    // alongside the numeric scaling instead of being silently dropped.
+    private static XElement? ToAxisDisplayUnitXml(ChartAxisDisplayUnit? unit, double? customUnit, bool showLabel, XNamespace chartNs)
     {
         if (customUnit is { } customNumeric && double.IsFinite(customNumeric) && customNumeric > 0)
             return new XElement(chartNs + "dispUnits",
-                new XElement(chartNs + "custUnit", new XAttribute("val", customNumeric.ToString(CultureInfo.InvariantCulture))));
+                new XElement(chartNs + "custUnit", new XAttribute("val", customNumeric.ToString(CultureInfo.InvariantCulture))),
+                showLabel ? new XElement(chartNs + "dispUnitsLbl") : null);
 
         return unit is null
             ? null
             : new XElement(chartNs + "dispUnits",
-                new XElement(chartNs + "builtInUnit", new XAttribute("val", ToXlsxAxisDisplayUnit(unit.Value))));
+                new XElement(chartNs + "builtInUnit", new XAttribute("val", ToXlsxAxisDisplayUnit(unit.Value))),
+                showLabel ? new XElement(chartNs + "dispUnitsLbl") : null);
     }
 
     private static string ToXlsxAxisDisplayUnit(ChartAxisDisplayUnit unit) =>

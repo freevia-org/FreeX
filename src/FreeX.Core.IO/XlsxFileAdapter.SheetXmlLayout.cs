@@ -63,6 +63,8 @@ public sealed partial class XlsxFileAdapter
         bool? ApplyOutlineStyles,
         HashSet<uint> GroupHiddenRows,
         HashSet<uint> GroupHiddenCols,
+        HashSet<uint> CollapsedAnchorRows,
+        HashSet<uint> CollapsedAnchorCols,
         Dictionary<uint, double> RowHeights,
         Dictionary<uint, double> ColumnWidths,
         IReadOnlyList<(uint Row, uint Col, string Text, string Author)> Comments,
@@ -394,6 +396,8 @@ public sealed partial class XlsxFileAdapter
             ParseOptionalBool(outlinePr?.Attribute("applyStyles")?.Value),
             rowColumnLayout.GroupHiddenRows,
             rowColumnLayout.GroupHiddenCols,
+            rowColumnLayout.CollapsedAnchorRows ?? [],
+            rowColumnLayout.CollapsedAnchorCols ?? [],
             rowColumnLayout.RowHeights,
             rowColumnLayout.ColumnWidths,
             comments,
@@ -584,6 +588,7 @@ public sealed partial class XlsxFileAdapter
                 HiddenCols = columnLayout.HiddenCols,
                 ColOutlineLevels = columnLayout.ColOutlineLevels,
                 GroupHiddenCols = columnLayout.GroupHiddenCols,
+                CollapsedAnchorCols = columnLayout.CollapsedAnchorCols,
                 ColumnWidths = columnLayout.ColumnWidths
             }
         };

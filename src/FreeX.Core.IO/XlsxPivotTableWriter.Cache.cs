@@ -148,13 +148,25 @@ internal static partial class XlsxPivotTableWriter
         if (groupBy is null)
             return null;
 
+        // R36-io-pivot-cache-2-2: a date-type groupBy (years/quarters/months/days) serializes its bounds
+        // as dateTime startDate/endDate attributes, never startNum/endNum (CT_RangePr, ECMA-376
+        // 18.10.1.60). Prefer the preserved date-string bounds when present; fall back to the numeric
+        // startNum/endNum otherwise so number-range grouping (and any date field that only carries the
+        // legacy numeric bounds) keeps round-tripping exactly as before.
+        var isDateGrouping = field.Grouping is PivotFieldGrouping.Year or PivotFieldGrouping.Quarter
+            or PivotFieldGrouping.Month or PivotFieldGrouping.Day;
+
         return new XElement(
             workbookNs + "fieldGroup",
             new XElement(
                 workbookNs + "rangePr",
                 new XAttribute("groupBy", groupBy),
-                field.GroupStart is { } groupStart ? new XAttribute("startNum", groupStart.ToString(CultureInfo.InvariantCulture)) : null,
-                field.GroupEnd is { } groupEnd ? new XAttribute("endNum", groupEnd.ToString(CultureInfo.InvariantCulture)) : null,
+                isDateGrouping && !string.IsNullOrWhiteSpace(field.GroupStartDate)
+                    ? new XAttribute("startDate", field.GroupStartDate)
+                    : field.GroupStart is { } groupStart ? new XAttribute("startNum", groupStart.ToString(CultureInfo.InvariantCulture)) : null,
+                isDateGrouping && !string.IsNullOrWhiteSpace(field.GroupEndDate)
+                    ? new XAttribute("endDate", field.GroupEndDate)
+                    : field.GroupEnd is { } groupEnd ? new XAttribute("endNum", groupEnd.ToString(CultureInfo.InvariantCulture)) : null,
                 field.GroupInterval is { } groupInterval ? new XAttribute("groupInterval", groupInterval.ToString(CultureInfo.InvariantCulture)) : null));
     }
 

@@ -63,7 +63,15 @@ public sealed record PivotCacheFieldModel(
     PivotFieldGrouping Grouping = PivotFieldGrouping.None,
     double? GroupStart = null,
     double? GroupEnd = null,
-    double? GroupInterval = null);
+    double? GroupInterval = null,
+    /// <summary>
+    /// Raw ISO dateTime bounds from a date-type CT_RangePr (groupBy=years/quarters/months/days), e.g.
+    /// "2024-03-01T00:00:00". Excel emits these instead of startNum/endNum for a date-grouped field; when
+    /// present they take precedence over <see cref="GroupStart"/>/<see cref="GroupEnd"/> on save
+    /// (R36-io-pivot-cache-2-2).
+    /// </summary>
+    string? GroupStartDate = null,
+    string? GroupEndDate = null);
 
 public sealed class PivotTableModel
 {
@@ -178,7 +186,13 @@ public sealed record PivotFieldModel(
     /// field, so renderers must still honor this field in <c>MatchesFieldSelections</c> but must
     /// exclude it from the visible page-field row span / header writing.
     /// </summary>
-    bool IsUnplacedFilterField = false);
+    bool IsUnplacedFilterField = false,
+    /// <summary>
+    /// See <see cref="PivotCacheFieldModel.GroupStartDate"/>. Carried on this intermediate model only when
+    /// used as the return value of a cache-field-group parse (R36-io-pivot-cache-2-2).
+    /// </summary>
+    string? GroupStartDate = null,
+    string? GroupEndDate = null);
 
 public enum PivotFieldGrouping
 {
@@ -272,7 +286,35 @@ public enum PivotLabelFilterKind
     GreaterThanOrEqual,
     LessThan,
     LessThanOrEqual,
-    Between
+    Between,
+    // Excel's Row/Column Label "Date Filters" submenu (ST_PivotFilterType date* and relative-period
+    // tokens, R36-io-pivot-cache-2-3). DateEqual..DateNotBetween carry an explicit date Value/Value2;
+    // the relative-period kinds below carry no value at all -- Excel computes the range dynamically
+    // from the current date at filter-apply time.
+    DateEqual,
+    DateNotEqual,
+    DateOlderThan,
+    DateOlderThanOrEqual,
+    DateNewerThan,
+    DateNewerThanOrEqual,
+    DateBetween,
+    DateNotBetween,
+    Yesterday,
+    Today,
+    Tomorrow,
+    LastWeek,
+    ThisWeek,
+    NextWeek,
+    LastMonth,
+    ThisMonth,
+    NextMonth,
+    LastQuarter,
+    ThisQuarter,
+    NextQuarter,
+    LastYear,
+    ThisYear,
+    NextYear,
+    YearToDate
 }
 
 public sealed record PivotValueFilterModel(

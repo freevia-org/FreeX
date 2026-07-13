@@ -164,6 +164,13 @@ public sealed class ChartModel
     public ChartAxisCrossBetween? XAxisCrossBetween { get; set; }
     public ChartAxisDisplayUnit? XAxisDisplayUnit { get; set; }
     public double? XAxisCustomDisplayUnit { get; set; }
+
+    /// <summary>
+    /// R36-io-chart-axis-scaling-2-3: whether Excel's "Show display units label on chart" checkbox
+    /// (&lt;c:dispUnitsLbl/&gt; under &lt;c:dispUnits&gt;) was set for this axis's display unit. When
+    /// true and a display unit is set, the on-chart caption (e.g. "Thousands") is round-tripped.
+    /// </summary>
+    public bool ShowXAxisDisplayUnitLabel { get; set; }
     public double? YAxisMinimum { get; set; }
     public double? YAxisMaximum { get; set; }
     public double? YAxisMajorUnit { get; set; }
@@ -195,6 +202,9 @@ public sealed class ChartModel
     public ChartAxisDisplayUnit? YAxisDisplayUnit { get; set; }
     public double? YAxisCustomDisplayUnit { get; set; }
 
+    /// <summary>See <see cref="ShowXAxisDisplayUnitLabel"/>.</summary>
+    public bool ShowYAxisDisplayUnitLabel { get; set; }
+
     /// <summary>
     /// The secondary value axis's own title/min/max/number-format (combo charts, e.g. bar-primary +
     /// line-secondary). Null/default means "not captured" — the writer then falls back to cloning the
@@ -207,6 +217,22 @@ public sealed class ChartModel
     public ChartDataLabelNumberFormat SecondaryAxisNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
     public string? SecondaryAxisNumberFormatCode { get; set; }
     public bool? SecondaryAxisNumberFormatSourceLinked { get; set; }
+
+    /// <summary>
+    /// R36-io-chart-axis-scaling-2-2: the secondary value axis's OWN orientation (reversed/maxMin), log
+    /// scale, tick style, and crossing — captured separately from the primary (Y) axis's fields above so
+    /// the writer doesn't silently clone the primary axis's current settings onto the secondary axis.
+    /// Null/default means "not captured" — the writer falls back to the primary (Y) axis's value,
+    /// matching prior behavior for charts never round-tripped through the XLSX reader.
+    /// </summary>
+    public bool? SecondaryAxisReverseOrder { get; set; }
+    public bool? SecondaryAxisLogScale { get; set; }
+    public double? SecondaryAxisLogBase { get; set; }
+    public ChartAxisTickStyle? SecondaryAxisMajorTickStyle { get; set; }
+    public ChartAxisTickStyle? SecondaryAxisMinorTickStyle { get; set; }
+    public ChartAxisCrosses? SecondaryAxisCrosses { get; set; }
+    public double? SecondaryAxisCrossesAt { get; set; }
+    public ChartAxisCrossBetween? SecondaryAxisCrossBetween { get; set; }
     public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
     public bool LegendOverlay { get; set; }
     public bool ShowLegend { get; set; } = true;

@@ -525,7 +525,9 @@ internal static partial class XlsxPivotTableWriter
                     new XAttribute("name", string.IsNullOrWhiteSpace(field.Name) ? "Values" : field.Name),
                     new XAttribute("fld", ResolvePivotDataFieldIndex(field, calculatedFieldIndexes).ToString(CultureInfo.InvariantCulture)),
                     new XAttribute("subtotal", string.IsNullOrWhiteSpace(field.SummaryFunction) ? "sum" : field.SummaryFunction),
-                    field.ShowValuesAs == PivotShowValuesAs.None ? null : new XAttribute("showValuesAs", ToPivotShowValuesAsText(field.ShowValuesAs)),
+                    // CT_DataField's real OOXML attribute is showDataAs (ST_ShowDataAs), not showValuesAs --
+                    // see ToPivotShowValuesAsText (R36-io-pivot-cache-2-1).
+                    field.ShowValuesAs == PivotShowValuesAs.None ? null : new XAttribute("showDataAs", ToPivotShowValuesAsText(field.ShowValuesAs)),
                     field.BaseFieldIndex is { } baseField ? new XAttribute("baseField", baseField.ToString(CultureInfo.InvariantCulture)) : null,
                     string.IsNullOrWhiteSpace(field.BaseItem) ? null : new XAttribute("baseItem", field.BaseItem),
                     ToPivotNumberFormatAttribute(field, numberFormatIdMap))));

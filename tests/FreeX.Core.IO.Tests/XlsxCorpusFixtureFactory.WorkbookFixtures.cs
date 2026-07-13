@@ -429,7 +429,12 @@ internal static partial class XlsxCorpusFixtureFactory
         {
             AppliesTo = Range(sheet, "B2", "B20"),
             Type = DvType.List,
-            Formula1 = "StatusChoices"
+            // Named-range List source: the in-memory model convention (matching a real range/name
+            // reference formula elsewhere, e.g. R27_DataValidationListSourceTests) is a leading '=',
+            // which DataValidationService.ListSources gates range/name resolution on. Real Excel
+            // itself never stores the '=' in the saved <formula1> element, and the R36 IO-mapper fix
+            // re-adds it on load -- so the model here must also carry it for the round-trip to match.
+            Formula1 = "=StatusChoices"
         });
         sheet.DataValidations.Add(new DataValidation
         {
@@ -1379,7 +1384,9 @@ internal static partial class XlsxCorpusFixtureFactory
         var listDv = new DataValidation { AppliesTo = Range(sheet, "D2", "D20"), Type = DvType.Decimal, Operator = DvOperator.Between, Formula1 = "0", Formula2 = "1" };
         listDv.AdditionalRanges.Add(Range(sheet, "F2", "F20"));
         sheet.DataValidations.Add(listDv);
-        sheet.DataValidations.Add(new DataValidation { AppliesTo = Range(sheet, "E2", "E20"), Type = DvType.List, Formula1 = "DvChoices", PromptTitle = "Pick item", PromptMessage = "Choose Alpha, Beta or Gamma." });
+        // Named-range List source: model convention is a leading '=' (see R27_DataValidationListSourceTests
+        // and the R36 IO-mapper fix, which re-adds it on load to match real Excel's unprefixed on-disk form).
+        sheet.DataValidations.Add(new DataValidation { AppliesTo = Range(sheet, "E2", "E20"), Type = DvType.List, Formula1 = "=DvChoices", PromptTitle = "Pick item", PromptMessage = "Choose Alpha, Beta or Gamma." });
         return workbook;
     }
 

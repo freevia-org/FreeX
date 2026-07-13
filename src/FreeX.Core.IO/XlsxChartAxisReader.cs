@@ -100,6 +100,22 @@ internal static class XlsxChartAxisReader
         var scaling = axisElement.Element(ChartNs + "scaling");
         chart.SecondaryAxisMinimum = ReadDouble(scaling?.Element(ChartNs + "min")?.Attribute("val")?.Value);
         chart.SecondaryAxisMaximum = ReadDouble(scaling?.Element(ChartNs + "max")?.Attribute("val")?.Value);
+
+        // R36-io-chart-axis-scaling-2-2: capture the secondary axis's OWN orientation/log-scale/
+        // tick-style/crossing — these must not be conflated with the primary (Y) axis's fields
+        // (chart.YAxis*), otherwise the writer silently overwrites this axis's settings with the
+        // primary axis's current ones on every save.
+        chart.SecondaryAxisReverseOrder = IsReverseOrientation(scaling);
+        var logBaseElement = scaling?.Element(ChartNs + "logBase");
+        chart.SecondaryAxisLogScale = logBaseElement is not null;
+        chart.SecondaryAxisLogBase = ReadDouble(logBaseElement?.Attribute("val")?.Value);
+        chart.SecondaryAxisMajorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
+        chart.SecondaryAxisMinorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
+        var secondaryCrossing = ReadAxisCrossing(axisElement);
+        chart.SecondaryAxisCrosses = secondaryCrossing.Crosses;
+        chart.SecondaryAxisCrossesAt = secondaryCrossing.CrossesAt;
+        chart.SecondaryAxisCrossBetween = secondaryCrossing.CrossBetween;
+
         var numberFormatElement = axisElement.Element(ChartNs + "numFmt");
         var numberFormatCode = numberFormatElement?.Attribute("formatCode")?.Value;
         chart.SecondaryAxisNumberFormat = FromXlsxNumberFormatCode(numberFormatCode);
@@ -343,16 +359,21 @@ internal static class XlsxChartAxisReader
         var tickLabelPosition = FromXlsxTickLabelPosition(tickLabelPositionValue);
         var axisLine = ReadAxisLine(axisElement.Element(ChartNs + "spPr"));
         var crossing = ReadAxisCrossing(axisElement);
+        var dispUnitsElement = axisElement.Element(ChartNs + "dispUnits");
         var displayUnit = FromXlsxAxisDisplayUnit(
-            axisElement.Element(ChartNs + "dispUnits")?
+            dispUnitsElement?
                 .Element(ChartNs + "builtInUnit")?
                 .Attribute("val")?
                 .Value);
         var customDisplayUnit = ReadDouble(
-            axisElement.Element(ChartNs + "dispUnits")?
+            dispUnitsElement?
                 .Element(ChartNs + "custUnit")?
                 .Attribute("val")?
                 .Value);
+        // R36-io-chart-axis-scaling-2-3: <c:dispUnitsLbl/> is the "Show display units label on chart"
+        // checkbox — capture its presence so the writer can round-trip the visible caption instead of
+        // silently dropping it while still preserving the numeric scaling.
+        var showDisplayUnitLabel = dispUnitsElement?.Element(ChartNs + "dispUnitsLbl") is not null;
 
         if (useXAxis)
         {
@@ -377,6 +398,7 @@ internal static class XlsxChartAxisReader
             chart.XAxisCrossBetween = crossing.CrossBetween;
             chart.XAxisDisplayUnit = displayUnit;
             chart.XAxisCustomDisplayUnit = customDisplayUnit;
+            chart.ShowXAxisDisplayUnitLabel = showDisplayUnitLabel;
             return;
         }
 
@@ -401,6 +423,7 @@ internal static class XlsxChartAxisReader
         chart.YAxisCrossBetween = crossing.CrossBetween;
         chart.YAxisDisplayUnit = displayUnit;
         chart.YAxisCustomDisplayUnit = customDisplayUnit;
+        chart.ShowYAxisDisplayUnitLabel = showDisplayUnitLabel;
     }
 
     private static void ApplyCategoryAxisProperties(XElement? axisElement, ChartModel chart, bool categoryAxisOnY)

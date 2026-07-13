@@ -290,10 +290,20 @@ public static partial class BuiltInFunctions
 
     private static double FPdf(double x, double d1, double d2)
     {
-        if (x <= 0) return 0;
+        if (x < 0) return 0;
         double lbeta = LogGamma(d1 / 2.0) + LogGamma(d2 / 2.0) - LogGamma((d1 + d2) / 2.0);
+        double shape = d1 / 2.0 - 1;
+        if (x == 0 && shape == 0)
+        {
+            // d1=2: x^(d1/2-1) == x^0 == 1 by convention, but evaluating Math.Log(0) would
+            // otherwise multiply 0 * -Infinity = NaN. The true limit at x=0 is exactly 1
+            // (independent of d2), so drop the (now-zero) shape*log(x) term instead of
+            // computing it.
+            return Math.Exp((d1 / 2.0) * Math.Log(d1) + (d2 / 2.0) * Math.Log(d2)
+                            - ((d1 + d2) / 2.0) * Math.Log(d2) - lbeta);
+        }
         return Math.Exp((d1 / 2.0) * Math.Log(d1) + (d2 / 2.0) * Math.Log(d2)
-                        + (d1 / 2.0 - 1) * Math.Log(x)
+                        + shape * Math.Log(x)
                         - ((d1 + d2) / 2.0) * Math.Log(d1 * x + d2) - lbeta);
     }
 
@@ -326,8 +336,17 @@ public static partial class BuiltInFunctions
 
     private static double ChiSqPdf(double x, double df)
     {
-        if (x <= 0) return 0;
-        return Math.Exp((df / 2.0 - 1) * Math.Log(x) - x / 2.0 - (df / 2.0) * Math.Log(2) - LogGamma(df / 2.0));
+        if (x < 0) return 0;
+        double shape = df / 2.0 - 1;
+        if (x == 0 && shape == 0)
+        {
+            // df=2: chi-square(2) is exactly Exponential(rate=0.5), whose density at 0 is
+            // the rate itself (0.5), not 0. x^(df/2-1) == x^0 == 1 by convention, but
+            // evaluating Math.Log(0) would otherwise multiply 0 * -Infinity = NaN, so drop
+            // the (now-zero) shape*log(x) term instead of computing it.
+            return Math.Exp(-(df / 2.0) * Math.Log(2) - LogGamma(df / 2.0));
+        }
+        return Math.Exp(shape * Math.Log(x) - x / 2.0 - (df / 2.0) * Math.Log(2) - LogGamma(df / 2.0));
     }
 
     private static double ChiSqInv(double p, double df) => 2.0 * GammaInv(p, df / 2.0);

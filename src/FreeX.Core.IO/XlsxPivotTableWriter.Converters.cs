@@ -48,22 +48,26 @@ internal static partial class XlsxPivotTableWriter
             ],
         };
 
+    // CT_DataField's real OOXML attribute is showDataAs, whose ST_ShowDataAs tokens (ECMA-376 18.18.72)
+    // are percentOfTotal/percentOfRow/percentOfCol/runTotal/difference/percentDiff/rankAscending/
+    // rankDescending/percentOfParent* -- NOT the earlier FreeX-invented percentOf*Total/runningTotalIn/
+    // differenceFrom/rankSmallest/rankLargest tokens, which real Excel silently ignores (R36-io-pivot-cache-2-1).
     private static string ToPivotShowValuesAsText(PivotShowValuesAs showValuesAs) =>
         showValuesAs switch
         {
-            PivotShowValuesAs.PercentOfGrandTotal => "percentOfGrandTotal",
-            PivotShowValuesAs.PercentOfRowTotal => "percentOfRowTotal",
-            PivotShowValuesAs.PercentOfColumnTotal => "percentOfColumnTotal",
-            PivotShowValuesAs.RunningTotalIn => "runningTotalIn",
-            PivotShowValuesAs.DifferenceFrom => "differenceFrom",
-            PivotShowValuesAs.PercentDifferenceFrom => "percentDifferenceFrom",
-            PivotShowValuesAs.RankSmallest => "rankSmallest",
-            PivotShowValuesAs.RankLargest => "rankLargest",
+            PivotShowValuesAs.PercentOfGrandTotal => "percentOfTotal",
+            PivotShowValuesAs.PercentOfRowTotal => "percentOfRow",
+            PivotShowValuesAs.PercentOfColumnTotal => "percentOfCol",
+            PivotShowValuesAs.RunningTotalIn => "runTotal",
+            PivotShowValuesAs.DifferenceFrom => "difference",
+            PivotShowValuesAs.PercentDifferenceFrom => "percentDiff",
+            PivotShowValuesAs.RankSmallest => "rankAscending",
+            PivotShowValuesAs.RankLargest => "rankDescending",
             PivotShowValuesAs.Index => "index",
-            PivotShowValuesAs.PercentOfParentRowTotal => "percentOfParentRowTotal",
-            PivotShowValuesAs.PercentOfParentColumnTotal => "percentOfParentColumnTotal",
-            PivotShowValuesAs.PercentOfParentTotal => "percentOfParentTotal",
-            _ => "none"
+            PivotShowValuesAs.PercentOfParentRowTotal => "percentOfParentRow",
+            PivotShowValuesAs.PercentOfParentColumnTotal => "percentOfParentCol",
+            PivotShowValuesAs.PercentOfParentTotal => "percentOfParent",
+            _ => "normal"
         };
 
     private static string ToPivotValueFilterKindText(PivotValueFilterKind kind) =>

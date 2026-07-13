@@ -37,10 +37,16 @@ internal static class XlsxDataValidationClosedXmlMapper
                     },
                     ShowInputMessage = xlDv.ShowInputMessage,
                     ShowErrorMessage = xlDv.ShowErrorMessage,
-                    ErrorTitle = xlDv.ErrorTitle,
-                    ErrorMessage = xlDv.ErrorMessage,
-                    PromptTitle = xlDv.InputTitle,
-                    PromptMessage = xlDv.InputMessage,
+                    // ClosedXML returns "" (never null) for these when the source XML has no
+                    // error/errorTitle/prompt/promptTitle attribute at all -- the common case
+                    // where the author never customized the Error Alert / Input Message tabs.
+                    // Normalize to null so FreeX's `dv.ErrorMessage ?? "<default text>"`
+                    // fallbacks (DataValidationService.cs/ListSources.cs) actually trigger
+                    // instead of surfacing a blank alert body.
+                    ErrorTitle = string.IsNullOrEmpty(xlDv.ErrorTitle) ? null : xlDv.ErrorTitle,
+                    ErrorMessage = string.IsNullOrEmpty(xlDv.ErrorMessage) ? null : xlDv.ErrorMessage,
+                    PromptTitle = string.IsNullOrEmpty(xlDv.InputTitle) ? null : xlDv.InputTitle,
+                    PromptMessage = string.IsNullOrEmpty(xlDv.InputMessage) ? null : xlDv.InputMessage,
                 };
 
                 dv.Type = xlDv.AllowedValues switch
@@ -72,8 +78,25 @@ internal static class XlsxDataValidationClosedXmlMapper
                 {
                     var raw = xlDv.MinValue ?? "";
                     if (raw.StartsWith('"') && raw.EndsWith('"') && raw.Length > 1)
-                        raw = raw.Substring(1, raw.Length - 2);
-                    dv.Formula1 = raw.Replace("\"\"", "\"");
+                    {
+                        // Inline literal list, e.g. <formula1>"Yes,No,Maybe"</formula1> -- strip
+                        // the quotes and keep as a literal comma-separated item list (no '=').
+                        dv.Formula1 = raw.Substring(1, raw.Length - 2).Replace("\"\"", "\"");
+                    }
+                    else if (raw.Length == 0)
+                    {
+                        dv.Formula1 = raw;
+                    }
+                    else
+                    {
+                        // Range / defined-name / cross-sheet reference, e.g. <formula1>MyColors</formula1>
+                        // or <formula1>$D$1:$D$3</formula1>. Real Excel never stores the leading '=' in
+                        // this element, but DataValidationService.ListSources gates range/named-source
+                        // resolution strictly on "Formula1 starts with '='" -- re-add it here so the
+                        // source resolves to the referenced range/name instead of being treated as one
+                        // literal list item equal to the raw reference text.
+                        dv.Formula1 = raw.StartsWith('=') ? raw : "=" + raw;
+                    }
                 }
                 else
                 {

@@ -21241,12 +21241,16 @@ public partial class FileAdapterSmokeTests
             cacheXml.ToString().Should().Contain("name=\"Revenue\"");
             cacheXml.ToString().Should().Contain("formula=\"Amount*2\"");
             pivotXml.ToString().Should().Contain("subtotal=\"average\"");
-            pivotXml.ToString().Should().Contain("showValuesAs=\"percentOfGrandTotal\"");
+            // ST_ShowDataAs (CT_DataField's real OOXML attribute is showDataAs, not showValuesAs) uses the
+            // tokens percentOfTotal/percentOfRow/percentOfCol/runTotal/difference -- not the earlier
+            // FreeX-invented percentOf*Total/runningTotalIn/differenceFrom tokens, which real Excel ignores.
+            pivotXml.ToString().Should().Contain("showDataAs=\"percentOfTotal\"");
             pivotXml.ToString().Should().Contain("subtotal=\"max\"");
-            pivotXml.ToString().Should().Contain("showValuesAs=\"percentOfRowTotal\"");
-            pivotXml.ToString().Should().Contain("showValuesAs=\"percentOfColumnTotal\"");
-            pivotXml.ToString().Should().Contain("showValuesAs=\"runningTotalIn\"");
-            pivotXml.ToString().Should().Contain("showValuesAs=\"differenceFrom\"");
+            pivotXml.ToString().Should().Contain("showDataAs=\"percentOfRow\"");
+            pivotXml.ToString().Should().Contain("showDataAs=\"percentOfCol\"");
+            pivotXml.ToString().Should().Contain("showDataAs=\"runTotal\"");
+            pivotXml.ToString().Should().Contain("showDataAs=\"difference\"");
+            pivotXml.ToString().Should().NotContain("showValuesAs");
             pivotXml.ToString().Should().Contain("baseField=\"1\"");
             pivotXml.ToString().Should().Contain("baseItem=\"Q1\"");
         }

@@ -237,6 +237,24 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 .Element(drawingNs + "srcRect");
             var (name, title, altText) = ReadNonVisualProperties(pictureElement);
             var anchorElement = FindNearestAnchorElement(pictureElement, spreadsheetDrawingNs);
+            var pictureTransform = pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm");
+
+            // A picture nested inside one or more <xdr:grpSp> groups shares its nearest worksheet
+            // anchor with every sibling in the group — that anchor alone only describes the GROUP's
+            // outer bounding box. Compose the ancestor group transform chain (the same mechanism
+            // ReadSpElement/ReadCxnSpElement use) so the picture's own local <a:xfrm><a:off>/<a:ext>
+            // is translated into worksheet coordinates and the picture gets its own sub-position and
+            // sub-size within the group instead of inheriting the whole group's anchor as-is.
+            var groupTransform = ComputeGroupTransform(pictureElement, spreadsheetDrawingNs, drawingNs);
+            var anchor = anchorElement is null
+                ? null
+                : ReadNearestAnchor(pictureElement, pictureTransform, groupTransform);
+            if (anchor is not null && groupTransform != DrawingGroupTransform.Identity)
+            {
+                var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(pictureTransform, drawingNs, groupTransform);
+                if (xfrmWidthPixels is > 0 && xfrmHeightPixels is > 0)
+                    anchor = anchor with { Width = xfrmWidthPixels, Height = xfrmHeightPixels };
+            }
 
             pictures.Add(new XlsxPicturePackagePart(
                 ReadEntryBytes(imageEntry),
@@ -244,10 +262,10 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 name,
                 title,
                 altText,
-                anchorElement is null ? null : TryReadAnchor(anchorElement, spreadsheetDrawingNs),
-                ReadDrawingRotation(pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm")),
-                ReadDrawingFlipHorizontal(pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm")),
-                ReadDrawingFlipVertical(pictureElement.Element(spreadsheetDrawingNs + "spPr")?.Element(drawingNs + "xfrm")),
+                anchor,
+                ReadDrawingRotation(pictureTransform),
+                ReadDrawingFlipHorizontal(pictureTransform),
+                ReadDrawingFlipVertical(pictureTransform),
                 ReadSourceRectangleRatio(sourceRectangle, "l"),
                 ReadSourceRectangleRatio(sourceRectangle, "t"),
                 ReadSourceRectangleRatio(sourceRectangle, "r"),

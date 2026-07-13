@@ -29,6 +29,11 @@
     <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Commands\FreeX.Core.Commands.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.IO\FreeX.Core.IO.csproj" />
+    <!-- R36-commands-paste-special-4-1/4-2/4-3: needed so this project's paste-special tiling
+         tests can exercise the WorkbookSession wiring (PasteCommentsFromClipboardAtActiveCell /
+         PasteDataValidationFromClipboardAtActiveCell / PasteLinkFromClipboardAtActiveCell /
+         PasteColumnWidthsFromClipboardAtActiveCell), not just the underlying Core.Commands. -->
+    <ProjectReference Include="..\..\src\FreeX.App.Services\FreeX.App.Services.csproj" />
   </ItemGroup>
 
 </Project>

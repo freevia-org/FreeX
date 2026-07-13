@@ -40,11 +40,11 @@ public sealed class ResizeDrawingShapeCommand : IWorkbookCommand
             return invalidSize;
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
             return DrawingShapeCommandGuards.DrawingShapeNotFound();
+
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousWidth = shape.Width;
         _previousHeight = shape.Height;
@@ -95,11 +95,11 @@ public sealed class RotateDrawingShapeCommand : IWorkbookCommand
             return new CommandOutcome(false, "Shape rotation must be a finite number.");
 
         var sheet = ctx.GetSheet(_sheetId);
-        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet) is { } protectedOutcome)
-            return protectedOutcome;
-
         if (!DrawingShapeCommandGuards.TryFindShape(sheet, _shapeId, out var shape))
             return DrawingShapeCommandGuards.DrawingShapeNotFound();
+
+        if (DrawingShapeCommandGuards.RejectIfEditObjectsBlocked(sheet, shape) is { } protectedOutcome)
+            return protectedOutcome;
 
         _previousRotationDegrees = shape.RotationDegrees;
         shape.RotationDegrees = ObjectRotationNormalizer.NormalizeDegrees(_rotationDegrees);

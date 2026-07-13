@@ -119,7 +119,8 @@ public static partial class BuiltInFunctions
     {
         double n = ToNumber(value);
         var numberText = FormatRoundedNumber(Math.Abs(n), dec, useCommas: true);
-        var formatted = "$" + numberText;
+        var currencySymbol = CultureInfo.CurrentCulture.NumberFormat.CurrencySymbol;
+        var formatted = currencySymbol + numberText;
         return TextResult(n < 0 && (dec >= 0 || numberText != "0") ? "(" + formatted + ")" : formatted);
     }
 
@@ -131,7 +132,7 @@ public static partial class BuiltInFunctions
         double rounded = decimals <= 15 ? RoundWithExcelDigits(value, decimals) : value;
         int displayDecimals = Math.Clamp(decimals, 0, 99); // .NET "N"/"F" format supports 0-99 only
         string format = (useCommas ? "N" : "F") + displayDecimals;
-        string text = rounded.ToString(format, System.Globalization.CultureInfo.InvariantCulture);
+        string text = rounded.ToString(format, CultureInfo.CurrentCulture);
 
         // Excel honors the full requested decimal count even past .NET's 99-digit "N"/"F" cap
         // (e.g. FIXED(1,100) shows "1." followed by 100 zeros). The value has no further

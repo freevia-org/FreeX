@@ -16,6 +16,7 @@ public sealed class AutofillCommand : IWorkbookCommand
     private readonly GridRange _sourceRange;
     private readonly GridRange _fillRange;
     private readonly bool _ctrlHeld;
+    private readonly IReadOnlyList<IReadOnlyList<string>> _customLists;
     private List<(CellAddress Addr, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
     private List<(CellAddress Address, bool HadTarget, string? Target, bool HadMetadata, HyperlinkMetadata? Metadata)>? _hyperlinkSnapshot;
     private List<(CellAddress Address, bool HadRuns, IReadOnlyList<CellTextRun>? Runs)>? _richTextRunsSnapshot;
@@ -32,12 +33,21 @@ public sealed class AutofillCommand : IWorkbookCommand
     /// while a date defaults to a day-increment series (Ctrl forces a copy instead) -- see
     /// <see cref="WantsSingleCellSeriesDefault"/>.
     /// </param>
-    public AutofillCommand(SheetId sheetId, GridRange sourceRange, GridRange fillRange, bool ctrlHeld = false)
+    /// <param name="customLists">
+    /// User-defined custom autofill lists (Excel: File ▸ Options ▸ Advanced ▸ Edit Custom
+    /// Lists), checked after Excel's built-in weekday/month lists so a fill-handle drag off a
+    /// value like "North" wraps through the user's own list ("South", "East", "West", "North",
+    /// ...) instead of falling through to a plain copy. Defaults to none: this command has no
+    /// dependency on where custom lists are persisted, so a host that adds custom-list storage
+    /// passes its saved lists here.
+    /// </param>
+    public AutofillCommand(SheetId sheetId, GridRange sourceRange, GridRange fillRange, bool ctrlHeld = false, IReadOnlyList<IReadOnlyList<string>>? customLists = null)
     {
         _sheetId     = sheetId;
         _sourceRange = sourceRange;
         _fillRange   = fillRange;
         _ctrlHeld    = ctrlHeld;
+        _customLists = customLists ?? [];
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -792,7 +802,7 @@ public sealed class AutofillCommand : IWorkbookCommand
         {
             var lineValues = cells.Select(addr => ((TextValue)sheet.GetCell(addr)!.Value).Value).ToList();
             var lineFunc = TryCreateTrailingNumberSeries(lineValues, plan)
-                ?? TryCreateBuiltInListSeries(lineValues, plan);
+                ?? TryCreateBuiltInListSeries(lineValues, plan, _customLists);
             if (lineFunc is null)
                 return null;
 
@@ -809,13 +819,13 @@ public sealed class AutofillCommand : IWorkbookCommand
     /// merge's non-anchor cells hold no independent value at all, so the multi-cell overload's
     /// per-cell scan over <see cref="_sourceRange"/> cannot be reused directly).
     /// </summary>
-    private static ListSeries? TryCreateSingleCellListSeries(Cell? sourceCell, FillPlan plan)
+    private ListSeries? TryCreateSingleCellListSeries(Cell? sourceCell, FillPlan plan)
     {
         if (sourceCell?.Value is not TextValue text)
             return null;
 
         var lineFunc = TryCreateTrailingNumberSeries([text.Value], plan)
-            ?? TryCreateBuiltInListSeries([text.Value], plan);
+            ?? TryCreateBuiltInListSeries([text.Value], plan, _customLists);
         if (lineFunc is null)
             return null;
 
@@ -874,13 +884,17 @@ public sealed class AutofillCommand : IWorkbookCommand
         ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     ];
 
-    /// <summary>Excel's built-in weekday/month name lists, wrapping around after the last entry.</summary>
-    private static Func<int, ScalarValue>? TryCreateBuiltInListSeries(IReadOnlyList<string> values, FillPlan plan)
+    /// <summary>
+    /// Excel's built-in weekday/month name lists, followed by any user-defined custom autofill
+    /// lists (Excel: File ▸ Options ▸ Advanced ▸ Edit Custom Lists) supplied by the caller, in
+    /// declaration order; whichever list matches every value wraps around after its last entry.
+    /// </summary>
+    private static Func<int, ScalarValue>? TryCreateBuiltInListSeries(IReadOnlyList<string> values, FillPlan plan, IReadOnlyList<IReadOnlyList<string>>? customLists = null)
     {
-        foreach (var list in BuiltInLists)
+        foreach (var list in EnumerateAutoFillLists(customLists))
         {
             var indices = values
-                .Select(value => Array.FindIndex(list, entry => string.Equals(entry, value, StringComparison.OrdinalIgnoreCase)))
+                .Select(value => IndexOfIgnoreCase(list, value))
                 .ToList();
             if (indices.Any(index => index < 0))
                 continue;
@@ -895,12 +909,52 @@ public sealed class AutofillCommand : IWorkbookCommand
 
             return offset =>
             {
-                var index = Mod(lastIndex + directedStep * (int)offset, list.Length);
+                var index = Mod(lastIndex + directedStep * (int)offset, list.Count);
                 return new TextValue(list[index]);
             };
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Detects the fill-handle's text list series for a single seed value -- a trailing number
+    /// (e.g. "Item 1" -&gt; "Item 2"), membership in one of Excel's built-in weekday/month lists,
+    /// or membership in one of the supplied <paramref name="customLists"/> (Excel: File ▸
+    /// Options ▸ Advanced ▸ Edit Custom Lists) -- without requiring a full
+    /// <see cref="AutofillCommand"/> drag operation. Used by
+    /// <c>FreeX.App.Presentation.FillSeries.FillSeriesPlanner</c>'s "AutoFill" series type in
+    /// Fill ▸ Series so that dialog option replays the exact same detection the fill handle
+    /// itself uses, instead of silently routing through the numeric-only Linear builder.
+    /// </summary>
+    public static Func<int, ScalarValue>? TryCreateAutoFillTextSeries(IReadOnlyList<string> seedValues, IReadOnlyList<IReadOnlyList<string>>? customLists = null)
+    {
+        var plan = new FillPlan(FillDirection.Down, FillAxis.Vertical);
+        return TryCreateTrailingNumberSeries(seedValues, plan)
+            ?? TryCreateBuiltInListSeries(seedValues, plan, customLists);
+    }
+
+    private static IEnumerable<IReadOnlyList<string>> EnumerateAutoFillLists(IReadOnlyList<IReadOnlyList<string>>? customLists)
+    {
+        foreach (var list in BuiltInLists)
+            yield return list;
+
+        if (customLists is null)
+            yield break;
+
+        foreach (var list in customLists)
+            yield return list;
+    }
+
+    private static int IndexOfIgnoreCase(IReadOnlyList<string> list, string value)
+    {
+        for (var i = 0; i < list.Count; i++)
+        {
+            if (string.Equals(list[i], value, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+
+        return -1;
     }
 
     private static int Mod(int value, int modulus) => ((value % modulus) + modulus) % modulus;

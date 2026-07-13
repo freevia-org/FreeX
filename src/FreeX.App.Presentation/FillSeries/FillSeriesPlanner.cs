@@ -197,6 +197,7 @@ public static class FillSeriesPlanner
         {
             FillSeriesType.Growth => BuildGrowthSeriesEdits(sheet, range, options.Step, options.SeriesIn, options.StopValue),
             FillSeriesType.Date => BuildDateSeriesEdits(sheet, range, options.Step, options.SeriesIn, options.DateUnit, options.StopValue),
+            FillSeriesType.AutoFill => BuildAutoFillSeriesEdits(sheet, range, options.SeriesIn),
             _ => BuildLinearSeriesEdits(sheet, range, options.Step, options.SeriesIn, options.StopValue),
         };
     }
@@ -258,12 +259,25 @@ public static class FillSeriesPlanner
 
         var edits = new List<(CellAddress, Cell)>();
         var value = startValue.Value;
-        var ascending = stopValue is not { } stop || startValue.Value <= stop;
+        var ascending = IsGrowthAscending(value, step);
         foreach (var address in EnumerateSeriesAddresses(sheet.Id, range, seriesIn))
         {
             if (address.Row == range.Start.Row && address.Col == range.Start.Col)
             {
                 value *= step;
+                continue;
+            }
+
+            // Same per-line-seed handling as BuildLinearSeriesEdits: every row/column in the
+            // selection is its own independent series line, so a line whose own leading cell
+            // already holds a number reseeds THAT line -- both the running value and the
+            // ascending/descending direction used for the Stop Value clamp below, since two
+            // different lines' own seeds can trend in opposite directions for the same step.
+            if (IsSeriesLineStart(address, range, seriesIn) &&
+                sheet.GetValue(address.Row, address.Col) is NumberValue lineSeed)
+            {
+                ascending = IsGrowthAscending(lineSeed.Value, step);
+                value = lineSeed.Value * step;
                 continue;
             }
 
@@ -302,12 +316,66 @@ public static class FillSeriesPlanner
                 continue;
             }
 
+            // Same per-line-seed handling as BuildLinearSeriesEdits/BuildGrowthSeriesEdits: a
+            // line (column, for "Series in Columns"; row, for "Series in Rows") whose own
+            // leading cell already holds a date restarts the Month/Year end-of-month clamp and
+            // step count from THAT date, instead of continuing the running value chained from a
+            // previous, unrelated line.
+            if (IsSeriesLineStart(address, range, seriesIn) &&
+                sheet.GetValue(address.Row, address.Col) is DateTimeValue lineSeed)
+            {
+                seed = lineSeed.Value;
+                preserveEndOfMonth = IsLastDayOfMonth(lineSeed.ToDateTime());
+                stepIndex = 1;
+                value = NextDateSerial(seed, seed, step, dateUnit, preserveEndOfMonth, stepIndex);
+                continue;
+            }
+
             if (IsPastStopValue(value, step, stopValue))
                 break;
 
             edits.Add((address, Cell.FromValue(new DateTimeValue(value))));
             stepIndex++;
             value = NextDateSerial(seed, value, step, dateUnit, preserveEndOfMonth, stepIndex);
+        }
+
+        return edits;
+    }
+
+    /// <summary>
+    /// Builds the AutoFill series-type edits for Fill ▸ Series: replays the exact same
+    /// fill-handle text-list detection <see cref="AutofillCommand"/> uses for a fill-handle drag
+    /// (a trailing number, e.g. "Item 1" -&gt; "Item 2", or membership in one of Excel's
+    /// built-in weekday/month lists) instead of routing through the numeric-only Linear builder,
+    /// which silently no-ops on any non-numeric seed. Each line (column, for "Series in
+    /// Columns"; row, for "Series in Rows") in the selection is its own independent series,
+    /// seeded from that line's own leading cell -- matching how Linear, Growth, and Date all
+    /// treat lines.
+    /// </summary>
+    public static List<(CellAddress Address, Cell NewCell)> BuildAutoFillSeriesEdits(
+        Sheet sheet,
+        GridRange range,
+        FillSeriesDirection seriesIn)
+    {
+        var edits = new List<(CellAddress, Cell)>();
+        Func<int, ScalarValue>? lineSeries = null;
+        var offset = 0;
+        foreach (var address in EnumerateSeriesAddresses(sheet.Id, range, seriesIn))
+        {
+            if (IsSeriesLineStart(address, range, seriesIn))
+            {
+                lineSeries = sheet.GetValue(address.Row, address.Col) is TextValue seed
+                    ? AutofillCommand.TryCreateAutoFillTextSeries([seed.Value])
+                    : null;
+                offset = 1;
+                continue;
+            }
+
+            if (lineSeries is null)
+                continue;
+
+            edits.Add((address, Cell.FromValue(lineSeries(offset))));
+            offset++;
         }
 
         return edits;
@@ -357,6 +425,17 @@ public static class FillSeriesPlanner
 
         return ascending ? value > stop : value < stop;
     }
+
+    /// <summary>
+    /// Whether a growth series' terms trend upward, derived from the STEP's effect on the seed
+    /// (comparing the first computed term against the seed) rather than from comparing the seed
+    /// to the user's Stop Value -- e.g. seed=10/step=3 (10 -&gt; 30) or seed=-10/step=0.5
+    /// (-10 -&gt; -5) are ascending; seed=10/step=0.5 (10 -&gt; 5) or seed=-10/step=3
+    /// (-10 -&gt; -30) are descending. Mirrors BuildLinearSeriesEdits' step-sign-derived
+    /// direction: a mismatched Stop Value must clamp immediately rather than run away because
+    /// the direction was inferred from start-vs-stop instead of from the step itself.
+    /// </summary>
+    private static bool IsGrowthAscending(double seed, double step) => seed * step >= seed;
 
     /// <summary>
     /// Computes the next date serial in a Fill ▸ Series ▸ Date sequence. Day and Weekday units have no

@@ -147,8 +147,8 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                     }
                     else if (cf.RuleType == CfRuleType.CellValue)
                     {
-                        var v1 = cf.Value1 ?? "";
-                        var v2 = cf.Value2 ?? "";
+                        var v1 = FormatCellValueOperand(cf.Value1);
+                        var v2 = FormatCellValueOperand(cf.Value2);
                         IXLStyle xlStyle = cf.Operator switch
                         {
                             CfOperator.Equal => xlCf.WhenEquals(v1),
@@ -172,6 +172,46 @@ internal static class XlsxConditionalFormatClosedXmlMapper
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Prepares a CellIs rule's Value1/Value2 threshold text for ClosedXML's string-typed
+    /// <c>WhenEquals</c>/<c>WhenBetween</c>/etc. API.
+    /// <para>
+    /// ClosedXML's own CellIs writer (<c>XLCFCellIsConverter.GetQuoted</c>) leaves a threshold
+    /// unquoted only when it is a plain number, already wrapped in literal quotes, or flagged
+    /// <c>IsFormula</c> (which <see cref="ClosedXML.Excel.XLFormula.Value"/> sets only when the raw
+    /// text carries a leading '='); anything else -- most notably a cell reference like
+    /// <c>$B$1</c> or a formula expression -- gets silently wrapped in a dead string literal
+    /// instead of being written as a live formula operand. FreeX's own threshold text (whether
+    /// typed by the user or round-tripped from a real Excel file, where OOXML's CellIs
+    /// <c>&lt;formula&gt;</c> grammar never carries the leading '=' itself) never includes that
+    /// prefix, so every reference/formula threshold hit this quoting trap. Prefixing a leading '='
+    /// here makes ClosedXML mark it <c>IsFormula</c> so it is written unquoted as a real formula
+    /// operand, matching real Excel's own CellIs semantics (and this same reference/formula-vs-
+    /// literal distinction that <c>ViewportConditionalFormatEvaluator</c> already applies when
+    /// evaluating Value1/Value2 in memory).
+    /// </para>
+    /// </summary>
+    private static string FormatCellValueOperand(string? raw)
+    {
+        if (string.IsNullOrEmpty(raw))
+            return raw ?? "";
+
+        // Must match ClosedXML's own numeric check in XLCFCellIsConverter.GetQuoted exactly
+        // (NumberStyles.Float, invariant culture) -- a looser style here (e.g. NumberStyles.Any,
+        // which also accepts thousands separators/parentheses) could classify a value as numeric
+        // when ClosedXML's own stricter check would not, leaving it to fall through to the same
+        // quoting bug this fix is closing.
+        if (double.TryParse(raw, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out _))
+            return raw;
+
+        // Already a quoted text literal (e.g. carried over from a prior round-trip) -- leave as-is
+        // so ClosedXML's own quoting logic passes it through unchanged instead of double-quoting it.
+        if (raw.Length >= 2 && raw[0] == '"' && raw[^1] == '"')
+            return raw;
+
+        return raw[0] == '=' ? raw : "=" + raw;
     }
 
     private static CfOperator? MapOperator(XLCFOperator op) => op switch

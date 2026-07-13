@@ -136,7 +136,12 @@ public static partial class BuiltInFunctions
         if (!cum)
         {
             // PMF: C(f+r-1, f) * p^r * (1-p)^f
-            double pmf = Math.Exp(LogBinom(f + r - 1, f) + r * Math.Log(p) + f * Math.Log(1 - p));
+            // Guard the p=1 boundary: f*log(1-p) is 0*log(0) = NaN at f=0, but the PMF is
+            // well-defined (degenerate) there — every trial succeeds, so the r-th success
+            // is certain on the very first trial, giving 0 failures with probability 1.
+            double pmf = p == 1
+                ? (f == 0 ? 1.0 : 0.0)
+                : Math.Exp(LogBinom(f + r - 1, f) + r * Math.Log(p) + f * Math.Log(1 - p));
             return NumberResult(pmf);
         }
         // CDF = I_p(r, f+1)
@@ -165,7 +170,12 @@ public static partial class BuiltInFunctions
         if (!cum)
         {
             // PMF: lambda^x * e^(-lambda) / x!
-            double pmf = Math.Exp(x * Math.Log(lambda) - lambda - LogGamma(x + 1));
+            // Guard the lambda=0 boundary: x*log(0) is 0*-Infinity = NaN at x=0, but the
+            // distribution is degenerate at 0 there (a Poisson process with rate 0 never
+            // fires) — Excel returns 1 at x=0, 0 elsewhere.
+            double pmf = lambda == 0
+                ? (x == 0 ? 1.0 : 0.0)
+                : Math.Exp(x * Math.Log(lambda) - lambda - LogGamma(x + 1));
             return NumberResult(pmf);
         }
         // CDF = 1 - GammaInc(x+1, lambda) via regularised upper gamma = e^{-lambda} sum_{k=0}^{x} lambda^k / k!

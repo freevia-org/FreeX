@@ -220,8 +220,8 @@ public static partial class BuiltInFunctions
         if (args.Count > 1 && args[1] is ErrorValue e1) return e1;
         if (args.Count > 2 && args[2] is ErrorValue e2) return e2;
 
-        var decSep = args.Count > 1 ? args[1] : new TextValue(".");
-        var grpSep = args.Count > 2 ? args[2] : new TextValue(",");
+        var decSep = args.Count > 1 ? args[1] : new TextValue(CultureInfo.CurrentCulture.NumberFormat.NumberDecimalSeparator);
+        var grpSep = args.Count > 2 ? args[2] : new TextValue(CultureInfo.CurrentCulture.NumberFormat.NumberGroupSeparator);
         return MapTernaryTextArgs(args[0], decSep, grpSep, NumbervalueScalarWithSeparators);
     }
 

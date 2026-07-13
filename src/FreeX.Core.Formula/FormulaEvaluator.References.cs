@@ -1181,13 +1181,20 @@ public sealed partial class FormulaEvaluator
                 baseHeight = namedRange.RowCount; baseWidth = namedRange.ColCount;
                 baseSheet = namedRange.SheetName;
                 break;
-            case FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT":
+            case FunctionCallNode fn when fn.FunctionName is "OFFSET" or "INDIRECT" or "ANCHORARRAY":
                 // The base argument may itself be a reference-returning function call, e.g.
                 // OFFSET(INDIRECT("A1"),1,1) or OFFSET(OFFSET(A1,0,0),1,1) — both are valid in
-                // Excel. Resolve the nested call to its RangeValue via the same path used
-                // elsewhere for reference-returning arguments (EvaluateCellReferenceArgument,
-                // EvaluateIsRef) and use its bounds as the OFFSET base.
-                var nestedReference = EvaluateReferenceReturningFunction(fn, context);
+                // Excel. It may also be a spill (#) reference, e.g. OFFSET(A1#,1,0): Excel treats
+                // A1# as the current spill range and offsets from its extent, so ANCHORARRAY(ref)
+                // — the node the parser produces for A1# — is resolved the same way, via
+                // EvaluateAnchorArray directly (it isn't one of the two functions
+                // EvaluateReferenceReturningFunction dispatches). Resolve the nested call to its
+                // RangeValue via the same path used elsewhere for reference-returning arguments
+                // (EvaluateCellReferenceArgument, EvaluateIsRef) and use its bounds as the OFFSET
+                // base.
+                var nestedReference = fn.FunctionName == "ANCHORARRAY"
+                    ? EvaluateAnchorArray(fn, context)
+                    : EvaluateReferenceReturningFunction(fn, context);
                 if (nestedReference is ErrorValue nestedError) return nestedError;
                 if (nestedReference is not RangeValue nestedRange) return ErrorValue.Value;
                 baseRow = nestedRange.StartRow; baseCol = nestedRange.StartCol;

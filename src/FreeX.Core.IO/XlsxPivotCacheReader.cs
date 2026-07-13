@@ -100,7 +100,9 @@ internal static class XlsxPivotCacheReader
                     fieldGroup.Grouping,
                     fieldGroup.GroupStart,
                     fieldGroup.GroupEnd,
-                    fieldGroup.GroupInterval));
+                    fieldGroup.GroupInterval,
+                    fieldGroup.GroupStartDate,
+                    fieldGroup.GroupEndDate));
             }
 
             result.Add(cache);
@@ -167,7 +169,13 @@ internal static class XlsxPivotCacheReader
             Grouping: grouping,
             GroupStart: XlsxXmlAttributeReader.ReadDoubleAttribute(rangePr, "startNum"),
             GroupEnd: XlsxXmlAttributeReader.ReadDoubleAttribute(rangePr, "endNum"),
-            GroupInterval: XlsxXmlAttributeReader.ReadDoubleAttribute(rangePr, "groupInterval"));
+            GroupInterval: XlsxXmlAttributeReader.ReadDoubleAttribute(rangePr, "groupInterval"),
+            // A date-type groupBy (years/quarters/months/days) serializes its bounds as dateTime
+            // startDate/endDate attributes instead of the numeric startNum/endNum (CT_RangePr,
+            // ECMA-376 18.10.1.60); real Excel omits startNum/endNum entirely in that case, so this was
+            // previously silently dropped on load (R36-io-pivot-cache-2-2).
+            GroupStartDate: rangePr.Attribute("startDate")?.Value,
+            GroupEndDate: rangePr.Attribute("endDate")?.Value);
     }
 
     private static PivotCacheSourceType GetSourceType(XElement? cacheSource, XElement? worksheetSource)

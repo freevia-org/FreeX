@@ -30,7 +30,11 @@ internal static partial class XlsxPivotTableReader
                     field.Attribute("subtotal")?.Value ?? "sum",
                     numberFormatId,
                     calculatedFieldName,
-                    ReadPivotShowValuesAs(field.Attribute("showValuesAs")?.Value),
+                    // CT_DataField's real OOXML attribute is showDataAs (ST_ShowDataAs), not showValuesAs --
+                    // see ReadPivotShowDataAs below. The earlier showValuesAs name/tokens were a FreeX-only
+                    // invention real Excel never writes or recognizes, so "Show Values As" silently vanished
+                    // on any exchange with a real Excel file (R36-io-pivot-cache-2-1).
+                    ReadPivotShowDataAs(field.Attribute("showDataAs")?.Value),
                     XlsxXmlAttributeReader.ReadIntAttribute(field, "baseField"),
                     field.Attribute("baseItem")?.Value,
                     numberFormatId is not null && numberFormatCatalog.TryGetValue(numberFormatId.Value, out var formatCode)
@@ -40,6 +44,27 @@ internal static partial class XlsxPivotTableReader
             .Where(field => field.SourceFieldIndex >= 0 || field.CalculatedFieldName is not null)
             .ToList();
     }
+
+    // Maps CT_DataField's real ST_ShowDataAs tokens (ECMA-376 18.18.72) to PivotShowValuesAs. "percent"
+    // (Excel's "% Of" mode, relative to a single base item with no grand/row/col-total semantics) has no
+    // dedicated model slot yet and intentionally falls through to None, same as an absent/"normal" attribute.
+    private static PivotShowValuesAs ReadPivotShowDataAs(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "difference" => PivotShowValuesAs.DifferenceFrom,
+            "percentdiff" => PivotShowValuesAs.PercentDifferenceFrom,
+            "runtotal" => PivotShowValuesAs.RunningTotalIn,
+            "percentofrow" => PivotShowValuesAs.PercentOfRowTotal,
+            "percentofcol" => PivotShowValuesAs.PercentOfColumnTotal,
+            "percentoftotal" => PivotShowValuesAs.PercentOfGrandTotal,
+            "index" => PivotShowValuesAs.Index,
+            "percentofparent" => PivotShowValuesAs.PercentOfParentTotal,
+            "percentofparentrow" => PivotShowValuesAs.PercentOfParentRowTotal,
+            "percentofparentcol" => PivotShowValuesAs.PercentOfParentColumnTotal,
+            "rankascending" => PivotShowValuesAs.RankSmallest,
+            "rankdescending" => PivotShowValuesAs.RankLargest,
+            _ => PivotShowValuesAs.None
+        };
 
     private static string? FindCalculatedFieldName(
         IReadOnlyList<PivotCalculatedFieldModel> calculatedFields,

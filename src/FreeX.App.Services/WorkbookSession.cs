@@ -2196,12 +2196,20 @@ public sealed class WorkbookSession
         }
 
         var destination = ActiveCell;
+        // Tile the pasted column widths across the whole selected destination columns when it
+        // is a whole multiple of the copied source range's columns, matching the
+        // Values/Formulas/Formats/All paste tiling behavior
+        // (PasteCommandFactory.CreateInternalPasteCommand / GetSinglePasteDestinationRange)
+        // instead of only ever filling the source range's own column footprint anchored at the
+        // selection's start column (R36-commands-paste-special-4-3).
+        var destinationRange = GetSinglePasteDestinationRange(destination);
         var command = CreateGroupedSheetCommand(
             "Paste Column Widths",
             sheetId => new PasteColumnWidthsCommand(
                 sheetId,
                 internalClipboard.SourceRange,
-                RemapAddressToSheet(destination, sheetId).Col));
+                RemapAddressToSheet(destination, sheetId).Col,
+                RemapRangeToSheet(destinationRange, sheetId).ColCount));
         var result = _cellEditService.ExecuteEditCommand(Workbook, command);
         if (!result.Success)
             return result;
@@ -2224,7 +2232,20 @@ public sealed class WorkbookSession
         }
 
         var destination = ActiveCell;
+        // Tile the pasted comment(s) across the whole selected destination when it is a whole
+        // multiple of the copied source range, matching the Values/Formulas/Formats/All paste
+        // tiling behavior (PasteCommandFactory.CreateInternalPasteCommand /
+        // GetSinglePasteDestinationRange) instead of only ever filling the selection's top-left
+        // cell (R36-commands-paste-special-4-1).
+        var destinationRange = GetSinglePasteDestinationRange(destination);
         var pasteSize = GetPasteDimensions(internalClipboard.SourceRange, transpose);
+        if (destinationRange.RowCount > pasteSize.RowCount || destinationRange.ColCount > pasteSize.ColCount)
+        {
+            pasteSize = (
+                Math.Max(pasteSize.RowCount, destinationRange.RowCount),
+                Math.Max(pasteSize.ColCount, destinationRange.ColCount));
+        }
+
         if (!TryGetRectangleEnd(destination, pasteSize.RowCount, pasteSize.ColCount, out _))
         {
             return new WorkbookCellEditResult(
@@ -2241,7 +2262,7 @@ public sealed class WorkbookSession
                 sheetId => new PasteCommentsCommand(
                     sheetId,
                     internalClipboard.SourceRange,
-                    RemapAddressToSheet(destination, sheetId),
+                    RemapRangeToSheet(destinationRange, sheetId),
                     transpose)));
         if (!result.Success)
             return result;
@@ -2265,7 +2286,20 @@ public sealed class WorkbookSession
         }
 
         var destination = ActiveCell;
+        // Tile the pasted validation rule(s) across the whole selected destination when it is a
+        // whole multiple of the copied source range, matching the Values/Formulas/Formats/All
+        // paste tiling behavior (PasteCommandFactory.CreateInternalPasteCommand /
+        // GetSinglePasteDestinationRange) instead of only ever filling the selection's top-left
+        // cell (R36-commands-paste-special-4-1).
+        var destinationRange = GetSinglePasteDestinationRange(destination);
         var pasteSize = GetPasteDimensions(internalClipboard.SourceRange, transpose);
+        if (destinationRange.RowCount > pasteSize.RowCount || destinationRange.ColCount > pasteSize.ColCount)
+        {
+            pasteSize = (
+                Math.Max(pasteSize.RowCount, destinationRange.RowCount),
+                Math.Max(pasteSize.ColCount, destinationRange.ColCount));
+        }
+
         if (!TryGetRectangleEnd(destination, pasteSize.RowCount, pasteSize.ColCount, out _))
         {
             return new WorkbookCellEditResult(
@@ -2282,7 +2316,7 @@ public sealed class WorkbookSession
                 sheetId => new PasteDataValidationCommand(
                     sheetId,
                     internalClipboard.SourceRange,
-                    RemapAddressToSheet(destination, sheetId),
+                    RemapRangeToSheet(destinationRange, sheetId),
                     transpose)));
         if (!result.Success)
             return result;
@@ -2387,10 +2421,17 @@ public sealed class WorkbookSession
         }
 
         var destination = ActiveCell;
+        // Tile the linked formulas across the whole selected destination when it is a whole
+        // multiple of the copied source range, matching the Values/Formulas/Formats/All paste
+        // tiling behavior (PasteCommandFactory.CreateInternalPasteCommand /
+        // GetSinglePasteDestinationRange) instead of only ever filling the selection's top-left
+        // cell (R36-commands-paste-special-4-2).
+        var destinationRange = GetSinglePasteDestinationRange(destination);
         var command = CreatePasteLinkCommand(
             internalClipboard,
             sourceSheet.Name,
             destination,
+            destinationRange,
             transpose,
             keepSourceColumnWidths);
 
@@ -2400,6 +2441,13 @@ public sealed class WorkbookSession
 
         ApplySuccessfulEditResult(result, destination);
         var pasteSize = GetPasteDimensions(internalClipboard.SourceRange, transpose);
+        if (destinationRange.RowCount > pasteSize.RowCount || destinationRange.ColCount > pasteSize.ColCount)
+        {
+            pasteSize = (
+                Math.Max(pasteSize.RowCount, destinationRange.RowCount),
+                Math.Max(pasteSize.ColCount, destinationRange.ColCount));
+        }
+
         SelectPastedRange(destination, pasteSize.RowCount, pasteSize.ColCount);
         return result;
     }
@@ -3920,6 +3968,7 @@ public sealed class WorkbookSession
         InternalClipboard clipboard,
         string sourceSheetName,
         CellAddress destination,
+        GridRange destinationRange,
         bool transpose,
         bool keepSourceColumnWidths)
     {
@@ -3928,9 +3977,11 @@ public sealed class WorkbookSession
         foreach (var sheetId in targetSheetIds)
         {
             var sheetDestination = RemapAddressToSheet(destination, sheetId);
+            var sheetDestinationRange = RemapRangeToSheet(destinationRange, sheetId);
             var linkedCells = PasteLinkService.CreateLinkedCells(
                 clipboard.SourceRange,
                 sheetDestination,
+                sheetDestinationRange,
                 sourceSheetName,
                 transpose);
             IWorkbookCommand command = new EditCellsCommand(sheetId, linkedCells);
@@ -3940,7 +3991,11 @@ public sealed class WorkbookSession
                     "Paste Link",
                     [
                         command,
-                        new PasteColumnWidthsCommand(sheetId, clipboard.SourceRange, sheetDestination.Col)
+                        new PasteColumnWidthsCommand(
+                            sheetId,
+                            clipboard.SourceRange,
+                            sheetDestination.Col,
+                            sheetDestinationRange.ColCount)
                     ]);
             }
 

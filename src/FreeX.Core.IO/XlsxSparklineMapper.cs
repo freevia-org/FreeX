@@ -214,14 +214,29 @@ internal static class XlsxSparklineMapper
             // unique model Id — grouping them by Kind instead would silently merge unrelated
             // same-kind sparklines (and their distinct colors/markers/axis settings) into one
             // shared x14:sparklineGroup, which is not what independently-inserted sparklines are.
+            //
+            // IO-sparkline-group-edit: the OOXML schema encodes type/markers/colors/axis-scaling
+            // etc. as ONE set of attributes per <x14:sparklineGroup> (shared by every member's
+            // <x14:sparkline>), but FreeX's editing command mutates a single loaded SparklineModel
+            // instance in isolation, so members that started in the same nominal group (same
+            // GroupId) can end up disagreeing on those "group-level" fields after an edit. Picking
+            // one arbitrary member as the group's representative would then either silently drop
+            // the edit (if a stale sibling was picked) or force it onto untouched siblings (if the
+            // edited member was picked) — both data loss. Instead, re-split each nominal GroupId
+            // bucket by whether its members still agree on every group-level field: members that
+            // agree are written together as one shared <x14:sparklineGroup> (so a group-level style
+            // edit applied uniformly to all members still round-trips as one group); members that
+            // diverge are written as their own singleton <x14:sparklineGroup>, preserving each
+            // member's own current settings without touching its siblings.
             var sparklineGroupsXml = new XElement(
                 x14Ns + "sparklineGroups",
                 validSparklines
                     .GroupBy(s => s.GroupId == 0 ? (object)s.Id : (object)s.GroupId)
-                    .Select(group =>
+                    .SelectMany(nominalGroup => nominalGroup.GroupBy(GroupStyleKeyOf))
+                    .Select(styleGroup =>
                     {
-                        var representative = group.First();
-                        return ToSparklineGroupXml(workbook, sheet, representative, group, x14Ns, xmNs);
+                        var representative = styleGroup.First();
+                        return ToSparklineGroupXml(workbook, sheet, representative, styleGroup, x14Ns, xmNs);
                     }));
 
             var newSparklineExt = new XElement(
@@ -298,6 +313,70 @@ internal static class XlsxSparklineMapper
 
         return null;
     }
+
+    /// <summary>
+    /// Value-equality key over every OOXML "group-level" &lt;x14:sparklineGroup&gt; attribute
+    /// (everything except each member's own <see cref="SparklineModel.DataRange"/> and
+    /// <see cref="SparklineModel.Location"/>, which are always per-&lt;x14:sparkline&gt;). Two
+    /// sparklines that share a nominal <see cref="SparklineModel.GroupId"/> but compare unequal
+    /// under this key have diverged (e.g. one member was edited in isolation) and must be written
+    /// as separate &lt;x14:sparklineGroup&gt; elements rather than merged under one, since the XLSX
+    /// schema has no way to express per-member type/markers/color/axis differences within a
+    /// single group.
+    /// </summary>
+    private readonly record struct GroupStyleKey(
+        SparklineKind Kind,
+        double? LineWeight,
+        bool ShowMarkers,
+        bool ShowHighPoint,
+        bool ShowLowPoint,
+        bool ShowFirstPoint,
+        bool ShowLastPoint,
+        bool ShowNegativePoints,
+        bool ShowAxis,
+        bool DisplayHidden,
+        bool RightToLeft,
+        SparklineAxisScaling MinAxisType,
+        SparklineAxisScaling MaxAxisType,
+        double? ManualMin,
+        double? ManualMax,
+        SparklineEmptyCellDisplay DisplayEmptyCellsAs,
+        CellColor? SeriesColor,
+        CellColor? NegativeColor,
+        CellColor? AxisColor,
+        CellColor? MarkersColor,
+        CellColor? HighPointColor,
+        CellColor? LowPointColor,
+        CellColor? FirstPointColor,
+        CellColor? LastPointColor,
+        GridRange? DateAxisRange);
+
+    private static GroupStyleKey GroupStyleKeyOf(SparklineModel s) => new(
+        s.Kind,
+        s.LineWeight,
+        s.ShowMarkers,
+        s.ShowHighPoint,
+        s.ShowLowPoint,
+        s.ShowFirstPoint,
+        s.ShowLastPoint,
+        s.ShowNegativePoints,
+        s.ShowAxis,
+        s.DisplayHidden,
+        s.RightToLeft,
+        s.MinAxisType,
+        s.MaxAxisType,
+        s.ManualMin,
+        s.ManualMax,
+        s.DisplayEmptyCellsAs,
+        s.SeriesColor,
+        s.NegativeColor,
+        s.AxisColor,
+        s.MarkersColor,
+        s.HighPointColor,
+        s.LowPointColor,
+        s.FirstPointColor,
+        s.LastPointColor,
+        s.DateAxisRange);
 
     private static XElement ToSparklineGroupXml(
         Workbook workbook,

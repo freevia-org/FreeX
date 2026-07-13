@@ -95,6 +95,8 @@ public sealed partial class XlsxFileAdapter
         sheet.ApplyOutlineStyles = layout.ApplyOutlineStyles;
         sheet.GroupHiddenRows.UnionWith(layout.GroupHiddenRows);
         sheet.GroupHiddenCols.UnionWith(layout.GroupHiddenCols);
+        sheet.CollapsedAnchorRows.UnionWith(layout.CollapsedAnchorRows);
+        sheet.CollapsedAnchorCols.UnionWith(layout.CollapsedAnchorCols);
         var loadedDrawingObjectOrder = new List<(int OrderIndex, DrawingObjectZOrderEntry Entry)>();
         var fallbackChartDataRange = sheet.GetUsedRange();
         var sheetNameResolver = workbook.Sheets
