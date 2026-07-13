@@ -1165,6 +1165,32 @@ public sealed class VisualEvidencePlannerTests
             signature.Contains("geometry=function-apply", StringComparison.Ordinal)
             && signature.Contains("name=sin", StringComparison.Ordinal)
             && signature.Contains("argument=x + y", StringComparison.Ordinal));
+        equations.SpacingGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("spacing=script", StringComparison.Ordinal)
+            && signature.Contains("hasSuperscript=1", StringComparison.Ordinal)
+            && signature.Contains("horizontalGapEm=0.06", StringComparison.Ordinal));
+        equations.SpacingGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("spacing=fraction", StringComparison.Ordinal)
+            && signature.Contains("layout=vertical-stack", StringComparison.Ordinal)
+            && signature.Contains("stackGapEm=0.12", StringComparison.Ordinal)
+            && signature.Contains("barOverhangEm=0.08", StringComparison.Ordinal));
+        equations.SpacingGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("spacing=radical", StringComparison.Ordinal)
+            && signature.Contains("degreePresent=1", StringComparison.Ordinal)
+            && signature.Contains("overbarClearanceEm=0.06", StringComparison.Ordinal));
+        equations.SpacingGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("spacing=nary", StringComparison.Ordinal)
+            && signature.Contains("limitPlacement=above-below", StringComparison.Ordinal)
+            && signature.Contains("operandGapEm=0.16", StringComparison.Ordinal));
+        equations.SpacingGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("spacing=matrix", StringComparison.Ordinal)
+            && signature.Contains("rowGapEm=0.28", StringComparison.Ordinal)
+            && signature.Contains("columnGapEm=0.55", StringComparison.Ordinal)
+            && signature.Contains("delimiterGapEm=0.12", StringComparison.Ordinal));
+        equations.SpacingGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("spacing=equationarray", StringComparison.Ordinal)
+            && signature.Contains("rowGapEm=0.28", StringComparison.Ordinal)
+            && signature.Contains("delimiterGapEm=0", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -3528,6 +3554,11 @@ public sealed class VisualEvidencePlannerTests
                         [
                             .. avaloniaRow.PageExpectation.Equations.ElementGeometrySignatures
                                 .Where(signature => !signature.Contains("geometry=radical", StringComparison.Ordinal))
+                        ],
+                        SpacingGeometrySignatures =
+                        [
+                            .. avaloniaRow.PageExpectation.Equations.SpacingGeometrySignatures
+                                .Where(signature => !signature.Contains("spacing=radical", StringComparison.Ordinal))
                         ]
                     }
                 }
@@ -3564,6 +3595,10 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("equation renderer pair 'equation-structures' page 1", StringComparison.Ordinal)
                 && f.Contains("element geometry signatures differ", StringComparison.Ordinal)
                 && f.Contains("geometry=radical", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("equation renderer pair 'equation-structures' page 1", StringComparison.Ordinal)
+                && f.Contains("spacing geometry signatures differ", StringComparison.Ordinal)
+                && f.Contains("spacing=radical", StringComparison.Ordinal));
         }
         finally
         {

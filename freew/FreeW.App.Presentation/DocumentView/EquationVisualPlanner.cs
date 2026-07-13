@@ -377,6 +377,7 @@ public sealed record FreeWVisualEquationExpectation(
     IReadOnlyList<string> BaselineRoleCounts,
     IReadOnlyList<string> SegmentGeometrySignatures,
     IReadOnlyList<string> ElementGeometrySignatures,
+    IReadOnlyList<string> SpacingGeometrySignatures,
     IReadOnlyList<string> SlotGeometrySignatures)
 {
     public static FreeWVisualEquationExpectation Empty { get; } = new(
@@ -390,6 +391,7 @@ public sealed record FreeWVisualEquationExpectation(
         BaselineRoleCounts: [],
         SegmentGeometrySignatures: [],
         ElementGeometrySignatures: [],
+        SpacingGeometrySignatures: [],
         SlotGeometrySignatures: []);
 }
 
@@ -403,6 +405,18 @@ public static class EquationVisualPlanner
     public const double LargeOperatorFontSizeScale = 1.45;
     public const double DecoratorFontSizeScale = 0.85;
     public const double DelimiterFontSizeScale = 1.25;
+    public const double ScriptHorizontalGapEm = 0.06;
+    public const double FractionStackGapEm = 0.12;
+    public const double FractionBarThicknessEm = 0.05;
+    public const double FractionBarOverhangEm = 0.08;
+    public const double RadicalDegreeGapEm = 0.08;
+    public const double RadicalRadicandGapEm = 0.1;
+    public const double RadicalOverbarClearanceEm = 0.06;
+    public const double NAryLimitGapEm = 0.08;
+    public const double NAryOperandGapEm = 0.16;
+    public const double MatrixColumnGapEm = 0.55;
+    public const double MatrixRowGapEm = 0.28;
+    public const double MatrixDelimiterGapEm = 0.12;
     public const string FractionBarText = "\u2044";
     public const string RadicalSignText = "\u221a";
     public const string MatrixOpenDelimiterText = "[";
@@ -542,6 +556,9 @@ public static class EquationVisualPlanner
                 .ToList(),
             ElementGeometrySignatures: plans
                 .SelectMany((plan, equationIndex) => BuildElementGeometrySignatures(plan, equationIndex + 1))
+                .ToList(),
+            SpacingGeometrySignatures: plans
+                .SelectMany((plan, equationIndex) => BuildSpacingGeometrySignatures(plan, equationIndex + 1))
                 .ToList(),
             SlotGeometrySignatures: slotPlans
                 .Select(slot => BuildSlotGeometrySignature(slot.EquationIndex, slot.OwnerPath, slot.SlotName, slot.Depth, slot.Plan))
@@ -1318,8 +1335,8 @@ public static class EquationVisualPlanner
                     "bar=" + NormalizeSignatureText(FractionBarText),
                     "denominator=" + NormalizeSignatureText(element.Denominator),
                     "slotOrder=numerator,bar,denominator",
-                    "stackGapEm=0.12",
-                    "barThicknessEm=0.05"),
+                    "stackGapEm=" + FormatDouble(FractionStackGapEm),
+                    "barThicknessEm=" + FormatDouble(FractionBarThicknessEm)),
             EquationVisualElementKind.Radical =>
                 string.Join(
                     "|",
@@ -1396,6 +1413,90 @@ public static class EquationVisualPlanner
         };
     }
 
+    private static IEnumerable<string> BuildSpacingGeometrySignatures(
+        EquationVisualPlan plan,
+        int equationIndex)
+    {
+        for (var elementIndex = 0; elementIndex < plan.Elements.Count; elementIndex++)
+        {
+            var element = plan.Elements[elementIndex];
+            var spacing = BuildSpacingGeometryPart(element);
+            if (spacing is null)
+                continue;
+
+            yield return string.Join(
+                "|",
+                EqPart(equationIndex),
+                "el=" + (elementIndex + 1).ToString(CultureInfo.InvariantCulture),
+                "kind=" + element.Kind,
+                spacing);
+        }
+    }
+
+    private static string? BuildSpacingGeometryPart(EquationVisualElement element)
+    {
+        return element.Kind switch
+        {
+            EquationVisualElementKind.Segments when !string.IsNullOrEmpty(element.ScriptSubscriptText)
+                || !string.IsNullOrEmpty(element.ScriptSuperscriptText) =>
+                string.Join(
+                    "|",
+                    "spacing=script",
+                    "hasSubscript=" + BoolFlag(!string.IsNullOrEmpty(element.ScriptSubscriptText)),
+                    "hasSuperscript=" + BoolFlag(!string.IsNullOrEmpty(element.ScriptSuperscriptText)),
+                    "horizontalGapEm=" + FormatDouble(ScriptHorizontalGapEm),
+                    "subOffsetEm=" + FormatDouble(SubscriptBaselineOffsetEm),
+                    "supOffsetEm=" + FormatDouble(SuperscriptBaselineOffsetEm),
+                    "scriptScale=" + FormatDouble(ScriptFontSizeScale)),
+            EquationVisualElementKind.Fraction =>
+                string.Join(
+                    "|",
+                    "spacing=fraction",
+                    "layout=vertical-stack",
+                    "numeratorAlign=center",
+                    "denominatorAlign=center",
+                    "stackGapEm=" + FormatDouble(FractionStackGapEm),
+                    "barThicknessEm=" + FormatDouble(FractionBarThicknessEm),
+                    "barOverhangEm=" + FormatDouble(FractionBarOverhangEm),
+                    "numeratorSegments=" + SegmentCount(element.NumeratorPlan).ToString(CultureInfo.InvariantCulture),
+                    "denominatorSegments=" + SegmentCount(element.DenominatorPlan).ToString(CultureInfo.InvariantCulture)),
+            EquationVisualElementKind.Radical =>
+                string.Join(
+                    "|",
+                    "spacing=radical",
+                    "degreeGapEm=" + FormatDouble(RadicalDegreeGapEm),
+                    "radicandGapEm=" + FormatDouble(RadicalRadicandGapEm),
+                    "overbarClearanceEm=" + FormatDouble(RadicalOverbarClearanceEm),
+                    "degreeOffsetEm=" + FormatDouble(SuperscriptBaselineOffsetEm),
+                    "degreePresent=" + BoolFlag(!string.IsNullOrEmpty(element.Degree)),
+                    "radicandSegments=" + SegmentCount(element.RadicandPlan).ToString(CultureInfo.InvariantCulture)),
+            EquationVisualElementKind.NAry =>
+                string.Join(
+                    "|",
+                    "spacing=nary",
+                    "limitPlacement=above-below",
+                    "lowerGapEm=" + FormatDouble(NAryLimitGapEm),
+                    "upperGapEm=" + FormatDouble(NAryLimitGapEm),
+                    "operandGapEm=" + FormatDouble(NAryOperandGapEm),
+                    "operatorScale=" + FormatDouble(LargeOperatorFontSizeScale),
+                    "limitScale=" + FormatDouble(ScriptFontSizeScale),
+                    "operandScale=" + FormatDouble(StructureFontSizeScale),
+                    "hasLower=" + BoolFlag(!string.IsNullOrEmpty(element.LowerLimit)),
+                    "hasUpper=" + BoolFlag(!string.IsNullOrEmpty(element.UpperLimit))),
+            EquationVisualElementKind.Matrix or EquationVisualElementKind.EquationArray =>
+                string.Join(
+                    "|",
+                    "spacing=" + element.Kind.ToString().ToLowerInvariant(),
+                    "rowGapEm=" + FormatDouble(MatrixRowGapEm),
+                    "columnGapEm=" + FormatDouble(MatrixColumnGapEm),
+                    "delimiterGapEm=" + FormatDouble(
+                        element.Kind == EquationVisualElementKind.Matrix ? MatrixDelimiterGapEm : 0.0),
+                    "rows=" + element.MatrixRowCount.ToString(CultureInfo.InvariantCulture),
+                    "columns=" + element.MatrixColumnCount.ToString(CultureInfo.InvariantCulture)),
+            _ => null
+        };
+    }
+
     private static string JoinRoles(IReadOnlyList<EquationVisualSegment> segments) =>
         string.Join(",", segments.Select(segment => segment.Role.ToString()));
 
@@ -1414,6 +1515,9 @@ public static class EquationVisualPlanner
                 "r" + cell.RowIndex.ToString(CultureInfo.InvariantCulture)
                     + "c" + cell.ColumnIndex.ToString(CultureInfo.InvariantCulture)
                     + "=" + NormalizeSignatureText(cell.Text))));
+
+    private static int SegmentCount(EquationVisualPlan? plan) =>
+        plan?.Segments.Count ?? 0;
 
     private static string EqPart(int equationIndex) =>
         "eq=" + equationIndex.ToString(CultureInfo.InvariantCulture);

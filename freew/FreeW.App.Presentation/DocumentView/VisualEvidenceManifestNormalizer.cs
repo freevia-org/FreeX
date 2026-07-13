@@ -148,7 +148,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 32;
+    public const int SummarySchemaVersion = 33;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -622,8 +622,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine();
         sb.AppendLine("## Equation Geometry Evidence");
         sb.AppendLine();
-        sb.AppendLine("| Host | Scenario | Page | Counts | Roles | Geometry Signatures |");
-        sb.AppendLine("| --- | --- | ---: | --- | --- | --- |");
+        sb.AppendLine("| Host | Scenario | Page | Counts | Roles | Geometry Signatures | Spacing Signatures |");
+        sb.AppendLine("| --- | --- | ---: | --- | --- | --- | --- |");
         foreach (var row in rows)
         {
             var equations = row.Equations;
@@ -640,11 +640,13 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 "baselines: " + FormatSummaries(equations.BaselineRoleCounts),
                 "elements: " + FormatSummaries(equations.ElementKindCounts));
             var signatures = FormatSummaries(equations.ElementGeometrySignatures);
+            var spacingSignatures = FormatSummaries(equations.SpacingGeometrySignatures);
 
             sb.AppendLine(
                 $"| {EscapeMarkdown(row.HostId)} | {EscapeMarkdown(row.ScenarioId)} | " +
                 $"{row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
-                $"{EscapeMarkdown(counts)} | {EscapeMarkdown(roles)} | {EscapeMarkdown(signatures)} |");
+                $"{EscapeMarkdown(counts)} | {EscapeMarkdown(roles)} | " +
+                $"{EscapeMarkdown(signatures)} | {EscapeMarkdown(spacingSignatures)} |");
         }
     }
 
@@ -3117,6 +3119,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateEquationSignatureList(pairName, "baseline role counts", wpfEquations.BaselineRoleCounts, avaloniaEquations.BaselineRoleCounts, failures);
         ValidateEquationSignatureList(pairName, "segment geometry signatures", wpfEquations.SegmentGeometrySignatures, avaloniaEquations.SegmentGeometrySignatures, failures);
         ValidateEquationSignatureList(pairName, "element geometry signatures", wpfEquations.ElementGeometrySignatures, avaloniaEquations.ElementGeometrySignatures, failures);
+        ValidateEquationSignatureList(pairName, "spacing geometry signatures", wpfEquations.SpacingGeometrySignatures, avaloniaEquations.SpacingGeometrySignatures, failures);
         ValidateEquationSignatureList(pairName, "slot geometry signatures", wpfEquations.SlotGeometrySignatures, avaloniaEquations.SlotGeometrySignatures, failures);
     }
 

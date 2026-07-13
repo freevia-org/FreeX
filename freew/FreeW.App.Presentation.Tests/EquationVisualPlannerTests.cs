@@ -979,6 +979,17 @@ public sealed class EquationVisualPlannerTests
             signature.Contains("geometry=nary", StringComparison.Ordinal)
             && signature.Contains("operator=\u2211", StringComparison.Ordinal)
             && signature.Contains("operand=sin(x)", StringComparison.Ordinal));
+        evidence.SpacingGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("spacing=fraction", StringComparison.Ordinal)
+            && signature.Contains("layout=vertical-stack", StringComparison.Ordinal)
+            && signature.Contains("barThicknessEm=0.05", StringComparison.Ordinal)
+            && signature.Contains("numeratorSegments=3", StringComparison.Ordinal)
+            && signature.Contains("denominatorSegments=3", StringComparison.Ordinal));
+        evidence.SpacingGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("spacing=nary", StringComparison.Ordinal)
+            && signature.Contains("limitPlacement=above-below", StringComparison.Ordinal)
+            && signature.Contains("operandGapEm=0.16", StringComparison.Ordinal)
+            && signature.Contains("operatorScale=1.45", StringComparison.Ordinal));
         evidence.SlotGeometrySignatures.Should().Contain(signature =>
             signature.Contains("slot=fraction-numerator", StringComparison.Ordinal)
             && signature.Contains("roles=Text,Base,Superscript", StringComparison.Ordinal));
