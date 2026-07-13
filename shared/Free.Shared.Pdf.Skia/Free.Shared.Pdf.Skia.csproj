@@ -18,6 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Free.Shared.Pdf.Tests" />
     <InternalsVisibleTo Include="Free.Shared.Pdf.Skia.Tests" />
     <InternalsVisibleTo Include="FreeX.App.Avalonia" />
     <InternalsVisibleTo Include="FreeX.App.Avalonia.Tests" />

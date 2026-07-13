@@ -278,7 +278,7 @@ public static class SkiaPdfWriter
             canvas.DrawImage(skImage, destRect, imagePaint);
     }
 
-    private static bool TryGetSourceRect(SKImage image, PdfImageSourceCrop crop, out SKRect sourceRect)
+    internal static bool TryGetSourceRect(SKImage image, PdfImageSourceCrop crop, out SKRect sourceRect)
     {
         sourceRect = default;
         if (!crop.HasCrop || image.Width <= 0 || image.Height <= 0)
