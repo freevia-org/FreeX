@@ -15,6 +15,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("\"--composite\", \"--software-fallback\"");
         source.Should().Contain("-AllowMissingWord");
         source.Should().Contain("--word-baseline-unavailable-reason");
+        source.Should().Contain("--allow-no-word-fallback-evidence");
         source.Should().Contain("evidenceMode = \"no-word-fallback\"");
         source.Should().Contain("baselineEvidenceClass = \"word-baseline-unavailable\"");
         source.Should().Contain("authoritativeWordPngParity = $false");
@@ -207,8 +208,11 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("--include-scenario");
         source.Should().Contain("--scenario");
         source.Should().Contain("AddScenarioIds(options, ReadValue(args, ref i, arg));");
+        source.Should().Contain("--allow-no-word-fallback-evidence");
+        source.Should().Contain("allowNoWordFallbackEvidence: options.AllowNoWordFallbackEvidence");
         source.Should().Contain("value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)");
         source.Should().Contain("includedScenarioIds: options.IncludeScenarioIds");
+        source.Should().Contain("public bool AllowNoWordFallbackEvidence { get; set; }");
         source.Should().Contain("public List<string> IncludeScenarioIds { get; } = [];");
     }
 

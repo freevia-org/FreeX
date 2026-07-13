@@ -302,7 +302,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
         IReadOnlyList<string> manifestPaths,
         string runRoot,
         IReadOnlyList<FreeWVisualEvidenceExpectedScenario>? expectedScenarios = null,
-        IReadOnlyCollection<string>? includedScenarioIds = null)
+        IReadOnlyCollection<string>? includedScenarioIds = null,
+        bool allowNoWordFallbackEvidence = false)
     {
         ArgumentNullException.ThrowIfNull(manifestPaths);
         ArgumentException.ThrowIfNullOrWhiteSpace(runRoot);
@@ -315,11 +316,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
             .Where(id => !string.IsNullOrWhiteSpace(id))
             .Select(id => id.Trim())
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var usingDefaultExpectedScenarios = expectedScenarios is null;
         var expected = (expectedScenarios ?? DefaultExpectedScenarios)
             .Where(e => included is null || included.Count == 0 || included.Contains(e.ScenarioId))
             .OrderBy(e => e.HostId, StringComparer.OrdinalIgnoreCase)
             .ThenBy(e => e.ScenarioId, StringComparer.OrdinalIgnoreCase)
             .ToList();
+        if (allowNoWordFallbackEvidence && usingDefaultExpectedScenarios)
+        {
+            expected = expected
+                .Where(e => !IsDefaultNoWordFallbackOptionalScenario(e))
+                .ToList();
+        }
         var expectedByKey = expected.ToDictionary(
             e => ScenarioKey(e.HostId, e.ScenarioId),
             StringComparer.OrdinalIgnoreCase);
@@ -363,7 +371,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     manifestDirectory,
                     normalizedRoot,
                     evidenceIds,
-                    failures));
+                    failures,
+                    allowNoWordFallbackEvidence));
             }
         }
 
@@ -786,6 +795,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     var outputSummary = string.Join(", ", pageRows.Select(row => row.OutputPath));
                     if (trusted.Count > 0)
                     {
+                        if (trusted.All(IsBackstageWpfSoftwareRendererFallback))
+                        {
+                            rows.Add(new FreeWVisualEvidenceBackstagePrintReadiness(
+                                scenarioId,
+                                hostId,
+                                pageNumber,
+                                "fallback",
+                                outputSummary,
+                                "WPF software renderer fallback retained for no-Word evidence; real wpf-composite-renderer capture still required"));
+                            continue;
+                        }
+
                         rows.Add(new FreeWVisualEvidenceBackstagePrintReadiness(
                             scenarioId,
                             hostId,
@@ -2228,7 +2249,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
         string manifestDirectory,
         string runRoot,
         HashSet<string> evidenceIds,
-        List<string> summaryFailures)
+        List<string> summaryFailures,
+        bool allowNoWordFallbackEvidence)
     {
         var rowFailures = new List<string>();
         if (!evidenceIds.Add(row.EvidenceId))
@@ -2249,7 +2271,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (!string.Equals(row.OutputName, pageExpectation.ExpectedOutputName, StringComparison.OrdinalIgnoreCase))
             rowFailures.Add($"output name '{row.OutputName}' does not match expected '{pageExpectation.ExpectedOutputName}'");
         ValidateFeatureExpectations(normalizedRow, rowFailures);
-        ValidateBackstageCaptureSource(normalizedRow, rowFailures);
+        ValidateBackstageCaptureSource(normalizedRow, rowFailures, allowNoWordFallbackEvidence);
 
         var outputPath = ResolveOutputPath(row.OutputPath, manifestDirectory);
         var relativeOutputPath = NormalizeRelativePath(runRoot, outputPath);
@@ -3007,7 +3029,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
     private static void ValidateBackstageCaptureSource(
         FreeWVisualEvidenceRow row,
-        List<string> rowFailures)
+        List<string> rowFailures,
+        bool allowNoWordFallbackEvidence)
     {
         if (!BackstageRendererScenarioIds.Contains(row.ScenarioId, StringComparer.OrdinalIgnoreCase))
             return;
@@ -3050,7 +3073,13 @@ public static class FreeWVisualEvidenceManifestNormalizer
             return;
         }
 
-        if (!string.Equals(captureSource, expectedCaptureSource, StringComparison.OrdinalIgnoreCase))
+        var isAllowedNoWordFallback = allowNoWordFallbackEvidence
+            && IsBackstageWpfSoftwareRendererFallback(row);
+        if (isAllowedNoWordFallback)
+            ValidateBackstageWpfSoftwareRendererFallback(row, rowFailures);
+
+        if (!string.Equals(captureSource, expectedCaptureSource, StringComparison.OrdinalIgnoreCase)
+            && !isAllowedNoWordFallback)
         {
             rowFailures.Add(
                 $"backstage renderer evidence for host '{row.HostId}' must use real capture source '{expectedCaptureSource}', found '{captureSource}'");
@@ -3193,6 +3222,41 @@ public static class FreeWVisualEvidenceManifestNormalizer
             "workflow-only"
         };
         return genericValues.Contains(value, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDefaultNoWordFallbackOptionalScenario(FreeWVisualEvidenceExpectedScenario scenario) =>
+        string.Equals(scenario.HostId, WpfHostId, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(scenario.ScenarioId, FloatingWrappingWpfScenarioId, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsBackstageWpfSoftwareRendererFallback(FreeWVisualEvidenceRow row) =>
+        BackstageRendererScenarioIds.Contains(row.ScenarioId, StringComparer.OrdinalIgnoreCase)
+        && string.Equals(row.HostId, WpfHostId, StringComparison.OrdinalIgnoreCase)
+        && row.HostMetadata.TryGetValue("captureSource", out var captureSource)
+        && string.Equals(captureSource, "software-renderer", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsBackstageWpfSoftwareRendererFallback(FreeWVisualEvidenceNormalizedRow row) =>
+        BackstageRendererScenarioIds.Contains(row.ScenarioId, StringComparer.OrdinalIgnoreCase)
+        && string.Equals(row.HostId, WpfHostId, StringComparison.OrdinalIgnoreCase)
+        && row.HostMetadata.TryGetValue("captureSource", out var captureSource)
+        && string.Equals(captureSource, "software-renderer", StringComparison.OrdinalIgnoreCase);
+
+    private static void ValidateBackstageWpfSoftwareRendererFallback(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        if (!row.HostMetadata.TryGetValue("wpfRenderTargetBitmap", out var renderTargetStatus)
+            || !string.Equals(renderTargetStatus, "unavailable", StringComparison.OrdinalIgnoreCase))
+        {
+            rowFailures.Add(
+                "backstage WPF software fallback evidence must declare wpfRenderTargetBitmap 'unavailable'");
+        }
+
+        if (!row.HostMetadata.TryGetValue("wpfRenderTargetBitmapReason", out var reason)
+            || string.IsNullOrWhiteSpace(reason))
+        {
+            rowFailures.Add(
+                "backstage WPF software fallback evidence must declare wpfRenderTargetBitmapReason");
+        }
     }
 
     private static IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> BuildScenarioSummaries(

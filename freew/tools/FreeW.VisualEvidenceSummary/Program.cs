@@ -21,7 +21,8 @@ try
     var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
         options.ManifestPaths,
         runRoot,
-        includedScenarioIds: options.IncludeScenarioIds);
+        includedScenarioIds: options.IncludeScenarioIds,
+        allowNoWordFallbackEvidence: options.AllowNoWordFallbackEvidence);
     if (!string.IsNullOrWhiteSpace(options.WordBaselineUnavailableReason))
     {
         var tolerance = FreeWVisualBaselineComparisonPlanner.ResolveTolerance(options.BaselineToleranceName);
@@ -111,6 +112,9 @@ static Options Parse(string[] args)
             case "--word-baseline-generated-corpus-only":
                 options.BaselineScopeName = FreeWWordBaselineEvidencePlanner.BaselineScopeGeneratedCorpus;
                 break;
+            case "--allow-no-word-fallback-evidence":
+                options.AllowNoWordFallbackEvidence = true;
+                break;
             case "--manifest":
                 options.ManifestPaths.Add(ReadValue(args, ref i, arg));
                 break;
@@ -149,7 +153,7 @@ static void AddScenarioIds(Options options, string value)
 
 static void PrintUsage()
 {
-    Console.Error.WriteLine("usage: FreeW.VisualEvidenceSummary --run-root <dir> --manifest <manifest.json> [--manifest <manifest.json>] [--include-scenario <id>] [--word-baseline-dir <dir> | --word-baseline-unavailable-reason <reason>] [--baseline-tolerance <name>] [--word-baseline-scope all|generated-corpus] [--output-json <path>] [--output-md <path>]");
+    Console.Error.WriteLine("usage: FreeW.VisualEvidenceSummary --run-root <dir> --manifest <manifest.json> [--manifest <manifest.json>] [--include-scenario <id>] [--word-baseline-dir <dir> | --word-baseline-unavailable-reason <reason>] [--baseline-tolerance <name>] [--word-baseline-scope all|generated-corpus] [--allow-no-word-fallback-evidence] [--output-json <path>] [--output-md <path>]");
     Console.Error.WriteLine("baseline tolerances: " + string.Join(", ", FreeWVisualBaselineComparisonTolerance.BuiltIn.Select(t => t.Name)));
     Console.Error.WriteLine("baseline scopes: all, generated-corpus");
 }
@@ -320,6 +324,7 @@ sealed class Options
     public string? BaselineToleranceName { get; set; }
     public string? BaselineScopeName { get; set; }
     public bool ShowHelp { get; set; }
+    public bool AllowNoWordFallbackEvidence { get; set; }
     public List<string> ManifestPaths { get; } = [];
     public List<string> IncludeScenarioIds { get; } = [];
 }

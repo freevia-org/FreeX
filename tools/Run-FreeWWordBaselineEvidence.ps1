@@ -74,6 +74,7 @@ function Write-WordBaselineUnavailableSummary([string]$Reason) {
         "--manifest", $avaloniaManifest,
         "--word-baseline-scope", "generated-corpus",
         "--baseline-tolerance", "word-png-default",
+        "--allow-no-word-fallback-evidence",
         "--word-baseline-unavailable-reason", $Reason,
         "--output-json", $summaryJson,
         "--output-md", $summaryMd)

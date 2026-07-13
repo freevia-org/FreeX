@@ -4321,6 +4321,135 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_AllowsBackstageSoftwareRendererRowsForNoWordFallback()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "backstage-pdf-export-fidelity";
+            var softwareFallbackRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    pageNumber: page,
+                    pageCount: 2) with
+                    {
+                        HostMetadata = new Dictionary<string, string>
+                        {
+                            ["renderer"] = "FreeW.FidelityRender",
+                            ["captureSource"] = "software-renderer",
+                            ["backstageWorkflow"] = "pdf-export",
+                            ["backstageArtifactKind"] = "pdf-export-rasterized",
+                            ["backstagePipeline"] = "pdf-export-rasterized-artifact",
+                            ["backstageCaptureRoute"] = "backstage-pdf-export-raster-capture",
+                            ["wpfRenderTargetBitmap"] = "unavailable",
+                            ["wpfRenderTargetBitmapReason"] = "Software evidence renderer requested by --software-fallback; WPF RenderTargetBitmap was not used."
+                        }
+                    })
+                .ToList();
+            var avaloniaRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    pageNumber: page,
+                    pageCount: 2))
+                .ToList();
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                softwareFallbackRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ],
+                allowNoWordFallbackEvidence: true);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Should().OnlyContain(row => row.Trust.Passed);
+            summary.BackstagePrintEvidenceReadiness.Should().Contain(row =>
+                row.ScenarioId == scenarioId &&
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId &&
+                row.PageNumber == 1 &&
+                row.Status == "fallback" &&
+                row.Notes.Contains("real wpf-composite-renderer capture still required", StringComparison.Ordinal));
+            summary.RemainingEvidenceBlockers.Should().ContainSingle(blocker =>
+                blocker.BlockerId == "backstage-real-captures-backstage-pdf-export-fidelity" &&
+                blocker.Status == "missing-real-captures" &&
+                blocker.SemanticEvidence.Contains("wpf-fidelity-render/p1=fallback") &&
+                blocker.Trust.Passed == false);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_MakesDefaultWpfFloatingWrapOptionalForNoWordFallback()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var unrelatedRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "f2-hf-basic",
+                pageNumber: 1,
+                pageCount: 1);
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [unrelatedRow],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var strictSummary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                includedScenarioIds: [FreeWVisualEvidenceManifestNormalizer.FloatingWrappingWpfScenarioId]);
+            strictSummary.Trust.Passed.Should().BeFalse();
+            strictSummary.Trust.Failures.Should().Contain(failure =>
+                failure.Contains("wpf-fidelity-render/f2-01-float-wrap", StringComparison.Ordinal)
+                && failure.Contains("expected at least 1 trusted output", StringComparison.Ordinal));
+
+            var fallbackSummary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                includedScenarioIds: [FreeWVisualEvidenceManifestNormalizer.FloatingWrappingWpfScenarioId],
+                allowNoWordFallbackEvidence: true);
+
+            fallbackSummary.Trust.Passed.Should().BeTrue();
+            fallbackSummary.ExpectedScenarios.Should().NotContain(scenario =>
+                scenario.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId
+                && scenario.ScenarioId == FreeWVisualEvidenceManifestNormalizer.FloatingWrappingWpfScenarioId);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresBackstageArtifactMetadata()
     {
         var root = CreateTempRoot();
