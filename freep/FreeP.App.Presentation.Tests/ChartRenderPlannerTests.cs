@@ -1827,16 +1827,18 @@ public sealed class ChartRenderPlannerTests
         plan.Series.Should().ContainSingle();
         plan.Series[0].IsFilled.Should().BeTrue();
         plan.Series[0].WithMarkers.Should().BeFalse();
+        plan.Series[0].Paths.Should().ContainSingle();
         plan.Series[0].Path.IsClosed.Should().BeTrue();
-        plan.Series[0].Path.Points.Should().Equal(plan.Series[0].Points);
+        plan.Series[0].Path.Points.Should().Equal(plan.Series[0].Points.Select(point => point!.Value));
         plan.Series[0].Path.Fill.Should().Be(new ChartFillPlan(seriesColor, ChartRenderPlanner.RadarFillAlpha));
         plan.Series[0].Stroke.Should().Be(new ChartStrokePlan(
             seriesColor,
             Alpha: 255,
             Thickness: ChartRenderPlanner.RadarSeriesStrokeThickness));
         plan.Series[0].Markers.Should().BeEmpty();
-        plan.Series[0].Points[0].X.Should().BeApproximately(100, 0.0001);
-        plan.Series[0].Points[0].Y.Should().BeApproximately(40.625, 0.0001);
+        plan.Series[0].Points[0].HasValue.Should().BeTrue();
+        plan.Series[0].Points[0]!.Value.X.Should().BeApproximately(100, 0.0001);
+        plan.Series[0].Points[0]!.Value.Y.Should().BeApproximately(40.625, 0.0001);
     }
 
     [Fact]
@@ -1866,6 +1868,93 @@ public sealed class ChartRenderPlannerTests
         primitive.Markers[0].Radius.Should().Be(ChartRenderPlanner.RadarMarkerRadius);
         primitive.Markers[0].Fill.Should().Be(new ChartFillPlan(seriesColor, Alpha: 255));
         primitive.Markers[0].Stroke.Should().BeNull();
+    }
+
+    [Fact]
+    public void BuildRadarPrimitivePlan_DisplayBlanksAsGap_BreaksSegmentsAroundBlankPoint()
+    {
+        var series = new ChartSeries { Name = "Radar" };
+        series.Values.AddRange(new double?[] { 1, null, 3, 4 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Radar,
+            RadarStyle = RadarStyle.Filled,
+            DisplayBlanksAs = ChartDisplayBlanksAs.Gap
+        };
+        chart.Categories.AddRange(new[] { "North", "East", "South", "West" });
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var primitive = plan.Series.Should().ContainSingle().Subject;
+        primitive.Points[0].HasValue.Should().BeTrue();
+        primitive.Points[1].Should().BeNull();
+        primitive.Points[2].HasValue.Should().BeTrue();
+        primitive.Points[3].HasValue.Should().BeTrue();
+        primitive.Paths.Should().HaveCount(2);
+        primitive.Paths[0].Points.Should().Equal(primitive.Points[2]!.Value, primitive.Points[3]!.Value);
+        primitive.Paths[1].Points.Should().Equal(primitive.Points[3]!.Value, primitive.Points[0]!.Value);
+        primitive.Paths.Should().OnlyContain(path => !path.IsClosed && !path.Fill.HasValue);
+    }
+
+    [Fact]
+    public void BuildRadarPrimitivePlan_DisplayBlanksAsZero_MaterializesBlankPointAtCenter()
+    {
+        var series = new ChartSeries { Name = "Radar" };
+        series.Values.AddRange(new double?[] { 1, null, 3, 4 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Radar,
+            RadarStyle = RadarStyle.Marker,
+            DisplayBlanksAs = ChartDisplayBlanksAs.Zero
+        };
+        chart.Categories.AddRange(new[] { "North", "East", "South", "West" });
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var primitive = plan.Series.Should().ContainSingle().Subject;
+        primitive.Points[1].Should().Be(new ChartPlanPoint(100, 50));
+        primitive.Paths.Should().ContainSingle();
+        primitive.Path.IsClosed.Should().BeTrue();
+        primitive.Path.Points.Should().HaveCount(4);
+        primitive.Markers.Select(marker => marker.PointIndex).Should().Equal(0, 1, 2, 3);
+    }
+
+    [Fact]
+    public void BuildRadarPrimitivePlan_DisplayBlanksAsSpan_BridgesBlankPoint()
+    {
+        var series = new ChartSeries { Name = "Radar" };
+        series.Values.AddRange(new double?[] { 1, null, 3, 4 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Radar,
+            RadarStyle = RadarStyle.Filled,
+            DisplayBlanksAs = ChartDisplayBlanksAs.Span
+        };
+        chart.Categories.AddRange(new[] { "North", "East", "South", "West" });
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var primitive = plan.Series.Should().ContainSingle().Subject;
+        primitive.Points[1].Should().BeNull();
+        primitive.Paths.Should().ContainSingle();
+        primitive.Path.IsClosed.Should().BeTrue();
+        primitive.Path.Fill.Should().NotBeNull();
+        primitive.Path.Points.Should().Equal(
+            primitive.Points[0]!.Value,
+            primitive.Points[2]!.Value,
+            primitive.Points[3]!.Value);
     }
 
     [Fact]

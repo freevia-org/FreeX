@@ -286,10 +286,15 @@ public readonly record struct ChartRadarSeriesPrimitive(
     int SeriesIndex,
     bool IsFilled,
     bool WithMarkers,
-    IReadOnlyList<ChartPlanPoint> Points,
-    ChartPathPrimitive Path,
+    IReadOnlyList<ChartPlanPoint?> Points,
+    IReadOnlyList<ChartPathPrimitive> Paths,
     ChartStrokePlan Stroke,
-    IReadOnlyList<ChartCirclePrimitive> Markers);
+    IReadOnlyList<ChartCirclePrimitive> Markers)
+{
+    public ChartPathPrimitive Path => Paths.Count > 0
+        ? Paths[0]
+        : new ChartPathPrimitive(Array.Empty<ChartPlanPoint>(), IsClosed: false, Fill: null);
+}
 
 public readonly record struct ChartRadarPrimitivePlan(
     IReadOnlyList<ChartRadarRingPrimitive> Rings,
@@ -2151,13 +2156,18 @@ public static partial class ChartRenderPlanner
         for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
         {
             var series = chart.Series[seriesIndex];
-            var points = new ChartPlanPoint[categoryCount];
+            var pointSlots = new ChartPlanPoint?[categoryCount];
             for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
             {
-                double? value = categoryIndex < series.Values.Count ? series.Values[categoryIndex] : null;
-                double fraction = Math.Clamp((value ?? 0) / dataMax, 0, 1);
+                double? value = ResolveBlankSensitiveValue(
+                    chart,
+                    categoryIndex < series.Values.Count ? series.Values[categoryIndex] : null);
+                if (!value.HasValue)
+                    continue;
+
+                double fraction = Math.Clamp(value.Value / dataMax, 0, 1);
                 double angle = GetRadarAngle(categoryIndex, categoryCount);
-                points[categoryIndex] = new ChartPlanPoint(
+                pointSlots[categoryIndex] = new ChartPlanPoint(
                     center.X + radius * fraction * Math.Cos(angle),
                     center.Y + radius * fraction * Math.Sin(angle));
             }
@@ -2169,8 +2179,12 @@ public static partial class ChartRenderPlanner
             var markers = new List<ChartCirclePrimitive>();
             if (withMarkers)
             {
-                for (int pointIndex = 0; pointIndex < points.Length; pointIndex++)
+                for (int pointIndex = 0; pointIndex < pointSlots.Length; pointIndex++)
                 {
+                    var point = pointSlots[pointIndex];
+                    if (!point.HasValue)
+                        continue;
+
                     var markerStyle = ResolvePointMarkerStyle(series, pointIndex);
                     bool hasAuthoredPointStyle = series.PointStyles.ContainsKey(pointIndex);
                     if (SuppressesMarker(markerStyle))
@@ -2179,7 +2193,7 @@ public static partial class ChartRenderPlanner
                     markers.Add(new ChartCirclePrimitive(
                         seriesIndex,
                         pointIndex,
-                        points[pointIndex],
+                        point.Value,
                         ResolveMarkerRadius(markerStyle, RadarMarkerRadius),
                         ResolveMarkerSymbol(markerStyle),
                         ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, defaultAlpha: 255, fillPlans),
@@ -2193,8 +2207,8 @@ public static partial class ChartRenderPlanner
                 seriesIndex,
                 filled,
                 withMarkers,
-                points,
-                new ChartPathPrimitive(points, IsClosed: true, fill),
+                pointSlots,
+                BuildRadarSeriesPaths(pointSlots, fill, ResolveDisplayBlanksAs(chart)),
                 stroke,
                 markers));
         }
@@ -2205,6 +2219,60 @@ public static partial class ChartRenderPlanner
             DefaultRadarSpokeStroke(),
             labels,
             seriesPrimitives);
+    }
+
+    private static IReadOnlyList<ChartPathPrimitive> BuildRadarSeriesPaths(
+        IReadOnlyList<ChartPlanPoint?> pointSlots,
+        ChartFillPlan? fill,
+        ChartDisplayBlanksAs displayBlanksAs)
+    {
+        var presentPoints = pointSlots
+            .Where(point => point.HasValue)
+            .Select(point => point!.Value)
+            .ToArray();
+        if (presentPoints.Length < 2)
+            return Array.Empty<ChartPathPrimitive>();
+
+        if (displayBlanksAs == ChartDisplayBlanksAs.Span)
+        {
+            bool closes = presentPoints.Length >= 3;
+            return new[]
+            {
+                new ChartPathPrimitive(
+                    presentPoints,
+                    IsClosed: closes,
+                    Fill: closes ? fill : null)
+            };
+        }
+
+        bool hasBlank = pointSlots.Any(point => !point.HasValue);
+        if (!hasBlank)
+        {
+            return new[]
+            {
+                new ChartPathPrimitive(
+                    presentPoints,
+                    IsClosed: presentPoints.Length >= 3,
+                    Fill: presentPoints.Length >= 3 ? fill : null)
+            };
+        }
+
+        var segments = new List<ChartPathPrimitive>();
+        for (int pointIndex = 0; pointIndex < pointSlots.Count; pointIndex++)
+        {
+            int nextIndex = (pointIndex + 1) % pointSlots.Count;
+            var start = pointSlots[pointIndex];
+            var end = pointSlots[nextIndex];
+            if (!start.HasValue || !end.HasValue)
+                continue;
+
+            segments.Add(new ChartPathPrimitive(
+                new[] { start.Value, end.Value },
+                IsClosed: false,
+                Fill: null));
+        }
+
+        return segments;
     }
 
     public static IReadOnlyList<ChartPieSlicePrimitive> BuildPieSlicePrimitives(

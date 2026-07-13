@@ -307,7 +307,8 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("plan.GridLineStroke");
             source.Should().Contain("plan.SpokeStroke");
             source.Should().Contain("ToGeometry(ring.Path)");
-            source.Should().Contain("ToGeometry(primitive.Path)");
+            source.Should().Contain("primitive.Paths");
+            source.Should().Contain("ToGeometry(path)");
             source.Should().NotContain("ComputeNiceScatterAxisRange(chart, useX: true)");
             source.Should().NotContain("ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot);");
             source.Should().NotContain("ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot);");

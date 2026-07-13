@@ -1178,10 +1178,14 @@ public sealed class SlideCanvas : FrameworkElement
 
         foreach (var primitive in plan.Series)
         {
-            dc.DrawGeometry(
-                primitive.Path.Fill.HasValue ? ToBrush(primitive.Path.Fill.Value) : null,
-                ToPen(primitive.Stroke),
-                ToGeometry(primitive.Path));
+            var pen = ToPen(primitive.Stroke);
+            foreach (var path in primitive.Paths)
+            {
+                dc.DrawGeometry(
+                    path.Fill.HasValue ? ToBrush(path.Fill.Value) : null,
+                    pen,
+                    ToGeometry(path));
+            }
 
             foreach (var marker in primitive.Markers)
                 DrawChartMarker(dc, marker);
