@@ -90,4 +90,28 @@ public class PlainTextFileAdapterTests
         using var ms = new MemoryStream(bytes);
         LinesOf(adapter.Load(ms)).Should().Equal("café ☕ — naïve");
     }
+
+    [Fact]
+    public void Save_WritesOnlyParagraphCharactersAndDropsNonTextStructures()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Plain "),
+                new Run("bold", RunFormatting.Default with { Bold = true }),
+            },
+        });
+        document.Blocks.Add(Table.Create(1, 1));
+        document.Blocks.Add(new Paragraph("After table"));
+
+        var adapter = new PlainTextFileAdapter();
+        var bytes = Save(document, adapter);
+
+        Encoding.UTF8.GetString(bytes).Should().Be("Plain bold\r\nAfter table");
+        using var stream = new MemoryStream(bytes);
+        LinesOf(adapter.Load(stream)).Should().Equal("Plain bold", "After table");
+    }
 }

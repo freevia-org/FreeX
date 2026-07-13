@@ -20,6 +20,32 @@ public class HtmlMhtmlRoundTripTests
         loaded.Blocks[4].Should().BeOfType<Table>().Which.Rows[0].Cells[0].PlainText.Should().Be("A1");
     }
 
+    [Theory]
+    [InlineData(false, "Web Page, Filtered", false)]
+    [InlineData(true, "Web Page", true)]
+    public void Html_SaveModesWriteDeterministicMarkupAndReloadSupportedSubset(
+        bool fullWebPage,
+        string formatName,
+        bool expectsOfficeScaffolding)
+    {
+        var adapter = fullWebPage ? HtmlFileAdapter.WebPage() : HtmlFileAdapter.Filtered();
+        var document = BuildStructuralDocument();
+
+        using var stream = new MemoryStream();
+        adapter.Save(document, stream);
+        var html = Encoding.UTF8.GetString(stream.ToArray());
+
+        html.Should().Contain("<!doctype html>");
+        html.Should().Contain("<table>");
+        html.Contains("mso-style-name", StringComparison.Ordinal).Should().Be(expectsOfficeScaffolding);
+        adapter.FormatName.Should().Be(formatName);
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        loaded.Blocks.OfType<Paragraph>().Should().Contain(paragraph => paragraph.StyleId == "Heading1");
+        loaded.Blocks.OfType<Table>().Should().ContainSingle().Which.Rows[0].Cells[1].PlainText.Should().Be("B1");
+    }
+
     [Fact]
     public void Html_ReadsInlineStyleFormatting()
     {
@@ -67,6 +93,35 @@ public class HtmlMhtmlRoundTripTests
         loadedImage.Should().NotBeNull();
         loadedImage!.Bytes.Should().Equal(image.Bytes);
         loadedImage.AltText.Should().Be("Tiny image");
+    }
+
+    [Fact]
+    public void Mhtml_SaveProducesMultipartArchiveAndReloadsTextAndEmbeddedResource()
+    {
+        var document = BuildStructuralDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(new InlineImage([0x89, 0x50, 0x4E, 0x47, 0x00], 18, 18, ImageFormat.Png)
+        {
+            AltText = "Evidence image",
+        }));
+        document.Blocks.Add(paragraph);
+
+        using var stream = new MemoryStream();
+        var adapter = new MhtmlFileAdapter();
+        adapter.Save(document, stream);
+        var mhtml = Encoding.UTF8.GetString(stream.ToArray());
+
+        mhtml.Should().Contain("multipart/related");
+        mhtml.Should().Contain("Content-Type: text/html");
+        mhtml.Should().Contain("image1@freew.local");
+
+        stream.Position = 0;
+        var loaded = adapter.Load(stream);
+        loaded.Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText).Should().Contain("Title");
+        loaded.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.Image?.AltText == "Evidence image")
+            .Should().BeTrue();
     }
 
     [Fact]

@@ -50,6 +50,23 @@ public class WordXmlFileAdapterTests
     }
 
     [Fact]
+    public void Wordml2003Adapter_SaveProducesWordDocumentRootAndReloadsSupportedSubset()
+    {
+        var adapter = Wordml2003FileAdapter.Wordml2003();
+        using var ms = new MemoryStream();
+        adapter.Save(SampleDoc("WordML one", "WordML two"), ms);
+
+        var xml = Encoding.UTF8.GetString(ms.ToArray());
+        xml.Should().Contain("<w:wordDocument");
+        xml.Should().Contain("http://schemas.microsoft.com/office/word/2003/wordml");
+
+        ms.Position = 0;
+        var text = adapter.Load(ms).Blocks.OfType<Paragraph>().Select(p => p.PlainText).ToList();
+        text.Should().Contain("WordML one");
+        text.Should().Contain("WordML two");
+    }
+
+    [Fact]
     public void Load_DispatchesWord2003Wordml_ToReadOnlyReader()
     {
         const string wordml =

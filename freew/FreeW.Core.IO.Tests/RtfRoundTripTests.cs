@@ -66,6 +66,38 @@ public class RtfRoundTripTests
         adapter.Formats[0].CanSave.Should().BeTrue();
     }
 
+    [Fact]
+    public void Save_ProducesRtfBytesAndReloadsModelledCompatibilitySubset()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("plain "));
+        paragraph.Runs.Add(new Run("bold", RunFormatting.Default with { Bold = true }));
+        document.Blocks.Add(paragraph);
+        var table = new Table();
+        table.Rows.Add(new TableRow
+        {
+            Cells =
+            {
+                new TableCell("A1") { WidthPt = 96 },
+                new TableCell("B1") { WidthPt = 144 },
+            },
+        });
+        document.Blocks.Add(table);
+
+        var bytes = Save(document);
+        var rtf = Encoding.ASCII.GetString(bytes);
+        rtf.Should().StartWith(@"{\rtf1");
+        rtf.Should().Contain(@"\b ");
+        rtf.Should().Contain(@"\trowd");
+
+        var reloaded = Load(bytes);
+        Lines(reloaded).Should().Contain(line => line.Contains("plain", StringComparison.Ordinal) && line.Contains("bold", StringComparison.Ordinal));
+        var reloadedTable = reloaded.Blocks.OfType<Table>().Should().ContainSingle().Which;
+        reloadedTable.Rows.Should().ContainSingle().Which.Cells.Select(cell => cell.PlainText).Should().Equal("A1", "B1");
+    }
+
     // P9 regression — \uN fallback skip over a control-word must consume the ENTIRE control word, not just 2
     // chars.  Previously ☃\bullet emitted the ☃ char followed by "ullet" because the skip loop only
     // advanced past "\b", leaving "ullet" to be emitted as literal text.

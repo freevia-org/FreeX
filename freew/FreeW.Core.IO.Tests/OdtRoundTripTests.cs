@@ -22,6 +22,13 @@ public class OdtRoundTripTests
         return ms.ToArray();
     }
 
+    private static byte[] Save(TextDocument document, OdtFileAdapter adapter)
+    {
+        using var ms = new MemoryStream();
+        adapter.Save(document, ms);
+        return ms.ToArray();
+    }
+
     private static TextDocument Load(byte[] bytes)
     {
         using var ms = new MemoryStream(bytes);
@@ -121,5 +128,34 @@ public class OdtRoundTripTests
         format.OpensAsTemplate.Should().BeTrue();
         format.CanOpen.Should().BeTrue();
         format.CanSave.Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData(false, ".odt", false)]
+    [InlineData(true, ".ott", true)]
+    public void Save_ProducesOdfPackageAndReloadsTextForDocumentAndTemplate(
+        bool template,
+        string extension,
+        bool opensAsTemplate)
+    {
+        var adapter = template ? OdtFileAdapter.Ott() : OdtFileAdapter.Odt();
+        var bytes = Save(DocOf("ODF evidence", "second"), adapter);
+
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        archive.Entries[0].FullName.Should().Be("mimetype");
+        archive.Entries.Select(entry => entry.FullName).Should().Contain(new[]
+        {
+            "content.xml",
+            "styles.xml",
+            "META-INF/manifest.xml",
+        });
+
+        using var stream = new MemoryStream(bytes);
+        Lines(adapter.Load(stream)).Should().Contain(new[] { "ODF evidence", "second" });
+        adapter.Formats.Single().Should().Match<FileFormatDescriptor>(format =>
+            format.Extension == extension &&
+            format.OpensAsTemplate == opensAsTemplate &&
+            format.CanOpen &&
+            format.CanSave);
     }
 }

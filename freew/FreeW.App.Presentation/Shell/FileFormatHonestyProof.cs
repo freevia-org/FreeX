@@ -101,7 +101,8 @@ public static class FileFormatHonestyProof
         row.PrimaryExtension is ".docx" or ".docm" or ".dotx" or ".dotm";
 
     private static bool IsFeatureLossFormat(DocumentFormatCapabilityRow row) =>
-        row.PrimaryExtension is ".odt" or ".ott" or ".rtf" or ".txt" or ".text" or ".log" or ".doc" or ".dot" ||
+        row.PrimaryExtension is ".html" or ".htm" or ".mhtml" or ".mht" or ".odt" or ".ott" or ".rtf" or ".txt" or ".text" or ".log" or ".doc" or ".dot" ||
+        row.FormatName.Equals("Word 2003 XML Document", StringComparison.OrdinalIgnoreCase) ||
         row.Kind == DocumentFormatCapabilityKind.LegacyCompatibility;
 
     private static int AreaRank(FileFormatHonestyProofArea area) =>

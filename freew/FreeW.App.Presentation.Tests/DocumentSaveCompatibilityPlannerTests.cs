@@ -198,6 +198,31 @@ public sealed class DocumentSaveCompatibilityPlannerTests
             DocumentSaveCompatibilityWarningKind.DrawingsChartsSmartArtAndImages);
     }
 
+    [Theory]
+    [InlineData("Compat.html", "Web Page", ".html", "Web page formats are document-to-HTML conversions")]
+    [InlineData("Compat.mhtml", "MHTML document", ".mhtml", "Web page formats are document-to-HTML conversions")]
+    [InlineData("Compat.xml", "Word 2003 XML Document", ".xml", "Word 2003 XML writes only the older modeled WordML subset")]
+    public void Build_WebAndWordmlCompatibilityTargetsWarnWithSelectedFormatTruth(
+        string path,
+        string formatName,
+        string extension,
+        string expectedSummary)
+    {
+        var document = RichDocument();
+        var workflow = new DocumentPersistenceWorkflow();
+        var filterIndex = SaveFilterIndex(workflow, formatName, extension);
+
+        workflow.TryResolveSaveTarget(path, filterIndex, out var target).Should().BeTrue();
+        var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
+
+        plan.RequiresConfirmation.Should().BeTrue();
+        plan.TargetLabel.Should().Contain(formatName);
+        plan.Warnings.Should().Contain(warning =>
+            warning.Kind == DocumentSaveCompatibilityWarningKind.CompatibilityTarget &&
+            warning.Summary.Contains(expectedSummary, StringComparison.Ordinal));
+        plan.Message.Should().Contain("Choose Continue to write this file anyway");
+    }
+
     [Fact]
     public void Build_ReadOnlyTarget_WarnsUnsupported()
     {
@@ -226,6 +251,12 @@ public sealed class DocumentSaveCompatibilityPlannerTests
         workflow.SaveFormats
             .Select((format, index) => new { format.FormatName, Index = index + 1 })
             .Single(row => row.FormatName == formatName)
+            .Index;
+
+    private static int SaveFilterIndex(DocumentPersistenceWorkflow workflow, string formatName, string extension) =>
+        workflow.SaveFormats
+            .Select((format, index) => new { format.FormatName, format.Extension, Index = index + 1 })
+            .Single(row => row.FormatName == formatName && row.Extension == extension)
             .Index;
 
     private static TextDocument RichDocument()

@@ -74,6 +74,18 @@ public sealed class FileFormatHonestyProofTests
             row.Evidence.Contains("Unsupported ODF constructs", StringComparison.Ordinal));
         rows.Should().Contain(row =>
             row.Area == FileFormatHonestyProofArea.FeatureLoss &&
+            row.FormatName == "Word 2003 XML Document" &&
+            row.Evidence.Contains("fidelity limited to supported document features", StringComparison.Ordinal));
+        rows.Should().Contain(row =>
+            row.Area == FileFormatHonestyProofArea.FeatureLoss &&
+            row.FormatName == "Web Page" &&
+            row.Evidence.Contains("web conversion rather than a full Word document round-trip", StringComparison.Ordinal));
+        rows.Should().Contain(row =>
+            row.Area == FileFormatHonestyProofArea.FeatureLoss &&
+            row.FormatName == "MHTML document" &&
+            row.Evidence.Contains("supported HTML content with embedded resources", StringComparison.Ordinal));
+        rows.Should().Contain(row =>
+            row.Area == FileFormatHonestyProofArea.FeatureLoss &&
             row.FormatName == "Word 97-2003 Document" &&
             row.IsLegacy &&
             row.Evidence.Contains("Compatibility format", StringComparison.Ordinal));

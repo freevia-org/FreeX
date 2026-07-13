@@ -37,4 +37,23 @@ public sealed class LegacyDocFileAdapterTests
 
         act.Should().Throw<InvalidDataException>().WithMessage("*Word 97-2003*");
     }
+
+    [Fact]
+    public void Save_WritesCfbContainerAndReloadsTextCompatibilitySubset()
+    {
+        var adapter = new LegacyDocFileAdapter();
+        var document = new TextDocument();
+        document.Blocks.Add(new Paragraph("Legacy body one"));
+        document.Blocks.Add(new Paragraph("Legacy body two"));
+
+        using var stream = new MemoryStream();
+        adapter.Save(document, stream);
+        stream.Length.Should().BeGreaterThan(8);
+        stream.ToArray().Take(8).Should().Equal(new byte[] { 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1 });
+
+        stream.Position = 0;
+        var loadedText = string.Join("\n", adapter.Load(stream).Blocks.OfType<Paragraph>().Select(paragraph => paragraph.PlainText));
+        loadedText.Should().Contain("Legacy body one");
+        loadedText.Should().Contain("Legacy body two");
+    }
 }
