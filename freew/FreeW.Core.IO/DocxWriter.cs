@@ -2650,14 +2650,14 @@ public static class DocxWriter
     /// <summary>
     /// Builds a radical (m:rad). A square root sets m:radPr/m:degHide and emits an empty m:deg; an nth
     /// root carries the degree in m:deg. The radicand is the m:e element. The reader keys off m:degHide
-    /// and the m:deg text to recover <see cref="MathRun.Degree"/>.
+    /// and the m:deg slot to recover <see cref="MathRun.Degree"/>.
     /// </summary>
     private static XElement BuildRadical(MathRun run, int depth)
     {
-        var isSquare = string.IsNullOrEmpty(run.Degree);
+        var isSquare = run.DegreeEquation is null && string.IsNullOrEmpty(run.Degree);
         var deg = isSquare
             ? new XElement(M + "deg")
-            : new XElement(M + "deg", MathText(run.Degree));
+            : BuildMathSlot(M + "deg", run.DegreeEquation, run.Degree, depth);
         return new XElement(M + "rad",
             new XElement(M + "radPr",
                 new XElement(M + "degHide", new XAttribute(M + "val", isSquare ? "1" : "0"))),

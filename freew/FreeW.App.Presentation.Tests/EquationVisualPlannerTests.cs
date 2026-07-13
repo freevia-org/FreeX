@@ -269,6 +269,47 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_NestedRadicalDegree_SurfacesSharedSlotPlanAndKeepsFlattenedSegments()
+    {
+        var plan = EquationVisualPlanner.Build(new Equation([
+            MathRun.Radical(
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]),
+                new Equation([
+                    MathRun.PlainText("n+"),
+                    MathRun.Subscript("k", "1")
+                ]))
+        ]));
+
+        plan.LinearText.Should().Be("n+k_1\u221a(a+x^2)");
+        plan.Elements.Should().ContainSingle();
+        var radical = plan.Elements[0];
+        radical.Kind.Should().Be(EquationVisualElementKind.Radical);
+        radical.Radicand.Should().Be("a+x^2");
+        radical.Degree.Should().Be("n+k_1");
+        radical.RadicandPlan.Should().NotBeNull();
+        radical.DegreePlan.Should().NotBeNull();
+        radical.DegreePlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Subscript);
+
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            "n+k_1",
+            EquationVisualPlanner.RadicalSignText,
+            "a+x^2");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.RadicalDegree,
+            EquationVisualSegmentRole.RadicalSign,
+            EquationVisualSegmentRole.RadicalRadicand);
+        plan.Segments[0].Style.BaselineRole.Should().Be(EquationVisualBaselineRole.Superscript);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
     public void EquationVisualPlanner_NestedRadicalRadicand_IsDepthBounded()
     {
         var equation = new Equation();
@@ -282,6 +323,24 @@ public sealed class EquationVisualPlannerTests
         var plan = EquationVisualPlanner.Build(equation);
 
         plan.LinearText.Should().Contain("\u221a(x)");
+        plan.Elements.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_NestedRadicalDegree_IsDepthBounded()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Radical,
+            Base = "x",
+            Degree = "n",
+            DegreeEquation = equation
+        });
+
+        var plan = EquationVisualPlanner.Build(equation);
+
+        plan.LinearText.Should().Contain("n\u221a(x)");
         plan.Elements.Should().NotBeEmpty();
     }
 
