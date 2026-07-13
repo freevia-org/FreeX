@@ -673,8 +673,10 @@ public sealed class MediaFieldsTests
         var loaded = PptxPackageReader.Read(source);
         loaded.PackageSnapshot!.TryGetEntry(fixture.PackagePath, out var snapshotBytes).Should().BeTrue();
         snapshotBytes.Should().Equal(CaptionPayload(fixture.Text));
-        loaded.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle()
-            .Which.Source.Should().Be(fixture.PackagePath);
+        var loadedTrack = loaded.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        loadedTrack.Source.Should().Be(fixture.PackagePath);
+        loadedTrack.ContentType.Should().Be(captionOverrideContentType,
+            "PowerPoint-authored caption sidecar content-type overrides should feed the shared media-caption model");
 
         loaded.Slides[0].Shapes.Add(new SlideShape
         {
@@ -714,10 +716,13 @@ public sealed class MediaFieldsTests
 
         saved.Position = 0;
         var reopened = PptxPackageReader.Read(saved);
+        var reopenedTrack = reopened.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        reopenedTrack.ContentType.Should().Be(captionOverrideContentType);
         var transcript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(reopened);
         transcript.Tracks.Should().ContainSingle()
             .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
                 descriptor.Source == fixture.PackagePath &&
+                descriptor.ContentType == captionOverrideContentType &&
                 descriptor.Status == PresentationMediaTranscriptTrackStatus.Available &&
                 descriptor.Cues[0].Text == fixture.Text);
     }

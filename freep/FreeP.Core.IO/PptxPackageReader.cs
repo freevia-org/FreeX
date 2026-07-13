@@ -3032,6 +3032,8 @@ public static class PptxPackageReader
         var relById = rels
             .GroupBy(rel => rel.Id, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        var defaultContentTypes = OpcMediaTypes.ReadDefaultContentTypes(archive);
+        var overrideContentTypes = OpcMediaTypes.ReadOverrideContentTypes(archive);
         var candidates = new List<(OpcRelationshipTarget Rel, XElement? Metadata)>();
 
         foreach (var element in nvPr.DescendantsAndSelf())
@@ -3087,7 +3089,7 @@ public static class PptxPackageReader
                 RelationshipId = rel.Id,
                 Source = source,
                 Bytes = captionBytes,
-                ContentType = GetCaptionTrackContentType(source),
+                ContentType = GetCaptionTrackContentType(source, isExternal, defaultContentTypes, overrideContentTypes),
                 Language = ReadCaptionTrackLanguage(metadata),
                 Label = ReadCaptionTrackLabel(metadata, source),
                 IsExternal = isExternal
@@ -3134,14 +3136,38 @@ public static class PptxPackageReader
         => Uri.TryCreate(target, UriKind.Absolute, out var uri)
             && !string.IsNullOrWhiteSpace(uri.Scheme);
 
-    private static string GetCaptionTrackContentType(string source)
-        => GetCaptionTrackExtension(source) switch
+    private static string GetCaptionTrackContentType(
+        string source,
+        bool isExternal,
+        IReadOnlyDictionary<string, string> defaultContentTypes,
+        IReadOnlyDictionary<string, string> overrideContentTypes)
+    {
+        if (!isExternal)
+        {
+            var partName = "/" + source.TrimStart('/');
+            if (overrideContentTypes.TryGetValue(partName, out var overrideContentType) &&
+                !string.IsNullOrWhiteSpace(overrideContentType))
+            {
+                return overrideContentType;
+            }
+        }
+
+        var extension = GetCaptionTrackExtension(source);
+        if (extension.Length > 0 &&
+            defaultContentTypes.TryGetValue(extension, out var defaultContentType) &&
+            !string.IsNullOrWhiteSpace(defaultContentType))
+        {
+            return defaultContentType;
+        }
+
+        return extension switch
         {
             "vtt" => "text/vtt",
             "ttml" or "dfxp" => "application/ttml+xml",
             "srt" => "application/x-subrip",
             _ => string.Empty
         };
+    }
 
     private static string GetCaptionTrackExtension(string source)
     {
