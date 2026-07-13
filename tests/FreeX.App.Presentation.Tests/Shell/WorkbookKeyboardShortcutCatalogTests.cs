@@ -1,0 +1,61 @@
+using FluentAssertions;
+using FreeX.App.Presentation.Shell;
+
+namespace FreeX.App.Presentation.Tests.Shell;
+
+public sealed class WorkbookKeyboardShortcutCatalogTests
+{
+    [Theory]
+    [InlineData(WorkbookShortcutKey.N, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.NewWorkbook)]
+    [InlineData(WorkbookShortcutKey.O, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]
+    [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenWorkbook)]
+    [InlineData(WorkbookShortcutKey.S, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.SaveWorkbook)]
+    [InlineData(WorkbookShortcutKey.F12, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SaveWorkbook)]
+    [InlineData(WorkbookShortcutKey.C, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Copy)]
+    [InlineData(WorkbookShortcutKey.Insert, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Copy)]
+    [InlineData(WorkbookShortcutKey.X, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Cut)]
+    [InlineData(WorkbookShortcutKey.Delete, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.Cut)]
+    [InlineData(WorkbookShortcutKey.V, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Paste)]
+    [InlineData(WorkbookShortcutKey.Insert, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.Paste)]
+    [InlineData(WorkbookShortcutKey.V, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Alt, WorkbookShortcutRoute.PasteSpecial)]
+    [InlineData(WorkbookShortcutKey.Z, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Undo)]
+    [InlineData(WorkbookShortcutKey.Back, WorkbookShortcutModifiers.Alt, WorkbookShortcutRoute.Undo)]
+    [InlineData(WorkbookShortcutKey.Y, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Redo)]
+    [InlineData(WorkbookShortcutKey.Z, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.Redo)]
+    [InlineData(WorkbookShortcutKey.D, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.FillDown)]
+    [InlineData(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.FillRight)]
+    [InlineData(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.FlashFill)]
+    [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleShowFormulas)]
+    [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenFormatCells)]
+    [InlineData(WorkbookShortcutKey.F, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Find)]
+    [InlineData(WorkbookShortcutKey.H, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Replace)]
+    [InlineData(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.GoTo)]
+    [InlineData(WorkbookShortcutKey.F5, WorkbookShortcutModifiers.None, WorkbookShortcutRoute.GoTo)]
+    [InlineData(WorkbookShortcutKey.F3, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.InsertFunction)]
+    [InlineData(WorkbookShortcutKey.OemPlus, WorkbookShortcutModifiers.Alt, WorkbookShortcutRoute.AutoSum)]
+    [InlineData(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.WorkbookStatistics)]
+    [InlineData(WorkbookShortcutKey.F11, WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.InsertWorksheet)]
+    public void TryGetWindowsRoute_ResolvesSharedWorkbookShortcutRoutes(
+        WorkbookShortcutKey key,
+        WorkbookShortcutModifiers modifiers,
+        WorkbookShortcutRoute expected)
+    {
+        WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(key, modifiers, out var route)
+            .Should().BeTrue();
+
+        route.Should().Be(expected);
+    }
+
+    [Fact]
+    public void NativeMenuChords_AreUniquePerRoute()
+    {
+        var duplicateRoutes = WorkbookKeyboardShortcutCatalog.Rules
+            .Where(rule => rule.NativeMenuChord is not null)
+            .GroupBy(rule => rule.Route)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToArray();
+
+        duplicateRoutes.Should().BeEmpty();
+    }
+}

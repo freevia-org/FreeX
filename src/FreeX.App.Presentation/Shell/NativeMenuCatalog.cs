@@ -411,11 +411,11 @@ public static class NativeMenuCatalog
         new(
             NativeFileMenuItemId.NewWorkbook,
             "AvaloniaNativeMenu_NewWorkbook",
-            new NativeMenuGesturePlan(NativeMenuGestureKey.N, NativeMenuGestureModifiers.Meta)),
+            NativeMenuGesture(WorkbookShortcutRoute.NewWorkbook)),
         new(
             NativeFileMenuItemId.Open,
             "AvaloniaNativeMenu_Open",
-            new NativeMenuGesturePlan(NativeMenuGestureKey.O, NativeMenuGestureModifiers.Meta)),
+            NativeMenuGesture(WorkbookShortcutRoute.OpenWorkbook)),
         new(
             NativeFileMenuItemId.OpenRecent,
             "AvaloniaNativeMenu_OpenRecent",
@@ -434,7 +434,7 @@ public static class NativeMenuCatalog
         new(
             NativeFileMenuItemId.Save,
             "AvaloniaNativeMenu_Save",
-            new NativeMenuGesturePlan(NativeMenuGestureKey.S, NativeMenuGestureModifiers.Meta)),
+            NativeMenuGesture(WorkbookShortcutRoute.SaveWorkbook)),
         new(
             NativeFileMenuItemId.SaveAs,
             "AvaloniaNativeMenu_SaveAs",
@@ -464,9 +464,7 @@ public static class NativeMenuCatalog
         new(
             NativeFileMenuItemId.WorkbookStatistics,
             "AvaloniaNativeMenu_WorkbookStatistics",
-            new NativeMenuGesturePlan(
-                NativeMenuGestureKey.G,
-                NativeMenuGestureModifiers.Control | NativeMenuGestureModifiers.Shift)),
+            NativeMenuGesture(WorkbookShortcutRoute.WorkbookStatistics)),
         new(
             NativeFileMenuItemId.PageSetup,
             "AvaloniaNativeMenu_PageSetup",
@@ -494,7 +492,7 @@ public static class NativeMenuCatalog
 
     private static readonly NativeMenuItemPlan[] MenuItems =
     [
-        new(NativeMenuItemId.NewSheet, "AvaloniaNativeMenu_NewSheet", new NativeMenuGesturePlan(NativeMenuGestureKey.F11, NativeMenuGestureModifiers.Shift), UsesResourceKey: true),
+        new(NativeMenuItemId.NewSheet, "AvaloniaNativeMenu_NewSheet", NativeMenuGesture(WorkbookShortcutRoute.InsertWorksheet), UsesResourceKey: true),
         new(NativeMenuItemId.RenameSheet, "Rename Sheet...", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.DuplicateSheet, "Duplicate Sheet", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.MoveSheetLeft, "Move Sheet Left", RequiresGestureInSmoke: false),
@@ -505,12 +503,12 @@ public static class NativeMenuCatalog
         new(NativeMenuItemId.HideSheet, "Hide Sheet", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.UnhideSheet, "Unhide Sheet...", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.DeleteSheet, "Delete Sheet", RequiresGestureInSmoke: false),
-        new(NativeMenuItemId.Undo, "Undo", new NativeMenuGesturePlan(NativeMenuGestureKey.Z, NativeMenuGestureModifiers.Meta)),
-        new(NativeMenuItemId.Redo, "Redo", new NativeMenuGesturePlan(NativeMenuGestureKey.Z, NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Shift)),
-        new(NativeMenuItemId.Cut, "Cut", new NativeMenuGesturePlan(NativeMenuGestureKey.X, NativeMenuGestureModifiers.Meta)),
-        new(NativeMenuItemId.Copy, "Copy", new NativeMenuGesturePlan(NativeMenuGestureKey.C, NativeMenuGestureModifiers.Meta)),
-        new(NativeMenuItemId.Paste, "Paste", new NativeMenuGesturePlan(NativeMenuGestureKey.V, NativeMenuGestureModifiers.Meta)),
-        new(NativeMenuItemId.PasteSpecial, "Paste Special", new NativeMenuGesturePlan(NativeMenuGestureKey.V, NativeMenuGestureModifiers.Meta | NativeMenuGestureModifiers.Alt)),
+        new(NativeMenuItemId.Undo, "Undo", NativeMenuGesture(WorkbookShortcutRoute.Undo)),
+        new(NativeMenuItemId.Redo, "Redo", NativeMenuGesture(WorkbookShortcutRoute.Redo)),
+        new(NativeMenuItemId.Cut, "Cut", NativeMenuGesture(WorkbookShortcutRoute.Cut)),
+        new(NativeMenuItemId.Copy, "Copy", NativeMenuGesture(WorkbookShortcutRoute.Copy)),
+        new(NativeMenuItemId.Paste, "Paste", NativeMenuGesture(WorkbookShortcutRoute.Paste)),
+        new(NativeMenuItemId.PasteSpecial, "Paste Special", NativeMenuGesture(WorkbookShortcutRoute.PasteSpecial)),
         new(NativeMenuItemId.FormatPainter, "Format Painter", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.Bold, "Bold", new NativeMenuGesturePlan(NativeMenuGestureKey.B, NativeMenuGestureModifiers.Meta)),
         new(NativeMenuItemId.Italic, "Italic", new NativeMenuGesturePlan(NativeMenuGestureKey.I, NativeMenuGestureModifiers.Meta)),
@@ -524,7 +522,7 @@ public static class NativeMenuCatalog
         new(NativeMenuItemId.FontColor, "Font Color", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.Borders, "Borders", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.CellStyles, "Cell Styles", RequiresGestureInSmoke: false),
-        new(NativeMenuItemId.FormatCells, "Format Cells...", new NativeMenuGesturePlan(NativeMenuGestureKey.D1, NativeMenuGestureModifiers.Meta)),
+        new(NativeMenuItemId.FormatCells, "Format Cells...", NativeMenuGesture(WorkbookShortcutRoute.OpenFormatCells)),
         new(NativeMenuItemId.ConditionalFormatting, "Conditional Formatting", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.HorizontalText, "Horizontal", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.AngleCounterclockwise, "Angle Counterclockwise", RequiresGestureInSmoke: false),
@@ -549,8 +547,8 @@ public static class NativeMenuCatalog
         new(NativeMenuItemId.AlignCenter, "Align Center", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.AlignRight, "Align Right", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.FillCells, "Fill", RequiresGestureInSmoke: false),
-        new(NativeMenuItemId.FillDown, "Down", new NativeMenuGesturePlan(NativeMenuGestureKey.D, NativeMenuGestureModifiers.Control)),
-        new(NativeMenuItemId.FillRight, "Right", new NativeMenuGesturePlan(NativeMenuGestureKey.R, NativeMenuGestureModifiers.Control)),
+        new(NativeMenuItemId.FillDown, "Down", NativeMenuGesture(WorkbookShortcutRoute.FillDown)),
+        new(NativeMenuItemId.FillRight, "Right", NativeMenuGesture(WorkbookShortcutRoute.FillRight)),
         new(NativeMenuItemId.FillUp, "Up", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.FillLeft, "Left", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.FillSeries, "Series...", RequiresGestureInSmoke: false),
@@ -561,10 +559,10 @@ public static class NativeMenuCatalog
         new(NativeMenuItemId.ClearComments, "Clear Comments and Notes", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.ClearHyperlinks, "Clear Hyperlinks", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.SelectAll, "Select All", new NativeMenuGesturePlan(NativeMenuGestureKey.A, NativeMenuGestureModifiers.Meta)),
-        new(NativeMenuItemId.Find, "Find...", new NativeMenuGesturePlan(NativeMenuGestureKey.F, NativeMenuGestureModifiers.Meta)),
+        new(NativeMenuItemId.Find, "Find...", NativeMenuGesture(WorkbookShortcutRoute.Find)),
         new(NativeMenuItemId.FindNext, "Find Next", new NativeMenuGesturePlan(NativeMenuGestureKey.G, NativeMenuGestureModifiers.Meta)),
-        new(NativeMenuItemId.Replace, "Replace...", new NativeMenuGesturePlan(NativeMenuGestureKey.H, NativeMenuGestureModifiers.Control)),
-        new(NativeMenuItemId.GoTo, "Go To...", new NativeMenuGesturePlan(NativeMenuGestureKey.G, NativeMenuGestureModifiers.Control)),
+        new(NativeMenuItemId.Replace, "Replace...", NativeMenuGesture(WorkbookShortcutRoute.Replace)),
+        new(NativeMenuItemId.GoTo, "Go To...", NativeMenuGesture(WorkbookShortcutRoute.GoTo)),
         new(NativeMenuItemId.GoToSpecial, "Go To Special...", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.OpenHyperlink, "Open Hyperlink", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.InsertHyperlink, "Hyperlink...", RequiresGestureInSmoke: false),
@@ -582,7 +580,7 @@ public static class NativeMenuCatalog
         new(NativeMenuItemId.SortAscending, "Sort A to Z", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.SortDescending, "Sort Z to A", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.CustomSort, "Sort...", RequiresGestureInSmoke: false),
-        new(NativeMenuItemId.FlashFill, "Flash Fill", new NativeMenuGesturePlan(NativeMenuGestureKey.E, NativeMenuGestureModifiers.Control)),
+        new(NativeMenuItemId.FlashFill, "Flash Fill", NativeMenuGesture(WorkbookShortcutRoute.FlashFill)),
         new(NativeMenuItemId.ToggleFilter, "Filter", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.AdvancedFilter, "Advanced Filter...", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.RemoveDuplicates, "Remove Duplicates...", RequiresGestureInSmoke: false),
@@ -632,18 +630,18 @@ public static class NativeMenuCatalog
         new(NativeMenuItemId.PageSetup, "AvaloniaNativeMenu_PageSetup", UsesResourceKey: true, RequiresGestureInSmoke: false),
         new(NativeMenuItemId.PrintGridlines, "Gridlines...", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.PrintHeadings, "Headings...", RequiresGestureInSmoke: false),
-        new(NativeMenuItemId.InsertFunction, "Insert Function...", new NativeMenuGesturePlan(NativeMenuGestureKey.F3, NativeMenuGestureModifiers.Shift)),
+        new(NativeMenuItemId.InsertFunction, "Insert Function...", NativeMenuGesture(WorkbookShortcutRoute.InsertFunction)),
         new(NativeMenuItemId.NameManager, "Name Manager...", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.DefineName, "Define Name...", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.CreateNamesFromSelection, "Create from Selection...", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.AutoSum, "AutoSum", RequiresGestureInSmoke: false),
-        new(NativeMenuItemId.AutoSumSum, "Sum", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Alt)),
+        new(NativeMenuItemId.AutoSumSum, "Sum", NativeMenuGesture(WorkbookShortcutRoute.AutoSum)),
         new(NativeMenuItemId.AutoSumAverage, "Average", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.AutoSumCountNumbers, "Count Numbers", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.AutoSumCountAll, "Count All", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.AutoSumMax, "Max", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.AutoSumMin, "Min", RequiresGestureInSmoke: false),
-        new(NativeMenuItemId.ShowFormulas, "Show Formulas", new NativeMenuGesturePlan(NativeMenuGestureKey.Oem3, NativeMenuGestureModifiers.Control)),
+        new(NativeMenuItemId.ShowFormulas, "Show Formulas", NativeMenuGesture(WorkbookShortcutRoute.ToggleShowFormulas)),
         new(NativeMenuItemId.ShowGridlines, "Gridlines", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.ShowHeadings, "Headings", RequiresGestureInSmoke: false),
         new(NativeMenuItemId.ZoomIn, "Zoom In", new NativeMenuGesturePlan(NativeMenuGestureKey.OemPlus, NativeMenuGestureModifiers.Meta)),
@@ -1218,4 +1216,50 @@ public static class NativeMenuCatalog
 
     private static NativeMenuEntryPlan Item(NativeMenuItemId id) =>
         NativeMenuEntryPlan.ForItem(id);
+
+    private static NativeMenuGesturePlan NativeMenuGesture(WorkbookShortcutRoute route)
+    {
+        var chord = WorkbookKeyboardShortcutCatalog.GetNativeMenuChord(route);
+        return new NativeMenuGesturePlan(
+            ToNativeMenuGestureKey(chord.Key),
+            ToNativeMenuGestureModifiers(chord.Modifiers));
+    }
+
+    private static NativeMenuGestureKey ToNativeMenuGestureKey(WorkbookShortcutKey key) =>
+        key switch
+        {
+            WorkbookShortcutKey.C => NativeMenuGestureKey.C,
+            WorkbookShortcutKey.D => NativeMenuGestureKey.D,
+            WorkbookShortcutKey.D1 => NativeMenuGestureKey.D1,
+            WorkbookShortcutKey.E => NativeMenuGestureKey.E,
+            WorkbookShortcutKey.F => NativeMenuGestureKey.F,
+            WorkbookShortcutKey.F3 => NativeMenuGestureKey.F3,
+            WorkbookShortcutKey.F11 => NativeMenuGestureKey.F11,
+            WorkbookShortcutKey.G => NativeMenuGestureKey.G,
+            WorkbookShortcutKey.H => NativeMenuGestureKey.H,
+            WorkbookShortcutKey.N => NativeMenuGestureKey.N,
+            WorkbookShortcutKey.O => NativeMenuGestureKey.O,
+            WorkbookShortcutKey.Oem3 => NativeMenuGestureKey.Oem3,
+            WorkbookShortcutKey.OemPlus => NativeMenuGestureKey.OemPlus,
+            WorkbookShortcutKey.R => NativeMenuGestureKey.R,
+            WorkbookShortcutKey.S => NativeMenuGestureKey.S,
+            WorkbookShortcutKey.V => NativeMenuGestureKey.V,
+            WorkbookShortcutKey.X => NativeMenuGestureKey.X,
+            WorkbookShortcutKey.Z => NativeMenuGestureKey.Z,
+            _ => throw new ArgumentOutOfRangeException(nameof(key), key, null)
+        };
+
+    private static NativeMenuGestureModifiers ToNativeMenuGestureModifiers(WorkbookShortcutModifiers modifiers)
+    {
+        var result = NativeMenuGestureModifiers.None;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control))
+            result |= NativeMenuGestureModifiers.Control;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt))
+            result |= NativeMenuGestureModifiers.Alt;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift))
+            result |= NativeMenuGestureModifiers.Shift;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta))
+            result |= NativeMenuGestureModifiers.Meta;
+        return result;
+    }
 }

@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using FreeX.App.Presentation.Shell;
 using FreeX.Core.Commands;
 
 namespace FreeX.App.Host;
@@ -22,7 +23,12 @@ public static partial class KeyboardShortcutMatcher
     }
 
     public static bool IsPasteSpecialShortcut(Key key, Key systemKey, ModifierKeys modifiers) =>
-        GetEffectiveKey(key, systemKey) == Key.V && modifiers == (ModifierKeys.Control | ModifierKeys.Alt);
+        TryGetWorkbookShortcutKey(GetEffectiveKey(key, systemKey), out var shortcutKey) &&
+        WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
+            shortcutKey,
+            ToWorkbookModifiers(modifiers),
+            out var route) &&
+        route == WorkbookShortcutRoute.PasteSpecial;
 
     public static bool TryGetGridShortcut(Key key, ModifierKeys modifiers, out KeyboardGridShortcut shortcut)
     {
@@ -103,6 +109,81 @@ public static partial class KeyboardShortcutMatcher
 
     private static Key GetEffectiveKey(Key key, Key systemKey) =>
         key is Key.None or Key.System ? systemKey : key;
+
+    private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
+    {
+        shortcutKey = key switch
+        {
+            Key.A => WorkbookShortcutKey.A,
+            Key.Back => WorkbookShortcutKey.Back,
+            Key.C => WorkbookShortcutKey.C,
+            Key.D => WorkbookShortcutKey.D,
+            Key.D1 => WorkbookShortcutKey.D1,
+            Key.Delete => WorkbookShortcutKey.Delete,
+            Key.E => WorkbookShortcutKey.E,
+            Key.F => WorkbookShortcutKey.F,
+            Key.F3 => WorkbookShortcutKey.F3,
+            Key.F5 => WorkbookShortcutKey.F5,
+            Key.F11 => WorkbookShortcutKey.F11,
+            Key.F12 => WorkbookShortcutKey.F12,
+            Key.G => WorkbookShortcutKey.G,
+            Key.H => WorkbookShortcutKey.H,
+            Key.Insert => WorkbookShortcutKey.Insert,
+            Key.N => WorkbookShortcutKey.N,
+            Key.O => WorkbookShortcutKey.O,
+            Key.Oem3 => WorkbookShortcutKey.Oem3,
+            Key.OemPlus or Key.Add => WorkbookShortcutKey.OemPlus,
+            Key.P => WorkbookShortcutKey.P,
+            Key.R => WorkbookShortcutKey.R,
+            Key.S => WorkbookShortcutKey.S,
+            Key.V => WorkbookShortcutKey.V,
+            Key.X => WorkbookShortcutKey.X,
+            Key.Y => WorkbookShortcutKey.Y,
+            Key.Z => WorkbookShortcutKey.Z,
+            _ => default
+        };
+
+        return key is
+            Key.A or
+            Key.Back or
+            Key.C or
+            Key.D or
+            Key.D1 or
+            Key.Delete or
+            Key.E or
+            Key.F or
+            Key.F3 or
+            Key.F5 or
+            Key.F11 or
+            Key.F12 or
+            Key.G or
+            Key.H or
+            Key.Insert or
+            Key.N or
+            Key.O or
+            Key.Oem3 or
+            Key.OemPlus or
+            Key.Add or
+            Key.P or
+            Key.R or
+            Key.S or
+            Key.V or
+            Key.X or
+            Key.Y or
+            Key.Z;
+    }
+
+    private static WorkbookShortcutModifiers ToWorkbookModifiers(ModifierKeys modifiers)
+    {
+        var result = WorkbookShortcutModifiers.None;
+        if (modifiers.HasFlag(ModifierKeys.Control))
+            result |= WorkbookShortcutModifiers.Control;
+        if (modifiers.HasFlag(ModifierKeys.Alt))
+            result |= WorkbookShortcutModifiers.Alt;
+        if (modifiers.HasFlag(ModifierKeys.Shift))
+            result |= WorkbookShortcutModifiers.Shift;
+        return result;
+    }
 
     public static bool TryGetNumberFormatShortcut(Key key, ModifierKeys modifiers, out NumberFormatShortcut shortcut)
     {

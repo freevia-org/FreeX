@@ -383,6 +383,47 @@ public sealed class NativeMenuCatalogTests
             .BeFalse();
     }
 
+    [Theory]
+    [InlineData(WorkbookShortcutRoute.NewWorkbook, NativeFileMenuItemId.NewWorkbook)]
+    [InlineData(WorkbookShortcutRoute.OpenWorkbook, NativeFileMenuItemId.Open)]
+    [InlineData(WorkbookShortcutRoute.SaveWorkbook, NativeFileMenuItemId.Save)]
+    [InlineData(WorkbookShortcutRoute.WorkbookStatistics, NativeFileMenuItemId.WorkbookStatistics)]
+    public void SharedShortcutRoutes_DriveNativeFileMenuGestures(
+        WorkbookShortcutRoute route,
+        NativeFileMenuItemId itemId)
+    {
+        NativeMenuCatalog.GetFileMenuItem(itemId).Gesture
+            .Should()
+            .Be(ToNativeMenuGesturePlan(WorkbookKeyboardShortcutCatalog.GetNativeMenuChord(route)));
+    }
+
+    [Theory]
+    [InlineData(WorkbookShortcutRoute.InsertWorksheet, NativeMenuItemId.NewSheet)]
+    [InlineData(WorkbookShortcutRoute.Undo, NativeMenuItemId.Undo)]
+    [InlineData(WorkbookShortcutRoute.Redo, NativeMenuItemId.Redo)]
+    [InlineData(WorkbookShortcutRoute.Cut, NativeMenuItemId.Cut)]
+    [InlineData(WorkbookShortcutRoute.Copy, NativeMenuItemId.Copy)]
+    [InlineData(WorkbookShortcutRoute.Paste, NativeMenuItemId.Paste)]
+    [InlineData(WorkbookShortcutRoute.PasteSpecial, NativeMenuItemId.PasteSpecial)]
+    [InlineData(WorkbookShortcutRoute.OpenFormatCells, NativeMenuItemId.FormatCells)]
+    [InlineData(WorkbookShortcutRoute.FillDown, NativeMenuItemId.FillDown)]
+    [InlineData(WorkbookShortcutRoute.FillRight, NativeMenuItemId.FillRight)]
+    [InlineData(WorkbookShortcutRoute.Find, NativeMenuItemId.Find)]
+    [InlineData(WorkbookShortcutRoute.Replace, NativeMenuItemId.Replace)]
+    [InlineData(WorkbookShortcutRoute.GoTo, NativeMenuItemId.GoTo)]
+    [InlineData(WorkbookShortcutRoute.FlashFill, NativeMenuItemId.FlashFill)]
+    [InlineData(WorkbookShortcutRoute.InsertFunction, NativeMenuItemId.InsertFunction)]
+    [InlineData(WorkbookShortcutRoute.AutoSum, NativeMenuItemId.AutoSumSum)]
+    [InlineData(WorkbookShortcutRoute.ToggleShowFormulas, NativeMenuItemId.ShowFormulas)]
+    public void SharedShortcutRoutes_DriveNativeMenuGestures(
+        WorkbookShortcutRoute route,
+        NativeMenuItemId itemId)
+    {
+        NativeMenuCatalog.GetMenuItem(itemId).Gesture
+            .Should()
+            .Be(ToNativeMenuGesturePlan(WorkbookKeyboardShortcutCatalog.GetNativeMenuChord(route)));
+    }
+
     [Fact]
     public void PlanMenuAvailability_MatchesAvaloniaNativeMenuRules()
     {
@@ -523,4 +564,45 @@ public sealed class NativeMenuCatalogTests
             CanZoomOut: false,
             IsPageBreakPreview: true,
             IsShowingFormulas: true);
+
+    private static NativeMenuGesturePlan ToNativeMenuGesturePlan(WorkbookShortcutChord chord) =>
+        new(ToNativeMenuGestureKey(chord.Key), ToNativeMenuGestureModifiers(chord.Modifiers));
+
+    private static NativeMenuGestureKey ToNativeMenuGestureKey(WorkbookShortcutKey key) =>
+        key switch
+        {
+            WorkbookShortcutKey.C => NativeMenuGestureKey.C,
+            WorkbookShortcutKey.D => NativeMenuGestureKey.D,
+            WorkbookShortcutKey.D1 => NativeMenuGestureKey.D1,
+            WorkbookShortcutKey.E => NativeMenuGestureKey.E,
+            WorkbookShortcutKey.F => NativeMenuGestureKey.F,
+            WorkbookShortcutKey.F3 => NativeMenuGestureKey.F3,
+            WorkbookShortcutKey.F11 => NativeMenuGestureKey.F11,
+            WorkbookShortcutKey.G => NativeMenuGestureKey.G,
+            WorkbookShortcutKey.H => NativeMenuGestureKey.H,
+            WorkbookShortcutKey.N => NativeMenuGestureKey.N,
+            WorkbookShortcutKey.O => NativeMenuGestureKey.O,
+            WorkbookShortcutKey.Oem3 => NativeMenuGestureKey.Oem3,
+            WorkbookShortcutKey.OemPlus => NativeMenuGestureKey.OemPlus,
+            WorkbookShortcutKey.R => NativeMenuGestureKey.R,
+            WorkbookShortcutKey.S => NativeMenuGestureKey.S,
+            WorkbookShortcutKey.V => NativeMenuGestureKey.V,
+            WorkbookShortcutKey.X => NativeMenuGestureKey.X,
+            WorkbookShortcutKey.Z => NativeMenuGestureKey.Z,
+            _ => throw new ArgumentOutOfRangeException(nameof(key), key, null)
+        };
+
+    private static NativeMenuGestureModifiers ToNativeMenuGestureModifiers(WorkbookShortcutModifiers modifiers)
+    {
+        var result = NativeMenuGestureModifiers.None;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control))
+            result |= NativeMenuGestureModifiers.Control;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt))
+            result |= NativeMenuGestureModifiers.Alt;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift))
+            result |= NativeMenuGestureModifiers.Shift;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta))
+            result |= NativeMenuGestureModifiers.Meta;
+        return result;
+    }
 }
