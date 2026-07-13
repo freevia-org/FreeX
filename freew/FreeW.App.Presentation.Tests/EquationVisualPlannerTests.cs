@@ -927,4 +927,63 @@ public sealed class EquationVisualPlannerTests
         plan.LinearText.Length.Should().BeLessThan(100);
         plan.Elements.Should().NotBeEmpty();
     }
+
+    [Fact]
+    public void EquationVisualPlanner_BuildEvidence_EmitsStableGeometryAndNestedSlotSignatures()
+    {
+        var nestedNumerator = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+        var nestedDenominator = new Equation([
+            MathRun.Radical("b", "3")
+        ]);
+        var equation = new Equation([
+            MathRun.Fraction(nestedNumerator, nestedDenominator),
+            MathRun.NAry(
+                "\u2211",
+                new Equation([MathRun.Subscript("i", "0")]),
+                new Equation([MathRun.PlainText("n")]),
+                new Equation([MathRun.FunctionApply("sin", "x")]))
+        ]);
+
+        var evidence = EquationVisualPlanner.BuildEvidence([equation]);
+
+        evidence.EquationCount.Should().Be(1);
+        evidence.NestedSlotCount.Should().Be(5);
+        evidence.MaxNestedSlotDepth.Should().Be(1);
+        evidence.ElementKindCounts.Should().Contain([
+            "Fraction=1",
+            "FunctionApply=1",
+            "NAry=1",
+            "Radical=1",
+            "Segments=4"]);
+        evidence.SegmentRoleCounts.Should().Contain([
+            "FractionBar=1",
+            "FractionDenominator=1",
+            "FractionNumerator=1",
+            "FunctionArgument=1",
+            "FunctionName=1",
+            "NAryOperand=1",
+            "NAryOperator=1",
+            "RadicalDegree=1"]);
+        evidence.BaselineRoleCounts.Should().Contain([
+            "Normal=15",
+            "Subscript=2",
+            "Superscript=3"]);
+        evidence.ElementGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("geometry=fraction", StringComparison.Ordinal)
+            && signature.Contains("numerator=a+x^2", StringComparison.Ordinal)
+            && signature.Contains("denominator=3\u221a(b)", StringComparison.Ordinal));
+        evidence.ElementGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("geometry=nary", StringComparison.Ordinal)
+            && signature.Contains("operator=\u2211", StringComparison.Ordinal)
+            && signature.Contains("operand=sin(x)", StringComparison.Ordinal));
+        evidence.SlotGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("slot=fraction-numerator", StringComparison.Ordinal)
+            && signature.Contains("roles=Text,Base,Superscript", StringComparison.Ordinal));
+        evidence.SlotGeometrySignatures.Should().Contain(signature =>
+            signature.Contains("slot=nary-operand", StringComparison.Ordinal)
+            && signature.Contains("roles=FunctionName,FunctionOpenDelimiter,FunctionArgument,FunctionCloseDelimiter", StringComparison.Ordinal));
+    }
 }
