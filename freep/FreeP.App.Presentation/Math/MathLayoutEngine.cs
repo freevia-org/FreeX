@@ -927,8 +927,10 @@ public static class MathLayoutEngine
         // Brackets scale to inner height * 1.10 unless OMML m:grow is off.
         double bracketH = delim.Grow ? innerH * 1.10 : em;
         double bracketW = em * 0.35; // fixed bracket width
+        double openBracketW = string.IsNullOrEmpty(delim.BegChar) ? 0 : bracketW;
+        double closeBracketW = string.IsNullOrEmpty(delim.EndChar) ? 0 : bracketW;
 
-        double totalW = bracketW + innerW + bracketW;
+        double totalW = openBracketW + innerW + closeBracketW;
         double totalH = Math.Max(innerH, bracketH);
         double ascent = innerAscent + (totalH - innerH) / 2.0;
 
@@ -947,7 +949,7 @@ public static class MathLayoutEngine
         }
 
         // Inner elements
-        double x = bracketW;
+        double x = openBracketW;
         double innerTop = (totalH - innerH) / 2.0;
         for (int i = 0; i < innerBoxes.Count; i++)
         {

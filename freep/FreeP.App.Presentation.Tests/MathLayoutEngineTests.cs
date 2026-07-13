@@ -549,6 +549,57 @@ public sealed class MathLayoutEngineTests
         glyphs.Should().HaveCount(2, "only the two element glyphs should render, no separator");
     }
 
+    [Fact]
+    public void Delim_WithExplicitEmptyBegChr_DoesNotReserveOpenBracketSlot()
+    {
+        var twoSided = MathLayoutEngine.Layout(
+            new MathNode.Delim("(", ")", new MathNode[] { Run("x") }),
+            "Cambria Math",
+            FontSizePt);
+        var oneSided = MathLayoutEngine.Layout(
+            new MathNode.Delim("", ")", new MathNode[] { Run("x") }),
+            "Cambria Math",
+            FontSizePt);
+
+        var brackets = AllBrackets(oneSided).ToList();
+        var closeBracket = brackets.Should().ContainSingle(
+            "m:begChr m:val=\"\" suppresses only the opening bracket").Which;
+        closeBracket.Character.Should().Be(")");
+
+        var innerGlyph = AllGlyphs(oneSided).Cast<MathBox.Glyph>().Single(g => g.Text == "x");
+        innerGlyph.X.Should().BeApproximately(0, 0.01,
+            "the inner expression should start at the left edge when no opening bracket is requested");
+
+        (twoSided.Metrics.Width - oneSided.Metrics.Width).Should().BeApproximately(closeBracket.Metrics.Width, 0.01,
+            "a delimiter with an explicit empty opening bracket is one bracket slot narrower than the two-sided form");
+    }
+
+    [Fact]
+    public void Delim_WithExplicitEmptyEndChr_DoesNotReserveCloseBracketSlot()
+    {
+        var twoSided = MathLayoutEngine.Layout(
+            new MathNode.Delim("(", ")", new MathNode[] { Run("x") }),
+            "Cambria Math",
+            FontSizePt);
+        var oneSided = MathLayoutEngine.Layout(
+            new MathNode.Delim("(", "", new MathNode[] { Run("x") }),
+            "Cambria Math",
+            FontSizePt);
+
+        var brackets = AllBrackets(oneSided).ToList();
+        var openBracket = brackets.Should().ContainSingle(
+            "m:endChr m:val=\"\" suppresses only the closing bracket").Which;
+        openBracket.Character.Should().Be("(");
+        openBracket.X.Should().BeApproximately(0, 0.01);
+
+        var innerGlyph = AllGlyphs(oneSided).Cast<MathBox.Glyph>().Single(g => g.Text == "x");
+        innerGlyph.X.Should().BeApproximately(openBracket.Metrics.Width, 0.01,
+            "normal opening delimiter spacing is preserved when only the closing bracket is suppressed");
+
+        (twoSided.Metrics.Width - oneSided.Metrics.Width).Should().BeApproximately(openBracket.Metrics.Width, 0.01,
+            "a delimiter with an explicit empty closing bracket is one bracket slot narrower than the two-sided form");
+    }
+
     // ── HA6: m:f fPr/type — fraction bar style ──────────────────────────────
 
     [Fact]

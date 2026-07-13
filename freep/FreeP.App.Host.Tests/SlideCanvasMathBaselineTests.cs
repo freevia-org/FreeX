@@ -446,4 +446,50 @@ public sealed class SlideCanvasMathBaselineTests
 
         act.Should().NotThrow();
     }
+
+    [StaFact]
+    public void RenderParaWithMath_OneSidedDelimiters_UseSingleSharedBracketPlan_DoesNotThrow()
+    {
+        var openSuppressed = MathLayoutEngine.Layout(
+            ParseOmml(
+                "<m:d>" +
+                "<m:dPr><m:begChr m:val=\"\"/><m:endChr m:val=\")\"/></m:dPr>" +
+                "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                "</m:d>"),
+            "Cambria Math",
+            18.0);
+        var closeSuppressed = MathLayoutEngine.Layout(
+            ParseOmml(
+                "<m:d>" +
+                "<m:dPr><m:begChr m:val=\"(\"/><m:endChr m:val=\"\"/></m:dPr>" +
+                "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                "</m:d>"),
+            "Cambria Math",
+            18.0);
+
+        MathBoxRenderPlanner.Plan(openSuppressed, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawBracket>()
+            .Should().ContainSingle().Which.Character.Should().Be(")");
+        MathBoxRenderPlanner.Plan(closeSuppressed, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawBracket>()
+            .Should().ContainSingle().Which.Character.Should().Be("(");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "D = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = openSuppressed },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
 }
