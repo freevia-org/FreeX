@@ -12,9 +12,10 @@ namespace FreeW.Core.Model;
 // an over/under-bar (m:bar), a bracketed delimiter (m:d) or a matrix (m:m). Most structure slots store
 // plain math text; scripts carry optional nested base/sub/sup equations, fractions additionally carry
 // optional nested numerator/denominator equations, radicals carry an optional nested radicand, n-ary
-// operators carry optional nested lower/upper/operand equations, and delimiters carry an optional nested
-// content equation so common OfficeMath slots can round-trip without a broad recursive-slot rewrite.
-// A Matrix additionally carries a small grid of text cells. That
+// operators carry optional nested lower/upper/operand equations, delimiters carry an optional nested
+// content equation, and matrices carry optional nested cell equations so common OfficeMath slots can
+// round-trip without a broad recursive-slot rewrite. A Matrix additionally carries a small grid of text
+// cells as its fallback display/editing surface. That
 // covers the high-value structures from Word's Equation tools while staying well short of the full
 // recursive OMML schema — richer constructs degrade to their plain math text on read so nothing throws.
 
@@ -466,7 +467,7 @@ public sealed record MathRun
         MathRunKind.Accent => $"{SlotLinearText(DecoratorBaseEquation, Base, depth)}{Accent}",
         MathRunKind.Bar => BarTop ? $"‾{SlotLinearText(DecoratorBaseEquation, Base, depth)}‾" : $"_{SlotLinearText(DecoratorBaseEquation, Base, depth)}_",
         MathRunKind.Delimiter => $"{OpenChar}{SlotLinearText(DelimiterContentEquation, Base, depth)}{CloseChar}",
-        MathRunKind.Matrix => Matrix?.LinearText ?? string.Empty,
+        MathRunKind.Matrix => Matrix?.LinearTextWithDepth(depth) ?? string.Empty,
         MathRunKind.FunctionApply => FunctionLinearText(depth),
         MathRunKind.GroupChar => string.Equals(GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase)
             ? $"{SlotLinearText(DecoratorBaseEquation, Base, depth)}{GroupChr}"
@@ -493,13 +494,16 @@ public sealed record MathRun
 
 /// <summary>
 /// A small dense grid of plain-math-text cells backing a <see cref="MathRunKind.Matrix"/> fragment
-/// (OMML m:m). Rows are equal-length lists of cell strings. Kept text-only (no nested fragments) to match
-/// the rest of the equation model's flat shape; Word re-lays-out the matrix on open.
+/// (OMML m:m). Rows are lists of cell strings, with optional parallel nested cell equations for m:e
+/// slots that contain structured OMML. Word re-lays-out the matrix on open.
 /// </summary>
 public sealed class MathMatrix
 {
-    /// <summary>The matrix rows, each an ordered list of cell strings (all rows the same length).</summary>
+    /// <summary>The matrix rows, each an ordered list of fallback cell strings.</summary>
     public List<List<string>> Rows { get; } = [];
+
+    /// <summary>Optional structured equations for matrix cells, parallel to <see cref="Rows"/>.</summary>
+    public List<List<Equation?>> CellEquations { get; } = [];
 
     public MathMatrix() { }
 
@@ -510,18 +514,81 @@ public sealed class MathMatrix
             Rows.Add([.. row]);
     }
 
+    /// <summary>Creates a matrix from rows of optional structured cell equations.</summary>
+    public static MathMatrix FromCellEquations(IEnumerable<IEnumerable<Equation?>> rows)
+    {
+        var matrix = new MathMatrix();
+        foreach (var row in rows)
+        {
+            var textRow = new List<string>();
+            var equationRow = new List<Equation?>();
+            foreach (var equation in row)
+            {
+                textRow.Add(equation?.LinearText ?? string.Empty);
+                equationRow.Add(equation);
+            }
+
+            matrix.Rows.Add(textRow);
+            matrix.CellEquations.Add(equationRow);
+        }
+
+        return matrix;
+    }
+
     /// <summary>The number of rows.</summary>
-    public int RowCount => Rows.Count;
+    public int RowCount => Math.Max(Rows.Count, CellEquations.Count);
 
     /// <summary>The number of columns (the longest row's length; 0 for an empty matrix).</summary>
-    public int ColumnCount => Rows.Count == 0 ? 0 : Rows.Max(r => r.Count);
+    public int ColumnCount => RowCount == 0
+        ? 0
+        : Enumerable.Range(0, RowCount).Max(RowColumnCount);
+
+    /// <summary>Returns the structured equation for the addressed cell, if any.</summary>
+    public Equation? CellEquationAt(int rowIndex, int columnIndex)
+    {
+        if (rowIndex < 0 || columnIndex < 0)
+            return null;
+
+        if (rowIndex >= CellEquations.Count)
+            return null;
+
+        var row = CellEquations[rowIndex];
+        return columnIndex < row.Count ? row[columnIndex] : null;
+    }
+
+    /// <summary>Returns the flattened fallback text for the addressed cell.</summary>
+    public string CellTextAt(int rowIndex, int columnIndex) => CellTextAt(rowIndex, columnIndex, depth: 0);
+
+    internal string CellTextAt(int rowIndex, int columnIndex, int depth)
+    {
+        if (CellEquationAt(rowIndex, columnIndex) is { } equation && depth < MathRun.MaxNestedEquationDepth)
+            return equation.LinearTextWithDepth(depth + 1);
+
+        if (rowIndex < 0 || columnIndex < 0 || rowIndex >= Rows.Count)
+            return string.Empty;
+
+        var row = Rows[rowIndex];
+        return columnIndex < row.Count ? row[columnIndex] : string.Empty;
+    }
+
+    private int RowColumnCount(int rowIndex)
+    {
+        var textColumns = rowIndex < Rows.Count ? Rows[rowIndex].Count : 0;
+        var equationColumns = rowIndex < CellEquations.Count ? CellEquations[rowIndex].Count : 0;
+        return Math.Max(textColumns, equationColumns);
+    }
 
     /// <summary>A 2×2 identity matrix (1 0 / 0 1) — the Insert > Equation matrix preset.</summary>
     public static MathMatrix Identity2x2() => new([["1", "0"], ["0", "1"]]);
 
     /// <summary>A best-effort linear rendering: rows joined by "; ", cells within a row by ", ", in brackets.</summary>
     public string LinearText =>
-        "[" + string.Join("; ", Rows.Select(r => string.Join(", ", r))) + "]";
+        LinearTextWithDepth(0);
+
+    internal string LinearTextWithDepth(int depth) =>
+        "[" + string.Join("; ", Enumerable.Range(0, RowCount)
+            .Select(rowIndex => string.Join(", ", Enumerable.Range(0, RowColumnCount(rowIndex))
+                .Select(columnIndex => CellTextAt(rowIndex, columnIndex, depth))))) + "]";
 }
 
 /// <summary>

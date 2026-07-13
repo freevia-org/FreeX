@@ -519,6 +519,62 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_NestedMatrixCells_SurfaceSharedCellPlansAndKeepFlattenedSegments()
+    {
+        var structuredCell = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+        var matrix = new MathMatrix([["a+x2", "plain"]]);
+        matrix.CellEquations.Add([structuredCell, null]);
+
+        var plan = EquationVisualPlanner.Build(new Equation([MathRun.MatrixOf(matrix)]));
+
+        plan.LinearText.Should().Be("[a+x^2, plain]");
+        plan.Elements.Should().ContainSingle();
+        var element = plan.Elements[0];
+        element.Kind.Should().Be(EquationVisualElementKind.Matrix);
+        element.MatrixRows.Should().ContainSingle();
+        var cells = element.MatrixRows[0].Cells;
+        cells.Select(cell => cell.Text).Should().Equal("a+x^2", "plain");
+        cells[0].CellPlan.Should().NotBeNull();
+        cells[0].CellPlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Superscript);
+        cells[1].CellPlan.Should().BeNull();
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            EquationVisualPlanner.MatrixOpenDelimiterText,
+            "a+x^2",
+            EquationVisualPlanner.MatrixColumnSeparatorText,
+            "plain",
+            EquationVisualPlanner.MatrixCloseDelimiterText);
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.MatrixOpenDelimiter,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixColumnSeparator,
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixCloseDelimiter);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_NestedMatrixCells_AreDepthBounded()
+    {
+        var equation = new Equation();
+        var matrix = new MathMatrix();
+        matrix.Rows.Add(["fallback"]);
+        matrix.CellEquations.Add([equation]);
+        equation.Runs.Add(MathRun.MatrixOf(matrix));
+
+        var plan = EquationVisualPlanner.Build(equation);
+
+        plan.LinearText.Length.Should().BeLessThan(500);
+        plan.LinearText.Should().Contain("fallback");
+        plan.Elements.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public void EquationVisualPlanner_Accent_BuildsStructuredMarkOverBaseElement()
     {
         var run = MathRun.AccentOf("x", "hat");

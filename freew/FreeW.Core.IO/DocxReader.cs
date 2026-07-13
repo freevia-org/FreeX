@@ -1946,14 +1946,26 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Reads a matrix (m:m) into a <see cref="MathMatrix"/>: one row per m:mr, one cell per m:e.
+    /// Reads a matrix (m:m) into a <see cref="MathMatrix"/>: one row per m:mr, one cell per m:e,
+    /// preserving structured cell equations when a cell contains child OMML runs.
     /// Mirrors <c>DocxWriter.BuildMatrix</c>.
     /// </summary>
     private static MathMatrix ReadMatrix(XElement m)
     {
         var matrix = new MathMatrix();
         foreach (var mr in m.Elements(M + "mr"))
-            matrix.Rows.Add([.. mr.Elements(M + "e").Select(MathTextOf)]);
+        {
+            var textRow = new List<string>();
+            var equationRow = new List<Equation?>();
+            foreach (var cell in mr.Elements(M + "e"))
+            {
+                textRow.Add(MathTextOf(cell));
+                equationRow.Add(HasStructuredMathSlot(cell) ? ReadMathSlot(cell) : null);
+            }
+
+            matrix.Rows.Add(textRow);
+            matrix.CellEquations.Add(equationRow);
+        }
         return matrix;
     }
 
