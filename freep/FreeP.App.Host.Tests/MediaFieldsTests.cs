@@ -633,6 +633,96 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_PowerPointNativeCaptionPackage_PreservesCaptionSidecarContentTypeOverride()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "PowerPoint override captioned video",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 },
+                ContentType = "video/mp4"
+            }
+        });
+        pres.Slides.Add(slide);
+
+        var fixture = new CaptionTrackFixture(
+            "rIdPowerPointCaptionOverride",
+            "ppt/media/powerpoint-native-captions.vtt",
+            "en-US",
+            "PowerPoint override captions",
+            "Content type override caption");
+        const string captionOverrideContentType = "application/vnd.ms-powerpoint.media.caption+vtt";
+
+        using var source = new MemoryStream();
+        PptxPackageWriter.Write(pres, source);
+        AddCaptionTracks(source, [fixture]);
+        AddContentTypeOverride(source, "/" + fixture.PackagePath, captionOverrideContentType);
+
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot!.TryGetEntry(fixture.PackagePath, out var snapshotBytes).Should().BeTrue();
+        snapshotBytes.Should().Equal(CaptionPayload(fixture.Text));
+        loaded.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle()
+            .Which.Source.Should().Be(fixture.PackagePath);
+
+        loaded.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "Modeled edit",
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 3657600,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            Text = "edit"
+        });
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+
+        saved.Position = 0;
+        using (var zip = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            ReadBytes(zip, fixture.PackagePath).Should().Equal(CaptionPayload(fixture.Text));
+
+            var contentTypes = ReadXml(zip, "[Content_Types].xml");
+            var ct = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+            var captionOverrides = contentTypes.Root!.Elements(ct + "Override")
+                .Where(e =>
+                    string.Equals(e.Attribute("PartName")?.Value, "/" + fixture.PackagePath, StringComparison.OrdinalIgnoreCase) &&
+                    e.Attribute("ContentType")?.Value == captionOverrideContentType)
+                .ToArray();
+            captionOverrides.Should().ContainSingle();
+
+            var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+            var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            rels.Root!.Elements(relNs + "Relationship")
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption")
+                .Attribute("Target")!.Value.Should().Be("../media/powerpoint-native-captions.vtt");
+        }
+
+        saved.Position = 0;
+        var reopened = PptxPackageReader.Read(saved);
+        var transcript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(reopened);
+        transcript.Tracks.Should().ContainSingle()
+            .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
+                descriptor.Source == fixture.PackagePath &&
+                descriptor.Status == PresentationMediaTranscriptTrackStatus.Available &&
+                descriptor.Cues[0].Text == fixture.Text);
+    }
+
+    [Fact]
     public void Media_SlideCloner_ClonesMedia()
     {
         var shape = new SlideShape
@@ -1158,6 +1248,22 @@ public sealed class MediaFieldsTests
         {
             WriteText(archive, track.PackagePath, CaptionText(track.Text));
         }
+    }
+
+    private static void AddContentTypeOverride(MemoryStream package, string partName, string contentType)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true);
+        var contentTypes = ReadXml(archive, "[Content_Types].xml");
+        var ct = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+        contentTypes.Root!.Elements(ct + "Override")
+            .Where(e => string.Equals(e.Attribute("PartName")?.Value, partName, StringComparison.OrdinalIgnoreCase))
+            .Remove();
+        contentTypes.Root!.Add(new XElement(
+            ct + "Override",
+            new XAttribute("PartName", partName),
+            new XAttribute("ContentType", contentType)));
+        WriteXml(archive, "[Content_Types].xml", contentTypes);
     }
 
     private static byte[] ReadBytes(ZipArchive archive, string path)
