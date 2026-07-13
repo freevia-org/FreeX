@@ -88,6 +88,36 @@ public sealed class PresentationExportPlannerTests
         return presentation;
     }
 
+    private static Presentation BuildCustomGeometryDeck()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100, Fill = true, Stroke = true };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 100, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 50, Y: 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x70AD47)),
+            Outline = new ShapeOutline.Visible(SrgbColor.FromRgb(0x2F5597), widthPt: 1.75),
+            Text = "Freeform",
+        };
+        shape.CustomGeometry.Add(path);
+
+        var slide = new Slide { Title = "Custom geometry evidence" };
+        slide.Shapes.Add(shape);
+        slide.Notes = MakeTextBody("Custom geometry notes evidence.");
+        presentation.Slides.Add(slide);
+        return presentation;
+    }
+
     [Fact]
     public void PrintLayouts_CoverSlidesNotesAndPowerPointHandoutOptions()
     {
@@ -403,6 +433,27 @@ public sealed class PresentationExportPlannerTests
         notesPlan.Pages[0].Ops.OfType<PdfStrokeEllipse>().Should().ContainSingle();
         handoutPlan.Pages[0].Ops.OfType<PdfFillEllipse>().Should().ContainSingle();
         handoutPlan.Pages[0].Ops.OfType<PdfStrokeEllipse>().Should().ContainSingle();
+    }
+
+    [Fact]
+    public void NotesAndHandoutPdfRenderPlans_PreserveCustomGeometrySlideOps()
+    {
+        var deck = BuildCustomGeometryDeck();
+
+        var notesPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(deck);
+        var handoutPlan = PresentationHandoutPdfExporter.BuildRenderPlan(
+            deck,
+            new PresentationHandoutPdfExportRequest(
+                new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts, HandoutSlidesPerPage: 1)));
+
+        notesPlan.Pages[0].Ops.OfType<PdfPath>().Should().ContainSingle(path =>
+            path.FillColor == new PdfColor(0x70, 0xAD, 0x47) &&
+            path.StrokeColor == new PdfColor(0x2F, 0x55, 0x97) &&
+            path.StrokeWidth > 0);
+        handoutPlan.Pages[0].Ops.OfType<PdfPath>().Should().ContainSingle(path =>
+            path.FillColor == new PdfColor(0x70, 0xAD, 0x47) &&
+            path.StrokeColor == new PdfColor(0x2F, 0x55, 0x97) &&
+            path.StrokeWidth > 0);
     }
 
     [Fact]

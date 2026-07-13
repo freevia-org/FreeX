@@ -355,6 +355,61 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_ExportsCustomGeometryAsPdfPath()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100, Fill = true, Stroke = true };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 0, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.LineTo, X: 100, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.CubicBezTo, X: 100, Y: 50, X1: 75, Y1: 100, X2: 50, Y2: 100));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.QuadBezTo, X: 25, Y: 100, X1: 0, Y1: 75));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.Close));
+        var slide = new Slide();
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x70AD47)),
+            Outline = new ShapeOutline.Visible(SrgbColor.FromRgb(0x2F5597), widthPt: 1.75),
+            Text = "Freeform",
+        };
+        shape.CustomGeometry.Add(path);
+        slide.Shapes.Add(shape);
+        deck.Slides.Add(slide);
+
+        var ops = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+        var pdfPath = ops.OfType<PdfPath>().Should().ContainSingle().Subject;
+        var contour = pdfPath.Contours.Should().ContainSingle().Subject;
+
+        pdfPath.FillColor.Should().Be(new PdfColor(0x70, 0xAD, 0x47));
+        pdfPath.StrokeColor.Should().Be(new PdfColor(0x2F, 0x55, 0x97));
+        pdfPath.StrokeWidth.Should().Be(1.75);
+        contour.Start.Should().Be(new PdfPathPoint(72, 450));
+        contour.Closed.Should().BeTrue();
+        contour.Segments.Should().HaveCount(3);
+        contour.Segments[0].Should().Be(PdfPathSegment.LineTo(new PdfPathPoint(216, 450)));
+        contour.Segments[1].Should().Be(PdfPathSegment.BezierTo(
+            new PdfPathPoint(216, 414),
+            new PdfPathPoint(180, 378),
+            new PdfPathPoint(144, 378)));
+        contour.Segments[2].Should().Be(PdfPathSegment.BezierTo(
+            new PdfPathPoint(120, 378),
+            new PdfPathPoint(96, 384),
+            new PdfPathPoint(72, 396)));
+        ops.OfType<PdfFillRect>().Should().BeEmpty("custom geometry should not flatten to rectangle fill geometry");
+        ops.OfType<PdfStrokeRect>().Should().BeEmpty("custom geometry should not flatten to rectangle outline geometry");
+        ops.OfType<PdfText>().Should().ContainSingle(text =>
+            text.X == 80 &&
+            text.Y == 424 &&
+            text.Text == "Freeform");
+    }
+
+    [Fact]
     public void BuildDocument_ExportsRotatedRectangleAndTextThroughPdfRotationGroup()
     {
         var deck = Presentation.CreateEmpty();

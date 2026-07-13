@@ -81,6 +81,45 @@ public sealed record PdfFilledTriangle(
     PdfColor Color) : PdfDrawOp;
 
 /// <summary>
+/// The kind of a single path segment. Coordinates are expressed in PDF user space.
+/// </summary>
+public enum PdfPathSegmentKind
+{
+    Line,
+    CubicBezier,
+}
+
+public readonly record struct PdfPathPoint(double X, double Y);
+
+public sealed record PdfPathSegment(
+    PdfPathSegmentKind Kind,
+    PdfPathPoint End,
+    PdfPathPoint Control1 = default,
+    PdfPathPoint Control2 = default)
+{
+    public static PdfPathSegment LineTo(PdfPathPoint end) => new(PdfPathSegmentKind.Line, end);
+
+    public static PdfPathSegment BezierTo(PdfPathPoint control1, PdfPathPoint control2, PdfPathPoint end) =>
+        new(PdfPathSegmentKind.CubicBezier, end, control1, control2);
+}
+
+public sealed record PdfPathContour(
+    PdfPathPoint Start,
+    IReadOnlyList<PdfPathSegment> Segments,
+    bool Closed);
+
+/// <summary>
+/// Draws one or more arbitrary path contours with optional fill and stroke. This is used for
+/// PowerPoint custom/freeform geometry that cannot be represented by the simpler rectangle,
+/// ellipse, line, or triangle primitives.
+/// </summary>
+public sealed record PdfPath(
+    IReadOnlyList<PdfPathContour> Contours,
+    PdfColor? FillColor,
+    PdfColor? StrokeColor,
+    double StrokeWidth) : PdfDrawOp;
+
+/// <summary>
 /// Applies a rotation transform around a fixed PDF user-space center to a child draw-op list.
 /// Positive degrees follow Office's visual coordinate convention; writers map that to their
 /// backend coordinate system.

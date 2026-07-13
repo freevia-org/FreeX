@@ -160,6 +160,9 @@ public static class PresentationPdfExporter
         if (TryAppendConnectorGeometry(ops, shape, x, y, width, height, slideHeightPoints))
             return new ShapeBox(x, y, width, height);
 
+        if (TryAppendCustomGeometry(ops, shape, x, y, width, height))
+            return new ShapeBox(x, y, width, height);
+
         if (IsEllipseLike(shape))
         {
             if (TryMapFill(shape.Fill, out var fill))
@@ -266,6 +269,154 @@ public static class PresentationPdfExporter
         }
 
         return true;
+    }
+
+    private static bool TryAppendCustomGeometry(
+        List<PdfDrawOp> ops,
+        SlideShape shape,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        if (shape.Kind != SlideShapeKind.AutoShape || shape.CustomGeometry.Count == 0)
+            return false;
+
+        var hasFill = TryMapFill(shape.Fill, out var fill);
+        var hasStroke = TryMapOutline(shape.Outline, out var stroke, out var strokeWidth);
+
+        foreach (var path in shape.CustomGeometry)
+        {
+            var contours = BuildCustomPathContours(path, x, y, width, height);
+            if (contours.Count == 0)
+                continue;
+
+            var fillColor = path.Fill && hasFill ? fill : (PdfColor?)null;
+            var strokeColor = path.Stroke && hasStroke ? stroke : (PdfColor?)null;
+            if (fillColor is null && strokeColor is null)
+                continue;
+
+            ops.Add(new PdfPath(contours, fillColor, strokeColor, strokeWidth));
+        }
+
+        return true;
+    }
+
+    private static IReadOnlyList<PdfPathContour> BuildCustomPathContours(
+        CustomGeometryPath path,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        var pathWidth = path.PathW > 0 ? path.PathW : Math.Max(1, width);
+        var pathHeight = path.PathH > 0 ? path.PathH : Math.Max(1, height);
+        var scaleX = width / pathWidth;
+        var scaleY = height / pathHeight;
+        var contours = new List<PdfPathContour>();
+        var segments = new List<PdfPathSegment>();
+        PdfPathPoint current = new(x, y + height);
+        PdfPathPoint? start = null;
+        (double X, double Y) currentSource = (0, 0);
+
+        PdfPathPoint Map(double pointX, double pointY) =>
+            new(x + (pointX * scaleX), y + height - (pointY * scaleY));
+
+        void Flush(bool closed)
+        {
+            if (start is not { } contourStart)
+                return;
+
+            contours.Add(new PdfPathContour(contourStart, segments.ToArray(), closed));
+            segments.Clear();
+            start = null;
+        }
+
+        foreach (var segment in path.Segments)
+        {
+            switch (segment.Kind)
+            {
+                case CustomSegmentKind.MoveTo:
+                    if (start is not null && segments.Count > 0)
+                        Flush(closed: false);
+                    current = Map(segment.X, segment.Y);
+                    currentSource = (segment.X, segment.Y);
+                    start = current;
+                    break;
+                case CustomSegmentKind.LineTo:
+                {
+                    EnsureStarted();
+                    var end = Map(segment.X, segment.Y);
+                    segments.Add(PdfPathSegment.LineTo(end));
+                    current = end;
+                    currentSource = (segment.X, segment.Y);
+                    break;
+                }
+                case CustomSegmentKind.CubicBezTo:
+                {
+                    EnsureStarted();
+                    var control1 = Map(segment.X, segment.Y);
+                    var control2 = Map(segment.X1, segment.Y1);
+                    var end = Map(segment.X2, segment.Y2);
+                    segments.Add(PdfPathSegment.BezierTo(control1, control2, end));
+                    current = end;
+                    currentSource = (segment.X2, segment.Y2);
+                    break;
+                }
+                case CustomSegmentKind.QuadBezTo:
+                {
+                    EnsureStarted();
+                    var control = Map(segment.X, segment.Y);
+                    var end = Map(segment.X1, segment.Y1);
+                    var control1 = new PdfPathPoint(
+                        current.X + (2.0 / 3.0 * (control.X - current.X)),
+                        current.Y + (2.0 / 3.0 * (control.Y - current.Y)));
+                    var control2 = new PdfPathPoint(
+                        end.X + (2.0 / 3.0 * (control.X - end.X)),
+                        end.Y + (2.0 / 3.0 * (control.Y - end.Y)));
+                    segments.Add(PdfPathSegment.BezierTo(control1, control2, end));
+                    current = end;
+                    currentSource = (segment.X1, segment.Y1);
+                    break;
+                }
+                case CustomSegmentKind.ArcTo:
+                {
+                    EnsureStarted();
+                    var endSource = GetArcEnd(currentSource, segment);
+                    var end = Map(endSource.X, endSource.Y);
+                    segments.Add(PdfPathSegment.LineTo(end));
+                    current = end;
+                    currentSource = endSource;
+                    break;
+                }
+                case CustomSegmentKind.Close:
+                    Flush(closed: true);
+                    break;
+            }
+        }
+
+        if (start is not null && segments.Count > 0)
+            Flush(closed: false);
+
+        return contours;
+
+        void EnsureStarted()
+        {
+            if (start is null)
+                start = current;
+        }
+    }
+
+    private static (double X, double Y) GetArcEnd((double X, double Y) currentSource, CustomSegment segment)
+    {
+        var startAngle = segment.StAng * Math.PI / 180.0;
+        var sweepAngle = segment.SwAng * Math.PI / 180.0;
+        var endAngle = startAngle + sweepAngle;
+        var centerX = currentSource.X - (segment.WR * Math.Cos(startAngle));
+        var centerY = currentSource.Y - (segment.HR * Math.Sin(startAngle));
+        return (
+            centerX + (segment.WR * Math.Cos(endAngle)),
+            centerY + (segment.HR * Math.Sin(endAngle)));
     }
 
     private static bool TryGetLineEnds(ShapeOutline? outline, out ShapeLineEnd? begin, out ShapeLineEnd? end)

@@ -324,6 +324,9 @@ public static class PresentationNotesPagePdfExporter
                         line.Color,
                         line.LineWidth * scale);
                     break;
+                case PdfPath path:
+                    yield return MapPath(path);
+                    break;
             }
         }
 
@@ -352,6 +355,30 @@ public static class PresentationNotesPagePdfExporter
                 ? new PdfFillEllipse(mapped.X, pdfY, mapped.Width, mapped.Height, color)
                 : new PdfStrokeEllipse(mapped.X, pdfY, mapped.Width, mapped.Height, color, lineWidth.Value * scale);
         }
+
+        PdfPath MapPath(PdfPath path) =>
+            new(
+                path.Contours
+                    .Select(contour => new PdfPathContour(
+                        MapPoint(contour.Start),
+                        contour.Segments.Select(MapSegment).ToArray(),
+                        contour.Closed))
+                    .ToArray(),
+                path.FillColor,
+                path.StrokeColor,
+                path.StrokeWidth * scale);
+
+        PdfPathSegment MapSegment(PdfPathSegment segment) =>
+            segment.Kind switch
+            {
+                PdfPathSegmentKind.CubicBezier => PdfPathSegment.BezierTo(
+                    MapPoint(segment.Control1),
+                    MapPoint(segment.Control2),
+                    MapPoint(segment.End)),
+                _ => PdfPathSegment.LineTo(MapPoint(segment.End)),
+            };
+
+        PdfPathPoint MapPoint(PdfPathPoint point) => new(MapX(point.X), MapY(point.Y));
 
         double MapX(double x) => fitted.X + (x * scale);
 

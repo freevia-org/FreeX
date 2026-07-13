@@ -127,6 +127,38 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsFilledAndStrokedCustomPath()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfPath(
+                [
+                    new PdfPathContour(
+                        new PdfPathPoint(10, 20),
+                        [
+                            PdfPathSegment.LineTo(new PdfPathPoint(30, 20)),
+                            PdfPathSegment.BezierTo(
+                                new PdfPathPoint(35, 35),
+                                new PdfPathPoint(20, 45),
+                                new PdfPathPoint(10, 40)),
+                        ],
+                        Closed: true),
+                ],
+                new PdfColor(0x11, 0x22, 0x33),
+                new PdfColor(0x44, 0x55, 0x66),
+                1.25),
+        });
+
+        var pdf = Encoding.ASCII.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("0.067 0.133 0.2 rg");
+        pdf.Should().Contain("0.267 0.333 0.4 RG");
+        pdf.Should().Contain("1.25 w");
+        pdf.Should().Contain("10 20 m\n30 20 l\n35 35 20 45 10 40 c\nh\nB");
+    }
+
+    [Fact]
     public void Write_EmitsFilledAndStrokedEllipsePaths()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

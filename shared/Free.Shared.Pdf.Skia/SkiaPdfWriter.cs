@@ -192,6 +192,25 @@ public static class SkiaPdfWriter
                 break;
             }
 
+            case PdfPath pdfPath:
+            {
+                using var skPath = ToSkPath(pdfPath, pageHeight);
+                if (pdfPath.FillColor is { } fill)
+                {
+                    fillPaint.Color = ToSkColor(fill);
+                    canvas.DrawPath(skPath, fillPaint);
+                }
+
+                if (pdfPath.StrokeColor is { } stroke)
+                {
+                    strokePaint.Color = ToSkColor(stroke);
+                    strokePaint.StrokeWidth = (float)Math.Max(0.1, pdfPath.StrokeWidth);
+                    canvas.DrawPath(skPath, strokePaint);
+                }
+
+                break;
+            }
+
             case PdfRotationGroup group:
             {
                 if (group.Ops.Count == 0)
@@ -244,6 +263,38 @@ public static class SkiaPdfWriter
                 break;
             }
         }
+    }
+
+    private static SKPath ToSkPath(PdfPath pdfPath, float pageHeight)
+    {
+        var path = new SKPath();
+        foreach (var contour in pdfPath.Contours)
+        {
+            path.MoveTo((float)contour.Start.X, pageHeight - (float)contour.Start.Y);
+            foreach (var segment in contour.Segments)
+            {
+                switch (segment.Kind)
+                {
+                    case PdfPathSegmentKind.Line:
+                        path.LineTo((float)segment.End.X, pageHeight - (float)segment.End.Y);
+                        break;
+                    case PdfPathSegmentKind.CubicBezier:
+                        path.CubicTo(
+                            (float)segment.Control1.X,
+                            pageHeight - (float)segment.Control1.Y,
+                            (float)segment.Control2.X,
+                            pageHeight - (float)segment.Control2.Y,
+                            (float)segment.End.X,
+                            pageHeight - (float)segment.End.Y);
+                        break;
+                }
+            }
+
+            if (contour.Closed)
+                path.Close();
+        }
+
+        return path;
     }
 
     private static SKPaint CreateImagePaint(double opacity) =>

@@ -122,6 +122,9 @@ public static class PortablePdfWriter
                     triangle.Y3,
                     triangle.Color);
                 break;
+            case PdfPath path:
+                AppendPath(content, path);
+                break;
             case PdfRotationGroup group:
                 AppendRotationGroup(content, group, imageResources, opacityResources);
                 break;
@@ -828,6 +831,49 @@ public static class PortablePdfWriter
         content.AppendLine($"{FormatNumber(x1)} {FormatNumber(y1)} m");
         content.AppendLine($"{FormatNumber(x2)} {FormatNumber(y2)} l");
         content.AppendLine($"{FormatNumber(x3)} {FormatNumber(y3)} l f");
+        content.AppendLine("Q");
+    }
+
+    private static void AppendPath(StringBuilder content, PdfPath path)
+    {
+        if (path.Contours.Count == 0 || (path.FillColor is null && path.StrokeColor is null))
+            return;
+
+        content.AppendLine("q");
+        if (path.FillColor is { } fill)
+            AppendRgb(content, fill, "rg");
+        if (path.StrokeColor is { } stroke)
+        {
+            AppendRgb(content, stroke, "RG");
+            content.AppendLine($"{FormatNumber(Math.Max(0.1, path.StrokeWidth))} w");
+        }
+
+        foreach (var contour in path.Contours)
+        {
+            content.AppendLine($"{FormatNumber(contour.Start.X)} {FormatNumber(contour.Start.Y)} m");
+            foreach (var segment in contour.Segments)
+            {
+                switch (segment.Kind)
+                {
+                    case PdfPathSegmentKind.Line:
+                        content.AppendLine($"{FormatNumber(segment.End.X)} {FormatNumber(segment.End.Y)} l");
+                        break;
+                    case PdfPathSegmentKind.CubicBezier:
+                        content.AppendLine(
+                            $"{FormatNumber(segment.Control1.X)} {FormatNumber(segment.Control1.Y)} " +
+                            $"{FormatNumber(segment.Control2.X)} {FormatNumber(segment.Control2.Y)} " +
+                            $"{FormatNumber(segment.End.X)} {FormatNumber(segment.End.Y)} c");
+                        break;
+                }
+            }
+
+            if (contour.Closed)
+                content.AppendLine("h");
+        }
+
+        content.AppendLine(path.FillColor is not null && path.StrokeColor is not null
+            ? "B"
+            : path.FillColor is not null ? "f" : "S");
         content.AppendLine("Q");
     }
 
