@@ -43,6 +43,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("PageCompositionProof = @(");
         source.Should().Contain("FloatingWrappingVisualProof = @(");
         source.Should().Contain("TableLayoutProof = @(");
+        source.Should().Contain("TablePaginationPageCompositionProof = @(");
         source.Should().Contain("DrawingObjectVisualProof = @(");
         source.Should().Contain("ShapeObjectVisualProof = @(");
         source.Should().Contain("SmartArtPolygonVisualProof = @(");
@@ -65,6 +66,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'table-layout-complex'");
         source.Should().Contain("'table-pagination-repeat-header'");
         source.Should().Contain("'table-page-composition-stress'");
+        source.Should().Contain("freew-fidelity-corpus/runs/table-pagination-page-composition-proof");
         source.Should().Contain("'drawing-objects-complex'");
         source.Should().Contain("'object-format-position-size-style'");
         source.Should().Contain("'chart-smartart-complex'");
@@ -165,6 +167,14 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'table-page-composition-stress' = 2");
         source.Should().Contain("Table layout proof readiness: trusted scenario rows=");
         source.Should().Contain("Table layout Word-baseline policy rows: verified rows=");
+        source.Should().Contain("Assert-TablePaginationPageCompositionProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Table pagination/page composition proof readiness requires FreeW visual evidence summary schema v40 or newer");
+        source.Should().Contain("$readinessRows = @($summary.tablePaginationProofReadiness)");
+        source.Should().Contain("missing repeated-header pagination semantic evidence");
+        source.Should().Contain("missing honest word-baseline-unavailable table pagination blocker");
+        source.Should().Contain("Table pagination/page composition proof readiness: trusted scenario rows=");
+        source.Should().Contain("Table pagination/page composition semantic rows: verified rows=");
+        source.Should().Contain("Table pagination/page composition Word-baseline policy rows: verified rows=");
         source.Should().Contain("Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("Drawing object visual proof readiness requires FreeW visual evidence summary schema v28 or newer");
         source.Should().Contain("$readinessRows = @($summary.drawingObjectProofReadiness)");

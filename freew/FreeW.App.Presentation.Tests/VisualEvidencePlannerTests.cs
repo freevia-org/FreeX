@@ -6761,6 +6761,130 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void TablePaginationNoWordSummary_ReportsFocusedProofReadinessWithoutAuthoritativeWordParity()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioIds = new[]
+            {
+                "table-pagination-repeat-header",
+                "table-page-composition-stress"
+            };
+            var wpfRows = scenarioIds
+                .SelectMany(scenarioId => Enumerable.Range(1, 2)
+                    .Select(page => BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        page,
+                        pageCount: 2)))
+                .ToList();
+            var avaloniaRows = scenarioIds
+                .SelectMany(scenarioId => Enumerable.Range(1, 2)
+                    .Select(page => BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        page,
+                        pageCount: 2)))
+                .ToList();
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                scenarioIds
+                    .SelectMany(scenarioId => new[]
+                    {
+                        new FreeWVisualEvidenceExpectedScenario(
+                            FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                            scenarioId,
+                            2),
+                        new FreeWVisualEvidenceExpectedScenario(
+                            FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                            scenarioId,
+                            2)
+                    })
+                    .ToList());
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.TablePaginationProofReadiness.Should().HaveCount(4);
+            summary.TablePaginationProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "not-run"
+                && row.Trust.Passed);
+            summary.TablePaginationProofReadiness.Should().Contain(row =>
+                row.ScenarioId == "table-page-composition-stress"
+                && row.SemanticEvidence.Contains("page-border", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("watermark", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("NUMPAGES", StringComparison.Ordinal));
+
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.TablePaginationProofReadiness.Should().HaveCount(4);
+            withBaseline.TablePaginationProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "word-baseline-unavailable=2"
+                && row.BaselineReadiness.Contains("without authoritative Word table parity", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("repeatedHeaderPages=", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("keepRows=1", StringComparison.Ordinal)
+                && row.Trust.Passed);
+            withBaseline.RemainingEvidenceBlockers.Should().HaveCount(2);
+            withBaseline.RemainingEvidenceBlockers.Should().OnlyContain(blocker =>
+                scenarioIds.Contains(blocker.ScenarioId)
+                && blocker.BlockerId == blocker.ScenarioId + "-word-baseline-fidelity"
+                && blocker.Status == FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus
+                && blocker.RequiresWordBaseline);
+            withBaseline.RemainingEvidenceBlockers.Should().Contain(blocker =>
+                blocker.ScenarioId == "table-page-composition-stress"
+                && blocker.SemanticEvidence.Any(evidence =>
+                    evidence.Contains("page-border", StringComparison.Ordinal)
+                    && evidence.Contains("watermark", StringComparison.Ordinal)));
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(40);
+            doc.RootElement.GetProperty("tablePaginationProofReadiness").GetArrayLength().Should().Be(4);
+            doc.RootElement.GetProperty("remainingEvidenceBlockers").EnumerateArray()
+                .Should().Contain(blocker =>
+                    blocker.GetProperty("blockerId").GetString() == "table-page-composition-stress-word-baseline-fidelity");
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Table Pagination/Page Composition Proof Readiness");
+            markdown.Should().Contain("table-page-composition-stress");
+            markdown.Should().Contain("word-baseline-unavailable=2");
+            markdown.Should().Contain("without authoritative Word table parity");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void FloatingWrappingNoWordSummary_ReportsPairedProofReadinessWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();

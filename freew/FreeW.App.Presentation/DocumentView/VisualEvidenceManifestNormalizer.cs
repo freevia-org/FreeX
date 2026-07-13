@@ -65,6 +65,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceNormalizedRow> Evidence,
     IReadOnlyList<FreeWVisualEvidenceBackstagePrintReadiness> BackstagePrintEvidenceReadiness,
     IReadOnlyList<FreeWVisualFloatingWrappingProofReadiness> FloatingWrappingProofReadiness,
+    IReadOnlyList<FreeWVisualTablePaginationProofReadiness> TablePaginationProofReadiness,
     IReadOnlyList<FreeWVisualDrawingObjectProofReadiness> DrawingObjectProofReadiness,
     IReadOnlyList<FreeWVisualReviewCompareCombineProofReadiness> ReviewCompareCombineProofReadiness,
     IReadOnlyList<FreeWVisualReviewProofingProofReadiness> ReviewProofingProofReadiness,
@@ -90,6 +91,17 @@ public sealed record FreeWVisualFloatingWrappingProofReadiness(
     string WpfScenarioId,
     string WpfOutputSummary,
     string AvaloniaScenarioId,
+    string AvaloniaOutputSummary,
+    string WordBaselineStatus,
+    string BaselineReadiness,
+    string SemanticEvidence,
+    FreeWVisualEvidenceTrust Trust);
+
+public sealed record FreeWVisualTablePaginationProofReadiness(
+    string ScenarioId,
+    int PageNumber,
+    string Status,
+    string WpfOutputSummary,
     string AvaloniaOutputSummary,
     string WordBaselineStatus,
     string BaselineReadiness,
@@ -186,7 +198,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 39;
+    public const int SummarySchemaVersion = 40;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -222,6 +234,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
         "table-layout-complex",
+        "table-pagination-repeat-header",
+        "table-page-composition-stress"
+    ];
+    public static IReadOnlyList<string> TablePaginationVisualProofScenarioIds { get; } =
+    [
         "table-pagination-repeat-header",
         "table-page-composition-stress"
     ];
@@ -428,6 +445,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         var backstageReadiness = BuildBackstagePrintEvidenceReadinessRows(expected, orderedRows);
         var floatingWrappingProofReadiness = BuildFloatingWrappingProofReadinessRows(expected, orderedRows, []);
+        var tablePaginationProofReadiness = BuildTablePaginationProofReadinessRows(expected, orderedRows, []);
         var drawingObjectProofReadiness = BuildDrawingObjectProofReadinessRows(expected, orderedRows, []);
         var reviewCompareCombineProofReadiness = BuildReviewCompareCombineProofReadinessRows(expected, orderedRows, []);
         var reviewProofingProofReadiness = BuildReviewProofingProofReadinessRows(expected, orderedRows, []);
@@ -443,6 +461,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             orderedRows,
             backstageReadiness,
             floatingWrappingProofReadiness,
+            tablePaginationProofReadiness,
             drawingObjectProofReadiness,
             reviewCompareCombineProofReadiness,
             reviewProofingProofReadiness,
@@ -504,6 +523,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         AppendBackstagePrintEvidenceReadiness(sb, summary);
         AppendFloatingWrappingProofReadiness(sb, summary);
+        AppendTablePaginationProofReadiness(sb, summary);
         AppendDrawingObjectProofReadiness(sb, summary);
         AppendReviewCompareCombineProofReadiness(sb, summary);
         AppendReviewProofingProofReadiness(sb, summary);
@@ -618,6 +638,33 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{EscapeMarkdown(row.WpfScenarioId)} | " +
                 $"{EscapeMarkdown(row.WpfOutputSummary)} | " +
                 $"{EscapeMarkdown(row.AvaloniaScenarioId)} | " +
+                $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | " +
+                $"{EscapeMarkdown(row.WordBaselineStatus)} | " +
+                $"{EscapeMarkdown(row.BaselineReadiness)} | " +
+                $"{EscapeMarkdown(row.SemanticEvidence)} | " +
+                $"{(row.Trust.Passed ? "passed" : "failed")} |");
+        }
+    }
+
+    private static void AppendTablePaginationProofReadiness(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.TablePaginationProofReadiness.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## Table Pagination/Page Composition Proof Readiness");
+        sb.AppendLine();
+        sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
+        sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var row in summary.TablePaginationProofReadiness)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.ScenarioId)} | " +
+                $"{row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(row.Status)} | " +
+                $"{EscapeMarkdown(row.WpfOutputSummary)} | " +
                 $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | " +
                 $"{EscapeMarkdown(row.WordBaselineStatus)} | " +
                 $"{EscapeMarkdown(row.BaselineReadiness)} | " +
@@ -1053,6 +1100,68 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return rows;
     }
 
+    private static IReadOnlyList<FreeWVisualTablePaginationProofReadiness> BuildTablePaginationProofReadinessRows(
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var rows = new List<FreeWVisualTablePaginationProofReadiness>();
+        foreach (var scenarioId in TablePaginationVisualProofScenarioIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            var expected = expectedScenarios
+                .Any(e => string.Equals(e.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            var hasEvidence = evidence
+                .Any(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            if (!expected && !hasEvidence)
+                continue;
+
+            foreach (var pageNumber in RequiredScenarioPages(scenarioId))
+            {
+                var wpfRows = RowsForHostScenarioPage(evidence, WpfHostId, scenarioId, pageNumber);
+                var avaloniaRows = RowsForHostScenarioPage(evidence, AvaloniaHostId, scenarioId, pageNumber);
+                var trustedWpf = wpfRows.FirstOrDefault(row => row.Trust.Passed);
+                var trustedAvalonia = avaloniaRows.FirstOrDefault(row => row.Trust.Passed);
+                var relatedBaseline = baselineComparisons
+                    .Where(comparison =>
+                        string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase)
+                        && comparison.PageNumber == pageNumber)
+                    .ToList();
+
+                if (trustedWpf is null || trustedAvalonia is null)
+                {
+                    rows.Add(new FreeWVisualTablePaginationProofReadiness(
+                        scenarioId,
+                        pageNumber,
+                        "missing-paired-renderer-evidence",
+                        FormatOutputSummary(wpfRows),
+                        FormatOutputSummary(avaloniaRows),
+                        FormatWordBaselineStatus(relatedBaseline),
+                        "paired WPF/Avalonia table pagination evidence is required before Word baseline comparison readiness",
+                        FormatTablePaginationProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                        new FreeWVisualEvidenceTrust(false, BuildMissingTablePaginationPairFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia))));
+                    continue;
+                }
+
+                var failures = BuildTablePaginationSemanticFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia);
+                var baselineTrust = EvaluateDrawingObjectProofReadiness(relatedBaseline);
+                failures.AddRange(baselineTrust.Failures);
+                var trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+                rows.Add(new FreeWVisualTablePaginationProofReadiness(
+                    scenarioId,
+                    pageNumber,
+                    trust.Passed ? "paired-renderer-proof-ready" : "table-pagination-proof-failed",
+                    FormatOutputSummary(wpfRows),
+                    FormatOutputSummary(avaloniaRows),
+                    FormatWordBaselineStatus(relatedBaseline),
+                    FormatTablePaginationBaselineReadiness(relatedBaseline, scenarioId),
+                    FormatTablePaginationProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                    trust));
+            }
+        }
+
+        return rows;
+    }
+
     private static IReadOnlyList<FreeWVisualReviewCompareCombineProofReadiness> BuildReviewCompareCombineProofReadinessRows(
         IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
@@ -1266,6 +1375,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 summary.ExpectedScenarios,
                 summary.Evidence,
                 ordered),
+            TablePaginationProofReadiness = BuildTablePaginationProofReadinessRows(
+                summary.ExpectedScenarios,
+                summary.Evidence,
+                ordered),
             DrawingObjectProofReadiness = BuildDrawingObjectProofReadinessRows(
                 summary.ExpectedScenarios,
                 summary.Evidence,
@@ -1326,6 +1439,20 @@ public static class FreeWVisualEvidenceManifestNormalizer
             failures.Add($"floating/wrapping proof page 1 is missing trusted WPF visual evidence for '{FloatingWrappingWpfScenarioId}'");
         if (trustedAvalonia is null)
             failures.Add($"floating/wrapping proof page 1 is missing trusted Avalonia visual evidence for '{FloatingWrappingAvaloniaScenarioId}'");
+        return failures;
+    }
+
+    private static IReadOnlyList<string> BuildMissingTablePaginationPairFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow? trustedWpf,
+        FreeWVisualEvidenceNormalizedRow? trustedAvalonia)
+    {
+        var failures = new List<string>();
+        if (trustedWpf is null)
+            failures.Add($"table pagination proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted WPF visual evidence");
+        if (trustedAvalonia is null)
+            failures.Add($"table pagination proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
         return failures;
     }
 
@@ -1543,6 +1670,60 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return failures;
     }
 
+    private static List<string> BuildTablePaginationSemanticFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia)
+    {
+        var failures = new List<string>();
+        var pairName = $"table pagination proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        ValidateTablePaginationSemanticRow(pairName + " WPF", scenarioId, wpf, failures);
+        ValidateTablePaginationSemanticRow(pairName + " Avalonia", scenarioId, avalonia, failures);
+        ValidateTablePairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+        return failures;
+    }
+
+    private static void ValidateTablePaginationSemanticRow(
+        string rowName,
+        string scenarioId,
+        FreeWVisualEvidenceNormalizedRow row,
+        List<string> failures)
+    {
+        var tables = row.Tables;
+        if (tables.TableCount <= 0)
+            failures.Add($"{rowName} expected table layout evidence");
+        if (!tables.HasPaginationPlan)
+            failures.Add($"{rowName} expected a table pagination plan");
+        if (!tables.HasMultiPageTables || tables.EstimatedPageCount < 2)
+            failures.Add($"{rowName} expected multi-page table pagination evidence");
+        if (!tables.HasRepeatedHeaderPages)
+            failures.Add($"{rowName} expected repeated header row evidence on later pages");
+        if (!tables.HasKeepTogetherRows)
+            failures.Add($"{rowName} expected keep-together row evidence");
+        if (!tables.PaginationPlans.Any(plan =>
+            plan.RepeatsHeaderRows
+            && plan.Pages.Count >= 2
+            && plan.Pages.Skip(1).Any(page => page.IncludesRepeatedHeader)))
+        {
+            failures.Add($"{rowName} expected pagination signatures with repeated headers after page 1");
+        }
+
+        if (!string.Equals(scenarioId, "table-page-composition-stress", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        if (!row.PageFeatures.PageBorder.Present)
+            failures.Add($"{rowName} expected page border evidence");
+        if (!row.PageFeatures.Watermark.Present)
+            failures.Add($"{rowName} expected watermark evidence");
+        if (!row.Fields.HasPageFields || !row.Fields.HasNumPagesFields || !row.Fields.HasHeaderFooterFields)
+            failures.Add($"{rowName} expected PAGE, NUMPAGES, and header/footer field evidence");
+        if (row.HeaderFooters.SlotCount <= 0)
+            failures.Add($"{rowName} expected header/footer surface evidence");
+        if (!tables.HasCustomCellBorders || !tables.HasCellMargins || !tables.HasCellSpacing || !tables.HasNamedStyle)
+            failures.Add($"{rowName} expected table page-composition cell border, margin, spacing, and named-style evidence");
+    }
+
     private static FreeWVisualEvidenceTrust EvaluateDrawingObjectProofReadiness(
         IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline)
     {
@@ -1601,6 +1782,35 @@ public static class FreeWVisualEvidenceManifestNormalizer
             StringComparison.OrdinalIgnoreCase)))
         {
             return "Word COM or baseline generation unavailable; paired WPF/Avalonia floating evidence is retained without authoritative Word wrap parity";
+        }
+
+        if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
+            return "one or more Word baseline comparison rows failed trust; inspect baseline triage";
+
+        if (relatedBaseline.Any(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.PassedStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "real Word PNG baseline compared within configured tolerance";
+        }
+
+        return "Word baseline policy rows are present and trusted";
+    }
+
+    private static string FormatTablePaginationBaselineReadiness(
+        IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline,
+        string scenarioId)
+    {
+        if (relatedBaseline.Count == 0)
+            return "paired renderer evidence is present; run Word PNG baseline comparison for " + scenarioId;
+
+        if (relatedBaseline.All(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Word COM or baseline generation unavailable; paired WPF/Avalonia table pagination evidence is retained without authoritative Word table parity";
         }
 
         if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
@@ -1835,6 +2045,58 @@ public static class FreeWVisualEvidenceManifestNormalizer
             parts.Add("z-order evidence");
 
         return string.Join(", ", parts);
+    }
+
+    private static string FormatTablePaginationProofSemanticEvidence(
+        FreeWVisualEvidenceNormalizedRow? wpf,
+        FreeWVisualEvidenceNormalizedRow? avalonia)
+    {
+        var parts = new List<string>();
+        if (wpf is not null)
+            parts.Add("WPF " + FormatTablePaginationRowSemanticEvidence(wpf));
+        if (avalonia is not null)
+            parts.Add("Avalonia " + FormatTablePaginationRowSemanticEvidence(avalonia));
+        return parts.Count == 0 ? "-" : string.Join("; ", parts);
+    }
+
+    private static string FormatTablePaginationRowSemanticEvidence(FreeWVisualEvidenceNormalizedRow row)
+    {
+        var tables = row.Tables;
+        var repeatedHeaderPages = tables.PaginationPlans
+            .SelectMany(plan => plan.Pages)
+            .Count(page => page.IncludesRepeatedHeader);
+        var pageFeatures = new List<string>();
+        if (row.PageFeatures.PageBorder.Present)
+            pageFeatures.Add("page-border");
+        if (row.PageFeatures.Watermark.Present)
+            pageFeatures.Add("watermark");
+        if (row.HeaderFooters.SlotCount > 0)
+            pageFeatures.Add("header-footer");
+        if (row.Fields.HasPageFields)
+            pageFeatures.Add("PAGE");
+        if (row.Fields.HasNumPagesFields)
+            pageFeatures.Add("NUMPAGES");
+
+        var cellFeatures = new[]
+        {
+            tables.HasCustomCellBorders ? "borders" : "no-borders",
+            tables.HasCellMargins ? "margins" : "no-margins",
+            tables.HasCellSpacing ? "spacing" : "no-spacing",
+            tables.HasNamedStyle ? "named-style" : "no-named-style"
+        };
+
+        return string.Concat(
+            tables.TableCount.ToString(CultureInfo.InvariantCulture),
+            " table(s); estimatedPages=",
+            tables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture),
+            "; repeatedHeaderPages=",
+            repeatedHeaderPages.ToString(CultureInfo.InvariantCulture),
+            "; keepRows=",
+            BoolFlag(tables.HasKeepTogetherRows),
+            "; cellFeatures=",
+            FormatSummaries(cellFeatures),
+            "; pageFeatures=",
+            pageFeatures.Count == 0 ? "-" : FormatSummaries(pageFeatures));
     }
 
     private static string FormatDrawingObjectProofSemanticEvidence(
@@ -2277,6 +2539,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         blockers.AddRange(BuildReviewProofingWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildEquationStructureWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildLegalReferenceWordBaselineBlockers(summary, baselineComparisons));
+        blockers.AddRange(BuildTablePaginationWordBaselineBlockers(summary, baselineComparisons));
 
         var rows = summary.Evidence
             .Where(row => string.Equals(row.ScenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
@@ -2982,6 +3245,188 @@ public static class FreeWVisualEvidenceManifestNormalizer
         FreeWVisualTableOfAuthoritiesExpectation tableOfAuthorities) =>
         ReferencesHeavyRequiredToaPageReferenceSignatures.All(signature =>
             tableOfAuthorities.PageReferenceSignatures.Contains(signature, StringComparer.Ordinal));
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildTablePaginationWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
+        foreach (var scenarioId in TablePaginationVisualProofScenarioIds)
+        {
+            var rows = summary.Evidence
+                .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .Where(row => row.Trust.Passed)
+                .ToList();
+            if (rows.Count == 0)
+                continue;
+
+            var semanticEvidence = BuildTablePaginationSemanticEvidence(rows);
+            if (semanticEvidence.Count == 0)
+            {
+                blockers.Add(BuildTablePaginationBlocker(
+                    scenarioId,
+                    "semantic-table-pagination-missing",
+                    "trusted WPF and Avalonia table pagination metadata",
+                    "trusted table evidence did not record repeated-header pagination metadata; regenerate current-schema evidence or fix shared table pagination planning before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false));
+                continue;
+            }
+
+            var related = baselineComparisons
+                .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (related.Count == 0)
+            {
+                blockers.Add(BuildTablePaginationBlocker(
+                    scenarioId,
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for table pagination and page composition",
+                    "trusted FreeW table pagination evidence is present; run a Word-baseline comparison for " + scenarioId + " to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            var statuses = related
+                .Select(comparison => comparison.Status)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var candidates = related
+                .SelectMany(comparison => comparison.CandidateBaselinePaths)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                var reasons = related
+                    .Where(comparison => string.Equals(
+                        comparison.Status,
+                        FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                        StringComparison.OrdinalIgnoreCase))
+                    .Select(FormatComparisonNotes)
+                    .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var reason = reasons.Count == 0
+                    ? "MS Word baseline PNG generation was unavailable for " + scenarioId
+                    : string.Join("; ", reasons);
+                blockers.Add(BuildTablePaginationBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for table pagination and page composition",
+                    reason,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                blockers.Add(BuildTablePaginationBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for table pagination and page composition",
+                    "trusted table pagination evidence is present, but mapped Word baseline PNGs are missing for " + scenarioId,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.All(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            blockers.Add(BuildTablePaginationBlocker(
+                scenarioId,
+                "needs-render-review",
+                "render-review resolution for failed table pagination Word PNG comparisons",
+                scenarioId + " Word baseline comparison did not fully pass; inspect table pagination and page-composition rendering differences",
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false));
+        }
+
+        return blockers;
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildTablePaginationBlocker(
+        string scenarioId,
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline) =>
+        new(
+            scenarioId + "-word-baseline-fidelity",
+            scenarioId,
+            "Table pagination/page composition fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
+
+    private static IReadOnlyList<string> BuildTablePaginationSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
+        rows
+            .Where(row => row.Tables.HasRepeatedHeaderPages)
+            .Select(row => string.Concat(
+                row.HostId,
+                "/p",
+                row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                ": estimatedPages=",
+                row.Tables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture),
+                "; repeatedHeaderPages=",
+                row.Tables.PaginationPlans
+                    .SelectMany(plan => plan.Pages)
+                    .Count(page => page.IncludesRepeatedHeader)
+                    .ToString(CultureInfo.InvariantCulture),
+                "; keepRows=",
+                BoolFlag(row.Tables.HasKeepTogetherRows),
+                "; pageFeatures=",
+                FormatTablePaginationBlockerPageFeatures(row)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static string FormatTablePaginationBlockerPageFeatures(FreeWVisualEvidenceNormalizedRow row)
+    {
+        var parts = new List<string>();
+        if (row.PageFeatures.PageBorder.Present)
+            parts.Add("page-border");
+        if (row.PageFeatures.Watermark.Present)
+            parts.Add("watermark");
+        if (row.HeaderFooters.SlotCount > 0)
+            parts.Add("header-footer");
+        if (row.Fields.HasPageFields)
+            parts.Add("PAGE");
+        if (row.Fields.HasNumPagesFields)
+            parts.Add("NUMPAGES");
+        return parts.Count == 0 ? "-" : FormatSummaries(parts);
+    }
 
     private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildLegalReferenceWordBaselineBlockers(
         FreeWVisualEvidenceNormalizedSummary summary,

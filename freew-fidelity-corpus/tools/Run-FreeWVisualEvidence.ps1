@@ -47,6 +47,9 @@
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/floating-wrapping-proof -ScenarioSet FloatingWrappingVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/table-pagination-page-composition-proof -ScenarioSet TablePaginationPageCompositionProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/review-compare-combine-proof -ScenarioSet ReviewCompareCombineVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
@@ -164,6 +167,10 @@ $namedScenarioSets = @{
     )
     TableLayoutProof = @(
         'table-layout-complex',
+        'table-pagination-repeat-header',
+        'table-page-composition-stress'
+    )
+    TablePaginationPageCompositionProof = @(
         'table-pagination-repeat-header',
         'table-page-composition-stress'
     )
@@ -1134,6 +1141,176 @@ function Assert-TableLayoutProofReadiness {
 
     Write-Host "Table layout proof readiness: trusted scenario rows=$trustedScenarioRows"
     Write-Host "Table layout Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+}
+
+function Assert-TablePaginationPageCompositionProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $requiredScenarioIds = @(
+        'table-pagination-repeat-header',
+        'table-page-composition-stress'
+    )
+    $selectedScenarioIds = @($requiredScenarioIds | Where-Object { $ScenarioIds -contains $_ })
+    if ($selectedScenarioIds.Count -eq 0) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Table pagination/page composition proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 40) {
+        throw "Table pagination/page composition proof readiness requires FreeW visual evidence summary schema v40 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $readinessRows = @($summary.tablePaginationProofReadiness)
+    $scenarios = @($summary.scenarios)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $blockers = @($summary.remainingEvidenceBlockers)
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $minimumTrustedOutputsByScenario = @{
+        'table-pagination-repeat-header' = 2
+        'table-page-composition-stress' = 2
+    }
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedReadinessRows = 0
+    $verifiedBaselineRows = 0
+
+    foreach ($scenarioId in $selectedScenarioIds) {
+        $requiredPages = 1..([int]$minimumTrustedOutputsByScenario[$scenarioId])
+
+        foreach ($proofRow in @($readinessRows | Where-Object { $_.scenarioId -eq $scenarioId })) {
+            if ($proofRow.status -ne 'paired-renderer-proof-ready') {
+                $notes = @($proofRow.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$proofRow.baselineReadiness
+                }
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): readiness status '$($proofRow.status)' failed ($notes)")
+                continue
+            }
+
+            if ([string]$proofRow.semanticEvidence -notmatch 'repeatedHeaderPages=') {
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing repeated-header pagination semantic evidence")
+            }
+
+            if ([string]$proofRow.semanticEvidence -notmatch 'keepRows=1') {
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing keep-together row semantic evidence")
+            }
+
+            if ($scenarioId -eq 'table-page-composition-stress') {
+                if ([string]$proofRow.semanticEvidence -notmatch 'page-border' -or
+                    [string]$proofRow.semanticEvidence -notmatch 'watermark' -or
+                    [string]$proofRow.semanticEvidence -notmatch 'header-footer' -or
+                    [string]$proofRow.semanticEvidence -notmatch 'NUMPAGES') {
+                    $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing page composition semantic evidence")
+                }
+            }
+
+            if ($proofRow.trust.passed -ne $true) {
+                $notes = @($proofRow.trust.failures) -join '; '
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): readiness trust failed ($notes)")
+            }
+
+            $verifiedReadinessRows++
+        }
+
+        foreach ($pageNumber in $requiredPages) {
+            $proofRows = @($readinessRows | Where-Object {
+                $_.scenarioId -eq $scenarioId -and
+                [int]$_.pageNumber -eq [int]$pageNumber
+            })
+            if ($proofRows.Count -eq 0) {
+                $failures.Add("${scenarioId}/p${pageNumber}: missing table pagination/page composition readiness row")
+            }
+        }
+
+        foreach ($hostId in $requiredHosts) {
+            $scenarioRows = @($scenarios | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId
+            })
+            if ($scenarioRows.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing normalized scenario row")
+                continue
+            }
+
+            $scenarioRow = $scenarioRows[0]
+            if ($scenarioRow.trust.passed -ne $true) {
+                $notes = @($scenarioRow.trust.failures) -join '; '
+                $failures.Add("${hostId}/${scenarioId}: scenario trust failed ($notes)")
+                continue
+            }
+
+            $minimumTrustedOutputs = [int]$minimumTrustedOutputsByScenario[$scenarioId]
+            if ([int]$scenarioRow.trustedOutputs -lt $minimumTrustedOutputs) {
+                $failures.Add("${hostId}/${scenarioId}: expected at least $minimumTrustedOutputs trusted output(s), found $($scenarioRow.trustedOutputs)")
+                continue
+            }
+
+            $trustedScenarioRows++
+
+            $comparisonRows = @($baselineComparisons | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.baselineScenarioId -eq $scenarioId
+            })
+            if ($comparisonRows.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+                continue
+            }
+
+            foreach ($comparison in $comparisonRows) {
+                if ($comparison.trust.passed -ne $true) {
+                    $notes = @($comparison.trust.failures) -join '; '
+                    if ([string]::IsNullOrWhiteSpace($notes)) {
+                        $notes = [string]$comparison.skipReason
+                    }
+                    $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                    continue
+                }
+
+                $baselineId = [string]$comparison.baselineId
+                if (-not $baselineId.StartsWith($scenarioId + '/', [StringComparison]::OrdinalIgnoreCase)) {
+                    $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baselineId '$baselineId' expected scenario '$scenarioId'")
+                    continue
+                }
+
+                $verifiedBaselineRows++
+            }
+        }
+
+        $hasWordBaselineUnavailable = @($baselineComparisons | Where-Object {
+            $_.scenarioId -eq $scenarioId -and
+            $_.status -eq 'word-baseline-unavailable'
+        }).Count -gt 0
+        if ($hasWordBaselineUnavailable) {
+            $blockerRows = @($blockers | Where-Object {
+                $_.blockerId -eq "${scenarioId}-word-baseline-fidelity" -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.status -eq 'word-baseline-unavailable' -and
+                $_.requiresWordBaseline -eq $true
+            })
+            if ($blockerRows.Count -eq 0) {
+                $failures.Add("${scenarioId}: missing honest word-baseline-unavailable table pagination blocker")
+            }
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Table pagination/page composition proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Table pagination/page composition proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "Table pagination/page composition semantic rows: verified rows=$verifiedReadinessRows"
+    Write-Host "Table pagination/page composition Word-baseline policy rows: verified rows=$verifiedBaselineRows"
 }
 
 function Assert-DrawingObjectVisualProofReadiness {
@@ -2124,6 +2301,7 @@ Assert-LegalReferenceSectionPageProofReadiness $summaryJson $effectiveScenarioId
 Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-FloatingWrappingProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
+Assert-TablePaginationPageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-SmartArtPolygonVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-ReviewCompareCombineVisualProofReadiness $summaryJson $effectiveScenarioIds
