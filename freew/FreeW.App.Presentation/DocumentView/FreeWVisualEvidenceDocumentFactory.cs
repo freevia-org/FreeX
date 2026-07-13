@@ -1121,6 +1121,50 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildFloatingWrapEvidenceDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph(
+            "F2-01: Floating image wrap evidence. The square-wrapped image should sit at the left margin, " +
+            "the tight-wrapped image should sit farther right, and body text should flow around both objects."));
+
+        var square = new InlineImage(BuildGeneratedWatermarkPngBytes(), widthPt: 108, heightPt: 72)
+        {
+            Wrapping = ImageWrapping.Square,
+            HorizontalOffsetPt = 40,
+            VerticalOffsetPt = 60,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            VerticalAnchor = VerticalAnchor.Page,
+            ZOrderIndex = 10,
+            AltText = "F2 square wrapped visual evidence image"
+        };
+        var squareParagraph = new Paragraph();
+        squareParagraph.Runs.Add(Run.FromImage(square));
+        squareParagraph.Runs.Add(new Run(LoremWords(92)));
+        doc.Blocks.Add(squareParagraph);
+
+        var tight = new InlineImage(BuildGeneratedWatermarkPngBytes(), widthPt: 96, heightPt: 64)
+        {
+            Wrapping = ImageWrapping.Tight,
+            HorizontalOffsetPt = 300,
+            VerticalOffsetPt = 60,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            VerticalAnchor = VerticalAnchor.Page,
+            ZOrderIndex = 11,
+            AltText = "F2 tight wrapped visual evidence image"
+        };
+        var tightParagraph = new Paragraph();
+        tightParagraph.Runs.Add(Run.FromImage(tight));
+        tightParagraph.Runs.Add(new Run(LoremWords(92)));
+        doc.Blocks.Add(tightParagraph);
+
+        for (var i = 1; i <= 4; i++)
+            doc.Blocks.Add(new Paragraph($"Floating wrap body paragraph {i}: {LoremWords(76)}"));
+
+        return doc;
+    }
+
     private static Paragraph StyledParagraph(string text, string styleId) =>
         new(text) { StyleId = styleId };
 
@@ -1764,6 +1808,19 @@ public static class FreeWVisualEvidenceDocumentFactory
         paragraph.Runs.Add(new Run(prefix));
         paragraph.Runs.Add(Run.FromEquation(equation));
         return paragraph;
+    }
+
+    private static string LoremWords(int words)
+    {
+        var source = new[]
+        {
+            "Lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing", "elit",
+            "sed", "do", "eiusmod", "tempor", "incididunt", "ut", "labore", "et",
+            "dolore", "magna", "aliqua", "Ut", "enim", "ad", "minim", "veniam",
+            "quis", "nostrud", "exercitation", "ullamco", "laboris", "nisi", "ut",
+            "aliquip", "ex", "ea", "commodo", "consequat"
+        };
+        return string.Join(" ", Enumerable.Range(0, Math.Max(1, words)).Select(i => source[i % source.Length]));
     }
 
     private static byte[] BuildGeneratedWatermarkPngBytes()

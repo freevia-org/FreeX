@@ -1760,6 +1760,12 @@ static void GenerateF2FlowCorpus(string outDir)
         Console.WriteLine("  wrote f2-hf-images.docx");
     }
 
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildFloatingWrapEvidenceDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "f2-01-float-wrap.docx"));
+        Console.WriteLine("  wrote f2-01-float-wrap.docx");
+    }
+
     // ─── 4. Footnotes ────────────────────────────────────────────────────────────────────────────
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument();

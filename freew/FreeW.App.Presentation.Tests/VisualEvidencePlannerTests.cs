@@ -381,6 +381,41 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SharedFloatingWrapFactory_BuildsWpfFloatWrapEvidenceContract()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildFloatingWrapEvidenceDocument();
+        var floatingImages = document.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(p => p.Runs)
+            .Where(r => r.Image is not null)
+            .Select(r => r.Image!)
+            .ToList();
+
+        floatingImages.Should().HaveCount(2);
+        floatingImages.Select(image => image.Wrapping).Should().BeEquivalentTo([
+            ImageWrapping.Square,
+            ImageWrapping.Tight
+        ]);
+        floatingImages.Should().OnlyContain(image =>
+            image.VerticalAnchor == VerticalAnchor.Page &&
+            image.HorizontalAnchor == HorizontalAnchor.Margin &&
+            !string.IsNullOrWhiteSpace(image.AltText));
+
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "f2-01-float-wrap",
+            document.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "f2-01-float-wrap_p1.png",
+            document: document);
+
+        expectation.DrawingObjects.FloatingObjectCount.Should().Be(2);
+        expectation.DrawingObjects.HasImages.Should().BeTrue();
+        expectation.DrawingObjects.HasSquareWrap.Should().BeTrue();
+        expectation.DrawingObjects.Objects.Should().Contain(o => o.Wrapping == ImageWrapping.Tight);
+    }
+
+    [Fact]
     public void SharedNotePlacementFactories_BuildF2NoteContracts()
     {
         var footnotes = FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument();

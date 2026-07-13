@@ -44,6 +44,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildLegalReferenceSectionPageNumbersDocument");
         source.Should().Contain("equation-structures.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument");
+        source.Should().Contain("f2-01-float-wrap.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildFloatingWrapEvidenceDocument");
         source.Should().Contain("table-layout-complex.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument");
         source.Should().Contain("table-pagination-repeat-header.docx");
