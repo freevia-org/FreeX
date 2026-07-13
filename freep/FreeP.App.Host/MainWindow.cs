@@ -156,6 +156,7 @@ public sealed class MainWindow : Window
     private StackPanel _proofingPaneRowsPanel = null!;
     private int? _selectedProofingIssueRowIndex;
     private PresentationProofingIgnoreState _proofingIgnoreState = PresentationProofingIgnoreState.Empty;
+    private PresentationProofingDictionaryState _proofingDictionaryState = PresentationProofingDictionaryState.Empty;
     private Border _mediaCaptionPaneHost = null!;
     private TextBlock _mediaCaptionPaneHeading = null!;
     private TextBlock _mediaCaptionPaneMessage = null!;
@@ -258,6 +259,9 @@ public sealed class MainWindow : Window
     internal bool IsProofingPaneIgnoreAllEnabled =>
         LastProofingPanePlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreAllCommandId)?.IsEnabled == true;
+    internal bool IsProofingPaneAddToDictionaryEnabled =>
+        LastProofingPanePlan?.Actions.SingleOrDefault(action =>
+            action.CommandId == PresentationReviewWorkflowPlanner.ProofingAddToDictionaryCommandId)?.IsEnabled == true;
     internal string ProofingPaneHeading => _proofingPaneHeading?.Text ?? string.Empty;
     internal string ProofingPaneMessage => _proofingPaneMessage?.Text ?? string.Empty;
     internal bool IsMediaCaptionPaneVisible => _mediaCaptionPaneHost?.Visibility == Visibility.Visible;
@@ -2636,7 +2640,8 @@ public sealed class MainWindow : Window
             PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
                 LastProofingExecutionPlan,
                 _selectedProofingIssueRowIndex,
-                _proofingIgnoreState);
+                _proofingIgnoreState,
+                _proofingDictionaryState);
         _selectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
             ? LastProofingPanePlan.SelectedRowIndex
             : null;
@@ -2662,7 +2667,8 @@ public sealed class MainWindow : Window
         LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
             LastProofingExecutionPlan!,
             _selectedProofingIssueRowIndex,
-            _proofingIgnoreState);
+            _proofingIgnoreState,
+            _proofingDictionaryState);
         RenderProofingPane(LastProofingPanePlan);
         _proofingPaneHost.Visibility = Visibility.Visible;
         return LastProofingPanePlan;
@@ -2706,13 +2712,15 @@ public sealed class MainWindow : Window
         {
             var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
                 LastProofingExecutionPlan!,
-                ignoreState: _proofingIgnoreState);
+                ignoreState: _proofingIgnoreState,
+                dictionaryState: _proofingDictionaryState);
             LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
                 LastProofingExecutionPlan!,
                 PresentationReviewWorkflowPlanner.NormalizeProofingSelectionAfterCorrection(
                     previousSelection,
                     refreshed),
-                _proofingIgnoreState);
+                _proofingIgnoreState,
+                _proofingDictionaryState);
             _selectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
                 ? LastProofingPanePlan.SelectedRowIndex
                 : null;
@@ -2747,15 +2755,29 @@ public sealed class MainWindow : Window
         return RefreshProofingPaneAfterIgnore(previousSelection);
     }
 
+    internal PresentationProofingPanePlan AddSelectedProofingWordToDictionary()
+    {
+        if (LastProofingPanePlan is null)
+            ShowProofingPane();
+
+        var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
+        _proofingDictionaryState = PresentationReviewWorkflowPlanner.AddProofingDictionaryWord(
+            _proofingDictionaryState,
+            LastProofingPanePlan.SelectedRow);
+        return RefreshProofingPaneAfterIgnore(previousSelection);
+    }
+
     private PresentationProofingPanePlan RefreshProofingPaneAfterIgnore(int previousSelection)
     {
         var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
             LastProofingExecutionPlan!,
-            ignoreState: _proofingIgnoreState);
+            ignoreState: _proofingIgnoreState,
+            dictionaryState: _proofingDictionaryState);
         LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
             LastProofingExecutionPlan!,
             PresentationReviewWorkflowPlanner.NormalizeProofingSelectionAfterIgnore(previousSelection, refreshed),
-            _proofingIgnoreState);
+            _proofingIgnoreState,
+            _proofingDictionaryState);
         _selectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
             ? LastProofingPanePlan.SelectedRowIndex
             : null;
@@ -2839,6 +2861,21 @@ public sealed class MainWindow : Window
             IgnoreAllSelectedProofingIssues();
         };
 
+        var addToDictionary = new Button
+        {
+            Content = row.AddToDictionaryAction.Label,
+            Tag = row.RowIndex,
+            MinWidth = 120,
+            Margin = new Thickness(8, 8, 0, 0),
+            IsEnabled = row.AddToDictionaryAction.IsEnabled,
+            ToolTip = row.AddToDictionaryAction.DisabledReason,
+        };
+        addToDictionary.Click += (_, _) =>
+        {
+            SelectProofingIssueRow(row.RowIndex);
+            AddSelectedProofingWordToDictionary();
+        };
+
         var select = new Button
         {
             Content = "Select",
@@ -2853,6 +2890,7 @@ public sealed class MainWindow : Window
         buttons.Children.Add(action);
         buttons.Children.Add(ignore);
         buttons.Children.Add(ignoreAll);
+        buttons.Children.Add(addToDictionary);
         buttons.Children.Add(select);
 
         var panel = new StackPanel { Orientation = Orientation.Vertical };

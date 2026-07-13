@@ -3111,12 +3111,16 @@ public sealed class PresentationReviewWorkflowPlannerTests
             row.IgnoreAction.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreCommandId &&
             row.IgnoreAction.IsEnabled &&
             row.IgnoreAllAction.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreAllCommandId &&
-            row.IgnoreAllAction.IsEnabled);
+            row.IgnoreAllAction.IsEnabled &&
+            row.AddToDictionaryAction.CommandId == PresentationReviewWorkflowPlanner.ProofingAddToDictionaryCommandId &&
+            row.AddToDictionaryAction.IsEnabled);
         plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ProofingApplyCorrectionCommandId)
             .IsEnabled.Should().BeTrue();
         plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreCommandId)
             .IsEnabled.Should().BeTrue();
         plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreAllCommandId)
+            .IsEnabled.Should().BeTrue();
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ProofingAddToDictionaryCommandId)
             .IsEnabled.Should().BeTrue();
     }
 
@@ -3223,6 +3227,100 @@ public sealed class PresentationReviewWorkflowPlannerTests
 
         PresentationReviewWorkflowPlanner.AddProofingIgnoredIssueGroup(ignoreState, initial.SelectedRow)
             .IgnoredIssueGroups.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void BuildProofingPanePlan_AddToDictionarySuppressesMatchingMisspellingAcrossScopes()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Title eror";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Body",
+            Text = "Body EROR and teh"
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Results table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Cell eror") }
+                        }
+                    }
+                }
+            }
+        });
+        slide.Notes = TextBody("Notes eror");
+        slide.Comments.Add(new SlideComment
+        {
+            Text = "Comment eror",
+            Replies =
+            {
+                new SlideCommentReply { Text = "Reply eror" }
+            }
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var initial = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+        var dictionaryState = PresentationReviewWorkflowPlanner.AddProofingDictionaryWord(
+            PresentationProofingDictionaryState.Empty,
+            initial.SelectedRow);
+        var filtered = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            execution,
+            dictionaryState: dictionaryState);
+
+        execution.Issues.Where(issue =>
+                string.Equals(issue.Text, "eror", StringComparison.OrdinalIgnoreCase) &&
+                issue.Message == PresentationReviewWorkflowPlanner.ProofingPossibleMisspellingMessage)
+            .Select(issue => issue.Scope.Kind)
+            .Should().Equal(
+                PresentationProofingScopeKind.SlideTitle,
+                PresentationProofingScopeKind.ShapeText,
+                PresentationProofingScopeKind.TableCellText,
+                PresentationProofingScopeKind.SpeakerNotes,
+                PresentationProofingScopeKind.Comment,
+                PresentationProofingScopeKind.CommentReply);
+        dictionaryState.NormalizedWords.Should().Equal("EROR");
+        filtered.IssueCount.Should().Be(1);
+        filtered.SelectedRow!.Text.Should().Be("teh");
+        filtered.SelectedRow.Scope.Kind.Should().Be(PresentationProofingScopeKind.ShapeText);
+
+        PresentationReviewWorkflowPlanner.AddProofingDictionaryWord(dictionaryState, initial.SelectedRow)
+            .NormalizedWords.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void BuildProofingPanePlan_AddToDictionaryIsDisabledForGrammarAndPunctuationIssues()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "A apple. bad punctuation!!";
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+
+        plan.Rows.Should().OnlyContain(row =>
+            row.Message != PresentationReviewWorkflowPlanner.ProofingPossibleMisspellingMessage);
+        plan.Rows.Should().OnlyContain(row =>
+            !row.AddToDictionaryAction.IsEnabled);
+        plan.SelectedRow!.AddToDictionaryAction.DisabledReason.Should()
+            .Be(PresentationReviewWorkflowPlanner.ProofingCannotAddToDictionaryMessage);
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ProofingAddToDictionaryCommandId)
+            .IsEnabled.Should().BeFalse();
+        PresentationReviewWorkflowPlanner.AddProofingDictionaryWord(
+                PresentationProofingDictionaryState.Empty,
+                plan.SelectedRow)
+            .NormalizedWords.Should().BeEmpty();
     }
 
     [Fact]

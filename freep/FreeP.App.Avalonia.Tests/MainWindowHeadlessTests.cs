@@ -2903,6 +2903,48 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ProofingPane_add_to_dictionary_uses_shared_session_state()
+    {
+        PresentationProofingPanePlan? opened = null;
+        PresentationProofingPanePlan? afterDictionary = null;
+        var addToDictionaryEnabled = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Title eror";
+            window.Editor.CurrentSlide.Shapes.Add(new SlideShape
+            {
+                Id = 724,
+                Name = "Body",
+                Text = "Body EROR and teh",
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Comment eror",
+                Idx = 1,
+            });
+
+            opened = window.ShowProofingPane();
+            addToDictionaryEnabled = window.IsProofingPaneAddToDictionaryEnabled;
+            afterDictionary = window.AddSelectedProofingWordToDictionary();
+        });
+
+        if (!ran) return;
+        opened.Should().NotBeNull();
+        opened!.IssueCount.Should().Be(4);
+        opened.Actions.Select(action => action.CommandId).Should().Contain(
+            PresentationReviewWorkflowPlanner.ProofingAddToDictionaryCommandId);
+        addToDictionaryEnabled.Should().BeTrue();
+        afterDictionary.Should().NotBeNull();
+        afterDictionary!.IssueCount.Should().Be(1);
+        afterDictionary.SelectedRow!.Text.Should().Be("teh");
+        afterDictionary.SelectedRow.Scope.Kind.Should().Be(PresentationProofingScopeKind.ShapeText);
+    }
+
+    [Fact]
     public async Task ReadingOrderPane_moves_nested_group_child_through_shared_plan()
     {
         PresentationReadingOrderPlan? initialPlan = null;

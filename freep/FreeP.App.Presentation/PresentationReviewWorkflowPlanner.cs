@@ -31,6 +31,7 @@ public enum PresentationReviewWorkflowIntentKind
     SelectProofingIssue,
     IgnoreProofingIssue,
     IgnoreAllProofingIssues,
+    AddProofingWordToDictionary,
     ApplyProofingCorrection
 }
 
@@ -541,6 +542,12 @@ public sealed record PresentationProofingIgnoreState(
     public static PresentationProofingIgnoreState Empty { get; } = new([], []);
 }
 
+public sealed record PresentationProofingDictionaryState(
+    IReadOnlyList<string> NormalizedWords)
+{
+    public static PresentationProofingDictionaryState Empty { get; } = new([]);
+}
+
 public sealed record PresentationProofingExecutionPlan(
     bool CanRun,
     PresentationWorkflowCapabilityStatus Status,
@@ -565,7 +572,8 @@ public sealed record PresentationProofingIssueRowPlan(
     bool IsSelected,
     PresentationReviewWorkflowActionPlan CorrectionAction,
     PresentationReviewWorkflowActionPlan IgnoreAction,
-    PresentationReviewWorkflowActionPlan IgnoreAllAction);
+    PresentationReviewWorkflowActionPlan IgnoreAllAction,
+    PresentationReviewWorkflowActionPlan AddToDictionaryAction);
 
 public sealed record PresentationProofingPanePlan(
     bool CanRun,
@@ -714,6 +722,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string ProofingApplyCorrectionCommandId = "freep.review.proofing.apply-correction";
     public const string ProofingIgnoreCommandId = "freep.review.proofing.ignore";
     public const string ProofingIgnoreAllCommandId = "freep.review.proofing.ignore-all";
+    public const string ProofingAddToDictionaryCommandId = "freep.review.proofing.add-to-dictionary";
     public const string InsertLinkCommandId = "freep.insert-link";
 
     public const string MissingSlideMessage = "Select a slide before adding a comment.";
@@ -766,8 +775,14 @@ public static class PresentationReviewWorkflowPlanner
         "Select a proofing issue before applying a correction.";
     public const string ProofingMissingIgnoreIssueMessage =
         "Select a proofing issue before ignoring it.";
+    public const string ProofingMissingDictionaryIssueMessage =
+        "Select a spelling issue before adding it to the dictionary.";
+    public const string ProofingCannotAddToDictionaryMessage =
+        "Only spelling issues backed by a single word can be added to the dictionary.";
     public const string ProofingNoSuggestionMessage =
         "No replacement suggestion is available for the selected proofing issue.";
+    public const string ProofingPossibleMisspellingMessage =
+        "Possible misspelling.";
     public const string ProofingWhitespaceBeforePunctuationMessage =
         "Remove the space before punctuation.";
     public const string ProofingMissingSpaceAfterSentencePunctuationMessage =
@@ -2110,13 +2125,16 @@ public static class PresentationReviewWorkflowPlanner
     public static PresentationProofingPanePlan BuildProofingPanePlan(
         PresentationProofingExecutionPlan executionPlan,
         int? selectedRowIndex = null,
-        PresentationProofingIgnoreState? ignoreState = null)
+        PresentationProofingIgnoreState? ignoreState = null,
+        PresentationProofingDictionaryState? dictionaryState = null)
     {
         ArgumentNullException.ThrowIfNull(executionPlan);
 
         ignoreState ??= PresentationProofingIgnoreState.Empty;
+        dictionaryState ??= PresentationProofingDictionaryState.Empty;
         var visibleIssues = executionPlan.Issues
             .Where(issue => !IsProofingIssueIgnored(issue, ignoreState))
+            .Where(issue => !IsProofingIssueInDictionary(issue, dictionaryState))
             .ToArray();
         var normalizedSelection = NormalizeProofingIssueSelection(
             visibleIssues.Length,
@@ -2129,10 +2147,16 @@ public static class PresentationReviewWorkflowPlanner
                     suggestion.Length > 0 &&
                     !string.Equals(issue.Text, suggestion, StringComparison.Ordinal);
                 var canIgnore = normalizedSelection == index;
+                var canAddToDictionary = canIgnore && TryGetDictionaryWordKey(issue, out _);
                 var disabledReason = normalizedSelection == index
                     ? canApply ? null : ProofingNoSuggestionMessage
                     : ProofingMissingIssueMessage;
                 var ignoreDisabledReason = canIgnore ? null : ProofingMissingIgnoreIssueMessage;
+                var dictionaryDisabledReason = normalizedSelection != index
+                    ? ProofingMissingDictionaryIssueMessage
+                    : canAddToDictionary
+                        ? null
+                        : ProofingCannotAddToDictionaryMessage;
 
                 return new PresentationProofingIssueRowPlan(
                     index,
@@ -2166,13 +2190,21 @@ public static class PresentationReviewWorkflowPlanner
                         PresentationReviewWorkflowIntentKind.IgnoreAllProofingIssues,
                         canIgnore,
                         executionPlan.Status,
-                        ignoreDisabledReason));
+                        ignoreDisabledReason),
+                    new PresentationReviewWorkflowActionPlan(
+                        ProofingAddToDictionaryCommandId,
+                        "Add to Dictionary",
+                        PresentationReviewWorkflowIntentKind.AddProofingWordToDictionary,
+                        canAddToDictionary,
+                        executionPlan.Status,
+                        dictionaryDisabledReason));
             })
             .ToArray();
 
         var selectedAction = rows.FirstOrDefault(row => row.IsSelected)?.CorrectionAction;
         var selectedIgnoreAction = rows.FirstOrDefault(row => row.IsSelected)?.IgnoreAction;
         var selectedIgnoreAllAction = rows.FirstOrDefault(row => row.IsSelected)?.IgnoreAllAction;
+        var selectedAddToDictionaryAction = rows.FirstOrDefault(row => row.IsSelected)?.AddToDictionaryAction;
         var applyAction = selectedAction ?? new PresentationReviewWorkflowActionPlan(
             ProofingApplyCorrectionCommandId,
             "Change",
@@ -2194,6 +2226,13 @@ public static class PresentationReviewWorkflowPlanner
             false,
             executionPlan.Status,
             visibleIssues.Length == 0 ? ProofingNoIssuesMessage : ProofingMissingIgnoreIssueMessage);
+        var addToDictionaryAction = selectedAddToDictionaryAction ?? new PresentationReviewWorkflowActionPlan(
+            ProofingAddToDictionaryCommandId,
+            "Add to Dictionary",
+            PresentationReviewWorkflowIntentKind.AddProofingWordToDictionary,
+            false,
+            executionPlan.Status,
+            visibleIssues.Length == 0 ? ProofingNoIssuesMessage : ProofingMissingDictionaryIssueMessage);
 
         return new PresentationProofingPanePlan(
             executionPlan.CanRun,
@@ -2202,7 +2241,7 @@ public static class PresentationReviewWorkflowPlanner
             visibleIssues.Length,
             normalizedSelection,
             rows,
-            [.. executionPlan.Actions, applyAction, ignoreAction, ignoreAllAction],
+            [.. executionPlan.Actions, applyAction, ignoreAction, ignoreAllAction, addToDictionaryAction],
             visibleIssues.Length == 0 ? ProofingNoIssuesMessage : executionPlan.Message);
     }
 
@@ -2258,6 +2297,28 @@ public static class PresentationReviewWorkflowPlanner
             return ignoreState;
 
         return ignoreState with { IgnoredIssueGroups = [.. ignoreState.IgnoredIssueGroups, group] };
+    }
+
+    public static PresentationProofingDictionaryState AddProofingDictionaryWord(
+        PresentationProofingDictionaryState? dictionaryState,
+        PresentationProofingIssueRowPlan? row)
+    {
+        dictionaryState ??= PresentationProofingDictionaryState.Empty;
+        if (row is null)
+            return dictionaryState;
+
+        var issue = new PresentationProofingIssueDescriptor(
+            row.Scope,
+            row.Start,
+            row.Length,
+            row.Text,
+            row.Message);
+        if (!TryGetDictionaryWordKey(issue, out var normalizedWord))
+            return dictionaryState;
+
+        return dictionaryState.NormalizedWords.Contains(normalizedWord, StringComparer.Ordinal)
+            ? dictionaryState
+            : dictionaryState with { NormalizedWords = [.. dictionaryState.NormalizedWords, normalizedWord] };
     }
 
     public static PresentationProofingCorrectionMutationPlan TryApplyProofingCorrection(
@@ -2491,6 +2552,12 @@ public static class PresentationReviewWorkflowPlanner
                 string.Equals(group.NormalizedText, NormalizeProofingIssueTextKey(issue.Text), StringComparison.Ordinal) &&
                 string.Equals(group.Message, issue.Message, StringComparison.Ordinal));
 
+    private static bool IsProofingIssueInDictionary(
+        PresentationProofingIssueDescriptor issue,
+        PresentationProofingDictionaryState dictionaryState)
+        => TryGetDictionaryWordKey(issue, out var normalizedWord) &&
+            dictionaryState.NormalizedWords.Contains(normalizedWord, StringComparer.Ordinal);
+
     private static bool IsSameProofingIssueOccurrence(
         PresentationProofingIssueDescriptor issue,
         PresentationProofingIgnoredIssueDescriptor ignoredIssue)
@@ -2523,6 +2590,26 @@ public static class PresentationReviewWorkflowPlanner
     private static string NormalizeProofingIssueTextKey(string text)
         => text.ToUpperInvariant();
 
+    private static bool TryGetDictionaryWordKey(
+        PresentationProofingIssueDescriptor issue,
+        out string normalizedWord)
+    {
+        normalizedWord = string.Empty;
+        if (!string.Equals(issue.Message, ProofingPossibleMisspellingMessage, StringComparison.Ordinal))
+            return false;
+
+        var words = EnumerateProofingWords(issue.Text).ToArray();
+        if (words.Length != 1 ||
+            words[0].Start != 0 ||
+            words[0].Length != issue.Text.Length)
+        {
+            return false;
+        }
+
+        normalizedWord = NormalizeProofingIssueTextKey(words[0].Text);
+        return normalizedWord.Length > 0;
+    }
+
     private static IEnumerable<PresentationProofingIssueMatch> ScanBuiltInProofingIssues(
         PresentationProofingScopeDescriptor scope)
     {
@@ -2539,7 +2626,7 @@ public static class PresentationReviewWorkflowPlanner
                     index,
                     typo.Key.Length,
                     scope.Text.Substring(index, typo.Key.Length),
-                    "Possible misspelling.");
+                    ProofingPossibleMisspellingMessage);
                 start = index + typo.Key.Length;
             }
         }

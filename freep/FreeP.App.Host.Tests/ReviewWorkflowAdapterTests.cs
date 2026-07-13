@@ -238,6 +238,45 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_ProofingAddToDictionary_UsesSharedSessionState()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Title = "Title eror";
+            window.Editor.CurrentSlide.Shapes.Add(new SlideShape
+            {
+                Id = 724,
+                Name = "Body",
+                Text = "Body EROR and teh"
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Comment eror",
+                Idx = 1
+            });
+
+            var opened = window.ShowProofingPane();
+            window.IsProofingPaneAddToDictionaryEnabled.Should().BeTrue();
+            opened.Actions.Select(action => action.CommandId).Should().Contain(
+                PresentationReviewWorkflowPlanner.ProofingAddToDictionaryCommandId);
+
+            var afterDictionary = window.AddSelectedProofingWordToDictionary();
+
+            afterDictionary.IssueCount.Should().Be(1);
+            afterDictionary.SelectedRow!.Text.Should().Be("teh");
+            afterDictionary.SelectedRow.Scope.Kind.Should().Be(PresentationProofingScopeKind.ShapeText);
+            window.IsProofingPaneAddToDictionaryEnabled.Should().BeTrue();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ReviewCommentReply_RoutesThroughSharedMutationPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
