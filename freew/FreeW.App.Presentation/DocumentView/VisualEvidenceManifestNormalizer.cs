@@ -148,7 +148,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 30;
+    public const int SummarySchemaVersion = 31;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -208,7 +208,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static IReadOnlyList<string> FieldRendererScenarioIds { get; } =
     [
         "field-page-number-variants",
-        "references-heavy-fields"
+        "references-heavy-fields",
+        "legal-reference-section-page-numbers"
     ];
     public static IReadOnlyList<string> EquationRendererScenarioIds { get; } =
     [
@@ -260,6 +261,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "category=Cases|entry=Example v. FreeW, 123 F.4th 456 (2026)|kind=explicit-page-numbers|pages=1,2|text=1, 2",
         "category=Statutes|entry=Free Software Evidence Act, 42 U.S.C. 2026|kind=explicit-page-numbers|pages=1|text=1"
+    ];
+
+    private static readonly string[] LegalReferenceRequiredToaPageReferenceSignatures =
+    [
+        "category=Cases|entry=Matter of Sectioned Pages, 101 F. Supp. 3d 2026 (D. FreeW)|kind=section-formatted-page-numbers|pages=1,2|text=i, 1",
+        "category=Statutes|entry=Restart Numbering Act, 7 FreeW Code 13|kind=explicit-page-numbers|pages=2|text=1"
     ];
 
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =
@@ -1919,6 +1926,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 "scenario expects generated Table of Authorities page references but the page expectation records none");
         }
         ValidateReferencesHeavyTableOfAuthoritiesEvidence(row, rowFailures);
+        ValidateLegalReferenceTableOfAuthoritiesEvidence(row, rowFailures);
         if (composition.ExpectsTables && row.PageExpectation.Tables.TableCount <= 0)
             rowFailures.Add("scenario expects table layout but the page expectation records no tables");
         if (composition.ExpectsFloatingObjects && row.PageExpectation.DrawingObjects.FloatingObjectCount <= 0)
@@ -2033,6 +2041,78 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add(
                 "references-heavy TOA evidence contains weak generated page-reference signature(s): " +
                 string.Join("; ", weakReferences));
+        }
+    }
+
+    private static void ValidateLegalReferenceTableOfAuthoritiesEvidence(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        if (!string.Equals(row.ScenarioId, "legal-reference-section-page-numbers", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var fields = row.PageExpectation.Fields;
+        var toa = row.PageExpectation.TableOfAuthorities;
+
+        if (!fields.ComplexFieldKeywords.Contains("TOA", StringComparer.OrdinalIgnoreCase))
+        {
+            rowFailures.Add(
+                "legal-reference section page-number evidence must include cached TOA field metadata");
+        }
+
+        if (!fields.ComplexFieldResultSignatures.Contains("TOA=Cases\\ti, 1", StringComparer.OrdinalIgnoreCase))
+        {
+            rowFailures.Add(
+                "legal-reference field evidence must include cached TOA displayed page-reference sentinel 'TOA=Cases\\ti, 1'");
+        }
+
+        if (!toa.HasGeneratedTable || toa.EntryCount < 2)
+        {
+            rowFailures.Add(
+                "legal-reference TOA evidence must include shared generated Table of Authorities entries");
+        }
+
+        if (toa.EntryWithPageReferenceCount < 2)
+        {
+            rowFailures.Add(
+                "legal-reference TOA evidence must include generated page references for both authority entries");
+        }
+
+        foreach (var signature in LegalReferenceRequiredToaPageReferenceSignatures)
+        {
+            if (!toa.PageReferenceSignatures.Contains(signature, StringComparer.Ordinal))
+            {
+                rowFailures.Add(
+                    $"legal-reference TOA evidence is missing generated page-reference signature '{signature}'");
+            }
+        }
+
+        var sectionFormatted = toa.PageReferences
+            .Where(reference => string.Equals(
+                reference.PageReferenceKind,
+                "section-formatted-page-numbers",
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (sectionFormatted.Count == 0)
+        {
+            rowFailures.Add(
+                "legal-reference TOA evidence must include a section-formatted page-reference row");
+        }
+
+        foreach (var reference in sectionFormatted)
+        {
+            if (!reference.PageNumbers.Contains(1) || !reference.PageNumbers.Contains(2))
+            {
+                rowFailures.Add(
+                    "legal-reference section-formatted TOA evidence must preserve physical pages 1 and 2");
+            }
+
+            if (!reference.DisplayedPageReferences.Contains("i", StringComparer.OrdinalIgnoreCase)
+                || !reference.DisplayedPageReferences.Contains("1", StringComparer.OrdinalIgnoreCase))
+            {
+                rowFailures.Add(
+                    "legal-reference section-formatted TOA evidence must preserve displayed page references 'i' and '1'");
+            }
         }
     }
 
@@ -2889,8 +2969,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
                 ValidateRendererPairRow("field renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
                 ValidateFieldPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
-                if (string.Equals(scenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
-                    ValidateReferencesHeavyToaPairRow(pageNumber, wpf, avalonia, failures);
+                if (IsTableOfAuthoritiesFieldScenario(scenarioId))
+                    ValidateToaFieldPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
     }
@@ -3757,13 +3837,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
         string.Equals(scenarioId, "review-proofing-visual-depth", StringComparison.OrdinalIgnoreCase)
         || string.Equals(scenarioId, "review-protection-proofing-comments-only", StringComparison.OrdinalIgnoreCase);
 
-    private static void ValidateReferencesHeavyToaPairRow(
+    private static bool IsTableOfAuthoritiesFieldScenario(string scenarioId) =>
+        string.Equals(scenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(scenarioId, "legal-reference-section-page-numbers", StringComparison.OrdinalIgnoreCase);
+
+    private static void ValidateToaFieldPairRow(
+        string scenarioId,
         int pageNumber,
         FreeWVisualEvidenceNormalizedRow wpf,
         FreeWVisualEvidenceNormalizedRow avalonia,
         List<string> failures)
     {
-        var pairName = $"field renderer pair 'references-heavy-fields' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var pairName = $"field renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
         var wpfToa = wpf.TableOfAuthorities;
         var avaloniaToa = avalonia.TableOfAuthorities;
 

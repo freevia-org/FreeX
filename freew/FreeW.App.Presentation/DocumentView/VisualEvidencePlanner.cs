@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Ribbon;
 
@@ -241,6 +242,7 @@ public sealed record FreeWVisualTableOfAuthoritiesPageReference(
     string EntryText,
     string PageReferenceText,
     IReadOnlyList<int> PageNumbers,
+    IReadOnlyList<string> DisplayedPageReferences,
     string PageReferenceKind,
     bool HasPageReferenceSentinel,
     string StableSignature);
@@ -443,7 +445,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 20;
+    public const int SchemaVersion = 21;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -577,6 +579,27 @@ public static class FreeWVisualEvidencePlanner
                 "body-text"
             ],
             "references-heavy-fields_p{page}.png",
+            2,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition),
+        new(
+            "legal-reference-section-page-numbers",
+            "Legal/reference Table of Authorities evidence with section-formatted displayed page references.",
+            [
+                "references",
+                "toa-fields",
+                "cached-toa-page-number-sentinel",
+                "generated-toa-page-references",
+                "section-formatted-page-numbers",
+                "legal-authorities",
+                "generated-table-of-authorities",
+                "page-composition",
+                "print-layout",
+                "multi-section",
+                "multi-page",
+                "body-text"
+            ],
+            "legal-reference-section-page-numbers_p{page}.png",
             2,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition),
@@ -2097,6 +2120,7 @@ public static class FreeWVisualEvidencePlanner
 
         var entryCount = 0;
         var pageReferences = new List<FreeWVisualTableOfAuthoritiesPageReference>();
+        var sourcePageReferences = BuildSourceToaPageReferenceEvidence(document);
         var categories = new List<string>();
         var currentCategory = string.Empty;
         foreach (var paragraph in document.Blocks.OfType<Paragraph>())
@@ -2122,8 +2146,25 @@ public static class FreeWVisualEvidencePlanner
                 continue;
 
             var pageNumbers = ParsePageNumbers(extracted.Value.PageReferenceText);
+            var displayedPageReferences = ParseDisplayedPageReferences(extracted.Value.PageReferenceText);
             var category = string.IsNullOrWhiteSpace(currentCategory) ? "Uncategorized" : currentCategory;
-            var referenceKind = ClassifyTableOfAuthoritiesPageReference(extracted.Value.PageReferenceText, pageNumbers);
+            var sourceKey = BuildToaEvidenceKey(category, extracted.Value.EntryText);
+            if (sourcePageReferences.TryGetValue(sourceKey, out var sourceReferences))
+            {
+                var matchingPhysicalPages = sourceReferences
+                    .Where(reference => displayedPageReferences.Contains(reference.DisplayText, StringComparer.OrdinalIgnoreCase))
+                    .Select(reference => reference.PhysicalPageNumber)
+                    .Distinct()
+                    .OrderBy(page => page)
+                    .ToList();
+                if (matchingPhysicalPages.Count > 0)
+                    pageNumbers = matchingPhysicalPages;
+            }
+
+            var referenceKind = ClassifyTableOfAuthoritiesPageReference(
+                extracted.Value.PageReferenceText,
+                pageNumbers,
+                displayedPageReferences);
             var stableSignature = BuildTableOfAuthoritiesPageReferenceSignature(
                 category,
                 extracted.Value.EntryText,
@@ -2135,6 +2176,7 @@ public static class FreeWVisualEvidencePlanner
                 extracted.Value.EntryText,
                 extracted.Value.PageReferenceText,
                 pageNumbers,
+                displayedPageReferences,
                 referenceKind,
                 IsStrongTableOfAuthoritiesPageReference(referenceKind, pageNumbers),
                 stableSignature));
@@ -2982,8 +3024,15 @@ public static class FreeWVisualEvidencePlanner
 
     private static string ClassifyTableOfAuthoritiesPageReference(
         string pageReferenceText,
-        IReadOnlyList<int> pageNumbers)
+        IReadOnlyList<int> pageNumbers,
+        IReadOnlyList<string> displayedPageReferences)
     {
+        if (pageNumbers.Count > 0
+            && displayedPageReferences.Any(reference =>
+                !int.TryParse(reference, NumberStyles.Integer, CultureInfo.InvariantCulture, out _)))
+        {
+            return "section-formatted-page-numbers";
+        }
         if (pageNumbers.Count > 0)
             return "explicit-page-numbers";
         if (string.Equals(pageReferenceText.Trim(), "passim", StringComparison.OrdinalIgnoreCase))
@@ -3086,6 +3135,47 @@ public static class FreeWVisualEvidencePlanner
             .Distinct()
             .OrderBy(page => page)
             .ToList();
+
+    private static IReadOnlyList<string> ParseDisplayedPageReferences(string pageReferenceText) =>
+        pageReferenceText
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .Where(segment => !string.IsNullOrWhiteSpace(segment))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(segment => segment, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static Dictionary<string, IReadOnlyList<SourceToaPageReferenceEvidence>> BuildSourceToaPageReferenceEvidence(
+        TextDocument document)
+    {
+        var references = PageNumberFormatDialogPlanner.BuildCitationPageReferencePlans(document)
+            .Where(plan => !string.IsNullOrWhiteSpace(plan.Citation.LongCitation))
+            .GroupBy(
+                plan => BuildToaEvidenceKey(
+                    TableOfAuthorities.CategoryHeading(plan.Citation.Category),
+                    plan.Citation.LongCitation),
+                StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<SourceToaPageReferenceEvidence>)group
+                    .GroupBy(
+                        plan => (plan.PhysicalPageNumber, plan.DisplayText),
+                        plan => plan,
+                        EqualityComparer<(int PhysicalPageNumber, string DisplayText)>.Default)
+                    .Select(g => new SourceToaPageReferenceEvidence(
+                        g.Key.PhysicalPageNumber,
+                        g.Key.DisplayText))
+                    .OrderBy(reference => reference.PhysicalPageNumber)
+                    .ThenBy(reference => reference.DisplayText, StringComparer.OrdinalIgnoreCase)
+                    .ToList(),
+                StringComparer.OrdinalIgnoreCase);
+
+        return references;
+    }
+
+    private static string BuildToaEvidenceKey(string category, string entryText) =>
+        NormalizeEvidenceSignatureText(category) + "|" + NormalizeEvidenceSignatureText(entryText);
+
+    private sealed record SourceToaPageReferenceEvidence(int PhysicalPageNumber, string DisplayText);
 
     private static TextDocument BuildSectionGeometrySurfaceDocument(
         TextDocument source,

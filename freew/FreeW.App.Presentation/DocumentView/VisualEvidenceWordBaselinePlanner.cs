@@ -33,6 +33,7 @@ public static class FreeWWordBaselineEvidencePlanner
         "f2-hf-images",
         "field-page-number-variants",
         "references-heavy-fields",
+        "legal-reference-section-page-numbers",
         "equation-structures",
         "f2-footnotes",
         "f2-endnotes",

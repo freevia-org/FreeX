@@ -125,6 +125,36 @@ public sealed class PageNumberFormatDialogPlannerTests
     }
 
     [Fact]
+    public void BuildCitationPageReferencePlans_PreservesPhysicalPageAndSectionDisplayText()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var frontMatterPage = document.Page.Clone();
+        frontMatterPage.PageNumberFormat = PageNumberFormat.LowerRoman;
+        frontMatterPage.PageNumberStartAt = 1;
+        document.Page.PageNumberFormat = PageNumberFormat.Decimal;
+        document.Page.PageNumberStartAt = 1;
+        var citation = new Citation("Case A", CitationCategory.Cases);
+        document.Blocks.Add(CitationParagraph("Front", citation));
+        document.Blocks.Add(new Paragraph("section end")
+        {
+            SectionBreak = new Section(frontMatterPage, SectionBreakKind.NextPage)
+        });
+        document.Blocks.Add(CitationParagraph("Main", citation));
+
+        var plans = PageNumberFormatDialogPlanner.BuildCitationPageReferencePlans(document);
+
+        plans.Select(plan => plan.PhysicalPageNumber).Should().Equal(1, 2);
+        plans.Select(plan => plan.SectionRelativePageNumber).Should().Equal(1, 1);
+        plans.Select(plan => plan.LogicalPageNumber).Should().Equal(1, 1);
+        plans.Select(plan => plan.DisplayText).Should().Equal("i", "1");
+
+        var resolver = PageNumberFormatDialogPlanner.BuildCitationPageReferenceResolver(document);
+        resolver(document, 0, 1, citation).Should().Be(new ToaCitationPageReference(1, "i"));
+        resolver(document, 2, 1, citation).Should().Be(new ToaCitationPageReference(2, "1"));
+    }
+
+    [Fact]
     public void CommandValue_RoundTripsContinueAndStartAt()
     {
         var start = PageNumberFormatDialogPlanner.BuildCommandValue(PageNumberFormat.LowerRoman, 12);
@@ -167,4 +197,12 @@ public sealed class PageNumberFormatDialogPlannerTests
             new SectionHeadersFooters(),
             relativePage,
             settings);
+
+    private static Paragraph CitationParagraph(string text, Citation citation)
+    {
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run(text));
+        paragraph.Runs.Add(Run.CitationMark(citation));
+        return paragraph;
+    }
 }

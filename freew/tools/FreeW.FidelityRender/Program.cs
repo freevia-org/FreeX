@@ -1743,6 +1743,12 @@ static void GenerateF2FlowCorpus(string outDir)
     }
 
     {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildLegalReferenceSectionPageNumbersDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "legal-reference-section-page-numbers.docx"));
+        Console.WriteLine("  wrote legal-reference-section-page-numbers.docx");
+    }
+
+    {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument();
         DocxWriter.Write(doc, Path.Combine(outDir, "equation-structures.docx"));
         Console.WriteLine("  wrote equation-structures.docx");

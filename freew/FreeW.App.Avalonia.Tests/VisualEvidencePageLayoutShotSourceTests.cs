@@ -75,6 +75,10 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"references-heavy-fields\", 1)");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"references-heavy-fields\", 2)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument");
+        source.Should().Contain("legal-reference-section-page-numbers");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"legal-reference-section-page-numbers\", 1)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"legal-reference-section-page-numbers\", 2)");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildLegalReferenceSectionPageNumbersDocument");
         source.Should().Contain("equation-structures");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"equation-structures\", 1)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument");

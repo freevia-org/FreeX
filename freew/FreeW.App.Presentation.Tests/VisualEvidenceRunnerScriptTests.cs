@@ -44,6 +44,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("ReviewCompareCombineVisualProof = @(");
         source.Should().Contain("'field-page-number-variants'");
         source.Should().Contain("'references-heavy-fields'");
+        source.Should().Contain("'legal-reference-section-page-numbers'");
         source.Should().Contain("'equation-structures'");
         source.Should().Contain("'review-protection-proofing-comments-only'");
         source.Should().Contain("'page-composition-columns'");

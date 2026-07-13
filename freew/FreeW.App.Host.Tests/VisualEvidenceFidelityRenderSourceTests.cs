@@ -40,6 +40,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument");
         source.Should().Contain("references-heavy-fields.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument");
+        source.Should().Contain("legal-reference-section-page-numbers.docx");
+        source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildLegalReferenceSectionPageNumbersDocument");
         source.Should().Contain("equation-structures.docx");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument");
         source.Should().Contain("table-layout-complex.docx");

@@ -116,6 +116,7 @@ public static class FreeWVisualBaselineComparisonPlanner
             "wordart-picture-watermark-layout",
             "field-page-number-variants",
             "references-heavy-fields",
+            "legal-reference-section-page-numbers",
             "equation-structures",
             "review-compare-visual-proof",
             "review-combine-visual-proof",

@@ -78,6 +78,8 @@ static int RenderAll(string outDir)
     var fieldPageNumberP3Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 3);
     var referencesHeavyP1Path = VisualEvidenceOutputPath(outDir, "references-heavy-fields", 1);
     var referencesHeavyP2Path = VisualEvidenceOutputPath(outDir, "references-heavy-fields", 2);
+    var legalReferenceP1Path = VisualEvidenceOutputPath(outDir, "legal-reference-section-page-numbers", 1);
+    var legalReferenceP2Path = VisualEvidenceOutputPath(outDir, "legal-reference-section-page-numbers", 2);
     var equationStructuresPath = VisualEvidenceOutputPath(outDir, "equation-structures", 1);
     var headerFooterImagesP1Path = VisualEvidenceOutputPath(outDir, "f2-hf-images", 1);
     var headerFooterImagesP2Path = VisualEvidenceOutputPath(outDir, "f2-hf-images", 2);
@@ -268,6 +270,27 @@ static int RenderAll(string outDir)
         scenarioId: "references-heavy-fields",
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument,
+        pageNumber: 2,
+        pageCount: 2,
+        viewportOffsetY: 1100);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, legalReferenceP1Path,
+        width: 960, height: 1200,
+        label: "Legal Reference Section Page Numbers p1",
+        scenarioId: "legal-reference-section-page-numbers",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildLegalReferenceSectionPageNumbersDocument,
+        pageNumber: 1,
+        pageCount: 2);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, legalReferenceP2Path,
+        width: 960, height: 1200,
+        label: "Legal Reference Section Page Numbers p2",
+        scenarioId: "legal-reference-section-page-numbers",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildLegalReferenceSectionPageNumbersDocument,
         pageNumber: 2,
         pageCount: 2,
         viewportOffsetY: 1100);

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Security.Cryptography;
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
 
 namespace FreeW.App.Presentation.Tests;
@@ -19,6 +20,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-hf-images",
             "field-page-number-variants",
             "references-heavy-fields",
+            "legal-reference-section-page-numbers",
             "equation-structures",
             "f2-footnotes",
             "f2-endnotes",
@@ -143,6 +145,16 @@ public sealed class VisualEvidencePlannerTests
             "legal-authorities"]);
         referencesScenario.ExpectedOutputNamePattern.Should().Be("references-heavy-fields_p{page}.png");
         referencesScenario.MinimumExpectedOutputs.Should().Be(2);
+
+        var legalReferenceScenario = FreeWVisualEvidencePlanner.ResolveScenario("legal-reference-section-page-numbers");
+        legalReferenceScenario.ExpectedFeatureTags.Should().Contain([
+            "references",
+            "toa-fields",
+            "generated-toa-page-references",
+            "section-formatted-page-numbers",
+            "legal-authorities"]);
+        legalReferenceScenario.ExpectedOutputNamePattern.Should().Be("legal-reference-section-page-numbers_p{page}.png");
+        legalReferenceScenario.MinimumExpectedOutputs.Should().Be(2);
 
         var equationScenario = FreeWVisualEvidencePlanner.ResolveScenario("equation-structures");
         equationScenario.ExpectedFeatureTags.Should().Contain([
@@ -830,6 +842,7 @@ public sealed class VisualEvidencePlannerTests
             && reference.EntryText == "Example v. FreeW, 123 F.4th 456 (2026)"
             && reference.PageReferenceText == "1, 2").Subject;
         caseToa.PageNumbers.Should().Equal(1, 2);
+        caseToa.DisplayedPageReferences.Should().Equal("1", "2");
         caseToa.PageReferenceKind.Should().Be("explicit-page-numbers");
         caseToa.HasPageReferenceSentinel.Should().BeTrue();
         caseToa.StableSignature.Should().Be(
@@ -855,6 +868,74 @@ public sealed class VisualEvidencePlannerTests
         expectation.Fields.ComplexFieldKeywords.Should().Contain(["CITATION", "BIBLIOGRAPHY", "TOA"]);
         expectation.TableOfAuthorities.PageReferences.Select(reference => reference.PageReferenceText)
             .Should().BeEquivalentTo(["1, 2", "1"]);
+        expectation.TableOfAuthorities.PageReferenceSignatures.Should().BeEquivalentTo(toa.PageReferenceSignatures);
+    }
+
+    [Fact]
+    public void SharedLegalReferenceFactory_BuildsSectionFormattedToaPageReferenceEvidence()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildLegalReferenceSectionPageNumbersDocument();
+
+        document.Sections.Should().HaveCount(2);
+        document.Sections[0].Page.PageNumberFormat.Should().Be(PageNumberFormat.LowerRoman);
+        document.Sections[0].Page.PageNumberStartAt.Should().Be(1);
+        document.Page.PageNumberFormat.Should().Be(PageNumberFormat.Decimal);
+        document.Page.PageNumberStartAt.Should().Be(1);
+        document.Blocks.OfType<Paragraph>()
+            .Should().Contain(p => TableOfAuthorities.IsTableOfAuthoritiesParagraph(p));
+        document.Blocks.OfType<Paragraph>()
+            .Where(p => p.StyleId == TableOfAuthorities.EntryStyleId)
+            .Select(p => p.PlainText)
+            .Should().Contain([
+                "Matter of Sectioned Pages, 101 F. Supp. 3d 2026 (D. FreeW)\ti, 1",
+                "Restart Numbering Act, 7 FreeW Code 13\t1"
+            ]);
+        document.Blocks.OfType<Paragraph>()
+            .Count(p => p.PlainText.StartsWith("Main section reference body paragraph ", StringComparison.Ordinal))
+            .Should().BeGreaterThanOrEqualTo(18);
+
+        var pageReferences = PageNumberFormatDialogPlanner.BuildCitationPageReferencePlans(document);
+        pageReferences.Should().Contain(reference =>
+            reference.PhysicalPageNumber == 1
+            && reference.SectionRelativePageNumber == 1
+            && reference.DisplayText == "i");
+        pageReferences.Should().Contain(reference =>
+            reference.PhysicalPageNumber == 2
+            && reference.SectionRelativePageNumber == 1
+            && reference.DisplayText == "1");
+
+        var fields = FreeWVisualEvidencePlanner.BuildFieldExpectation(document);
+        fields.ComplexFieldKeywords.Should().Contain("TOA");
+        fields.ComplexFieldResultSignatures.Should().Contain("TOA=Cases\\ti, 1");
+
+        var toa = FreeWVisualEvidencePlanner.BuildTableOfAuthoritiesExpectation(document);
+        toa.EntryCount.Should().Be(2);
+        toa.EntryWithPageReferenceCount.Should().Be(2);
+        toa.HasGeneratedTable.Should().BeTrue();
+        toa.HasPageReferences.Should().BeTrue();
+        toa.HasExplicitPageNumbers.Should().BeTrue();
+        toa.PageReferenceSignatures.Should().BeEquivalentTo([
+            "category=Cases|entry=Matter of Sectioned Pages, 101 F. Supp. 3d 2026 (D. FreeW)|kind=section-formatted-page-numbers|pages=1,2|text=i, 1",
+            "category=Statutes|entry=Restart Numbering Act, 7 FreeW Code 13|kind=explicit-page-numbers|pages=2|text=1"
+        ]);
+
+        var caseToa = toa.PageReferences.Should().ContainSingle(reference =>
+            reference.Category == "Cases"
+            && reference.EntryText == "Matter of Sectioned Pages, 101 F. Supp. 3d 2026 (D. FreeW)").Subject;
+        caseToa.PageReferenceText.Should().Be("i, 1");
+        caseToa.PageNumbers.Should().Equal(1, 2);
+        caseToa.DisplayedPageReferences.Should().Equal("1", "i");
+        caseToa.PageReferenceKind.Should().Be("section-formatted-page-numbers");
+        caseToa.HasPageReferenceSentinel.Should().BeTrue();
+
+        var expectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "legal-reference-section-page-numbers",
+            document.Page,
+            pageNumber: 2,
+            pageCount: 2,
+            outputName: "legal-reference-section-page-numbers_p2.png",
+            document: document);
+        expectation.ExpectedOutputName.Should().Be("legal-reference-section-page-numbers_p2.png");
         expectation.TableOfAuthorities.PageReferenceSignatures.Should().BeEquivalentTo(toa.PageReferenceSignatures);
     }
 
@@ -1284,14 +1365,15 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(28);
-            plan.ExpectedBaselinePngCount.Should().Be(84);
+            plan.ExpectedFixtureCount.Should().Be(29);
+            plan.ExpectedBaselinePngCount.Should().Be(87);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "f2-hf-images.docx",
                 "f2-01-float-wrap.docx",
                 "field-page-number-variants.docx",
                 "references-heavy-fields.docx",
+                "legal-reference-section-page-numbers.docx",
                 "equation-structures.docx",
                 "review-proofing-visual-depth.docx",
                 "review-compare-visual-proof.docx",
@@ -1318,6 +1400,8 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("field-page-number-variants/field-page-number-variants_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "references-heavy-fields")
                 .ExpectedBaselinePaths.Should().Contain("references-heavy-fields/references-heavy-fields_p2.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "legal-reference-section-page-numbers")
+                .ExpectedBaselinePaths.Should().Contain("legal-reference-section-page-numbers/legal-reference-section-page-numbers_p2.png");
             plan.Fixtures.Single(f => f.ScenarioId == "equation-structures")
                 .ExpectedBaselinePaths.Should().Contain("equation-structures/equation-structures_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "f2-hf-images")
@@ -5610,6 +5694,78 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_TrustsLegalReferenceSectionPageNumberSignatures()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "legal-reference-section-page-numbers";
+            var wpfRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2))
+                .ToList();
+            var avaloniaRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2))
+                .ToList();
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Should().OnlyContain(row => row.Trust.Passed);
+            var wpfPage1 = summary.Evidence.Single(row =>
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.WpfHostId
+                && row.ScenarioId == scenarioId
+                && row.PageNumber == 1);
+            var caseReference = wpfPage1.TableOfAuthorities.PageReferences.Should().ContainSingle(reference =>
+                reference.EntryText == "Matter of Sectioned Pages, 101 F. Supp. 3d 2026 (D. FreeW)").Subject;
+            caseReference.PageNumbers.Should().Equal(1, 2);
+            caseReference.DisplayedPageReferences.Should().Equal("1", "i");
+            caseReference.PageReferenceKind.Should().Be("section-formatted-page-numbers");
+            wpfPage1.TableOfAuthorities.PageReferenceSignatures.Should().Contain(
+                "category=Cases|entry=Matter of Sectioned Pages, 101 F. Supp. 3d 2026 (D. FreeW)|kind=section-formatted-page-numbers|pages=1,2|text=i, 1");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ReferencesHeavyNoWordSummary_ReportsToaPageNumberEvidenceBlocker()
     {
         var root = CreateTempRoot();
@@ -6770,6 +6926,7 @@ public sealed class VisualEvidencePlannerTests
             "f2-hf-images" => FreeWVisualEvidenceDocumentFactory.BuildMultiSectionHeaderFooterImageDocument(),
             "field-page-number-variants" => FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument(),
             "references-heavy-fields" => FreeWVisualEvidenceDocumentFactory.BuildReferencesHeavyFieldDocument(),
+            "legal-reference-section-page-numbers" => FreeWVisualEvidenceDocumentFactory.BuildLegalReferenceSectionPageNumbersDocument(),
             "equation-structures" => FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument(),
             "f2-tracked-changes" => FreeWVisualEvidenceDocumentFactory.BuildTrackedChangesReviewDocument(),
             "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),

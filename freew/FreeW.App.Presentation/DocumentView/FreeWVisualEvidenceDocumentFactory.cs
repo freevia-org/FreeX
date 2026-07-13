@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
 using FreeW.Core.Model;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -245,6 +246,77 @@ public static class FreeWVisualEvidenceDocumentFactory
 
         for (var i = 1; i <= 10; i++)
             doc.Blocks.Add(new Paragraph($"Closing references paragraph {i}: confirms late-page evidence remains nonblank."));
+
+        return doc;
+    }
+
+    public static TextDocument BuildLegalReferenceSectionPageNumbersDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Properties.Title = "Legal Reference Section Page Numbers";
+        doc.Properties.Author = "FreeW Visual Evidence";
+        doc.Properties.Subject = "Section-formatted Table of Authorities page references";
+        doc.Properties.Keywords = "TOA, section page numbers, roman, restart";
+        doc.Properties.Comments = "Exercises displayed TOA page references where physical page 1 displays i and the main section restarts at 1.";
+
+        var frontMatterPage = doc.Page.Clone();
+        frontMatterPage.PageNumberFormat = PageNumberFormat.LowerRoman;
+        frontMatterPage.PageNumberStartAt = 1;
+        doc.Page.PageNumberFormat = PageNumberFormat.Decimal;
+        doc.Page.PageNumberStartAt = 1;
+
+        var sectionedCase = new Citation(
+            "Matter of Sectioned Pages, 101 F. Supp. 3d 2026 (D. FreeW)",
+            CitationCategory.Cases,
+            "Sectioned Pages");
+        var restartStatute = new Citation(
+            "Restart Numbering Act, 7 FreeW Code 13",
+            CitationCategory.Statutes,
+            "RNA");
+
+        doc.Blocks.Add(StyledParagraph("Table of Authorities - Front Matter", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The front matter uses lower-roman page numbering. The marked authority below should be " +
+            "reported by its displayed page reference i even though it is physical page 1."));
+        doc.Blocks.Add(AuthorityParagraph(
+            "Front-matter authority mark: Matter of Sectioned Pages appears before the main section restart.",
+            sectionedCase));
+
+        doc.Blocks.Add(new Paragraph("End of front matter")
+        {
+            SectionBreak = new Section(frontMatterPage, SectionBreakKind.NextPage)
+        });
+
+        doc.Blocks.Add(StyledParagraph("Main Matter", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The main matter restarts page numbering at decimal 1. The same case and a statute are marked " +
+            "here so generated TOA evidence must keep physical pages distinct from displayed page text."));
+        doc.Blocks.Add(AuthorityParagraph(
+            "Main authority marks: Matter of Sectioned Pages and the Restart Numbering Act appear after restart.",
+            sectionedCase,
+            restartStatute));
+
+        for (var i = 1; i <= 18; i++)
+        {
+            doc.Blocks.Add(new Paragraph(
+                $"Main section reference body paragraph {i}: filler keeps the generated table of authorities " +
+                "on the restarted section capture while preserving section-formatted page-reference metadata."));
+        }
+
+        doc.Blocks.Add(FieldParagraph(
+            "TOA field cache with section-formatted page-reference sentinel: ",
+            Run.ComplexFieldRun(" TOA \\c 1 \\p ", "Cases\ti, 1")));
+        doc.Blocks.AddRange(TableOfAuthoritiesRegionPlanner
+            .BuildInsertPlan(
+                doc,
+                doc.Blocks.Count,
+                new ToaOptions { TabLeader = ToaTabLeader.Dots },
+                PageNumberFormatDialogPlanner.BuildCitationPageReferenceResolver(doc))
+            .Paragraphs);
+
+        doc.Blocks.Add(new Paragraph(
+            "Closing paragraph: semantic evidence remains separate from authoritative MS Word PNG baselines."));
 
         return doc;
     }

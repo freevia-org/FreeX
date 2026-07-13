@@ -41,6 +41,16 @@ public sealed record PageNumberDisplayPlan(
     string Text,
     string? ChapterNumber = null);
 
+public sealed record PageNumberCitationReferencePlan(
+    int BlockIndex,
+    int RunIndex,
+    Citation Citation,
+    int PhysicalPageNumber,
+    int SectionIndex,
+    int SectionRelativePageNumber,
+    int LogicalPageNumber,
+    string DisplayText);
+
 public static class PageNumberFormatDialogPlanner
 {
     public const string Title = "Page Number Format";
@@ -290,6 +300,95 @@ public static class PageNumberFormatDialogPlanner
         return result;
     }
 
+    public static IReadOnlyList<PageNumberCitationReferencePlan> BuildCitationPageReferencePlans(TextDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+
+        var sections = document.Sections;
+        var plans = new List<PageNumberCitationReferencePlan>();
+        var sectionIndex = 0;
+        var sectionRelativePageNumber = 1;
+        var physicalPageNumber = 1;
+        var nextContinueValue = 1;
+        var currentSectionStart = ResolveSectionStart(sections, sectionIndex, nextContinueValue);
+
+        for (var blockIndex = 0; blockIndex < document.Blocks.Count; blockIndex++)
+        {
+            var block = document.Blocks[blockIndex];
+            if (block is not Paragraph paragraph)
+                continue;
+
+            if (paragraph.Formatting.PageBreakBefore)
+                AdvanceWithinSection();
+
+            for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
+            {
+                var run = paragraph.Runs[runIndex];
+                if (run.IsPageBreak)
+                {
+                    AdvanceWithinSection();
+                    continue;
+                }
+
+                if (run.Citation is not { } citation)
+                    continue;
+
+                var logicalPageNumber = CurrentLogicalPageNumber();
+                plans.Add(new PageNumberCitationReferencePlan(
+                    blockIndex,
+                    runIndex,
+                    citation,
+                    physicalPageNumber,
+                    sectionIndex,
+                    sectionRelativePageNumber,
+                    logicalPageNumber,
+                    FormatPageNumber(logicalPageNumber, CurrentPageSettings().PageNumberFormat)));
+            }
+
+            if (paragraph.SectionBreak is { } sectionBreak)
+            {
+                nextContinueValue = CurrentLogicalPageNumber() + 1;
+                physicalPageNumber = AdvanceForSectionBreak(physicalPageNumber, sectionBreak.BreakKind);
+                sectionIndex = Math.Min(sectionIndex + 1, Math.Max(0, sections.Count - 1));
+                sectionRelativePageNumber = 1;
+                currentSectionStart = ResolveSectionStart(sections, sectionIndex, nextContinueValue);
+            }
+        }
+
+        return plans;
+
+        PageSettings CurrentPageSettings()
+        {
+            if (sections.Count == 0)
+                return document.Page;
+
+            var safeSectionIndex = Math.Clamp(sectionIndex, 0, sections.Count - 1);
+            return sections[safeSectionIndex].Page;
+        }
+
+        int CurrentLogicalPageNumber() => currentSectionStart + Math.Max(1, sectionRelativePageNumber) - 1;
+
+        void AdvanceWithinSection()
+        {
+            nextContinueValue = CurrentLogicalPageNumber() + 1;
+            physicalPageNumber++;
+            sectionRelativePageNumber++;
+        }
+    }
+
+    public static ToaCitationPageResolver BuildCitationPageReferenceResolver(TextDocument document)
+    {
+        var referenceByRun = BuildCitationPageReferencePlans(document)
+            .ToDictionary(
+                plan => (plan.BlockIndex, plan.RunIndex),
+                plan => new ToaCitationPageReference(plan.PhysicalPageNumber, plan.DisplayText));
+
+        return (_, blockIndex, runIndex, _) =>
+            referenceByRun.TryGetValue((blockIndex, runIndex), out var reference)
+                ? reference
+                : null;
+    }
+
     private static IReadOnlyDictionary<int, IReadOnlyList<string?>> BuildChapterNumbersByPage(
         TextDocument? document,
         IReadOnlyList<int>? blockPageAssignments,
@@ -387,6 +486,27 @@ public static class PageNumberFormatDialogPlanner
             _ => value.ToString(CultureInfo.InvariantCulture)
         };
     }
+
+    private static int ResolveSectionStart(
+        IReadOnlyList<Section> sections,
+        int sectionIndex,
+        int nextContinueValue)
+    {
+        if (sections.Count == 0)
+            return Math.Max(1, nextContinueValue);
+
+        var safeSectionIndex = Math.Clamp(sectionIndex, 0, sections.Count - 1);
+        return Math.Max(1, sections[safeSectionIndex].Page.PageNumberStartAt ?? nextContinueValue);
+    }
+
+    private static int AdvanceForSectionBreak(int physicalPageNumber, SectionBreakKind breakKind) =>
+        breakKind switch
+        {
+            SectionBreakKind.NextPage => physicalPageNumber + 1,
+            SectionBreakKind.EvenPage => physicalPageNumber % 2 == 0 ? physicalPageNumber + 2 : physicalPageNumber + 1,
+            SectionBreakKind.OddPage => physicalPageNumber % 2 == 0 ? physicalPageNumber + 1 : physicalPageNumber + 2,
+            _ => physicalPageNumber
+        };
 
     private static int IndexOf(PageNumberFormat format)
     {
