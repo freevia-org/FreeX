@@ -63,6 +63,37 @@ public sealed class R39_HyperlinkCrossSheetLocalNameTests
     }
 
     [Fact]
+    public void RoundTrip_InternalHyperlinkToOtherSheetLocalDefinedName_PreservesSheetQualifier()
+    {
+        // R39-meta-1 round-trip hardening: the cross-sheet local-name qualifier must survive not
+        // just the initial load but a full save+reload. On save the bookmark is written verbatim
+        // as the "location" attribute (LinkType is PlaceInThisDocument); on reload ClosedXML does
+        // not re-fabricate a prefix (the address is already bang-qualified) and the sheet part
+        // ("Sheet2") differs from the hyperlink's own containing sheet ("Sheet1"), so the qualifier
+        // must be kept exactly as it went in.
+        var sourceBytes = CreateTwoSheetPackageWithHyperlink(
+            hyperlinkSheetCell: "A1",
+            locationAttr: "Sheet2!LocalRegion",
+            tooltip: "Jump to other sheet's local name");
+        var adapter = new XlsxFileAdapter();
+        Workbook workbook;
+        using (var source = new MemoryStream(sourceBytes, writable: false))
+            workbook = adapter.Load(source);
+
+        using var roundTripped = new MemoryStream();
+        adapter.Save(workbook, roundTripped);
+        roundTripped.Position = 0;
+        var reloaded = adapter.Load(roundTripped);
+
+        var sheet = reloaded.GetSheetAt(0);
+        var address = new CellAddress(sheet.Id, 1, 1);
+
+        sheet.Hyperlinks[address].Should().Be("Sheet2!LocalRegion");
+        sheet.HyperlinkMetadata[address].Bookmark.Should().Be("Sheet2!LocalRegion");
+        sheet.HyperlinkMetadata[address].LinkType.Should().Be(HyperlinkTargetKind.PlaceInThisDocument);
+    }
+
+    [Fact]
     public void Load_PlainCellReferenceInternalHyperlink_IsUnchanged()
     {
         // Sibling/no-regression case: an ordinary same-sheet cell-reference internal hyperlink
