@@ -201,7 +201,8 @@ public static class PresentationPdfExporter
             picture.Bytes,
             picture.ContentType,
             shape.RotationDeg,
-            MapPictureFrameClip(shape.PictureFrameGeometry)));
+            MapPictureFrameClip(shape.PictureFrameGeometry),
+            MapPictureOpacity(shape)));
         return true;
     }
 
@@ -212,6 +213,11 @@ public static class PresentationPdfExporter
             "roundRect" => PdfImageClipKind.RoundedRectangle,
             _ => PdfImageClipKind.None,
         };
+
+    private static double MapPictureOpacity(SlideShape shape) =>
+        shape.Kind == SlideShapeKind.Picture && shape.PictureFormat?.AlphaModPct is { } opacity
+            ? Math.Clamp(opacity, 0.0, 1.0)
+            : 1.0;
 
     private static bool TryAppendConnectorGeometry(
         List<PdfDrawOp> ops,

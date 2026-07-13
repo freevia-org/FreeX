@@ -223,6 +223,7 @@ public static class SkiaPdfWriter
                 var left = (float)image.X;
                 var width = (float)image.Width;
                 var height = (float)image.Height;
+                using var imagePaint = CreateImagePaint(image.Opacity);
                 canvas.Save();
                 if (Math.Abs(image.RotationDegrees) > 0.001)
                 {
@@ -230,13 +231,13 @@ public static class SkiaPdfWriter
                     canvas.RotateDegrees((float)image.RotationDegrees);
                     var localRect = new SKRect(-width / 2f, -height / 2f, width / 2f, height / 2f);
                     ClipImage(canvas, image.ClipKind, localRect);
-                    canvas.DrawImage(skImage, localRect);
+                    canvas.DrawImage(skImage, localRect, imagePaint);
                 }
                 else
                 {
                     var destRect = new SKRect(left, top, left + width, top + height);
                     ClipImage(canvas, image.ClipKind, destRect);
-                    canvas.DrawImage(skImage, destRect);
+                    canvas.DrawImage(skImage, destRect, imagePaint);
                 }
 
                 canvas.Restore();
@@ -244,6 +245,13 @@ public static class SkiaPdfWriter
             }
         }
     }
+
+    private static SKPaint CreateImagePaint(double opacity) =>
+        new()
+        {
+            IsAntialias = true,
+            Color = new SKColor(255, 255, 255, ToAlphaByte(opacity)),
+        };
 
     private static void ClipImage(SKCanvas canvas, PdfImageClipKind clipKind, SKRect bounds)
     {
@@ -267,6 +275,9 @@ public static class SkiaPdfWriter
     }
 
     private static SKColor ToSkColor(PdfColor color) => new(color.R, color.G, color.B);
+
+    private static byte ToAlphaByte(double opacity) =>
+        (byte)Math.Clamp(Math.Round((double.IsFinite(opacity) ? opacity : 1.0) * 255.0), 0, 255);
 
     private static bool IsSupportedImageContentType(string? contentType)
     {
