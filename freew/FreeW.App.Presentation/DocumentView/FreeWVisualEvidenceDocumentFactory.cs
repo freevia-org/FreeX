@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.IO.Compression;
 using System.Text;
+using System.Xml.Linq;
 using FreeW.Core.Model;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
@@ -671,6 +672,7 @@ public static class FreeWVisualEvidenceDocumentFactory
     {
         var original = BuildReviewCompareOriginalDocument();
         var revised = BuildReviewCompareRevisedDocument();
+        AddReviewRetainedModelSafety(revised, "compare");
         var doc = DocumentCompare.Compare(
             original,
             revised,
@@ -696,6 +698,7 @@ public static class FreeWVisualEvidenceDocumentFactory
         var original = BuildReviewCombineOriginalDocument();
         var revisedA = BuildReviewCombineReviewerADocument();
         var revisedB = BuildReviewCombineReviewerBDocument();
+        AddReviewRetainedModelSafety(revisedB, "combine");
         var doc = DocumentCombine.Combine(
             original,
             revisedA,
@@ -1699,6 +1702,44 @@ public static class FreeWVisualEvidenceDocumentFactory
         doc.Blocks.Add(new Paragraph(
             "The closing paragraph asks operations to publish the final package with release evidence."));
         return doc;
+    }
+
+    private static void AddReviewRetainedModelSafety(TextDocument doc, string operation)
+    {
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        XNamespace cp = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+        XNamespace vt = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+
+        doc.Preserved.OriginalSettings = new XElement(
+            w + "settings",
+            new XAttribute(XNamespace.Xmlns + "w", w.NamespaceName),
+            new XElement(
+                w + "proofState",
+                new XAttribute(w + "spelling", "clean"),
+                new XAttribute(w + "grammar", "clean")),
+            new XElement(
+                w + "compat",
+                new XElement(w + "compatSetting",
+                    new XAttribute(w + "name", "freewReviewSafety"),
+                    new XAttribute(w + "uri", "urn:freew:visual-evidence"),
+                    new XAttribute(w + "val", operation))));
+
+        doc.Preserved.OriginalCustomProperties = new XElement(
+            cp + "Properties",
+            new XAttribute(XNamespace.Xmlns + "cp", cp.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "vt", vt.NamespaceName),
+            new XElement(
+                cp + "property",
+                new XAttribute("fmtid", "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}"),
+                new XAttribute("pid", "2"),
+                new XAttribute("name", "FreeWReviewSafety"),
+                new XElement(vt + "lpwstr", operation + "-retained-model-safety")));
+
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/customXml/freew-review-safety.xml",
+            Encoding.UTF8.GetBytes("<freew-review-safety operation=\"" + operation + "\" retained=\"true\" />"),
+            "application/xml",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml"));
     }
 
     private static Paragraph EquationParagraph(string prefix, Equation equation)

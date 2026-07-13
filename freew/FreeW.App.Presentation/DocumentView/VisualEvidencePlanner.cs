@@ -334,8 +334,14 @@ public sealed record FreeWVisualReviewCompareCombineExpectation(
     int DeletionCount,
     int FormattingCount,
     int AuthorCount,
+    int PreservedPartCount,
+    int PreservedContentTypeDefaultCount,
+    bool HasPreservedSettings,
+    bool HasPreservedCustomProperties,
+    bool HasRetainedModelSafety,
     IReadOnlyList<string> Authors,
     IReadOnlyList<string> StableSignatures,
+    IReadOnlyList<string> RetainedModelSafetySignatures,
     bool HasCompareSemantics,
     bool HasCombineSemantics)
 {
@@ -346,8 +352,14 @@ public sealed record FreeWVisualReviewCompareCombineExpectation(
         DeletionCount: 0,
         FormattingCount: 0,
         AuthorCount: 0,
+        PreservedPartCount: 0,
+        PreservedContentTypeDefaultCount: 0,
+        HasPreservedSettings: false,
+        HasPreservedCustomProperties: false,
+        HasRetainedModelSafety: false,
         Authors: [],
         StableSignatures: [],
+        RetainedModelSafetySignatures: [],
         HasCompareSemantics: false,
         HasCombineSemantics: false);
 }
@@ -2414,6 +2426,7 @@ public static class FreeWVisualEvidencePlanner
                 "text=" + NormalizeEvidenceSignatureText(entry.Text)))
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToList();
+        var retainedModelSafetySignatures = BuildReviewRetainedModelSafetySignatures(document, operation);
 
         return new FreeWVisualReviewCompareCombineExpectation(
             Operation: operation,
@@ -2422,14 +2435,41 @@ public static class FreeWVisualEvidencePlanner
             DeletionCount: entries.Count(entry => entry.Kind == RevisionEntryKind.Deletion),
             FormattingCount: entries.Count(entry => entry.Kind == RevisionEntryKind.Formatting),
             AuthorCount: authors.Count,
+            PreservedPartCount: document.Preserved.Parts.Count,
+            PreservedContentTypeDefaultCount: document.Preserved.ContentTypeDefaults.Count,
+            HasPreservedSettings: document.Preserved.OriginalSettings is not null,
+            HasPreservedCustomProperties: document.Preserved.OriginalCustomProperties is not null,
+            HasRetainedModelSafety: retainedModelSafetySignatures.Count > 0,
             Authors: authors,
             StableSignatures: stableSignatures,
+            RetainedModelSafetySignatures: retainedModelSafetySignatures,
             HasCompareSemantics: string.Equals(operation, "compare", StringComparison.Ordinal)
                 && entries.Count > 0
                 && authors.Count == 1,
             HasCombineSemantics: string.Equals(operation, "combine", StringComparison.Ordinal)
                 && entries.Count > 0
                 && authors.Count >= 2);
+    }
+
+    private static IReadOnlyList<string> BuildReviewRetainedModelSafetySignatures(
+        TextDocument document,
+        string operation)
+    {
+        var signatures = new List<string>();
+        if (document.Preserved.OriginalSettings is not null)
+            signatures.Add("operation=" + operation + "|preserved=settings");
+        if (document.Preserved.OriginalCustomProperties is not null)
+            signatures.Add("operation=" + operation + "|preserved=custom-properties");
+
+        signatures.AddRange(document.Preserved.Parts
+            .Select(part => "operation=" + operation + "|preserved=part:" + NormalizeEvidenceSignatureText(part.PartName)));
+        signatures.AddRange(document.Preserved.ContentTypeDefaults
+            .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(pair => "operation=" + operation + "|preserved=content-type-default:" + NormalizeEvidenceSignatureText(pair.Key)));
+
+        return signatures
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
     }
 
     private static FreeWVisualProtectionOperationExpectation BuildReviewProtectionOperationExpectation(

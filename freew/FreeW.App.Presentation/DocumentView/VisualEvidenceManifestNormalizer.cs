@@ -160,7 +160,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 34;
+    public const int SummarySchemaVersion = 35;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -1271,6 +1271,16 @@ public static class FreeWVisualEvidenceManifestNormalizer
             failures.Add($"{rowName} expected deletion revision entries");
         if (expectation.StableSignatures.Count != expectation.RevisionCount)
             failures.Add($"{rowName} revision signatures must cover every review entry");
+        if (!expectation.HasRetainedModelSafety)
+            failures.Add($"{rowName} expected retained model safety evidence");
+        if (!expectation.HasPreservedSettings)
+            failures.Add($"{rowName} expected preserved settings evidence");
+        if (!expectation.HasPreservedCustomProperties)
+            failures.Add($"{rowName} expected preserved custom-property evidence");
+        if (expectation.PreservedPartCount <= 0)
+            failures.Add($"{rowName} expected preserved package part evidence");
+        if (expectation.RetainedModelSafetySignatures.Count < 3)
+            failures.Add($"{rowName} retained model safety signatures must cover settings, custom properties, and package parts");
     }
 
     private static List<string> BuildFloatingWrappingSemanticFailures(
@@ -1473,7 +1483,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
             " ",
             FormatReviewCompareCombineCounts(expectation),
             ", authors=",
-            expectation.Authors.Count == 0 ? "-" : string.Join("/", expectation.Authors));
+            expectation.Authors.Count == 0 ? "-" : string.Join("/", expectation.Authors),
+            ", retained=",
+            expectation.HasRetainedModelSafety
+                ? string.Join("/", expectation.RetainedModelSafetySignatures)
+                : "-");
 
     private static string FormatReviewCompareCombineCounts(
         FreeWVisualReviewCompareCombineExpectation expectation) =>
@@ -1485,7 +1499,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
             " deletions=",
             expectation.DeletionCount.ToString(CultureInfo.InvariantCulture),
             " formatting=",
-            expectation.FormattingCount.ToString(CultureInfo.InvariantCulture));
+            expectation.FormattingCount.ToString(CultureInfo.InvariantCulture),
+            " preservedParts=",
+            expectation.PreservedPartCount.ToString(CultureInfo.InvariantCulture),
+            " preservedContentTypeDefaults=",
+            expectation.PreservedContentTypeDefaultCount.ToString(CultureInfo.InvariantCulture));
 
     private static string FormatReviewProofingProofSemanticEvidence(
         FreeWVisualEvidenceNormalizedRow? wpf,
@@ -4260,10 +4278,20 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (wpfExpectation.RevisionCount != avaloniaExpectation.RevisionCount
             || wpfExpectation.InsertionCount != avaloniaExpectation.InsertionCount
             || wpfExpectation.DeletionCount != avaloniaExpectation.DeletionCount
-            || wpfExpectation.FormattingCount != avaloniaExpectation.FormattingCount)
+            || wpfExpectation.FormattingCount != avaloniaExpectation.FormattingCount
+            || wpfExpectation.PreservedPartCount != avaloniaExpectation.PreservedPartCount
+            || wpfExpectation.PreservedContentTypeDefaultCount != avaloniaExpectation.PreservedContentTypeDefaultCount)
         {
             failures.Add(
                 $"{pairName} compare/combine revision counts differ: WPF {FormatReviewCompareCombineCounts(wpfExpectation)}, Avalonia {FormatReviewCompareCombineCounts(avaloniaExpectation)}");
+        }
+
+        if (wpfExpectation.HasPreservedSettings != avaloniaExpectation.HasPreservedSettings
+            || wpfExpectation.HasPreservedCustomProperties != avaloniaExpectation.HasPreservedCustomProperties
+            || wpfExpectation.HasRetainedModelSafety != avaloniaExpectation.HasRetainedModelSafety)
+        {
+            failures.Add(
+                $"{pairName} compare/combine retained model flags differ: WPF settings={wpfExpectation.HasPreservedSettings} customProperties={wpfExpectation.HasPreservedCustomProperties} retained={wpfExpectation.HasRetainedModelSafety}, Avalonia settings={avaloniaExpectation.HasPreservedSettings} customProperties={avaloniaExpectation.HasPreservedCustomProperties} retained={avaloniaExpectation.HasRetainedModelSafety}");
         }
 
         var wpfAuthors = OrderedSummaries(wpfExpectation.Authors);
@@ -4280,6 +4308,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             failures.Add(
                 $"{pairName} compare/combine signatures differ: WPF '{FormatSummaries(wpfSignatures)}', Avalonia '{FormatSummaries(avaloniaSignatures)}'");
+        }
+
+        var wpfRetainedSignatures = OrderedSummaries(wpfExpectation.RetainedModelSafetySignatures);
+        var avaloniaRetainedSignatures = OrderedSummaries(avaloniaExpectation.RetainedModelSafetySignatures);
+        if (!wpfRetainedSignatures.SequenceEqual(avaloniaRetainedSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} compare/combine retained model safety signatures differ: WPF '{FormatSummaries(wpfRetainedSignatures)}', Avalonia '{FormatSummaries(avaloniaRetainedSignatures)}'");
         }
     }
 

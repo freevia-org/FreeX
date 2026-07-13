@@ -404,6 +404,7 @@ public static class DocumentCompare
         target.Page.AutoHyphenation = source.Page.AutoHyphenation;
         target.Page.VerticalAlignment = source.Page.VerticalAlignment;
         target.Page.DifferentFirstPage = source.Page.DifferentFirstPage;
+        target.Preserved.CopyFrom(source.Preserved);
     }
 
     // Clone a paragraph with its runs verbatim and no revision marks (used for unchanged paragraphs).

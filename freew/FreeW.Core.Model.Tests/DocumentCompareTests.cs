@@ -1,3 +1,6 @@
+using System.Text;
+using System.Xml.Linq;
+
 namespace FreeW.Core.Model.Tests;
 
 public class DocumentCompareTests
@@ -11,6 +14,24 @@ public class DocumentCompareTests
         foreach (var text in paragraphs)
             doc.Blocks.Add(new Paragraph(text));
         return doc;
+    }
+
+    private static void AddPreservedSafetyShell(TextDocument doc, string marker)
+    {
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        XNamespace cp = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+        XNamespace vt = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+
+        doc.Preserved.OriginalSettings = new XElement(w + "settings", new XElement(w + "proofState"));
+        doc.Preserved.OriginalCustomProperties = new XElement(
+            cp + "Properties",
+            new XElement(cp + "property", new XAttribute("name", marker), new XElement(vt + "lpwstr", marker)));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/customXml/review-safety.xml",
+            Encoding.UTF8.GetBytes(marker),
+            "application/xml",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml"));
+        doc.Preserved.ContentTypeDefaults["xml"] = "application/xml";
     }
 
     [Fact]
@@ -227,5 +248,24 @@ public class DocumentCompareTests
         // it must round-trip through the CompareSettings so the calling command can use it.
         var settings = new CompareSettings { ShowChangesIn = CompareShowChangesIn.Original };
         settings.ShowChangesIn.Should().Be(CompareShowChangesIn.Original);
+    }
+
+    [Fact]
+    public void Compare_CopiesRevisedPreservedPackageSafetyShell()
+    {
+        var original = DocWith("baseline review text");
+        var revised = DocWith("updated review text");
+        AddPreservedSafetyShell(revised, "compare-retained");
+
+        var result = DocumentCompare.Compare(original, revised, Author, DateXml);
+
+        result.Preserved.OriginalSettings.Should().NotBeNull();
+        result.Preserved.OriginalSettings.Should().NotBeSameAs(revised.Preserved.OriginalSettings);
+        result.Preserved.OriginalCustomProperties.Should().NotBeNull();
+        result.Preserved.Parts.Should().ContainSingle(part =>
+            part.PartName == "/customXml/review-safety.xml" &&
+            Encoding.UTF8.GetString(part.Bytes) == "compare-retained");
+        result.Preserved.Parts.Single().Bytes.Should().NotBeSameAs(revised.Preserved.Parts.Single().Bytes);
+        result.Preserved.ContentTypeDefaults.Should().ContainKey("xml");
     }
 }

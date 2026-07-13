@@ -705,6 +705,16 @@ public sealed class VisualEvidencePlannerTests
         reviewCompareExpectation.ReviewCompareCombine.StableSignatures.Should()
             .Contain(signature => signature.Contains("operation=compare", StringComparison.Ordinal)
                 && signature.Contains("author=Riley", StringComparison.Ordinal));
+        reviewCompareExpectation.ReviewCompareCombine.HasRetainedModelSafety.Should().BeTrue();
+        reviewCompareExpectation.ReviewCompareCombine.HasPreservedSettings.Should().BeTrue();
+        reviewCompareExpectation.ReviewCompareCombine.HasPreservedCustomProperties.Should().BeTrue();
+        reviewCompareExpectation.ReviewCompareCombine.PreservedPartCount.Should().Be(1);
+        reviewCompareExpectation.ReviewCompareCombine.PreservedContentTypeDefaultCount.Should().Be(0);
+        reviewCompareExpectation.ReviewCompareCombine.RetainedModelSafetySignatures.Should().Contain([
+            "operation=compare|preserved=settings",
+            "operation=compare|preserved=custom-properties",
+            "operation=compare|preserved=part:/customXml/freew-review-safety.xml"
+        ]);
 
         var combineEntries = RevisionList.Enumerate(reviewCombine);
         combineEntries.Should().NotBeEmpty();
@@ -731,6 +741,16 @@ public sealed class VisualEvidencePlannerTests
         reviewCombineExpectation.ReviewCompareCombine.StableSignatures.Should()
             .Contain(signature => signature.Contains("operation=combine", StringComparison.Ordinal)
                 && signature.Contains("author=Bob", StringComparison.Ordinal));
+        reviewCombineExpectation.ReviewCompareCombine.HasRetainedModelSafety.Should().BeTrue();
+        reviewCombineExpectation.ReviewCompareCombine.HasPreservedSettings.Should().BeTrue();
+        reviewCombineExpectation.ReviewCompareCombine.HasPreservedCustomProperties.Should().BeTrue();
+        reviewCombineExpectation.ReviewCompareCombine.PreservedPartCount.Should().Be(1);
+        reviewCombineExpectation.ReviewCompareCombine.PreservedContentTypeDefaultCount.Should().Be(0);
+        reviewCombineExpectation.ReviewCompareCombine.RetainedModelSafetySignatures.Should().Contain([
+            "operation=combine|preserved=settings",
+            "operation=combine|preserved=custom-properties",
+            "operation=combine|preserved=part:/customXml/freew-review-safety.xml"
+        ]);
     }
 
     [Fact]

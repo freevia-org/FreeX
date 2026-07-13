@@ -221,6 +221,7 @@ public static class DocumentCombine
         target.Page.AutoHyphenation = source.Page.AutoHyphenation;
         target.Page.VerticalAlignment = source.Page.VerticalAlignment;
         target.Page.DifferentFirstPage = source.Page.DifferentFirstPage;
+        target.Preserved.CopyFrom(source.Preserved);
     }
 
     private static Block CloneBlock(Block block) => block switch

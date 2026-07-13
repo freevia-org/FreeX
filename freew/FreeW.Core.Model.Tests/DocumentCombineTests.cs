@@ -1,4 +1,6 @@
 using System.Linq;
+using System.Text;
+using System.Xml.Linq;
 using FreeW.Core.Model;
 using Xunit;
 using FluentAssertions;
@@ -23,6 +25,24 @@ public class DocumentCombineTests
         foreach (var text in paragraphs)
             doc.Blocks.Add(new Paragraph(text));
         return doc;
+    }
+
+    private static void AddPreservedSafetyShell(TextDocument doc, string marker)
+    {
+        XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        XNamespace cp = "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties";
+        XNamespace vt = "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes";
+
+        doc.Preserved.OriginalSettings = new XElement(w + "settings", new XElement(w + "proofState"));
+        doc.Preserved.OriginalCustomProperties = new XElement(
+            cp + "Properties",
+            new XElement(cp + "property", new XAttribute("name", marker), new XElement(vt + "lpwstr", marker)));
+        doc.Preserved.Parts.Add(new PreservedPart(
+            "/customXml/review-safety.xml",
+            Encoding.UTF8.GetBytes(marker),
+            "application/xml",
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml"));
+        doc.Preserved.ContentTypeDefaults["xml"] = "application/xml";
     }
 
     // -----------------------------------------------------------------------
@@ -359,5 +379,25 @@ public class DocumentCombineTests
         var doc = DocWith("x");
         var act = () => DocumentCombine.Combine(doc, doc, AuthorA, doc, null!);
         act.Should().Throw<ArgumentNullException>();
+    }
+
+    [Fact]
+    public void Combine_CopiesReviewerBPreservedPackageSafetyShell()
+    {
+        var original = DocWith("one two three");
+        var revisedA = DocWith("one Alice three");
+        var revisedB = DocWith("one two Bob");
+        AddPreservedSafetyShell(revisedB, "combine-retained");
+
+        var result = DocumentCombine.Combine(original, revisedA, AuthorA, revisedB, AuthorB, DateXml);
+
+        result.Preserved.OriginalSettings.Should().NotBeNull();
+        result.Preserved.OriginalSettings.Should().NotBeSameAs(revisedB.Preserved.OriginalSettings);
+        result.Preserved.OriginalCustomProperties.Should().NotBeNull();
+        result.Preserved.Parts.Should().ContainSingle(part =>
+            part.PartName == "/customXml/review-safety.xml" &&
+            Encoding.UTF8.GetString(part.Bytes) == "combine-retained");
+        result.Preserved.Parts.Single().Bytes.Should().NotBeSameAs(revisedB.Preserved.Parts.Single().Bytes);
+        result.Preserved.ContentTypeDefaults.Should().ContainKey("xml");
     }
 }

@@ -1,3 +1,4 @@
+using System;
 using System.Xml.Linq;
 
 namespace FreeW.Core.Model;
@@ -130,4 +131,31 @@ public sealed class PreservedParts
 
     /// <summary>True when nothing is preserved — the authored-from-scratch case.</summary>
     public bool IsEmpty => OriginalSettings is null && OriginalNumbering is null && OriginalCustomProperties is null && Parts.Count == 0;
+
+    /// <summary>
+    /// Replaces this preserved-package snapshot with a deep copy of <paramref name="source"/> so derived
+    /// documents can carry the same unmodelled package safety state without sharing mutable byte/XML buffers.
+    /// </summary>
+    public void CopyFrom(PreservedParts source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        OriginalSettings = source.OriginalSettings is null ? null : new XElement(source.OriginalSettings);
+        OriginalNumbering = source.OriginalNumbering is null ? null : new XElement(source.OriginalNumbering);
+        OriginalCustomProperties = source.OriginalCustomProperties is null ? null : new XElement(source.OriginalCustomProperties);
+
+        Parts.Clear();
+        foreach (var part in source.Parts)
+        {
+            Parts.Add(new PreservedPart(
+                part.PartName,
+                (byte[])part.Bytes.Clone(),
+                part.ContentTypeOverride,
+                part.RelationshipType));
+        }
+
+        ContentTypeDefaults.Clear();
+        foreach (var (extension, contentType) in source.ContentTypeDefaults)
+            ContentTypeDefaults[extension] = contentType;
+    }
 }
