@@ -2312,6 +2312,192 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_AllowsUniformFloatingObjectRendererOriginOffset()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "drawing-objects-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = OffsetFloatingObjectXDip(
+                BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1),
+                (_, _) => 48);
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaRow],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue(string.Join(Environment.NewLine, summary.Trust.Failures));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsRelativeFloatingObjectHorizontalDrift()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "drawing-objects-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = OffsetFloatingObjectXDip(
+                BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1),
+                (_, index) => index == 0 ? 72 : 48);
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaRow],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("origin-normalized floating object signatures differ", StringComparison.Ordinal) &&
+                f.Contains("xRel=", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresGroupedChildVisualSemanticsBeyondCounts()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "drawing-objects-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaWithChangedChildVisuals = ReplaceGroupedChildVisualSignatures(
+                avaloniaRow,
+                signature => signature.StartsWith("Group0Child2:Chart:", StringComparison.Ordinal)
+                    ? "Group0Child2:Chart:kind=Line|geometry=Lines|gridlines=1|markers=0"
+                    : signature.StartsWith("Group0Child3:WordArt:", StringComparison.Ordinal)
+                        ? signature.Replace("effects=glow", "effects=shadow", StringComparison.Ordinal)
+                        : signature);
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithChangedChildVisuals],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("proof-comparable grouped child visual signatures differ", StringComparison.Ordinal) &&
+                f.Contains("Group0Child2:Chart", StringComparison.Ordinal) &&
+                f.Contains("Group0Child3:WordArt", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_RequiresRenderedGroupedChildWordArtEffectEvidence()
     {
         var root = CreateTempRoot();
@@ -6048,6 +6234,47 @@ public sealed class VisualEvidencePlannerTests
 
         return FreeWVisualEvidencePlanner.BuildEvidenceRow(capture);
     }
+
+    private static FreeWVisualEvidenceRow OffsetFloatingObjectXDip(
+        FreeWVisualEvidenceRow row,
+        Func<DocumentFloatingObjectSnapshot, int, double> offsetForObject) =>
+        row with
+        {
+            PageExpectation = row.PageExpectation with
+            {
+                DrawingObjects = row.PageExpectation.DrawingObjects with
+                {
+                    Objects = row.PageExpectation.DrawingObjects.Objects
+                        .Select((snapshot, index) => snapshot with
+                        {
+                            Rect = snapshot.Rect with
+                            {
+                                XDip = snapshot.Rect.XDip + offsetForObject(snapshot, index)
+                            }
+                        })
+                        .ToList()
+                }
+            }
+        };
+
+    private static FreeWVisualEvidenceRow ReplaceGroupedChildVisualSignatures(
+        FreeWVisualEvidenceRow row,
+        Func<string, string> replace) =>
+        row with
+        {
+            PageExpectation = row.PageExpectation with
+            {
+                DrawingObjects = row.PageExpectation.DrawingObjects with
+                {
+                    GroupChildren = row.PageExpectation.DrawingObjects.GroupChildren with
+                    {
+                        ChildVisualSignatures = row.PageExpectation.DrawingObjects.GroupChildren.ChildVisualSignatures
+                            .Select(replace)
+                            .ToList()
+                    }
+                }
+            }
+        };
 
     private static Dictionary<string, string> BuildFileBackedHostMetadata(string hostId, string scenarioId)
     {

@@ -2870,12 +2870,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} in-front counts differ: WPF {wpfObjects.InFrontCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaObjects.InFrontCount.ToString(CultureInfo.InvariantCulture)}");
         }
 
-        var wpfDrawingSignatures = BuildFloatingObjectSignatures(wpfObjects.Objects);
-        var avaloniaDrawingSignatures = BuildFloatingObjectSignatures(avaloniaObjects.Objects);
+        var wpfDrawingSignatures = BuildOriginNormalizedFloatingObjectSignatures(wpfObjects.Objects);
+        var avaloniaDrawingSignatures = BuildOriginNormalizedFloatingObjectSignatures(avaloniaObjects.Objects);
         if (!wpfDrawingSignatures.SequenceEqual(avaloniaDrawingSignatures, StringComparer.Ordinal))
         {
             failures.Add(
-                $"{pairName} floating object signatures differ: WPF '{FormatSummaries(wpfDrawingSignatures)}', Avalonia '{FormatSummaries(avaloniaDrawingSignatures)}'");
+                $"{pairName} origin-normalized floating object signatures differ: WPF '{FormatSummaries(wpfDrawingSignatures)}', Avalonia '{FormatSummaries(avaloniaDrawingSignatures)}'");
         }
 
         var wpfAltTextSummaries = OrderedSummaries(wpfObjects.AltTextSummaries ?? []);
@@ -2902,12 +2902,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} grouped child kind summaries differ: WPF '{FormatSummaries(wpfGroupChildKinds)}', Avalonia '{FormatSummaries(avaloniaGroupChildKinds)}'");
         }
 
-        var wpfGroupChildVisualSignatures = BuildComparableGroupChildVisualSignatures(wpfGroupChildren.ChildVisualSignatures ?? []);
-        var avaloniaGroupChildVisualSignatures = BuildComparableGroupChildVisualSignatures(avaloniaGroupChildren.ChildVisualSignatures ?? []);
+        var wpfGroupChildVisualSignatures = BuildProofComparableGroupChildVisualSignatures(wpfGroupChildren.ChildVisualSignatures ?? []);
+        var avaloniaGroupChildVisualSignatures = BuildProofComparableGroupChildVisualSignatures(avaloniaGroupChildren.ChildVisualSignatures ?? []);
         if (!wpfGroupChildVisualSignatures.SequenceEqual(avaloniaGroupChildVisualSignatures, StringComparer.Ordinal))
         {
             failures.Add(
-                $"{pairName} grouped child visual signatures differ: WPF '{FormatSummaries(wpfGroupChildVisualSignatures)}', Avalonia '{FormatSummaries(avaloniaGroupChildVisualSignatures)}'");
+                $"{pairName} proof-comparable grouped child visual signatures differ: WPF '{FormatSummaries(wpfGroupChildVisualSignatures)}', Avalonia '{FormatSummaries(avaloniaGroupChildVisualSignatures)}'");
         }
 
         var wpfEffectSummaries = OrderedSummaries(wpfObjects.Effects.EffectSummaries);
@@ -3318,12 +3318,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} page feature signatures differ: WPF '{wpfFeatureSignature}', Avalonia '{avaloniaFeatureSignature}'");
         }
 
-        var wpfDrawingSignatures = BuildFloatingObjectSignatures(wpf.DrawingObjects.Objects);
-        var avaloniaDrawingSignatures = BuildFloatingObjectSignatures(avalonia.DrawingObjects.Objects);
+        var wpfDrawingSignatures = BuildOriginNormalizedFloatingObjectSignatures(wpf.DrawingObjects.Objects);
+        var avaloniaDrawingSignatures = BuildOriginNormalizedFloatingObjectSignatures(avalonia.DrawingObjects.Objects);
         if (!wpfDrawingSignatures.SequenceEqual(avaloniaDrawingSignatures, StringComparer.Ordinal))
         {
             failures.Add(
-                $"{pairName} floating object signatures differ: WPF '{FormatSummaries(wpfDrawingSignatures)}', Avalonia '{FormatSummaries(avaloniaDrawingSignatures)}'");
+                $"{pairName} origin-normalized floating object signatures differ: WPF '{FormatSummaries(wpfDrawingSignatures)}', Avalonia '{FormatSummaries(avaloniaDrawingSignatures)}'");
         }
 
         var wpfEffectSummaries = OrderedSummaries(wpf.DrawingObjects.Effects.EffectSummaries);
@@ -3682,13 +3682,19 @@ public static class FreeWVisualEvidenceManifestNormalizer
             ChildKindSummaries: [],
             ChildVisualSignatures: []);
 
-    private static List<string> BuildFloatingObjectSignatures(IEnumerable<DocumentFloatingObjectSnapshot> objects) =>
-        objects
+    private static List<string> BuildOriginNormalizedFloatingObjectSignatures(IEnumerable<DocumentFloatingObjectSnapshot> objects)
+    {
+        var snapshots = objects.ToList();
+        // WPF and Avalonia evidence can report the same page content from different renderer origins.
+        // Preserve relative X geometry so per-object horizontal drift still fails.
+        var originXDip = snapshots.Count == 0 ? 0 : snapshots.Min(o => o.Rect.XDip);
+        return snapshots
             .Select(o => string.Join(
                 "|",
                 o.TypeTag,
                 o.BlockIndex.ToString(CultureInfo.InvariantCulture),
                 o.RunIndex.ToString(CultureInfo.InvariantCulture),
+                "xRel=" + FormatDouble(o.Rect.XDip - originXDip),
                 FormatDouble(o.Rect.YDip),
                 FormatDouble(o.Rect.WidthDip),
                 FormatDouble(o.Rect.HeightDip),
@@ -3700,24 +3706,57 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 BoolFlag(o.FlipV)))
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToList();
+    }
 
-    private static List<string> BuildComparableGroupChildVisualSignatures(IEnumerable<string> signatures) =>
+    private static List<string> BuildProofComparableGroupChildVisualSignatures(IEnumerable<string> signatures) =>
         signatures
             .Where(signature => !string.IsNullOrWhiteSpace(signature))
-            .Select(NormalizeGroupChildVisualSignature)
+            .Select(NormalizeProofComparableGroupChildVisualSignature)
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToList();
 
-    private static string NormalizeGroupChildVisualSignature(string signature)
+    private static string NormalizeProofComparableGroupChildVisualSignature(string signature)
     {
         var firstSeparator = signature.IndexOf(':');
         if (firstSeparator < 0)
             return signature;
 
         var secondSeparator = signature.IndexOf(':', firstSeparator + 1);
-        return secondSeparator < 0
-            ? signature
-            : signature[..secondSeparator];
+        if (secondSeparator < 0)
+            return signature;
+
+        var prefix = signature[..secondSeparator];
+        var details = signature[(secondSeparator + 1)..];
+        if (prefix.EndsWith(":Image", StringComparison.Ordinal))
+            return NormalizeImageGroupChildSignature(prefix, details);
+        if (prefix.EndsWith(":Shape", StringComparison.Ordinal) ||
+            prefix.EndsWith(":WordArt", StringComparison.Ordinal))
+            return signature;
+        if (prefix.EndsWith(":Chart", StringComparison.Ordinal))
+            return prefix + ":" + JoinSignatureParts(details, "kind", "geometry", "gridlines", "markers");
+        if (prefix.EndsWith(":SmartArt", StringComparison.Ordinal))
+            // Grouped SmartArt child internals differ by renderer capture path; standalone SmartArt proof rows keep full signatures.
+            return prefix;
+
+        return signature;
+    }
+
+    private static string NormalizeImageGroupChildSignature(string prefix, string details)
+    {
+        var parts = details
+            .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(part => !part.StartsWith("bytes=", StringComparison.Ordinal))
+            .ToList();
+        return prefix + ":" + string.Join(";", parts);
+    }
+
+    private static string JoinSignatureParts(string details, params string[] keys)
+    {
+        var parts = details
+            .Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(part => keys.Any(key => part.StartsWith(key + "=", StringComparison.Ordinal)))
+            .ToList();
+        return parts.Count == 0 ? details : string.Join("|", parts);
     }
 
     private static string BoolFlag(bool value) => value ? "1" : "0";
