@@ -37,6 +37,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("[string[]]$ScenarioId");
         source.Should().Contain("BackstagePrintExport = @(");
         source.Should().Contain("CoreLayoutProof = @(");
+        source.Should().Contain("ReferencesHeavyWordBaselineProof = @(");
         source.Should().Contain("PageCompositionProof = @(");
         source.Should().Contain("FloatingWrappingVisualProof = @(");
         source.Should().Contain("TableLayoutProof = @(");
@@ -112,6 +113,16 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Backstage artifact metadata: verified rows=");
         source.Should().Contain("Backstage capture routes: verified rows=");
         source.Should().Contain("Core layout proof readiness: trusted scenario rows=");
+        source.Should().Contain("Assert-ReferencesHeavyWordBaselineProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("References-heavy Word baseline proof readiness requires FreeW visual evidence summary schema v33 or newer");
+        source.Should().Contain("missing cached bibliography result signature");
+        source.Should().Contain("missing cached TOA page-reference sentinel");
+        source.Should().Contain("missing generated TOA page-number evidence");
+        source.Should().Contain("missing honest word-baseline-unavailable TOA page-number blocker");
+        source.Should().Contain("References-heavy Word baseline proof readiness: trusted scenario rows=");
+        source.Should().Contain("References-heavy semantic field/TOA rows: verified rows=");
+        source.Should().Contain("References-heavy Word-baseline policy rows: verified rows=");
+        source.Should().Contain("References-heavy Word-baseline unavailable blocker: verified");
         source.Should().Contain("Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("Page composition proof readiness requires FreeW visual evidence summary schema v25 or newer");
         source.Should().Contain("'avalonia-page-layout-shot'");

@@ -26,6 +26,9 @@
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/core-layout-proof -ScenarioSet CoreLayoutProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/references-heavy-word-baseline-proof -ScenarioSet ReferencesHeavyWordBaselineProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/drawing-object-proof -ScenarioSet DrawingObjectVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
@@ -127,6 +130,9 @@ $namedScenarioSets = @{
         'f2-comments',
         'review-proofing-visual-depth',
         'review-protection-proofing-comments-only'
+    )
+    ReferencesHeavyWordBaselineProof = @(
+        'references-heavy-fields'
     )
     PageCompositionProof = @(
         'f2-columns',
@@ -403,6 +409,174 @@ function Assert-CoreLayoutProofReadiness {
     }
 
     Write-Host "Core layout proof readiness: trusted scenario rows=$trustedScenarioRows"
+}
+
+function Assert-ReferencesHeavyWordBaselineProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    if (@($ScenarioIds).Count -eq 0 -or -not @($ScenarioIds | Where-Object { $_ -eq 'references-heavy-fields' }).Count) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "References-heavy Word baseline proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 33) {
+        throw "References-heavy Word baseline proof readiness requires FreeW visual evidence summary schema v33 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $requiredScenarioId = 'references-heavy-fields'
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $requiredKeywords = @(
+        'CITATION',
+        'BIBLIOGRAPHY',
+        'TOA'
+    )
+    $requiredToaSignatures = @(
+        'category=Cases|entry=Example v. FreeW, 123 F.4th 456 (2026)|kind=explicit-page-numbers|pages=1,2|text=1, 2',
+        'category=Statutes|entry=Free Software Evidence Act, 42 U.S.C. 2026|kind=explicit-page-numbers|pages=1|text=1'
+    )
+    $scenarios = @($summary.scenarios)
+    $evidenceRows = @($summary.evidence)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $remainingBlockers = @($summary.remainingEvidenceBlockers)
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedSemanticRows = 0
+    $verifiedBaselineRows = 0
+
+    foreach ($hostId in $requiredHosts) {
+        $scenarioRows = @($scenarios | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $requiredScenarioId
+        })
+        if ($scenarioRows.Count -eq 0) {
+            $failures.Add("${hostId}/${requiredScenarioId}: missing normalized scenario row")
+            continue
+        }
+
+        $scenarioRow = $scenarioRows[0]
+        if ($scenarioRow.trust.passed -ne $true) {
+            $notes = @($scenarioRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = 'no notes'
+            }
+            $failures.Add("${hostId}/${requiredScenarioId}: scenario trust failed ($notes)")
+            continue
+        }
+
+        if ([int]$scenarioRow.trustedOutputs -lt [int]$scenarioRow.minimumExpectedOutputs) {
+            $failures.Add("${hostId}/${requiredScenarioId}: expected at least $($scenarioRow.minimumExpectedOutputs) trusted output(s), found $($scenarioRow.trustedOutputs)")
+            continue
+        }
+
+        $trustedScenarioRows++
+
+        $hostEvidenceRows = @($evidenceRows | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $requiredScenarioId -and
+            $_.trust.passed -eq $true
+        })
+        if ($hostEvidenceRows.Count -eq 0) {
+            $failures.Add("${hostId}/${requiredScenarioId}: missing trusted evidence rows")
+            continue
+        }
+
+        foreach ($row in $hostEvidenceRows) {
+            $keywords = @($row.fields.complexFieldKeywords)
+            foreach ($keyword in $requiredKeywords) {
+                if ($keywords -notcontains $keyword) {
+                    $failures.Add("${hostId}/${requiredScenarioId}/p$($row.pageNumber): missing complex field keyword '$keyword'")
+                }
+            }
+
+            $resultSignatures = @($row.fields.complexFieldResultSignatures)
+            if ($resultSignatures -notcontains 'BIBLIOGRAPHY=References') {
+                $failures.Add("${hostId}/${requiredScenarioId}/p$($row.pageNumber): missing cached bibliography result signature")
+            }
+            if ($resultSignatures -notcontains 'TOA=Cases\t1, 2') {
+                $failures.Add("${hostId}/${requiredScenarioId}/p$($row.pageNumber): missing cached TOA page-reference sentinel")
+            }
+
+            $toa = $row.tableOfAuthorities
+            if ($toa.hasGeneratedTable -ne $true -or $toa.hasPageReferences -ne $true -or $toa.hasExplicitPageNumbers -ne $true) {
+                $failures.Add("${hostId}/${requiredScenarioId}/p$($row.pageNumber): missing generated TOA page-number evidence")
+            }
+
+            $toaSignatures = @($toa.pageReferenceSignatures)
+            foreach ($signature in $requiredToaSignatures) {
+                if ($toaSignatures -notcontains $signature) {
+                    $failures.Add("${hostId}/${requiredScenarioId}/p$($row.pageNumber): missing TOA signature '$signature'")
+                }
+            }
+
+            $verifiedSemanticRows++
+        }
+
+        $comparisonRows = @($baselineComparisons | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $requiredScenarioId -and
+            $_.baselineScenarioId -eq $requiredScenarioId
+        })
+        if ($comparisonRows.Count -eq 0) {
+            $failures.Add("${hostId}/${requiredScenarioId}: missing Word-baseline policy row")
+            continue
+        }
+
+        foreach ($comparison in $comparisonRows) {
+            if ($comparison.trust.passed -ne $true) {
+                $notes = @($comparison.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$comparison.skipReason
+                }
+                $failures.Add("$hostId/$requiredScenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                continue
+            }
+
+            $baselineId = [string]$comparison.baselineId
+            if (-not $baselineId.StartsWith($requiredScenarioId + '/', [StringComparison]::OrdinalIgnoreCase)) {
+                $failures.Add("$hostId/$requiredScenarioId/$($comparison.outputName): baselineId '$baselineId' expected scenario '$requiredScenarioId'")
+                continue
+            }
+
+            $verifiedBaselineRows++
+        }
+    }
+
+    $unavailableComparisons = @($baselineComparisons | Where-Object {
+        $_.scenarioId -eq $requiredScenarioId -and
+        $_.status -eq 'word-baseline-unavailable'
+    })
+    if ($unavailableComparisons.Count -gt 0) {
+        $blocker = @($remainingBlockers | Where-Object {
+            $_.blockerId -eq 'references-heavy-toa-page-number-fidelity' -and
+            $_.scenarioId -eq $requiredScenarioId -and
+            $_.status -eq 'word-baseline-unavailable' -and
+            $_.requiresWordBaseline -eq $true
+        }) | Select-Object -First 1
+        if (-not $blocker) {
+            $failures.Add("${requiredScenarioId}: missing honest word-baseline-unavailable TOA page-number blocker")
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "References-heavy Word baseline proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "References-heavy Word baseline proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "References-heavy semantic field/TOA rows: verified rows=$verifiedSemanticRows"
+    Write-Host "References-heavy Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    if ($unavailableComparisons.Count -gt 0) {
+        Write-Host "References-heavy Word-baseline unavailable blocker: verified"
+    }
 }
 
 function Assert-PageCompositionProofReadiness {
@@ -1204,6 +1378,7 @@ else {
     Write-Host "Backstage evidence readiness: skipped by scenario filter"
 }
 Assert-CoreLayoutProofReadiness $summaryJson $effectiveScenarioIds
+Assert-ReferencesHeavyWordBaselineProofReadiness $summaryJson $effectiveScenarioIds
 Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-FloatingWrappingProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
