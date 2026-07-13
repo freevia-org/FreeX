@@ -97,6 +97,14 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Strips:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wedge:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wheel:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Dissolve:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Flash:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spiral:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Swivel:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Bounce:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Float:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Swoop:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Boomerang:");
         source.Should().Contain("case SlideShowGeometricMaskKind.Circle:");
         source.Should().Contain("CircleEffect(sb, el, plan);");
         source.Should().Contain("case SlideShowGeometricMaskKind.Diamond:");

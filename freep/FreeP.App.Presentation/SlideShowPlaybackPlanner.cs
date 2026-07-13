@@ -33,6 +33,14 @@ public enum SlideShowShapeAnimationEffectKind
     Strips,
     Wedge,
     Wheel,
+    Dissolve,
+    Flash,
+    Spiral,
+    Swivel,
+    Bounce,
+    Float,
+    Swoop,
+    Boomerang,
     Peek,
     Crawl,
     Zoom,
@@ -219,6 +227,14 @@ public static class SlideShowPlaybackPlanner
             AnimationPreset.Strips => SlideShowShapeAnimationEffectKind.Strips,
             AnimationPreset.Wedge => SlideShowShapeAnimationEffectKind.Wedge,
             AnimationPreset.Wheel => SlideShowShapeAnimationEffectKind.Wheel,
+            AnimationPreset.Dissolve => SlideShowShapeAnimationEffectKind.Dissolve,
+            AnimationPreset.Flash => SlideShowShapeAnimationEffectKind.Flash,
+            AnimationPreset.Spiral => SlideShowShapeAnimationEffectKind.Spiral,
+            AnimationPreset.Swivel => SlideShowShapeAnimationEffectKind.Swivel,
+            AnimationPreset.Bounce => SlideShowShapeAnimationEffectKind.Bounce,
+            AnimationPreset.Float => SlideShowShapeAnimationEffectKind.Float,
+            AnimationPreset.Swoop => SlideShowShapeAnimationEffectKind.Swoop,
+            AnimationPreset.Boomerang => SlideShowShapeAnimationEffectKind.Boomerang,
             AnimationPreset.Peek => SlideShowShapeAnimationEffectKind.Peek,
             AnimationPreset.Crawl => SlideShowShapeAnimationEffectKind.Crawl,
             AnimationPreset.Zoom => SlideShowShapeAnimationEffectKind.Zoom,
@@ -234,6 +250,7 @@ public static class SlideShowPlaybackPlanner
         SlideShowShapeAnimationEffectKind effectKind)
     {
         if (effectKind == SlideShowShapeAnimationEffectKind.MotionPath ||
+            effectKind is SlideShowShapeAnimationEffectKind.Spiral or SlideShowShapeAnimationEffectKind.Swivel ||
             animation.Kind is AnimationKind.Emphasis or AnimationKind.Exit)
         {
             return SlideShowAnimationRevealTiming.AtStart;
