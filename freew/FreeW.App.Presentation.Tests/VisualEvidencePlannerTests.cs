@@ -6652,6 +6652,96 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SmartArtPolygonNoWordSummary_ReportsFocusedProofReadinessWithoutAuthoritativeWordParity()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "chart-smartart-complex";
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            var readiness = withBaseline.DrawingObjectProofReadiness.Single();
+            readiness.ScenarioId.Should().Be(scenarioId);
+            readiness.Status.Should().Be("paired-renderer-proof-ready");
+            readiness.WordBaselineStatus.Should().Be("word-baseline-unavailable=2");
+            readiness.BaselineReadiness.Should().Contain("without authoritative Word parity");
+            readiness.SemanticEvidence.Should().Contain("SmartArt layouts=orgchart1/pyramid1");
+            readiness.SemanticEvidence.Should().Contain("SmartArt geometry=Pyramid");
+            readiness.SemanticEvidence.Should().Contain("SmartArt polygon nodes=4");
+            readiness.Trust.Passed.Should().BeTrue();
+
+            var blocker = withBaseline.RemainingEvidenceBlockers.Single();
+            blocker.BlockerId.Should().Be("chart-smartart-complex-word-baseline-fidelity");
+            blocker.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            blocker.Area.Should().Be("SmartArt polygon visual fidelity");
+            blocker.Reason.Should().Contain("Word.Application");
+            blocker.RequiresWordBaseline.Should().BeTrue();
+            blocker.SemanticEvidence.Should().OnlyContain(evidence =>
+                evidence.Contains("pyramid1", StringComparison.Ordinal) &&
+                evidence.Contains("polygonNodes=4", StringComparison.Ordinal));
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Drawing/Object Visual Proof Readiness");
+            markdown.Should().Contain("chart-smartart-complex-word-baseline-fidelity");
+            markdown.Should().Contain("SmartArt polygon nodes=4");
+            markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void DrawingObjectNoWordSummary_ReportsPairedProofReadinessWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();
