@@ -745,6 +745,8 @@ public static class ChartSmartArtVisualPlanner
 
     private static SmartArtLayoutGeometryPlan BuildPyramidGeometry(int nodeCount)
     {
+        // Bounded Word-common approximation: shared renderers consume centered widening rectangles,
+        // not Word's exact trapezoid/polygon band geometry.
         const double margin = 8;
         const double minBandWidth = 54;
         const double maxBandWidth = 160;

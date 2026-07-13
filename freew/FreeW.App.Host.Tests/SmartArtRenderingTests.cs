@@ -247,7 +247,7 @@ public sealed class SmartArtRenderingTests
     }
 
     [StaFact]
-    public void BasicPyramidLayout_RendersSharedWideningBandGeometry()
+    public void BasicPyramidLayout_RendersSharedWideningBandApproximation()
     {
         var sa = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
         sa.LayoutId = "pyramid1";
@@ -258,13 +258,13 @@ public sealed class SmartArtRenderingTests
         var lower = NodeBorder(view, "Lower");
         var bottom = NodeBorder(view, "Base");
 
-        Assert.True(Canvas.GetTop(middle) > Canvas.GetTop(top), "second pyramid band should be below the first");
-        Assert.True(Canvas.GetTop(lower) > Canvas.GetTop(middle), "third pyramid band should be below the second");
-        Assert.True(Canvas.GetTop(bottom) > Canvas.GetTop(lower), "base pyramid band should be last");
-        Assert.True(top.Width < middle.Width, "top band should be narrower than the second band");
-        Assert.True(middle.Width < lower.Width, "middle band should be narrower than the third band");
-        Assert.True(lower.Width < bottom.Width, "lower band should be narrower than the base");
-        Assert.True(Canvas.GetLeft(top) > Canvas.GetLeft(bottom), "top band should be centered inside the base width");
+        Assert.True(Canvas.GetTop(middle) > Canvas.GetTop(top), "second shared pyramid-approximation band should be below the first");
+        Assert.True(Canvas.GetTop(lower) > Canvas.GetTop(middle), "third shared pyramid-approximation band should be below the second");
+        Assert.True(Canvas.GetTop(bottom) > Canvas.GetTop(lower), "base shared pyramid-approximation band should be last");
+        Assert.True(top.Width < middle.Width, "top approximation band should be narrower than the second band");
+        Assert.True(middle.Width < lower.Width, "middle approximation band should be narrower than the third band");
+        Assert.True(lower.Width < bottom.Width, "lower approximation band should be narrower than the base");
+        Assert.True(Canvas.GetLeft(top) > Canvas.GetLeft(bottom), "top approximation band should be centered inside the base width");
     }
 
     [StaTheory]
