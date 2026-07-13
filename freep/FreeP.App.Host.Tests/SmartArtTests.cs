@@ -1327,7 +1327,7 @@ public sealed class SmartArtTests : IDisposable
     public void Reader_ParsesKnownCycleFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/textCycle",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/blockCycle",
             nodes: [("id1", "Phase 1"), ("id2", "Phase 2"), ("id3", "Phase 3")],
             parOfConnections: []);
 
@@ -1340,6 +1340,25 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeFalse(
             "cycle-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Phase 1", "Phase 2", "Phase 3");
+    }
+
+    [Fact]
+    public void Reader_ParsesTextCycleAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/textCycle",
+            nodes: [("id1", "Plan"), ("id2", "Draft"), ("id3", "Review"), ("id4", "Publish")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "textCycle is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "textCycle is now in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Plan", "Draft", "Review", "Publish");
     }
 
     [Fact]
