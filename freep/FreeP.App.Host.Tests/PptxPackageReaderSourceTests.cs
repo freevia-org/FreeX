@@ -63,6 +63,34 @@ public sealed class PptxPackageReaderSourceTests
     }
 
     [Fact]
+    public void SmartArtPictureCaptionList_IsAdmittedOnlyThroughDeterministicNodeImages()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.Core.IO",
+            "PptxPackageReader.cs"));
+
+        ExtractMethod(source, "private static SmartArtData? ReadSmartArtData(")
+            .Should()
+            .Contain("var isLiveLayoutSupported = IsLiveSmartArtLayoutSupported(layoutUniqueId, family);")
+            .And.Contain("if (IsPictureCaptionListLayout(layoutUniqueId))")
+            .And.Contain("isLiveLayoutSupported = false;")
+            .And.Contain("IsLiveLayoutSupported = isLiveLayoutSupported");
+
+        ExtractMethod(source, "private static void TryAttachPictureCaptionListNodePictures(")
+            .Should()
+            .Contain("if (pictures.Count != nodes.Count)")
+            .And.Contain("data.IsLiveLayoutSupported = false;")
+            .And.Contain("nodes[i].Picture = pictures[i];")
+            .And.Contain("data.IsLiveLayoutSupported = true;");
+
+        ExtractMethod(source, "private static bool IsLiveSmartArtLayoutSupported(")
+            .Should()
+            .Contain("picturecaptionlist");
+    }
+
+    [Fact]
     public void DrawingMlSrgbParsing_UsesSharedRgbHelper()
     {
         var root = FindRepositoryRoot();
