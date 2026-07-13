@@ -312,6 +312,49 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_ExportsEllipseShapesAsPdfEllipses()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Ellipse,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x70AD47)),
+            Outline = new ShapeOutline.Visible(SrgbColor.FromRgb(0x2F5597), widthPt: 1.75),
+            Text = "Oval callout",
+        });
+        deck.Slides.Add(slide);
+
+        var ops = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+
+        ops.OfType<PdfFillEllipse>().Should().ContainSingle(fill =>
+            fill.X == 72 &&
+            fill.Y == 378 &&
+            fill.Width == 144 &&
+            fill.Height == 72 &&
+            fill.Color == new PdfColor(0x70, 0xAD, 0x47));
+        ops.OfType<PdfStrokeEllipse>().Should().ContainSingle(stroke =>
+            stroke.X == 72 &&
+            stroke.Y == 378 &&
+            stroke.Width == 144 &&
+            stroke.Height == 72 &&
+            stroke.Color == new PdfColor(0x2F, 0x55, 0x97) &&
+            stroke.LineWidth == 1.75);
+        ops.OfType<PdfFillRect>().Should().BeEmpty("ellipse shapes should not flatten to rectangular fill geometry");
+        ops.OfType<PdfStrokeRect>().Should().BeEmpty("ellipse shapes should not flatten to rectangular outline geometry");
+        ops.OfType<PdfText>().Should().ContainSingle(text =>
+            text.X == 80 &&
+            text.Y == 424 &&
+            text.Text == "Oval callout");
+    }
+
+    [Fact]
     public void BuildDocument_ExportsRotatedRectangleAndTextThroughPdfRotationGroup()
     {
         var deck = Presentation.CreateEmpty();

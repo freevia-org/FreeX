@@ -286,6 +286,22 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "PowerPoint-authoritative fixed-layout, image, video, print, and Backstage visual baselines still require a PowerPoint COM-capable machine; local WPF/Avalonia evidence does not claim Microsoft PowerPoint visual parity."),
         new(
+            EvidenceId: "freep.export.pdf-ellipse-fixed-layout",
+            Area: "Fixed-layout PDF ellipse and oval shape export",
+            Status: "shared-fixed-layout-evidence",
+            HostCoverage: "WPF/Avalonia share the same FreeP PDF exporter, notes-page PDF thumbnail mapper, handout PDF thumbnail mapper, and shared portable/Skia PDF draw-op model",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-pdf-ellipse-export-2026-07-13.md"
+            ],
+            Verification:
+            [
+                "tests/Free.Shared.Pdf.Tests/PortablePdfWriterTests.cs",
+                "freep/FreeP.App.Host.Tests/PresentationPdfExporterTests.cs",
+                "freep/FreeP.App.Presentation.Tests/PresentationExportPlannerTests.cs"
+            ],
+            RemainingWork: "Axis-aligned oval/ellipse fixed-layout output is covered through shared WPF/Avalonia PDF paths. Broader freeform/custom geometry, crop masks, transparency, effects, and PowerPoint-authoritative PDF visual baselines remain deferred."),
+        new(
             EvidenceId: "freep.table.inline-text.workflow-depth",
             Area: "Rich inline table-cell text editing, paragraph formatting, selection, and persistence",
             Status: "shared-planner-and-host-evidence",

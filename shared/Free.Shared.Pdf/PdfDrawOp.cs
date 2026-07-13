@@ -33,6 +33,18 @@ public sealed record PdfStrokeRect(
     PdfColor Color,
     double LineWidth) : PdfDrawOp;
 
+/// <summary>Fills an axis-aligned ellipse inside the supplied rectangular bounds.</summary>
+public sealed record PdfFillEllipse(double X, double Y, double Width, double Height, PdfColor Color) : PdfDrawOp;
+
+/// <summary>Strokes an axis-aligned ellipse inside the supplied rectangular bounds.</summary>
+public sealed record PdfStrokeEllipse(
+    double X,
+    double Y,
+    double Width,
+    double Height,
+    PdfColor Color,
+    double LineWidth) : PdfDrawOp;
+
 /// <summary>
 /// Draws a single run of text. <paramref name="X"/>/<paramref name="Y"/> is the text origin
 /// (baseline left) in PDF user space.

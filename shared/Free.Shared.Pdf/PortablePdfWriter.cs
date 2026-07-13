@@ -89,6 +89,19 @@ public static class PortablePdfWriter
             case PdfStrokeRect stroke:
                 AppendStrokedRectangle(content, stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth);
                 break;
+            case PdfFillEllipse fillEllipse:
+                AppendFilledEllipse(content, fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, fillEllipse.Color);
+                break;
+            case PdfStrokeEllipse strokeEllipse:
+                AppendStrokedEllipse(
+                    content,
+                    strokeEllipse.X,
+                    strokeEllipse.Y,
+                    strokeEllipse.Width,
+                    strokeEllipse.Height,
+                    strokeEllipse.Color,
+                    strokeEllipse.LineWidth);
+                break;
             case PdfText text:
                 AppendText(content, text.X, text.Y, text.FontSize, FontResource(text.Face), text.Color, text.Text);
                 break;
@@ -594,6 +607,66 @@ public static class PortablePdfWriter
         content.AppendLine($"{FormatNumber(lineWidth)} w");
         content.AppendLine($"{FormatNumber(x)} {FormatNumber(y)} {FormatNumber(width)} {FormatNumber(height)} re S");
         content.AppendLine("Q");
+    }
+
+    private static void AppendFilledEllipse(
+        StringBuilder content,
+        double x,
+        double y,
+        double width,
+        double height,
+        PdfColor color)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        content.AppendLine("q");
+        AppendRgb(content, color, "rg");
+        AppendEllipsePath(content, x, y, width, height);
+        content.AppendLine("f");
+        content.AppendLine("Q");
+    }
+
+    private static void AppendStrokedEllipse(
+        StringBuilder content,
+        double x,
+        double y,
+        double width,
+        double height,
+        PdfColor color,
+        double lineWidth)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        content.AppendLine("q");
+        AppendRgb(content, color, "RG");
+        content.AppendLine($"{FormatNumber(lineWidth)} w");
+        AppendEllipsePath(content, x, y, width, height);
+        content.AppendLine("S");
+        content.AppendLine("Q");
+    }
+
+    private static void AppendEllipsePath(
+        StringBuilder content,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        const double kappa = 0.5522847498307936;
+        var rx = width / 2d;
+        var ry = height / 2d;
+        var cx = x + rx;
+        var cy = y + ry;
+        var ox = rx * kappa;
+        var oy = ry * kappa;
+
+        content.AppendLine($"{FormatNumber(cx + rx)} {FormatNumber(cy)} m");
+        content.AppendLine($"{FormatNumber(cx + rx)} {FormatNumber(cy + oy)} {FormatNumber(cx + ox)} {FormatNumber(cy + ry)} {FormatNumber(cx)} {FormatNumber(cy + ry)} c");
+        content.AppendLine($"{FormatNumber(cx - ox)} {FormatNumber(cy + ry)} {FormatNumber(cx - rx)} {FormatNumber(cy + oy)} {FormatNumber(cx - rx)} {FormatNumber(cy)} c");
+        content.AppendLine($"{FormatNumber(cx - rx)} {FormatNumber(cy - oy)} {FormatNumber(cx - ox)} {FormatNumber(cy - ry)} {FormatNumber(cx)} {FormatNumber(cy - ry)} c");
+        content.AppendLine($"{FormatNumber(cx + ox)} {FormatNumber(cy - ry)} {FormatNumber(cx + rx)} {FormatNumber(cy - oy)} {FormatNumber(cx + rx)} {FormatNumber(cy)} c");
     }
 
     private static void AppendLine(
