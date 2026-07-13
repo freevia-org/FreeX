@@ -108,7 +108,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 25;
+    public const int SummarySchemaVersion = 26;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -1502,6 +1502,34 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             rowFailures.Add("scenario expects proofing language evidence but the proofing diagnostics record no language tags");
         }
+        if (!tags.Contains("proofing-adornments", StringComparer.OrdinalIgnoreCase)
+            && !tags.Contains("proofing-underline-intent", StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (proofing.AdornmentCount <= 0)
+            rowFailures.Add("scenario expects proofing visual adornment evidence but the page expectation records none");
+        if (proofing.AdornmentCount != proofing.DiagnosticCount)
+            rowFailures.Add("proofing visual adornment count must match the proofing diagnostic count");
+        if (proofing.SpellingAdornmentCount != proofing.SpellingCount)
+            rowFailures.Add("spelling visual adornment count must match the spelling diagnostic count");
+        if (proofing.GrammarAdornmentCount != proofing.GrammarCount)
+            rowFailures.Add("grammar visual adornment count must match the grammar diagnostic count");
+        if (!proofing.HasSpellingUnderline)
+            rowFailures.Add("scenario expects spelling underline visual evidence but the page expectation records none");
+        if (!proofing.HasGrammarUnderline)
+            rowFailures.Add("scenario expects grammar underline visual evidence but the page expectation records none");
+        if (proofing.AdornmentStableSignatures.Count != proofing.AdornmentCount)
+            rowFailures.Add("proofing visual adornment signatures must cover every adornment");
+        if (proofing.Adornments.Any(adornment =>
+                !string.Equals(adornment.UnderlineStyle, "wavy", StringComparison.Ordinal)
+                || string.IsNullOrWhiteSpace(adornment.ColorHex)
+                || adornment.Length <= 0
+                || adornment.ParagraphEndOffset <= adornment.ParagraphStartOffset))
+        {
+            rowFailures.Add("proofing visual adornments must include stable wavy underline color and range evidence");
+        }
     }
 
     private static void ValidateReviewProtectionFeatureTags(
@@ -2673,6 +2701,24 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{pairName} grammar diagnostic counts differ: WPF {wpfProofing.GrammarCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaProofing.GrammarCount.ToString(CultureInfo.InvariantCulture)}");
         }
 
+        if (wpfProofing.AdornmentCount != avaloniaProofing.AdornmentCount)
+        {
+            failures.Add(
+                $"{pairName} proofing visual adornment counts differ: WPF {wpfProofing.AdornmentCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaProofing.AdornmentCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfProofing.SpellingAdornmentCount != avaloniaProofing.SpellingAdornmentCount)
+        {
+            failures.Add(
+                $"{pairName} spelling visual adornment counts differ: WPF {wpfProofing.SpellingAdornmentCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaProofing.SpellingAdornmentCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (wpfProofing.GrammarAdornmentCount != avaloniaProofing.GrammarAdornmentCount)
+        {
+            failures.Add(
+                $"{pairName} grammar visual adornment counts differ: WPF {wpfProofing.GrammarAdornmentCount.ToString(CultureInfo.InvariantCulture)}, Avalonia {avaloniaProofing.GrammarAdornmentCount.ToString(CultureInfo.InvariantCulture)}");
+        }
+
         var wpfKinds = OrderedSummaries(wpfProofing.Kinds);
         var avaloniaKinds = OrderedSummaries(avaloniaProofing.Kinds);
         if (!wpfKinds.SequenceEqual(avaloniaKinds, StringComparer.Ordinal))
@@ -2695,6 +2741,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             failures.Add(
                 $"{pairName} proofing diagnostic signatures differ: WPF '{FormatSummaries(wpfSignatures)}', Avalonia '{FormatSummaries(avaloniaSignatures)}'");
+        }
+
+        var wpfAdornmentSignatures = OrderedSummaries(wpfProofing.AdornmentStableSignatures);
+        var avaloniaAdornmentSignatures = OrderedSummaries(avaloniaProofing.AdornmentStableSignatures);
+        if (!wpfAdornmentSignatures.SequenceEqual(avaloniaAdornmentSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} proofing visual adornment signatures differ: WPF '{FormatSummaries(wpfAdornmentSignatures)}', Avalonia '{FormatSummaries(avaloniaAdornmentSignatures)}'");
         }
     }
 
@@ -3387,6 +3441,15 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{row.ProofingDiagnostics.DiagnosticCount.ToString(CultureInfo.InvariantCulture)} proofing diagnostic(s), " +
                 $"{row.ProofingDiagnostics.SpellingCount.ToString(CultureInfo.InvariantCulture)} spelling, " +
                 $"{row.ProofingDiagnostics.GrammarCount.ToString(CultureInfo.InvariantCulture)} grammar");
+            if (row.ProofingDiagnostics.AdornmentCount > 0)
+            {
+                parts.Add(
+                    $"{row.ProofingDiagnostics.AdornmentCount.ToString(CultureInfo.InvariantCulture)} proofing visual adornment(s): " +
+                    string.Join("/", row.ProofingDiagnostics.Adornments
+                        .Select(adornment => $"{adornment.AdornmentKind} {adornment.UnderlineStyle} {adornment.ColorHex}")
+                        .Distinct(StringComparer.Ordinal)
+                        .OrderBy(summary => summary, StringComparer.Ordinal)));
+            }
         }
         if (row.ReviewProtection.IsProtected)
         {

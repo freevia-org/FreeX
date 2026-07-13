@@ -70,7 +70,9 @@ public sealed class VisualEvidencePlannerTests
             "resolved-comments",
             "table-comment-anchors",
             "proofing-language",
-            "proofing-diagnostics"]);
+            "proofing-diagnostics",
+            "proofing-adornments",
+            "proofing-underline-intent"]);
         reviewProofingScenario.ExpectedOutputNamePattern.Should().Be("review-proofing-visual-depth_p{page}.png");
         reviewProofingScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
         reviewProofingScenario.Composition.ExpectsComments.Should().BeTrue();
@@ -86,6 +88,9 @@ public sealed class VisualEvidencePlannerTests
             "protection-command-matrix",
             "proofing-replacement-blocked",
             "comment-workflow-blocked"]);
+        reviewProtectionScenario.ExpectedFeatureTags.Should().Contain([
+            "proofing-adornments",
+            "proofing-underline-intent"]);
         reviewProtectionScenario.ExpectedOutputNamePattern.Should()
             .Be("review-protection-proofing-comments-only_p{page}.png");
         reviewProtectionScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
@@ -532,6 +537,27 @@ public sealed class VisualEvidencePlannerTests
             "kind=Spelling|word=acommodate|normalized=acommodate|language=fr-FR|block=5|run=3|runOffset=0|paragraphOffset=34|length=10",
             "kind=Grammar|word=the|normalized=the|language=en-US|block=5|run=5|runOffset=0|paragraphOffset=49|length=3"
         ]);
+        reviewProofingExpectation.ProofingDiagnostics.AdornmentCount.Should().Be(4);
+        reviewProofingExpectation.ProofingDiagnostics.SpellingAdornmentCount.Should().Be(3);
+        reviewProofingExpectation.ProofingDiagnostics.GrammarAdornmentCount.Should().Be(1);
+        reviewProofingExpectation.ProofingDiagnostics.HasSpellingUnderline.Should().BeTrue();
+        reviewProofingExpectation.ProofingDiagnostics.HasGrammarUnderline.Should().BeTrue();
+        reviewProofingExpectation.ProofingDiagnostics.AdornmentStableSignatures.Should().Contain([
+            "diagnostic=kind=Spelling|word=teh|normalized=teh|language=en-US|block=5|run=1|runOffset=0|paragraphOffset=22|length=3|adornment=spelling-squiggle|style=wavy|color=#D13438|block=5|run=1|runOffset=0|paragraphStart=22|paragraphEnd=25|length=3",
+            "diagnostic=kind=Grammar|word=the|normalized=the|language=en-US|block=5|run=5|runOffset=0|paragraphOffset=49|length=3|adornment=grammar-squiggle|style=wavy|color=#2B579A|block=5|run=5|runOffset=0|paragraphStart=49|paragraphEnd=52|length=3"
+        ]);
+        reviewProofingExpectation.ProofingDiagnostics.Adornments.Should().Contain(adornment =>
+            adornment.AdornmentKind == "spelling-squiggle"
+            && adornment.UnderlineStyle == "wavy"
+            && adornment.ColorHex == "#D13438"
+            && adornment.ParagraphStartOffset == 22
+            && adornment.ParagraphEndOffset == 25);
+        reviewProofingExpectation.ProofingDiagnostics.Adornments.Should().Contain(adornment =>
+            adornment.AdornmentKind == "grammar-squiggle"
+            && adornment.UnderlineStyle == "wavy"
+            && adornment.ColorHex == "#2B579A"
+            && adornment.ParagraphStartOffset == 49
+            && adornment.ParagraphEndOffset == 52);
 
         reviewProtection.Protection.Mode.Should().Be(ProtectionMode.CommentsOnly);
         reviewProtection.MarkedAsFinal.Should().BeTrue();
@@ -546,6 +572,7 @@ public sealed class VisualEvidencePlannerTests
         reviewProtectionExpectation.Composition.ExpectsTrackedChanges.Should().BeTrue();
         reviewProtectionExpectation.Composition.ExpectsComments.Should().BeTrue();
         reviewProtectionExpectation.ProofingDiagnostics.DiagnosticCount.Should().Be(4);
+        reviewProtectionExpectation.ProofingDiagnostics.AdornmentCount.Should().Be(4);
         reviewProtectionExpectation.ReviewProtection.ProtectionMode.Should().Be(nameof(ProtectionMode.CommentsOnly));
         reviewProtectionExpectation.ReviewProtection.IsProtected.Should().BeTrue();
         reviewProtectionExpectation.ReviewProtection.IsMarkedAsFinal.Should().BeTrue();
@@ -4172,10 +4199,90 @@ public sealed class VisualEvidencePlannerTests
             summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.GrammarCount == 1);
             summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.HasSpelling);
             summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.HasGrammar);
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.AdornmentCount == 4);
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.SpellingAdornmentCount == 3);
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.GrammarAdornmentCount == 1);
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.HasSpellingUnderline);
+            summary.Evidence.Should().OnlyContain(row => row.ProofingDiagnostics.HasGrammarUnderline);
             summary.Evidence.SelectMany(row => row.ProofingDiagnostics.StableSignatures)
                 .Should().Contain(signature => signature.Contains("kind=Grammar", StringComparison.Ordinal)
                     && signature.Contains("normalized=the", StringComparison.Ordinal)
                     && signature.Contains("language=en-US", StringComparison.Ordinal));
+            summary.Evidence.SelectMany(row => row.ProofingDiagnostics.AdornmentStableSignatures)
+                .Should().Contain(signature => signature.Contains("adornment=grammar-squiggle", StringComparison.Ordinal)
+                    && signature.Contains("style=wavy", StringComparison.Ordinal)
+                    && signature.Contains("color=#2B579A", StringComparison.Ordinal)
+                    && signature.Contains("paragraphStart=49", StringComparison.Ordinal));
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(summary);
+            using var doc = JsonDocument.Parse(json);
+            var firstProofing = doc.RootElement.GetProperty("evidence")[0].GetProperty("proofingDiagnostics");
+            firstProofing.GetProperty("adornmentCount").GetInt32().Should().Be(4);
+            firstProofing.GetProperty("adornments")[0].GetProperty("underlineStyle").GetString().Should().Be("wavy");
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
+            markdown.Should().Contain("4 proofing visual adornment(s)");
+            markdown.Should().Contain("grammar-squiggle wavy #2B579A");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsReviewProofingMissingVisualAdornments()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            const string scenarioId = "review-proofing-visual-depth";
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var missingAdornmentRow = row with
+            {
+                PageExpectation = row.PageExpectation with
+                {
+                    ProofingDiagnostics = row.PageExpectation.ProofingDiagnostics with
+                    {
+                        AdornmentCount = 0,
+                        SpellingAdornmentCount = 0,
+                        GrammarAdornmentCount = 0,
+                        HasSpellingUnderline = false,
+                        HasGrammarUnderline = false,
+                        AdornmentStableSignatures = [],
+                        Adornments = []
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [missingAdornmentRow],
+                new DateTimeOffset(2026, 7, 6, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("scenario expects proofing visual adornment evidence", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("spelling visual adornment count must match", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("grammar visual adornment count must match", StringComparison.Ordinal));
         }
         finally
         {
@@ -4301,7 +4408,11 @@ public sealed class VisualEvidencePlannerTests
                                 ? signature.Replace("language=en-US", "language=de-DE", StringComparison.Ordinal)
                                 : signature)
                             .ToList(),
-                        GrammarCount = 2
+                        AdornmentStableSignatures = avaloniaRow.PageExpectation.ProofingDiagnostics.AdornmentStableSignatures
+                            .Select(signature => signature.Contains("adornment=grammar-squiggle", StringComparison.Ordinal)
+                                ? signature.Replace("color=#2B579A", "color=#D13438", StringComparison.Ordinal)
+                                : signature)
+                            .ToList()
                     }
                 }
             };
@@ -4335,11 +4446,12 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Passed.Should().BeFalse();
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("review renderer pair 'review-proofing-visual-depth' page 1", StringComparison.Ordinal)
-                && f.Contains("grammar diagnostic counts differ", StringComparison.Ordinal));
-            summary.Trust.Failures.Should().Contain(f =>
-                f.Contains("review renderer pair 'review-proofing-visual-depth' page 1", StringComparison.Ordinal)
                 && f.Contains("proofing diagnostic signatures differ", StringComparison.Ordinal)
                 && f.Contains("kind=Grammar", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("review renderer pair 'review-proofing-visual-depth' page 1", StringComparison.Ordinal)
+                && f.Contains("proofing visual adornment signatures differ", StringComparison.Ordinal)
+                && f.Contains("grammar-squiggle", StringComparison.Ordinal));
         }
         finally
         {
