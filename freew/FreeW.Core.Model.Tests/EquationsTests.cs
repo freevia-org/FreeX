@@ -171,6 +171,38 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathRun_Radical_CanCarryNestedDegreeEquation()
+    {
+        var degree = new Equation([
+            MathRun.PlainText("n+"),
+            MathRun.Subscript("k", "1")
+        ]);
+
+        var radical = MathRun.Radical("x + 1", degree);
+
+        radical.Kind.Should().Be(MathRunKind.Radical);
+        radical.Base.Should().Be("x + 1");
+        radical.Degree.Should().Be("n+k_1");
+        radical.DegreeEquation.Should().BeSameAs(degree);
+        radical.LinearText.Should().Be("n+k_1\u221a(x + 1)");
+    }
+
+    [Fact]
+    public void MathRun_Radical_CanCarryNestedRadicandAndDegreeEquations()
+    {
+        var radicand = new Equation([MathRun.Superscript("x", "2")]);
+        var degree = new Equation([MathRun.Fraction("p", "q")]);
+
+        var radical = MathRun.Radical(radicand, degree);
+
+        radical.Base.Should().Be("x^2");
+        radical.Degree.Should().Be("p/q");
+        radical.RadicandEquation.Should().BeSameAs(radicand);
+        radical.DegreeEquation.Should().BeSameAs(degree);
+        radical.LinearText.Should().Be("p/q\u221a(x^2)");
+    }
+
+    [Fact]
     public void MathRun_Radical_LinearText_IsDepthBoundedForCyclicNestedRadicand()
     {
         var equation = new Equation();
@@ -186,6 +218,25 @@ public class EquationsTests
         linearText.Should().NotBeEmpty();
         linearText.Length.Should().BeLessThan(100);
         linearText.Should().Contain("\u221a(x)");
+    }
+
+    [Fact]
+    public void MathRun_Radical_LinearText_IsDepthBoundedForCyclicNestedDegree()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Radical,
+            Base = "x",
+            Degree = "n",
+            DegreeEquation = equation
+        });
+
+        var linearText = equation.LinearText;
+
+        linearText.Should().NotBeEmpty();
+        linearText.Length.Should().BeLessThan(100);
+        linearText.Should().Contain("n\u221a(x)");
     }
 
     [Fact]

@@ -115,6 +115,9 @@ public sealed record MathRun
     /// <summary>Optional structured radicand equation for nested OMML radical slots.</summary>
     public Equation? RadicandEquation { get; init; }
 
+    /// <summary>Optional structured degree equation for nested OMML radical slots.</summary>
+    public Equation? DegreeEquation { get; init; }
+
     /// <summary>Optional structured content equation for nested OMML delimiter slots.</summary>
     public Equation? DelimiterContentEquation { get; init; }
 
@@ -263,8 +266,7 @@ public sealed record MathRun
         new() { Kind = MathRunKind.Radical, Base = radicand, Degree = degree ?? string.Empty };
 
     /// <summary>
-    /// Creates a radical fragment (m:rad) whose radicand is a structured equation. The degree remains
-    /// text-only for this bounded slice.
+    /// Creates a radical fragment (m:rad) whose radicand is a structured equation.
     /// </summary>
     public static MathRun Radical(Equation radicand, string degree = "")
     {
@@ -276,6 +278,36 @@ public sealed record MathRun
             Base = radicand.LinearText,
             Degree = degree ?? string.Empty,
             RadicandEquation = radicand
+        };
+    }
+
+    /// <summary>Creates a radical fragment (m:rad) whose degree is a structured equation.</summary>
+    public static MathRun Radical(string radicand, Equation degree)
+    {
+        ArgumentNullException.ThrowIfNull(degree);
+
+        return new()
+        {
+            Kind = MathRunKind.Radical,
+            Base = radicand,
+            Degree = degree.LinearText,
+            DegreeEquation = degree
+        };
+    }
+
+    /// <summary>Creates a radical fragment (m:rad) whose radicand and degree are structured equations.</summary>
+    public static MathRun Radical(Equation radicand, Equation degree)
+    {
+        ArgumentNullException.ThrowIfNull(radicand);
+        ArgumentNullException.ThrowIfNull(degree);
+
+        return new()
+        {
+            Kind = MathRunKind.Radical,
+            Base = radicand.LinearText,
+            Degree = degree.LinearText,
+            RadicandEquation = radicand,
+            DegreeEquation = degree
         };
     }
 
@@ -427,9 +459,9 @@ public sealed record MathRun
         MathRunKind.Subscript => $"{SlotLinearText(ScriptBaseEquation, Base, depth)}_{SlotLinearText(ScriptSubEquation, Sub, depth)}",
         MathRunKind.SubSuperscript => $"{SlotLinearText(ScriptBaseEquation, Base, depth)}_{SlotLinearText(ScriptSubEquation, Sub, depth)}^{SlotLinearText(ScriptSupEquation, Sup, depth)}",
         MathRunKind.Fraction => $"{SlotLinearText(NumeratorEquation, Numerator, depth)}/{SlotLinearText(DenominatorEquation, Denominator, depth)}",
-        MathRunKind.Radical => string.IsNullOrEmpty(Degree)
+        MathRunKind.Radical => string.IsNullOrEmpty(SlotLinearText(DegreeEquation, Degree, depth))
             ? $"√({SlotLinearText(RadicandEquation, Base, depth)})"
-            : $"{Degree}√({SlotLinearText(RadicandEquation, Base, depth)})",
+            : $"{SlotLinearText(DegreeEquation, Degree, depth)}√({SlotLinearText(RadicandEquation, Base, depth)})",
         MathRunKind.NAry => $"{Operator}({SlotLinearText(NAryLowerLimitEquation, Sub, depth)}..{SlotLinearText(NAryUpperLimitEquation, Sup, depth)}) {SlotLinearText(NAryOperandEquation, Base, depth)}".TrimEnd(),
         MathRunKind.Accent => $"{SlotLinearText(DecoratorBaseEquation, Base, depth)}{Accent}",
         MathRunKind.Bar => BarTop ? $"‾{SlotLinearText(DecoratorBaseEquation, Base, depth)}‾" : $"_{SlotLinearText(DecoratorBaseEquation, Base, depth)}_",

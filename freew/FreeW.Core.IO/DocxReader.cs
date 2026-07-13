@@ -1821,22 +1821,26 @@ public static class DocxReader
 
     /// <summary>
     /// Reads a radical (m:rad). When m:radPr/m:degHide is "1" (or m:deg is empty) it is a square root
-    /// (empty degree); otherwise the m:deg text is the nth-root degree. Mirrors <c>DocxWriter.BuildRadical</c>.
+    /// (empty degree); otherwise m:deg is the nth-root degree. Mirrors <c>DocxWriter.BuildRadical</c>.
     /// </summary>
     private static MathRun ReadRadical(XElement rad)
     {
         var degHide = rad.Element(M + "radPr")?.Element(M + "degHide")?.Attribute(M + "val")?.Value;
-        var degText = MathTextOf(rad.Element(M + "deg"));
+        var degreeSlot = rad.Element(M + "deg");
+        var degText = MathTextOf(degreeSlot);
         var degree = degHide == "1" ? string.Empty : degText;
         var radicand = rad.Element(M + "e");
         var radicandText = MathTextOf(radicand);
-        return HasStructuredMathSlot(radicand)
+        var hasNestedDegree = degHide != "1" && HasStructuredMathSlot(degreeSlot);
+        var hasNestedRadicand = HasStructuredMathSlot(radicand);
+        return hasNestedDegree || hasNestedRadicand
             ? new MathRun
             {
                 Kind = MathRunKind.Radical,
                 Base = radicandText,
                 Degree = degree,
-                RadicandEquation = ReadMathSlot(radicand)
+                RadicandEquation = hasNestedRadicand ? ReadMathSlot(radicand) : null,
+                DegreeEquation = hasNestedDegree ? ReadMathSlot(degreeSlot) : null
             }
             : MathRun.Radical(radicandText, degree);
     }

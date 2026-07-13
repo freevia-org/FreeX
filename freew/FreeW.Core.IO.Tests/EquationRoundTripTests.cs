@@ -407,6 +407,54 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedRadicalDegree_SurvivesRoundTripAndEmitsDirectSlotChildren()
+    {
+        var equation = new Equation([
+            MathRun.Radical(
+                new Equation([
+                    MathRun.PlainText("a+"),
+                    MathRun.Superscript("x", "2")
+                ]),
+                new Equation([
+                    MathRun.PlainText("n+"),
+                    MathRun.Subscript("k", "1")
+                ]))
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var radical = roundTripped.Runs[0];
+        radical.Kind.Should().Be(MathRunKind.Radical);
+        radical.Base.Should().Be("a+x2");
+        radical.Degree.Should().Be("n+k1");
+        radical.RadicandEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        radical.DegreeEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        radical.DegreeEquation.Runs[1].Base.Should().Be("k");
+        radical.DegreeEquation.Runs[1].Sub.Should().Be("1");
+        roundTripped.LinearText.Should().Be("n+k_1\u221a(a+x^2)");
+
+        var writtenRadical = xml.Descendants(M + "rad").Single();
+        writtenRadical.Elements().Select(element => element.Name.LocalName)
+            .Should().Equal("radPr", "deg", "e");
+        var degree = writtenRadical.Element(M + "deg")!;
+        degree.Elements(M + "oMath").Should().BeEmpty();
+        degree.Elements(M + "r").Should().ContainSingle();
+        degree.Elements(M + "sSub").Should().ContainSingle();
+        var radicand = writtenRadical.Element(M + "e")!;
+        radicand.Elements(M + "oMath").Should().BeEmpty();
+        radicand.Elements(M + "sSup").Should().ContainSingle();
+    }
+
+    [Fact]
     public void RawNestedRadicalRadicand_ReadsAsNestedEquation()
     {
         var documentXml = $$"""
@@ -441,6 +489,44 @@ public class EquationRoundTripTests
         radical.RadicandEquation!.Runs.Select(run => run.Kind)
             .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
         equation.LinearText.Should().Be("3\u221a(a+x^2)");
+    }
+
+    [Fact]
+    public void RawNestedRadicalDegree_ReadsAsNestedEquation()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:rad>
+                      <m:radPr><m:degHide m:val="0" /></m:radPr>
+                      <m:deg>
+                        <m:r><m:t>n+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>k</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:deg>
+                      <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                    </m:rad>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Should().ContainSingle();
+        var radical = equation.Runs[0];
+        radical.Kind.Should().Be(MathRunKind.Radical);
+        radical.Degree.Should().Be("n+k1");
+        radical.DegreeEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        radical.RadicandEquation.Should().BeNull();
+        equation.LinearText.Should().Be("n+k_1\u221a(x)");
     }
 
     [Fact]
