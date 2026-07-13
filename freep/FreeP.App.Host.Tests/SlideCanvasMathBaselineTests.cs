@@ -723,4 +723,41 @@ public sealed class SlideCanvasMathBaselineTests
 
         act.Should().NotThrow();
     }
+
+    [StaFact]
+    public void RenderParaWithMath_ArgumentSize_UsesSharedScaledGlyphPlan_DoesNotThrow()
+    {
+        var mathNode = ParseOmml(
+            "<m:sSup>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "<m:sup><m:argPr><m:argSz m:val=\"1\"/></m:argPr><m:r><m:t>2</m:t></m:r></m:sup>" +
+            "</m:sSup>");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+        var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "x", "2" },
+            "m:argPr/m:argSz glyph ordering must be resolved in the shared MathBox plan before WPF draws it");
+        glyphs.Single(g => g.Text == "2").FontSizePt.Should().BeApproximately(18.0, 0.001,
+            "the shared plan should carry the superscript argument's +1 script-size adjustment to WPF");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "A = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
 }

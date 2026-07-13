@@ -986,6 +986,46 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void BoxArgument_WithArgSizeMinusOne_WrapsBaseInSharedArgumentSizeNode()
+    {
+        var node = Parse(
+            "<m:box>" +
+            "<m:e><m:argPr><m:argSz m:val=\"-1\"/></m:argPr><m:r><m:t>abc</m:t></m:r></m:e>" +
+            "</m:box>");
+
+        var box = Assert.IsType<MathNode.Box>(node);
+        var argSize = Assert.IsType<MathNode.ArgSize>(box.Base);
+        Assert.Equal(-1, argSize.Adjustment);
+        Assert.Equal("abc", Assert.IsType<MathNode.Run>(argSize.Base).Text);
+    }
+
+    [Fact]
+    public void SuperscriptArgument_WithArgSizePlusOne_PreservesLargerScriptRequest()
+    {
+        var node = Parse(
+            "<m:sSup>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "<m:sup><m:argPr><m:argSz m:val=\"1\"/></m:argPr><m:r><m:t>2</m:t></m:r></m:sup>" +
+            "</m:sSup>");
+
+        var sup = Assert.IsType<MathNode.Sup>(node);
+        var argSize = Assert.IsType<MathNode.ArgSize>(sup.Script);
+        Assert.Equal(1, argSize.Adjustment);
+        Assert.Equal("2", Assert.IsType<MathNode.Run>(argSize.Base).Text);
+    }
+
+    [Theory]
+    [InlineData("-4", -2)]
+    [InlineData("4", 2)]
+    public void ArgumentSize_ClampsToOmmlScriptLevelRange(string val, int expected)
+    {
+        var node = Parse($"<m:box><m:e><m:argPr><m:argSz m:val=\"{val}\"/></m:argPr><m:r><m:t>x</m:t></m:r></m:e></m:box>");
+
+        var box = Assert.IsType<MathNode.Box>(node);
+        Assert.Equal(expected, Assert.IsType<MathNode.ArgSize>(box.Base).Adjustment);
+    }
+
+    [Fact]
     public void BorderBox_ParsesHiddenSideFlags()
     {
         var node = Parse(

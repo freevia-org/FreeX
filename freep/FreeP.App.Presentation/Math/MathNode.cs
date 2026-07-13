@@ -309,6 +309,21 @@ public abstract class MathNode
         }
     }
 
+    /// <summary><c>m:argPr/m:argSz</c> -- script-size adjustment for a math argument.</summary>
+    public sealed class ArgSize : MathNode
+    {
+        public MathNode Base { get; }
+
+        /// <summary>Argument script-size delta, clamped to the OMML -2..2 range.</summary>
+        public int Adjustment { get; }
+
+        public ArgSize(MathNode @base, int adjustment)
+        {
+            Base = @base;
+            Adjustment = System.Math.Clamp(adjustment, -2, 2);
+        }
+    }
+
     /// <summary><c>m:phant</c> -- optionally hidden expression that still reserves selected metrics.</summary>
     public sealed class Phantom : MathNode
     {

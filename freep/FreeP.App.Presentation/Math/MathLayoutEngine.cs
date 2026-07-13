@@ -178,6 +178,7 @@ public static class MathLayoutEngine
             MathNode.Acc     a  => LayoutAcc(a, fontFamily, fontSizePt),
             MathNode.Bar     b  => LayoutBar(b, fontFamily, fontSizePt),
             MathNode.Box     bx => LayoutBox(bx, fontFamily, fontSizePt),
+            MathNode.ArgSize arg => LayoutArgSize(arg, fontFamily, fontSizePt),
             MathNode.Phantom ph => LayoutPhantom(ph, fontFamily, fontSizePt),
             MathNode.BorderBox bb => LayoutBorderBox(bb, fontFamily, fontSizePt),
             MathNode.GroupChr g => LayoutGroupChr(g, fontFamily, fontSizePt),
@@ -1087,6 +1088,12 @@ public static class MathLayoutEngine
         c.Children.Add(baseBox);
 
         return c;
+    }
+
+    private static MathBox LayoutArgSize(MathNode.ArgSize argSize, string fontFamily, double fontSizePt)
+    {
+        var scale = Math.Pow(0.70, -argSize.Adjustment);
+        return LayoutNode(argSize.Base, fontFamily, fontSizePt * scale);
     }
 
     private static MathBox LayoutPhantom(MathNode.Phantom phantom, string fontFamily, double fontSizePt)

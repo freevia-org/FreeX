@@ -84,9 +84,16 @@ public static class OmmlParser
         List<MathNode>? rows = null;
         List<int?>? alignmentPointIndices = null;
         int? currentAlignmentPointIndex = null;
+        int? argumentSizeAdjustment = null;
 
         foreach (var child in container.Elements())
         {
+            if (TryReadArgumentSize(child, out var childArgumentSizeAdjustment))
+            {
+                argumentSizeAdjustment = childArgumentSizeAdjustment;
+                continue;
+            }
+
             if (TryReadManualBreak(child, out var breakAlignmentPointIndex))
             {
                 if (children.Count > 0)
@@ -110,10 +117,12 @@ public static class OmmlParser
         {
             rows.Add(CreateRow(children));
             alignmentPointIndices!.Add(currentAlignmentPointIndex);
-            return new MathNode.EqArray(rows, alignmentPointIndices);
+            return ApplyArgumentSize(
+                new MathNode.EqArray(rows, alignmentPointIndices),
+                argumentSizeAdjustment);
         }
 
-        return CreateRow(children);
+        return ApplyArgumentSize(CreateRow(children), argumentSizeAdjustment);
     }
 
     // ── Dispatcher ────────────────────────────────────────────────────────
@@ -148,6 +157,7 @@ public static class OmmlParser
             "m"        => ParseMatrix(el),
             "eqArr"    => ParseEqArray(el),
             "aln"      => null,
+            "argPr"    => null,
             "brk"      => null,
             "oMathPara"=> ParseRow(el),
             _          => ParseUnknown(el)
@@ -631,6 +641,25 @@ public static class OmmlParser
         alignmentPointIndex = ReadAlnAt(brk);
         return true;
     }
+
+    private static bool TryReadArgumentSize(XElement element, out int argumentSizeAdjustment)
+    {
+        argumentSizeAdjustment = 0;
+
+        if (element.Name != M + "argPr")
+            return false;
+
+        var value = ReadVal(element.Element(M + "argSz"));
+        if (int.TryParse(value, out var parsed))
+            argumentSizeAdjustment = Math.Clamp(parsed, -2, 2);
+
+        return true;
+    }
+
+    private static MathNode ApplyArgumentSize(MathNode node, int? argumentSizeAdjustment) =>
+        argumentSizeAdjustment.HasValue && argumentSizeAdjustment.Value != 0
+            ? new MathNode.ArgSize(node, argumentSizeAdjustment.Value)
+            : node;
 
     private static int? ReadAlnAt(XElement brk)
     {

@@ -351,6 +351,43 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void ArgumentSizeMinusOne_ScalesArgumentGlyphInSharedDrawPlan()
+    {
+        var node = ParseOmml(
+            "<m:box>" +
+            "<m:e><m:argPr><m:argSz m:val=\"-1\"/></m:argPr><m:r><m:t>abc</m:t></m:r></m:e>" +
+            "</m:box>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var op = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        op.Text.Should().Be("abc");
+        op.FontSizePt.Should().BeApproximately(FontSizePt * 0.70, 0.001,
+            "m:argPr/m:argSz=-1 should reduce the argument by one shared script-size level before either host draws it");
+    }
+
+    [Fact]
+    public void SuperscriptArgumentSizePlusOne_RestoresScriptGlyphTowardTextSize()
+    {
+        var node = ParseOmml(
+            "<m:sSup>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "<m:sup><m:argPr><m:argSz m:val=\"1\"/></m:argPr><m:r><m:t>2</m:t></m:r></m:sup>" +
+            "</m:sSup>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var glyphs = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "x", "2" });
+        glyphs.Single(g => g.Text == "2").FontSizePt.Should().BeApproximately(FontSizePt, 0.001,
+            "a +1 argument-size request inside the superscript should offset the default script shrink in shared layout");
+    }
+
+    [Fact]
     public void Sup_OnNormalBase_ContainerAscentGrowsToContainRaisedScript()
     {
         // sup on 'x': ideal scriptY = baseAscent - 0.40em - scriptAscent is
