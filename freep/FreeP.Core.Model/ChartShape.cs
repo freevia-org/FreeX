@@ -29,6 +29,9 @@ public enum ChartType
 /// <summary>Scatter/bubble style read from c:scatterStyle or similar.</summary>
 public enum ScatterStyle { Marker, LineMarker, Line, Smooth, SmoothMarker }
 
+/// <summary>PowerPoint bubble-size representation from <c>c:sizeRepresents</c>.</summary>
+public enum BubbleSizeRepresentation { Area, Width }
+
 /// <summary>Radar style read from c:radarStyle.</summary>
 public enum RadarStyle { Standard, Marker, Filled }
 
@@ -440,6 +443,24 @@ public sealed class ChartShape
     /// Populated for Scatter and Bubble chart types.
     /// </summary>
     public ScatterStyle ScatterStyle { get; set; } = ScatterStyle.Marker;
+
+    /// <summary>
+    /// Bubble chart scale percentage from <c>c:bubbleScale</c>.
+    /// Default 100 (PowerPoint default); clamped by render and write paths to the OOXML UI range.
+    /// </summary>
+    public int BubbleScalePercent { get; set; } = 100;
+
+    /// <summary>
+    /// Whether bubble size values represent bubble area or width (<c>c:sizeRepresents</c>).
+    /// PowerPoint defaults to area sizing.
+    /// </summary>
+    public BubbleSizeRepresentation BubbleSizeRepresents { get; set; } = BubbleSizeRepresentation.Area;
+
+    /// <summary>
+    /// True when negative bubble sizes should remain visible (<c>c:showNegBubbles</c>).
+    /// PowerPoint hides negative bubbles by default.
+    /// </summary>
+    public bool ShowNegativeBubbles { get; set; }
 
     /// <summary>
     /// Radar chart style (standard, marker, filled).

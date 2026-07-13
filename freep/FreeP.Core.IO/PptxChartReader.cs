@@ -437,9 +437,23 @@ internal static class PptxChartReader
         // Bubble charts also have a scatterStyle-like attribute (c:bubble3D is irrelevant for us).
         // Treat as SmoothMarker by default; exact style rarely stored explicitly.
         shape.ScatterStyle = ScatterStyle.Marker;
+        shape.BubbleScalePercent = ReadBubbleScalePercent(el);
+        shape.BubbleSizeRepresents = ReadBubbleSizeRepresentation(el);
+        shape.ShowNegativeBubbles = ParseBoolAttr(el.Element(C + "showNegBubbles"));
 
         ReadBubbleSeriesFromChart(el, shape, scheme, idxMap);
     }
+
+    private static int ReadBubbleScalePercent(XElement bubbleChartEl)
+    {
+        var parsed = ParseNullableInt(bubbleChartEl.Element(C + "bubbleScale")?.Attribute("val")?.Value);
+        return parsed.HasValue ? Math.Clamp(parsed.Value, 0, 300) : 100;
+    }
+
+    private static BubbleSizeRepresentation ReadBubbleSizeRepresentation(XElement bubbleChartEl) =>
+        bubbleChartEl.Element(C + "sizeRepresents")?.Attribute("val")?.Value == "w"
+            ? BubbleSizeRepresentation.Width
+            : BubbleSizeRepresentation.Area;
 
     private static void ReadVaryColors(XElement chartTypeEl, ChartShape shape) =>
         shape.VaryColors = ParseBoolAttr(chartTypeEl.Element(C + "varyColors"));

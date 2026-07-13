@@ -1405,6 +1405,97 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildBubblePrimitivePlan_WidthSizingUsesLinearRadii()
+    {
+        var series = new ChartSeries { Name = "Bubble" };
+        series.XValues.AddRange(new double?[] { 0, 100 });
+        series.Values.AddRange(new double?[] { 0, 40 });
+        series.BubbleSizes.AddRange(new double?[] { 25, 100 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Bubble,
+            BubbleSizeRepresents = BubbleSizeRepresentation.Width
+        };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 160, 80));
+
+        plan.Bubbles.Should().HaveCount(2);
+        plan.Bubbles[0].Radius.Should().BeApproximately(2.5, 0.0001);
+        plan.Bubbles[1].Radius.Should().BeApproximately(10, 0.0001);
+    }
+
+    [Fact]
+    public void BuildBubblePrimitivePlan_BubbleScaleChangesMaxRadius()
+    {
+        var series = new ChartSeries { Name = "Bubble" };
+        series.XValues.AddRange(new double?[] { 0, 100 });
+        series.Values.AddRange(new double?[] { 0, 40 });
+        series.BubbleSizes.AddRange(new double?[] { 25, 100 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Bubble,
+            BubbleScalePercent = 150
+        };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 160, 80));
+
+        plan.Bubbles.Should().HaveCount(2);
+        plan.Bubbles[0].Radius.Should().BeApproximately(7.5, 0.0001);
+        plan.Bubbles[1].Radius.Should().BeApproximately(15, 0.0001);
+    }
+
+    [Fact]
+    public void BuildBubblePrimitivePlan_HidesNegativeBubblesByDefault()
+    {
+        var series = new ChartSeries { Name = "Bubble" };
+        series.XValues.AddRange(new double?[] { 0, 50, 100 });
+        series.Values.AddRange(new double?[] { 0, 20, 40 });
+        series.BubbleSizes.AddRange(new double?[] { 25, -50, 100 });
+
+        var chart = new ChartShape { ChartType = ChartType.Bubble };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 160, 80));
+
+        plan.Bubbles.Should().HaveCount(2);
+        plan.Bubbles.Select(b => b.PointIndex).Should().Equal(0, 2);
+    }
+
+    [Fact]
+    public void BuildBubblePrimitivePlan_ShowNegativeBubblesUsesAbsoluteAuthoredSize()
+    {
+        var series = new ChartSeries { Name = "Bubble" };
+        series.XValues.AddRange(new double?[] { 0, 50, 100 });
+        series.Values.AddRange(new double?[] { 0, 20, 40 });
+        series.BubbleSizes.AddRange(new double?[] { 25, -100, 100 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Bubble,
+            ShowNegativeBubbles = true
+        };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 160, 80));
+
+        plan.Bubbles.Should().HaveCount(3);
+        plan.Bubbles[1].Radius.Should().BeApproximately(10, 0.0001);
+        plan.Bubbles[2].Radius.Should().BeApproximately(10, 0.0001);
+    }
+
+    [Fact]
     public void BuildRadarPrimitivePlan_PlansRingsSpokesLabelsAndSeries()
     {
         var series = new ChartSeries { Name = "Radar" };
