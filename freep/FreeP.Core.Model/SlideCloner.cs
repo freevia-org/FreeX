@@ -12,7 +12,7 @@ namespace FreeP.Core.Model;
 /// - Collections (<see cref="Slide.Shapes"/>, <see cref="TextBody.Paragraphs"/>, etc.) are
 ///   deep-cloned so mutations on the copy do not affect the original.
 /// - <see cref="ImagePart"/> bytes are shared (byte arrays are treated as immutable once loaded).
-/// - <see cref="TableShape"/> and <see cref="ChartShape"/> data is deep-cloned.
+/// - <see cref="TableShape"/>, <see cref="ChartShape"/>, and editable SmartArt data are deep-cloned.
 /// </summary>
 public static class SlideCloner
 {
@@ -79,7 +79,7 @@ public static class SlideCloner
             TextBody       = PresentationModelCloneHelper.CloneTextBody(shape.TextBody),
             Table          = shape.Table is null ? null : PresentationModelCloneHelper.CloneTable(shape.Table),
             Chart          = shape.Chart    is null ? null : CloneChart(shape.Chart),
-            SmartArt       = shape.SmartArt,  // SmartArtShape bytes are immutable once loaded — share
+            SmartArt       = shape.SmartArt is null ? null : CloneSmartArt(shape.SmartArt),
             Hyperlink      = PresentationModelCloneHelper.CloneHyperlink(shape.Hyperlink),
         };
 
@@ -231,6 +231,102 @@ public static class SlideCloner
         HasMajorGridlines = a.HasMajorGridlines,
         Delete            = a.Delete,
     };
+
+    private static SmartArtShape CloneSmartArt(SmartArtShape source)
+    {
+        var copy = new SmartArtShape
+        {
+            Data = source.Data is null ? null : CloneSmartArtData(source.Data),
+            QuickStyle = source.QuickStyle is null ? null : CloneSmartArtQuickStyle(source.QuickStyle),
+            Colors = source.Colors is null ? null : CloneSmartArtColors(source.Colors),
+            DrawingPartPath = source.DrawingPartPath,
+        };
+
+        foreach (var fallbackShape in source.FallbackShapes)
+            copy.FallbackShapes.Add(CloneShape(fallbackShape));
+
+        foreach (var kv in source.DiagramRelIds)
+            copy.DiagramRelIds[kv.Key] = kv.Value;
+
+        foreach (var kv in source.Parts)
+        {
+            copy.Parts[kv.Key] = new DiagramPart
+            {
+                ContentType = kv.Value.ContentType,
+                PartPath = kv.Value.PartPath,
+                Bytes = kv.Value.Bytes,
+            };
+        }
+
+        foreach (var kv in source.PartRels)
+            copy.PartRels[kv.Key] = kv.Value;
+
+        return copy;
+    }
+
+    private static SmartArtData CloneSmartArtData(SmartArtData source)
+    {
+        var copy = new SmartArtData
+        {
+            Family = source.Family,
+            LayoutUniqueId = source.LayoutUniqueId,
+            IsLiveLayoutSupported = source.IsLiveLayoutSupported,
+        };
+
+        foreach (var node in source.Nodes)
+            copy.Nodes.Add(CloneSmartArtNode(node));
+
+        return copy;
+    }
+
+    private static SmartArtNode CloneSmartArtNode(SmartArtNode source)
+    {
+        var copy = new SmartArtNode
+        {
+            ModelId = source.ModelId,
+            Text = source.Text,
+            Level = source.Level,
+            IsAssistant = source.IsAssistant,
+            Picture = source.Picture,
+        };
+
+        foreach (var child in source.Children)
+            copy.Children.Add(CloneSmartArtNode(child));
+
+        return copy;
+    }
+
+    private static SmartArtQuickStyleMetadata CloneSmartArtQuickStyle(SmartArtQuickStyleMetadata source)
+    {
+        var copy = new SmartArtQuickStyleMetadata
+        {
+            UniqueId = source.UniqueId,
+            Title = source.Title,
+            Category = source.Category,
+        };
+
+        foreach (var label in source.StyleLabels)
+            copy.StyleLabels.Add(label);
+
+        return copy;
+    }
+
+    private static SmartArtColorMetadata CloneSmartArtColors(SmartArtColorMetadata source)
+    {
+        var copy = new SmartArtColorMetadata
+        {
+            UniqueId = source.UniqueId,
+            Title = source.Title,
+            Category = source.Category,
+        };
+
+        foreach (var label in source.ColorLabels)
+            copy.ColorLabels.Add(label);
+        foreach (var color in source.Palette)
+            copy.Palette.Add(color);
+
+        return copy;
+    }
 
     private static SlideComment CloneComment(SlideComment c)
     {
