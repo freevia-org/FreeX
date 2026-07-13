@@ -169,6 +169,37 @@ public sealed record InCanvasEditorParagraphStyle(
         !BulletSuppressed && BulletKind != BulletKind.None;
 }
 
+public sealed record InCanvasEditorSelectedListState(
+    bool HasSelectedParagraphs,
+    bool HasListFormatting,
+    bool HasMixedListFormatting,
+    string? PresetId,
+    string? DisplayName,
+    string? PreviewText,
+    PresentationListGalleryItemKind? GalleryItemKind,
+    BulletKind? BulletKind,
+    string? BulletChar,
+    AutoNumType? AutoNumType,
+    int? AutoNumStartAt,
+    bool IsPictureBullet)
+{
+    public bool HasResolvedPreset => !string.IsNullOrWhiteSpace(PresetId);
+
+    public static readonly InCanvasEditorSelectedListState None = new(
+        HasSelectedParagraphs: false,
+        HasListFormatting: false,
+        HasMixedListFormatting: false,
+        PresetId: null,
+        DisplayName: null,
+        PreviewText: null,
+        GalleryItemKind: null,
+        BulletKind: null,
+        BulletChar: null,
+        AutoNumType: null,
+        AutoNumStartAt: null,
+        IsPictureBullet: false);
+}
+
 public sealed record InCanvasEditorTextStyleState(
     string? FontFamily,
     double? FontSizePt,
@@ -198,6 +229,7 @@ public sealed record InCanvasTableCellRichTextEditPlan(
     IReadOnlyList<InCanvasEditorSelectedRunRange> SelectedRunRanges,
     IReadOnlyList<InCanvasEditorParagraphStyle> Paragraphs,
     IReadOnlyList<InCanvasEditorParagraphStyle> SelectedParagraphs,
+    InCanvasEditorSelectedListState SelectedListState,
     bool HasMixedParagraphFormatting)
 {
     public bool HasRichFormatting => Runs.Count > 1 || HasMixedFormatting;
@@ -349,6 +381,20 @@ public static class TableCellListPresetCatalog
     {
         preset = BuiltIn.FirstOrDefault(candidate =>
             StringComparer.OrdinalIgnoreCase.Equals(candidate.Id, id));
+        return preset is not null;
+    }
+
+    public static bool TryMatch(
+        BulletKind bulletKind,
+        string? bulletChar,
+        AutoNumType? autoNumType,
+        out TableCellListPresetDescriptor? preset)
+    {
+        preset = BuiltIn.FirstOrDefault(candidate =>
+            candidate.BulletKind == bulletKind &&
+            (bulletKind != BulletKind.Char || StringComparer.Ordinal.Equals(candidate.BulletChar, bulletChar)) &&
+            (bulletKind != BulletKind.Auto || candidate.AutoNumType == autoNumType));
+
         return preset is not null;
     }
 }
@@ -581,6 +627,7 @@ public static class TableCellEditPlanner
             selectedRunRanges,
             paragraphs,
             selectedParagraphs,
+            BuildSelectedListState(selectedParagraphs),
             HasMixedParagraphFormatting(paragraphs));
     }
 
@@ -1301,6 +1348,119 @@ public static class TableCellEditPlanner
 
         return selected;
     }
+
+    private static InCanvasEditorSelectedListState BuildSelectedListState(
+        IReadOnlyList<InCanvasEditorParagraphStyle> selectedParagraphs)
+    {
+        if (selectedParagraphs.Count == 0)
+            return InCanvasEditorSelectedListState.None;
+
+        var listParagraphs = selectedParagraphs
+            .Where(paragraph => paragraph.HasListFormatting)
+            .ToArray();
+
+        if (listParagraphs.Length == 0)
+        {
+            return InCanvasEditorSelectedListState.None with
+            {
+                HasSelectedParagraphs = true,
+            };
+        }
+
+        bool hasMixedListFormatting = selectedParagraphs.Count != listParagraphs.Length ||
+            listParagraphs
+                .Skip(1)
+                .Any(paragraph => !ListStateEquals(listParagraphs[0], paragraph));
+
+        var first = listParagraphs[0];
+        if (hasMixedListFormatting)
+        {
+            return new InCanvasEditorSelectedListState(
+                HasSelectedParagraphs: true,
+                HasListFormatting: true,
+                HasMixedListFormatting: true,
+                PresetId: null,
+                DisplayName: null,
+                PreviewText: null,
+                GalleryItemKind: null,
+                BulletKind: null,
+                BulletChar: null,
+                AutoNumType: null,
+                AutoNumStartAt: null,
+                IsPictureBullet: false);
+        }
+
+        if (first.BulletKind == BulletKind.Image)
+        {
+            return new InCanvasEditorSelectedListState(
+                HasSelectedParagraphs: true,
+                HasListFormatting: true,
+                HasMixedListFormatting: false,
+                PresetId: null,
+                DisplayName: "Picture Bullet",
+                PreviewText: "[image]",
+                GalleryItemKind: PresentationListGalleryItemKind.ImageBullet,
+                BulletKind: BulletKind.Image,
+                BulletChar: null,
+                AutoNumType: null,
+                AutoNumStartAt: null,
+                IsPictureBullet: true);
+        }
+
+        if (TableCellListPresetCatalog.TryMatch(
+                first.BulletKind,
+                first.BulletChar,
+                first.AutoNumType,
+                out var preset) &&
+            preset is not null)
+        {
+            var itemKind = preset.BulletKind == BulletKind.Auto
+                ? PresentationListGalleryItemKind.Numbering
+                : PresentationListGalleryItemKind.CharacterBullet;
+
+            return new InCanvasEditorSelectedListState(
+                HasSelectedParagraphs: true,
+                HasListFormatting: true,
+                HasMixedListFormatting: false,
+                preset.Id,
+                preset.DisplayName,
+                PresentationListGalleryPlanner.GetPresetPreviewText(preset),
+                itemKind,
+                preset.BulletKind,
+                preset.BulletChar,
+                preset.AutoNumType,
+                first.AutoNumStartAt,
+                IsPictureBullet: false);
+        }
+
+        return new InCanvasEditorSelectedListState(
+            HasSelectedParagraphs: true,
+            HasListFormatting: true,
+            HasMixedListFormatting: false,
+            PresetId: null,
+            DisplayName: first.BulletKind == BulletKind.Auto ? "Custom Numbering" : "Custom Bullet",
+            PreviewText: first.BulletKind == BulletKind.Auto
+                ? "1.  Custom Numbering"
+                : $"{(string.IsNullOrEmpty(first.BulletChar) ? DefaultBulletChar : first.BulletChar)}  Custom Bullet",
+            GalleryItemKind: first.BulletKind == BulletKind.Auto
+                ? PresentationListGalleryItemKind.Numbering
+                : PresentationListGalleryItemKind.CharacterBullet,
+            BulletKind: first.BulletKind,
+            BulletChar: first.BulletChar,
+            AutoNumType: first.AutoNumType,
+            AutoNumStartAt: first.AutoNumStartAt,
+            IsPictureBullet: false);
+    }
+
+    private static bool ListStateEquals(
+        InCanvasEditorParagraphStyle left,
+        InCanvasEditorParagraphStyle right) =>
+        left.BulletKind == right.BulletKind &&
+        left.BulletChar == right.BulletChar &&
+        left.AutoNumType == right.AutoNumType &&
+        left.AutoNumStartAt == right.AutoNumStartAt &&
+        left.BulletSuppressed == right.BulletSuppressed &&
+        ImagePartsEqual(left.BulletImage, right.BulletImage);
 
     private static IReadOnlyList<InCanvasEditorRunStyle> ResolveInitialSelectionStyleRuns(
         IReadOnlyList<InCanvasEditorRunStyle> runs,

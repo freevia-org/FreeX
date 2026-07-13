@@ -132,18 +132,23 @@ public static class PresentationListGalleryPlanner
         TableCellListPresetDescriptor preset,
         PresentationListGalleryItemKind kind)
     {
-        string preview = preset.BulletKind == BulletKind.Char
-            ? $"{preset.BulletChar}  {preset.DisplayName}"
-            : $"{GetNumberingPreview(preset)}  {preset.DisplayName}";
-
         return new PresentationListGalleryItem(
             $"{ownerCommandId}.{preset.Id}",
             preset.DisplayName,
-            preview,
+            GetPresetPreviewText(preset),
             kind,
             preset,
             IsEnabled: true,
             $"{preset.DisplayName} list preset");
+    }
+
+    public static string GetPresetPreviewText(TableCellListPresetDescriptor preset)
+    {
+        ArgumentNullException.ThrowIfNull(preset);
+
+        return preset.BulletKind == BulletKind.Char
+            ? $"{preset.BulletChar}  {preset.DisplayName}"
+            : $"{GetNumberingPreview(preset)}  {preset.DisplayName}";
     }
 
     private static string GetNumberingPreview(TableCellListPresetDescriptor preset) =>

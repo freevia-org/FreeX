@@ -356,6 +356,14 @@ public sealed class TableCellEditPlannerTests
         rich.SelectedParagraphs[0].AutoNumStartAt.Should().Be(3);
         rich.SelectedParagraphs[0].MarginLeftEmu.Should().Be(457200);
         rich.SelectedParagraphs[0].IndentEmu.Should().Be(-228600);
+        rich.SelectedListState.HasSelectedParagraphs.Should().BeTrue();
+        rich.SelectedListState.HasListFormatting.Should().BeTrue();
+        rich.SelectedListState.HasMixedListFormatting.Should().BeFalse();
+        rich.SelectedListState.PresetId.Should().Be(TableCellListPresetCatalog.NumberRomanLowerPeriodId);
+        rich.SelectedListState.DisplayName.Should().Be("Roman i.");
+        rich.SelectedListState.PreviewText.Should().Be("i.  Roman i.");
+        rich.SelectedListState.GalleryItemKind.Should().Be(PresentationListGalleryItemKind.Numbering);
+        rich.SelectedListState.AutoNumStartAt.Should().Be(3);
         rich.HasListFormatting.Should().BeTrue();
         rich.HasMixedParagraphFormatting.Should().BeTrue();
     }
@@ -382,7 +390,41 @@ public sealed class TableCellEditPlannerTests
         rich.Paragraphs[0].BulletImage!.Bytes.Should().Equal(0x89, 0x50, 0x4E, 0x47);
         rich.SelectedParagraphs.Should().ContainSingle();
         rich.SelectedParagraphs[0].BulletImage.Should().BeSameAs(rich.Paragraphs[0].BulletImage);
+        rich.SelectedListState.HasListFormatting.Should().BeTrue();
+        rich.SelectedListState.HasResolvedPreset.Should().BeFalse();
+        rich.SelectedListState.IsPictureBullet.Should().BeTrue();
+        rich.SelectedListState.DisplayName.Should().Be("Picture Bullet");
+        rich.SelectedListState.PreviewText.Should().Be("[image]");
+        rich.SelectedListState.GalleryItemKind.Should().Be(PresentationListGalleryItemKind.ImageBullet);
         rich.HasListFormatting.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlanRichTextEdit_MixedSelectedListParagraphs_ReportsMixedVisibleListState()
+    {
+        var body = MakeBody("Alpha");
+        body.Paragraphs[0].BulletKind = BulletKind.Char;
+        body.Paragraphs[0].BulletChar = "\u25AA";
+
+        var second = new Paragraph
+        {
+            BulletKind = BulletKind.Auto,
+            AutoNumType = AutoNumType.AlphaUcPeriod,
+            AutoNumStartAt = 1,
+        };
+        second.Runs.Add(new Run { Text = "Beta" });
+        body.Paragraphs.Add(second);
+
+        var rich = TableCellEditPlanner.PlanRichTextEdit(
+            body,
+            new InCanvasEditorTextSelection(0, "Alpha\nBeta".Length));
+
+        rich.SelectedParagraphs.Should().HaveCount(2);
+        rich.SelectedListState.HasSelectedParagraphs.Should().BeTrue();
+        rich.SelectedListState.HasListFormatting.Should().BeTrue();
+        rich.SelectedListState.HasMixedListFormatting.Should().BeTrue();
+        rich.SelectedListState.PresetId.Should().BeNull();
+        rich.SelectedListState.PreviewText.Should().BeNull();
     }
 
     [Fact]
@@ -1164,6 +1206,11 @@ public sealed class TableCellEditPlannerTests
         plan.ResultRichTextPlan.SelectedParagraphs[0].BulletKind.Should().Be(BulletKind.Auto);
         plan.ResultRichTextPlan.SelectedParagraphs[0].AutoNumType.Should().Be(AutoNumType.RomanUcPeriod);
         plan.ResultRichTextPlan.SelectedParagraphs[0].AutoNumStartAt.Should().Be(1);
+        plan.ResultRichTextPlan.SelectedListState.HasResolvedPreset.Should().BeTrue();
+        plan.ResultRichTextPlan.SelectedListState.PresetId.Should().Be(TableCellListPresetCatalog.NumberRomanUpperPeriodId);
+        plan.ResultRichTextPlan.SelectedListState.DisplayName.Should().Be("Roman I.");
+        plan.ResultRichTextPlan.SelectedListState.PreviewText.Should().Be("I.  Roman I.");
+        plan.ResultRichTextPlan.SelectedListState.GalleryItemKind.Should().Be(PresentationListGalleryItemKind.Numbering);
 
         var presentation = Presentation.CreateEmpty();
         presentation.Slides[0].Shapes.Clear();

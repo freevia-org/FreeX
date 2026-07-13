@@ -65,6 +65,32 @@ public sealed class PresentationListGalleryPlannerTests
         preset!.BulletChar.Should().Be("\u25AA");
     }
 
+    [Fact]
+    public void PresetPreviewAndMatch_ResolveVisibleListStateDescriptors()
+    {
+        PresentationListGalleryPlanner.GetPresetPreviewText(TableCellListPresetCatalog.NumberAlphaUpperPeriod)
+            .Should()
+            .Be("A.  Alpha A.");
+
+        TableCellListPresetCatalog.TryMatch(
+                BulletKind.Char,
+                "\u25AA",
+                autoNumType: null,
+                out var bulletPreset)
+            .Should()
+            .BeTrue();
+        bulletPreset.Should().Be(TableCellListPresetCatalog.BulletSquare);
+
+        TableCellListPresetCatalog.TryMatch(
+                BulletKind.Auto,
+                bulletChar: null,
+                AutoNumType.RomanLcPeriod,
+                out var numberingPreset)
+            .Should()
+            .BeTrue();
+        numberingPreset.Should().Be(TableCellListPresetCatalog.NumberRomanLowerPeriod);
+    }
+
     [Theory]
     [InlineData("bullet.png", "image/png")]
     [InlineData("bullet.jpeg", "image/jpeg")]

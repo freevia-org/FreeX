@@ -658,6 +658,11 @@ public sealed class SlideCanvasAvaloniaTests
         selectedPlan.SelectedParagraphs[0].BulletKind.Should().Be(BulletKind.Auto);
         selectedPlan.SelectedParagraphs[0].AutoNumType.Should().Be(AutoNumType.AlphaUcPeriod);
         selectedPlan.SelectedParagraphs[0].AutoNumStartAt.Should().Be(1);
+        selectedPlan.SelectedListState.HasResolvedPreset.Should().BeTrue();
+        selectedPlan.SelectedListState.PresetId.Should().Be(TableCellListPresetCatalog.NumberAlphaUpperPeriodId);
+        selectedPlan.SelectedListState.DisplayName.Should().Be("Alpha A.");
+        selectedPlan.SelectedListState.PreviewText.Should().Be("A.  Alpha A.");
+        selectedPlan.SelectedListState.GalleryItemKind.Should().Be(PresentationListGalleryItemKind.Numbering);
         selectedPlan.Paragraphs[0].BulletKind.Should().Be(BulletKind.None);
         selectedPlan.Paragraphs[2].BulletKind.Should().Be(BulletKind.None);
         selectedPlan.HasListFormatting.Should().BeTrue();
