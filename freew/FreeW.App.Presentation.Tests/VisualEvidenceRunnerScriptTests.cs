@@ -46,6 +46,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("ShapeObjectVisualProof = @(");
         source.Should().Contain("ReviewCompareCombineVisualProof = @(");
         source.Should().Contain("ReviewProofingVisualProof = @(");
+        source.Should().Contain("EquationStructureVisualProof = @(");
         source.Should().Contain("'field-page-number-variants'");
         source.Should().Contain("'references-heavy-fields'");
         source.Should().Contain("'legal-reference-section-page-numbers'");
@@ -189,6 +190,16 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Review proofing visual semantic rows: verified rows=");
         source.Should().Contain("Review proofing Word-baseline policy rows: verified rows=");
         source.Should().Contain("Review proofing Word-baseline unavailable blockers: verified rows=");
+        source.Should().Contain("Assert-EquationStructureVisualProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Equation structure visual proof readiness requires FreeW visual evidence summary schema v37 or newer");
+        source.Should().Contain("missing modeled equation geometry depth");
+        source.Should().Contain("missing equation spacing geometry signatures");
+        source.Should().Contain("missing honest word-baseline-unavailable equation visual blocker");
+        source.Should().Contain("equation-structures-word-baseline-fidelity");
+        source.Should().Contain("Equation structure visual proof readiness: trusted scenario rows=");
+        source.Should().Contain("Equation structure visual semantic rows: verified rows=");
+        source.Should().Contain("Equation structure Word-baseline policy rows: verified rows=");
+        source.Should().Contain("Equation structure Word-baseline unavailable blocker: verified");
         source.Should().Contain("Word baseline mode: word-png-comparison");
         source.Should().Contain("Word baseline mode: word-baseline-unavailable");
         source.Should().Contain("Word baseline mode: visual-evidence-only");

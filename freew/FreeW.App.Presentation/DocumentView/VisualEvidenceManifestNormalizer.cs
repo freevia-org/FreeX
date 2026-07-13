@@ -174,7 +174,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 36;
+    public const int SummarySchemaVersion = 37;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -2027,6 +2027,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
         blockers.AddRange(BuildBackstageRealCaptureBlockers(summary));
         blockers.AddRange(BuildReviewProofingWordBaselineBlockers(summary, baselineComparisons));
+        blockers.AddRange(BuildEquationStructureWordBaselineBlockers(summary, baselineComparisons));
 
         var rows = summary.Evidence
             .Where(row => string.Equals(row.ScenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
@@ -2139,6 +2140,171 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 requiresWordBaseline: false));
         return blockers;
     }
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildEquationStructureWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        const string scenarioId = "equation-structures";
+        var rows = summary.Evidence
+            .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .Where(row => row.Trust.Passed)
+            .ToList();
+        if (rows.Count == 0)
+            return [];
+
+        var semanticEvidence = BuildEquationStructureSemanticEvidence(rows);
+        if (semanticEvidence.Count == 0)
+        {
+            return
+            [
+                BuildEquationStructureVisualBlocker(
+                    "semantic-equation-geometry-missing",
+                    "trusted WPF and Avalonia equation geometry metadata",
+                    "trusted equation evidence did not record shared equation geometry metadata; regenerate current-schema evidence or fix shared equation planning before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false)
+            ];
+        }
+
+        var related = baselineComparisons
+            .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (related.Count == 0)
+        {
+            return
+            [
+                BuildEquationStructureVisualBlocker(
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for OfficeMath equation structures",
+                    "trusted FreeW equation structure evidence is present; run a Word-baseline comparison for equation-structures to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        var statuses = related
+            .Select(comparison => comparison.Status)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var candidates = related
+            .SelectMany(comparison => comparison.CandidateBaselinePaths)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            var reasons = related
+                .Where(comparison => string.Equals(
+                    comparison.Status,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(FormatComparisonNotes)
+                .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var reason = reasons.Count == 0
+                ? "MS Word baseline PNG generation was unavailable for equation-structures"
+                : string.Join("; ", reasons);
+            return
+            [
+                BuildEquationStructureVisualBlocker(
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for OfficeMath equation structures",
+                    reason,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return
+            [
+                BuildEquationStructureVisualBlocker(
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for OfficeMath equation structures",
+                    "trusted equation structure evidence is present, but mapped Word baseline PNGs are missing for equation-structures",
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        if (related.All(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return [];
+        }
+
+        return
+        [
+            BuildEquationStructureVisualBlocker(
+                "needs-render-review",
+                "render-review resolution for failed equation-structure Word PNG comparisons",
+                "equation-structures Word baseline comparison did not fully pass; inspect OfficeMath rendering differences",
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false)
+        ];
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildEquationStructureVisualBlocker(
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline) =>
+        new(
+            "equation-structures-word-baseline-fidelity",
+            "equation-structures",
+            "Equation structure visual fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
+
+    private static IReadOnlyList<string> BuildEquationStructureSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
+        rows
+            .Where(row => row.Equations.EquationCount > 0)
+            .Select(row => string.Concat(
+                row.HostId,
+                "/p",
+                row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                ": equations=",
+                row.Equations.EquationCount.ToString(CultureInfo.InvariantCulture),
+                "; elements=",
+                row.Equations.ElementCount.ToString(CultureInfo.InvariantCulture),
+                "; nestedSlots=",
+                row.Equations.NestedSlotCount.ToString(CultureInfo.InvariantCulture),
+                "; maxDepth=",
+                row.Equations.MaxNestedSlotDepth.ToString(CultureInfo.InvariantCulture),
+                "; kinds=",
+                string.Join("/", row.Equations.ElementKindCounts.OrderBy(value => value, StringComparer.Ordinal))))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
 
     private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildReviewProofingWordBaselineBlockers(
         FreeWVisualEvidenceNormalizedSummary summary,

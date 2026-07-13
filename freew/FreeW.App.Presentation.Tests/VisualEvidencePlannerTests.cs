@@ -6287,6 +6287,121 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void EquationStructuresNoWordSummary_ReportsEquationWordBaselineEvidenceBlocker()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "equation-structures";
+            var wpfRows = new[]
+            {
+                BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1)
+            };
+            var avaloniaRows = new[]
+            {
+                BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1)
+            };
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Should().OnlyContain(row => row.Trust.Passed);
+            summary.Evidence.Should().OnlyContain(row =>
+                row.Equations.EquationCount >= 8
+                && row.Equations.ElementCount >= 8
+                && row.Equations.SpacingGeometrySignatures.Count > 0
+                && row.Equations.ElementKindCounts.Contains("EquationArray=1"));
+
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            var blocker = withBaseline.RemainingEvidenceBlockers.Should().ContainSingle().Subject;
+            blocker.BlockerId.Should().Be("equation-structures-word-baseline-fidelity");
+            blocker.ScenarioId.Should().Be(scenarioId);
+            blocker.Area.Should().Be("Equation structure visual fidelity");
+            blocker.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            blocker.RequiredEvidence.Should().Contain("real MS Word PNG comparisons");
+            blocker.Reason.Should().Contain("Word.Application");
+            blocker.SemanticEvidence.Should().Contain(evidence =>
+                evidence.Contains("wpf-fidelity-render/p1", StringComparison.Ordinal)
+                && evidence.Contains("EquationArray=1", StringComparison.Ordinal));
+            blocker.SemanticEvidence.Should().Contain(evidence =>
+                evidence.Contains("avalonia-page-layout-shot/p1", StringComparison.Ordinal)
+                && evidence.Contains("elements=", StringComparison.Ordinal));
+            blocker.RelatedBaselineStatuses.Should().Contain(
+                FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            blocker.CandidateBaselinePaths.Should().Contain("equation-structures/equation-structures_p1.png");
+            blocker.RequiresWordBaseline.Should().BeTrue();
+            blocker.Trust.Passed.Should().BeTrue();
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(37);
+            var jsonBlocker = doc.RootElement.GetProperty("remainingEvidenceBlockers")[0];
+            jsonBlocker.GetProperty("blockerId").GetString()
+                .Should().Be("equation-structures-word-baseline-fidelity");
+            jsonBlocker.GetProperty("status").GetString()
+                .Should().Be("word-baseline-unavailable");
+            jsonBlocker.GetProperty("semanticEvidence").GetArrayLength().Should().Be(2);
+            jsonBlocker.GetProperty("requiresWordBaseline").GetBoolean().Should().BeTrue();
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Equation Geometry Evidence");
+            markdown.Should().Contain("## Remaining Evidence Blockers");
+            markdown.Should().Contain("equation-structures-word-baseline-fidelity");
+            markdown.Should().Contain("Equation structure visual fidelity");
+            markdown.Should().Contain("EquationArray=1");
+            markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void WithBaselineComparisons_SurfacesDrawingObjectVisualProofReadiness()
     {
         var root = CreateTempRoot();

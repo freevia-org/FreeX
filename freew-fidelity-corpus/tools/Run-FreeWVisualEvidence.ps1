@@ -39,6 +39,9 @@
 
 .EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/review-compare-combine-proof -ScenarioSet ReviewCompareCombineVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/equation-structure-proof -ScenarioSet EquationStructureVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 #>
 [CmdletBinding()]
 param(
@@ -170,6 +173,9 @@ $namedScenarioSets = @{
     ReviewProofingVisualProof = @(
         'review-proofing-visual-depth',
         'review-protection-proofing-comments-only'
+    )
+    EquationStructureVisualProof = @(
+        'equation-structures'
     )
 }
 
@@ -1477,6 +1483,185 @@ function Assert-ReviewProofingVisualProofReadiness {
     }
 }
 
+function Assert-EquationStructureVisualProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $scenarioId = 'equation-structures'
+    if (-not ($ScenarioIds -contains $scenarioId)) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Equation structure visual proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 37) {
+        throw "Equation structure visual proof readiness requires FreeW visual evidence summary schema v37 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $scenarios = @($summary.scenarios)
+    $evidenceRows = @($summary.evidence)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $remainingBlockers = @($summary.remainingEvidenceBlockers)
+    $summaryFailures = @($summary.trust.failures)
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $requiredElementKinds = @(
+        'Fraction',
+        'Radical',
+        'Matrix',
+        'NAry',
+        'EquationArray'
+    )
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedSemanticRows = 0
+    $verifiedBaselineRows = 0
+    $verifiedUnavailableBlockers = 0
+
+    $semanticFailures = @($summaryFailures | Where-Object {
+        ([string]$_).IndexOf("equation renderer pair '$scenarioId'", [StringComparison]::Ordinal) -ge 0
+    })
+    foreach ($semanticFailure in $semanticFailures) {
+        $failures.Add("${scenarioId}: WPF/Avalonia equation semantic parity drift ($semanticFailure)")
+    }
+
+    foreach ($hostId in $requiredHosts) {
+        $scenarioRows = @($scenarios | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId
+        })
+        if ($scenarioRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing normalized scenario row")
+            continue
+        }
+
+        $scenarioRow = $scenarioRows[0]
+        if ($scenarioRow.trust.passed -ne $true) {
+            $notes = @($scenarioRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = 'no notes'
+            }
+            $failures.Add("${hostId}/${scenarioId}: scenario trust failed ($notes)")
+            continue
+        }
+
+        if ([int]$scenarioRow.trustedOutputs -lt 1) {
+            $failures.Add("${hostId}/${scenarioId}: expected at least 1 trusted output, found $($scenarioRow.trustedOutputs)")
+            continue
+        }
+
+        $trustedScenarioRows++
+
+        $hostEvidenceRows = @($evidenceRows | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.trust.passed -eq $true
+        })
+        if ($hostEvidenceRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing trusted normalized evidence row for equation geometry semantics")
+        }
+        foreach ($row in $hostEvidenceRows) {
+            $equations = $row.equations
+            if ([int]$equations.equationCount -lt 8 -or
+                [int]$equations.elementCount -lt 8 -or
+                [int]$equations.segmentCount -lt 8) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing modeled equation geometry depth")
+                continue
+            }
+
+            $elementKindCounts = @($equations.elementKindCounts)
+            foreach ($kind in $requiredElementKinds) {
+                if (@($elementKindCounts | Where-Object { ([string]$_).StartsWith($kind + '=', [StringComparison]::Ordinal) }).Count -eq 0) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing $kind equation element evidence")
+                    continue
+                }
+            }
+
+            if (@($equations.elementGeometrySignatures).Count -lt [int]$equations.elementCount) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): element geometry signatures do not cover every equation element")
+                continue
+            }
+            if (@($equations.spacingGeometrySignatures).Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing equation spacing geometry signatures")
+                continue
+            }
+
+            $verifiedSemanticRows++
+        }
+
+        $comparisonRows = @($baselineComparisons | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.baselineScenarioId -eq $scenarioId
+        })
+        if ($baselineComparisons.Count -gt 0 -and $comparisonRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+            continue
+        }
+
+        foreach ($comparison in $comparisonRows) {
+            if ($comparison.trust.passed -ne $true) {
+                $notes = @($comparison.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$comparison.skipReason
+                }
+                $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                continue
+            }
+
+            $baselineId = [string]$comparison.baselineId
+            if (-not $baselineId.StartsWith($scenarioId + '/', [StringComparison]::OrdinalIgnoreCase)) {
+                $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baselineId '$baselineId' expected scenario '$scenarioId'")
+                continue
+            }
+
+            $verifiedBaselineRows++
+        }
+    }
+
+    $unavailableComparisons = @($baselineComparisons | Where-Object {
+        $_.scenarioId -eq $scenarioId -and
+        $_.status -eq 'word-baseline-unavailable'
+    })
+    if ($unavailableComparisons.Count -gt 0) {
+        $blocker = @($remainingBlockers | Where-Object {
+            $_.blockerId -eq 'equation-structures-word-baseline-fidelity' -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.status -eq 'word-baseline-unavailable' -and
+            $_.requiresWordBaseline -eq $true
+        }) | Select-Object -First 1
+        if (-not $blocker) {
+            $failures.Add("${scenarioId}: missing honest word-baseline-unavailable equation visual blocker")
+        }
+        else {
+            $verifiedUnavailableBlockers++
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Equation structure visual proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Equation structure visual proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "Equation structure visual semantic rows: verified rows=$verifiedSemanticRows"
+    if ($baselineComparisons.Count -gt 0) {
+        Write-Host "Equation structure Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    }
+    else {
+        Write-Host "Equation structure Word-baseline policy rows: no Word baseline mode requested"
+    }
+    if ($verifiedUnavailableBlockers -gt 0) {
+        Write-Host "Equation structure Word-baseline unavailable blocker: verified"
+    }
+}
+
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
 New-Item -ItemType Directory -Force $wpfDir | Out-Null
 New-Item -ItemType Directory -Force $avaloniaDir | Out-Null
@@ -1582,6 +1767,7 @@ Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-ReviewCompareCombineVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-ReviewProofingVisualProofReadiness $summaryJson $effectiveScenarioIds
+Assert-EquationStructureVisualProofReadiness $summaryJson $effectiveScenarioIds
 
 Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green
