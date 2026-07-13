@@ -1901,6 +1901,32 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildRadarPrimitivePlan_DefaultDisplayBlanksAsGap_BreaksSegmentsAroundBlankPoint()
+    {
+        var series = new ChartSeries { Name = "Radar" };
+        series.Values.AddRange(new double?[] { 1, null, 3, 4 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Radar,
+            RadarStyle = RadarStyle.Filled
+        };
+        chart.Categories.AddRange(new[] { "North", "East", "South", "West" });
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var primitive = plan.Series.Should().ContainSingle().Subject;
+        primitive.Points[1].Should().BeNull();
+        primitive.Paths.Should().HaveCount(2);
+        primitive.Paths[0].Points.Should().Equal(primitive.Points[2]!.Value, primitive.Points[3]!.Value);
+        primitive.Paths[1].Points.Should().Equal(primitive.Points[3]!.Value, primitive.Points[0]!.Value);
+        primitive.Paths.Should().OnlyContain(path => !path.IsClosed && !path.Fill.HasValue);
+    }
+
+    [Fact]
     public void BuildRadarPrimitivePlan_DisplayBlanksAsZero_MaterializesBlankPointAtCenter()
     {
         var series = new ChartSeries { Name = "Radar" };
