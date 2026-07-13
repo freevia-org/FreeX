@@ -556,6 +556,20 @@ public static partial class ChartRenderPlanner
     private static double? PointsToDip(double? points) =>
         points.HasValue ? points.Value * DipPerPoint : null;
 
+    private static ChartDisplayBlanksAs ResolveDisplayBlanksAs(ChartShape chart) =>
+        chart.DisplayBlanksAs ?? ChartDisplayBlanksAs.Gap;
+
+    private static bool ShouldSpanBlankSegments(ChartShape chart) =>
+        ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Span;
+
+    private static double? ResolveBlankSensitiveValue(
+        ChartShape chart,
+        double? value,
+        bool supportsZero = true) =>
+        value ?? (supportsZero && ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Zero
+            ? 0
+            : null);
+
     public static ChartFramePlan BuildFramePlan(ChartShape chart, ChartPlanRect bounds)
     {
         double titleAreaHeight = chart.Title is not null ? TitleHeight + Margin : 0;
@@ -1373,9 +1387,11 @@ public static partial class ChartRenderPlanner
                     continue;
                 }
 
-                double? rawValue = categoryIndex < series.Values.Count
+                double? rawValue = ResolveBlankSensitiveValue(
+                    chart,
+                    categoryIndex < series.Values.Count
                     ? series.Values[categoryIndex]
-                    : null;
+                    : null);
                 if (rawValue is null)
                     continue;
 
@@ -1459,9 +1475,11 @@ public static partial class ChartRenderPlanner
             for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
             {
                 var series = chart.Series[seriesIndex];
-                double? rawValue = categoryIndex < series.Values.Count
+                double? rawValue = ResolveBlankSensitiveValue(
+                    chart,
+                    categoryIndex < series.Values.Count
                     ? series.Values[categoryIndex]
-                    : null;
+                    : null);
                 if (rawValue is null)
                     continue;
 
@@ -1536,9 +1554,11 @@ public static partial class ChartRenderPlanner
             var points = new ChartPlanPoint?[categoryCount];
             for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
             {
-                double? rawValue = categoryIndex < series.Values.Count
+                double? rawValue = ResolveBlankSensitiveValue(
+                    chart,
+                    categoryIndex < series.Values.Count
                     ? series.Values[categoryIndex]
-                    : null;
+                    : null);
                 if (rawValue is null)
                     continue;
 
@@ -1553,7 +1573,8 @@ public static partial class ChartRenderPlanner
                 points,
                 chart.Series[seriesIndex],
                 seriesColors,
-                fillPlans));
+                fillPlans,
+                ShouldSpanBlankSegments(chart)));
         }
 
         return primitives;
@@ -1591,9 +1612,11 @@ public static partial class ChartRenderPlanner
             var points = new ChartPlanPoint?[categoryCount];
             for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
             {
-                double? rawValue = categoryIndex < series.Values.Count
+                double? rawValue = ResolveBlankSensitiveValue(
+                    chart,
+                    categoryIndex < series.Values.Count
                     ? series.Values[categoryIndex]
-                    : null;
+                    : null);
                 if (rawValue is null)
                     continue;
 
@@ -1610,7 +1633,8 @@ public static partial class ChartRenderPlanner
                 points,
                 series,
                 seriesColors,
-                fillPlans));
+                fillPlans,
+                ShouldSpanBlankSegments(chart)));
         }
 
         return primitives;
@@ -1622,7 +1646,8 @@ public static partial class ChartRenderPlanner
         IReadOnlyList<ChartPlanPoint?> points,
         ChartSeries? series = null,
         IReadOnlyList<SrgbColor>? seriesColors = null,
-        ChartFillPlanSet? fillPlans = null)
+        ChartFillPlanSet? fillPlans = null,
+        bool spanBlankSegments = false)
     {
         series ??= new ChartSeries();
         bool suppressLine = series.LineStyle?.NoFill == true;
@@ -1655,8 +1680,12 @@ public static partial class ChartRenderPlanner
             var point = points[pointIndex];
             if (!point.HasValue)
             {
-                previousPointIndex = null;
-                previousPoint = null;
+                if (!spanBlankSegments)
+                {
+                    previousPointIndex = null;
+                    previousPoint = null;
+                }
+
                 continue;
             }
 
@@ -1716,8 +1745,6 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartAreaSeriesPrimitive>();
 
         double stepX = plot.Width / Math.Max(1, categoryCount - 1);
-        var baselineStart = new ChartPlanPoint(plot.X, plot.Bottom);
-        var baselineEnd = new ChartPlanPoint(plot.Right, plot.Bottom);
         var primitives = new List<ChartAreaSeriesPrimitive>();
 
         for (int seriesIndex = chart.Series.Count - 1; seriesIndex >= 0; seriesIndex--)
@@ -1726,37 +1753,90 @@ public static partial class ChartRenderPlanner
             if (series.Values.Count == 0)
                 continue;
 
-            var points = new ChartPlanPoint[categoryCount];
+            var pointSlots = new ChartPlanPoint?[categoryCount];
             for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
             {
-                double value = categoryIndex < series.Values.Count
-                    ? series.Values[categoryIndex] ?? 0
-                    : 0;
+                double? value = ResolveBlankSensitiveValue(
+                    chart,
+                    categoryIndex < series.Values.Count
+                        ? series.Values[categoryIndex]
+                        : null);
+                if (!value.HasValue)
+                    continue;
+
                 double x = plot.X + categoryIndex * stepX;
-                double y = plot.Bottom - (value - minValue) / range * plot.Height;
-                points[categoryIndex] = new ChartPlanPoint(x, y);
+                double y = plot.Bottom - (value.Value - minValue) / range * plot.Height;
+                pointSlots[categoryIndex] = new ChartPlanPoint(x, y);
             }
 
             var fill = ResolveSeriesFill(seriesIndex, seriesColors, AreaFillAlpha, fillPlans);
-            var pathPoints = new ChartPlanPoint[categoryCount + 2];
-            pathPoints[0] = baselineStart;
-            for (int pointIndex = 0; pointIndex < points.Length; pointIndex++)
-                pathPoints[pointIndex + 1] = points[pointIndex];
-            pathPoints[^1] = baselineEnd;
-
-            primitives.Add(new ChartAreaSeriesPrimitive(
+            AddAreaSeriesPrimitives(
+                primitives,
                 seriesIndex,
-                baselineStart,
-                baselineEnd,
-                points,
-                new ChartPathPrimitive(
-                    pathPoints,
-                    IsClosed: true,
-                    Fill: fill),
-                fill));
+                pointSlots,
+                plot.Bottom,
+                fill,
+                ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Gap);
         }
 
         return primitives;
+    }
+
+    private static void AddAreaSeriesPrimitives(
+        List<ChartAreaSeriesPrimitive> primitives,
+        int seriesIndex,
+        IReadOnlyList<ChartPlanPoint?> pointSlots,
+        double baselineY,
+        ChartFillPlan fill,
+        bool splitAtBlankSlots)
+    {
+        var segment = new List<ChartPlanPoint>();
+        for (int pointIndex = 0; pointIndex < pointSlots.Count; pointIndex++)
+        {
+            var point = pointSlots[pointIndex];
+            if (point.HasValue)
+            {
+                segment.Add(point.Value);
+                continue;
+            }
+
+            if (splitAtBlankSlots)
+                AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineY, fill);
+        }
+
+        AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineY, fill);
+    }
+
+    private static void AddAreaSegmentPrimitive(
+        List<ChartAreaSeriesPrimitive> primitives,
+        int seriesIndex,
+        List<ChartPlanPoint> segment,
+        double baselineY,
+        ChartFillPlan fill)
+    {
+        if (segment.Count == 0)
+            return;
+
+        var baselineStart = new ChartPlanPoint(segment[0].X, baselineY);
+        var baselineEnd = new ChartPlanPoint(segment[^1].X, baselineY);
+        var pathPoints = new ChartPlanPoint[segment.Count + 2];
+        pathPoints[0] = baselineStart;
+        for (int pointIndex = 0; pointIndex < segment.Count; pointIndex++)
+            pathPoints[pointIndex + 1] = segment[pointIndex];
+        pathPoints[^1] = baselineEnd;
+
+        primitives.Add(new ChartAreaSeriesPrimitive(
+            seriesIndex,
+            baselineStart,
+            baselineEnd,
+            segment.ToArray(),
+            new ChartPathPrimitive(
+                pathPoints,
+                IsClosed: true,
+                Fill: fill),
+            fill));
+
+        segment.Clear();
     }
 
     public static ChartScatterPrimitivePlan BuildScatterPrimitivePlan(
@@ -1814,7 +1894,9 @@ public static partial class ChartRenderPlanner
             for (int pointIndex = 0; pointIndex < pointCount; pointIndex++)
             {
                 double? xValue = pointIndex < series.XValues.Count ? series.XValues[pointIndex] : null;
-                double? yValue = pointIndex < series.Values.Count ? series.Values[pointIndex] : null;
+                double? yValue = ResolveBlankSensitiveValue(
+                    chart,
+                    pointIndex < series.Values.Count ? series.Values[pointIndex] : null);
                 if (!xValue.HasValue || !yValue.HasValue)
                     continue;
 
@@ -1830,8 +1912,12 @@ public static partial class ChartRenderPlanner
                 var point = points[pointIndex];
                 if (!point.HasValue)
                 {
-                    previousPointIndex = null;
-                    previousPoint = null;
+                    if (!ShouldSpanBlankSegments(chart))
+                    {
+                        previousPointIndex = null;
+                        previousPoint = null;
+                    }
+
                     continue;
                 }
 

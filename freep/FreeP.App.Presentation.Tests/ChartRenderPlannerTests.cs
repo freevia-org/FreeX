@@ -1083,6 +1083,31 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildColumnPrimitives_DisplayBlanksAsZero_MaterializesZeroHeightBlankPoint()
+    {
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            DisplayBlanksAs = ChartDisplayBlanksAs.Zero
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(series);
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 300, 100));
+
+        primitives.Should().HaveCount(3);
+        var blank = primitives.Single(p => p.CategoryIndex == 1);
+        blank.SeriesIndex.Should().Be(0);
+        blank.Bounds.X.Should().BeApproximately(130, 0.0001);
+        blank.Bounds.Y.Should().BeApproximately(100, 0.0001);
+        blank.Bounds.Height.Should().BeApproximately(0.5, 0.0001);
+    }
+
+    [Fact]
     public void BuildColumnPrimitives_UsesPointGradientFillPlan()
     {
         var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
@@ -1216,6 +1241,31 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildBarPrimitives_DisplayBlanksAsZero_MaterializesZeroWidthBlankPoint()
+    {
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.BarClustered,
+            DisplayBlanksAs = ChartDisplayBlanksAs.Zero
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(series);
+
+        var primitives = ChartRenderPlanner.BuildBarPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 120));
+
+        primitives.Should().HaveCount(3);
+        var blank = primitives.Single(p => p.CategoryIndex == 1);
+        blank.SeriesIndex.Should().Be(0);
+        blank.Bounds.X.Should().Be(0);
+        blank.Bounds.Y.Should().BeApproximately(52, 0.0001);
+        blank.Bounds.Width.Should().BeApproximately(0.5, 0.0001);
+    }
+
+    [Fact]
     public void BuildLineSeriesPrimitives_PreservesGapsBetweenSegments()
     {
         var series = new ChartSeries { Name = "Line" };
@@ -1244,6 +1294,59 @@ public sealed class ChartRenderPlannerTests
             new SrgbColor(0x4F, 0x81, 0xBD),
             Alpha: 255,
             Thickness: ChartRenderPlanner.LineMarkerStrokeThickness));
+    }
+
+    [Fact]
+    public void BuildLineSeriesPrimitives_DisplayBlanksAsSpan_ConnectsAcrossBlankPoint()
+    {
+        var series = new ChartSeries { Name = "Line" };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            DisplayBlanksAs = ChartDisplayBlanksAs.Span
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            withMarkers: true).Single();
+
+        primitive.Points[0].Should().Be(new ChartPlanPoint(0, 75));
+        primitive.Points[1].Should().BeNull();
+        primitive.Points[2].Should().Be(new ChartPlanPoint(200, 25));
+        primitive.LineSegments.Should().ContainSingle();
+        primitive.LineSegments[0].StartPointIndex.Should().Be(0);
+        primitive.LineSegments[0].EndPointIndex.Should().Be(2);
+        primitive.Markers.Select(marker => marker.PointIndex).Should().Equal(0, 2);
+    }
+
+    [Fact]
+    public void BuildLineSeriesPrimitives_DisplayBlanksAsZero_PlansZeroPointAndAdjacentSegments()
+    {
+        var series = new ChartSeries { Name = "Line" };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            DisplayBlanksAs = ChartDisplayBlanksAs.Zero
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            withMarkers: true).Single();
+
+        primitive.Points[1].Should().Be(new ChartPlanPoint(100, 100));
+        primitive.LineSegments.Should().HaveCount(2);
+        primitive.LineSegments.Select(segment => (segment.StartPointIndex, segment.EndPointIndex))
+            .Should()
+            .Equal((0, 1), (1, 2));
+        primitive.Markers.Select(marker => marker.PointIndex).Should().Equal(0, 1, 2);
     }
 
     [Fact]
@@ -1383,6 +1486,65 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildAreaSeriesPrimitives_DisplayBlanksAsGap_SplitsFilledAreaAtBlankPoint()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Area,
+            DisplayBlanksAs = ChartDisplayBlanksAs.Gap
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        chart.Series.Add(series);
+
+        var primitives = ChartRenderPlanner.BuildAreaSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        primitives.Should().HaveCount(2);
+        primitives[0].Points.Should().Equal(new ChartPlanPoint(0, 75));
+        primitives[0].AreaPath.Points.Should().Equal(
+            new ChartPlanPoint(0, 100),
+            new ChartPlanPoint(0, 75),
+            new ChartPlanPoint(0, 100));
+        primitives[1].Points.Should().Equal(new ChartPlanPoint(200, 25));
+        primitives[1].AreaPath.Points.Should().Equal(
+            new ChartPlanPoint(200, 100),
+            new ChartPlanPoint(200, 25),
+            new ChartPlanPoint(200, 100));
+    }
+
+    [Fact]
+    public void BuildAreaSeriesPrimitives_DisplayBlanksAsZero_PlansZeroPointInSingleFilledArea()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Area,
+            DisplayBlanksAs = ChartDisplayBlanksAs.Zero
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildAreaSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100)).Single();
+
+        primitive.Points.Should().Equal(
+            new ChartPlanPoint(0, 75),
+            new ChartPlanPoint(100, 100),
+            new ChartPlanPoint(200, 25));
+        primitive.AreaPath.Points.Should().Equal(
+            new ChartPlanPoint(0, 100),
+            new ChartPlanPoint(0, 75),
+            new ChartPlanPoint(100, 100),
+            new ChartPlanPoint(200, 25),
+            new ChartPlanPoint(200, 100));
+    }
+
+    [Fact]
     public void BuildScatterPrimitivePlan_PlansAxesAndPreservesSeriesGaps()
     {
         var series = new ChartSeries { Name = "XY" };
@@ -1422,6 +1584,32 @@ public sealed class ChartRenderPlannerTests
             Alpha: 255));
         plan.Series[0].Markers[0].Radius.Should().Be(ChartRenderPlanner.ScatterMarkerRadius);
         plan.DataLabels.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildScatterPrimitivePlan_DisplayBlanksAsSpan_ConnectsAcrossBlankYPoint()
+    {
+        var series = new ChartSeries { Name = "XY" };
+        series.XValues.AddRange(new double?[] { 0, 50, 100 });
+        series.Values.AddRange(new double?[] { 10, null, 30 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Scatter,
+            ScatterStyle = ScatterStyle.LineMarker,
+            DisplayBlanksAs = ChartDisplayBlanksAs.Span
+        };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var primitive = plan.Series.Single();
+        primitive.Points[1].Should().BeNull();
+        primitive.LineSegments.Should().ContainSingle();
+        primitive.LineSegments[0].StartPointIndex.Should().Be(0);
+        primitive.LineSegments[0].EndPointIndex.Should().Be(2);
+        primitive.Markers.Select(marker => marker.PointIndex).Should().Equal(0, 2);
     }
 
     [Fact]
