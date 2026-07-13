@@ -154,6 +154,7 @@ public class RibbonAndDocumentTests
         mainWindow.Should().NotContain("CurrentFilePath");
         mainWindow.Should().NotContain("private string? _currentPath");
         mainWindow.Should().NotContain("DocumentFileFormatResolver.FindSaveAdapter(");
+        mainWindow.Should().NotContain("DocumentSaveCompatibilityPlanner.Build(");
         mainWindow.Should().NotContain("File.Create(path)");
     }
 

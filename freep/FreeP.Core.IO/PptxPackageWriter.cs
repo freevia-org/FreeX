@@ -359,6 +359,14 @@ public static class PptxPackageWriter
 
         // --- 1. [Content_Types].xml ---
         var preservedChartWorkbookPaths = FindPreservedChartWorkbookPaths(packageSnapshot, presentation);
+        var preservedContentTypeWriterOwnedPaths = new HashSet<string>(
+            preservedChartWorkbookPaths,
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var captionPath in FindPreservedCaptionPackagePaths(packageSnapshot, presentation))
+        {
+            preservedContentTypeWriterOwnedPaths.Add(captionPath);
+        }
+
         var ctXml = BuildContentTypesXml(
             presentation,
             masters,
@@ -366,7 +374,7 @@ public static class PptxPackageWriter
             mediaExtensions,
             prvPartCtRemaps,
             packageSnapshot,
-            preservedChartWorkbookPaths);
+            preservedContentTypeWriterOwnedPaths);
         WriteEntry(archive, "[Content_Types].xml", ctXml);
 
         // --- 2. Root rels ---
@@ -5034,6 +5042,41 @@ public static class PptxPackageWriter
                 }
 
                 chartIndex++;
+            }
+        }
+
+        return paths;
+    }
+
+    private static HashSet<string> FindPreservedCaptionPackagePaths(
+        PptxPackageSnapshot? packageSnapshot,
+        Presentation presentation)
+    {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (packageSnapshot is null)
+            return paths;
+
+        foreach (var slide in presentation.Slides)
+        {
+            foreach (var shape in AllShapes(slide.Shapes))
+            {
+                if (shape.Kind != SlideShapeKind.Media || shape.Media is null)
+                    continue;
+
+                foreach (var track in shape.Media.CaptionTracks)
+                {
+                    if (!TryNormalizeInternalCaptionPackagePath(track.Source, out var normalizedPath) ||
+                        !packageSnapshot.TryGetEntry(normalizedPath, out var preservedBytes) ||
+                        preservedBytes.Length == 0 ||
+                        !TryGetCaptionTrackBytes(track, packageSnapshot, out var bytes) ||
+                        bytes.Length == 0 ||
+                        !bytes.SequenceEqual(preservedBytes))
+                    {
+                        continue;
+                    }
+
+                    paths.Add(normalizedPath);
+                }
             }
         }
 

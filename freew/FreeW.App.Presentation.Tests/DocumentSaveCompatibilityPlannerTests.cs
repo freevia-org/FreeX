@@ -19,6 +19,22 @@ public sealed class DocumentSaveCompatibilityPlannerTests
         plan.TargetLabel.Should().Be("Word Document (*.docx)");
     }
 
+    [Theory]
+    [InlineData("Native.docx")]
+    [InlineData("Native.docm")]
+    [InlineData("Template.dotx")]
+    [InlineData("Template.dotm")]
+    public void Build_NativeOoxmlWithoutRiskyContent_ReturnsNoWarning(string path)
+    {
+        var document = TextDocument.CreateEmpty();
+        var target = ResolveTarget(path);
+
+        var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
+
+        plan.RequiresConfirmation.Should().BeFalse();
+        plan.Warnings.Should().BeEmpty();
+    }
+
     [Fact]
     public void Build_NonMacroDocxWithPreservedMacroProject_WarnsBeforeDroppingMacros()
     {
@@ -52,6 +68,42 @@ public sealed class DocumentSaveCompatibilityPlannerTests
         var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
 
         plan.RequiresConfirmation.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("Template.dotx", true)]
+    [InlineData("Template.dotm", false)]
+    public void Build_TemplateTargetsUseMacroPreservationTruth(string path, bool expectsMacroWarning)
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Preserved.Parts.Add(new PreservedPart("/word/vbaProject.bin", [1, 2, 3]));
+        var target = ResolveTarget(path);
+
+        var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
+
+        plan.Warnings.Any(warning => warning.Kind == DocumentSaveCompatibilityWarningKind.MacroProject)
+            .Should()
+            .Be(expectsMacroWarning);
+    }
+
+    [Theory]
+    [InlineData("Compat.rtf", DocumentSaveCompatibilityWarningKind.CompatibilityTarget)]
+    [InlineData("Compat.odt", DocumentSaveCompatibilityWarningKind.CompatibilityTarget)]
+    [InlineData("Template.ott", DocumentSaveCompatibilityWarningKind.CompatibilityTarget)]
+    [InlineData("Legacy.doc", DocumentSaveCompatibilityWarningKind.CompatibilityTarget)]
+    [InlineData("Plain.txt", DocumentSaveCompatibilityWarningKind.TextOnlyTarget)]
+    public void Build_CompatibilityTargetsWarnBeforeFeatureLoss(
+        string path,
+        DocumentSaveCompatibilityWarningKind targetWarningKind)
+    {
+        var document = RichDocument();
+        var target = ResolveTarget(path);
+
+        var plan = DocumentSaveCompatibilityPlanner.Build(document, target);
+
+        plan.RequiresConfirmation.Should().BeTrue();
+        plan.Warnings.Select(warning => warning.Kind).Should().Contain(targetWarningKind);
+        plan.Message.Should().Contain("may remove or simplify document features");
     }
 
     [Fact]
@@ -175,6 +227,18 @@ public sealed class DocumentSaveCompatibilityPlannerTests
             .Select((format, index) => new { format.FormatName, Index = index + 1 })
             .Single(row => row.FormatName == formatName)
             .Index;
+
+    private static TextDocument RichDocument()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Formatting = paragraph.Formatting with { Alignment = TextAlignment.Center };
+        paragraph.Runs.Add(new Run("Formatted", RunFormatting.Default with { Italic = true }));
+        document.Blocks.Add(paragraph);
+        document.Blocks.Add(Table.Create(1, 1));
+        return document;
+    }
 
     private sealed class FakeDocumentAdapter(IReadOnlyList<FileFormatDescriptor> formats) : IDocumentFileAdapter
     {
