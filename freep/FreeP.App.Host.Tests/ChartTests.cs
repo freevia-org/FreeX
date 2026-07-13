@@ -43,15 +43,19 @@ public sealed class ChartTests : IDisposable
         chart.Series.Should().BeEmpty();
         chart.Legend.Should().BeNull();
         chart.VaryColors.Should().BeFalse();
+        chart.BarGapWidthPercent.Should().BeNull();
+        chart.BarOverlapPercent.Should().BeNull();
         chart.FirstSliceAngleDegrees.Should().BeNull();
     }
 
     [Fact]
-    public void SlideCloner_ChartPreservesFirstSliceAngle()
+    public void SlideCloner_ChartPreservesTypeSpecificChartMetadata()
     {
         var slide = new Slide();
         var chart = BuildDoughnutChart(holeSize: 65);
         chart.FirstSliceAngleDegrees = 135;
+        chart.BarGapWidthPercent = 25;
+        chart.BarOverlapPercent = -40;
         slide.Shapes.Add(new SlideShape
         {
             Id = 7,
@@ -66,6 +70,8 @@ public sealed class ChartTests : IDisposable
         clonedChart.ChartType.Should().Be(ChartType.Doughnut);
         clonedChart.DoughnutHolePercent.Should().Be(65);
         clonedChart.FirstSliceAngleDegrees.Should().Be(135);
+        clonedChart.BarGapWidthPercent.Should().Be(25);
+        clonedChart.BarOverlapPercent.Should().Be(-40);
     }
 
     [Fact]
@@ -183,6 +189,39 @@ public sealed class ChartTests : IDisposable
 
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.Title.Should().Be("Quarterly Performance");
+    }
+
+    [Fact]
+    public void RoundTrip_ColumnChart_GapWidthAndOverlapPreservedInPackageAndModel()
+    {
+        var chart = BuildColumnChart();
+        chart.BarGapWidthPercent = 40;
+        chart.BarOverlapPercent = 55;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var barChart = chartDoc.Descendants(ChartNs + "barChart").Single();
+            barChart.Element(ChartNs + "gapWidth")
+                ?.Attribute("val")
+                ?.Value
+                .Should()
+                .Be("40");
+            barChart.Element(ChartNs + "overlap")
+                ?.Attribute("val")
+                ?.Value
+                .Should()
+                .Be("55");
+            ChartChildIndex(barChart, "gapWidth").Should().BeLessThan(ChartChildIndex(barChart, "overlap"));
+            ChartChildIndex(barChart, "overlap").Should().BeLessThan(ChartChildIndex(barChart, "axId"));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ChartType.Should().Be(ChartType.ColumnClustered);
+        rt.BarGapWidthPercent.Should().Be(40);
+        rt.BarOverlapPercent.Should().Be(55);
     }
 
     [Fact]

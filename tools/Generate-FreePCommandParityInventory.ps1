@@ -361,6 +361,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared chart planning now resolves edge and mixed factor/edge manual layout modes for plot-area and legend rectangles, clamping non-negative bounds inside the chart base rectangle. PowerPoint-authoritative chart visual baselines and nuanced layoutTarget tuning remain deferred."),
         new(
+            EvidenceId: "freep.chart.bar-gap-overlap",
+            Area: "Chart bar and column gap width plus series overlap",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume shared ChartRenderPlanner bar and column primitive geometry with no renderer-local spacing policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-bar-gap-overlap-2026-07-13.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.Model/ChartShape.cs",
+                "freep/FreeP.Core.Model/SlideCloner.cs",
+                "freep/FreeP.Core.IO/PptxChartReader.cs",
+                "freep/FreeP.Core.IO/PptxChartWriter.cs",
+                "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/ChartTests.cs"
+            ],
+            RemainingWork: "Bar and column c:gapWidth/c:overlap now round-trip through the model/package and drive shared primitive and data-label spacing for WPF/Avalonia. PowerPoint-authoritative chart visual baselines, 3-D bar/column spacing, and broader type-specific visual fidelity remain deferred."),
+        new(
             EvidenceId: "freep.chart.pie-first-slice-angle",
             Area: "Chart pie and doughnut first-slice angle preservation",
             Status: "shared-render-planner-evidence",

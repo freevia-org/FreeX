@@ -962,6 +962,43 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void ResolveBarClusterSpacing_DefaultMatchesExistingPowerPointClusterGeometry()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+
+        var slot = ChartRenderPlanner.ResolveBarClusterSpacing(
+            chart,
+            categorySize: 100,
+            seriesCount: 2,
+            stacked: false);
+
+        slot.CategoryStart.Should().BeApproximately(30, 0.0001);
+        slot.ClusterSize.Should().BeApproximately(40, 0.0001);
+        slot.SeriesSize.Should().BeApproximately(20, 0.0001);
+        slot.SeriesStep.Should().BeApproximately(20, 0.0001);
+    }
+
+    [Fact]
+    public void BuildColumnPrimitives_UsesAuthoredGapWidthAndOverlap()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.BarGapWidthPercent = 0;
+        chart.BarOverlapPercent = 50;
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        var second = primitives.Single(p => p.SeriesIndex == 1 && p.CategoryIndex == 0);
+        first.Bounds.X.Should().BeApproximately(0, 0.0001);
+        first.Bounds.Width.Should().BeApproximately(65.6667, 0.0001);
+        second.Bounds.X.Should().BeApproximately(33.3333, 0.0001);
+        second.Bounds.Width.Should().BeApproximately(65.6667, 0.0001);
+        second.Bounds.X.Should().BeLessThan(first.Bounds.Right, "positive overlap draws clustered series into the same category band");
+    }
+
+    [Fact]
     public void BuildColumnPrimitives_UsesPointGradientFillPlan()
     {
         var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
@@ -1050,6 +1087,26 @@ public sealed class ChartRenderPlannerTests
             Bounds: new ChartPlanRect(0, 65, 120, 9),
             Fill: new ChartFillPlan(new SrgbColor(0xC0, 0x50, 0x4D), ChartRenderPlanner.RectSeriesFillAlpha),
             Stroke: null));
+    }
+
+    [Fact]
+    public void BuildBarPrimitives_UsesAuthoredGapWidthAndOverlap()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.BarClustered);
+        chart.BarGapWidthPercent = 300;
+        chart.BarOverlapPercent = -100;
+
+        var primitives = ChartRenderPlanner.BuildBarPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        var second = primitives.Single(p => p.SeriesIndex == 1 && p.CategoryIndex == 0);
+        first.Bounds.Y.Should().BeApproximately(77.0833, 0.0001);
+        first.Bounds.Height.Should().BeApproximately(3.1667, 0.0001);
+        second.Bounds.Y.Should().BeApproximately(68.75, 0.0001);
+        second.Bounds.Height.Should().BeApproximately(3.1667, 0.0001);
+        second.Bounds.Bottom.Should().BeLessThan(first.Bounds.Y, "negative overlap leaves a visible gap between series bars");
     }
 
     [Fact]
@@ -1600,6 +1657,27 @@ public sealed class ChartRenderPlannerTests
             label.CategoryIndex == 0 &&
             label.Text == "6 75%" &&
             label.Bounds == new ChartPlanRect(30, 32, 40, 11));
+    }
+
+    [Fact]
+    public void BuildDataLabelPlans_ColumnLabelsFollowAuthoredGapWidthAndOverlap()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.BarGapWidthPercent = 0;
+        chart.BarOverlapPercent = 50;
+        chart.DataLabels = new ChartDataLabels
+        {
+            ShowValue = true,
+            Position = DataLabelPosition.Center
+        };
+
+        var planned = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var label = planned.Single(p => p.SeriesIndex == 1 && p.CategoryIndex == 0);
+        label.Bounds.X.Should().BeApproximately(33.3333, 0.0001);
+        label.Bounds.Width.Should().BeApproximately(66.6667, 0.0001);
     }
 
     private static ChartShape MakeTwoSeriesChart(ChartType chartType)

@@ -219,6 +219,14 @@ public readonly record struct ChartRectPrimitive(
     ChartFillPlan Fill,
     ChartStrokePlan? Stroke);
 
+public readonly record struct ChartBarClusterSlot(
+    double CategoryStart,
+    double CategorySize,
+    double ClusterStart,
+    double ClusterSize,
+    double SeriesSize,
+    double SeriesStep);
+
 public readonly record struct ChartLineSeriesPrimitive(
     int SeriesIndex,
     bool WithMarkers,
@@ -367,6 +375,7 @@ public static partial class ChartRenderPlanner
     public const double RadarSeriesStrokeThickness = 1.5;
     public const double RadarMarkerRadius = 3.0;
     private const double DipPerPoint = 96.0 / 72.0;
+    private const double DefaultBarGapWidthPercent = 150.0;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -1340,18 +1349,15 @@ public static partial class ChartRenderPlanner
         var (secondaryMin, secondaryMax, _) = ComputeSecondaryValueAxisRange(chart);
         double secondaryRange = secondaryMax - secondaryMin;
         bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
-        const double gapRatio = 1.5;
         double categoryWidth = plot.Width / categoryCount;
-        double clusterWidth = categoryWidth / (1.0 + gapRatio);
-        double halfGap = (categoryWidth - clusterWidth) / 2.0;
         int seriesCount = Math.Max(1, chart.Series.Count);
-        double seriesWidth = stacked ? clusterWidth : clusterWidth / seriesCount;
+        var spacing = ResolveBarClusterSpacing(chart, categoryWidth, seriesCount, stacked);
         bool varyByPoint = ShouldVaryPointColors(chart);
 
         var primitives = new List<ChartRectPrimitive>();
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
         {
-            double categoryLeft = plot.X + categoryIndex * categoryWidth + halfGap;
+            var slot = ResolveBarClusterSlot(plot.X, categoryIndex, spacing);
             double stackedY = plot.Bottom;
 
             for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
@@ -1377,8 +1383,10 @@ public static partial class ChartRenderPlanner
                 if (effectiveRange <= 0)
                     continue;
 
-                double x = stacked ? categoryLeft : categoryLeft + seriesIndex * seriesWidth;
-                double drawWidth = Math.Max(1, stacked ? seriesWidth : seriesWidth - 1);
+                double x = stacked
+                    ? slot.ClusterStart
+                    : slot.ClusterStart + seriesIndex * slot.SeriesStep;
+                double drawWidth = Math.Max(1, slot.SeriesSize - (stacked ? 0 : 1));
                 if (stacked)
                 {
                     double height = Math.Max(0.5, Math.Abs(rawValue.Value / effectiveRange) * plot.Height);
@@ -1425,19 +1433,16 @@ public static partial class ChartRenderPlanner
         var (secondaryMin, secondaryMax, _) = ComputeSecondaryValueAxisRange(chart);
         double secondaryRange = secondaryMax - secondaryMin;
         bool stacked = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
-        const double gapRatio = 1.5;
         double categoryHeight = plot.Height / categoryCount;
-        double clusterHeight = categoryHeight / (1.0 + gapRatio);
-        double halfGap = (categoryHeight - clusterHeight) / 2.0;
         int seriesCount = Math.Max(1, chart.Series.Count);
-        double seriesHeight = stacked ? clusterHeight : clusterHeight / seriesCount;
+        var spacing = ResolveBarClusterSpacing(chart, categoryHeight, seriesCount, stacked);
         bool varyByPoint = ShouldVaryPointColors(chart);
 
         var primitives = new List<ChartRectPrimitive>();
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
         {
             int renderRow = categoryCount - 1 - categoryIndex;
-            double categoryTop = plot.Y + renderRow * categoryHeight + halfGap;
+            var slot = ResolveBarClusterSlot(plot.Y, renderRow, spacing);
             double stackedX = plot.X;
 
             for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
@@ -1456,9 +1461,11 @@ public static partial class ChartRenderPlanner
 
                 double width = Math.Max(0.5, Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Width));
                 int renderSeries = stacked ? seriesIndex : seriesCount - 1 - seriesIndex;
-                double y = stacked ? categoryTop : categoryTop + renderSeries * seriesHeight;
+                double y = stacked
+                    ? slot.ClusterStart
+                    : slot.ClusterStart + renderSeries * slot.SeriesStep;
                 double x = stacked ? stackedX : plot.X;
-                double height = Math.Max(1, stacked ? seriesHeight : seriesHeight - 1);
+                double height = Math.Max(1, slot.SeriesSize - (stacked ? 0 : 1));
 
                 primitives.Add(new ChartRectPrimitive(
                     seriesIndex,
@@ -3042,12 +3049,9 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartDataLabelPlan>();
 
         bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
-        const double gapRatio = 1.5;
         double categoryWidth = plot.Width / categoryCount;
-        double clusterWidth = categoryWidth / (1.0 + gapRatio);
-        double halfGap = (categoryWidth - clusterWidth) / 2.0;
         int seriesCount = Math.Max(1, chart.Series.Count);
-        double seriesWidth = stacked ? clusterWidth : clusterWidth / seriesCount;
+        var spacing = ResolveBarClusterSpacing(chart, categoryWidth, seriesCount, stacked);
         var position = labels.Position ?? DataLabelPosition.OutsideEnd;
         var plans = new List<ChartDataLabelPlan>();
 
@@ -3060,9 +3064,10 @@ public static partial class ChartRenderPlanner
                 continue;
 
             double value = rawValue.Value;
+            var slot = ResolveBarClusterSlot(plot.X, categoryIndex, spacing);
             double barX = stacked
-                ? plot.X + categoryIndex * categoryWidth + halfGap
-                : plot.X + categoryIndex * categoryWidth + halfGap + seriesIndex * seriesWidth;
+                ? slot.ClusterStart
+                : slot.ClusterStart + seriesIndex * slot.SeriesStep;
 
             double barHeight;
             double barY;
@@ -3119,7 +3124,7 @@ public static partial class ChartRenderPlanner
                 seriesIndex,
                 categoryIndex,
                 text,
-                new ChartPlanRect(barX, labelY, seriesWidth, labelHeight),
+                new ChartPlanRect(barX, labelY, slot.SeriesSize, labelHeight),
                 IsBold: false,
                 FontSize: 6.5,
                 Alignment: ChartPlanTextAlignment.Center));
@@ -3209,12 +3214,9 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartDataLabelPlan>();
 
         bool stacked = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
-        const double gapRatio = 1.5;
         double categoryHeight = plot.Height / categoryCount;
-        double clusterHeight = categoryHeight / (1.0 + gapRatio);
-        double halfGap = (categoryHeight - clusterHeight) / 2.0;
         int seriesCount = Math.Max(1, chart.Series.Count);
-        double seriesHeight = stacked ? clusterHeight : clusterHeight / seriesCount;
+        var spacing = ResolveBarClusterSpacing(chart, categoryHeight, seriesCount, stacked);
         var position = labels.Position ?? DataLabelPosition.OutsideEnd;
         var plans = new List<ChartDataLabelPlan>();
 
@@ -3228,7 +3230,7 @@ public static partial class ChartRenderPlanner
 
             double value = rawValue.Value;
             int renderRow = categoryCount - 1 - categoryIndex;
-            double categoryTop = plot.Y + renderRow * categoryHeight + halfGap;
+            var slot = ResolveBarClusterSlot(plot.Y, renderRow, spacing);
 
             double barWidth;
             double barX;
@@ -3249,14 +3251,14 @@ public static partial class ChartRenderPlanner
 
                 barWidth = Math.Max(0.5, Math.Abs((value - effectiveMin) / effectiveRange * plot.Width));
                 barX = stackedX;
-                barY = categoryTop;
+                barY = slot.ClusterStart;
             }
             else
             {
                 int renderSeries = seriesCount - 1 - seriesIndex;
                 barWidth = Math.Abs((value - effectiveMin) / effectiveRange * plot.Width);
                 barX = plot.X;
-                barY = categoryTop + renderSeries * seriesHeight;
+                barY = slot.ClusterStart + renderSeries * slot.SeriesStep;
             }
 
             double total = ComputeDataLabelTotal(chart, series, categoryIndex, stacked, labels);
@@ -3275,7 +3277,7 @@ public static partial class ChartRenderPlanner
                 DataLabelPosition.InsideBase => barX + 2,
                 _ => barX + barWidth + 2
             };
-            double labelY = barY + seriesHeight / 2 - labelHeight / 2;
+            double labelY = barY + slot.SeriesSize / 2 - labelHeight / 2;
 
             plans.Add(new ChartDataLabelPlan(
                 seriesIndex,
@@ -3411,6 +3413,54 @@ public static partial class ChartRenderPlanner
 
         return (niceMin, niceMax, majorUnit);
     }
+
+    public static ChartBarClusterSlot ResolveBarClusterSpacing(
+        ChartShape chart,
+        double categorySize,
+        int seriesCount,
+        bool stacked)
+    {
+        double gapWidth = Math.Clamp(chart.BarGapWidthPercent ?? (int)DefaultBarGapWidthPercent, 0, 500);
+        double clusterSize = categorySize * 100.0 / (100.0 + gapWidth);
+        clusterSize = Math.Clamp(clusterSize, 1.0, categorySize);
+        double categoryStart = (categorySize - clusterSize) / 2.0;
+
+        if (stacked || seriesCount <= 1)
+        {
+            return new ChartBarClusterSlot(
+                categoryStart,
+                categorySize,
+                categoryStart,
+                clusterSize,
+                clusterSize,
+                clusterSize);
+        }
+
+        double overlap = Math.Clamp(chart.BarOverlapPercent ?? 0, -100, 100) / 100.0;
+        double denominator = seriesCount - overlap * (seriesCount - 1);
+        double seriesSize = denominator <= 0 ? clusterSize : clusterSize / denominator;
+        double seriesStep = seriesSize * (1.0 - overlap);
+        double occupied = seriesSize + seriesStep * (seriesCount - 1);
+        double clusterStart = categoryStart + (clusterSize - occupied) / 2.0;
+
+        return new ChartBarClusterSlot(
+            categoryStart,
+            categorySize,
+            clusterStart,
+            clusterSize,
+            seriesSize,
+            seriesStep);
+    }
+
+    private static ChartBarClusterSlot ResolveBarClusterSlot(
+        double plotStart,
+        int categoryIndex,
+        ChartBarClusterSlot spacing) =>
+        spacing with
+        {
+            CategoryStart = plotStart + categoryIndex * spacing.CategorySize,
+            ClusterStart = plotStart + categoryIndex * spacing.CategorySize + spacing.ClusterStart
+        };
 
     private static void AccumulateValues(
         IEnumerable<double?> values,
