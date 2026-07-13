@@ -19,6 +19,10 @@ public enum WorkbookShortcutRoute
     FillRight,
     FlashFill,
     ToggleShowFormulas,
+    ActivatePreviousSheet,
+    ActivateNextSheet,
+    SelectPreviousSheetGroup,
+    SelectNextSheetGroup,
     OpenFormatCells,
     NumberFormatGeneral,
     NumberFormatNumber,
@@ -68,6 +72,8 @@ public enum WorkbookShortcutKey
     Oem3,
     OemMinus,
     OemPlus,
+    PageDown,
+    PageUp,
     P,
     R,
     S,
@@ -179,6 +185,22 @@ public static class WorkbookKeyboardShortcutCatalog
             WorkbookShortcutRoute.ToggleShowFormulas,
             new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control),
             new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control)),
+        new(
+            WorkbookShortcutRoute.ActivatePreviousSheet,
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Meta)),
+        new(
+            WorkbookShortcutRoute.ActivateNextSheet,
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Control),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Meta)),
+        new(
+            WorkbookShortcutRoute.SelectPreviousSheetGroup,
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+        new(
+            WorkbookShortcutRoute.SelectNextSheetGroup,
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
         new(
             WorkbookShortcutRoute.OpenFormatCells,
             new WorkbookShortcutChord(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control),

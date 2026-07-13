@@ -19,8 +19,12 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route)");
         source.Should().Contain("case WorkbookShortcutRoute.Find:");
         source.Should().Contain("case WorkbookShortcutRoute.ToggleBold:");
+        source.Should().Contain("case WorkbookShortcutRoute.ActivatePreviousSheet:");
+        source.Should().Contain("case WorkbookShortcutRoute.SelectNextSheetGroup:");
         source.Should().Contain("Key.D7 => WorkbookShortcutKey.D7");
         source.Should().Contain("Key.OemMinus => WorkbookShortcutKey.OemMinus");
+        source.Should().Contain("Key.PageUp => WorkbookShortcutKey.PageUp");
+        source.Should().Contain("Key.PageDown => WorkbookShortcutKey.PageDown");
         source.Should().Contain("WorkbookShortcutRoute.ApplyOutlineBorder");
         source.Should().Contain("WorkbookShortcutRoute.ClearOutlineBorder");
         source.Should().Contain("CellBorderPreset.Outside");
@@ -29,6 +33,8 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().NotContain("else if (e.Key == Key.B && HasOnlyCommandModifier");
         source.Should().NotContain("else if (e.Key == Key.D && HasOnlyControlModifier");
         source.Should().NotContain("e.Key == Key.D7 && HasCommandAndShiftModifiers");
+        source.Should().NotContain("e.Key == Key.PageUp && HasCommandAndShiftModifiers");
+        source.Should().NotContain("e.Key == Key.PageDown && HasOnlyCommandModifier");
     }
 
     [Fact]

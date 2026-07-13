@@ -142,6 +142,8 @@ public static partial class KeyboardShortcutMatcher
             Key.Oem3 => WorkbookShortcutKey.Oem3,
             Key.OemMinus => WorkbookShortcutKey.OemMinus,
             Key.OemPlus or Key.Add => WorkbookShortcutKey.OemPlus,
+            Key.PageDown => WorkbookShortcutKey.PageDown,
+            Key.PageUp => WorkbookShortcutKey.PageUp,
             Key.P => WorkbookShortcutKey.P,
             Key.R => WorkbookShortcutKey.R,
             Key.S => WorkbookShortcutKey.S,
@@ -187,6 +189,8 @@ public static partial class KeyboardShortcutMatcher
             Key.OemMinus or
             Key.OemPlus or
             Key.Add or
+            Key.PageDown or
+            Key.PageUp or
             Key.P or
             Key.R or
             Key.S or

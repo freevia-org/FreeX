@@ -21755,6 +21755,8 @@ public sealed partial class MainWindow : Window
             Key.Oem3 => WorkbookShortcutKey.Oem3,
             Key.OemMinus => WorkbookShortcutKey.OemMinus,
             Key.OemPlus or Key.Add => WorkbookShortcutKey.OemPlus,
+            Key.PageDown => WorkbookShortcutKey.PageDown,
+            Key.PageUp => WorkbookShortcutKey.PageUp,
             Key.P => WorkbookShortcutKey.P,
             Key.R => WorkbookShortcutKey.R,
             Key.S => WorkbookShortcutKey.S,
@@ -21802,6 +21804,8 @@ public sealed partial class MainWindow : Window
             Key.OemMinus or
             Key.OemPlus or
             Key.Add or
+            Key.PageDown or
+            Key.PageUp or
             Key.P or
             Key.R or
             Key.S or
@@ -22042,23 +22046,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (e.Key == Key.PageUp && HasCommandAndShiftModifiers(e.KeyModifiers))
-        {
-            e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true);
-        }
-        else if (e.Key == Key.PageDown && HasCommandAndShiftModifiers(e.KeyModifiers))
-        {
-            e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true);
-        }
-        else if (e.Key == Key.PageUp && HasOnlyCommandModifier(e.KeyModifiers))
-        {
-            e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false);
-        }
-        else if (e.Key == Key.PageDown && HasOnlyCommandModifier(e.KeyModifiers))
-        {
-            e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false);
-        }
-        else if (e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta)
+        if (e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta)
         {
             e.Handled = true;
             FindNext();
@@ -22189,6 +22177,18 @@ public sealed partial class MainWindow : Window
             case WorkbookShortcutRoute.ToggleShowFormulas:
                 e.Handled = true;
                 ToggleShowFormulas();
+                return true;
+            case WorkbookShortcutRoute.ActivatePreviousSheet:
+                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false);
+                return true;
+            case WorkbookShortcutRoute.ActivateNextSheet:
+                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false);
+                return true;
+            case WorkbookShortcutRoute.SelectPreviousSheetGroup:
+                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true);
+                return true;
+            case WorkbookShortcutRoute.SelectNextSheetGroup:
+                e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true);
                 return true;
             case WorkbookShortcutRoute.OpenFormatCells:
                 e.Handled = true;

@@ -33,6 +33,10 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     [InlineData(WorkbookShortcutKey.R, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.FillRight)]
     [InlineData(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.FlashFill)]
     [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleShowFormulas)]
+    [InlineData(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ActivatePreviousSheet)]
+    [InlineData(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ActivateNextSheet)]
+    [InlineData(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SelectPreviousSheetGroup)]
+    [InlineData(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SelectNextSheetGroup)]
     [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenFormatCells)]
     [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatGeneral)]
     [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatNumber)]
@@ -72,6 +76,10 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     [InlineData(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatScientific)]
     [InlineData(WorkbookShortcutKey.D7, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ApplyOutlineBorder)]
     [InlineData(WorkbookShortcutKey.OemMinus, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ClearOutlineBorder)]
+    [InlineData(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.ActivatePreviousSheet)]
+    [InlineData(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Meta, WorkbookShortcutRoute.ActivateNextSheet)]
+    [InlineData(WorkbookShortcutKey.PageUp, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SelectPreviousSheetGroup)]
+    [InlineData(WorkbookShortcutKey.PageDown, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.SelectNextSheetGroup)]
     public void TryGetNativeMenuRoute_ResolvesSharedMacShortcutRoutes(
         WorkbookShortcutKey key,
         WorkbookShortcutModifiers modifiers,
