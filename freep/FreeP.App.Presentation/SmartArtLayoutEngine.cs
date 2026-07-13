@@ -81,6 +81,9 @@ public static class SmartArtLayoutEngine
         if (IsPictureCaptionListLayout(data.LayoutUniqueId))
             return LayoutPictureCaptionList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsAlternatingProcessLayout(data.LayoutUniqueId))
+            return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         return data.Family switch
         {
             SmartArtFamily.Process   => LayoutProcess  (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
@@ -286,6 +289,53 @@ public static class SmartArtLayoutEngine
     /// <summary>
     /// Vertical stack of boxes (no connectors — standard list layout).
     /// </summary>
+    /// <summary>
+    /// Alternating process geometry: ordered steps alternate between an upper and lower
+    /// track while connectors keep the same shared DrawOp path for WPF and Avalonia.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutAlternatingProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+
+        int columns = Math.Max((n + 1) / 2, 1);
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * 0.10);
+        long gapX = columns > 1 ? (long)(fcx * GapFrac) : 0;
+        long gapY = (long)(fcy * 0.08);
+
+        long availW = fcx - 2 * outerPadX - (columns - 1) * gapX;
+        long boxW = Math.Max(availW / columns, 1L);
+        long boxH = Math.Max((fcy - 2 * outerPadY - gapY) / 2, 1L);
+
+        var centers = new (long x, long y)[n];
+        uint idCounter = 180;
+
+        for (int i = 0; i < n; i++)
+        {
+            int column = i / 2;
+            bool lowerTrack = i % 2 == 1;
+            long x = fx + outerPadX + column * (boxW + gapX);
+            long y = fy + outerPadY + (lowerTrack ? boxH + gapY : 0);
+
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Process);
+            shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, x, y, boxW, boxH));
+            centers[i] = (x + boxW / 2, y + boxH / 2);
+        }
+
+        for (int i = 0; i < n - 1; i++)
+        {
+            var from = centers[i];
+            var to = centers[i + 1];
+            shapes.Add(MakeConnector(idCounter++, from.x, from.y, to.x, to.y, stylePlan.Connector));
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape> LayoutList(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -736,5 +786,14 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "picturecaptionlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsAlternatingProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "alternatingprocess", StringComparison.Ordinal);
     }
 }

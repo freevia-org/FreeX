@@ -1062,8 +1062,8 @@ public sealed class SmartArtTests : IDisposable
             nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
             parOfConnections: []);
 
-        var sa = PptxPackageReader.Read(pptxPath)
-            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Process,
@@ -1081,8 +1081,8 @@ public sealed class SmartArtTests : IDisposable
             nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
             parOfConnections: []);
 
-        var sa = PptxPackageReader.Read(pptxPath)
-            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Process,
@@ -1100,8 +1100,8 @@ public sealed class SmartArtTests : IDisposable
             nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
             parOfConnections: []);
 
-        var sa = PptxPackageReader.Read(pptxPath)
-            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Process,
@@ -1499,22 +1499,26 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownProcessFamilyButDisablesLiveLayoutForUnsupportedVariant()
+    public void Reader_ParsesAlternatingProcessAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess",
-            nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
+            nodes: [("id1", "Stage 1"), ("id2", "Stage 2"), ("id3", "Stage 3"), ("id4", "Stage 4")],
             parOfConnections: []);
 
-        var sa = PptxPackageReader.Read(pptxPath)
-            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Process,
-            "unsupported process variants still retain broad family metadata for future layout slices");
-        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
-            "process-family layouts outside the bounded allow-list should keep cached-drawing fallback");
-        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2");
+            "alternatingProcess remains in the shared process family");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "alternatingProcess now has bounded shared upper/lower-track geometry");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2", "Stage 3", "Stage 4");
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        ops.Skip(1).OfType<DrawOp.Shape>()
+            .Should().HaveCount(7, "four alternating-process boxes plus three connectors should render from shared live data");
     }
 
     [Fact]
@@ -2035,7 +2039,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Process,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess",
             IsLiveLayoutSupported = false
         };
         data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });

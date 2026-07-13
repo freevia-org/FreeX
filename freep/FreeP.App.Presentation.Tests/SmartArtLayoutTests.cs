@@ -684,6 +684,41 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void AlternatingProcess_ReturnsUpperLowerTrackBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "A", "B", "C", "D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("alternatingProcess has bounded shared alternating-track geometry");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "one live box should be emitted per alternating-process node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "adjacent alternating-process nodes need shared connectors");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("A", "B", "C", "D");
+        boxes[1].OffsetYEmu.Should().BeGreaterThan(boxes[0].OffsetYEmu,
+            "the second node should move to the lower alternating track");
+        boxes[2].OffsetYEmu.Should().Be(boxes[0].OffsetYEmu,
+            "the third node should return to the upper alternating track");
+        boxes[2].OffsetXEmu.Should().BeGreaterThan(boxes[0].OffsetXEmu,
+            "the next upper-track pair should advance horizontally");
+        boxes[3].OffsetYEmu.Should().Be(boxes[1].OffsetYEmu,
+            "the fourth node should share the lower alternating track");
+
+        foreach (var box in boxes)
+        {
+            box.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            box.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (box.OffsetXEmu + box.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (box.OffsetYEmu + box.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
+    }
+
+    [Fact]
     public void BasicBlockList_ReturnsLiveVerticalListBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.List, "A", "B", "C");
@@ -807,7 +842,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedKnownProcessSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -1325,7 +1360,7 @@ public sealed class SmartArtLayoutTests
     public void Compositor_FallsBackToCachedDrawing_WhenKnownFamilyLayoutIsUnsupported()
     {
         var data = MakeData(SmartArtFamily.Process, "Live A", "Live B");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess";
         data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };
@@ -1370,6 +1405,65 @@ public sealed class SmartArtLayoutTests
         var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
         shapeOps.Should().ContainSingle("unsupported process variants should render cached drawing, not live boxes");
         shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached fallback");
+    }
+
+    [Fact]
+    public void Compositor_AlternatingProcess_UsesSharedLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Live A", "Live B", "Live C", "Live D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 10,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached alternating fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 72,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(7, "alternatingProcess should render four live boxes plus three connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Live A");
+        renderedText.Should().Contain("Live B");
+        renderedText.Should().Contain("Live C");
+        renderedText.Should().Contain("Live D");
+        renderedText.Should().NotContain("Cached alternating fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(3, "WPF and Avalonia hosts consume the shared alternating-process connector DrawOps");
     }
 
     [Fact]
