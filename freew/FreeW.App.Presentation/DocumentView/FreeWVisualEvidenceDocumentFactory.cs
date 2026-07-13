@@ -299,6 +299,11 @@ public static class FreeWVisualEvidenceDocumentFactory
                 MathRun.MatrixOf(new MathMatrix([["1", "0"], ["0", "1"]]))
             ])));
         doc.Blocks.Add(EquationParagraph(
+            "Equation array: ",
+            new Equation([
+                MathRun.EquationArrayOf(new MathMatrix([["x = 1"], ["y = 2"]]))
+            ])));
+        doc.Blocks.Add(EquationParagraph(
             "Accents and bars: ",
             new Equation([
                 MathRun.AccentOf("x", "\u0302"),
