@@ -42,6 +42,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("FloatingWrappingVisualProof = @(");
         source.Should().Contain("TableLayoutProof = @(");
         source.Should().Contain("DrawingObjectVisualProof = @(");
+        source.Should().Contain("ShapeObjectVisualProof = @(");
         source.Should().Contain("ReviewCompareCombineVisualProof = @(");
         source.Should().Contain("'field-page-number-variants'");
         source.Should().Contain("'references-heavy-fields'");
@@ -63,6 +64,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'chart-smartart-complex'");
         source.Should().Contain("'wordart-watermark-stress'");
         source.Should().Contain("'wordart-picture-watermark-layout'");
+        source.Should().Contain("freew-fidelity-corpus/runs/shape-object-proof");
         source.Should().Contain("'review-compare-visual-proof'");
         source.Should().Contain("'review-combine-visual-proof'");
         source.Should().Contain("Unknown ScenarioSet '$ScenarioSet'");
