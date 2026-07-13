@@ -106,7 +106,18 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue HyperlinkScalar(ScalarValue link, ScalarValue? friendlyName)
     {
-        var display = friendlyName is not null && friendlyName is not BlankValue ? ToText(friendlyName) : ToText(link);
+        // friendlyName is null only when the argument slot was genuinely omitted (see call
+        // sites above, which pass `args.Count > 1 ? args[1] : null`); in that case Excel falls
+        // back to displaying the link location. A present-but-blank friendly_name (e.g. a
+        // reference to an empty cell) is NOT the same as omitted: real Excel coerces the blank
+        // like an ordinary numeric argument and displays "0" (the documented HYPERLINK quirk,
+        // worked around by wrapping the argument as `cell&""`), it does not fall back to the link.
+        var display = friendlyName switch
+        {
+            null => ToText(link),
+            BlankValue => "0",
+            _ => ToText(friendlyName)
+        };
         return TextResult(display);
     }
 

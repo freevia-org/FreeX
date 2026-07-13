@@ -15477,6 +15477,11 @@ public partial class FileAdapterSmokeTests
         // showZeros, like zoomScale, is modeled (Sheet.ShowZeros) so it is excluded from the bulk
         // native-attribute bag reapply and must be driven by the live model value instead.
         sheet.ShowZeros = false;
+        // rightToLeft is dual-tracked (modeled Sheet.IsRightToLeft + preserved verbatim in this
+        // bag) but, like showZeros, is excluded from the bulk native-attribute bag reapply so a
+        // live model toggle always wins (see R39-io-sheetview-2-1) -- so the model must agree with
+        // the bag here for the bag's "1" to actually surface in the saved XML.
+        sheet.IsRightToLeft = true;
         sheet.PrimaryViewMetadata = MakeBag("sheetView",
             new Dictionary<string, string>(StringComparer.Ordinal)
             {
@@ -15846,6 +15851,10 @@ public partial class FileAdapterSmokeTests
         var workbook = new Workbook("WorksheetNativeMetadataBatchSave");
         var sheet = workbook.AddSheet("Data");
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), new TextValue("native metadata"));
+        // rightToLeft is dual-tracked: it is a modeled Sheet flag (owned by the live model on save,
+        // so a user RTL-off toggle survives) AND the load-time native bag carries "rightToLeft"="1".
+        // Set the modeled flag so the batched sheetView still emits rightToLeft="1" on save.
+        sheet.IsRightToLeft = true;
         sheet.IsProtected = true;
         sheet.ProtectionMetadata = MakeBag("sheetProtection",
             new Dictionary<string, string>(StringComparer.Ordinal)

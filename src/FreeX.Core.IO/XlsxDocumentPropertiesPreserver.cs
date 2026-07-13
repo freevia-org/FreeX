@@ -21,7 +21,7 @@ internal static class XlsxDocumentPropertiesPreserver
         new(CustomPropertiesPart, CustomPropertiesRelationshipType)
     ];
 
-    public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive)
+    public static void Preserve(ZipArchive sourceArchive, ZipArchive targetArchive, DateTimeOffset? saveTimestamp = null)
     {
         PreserveDocumentPropertyElements(
             sourceArchive,
@@ -36,6 +36,56 @@ internal static class XlsxDocumentPropertiesPreserver
             OpcDocumentProperties.StableExtendedPropertyElementNames);
 
         PreserveDocumentPropertyPart(sourceArchive, targetArchive, CustomPropertiesPart);
+
+        // Excel updates dcterms:modified and increments cp:revision on every save; the
+        // element-preservation pass above (and the wholesale part copy that happens earlier
+        // in the pipeline for a brand-new target part) otherwise carries the SOURCE file's
+        // stamp through unchanged forever. dcterms:created is intentionally left untouched.
+        UpdateModifiedAndRevisionOnSave(targetArchive, saveTimestamp ?? DateTimeOffset.UtcNow);
+    }
+
+    private static void UpdateModifiedAndRevisionOnSave(ZipArchive targetArchive, DateTimeOffset saveTimestamp)
+    {
+        var targetEntry = targetArchive.GetEntry(CorePropertiesPart);
+        if (targetEntry is null)
+            return;
+
+        var targetXml = XlsxPackageXmlEditor.LoadXml(targetEntry);
+        var targetRoot = targetXml.Root;
+        if (targetRoot is null)
+            return;
+
+        var modifiedName = OpcDocumentProperties.DublinCoreTermsNamespace + "modified";
+        var modifiedValue = OpcPackageProperties.ToW3CDtf(saveTimestamp);
+        var modifiedElement = targetRoot.Element(modifiedName);
+        if (modifiedElement is null)
+        {
+            targetRoot.Add(new XElement(
+                modifiedName,
+                new XAttribute(OpcDocumentProperties.XmlSchemaInstanceNamespace + "type", "dcterms:W3CDTF"),
+                modifiedValue));
+        }
+        else
+        {
+            modifiedElement.SetValue(modifiedValue);
+        }
+
+        var revisionName = OpcDocumentProperties.CorePropertiesNamespace + "revision";
+        var revisionElement = targetRoot.Element(revisionName);
+        var currentRevision = int.TryParse(
+            revisionElement?.Value,
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var parsedRevision)
+            ? parsedRevision
+            : 0;
+        var nextRevision = (currentRevision + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (revisionElement is null)
+            targetRoot.Add(new XElement(revisionName, nextRevision));
+        else
+            revisionElement.SetValue(nextRevision);
+
+        XlsxPackageXmlEditor.ReplaceXml(targetArchive, CorePropertiesPart, targetXml);
     }
 
     public static void NormalizePackageGraph(Stream packageStream)

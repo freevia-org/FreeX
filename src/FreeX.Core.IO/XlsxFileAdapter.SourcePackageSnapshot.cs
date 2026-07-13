@@ -1098,7 +1098,18 @@ public sealed partial class XlsxFileAdapter
             }
 
             if (!allowsCellPatchSave)
-                return Fail(cellPatchEligibilityBlockReason ?? "patch_blocked_package_or_workbook_requires_full_save", out diagnostics);
+            {
+                // This gate trips before any cell diff runs, so we cannot know whether the
+                // workbook's formulas/sheet layout actually changed since it was loaded. A stale
+                // source calcChain.xml surviving the resulting full-rebuild fallback can make
+                // Excel show stale values or mis-order recalculation, so treat every eligibility
+                // rejection as calc-chain invalidating -- the full rebuild will safely regenerate
+                // calcChain.xml (or Excel rebuilds it itself when the part is absent).
+                return Fail(
+                    cellPatchEligibilityBlockReason ?? "patch_blocked_package_or_workbook_requires_full_save",
+                    out diagnostics,
+                    invalidatesCalcChain: true);
+            }
 
             if (preparedPackage.CellPatchBaseline is null &&
                 preparedPackage.IsCellPatchBaselineLazy)

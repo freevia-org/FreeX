@@ -26,6 +26,13 @@ public static class TextToColumnsValueConverter
             TextToColumnsColumnFormat.DateMYD when TryParseDate(text, DateOrderMYD, out var date) => new DateTimeValue(date.ToOADate()),
             TextToColumnsColumnFormat.DateDYM when TryParseDate(text, DateOrderDYM, out var date) => new DateTimeValue(date.ToOADate()),
             TextToColumnsColumnFormat.DateYDM when TryParseDate(text, DateOrderYDM, out var date) => new DateTimeValue(date.ToOADate()),
+            // General (the wizard's default, unmodified-per-column format) must match Excel and
+            // FreeX's own typed-cell-entry path (CellEntryParser.ParseScalarValue): a number-first,
+            // then date-like-text, then boolean, then text fallback chain. Number is tried before
+            // date so an ordinary/grouped numeric literal is never misread as a date.
+            TextToColumnsColumnFormat.General when TryParseNumber(text, advancedOptions, out var generalNumber) => new NumberValue(generalNumber),
+            TextToColumnsColumnFormat.General when TryParseGeneralDate(text, out var generalDate) => new DateTimeValue(generalDate.ToOADate()),
+            TextToColumnsColumnFormat.General when IsBooleanText(text, out var generalBool) => new BoolValue(generalBool),
             _ when TryParseNumber(text, advancedOptions, out var number) => new NumberValue(number),
             _ when IsBooleanText(text, out var value) => new BoolValue(value),
             _ => new TextValue(text)
@@ -133,6 +140,73 @@ public static class TextToColumnsValueConverter
         var decimalSeparator = Regex.Escape(culture.NumberFormat.NumberDecimalSeparator);
         var pattern = $@"^[+-]?\d{{1,3}}({groupSeparator}\d{{3}})*({decimalSeparator}\d*)?[+-]?$";
         return Regex.IsMatch(text.Trim(), pattern);
+    }
+
+    // General-format date coercion: honors the CURRENT CULTURE's own date-part order (day-first,
+    // month-first, etc.), mirroring FreeX.App.Services.CellEntryParser.TryParseCurrentCultureDate's
+    // typed-cell-entry behavior. The logic is duplicated here (rather than referenced) because
+    // FreeX.App.Services depends on FreeX.App.Presentation, so a reverse reference would be circular.
+    private static bool TryParseGeneralDate(string text, out DateTime date)
+    {
+        date = default;
+        if (string.IsNullOrEmpty(CultureInfo.CurrentCulture.Name) || !LooksLikeGeneralDateCandidate(text))
+            return false;
+
+        // Clone so the two-digit-year window can be overridden to Excel's documented 1930-2029
+        // rule (30-99 -> 19xx, 00-29 -> 20xx). .NET's default Calendar.TwoDigitYearMax is 2049,
+        // which would misdate e.g. "6/15/45" to 2045 instead of Excel's 1945.
+        var culture = (CultureInfo)CultureInfo.CurrentCulture.Clone();
+        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
+
+        if (!DateTime.TryParse(text, culture, DateTimeStyles.NoCurrentDateDefault, out date))
+            return false;
+
+        // Excel's earliest representable date is 1/1/1900 (serial 1); text that parses to an
+        // earlier date is left as plain text/number instead of becoming a negative-serial value.
+        return date.Date >= new DateTime(1900, 1, 1);
+    }
+
+    // Only attempt a date parse when the text already "looks like" a date (at least two digit
+    // groups, plus either a recognized date separator with 3+ groups or a letter, e.g. a month
+    // name) - otherwise DateTime.TryParse is lenient enough to misread plain numbers/fractions.
+    private static bool LooksLikeGeneralDateCandidate(string text)
+    {
+        // '/' and '-' are universally treated by Excel as date separators regardless of locale;
+        // '.' only counts when it is the current culture's own actual date separator (e.g.
+        // de-DE/it-IT), otherwise a plain decimal-looking string like "1.2.3" under en-US (whose
+        // date separator is '/') would be misread as a date instead of staying text.
+        var cultureDateSeparator = CultureInfo.CurrentCulture.DateTimeFormat.DateSeparator;
+
+        var digitGroups = 0;
+        var inDigitGroup = false;
+        var hasDateSeparator = false;
+        var hasLetter = false;
+
+        foreach (var c in text)
+        {
+            if (char.IsDigit(c))
+            {
+                if (!inDigitGroup)
+                {
+                    digitGroups++;
+                    inDigitGroup = true;
+                }
+
+                continue;
+            }
+
+            inDigitGroup = false;
+            hasDateSeparator |= c is '/' or '-' ||
+                (cultureDateSeparator.Length == 1 && c == cultureDateSeparator[0]);
+            hasLetter |= char.IsLetter(c);
+        }
+
+        if (digitGroups < 2)
+        {
+            return false;
+        }
+
+        return (hasDateSeparator && digitGroups >= 3) || hasLetter;
     }
 
     private static bool TryParseDate(string text, DatePartOrder partOrder, out DateTime date)

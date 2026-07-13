@@ -8169,19 +8169,33 @@ public sealed partial class MainWindow : Window
         }
 
         var textMarginTop = superSubOffsetDip;  // negative = up (superscript), positive = down (subscript)
+        // Fill alignment and vertical (rotation 255) text always render left-anchored regardless of
+        // the cell's configured alignment (see the TextAlignment assignment just below).
+        var effectiveTextAlignment = (isFillAlign || textRotation == 255) ? TextAlignment.Left : textAlignment;
+        // Format Cells > Alignment > Indent insets from the side the text is anchored to, not always
+        // the physical left: a right-aligned cell (explicit Right, or General text-content mirrored
+        // into TextAlignment.Right by a right-to-left sheet — see MapCellTextAlignment) anchors its
+        // text to the right edge, so the indent must inset from the right margin instead. Left/Center
+        // anchored cells (including General content mirrored to Left in an RTL sheet) keep the
+        // original left-inset behavior.
+        var isRightAnchored = effectiveTextAlignment == TextAlignment.Right;
         var textBlock = new TextBlock
         {
             FontSize = adjustedFontSize,
             FontWeight = fontWeight,
             FontStyle = fontStyle,
             Foreground = foreground,
-            TextAlignment = (isFillAlign || textRotation == 255) ? TextAlignment.Left : textAlignment,
+            TextAlignment = effectiveTextAlignment,
             TextWrapping = isFillAlign ? TextWrapping.NoWrap : effectiveTextWrapping,
             TextTrimming = (isFillAlign || effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255)
                 ? TextTrimming.None
                 : TextTrimming.CharacterEllipsis,
             VerticalAlignment = verticalAlignment,
-            Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, textMarginTop, scaledHorizontalPadding, 0),
+            Margin = new Thickness(
+                scaledHorizontalPadding + (isRightAnchored ? 0 : scaledIndentPadding),
+                textMarginTop,
+                scaledHorizontalPadding + (isRightAnchored ? scaledIndentPadding : 0),
+                0),
             // Base bidi (UAX #9) direction for shaping/reordering mixed-direction runs (e.g. Arabic
             // text with embedded Latin words/digits) — resolved per-cell from the sheet's Right-to-left
             // view flag and the cell's own Format Cells ▸ Alignment ▸ Text direction override. Was

@@ -4325,7 +4325,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var indentPadding = GetCellIndentPadding(style) + GetPivotRowLabelTextPadding(address.Row, address.Col);");
         source.Should().Contain("private static double GetCellIndentPadding(CellStyle? style)");
         source.Should().Contain("Math.Clamp(style.IndentLevel, 0, 15) * CellIndentLevelWidth;");
-        source.Should().Contain("Margin = new Thickness(scaledHorizontalPadding + scaledIndentPadding, textMarginTop, scaledHorizontalPadding, 0),");
+        // The indent insets from the side the text is anchored to: for a right-anchored (right-aligned
+        // or RTL) cell the indent is added to the RIGHT margin, otherwise to the left.
+        source.Should().Contain("scaledHorizontalPadding + (isRightAnchored ? 0 : scaledIndentPadding),");
+        source.Should().Contain("scaledHorizontalPadding + (isRightAnchored ? scaledIndentPadding : 0),");
     }
 
     [Fact]

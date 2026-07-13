@@ -873,6 +873,52 @@ public static class PasteCommandFactory
     private static readonly System.Globalization.CultureInfo UsCulture =
         System.Globalization.CultureInfo.GetCultureInfo("en-US");
 
+    // Mirrors CellEntryParser.CreateCell's formula recognition (a leading '=' makes a typed value a
+    // live formula) for the external-clipboard paste path. Core.Commands cannot reference
+    // FreeX.App.Services (App.Services depends on Core.Commands, not the reverse), so this
+    // replicates the same rule directly rather than sharing the implementation. Excel's
+    // leading-apostrophe text escape takes priority, exactly as it does in ParseClipboardValue
+    // above -- pasting "'=1+1" keeps the literal text "=1+1", never a formula.
+    internal static bool TryGetPasteFormula(string text, out string formula)
+    {
+        formula = "";
+        if (text.StartsWith('\'') || !text.StartsWith("=", StringComparison.Ordinal))
+            return false;
+
+        formula = text[1..];
+        return true;
+    }
+
+    // Locale-aware counterpart to the en-US-only ValidGroupingRegex/TryParseExcelPasteNumber pair
+    // below: validates that <paramref name="text"/> uses <paramref name="culture"/>'s own thousands
+    // grouping shape (exactly 3 digits per group, 1-3 in the leftmost group) before allowing
+    // AllowThousands parsing, so a malformed grouping is still rejected as text rather than silently
+    // misparsed -- the same Excel-parity precaution TryParseExcelPasteNumber applies for en-US.
+    private static bool TryParseCultureGroupedNumber(string text, System.Globalization.CultureInfo culture, out double number)
+    {
+        number = 0;
+        var groupSeparator = culture.NumberFormat.NumberGroupSeparator;
+        if (string.IsNullOrEmpty(groupSeparator) || !text.Contains(groupSeparator, StringComparison.Ordinal))
+            return false;
+
+        var decimalSeparator = culture.NumberFormat.NumberDecimalSeparator;
+        var groupPattern = System.Text.RegularExpressions.Regex.Escape(groupSeparator);
+        var decimalPattern = System.Text.RegularExpressions.Regex.Escape(decimalSeparator);
+        var groupingRegex = new System.Text.RegularExpressions.Regex(
+            $@"^\(?[+-]?\d{{1,3}}({groupPattern}\d{{3}})*({decimalPattern}\d*)?[+-]?\)?$");
+        if (!groupingRegex.IsMatch(text))
+            return false;
+
+        const System.Globalization.NumberStyles groupedStyles =
+            System.Globalization.NumberStyles.AllowLeadingSign |
+            System.Globalization.NumberStyles.AllowTrailingSign |
+            System.Globalization.NumberStyles.AllowParentheses |
+            System.Globalization.NumberStyles.AllowDecimalPoint |
+            System.Globalization.NumberStyles.AllowThousands;
+
+        return double.TryParse(text, groupedStyles, culture, out number) && double.IsFinite(number);
+    }
+
     // NumberStyles without AllowThousands — used for the first Excel-parity parse attempt so that
     // comma-separated inputs with bad grouping do not silently succeed.
     private const System.Globalization.NumberStyles StylesWithoutThousands =
@@ -903,6 +949,19 @@ public static class PasteCommandFactory
             double.IsFinite(cultureNumber))
         {
             return new NumberValue(cultureNumber);
+        }
+
+        // Locale-aware thousands-grouping parse, matching CellEntryParser's NumberEntryStyles
+        // (NumberStyles.Float | AllowThousands against CurrentCulture) so a pasted grouped number
+        // in the user's own locale (e.g. de-DE "1.234,56" -> 1234.56, using '.' as the group
+        // separator and ',' as the decimal separator) is recognized exactly like typed entry,
+        // instead of falling through to the date-candidate check below (which would otherwise
+        // misread de-DE's '.' grouping as its own date separator) or ending up as literal text.
+        // Grouping shape is validated first (mirroring TryParseExcelPasteNumber's en-US-specific
+        // ValidGroupingRegex gate below) so a malformed grouping like "1.23,4" is still rejected.
+        if (TryParseCultureGroupedNumber(text, System.Globalization.CultureInfo.CurrentCulture, out var groupedCultureNumber))
+        {
+            return new NumberValue(groupedCultureNumber);
         }
 
         // Excel-parity coercion for the accounting/thousands/parenthesized forms Excel recognizes on
@@ -1086,10 +1145,27 @@ internal sealed class ExternalTextPasteValuesCommand : IWorkbookCommand, IAffect
         var plainEdits = new List<(CellAddress Address, Cell NewCell)>(_edits.Count);
         foreach (var (address, text) in _edits)
         {
-            var value = _preserveText || IsDestinationTextFormatted(ctx, sheet, address)
-                ? new TextValue(text)
-                : PasteCommandFactory.ParseClipboardValue(text);
-            plainEdits.Add((address, Cell.FromValue(value)));
+            Cell newCell;
+            if (_preserveText || IsDestinationTextFormatted(ctx, sheet, address))
+            {
+                // A destination pre-formatted as Text (or an explicit paste-as-text request) keeps
+                // the pasted field as a literal string exactly as Excel does, even when it looks
+                // like a formula -- so the leading-'=' formula check below is skipped entirely.
+                newCell = Cell.FromValue(new TextValue(text));
+            }
+            else if (PasteCommandFactory.TryGetPasteFormula(text, out var formula))
+            {
+                // Real Excel (and FreeX's own typed cell entry) treats a leading '=' in a pasted
+                // plain-text/CSV/HTML field exactly like keyboard entry: the field becomes a live
+                // formula, not a literal string (R39-io-external-clipboard-2-1).
+                newCell = Cell.FromFormula(formula);
+            }
+            else
+            {
+                newCell = Cell.FromValue(PasteCommandFactory.ParseClipboardValue(text));
+            }
+
+            plainEdits.Add((address, newCell));
         }
 
         _inner = new EditCellsCommand(_sheetId, plainEdits);

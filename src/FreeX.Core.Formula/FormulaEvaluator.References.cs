@@ -950,9 +950,11 @@ public sealed partial class FormulaEvaluator
         for (int ri = 0; ri < rows; ri++)
             for (int ci = 0; ci < cols; ci++)
             {
-                var cell = range.SheetName is not null
-                    ? context.TryGetCell(range.SheetName, r0 + (uint)ri, c0 + (uint)ci)
-                    : context.TryGetCell(r0 + (uint)ri, c0 + (uint)ci);
+                // Use the spill-aware TryGetCell helper (not context.TryGetCell directly) so a
+                // multi-cell reference spanning a dynamic-array spill (e.g. ISFORMULA(A1:A3) where
+                // A1 spills into A2:A3) reports every spill member as a formula cell too, matching
+                // Excel — see TryGetCell's spill-fallback comment above.
+                TryGetCell(range.SheetName, r0 + (uint)ri, c0 + (uint)ci, context, out var cell);
                 cells[ri, ci] = cellValue(cell);
             }
 
@@ -1028,6 +1030,27 @@ public sealed partial class FormulaEvaluator
         cell = sheetName is not null
             ? context.TryGetCell(sheetName, row, column)
             : context.TryGetCell(row, column);
+
+        // ISFORMULA/FORMULATEXT are the only callers of this helper (via
+        // TryResolveReferenceTopLeftCell/TryGetTopLeftCell), and Excel treats every cell covered
+        // by a dynamic-array (or legacy CSE array) spill as part of the anchor's formula: a
+        // non-anchor spill member has no Cell record of its own — its value lives only in the
+        // sheet's spill overlay (Sheet._spillValues) — so TryGetCell above legitimately returns
+        // null for it. Fall back to the spill anchor's own formula cell in that case so
+        // ISFORMULA(spill member) reports TRUE and FORMULATEXT(spill member) returns the anchor's
+        // formula text, matching Excel exactly (a plain blank cell still correctly reports
+        // FALSE/#N/A since TryGetArrayExtent returns false for it).
+        if (cell is null)
+        {
+            var sheet = sheetName is not null ? context.CurrentWorkbook?.GetSheet(sheetName) : context.CurrentSheet;
+            if (sheet is not null &&
+                sheet.TryGetArrayExtent(new CellAddress(sheet.Id, row, column), out var anchor, out _, out _) &&
+                (anchor.Row != row || anchor.Col != column))
+            {
+                cell = sheet.GetCell(anchor.Row, anchor.Col);
+            }
+        }
+
         return null;
     }
 

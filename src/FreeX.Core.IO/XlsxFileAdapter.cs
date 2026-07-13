@@ -603,7 +603,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     if (cell is null) continue;
 
                     var target = hyperlink.ExternalAddress?.ToString() ??
-                                 NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress) ??
+                                 NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress, xlSheet.Name) ??
                                  string.Empty;
                     if (string.IsNullOrEmpty(target)) continue;
 
@@ -612,7 +612,7 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
                     sheet.HyperlinkMetadata[addr] = new HyperlinkMetadata(
                         GetHyperlinkTargetKind(hyperlink, target),
                         hyperlink.Tooltip ?? "",
-                        NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress) ?? "");
+                        NormalizeInternalHyperlinkAddress(hyperlink.InternalAddress, xlSheet.Name) ?? "");
                 }
                 catch (Exception ex)
                 {

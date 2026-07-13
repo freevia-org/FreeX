@@ -17,7 +17,7 @@ public sealed partial class XlsxFileAdapter
             : HyperlinkTargetKind.ExistingFileOrWebPage;
     }
 
-    private static string? NormalizeInternalHyperlinkAddress(string? address)
+    private static string? NormalizeInternalHyperlinkAddress(string? address, string ownSheetName)
     {
         if (string.IsNullOrWhiteSpace(address))
             return address;
@@ -26,6 +26,7 @@ public sealed partial class XlsxFileAdapter
         if (bangIndex < 0)
             return address;
 
+        var sheetPart = address[..bangIndex];
         if (bangIndex > 2 && address[0] == '\'' && address[bangIndex - 1] == '\'')
         {
             // O27: Excel escapes an embedded apostrophe in a quoted sheet name by doubling it
@@ -37,6 +38,7 @@ public sealed partial class XlsxFileAdapter
             var sheetName = address[1..(bangIndex - 1)].Replace("''", "'", StringComparison.Ordinal);
             address = sheetName + address[bangIndex..];
             bangIndex = sheetName.Length;
+            sheetPart = sheetName;
         }
 
         // R38-io-hyperlink-2-1: ClosedXML's XLHyperlink.InternalAddress *getter* unconditionally
@@ -51,8 +53,19 @@ public sealed partial class XlsxFileAdapter
         // forbids naming a defined name like a cell address), so if it doesn't parse, the bang
         // was bogus -- strip it and hand back the bare name instead of resolving/rewriting it
         // into a cell reference.
+        //
+        // R39-meta-1: that fabrication only ever prepends the hyperlink's OWN containing sheet
+        // (ClosedXML's XLHyperlink.InternalAddress prepends Container.WorksheetName), so a
+        // fabricated address always reads "OwnSheet!Name". A GENUINE sheet-qualified reference to
+        // a sheet-scoped local defined name on a DIFFERENT sheet (e.g. a hyperlink on Sheet1
+        // pointing at "Sheet2!LocalRegion") is legitimate and must keep its sheet qualifier --
+        // only strip when the sheet part equals the hyperlink's own sheet, matching the
+        // fabrication case.
         var reference = address[(bangIndex + 1)..];
-        return LooksLikeCellOrRangeReference(reference) ? address : reference;
+        if (LooksLikeCellOrRangeReference(reference))
+            return address;
+
+        return string.Equals(sheetPart, ownSheetName, StringComparison.OrdinalIgnoreCase) ? reference : address;
     }
 
     private static bool LooksLikeCellOrRangeReference(string reference)

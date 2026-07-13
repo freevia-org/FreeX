@@ -43,13 +43,22 @@ internal static class XlsxWorksheetPrimaryViewMetadataWriter
                 sheetViews.AddFirst(sheetView);
             }
 
+            // Every attribute name listed here must match XlsxWorksheetViewWriter.UpdateSheetView's own
+            // SetOrRemoveAttributeIfChanged set (mirrors ModeledSheetViewMergeAttributes in
+            // XlsxWorksheetMetadataPreserver.ModeledAttributes.cs): that writer already reconciled the
+            // live sheetView against the current Sheet model earlier in the same save
+            // (XlsxFileAdapter.SavePostProcessing.cs), including turning a flag OFF by removing the
+            // attribute entirely. Reapplying a stale value from the load-time native metadata bag for
+            // any of these would silently undo that intentional removal/change (e.g. resurrecting
+            // rightToLeft="1" after the user toggled Sheet.IsRightToLeft to false -- see the regression
+            // this guards against).
             var (pvAttrs, pvChildren) = XmlNativeBagSerializer.Deserialize(metadata.Get("sheetView"));
             XlsxWorksheetNativeMetadataHelpers.ApplyNativeAttributes(
                 sheetView,
                 pvAttrs,
                 [
                     "workbookViewId", "view", "showGridLines", "showRowColHeaders", "showRuler", "zoomScale",
-                    "showFormulas", "topLeftCell", "showZeros",
+                    "showFormulas", "topLeftCell", "showZeros", "rightToLeft",
                     "zoomScaleNormal", "zoomScaleSheetLayoutView", "zoomScalePageLayoutView"
                 ]);
 

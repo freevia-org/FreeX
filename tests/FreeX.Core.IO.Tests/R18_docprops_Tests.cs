@@ -100,7 +100,9 @@ public sealed class R18_docprops_Tests
 
             core.Element((XNamespace)DcNs + "title")!.Value.Should().Be("Edited Title");
             core.Element((XNamespace)CoreXmlNs + "lastPrinted")!.Value.Should().Be("2026-01-15T09:30:00Z");
-            core.Element((XNamespace)CoreXmlNs + "revision")!.Value.Should().Be("7");
+            // R39-io-custom-xml-docprops-2-1: Excel increments cp:revision on every save
+            // rather than freezing the source's value forever.
+            core.Element((XNamespace)CoreXmlNs + "revision")!.Value.Should().Be("8");
 
             app.Element((XNamespace)AppNs + "Application")!.Value.Should().Be("FreeX");
             app.Element((XNamespace)AppNs + "HyperlinkBase")!.Value.Should().Be("https://example.com/original/");

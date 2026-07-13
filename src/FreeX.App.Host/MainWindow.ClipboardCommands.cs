@@ -377,12 +377,22 @@ public partial class MainWindow
             TryPasteClipboardImage(range.Start))
             return;
 
-        // Fallback: external clipboard (plain text)
+        // Fallback: external clipboard (plain text, or HTML table structure when available)
         if (string.IsNullOrEmpty(text)) return;
 
-        var rows = ClipboardSerializer.Deserialize(text);
-        if (rows.Length == 0 || rows.All(r => r.Length == 0)) return;
-        var capturedRows = rows.Select(row => (IReadOnlyList<string>)row).ToList();
+        // Prefer the actual CF_HTML <tr>/<td> row/column structure over the plain-text
+        // tab/newline splitter when a web-table (or other HTML-producing app) put HTML on the
+        // clipboard alongside its plain-text fallback: DeserializePlainText treats every bare
+        // \r/\n as a new row, which misreads a source cell whose rendered text spans multiple
+        // lines (e.g. a wrapped address, or an explicit <br>) as a row break, shifting every
+        // subsequent row by one (R39-io-external-clipboard-2-3).
+        var htmlRows = TryGetClipboardHtml() is { } htmlPayload
+            ? TryParseHtmlClipboardTableRows(htmlPayload)
+            : null;
+        var capturedRows = htmlRows is { Count: > 0 } htmlRowList
+            ? htmlRowList
+            : ClipboardSerializer.Deserialize(text).Select(row => (IReadOnlyList<string>)row).ToList();
+        if (capturedRows.Count == 0 || capturedRows.All(r => r.Count == 0)) return;
 
         IWorkbookCommand CreateExternalPasteCommand()
         {
@@ -435,6 +445,217 @@ public partial class MainWindow
     {
         try { return System.Windows.Clipboard.ContainsImage(); }
         catch { return false; }
+    }
+
+    /// <summary>Reads the CF_HTML clipboard payload (header + fragment), or null when absent/unreadable.</summary>
+    private static string? TryGetClipboardHtml()
+    {
+        try
+        {
+            return System.Windows.Clipboard.GetData(System.Windows.DataFormats.Html) as string;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Parses a CF_HTML clipboard payload's first &lt;table&gt; into rows of plain cell text (no
+    /// per-cell styling), or null if no table markup is found. This only recovers the actual
+    /// &lt;tr&gt;/&lt;td&gt;/&lt;th&gt; row/column boundaries -- fuller style reconstruction mirrors
+    /// FreeX.Core.IO.HtmlTableReader (used for whole-file HTML import) and is a larger follow-up
+    /// out of scope here; this is enough to stop a multi-line source cell's embedded line break
+    /// from being misread as a row boundary the way the plain-text tab/newline splitter does
+    /// (R39-io-external-clipboard-2-3).
+    /// </summary>
+    private static List<IReadOnlyList<string>>? TryParseHtmlClipboardTableRows(string htmlPayload)
+    {
+        var fragment = ExtractHtmlClipboardFragment(htmlPayload);
+        var tableInner = ExtractFirstHtmlTableInner(fragment);
+        if (tableInner is null)
+            return null;
+
+        var rows = new List<IReadOnlyList<string>>();
+        foreach (var rowInner in EnumerateHtmlElements(tableInner, "tr"))
+        {
+            var cells = new List<string>();
+            foreach (var cellInner in EnumerateHtmlCells(rowInner))
+                cells.Add(DecodeHtmlCellText(cellInner));
+
+            if (cells.Count > 0)
+                rows.Add(cells);
+        }
+
+        return rows.Count > 0 ? rows : null;
+    }
+
+    /// <summary>CF_HTML wraps the real markup between StartFragment/EndFragment comments after a
+    /// small header (see BuildHtmlClipboardFragment for the write side using the same convention);
+    /// falls back to the whole payload if the markers are absent (some non-Excel producers omit them).</summary>
+    private static string ExtractHtmlClipboardFragment(string html)
+    {
+        const string startMarker = "<!--StartFragment-->";
+        const string endMarker = "<!--EndFragment-->";
+        var start = html.IndexOf(startMarker, StringComparison.OrdinalIgnoreCase);
+        var end = html.IndexOf(endMarker, StringComparison.OrdinalIgnoreCase);
+        return start >= 0 && end > start
+            ? html[(start + startMarker.Length)..end]
+            : html;
+    }
+
+    private static string? ExtractFirstHtmlTableInner(string html)
+    {
+        int i = 0;
+        while (i < html.Length)
+        {
+            int lt = html.IndexOf('<', i);
+            if (lt < 0)
+                return null;
+            if (string.Equals(HtmlTagNameAt(html, lt), "table", StringComparison.OrdinalIgnoreCase))
+            {
+                int tagEnd = html.IndexOf('>', lt);
+                if (tagEnd < 0)
+                    return null;
+                int closeStart = FindMatchingHtmlClose(html, tagEnd + 1, "table");
+                return closeStart < 0 ? html[(tagEnd + 1)..] : html[(tagEnd + 1)..closeStart];
+            }
+            i = lt + 1;
+        }
+        return null;
+    }
+
+    private static IEnumerable<string> EnumerateHtmlElements(string html, string tag)
+    {
+        int i = 0;
+        while (i < html.Length)
+        {
+            int lt = html.IndexOf('<', i);
+            if (lt < 0)
+                break;
+            if (string.Equals(HtmlTagNameAt(html, lt), tag, StringComparison.OrdinalIgnoreCase))
+            {
+                int tagEnd = html.IndexOf('>', lt);
+                if (tagEnd < 0)
+                    break;
+                int closeStart = FindMatchingHtmlClose(html, tagEnd + 1, tag);
+                string inner = closeStart < 0 ? html[(tagEnd + 1)..] : html[(tagEnd + 1)..closeStart];
+                yield return inner;
+                i = closeStart < 0 ? html.Length : SkipHtmlClosingTag(html, closeStart);
+            }
+            else
+            {
+                i = lt + 1;
+            }
+        }
+    }
+
+    private static IEnumerable<string> EnumerateHtmlCells(string rowInner)
+    {
+        int i = 0;
+        while (i < rowInner.Length)
+        {
+            int lt = rowInner.IndexOf('<', i);
+            if (lt < 0)
+                break;
+            var name = HtmlTagNameAt(rowInner, lt);
+            if (name is "td" or "th")
+            {
+                int tagEnd = rowInner.IndexOf('>', lt);
+                if (tagEnd < 0)
+                    break;
+                int closeStart = FindMatchingHtmlClose(rowInner, tagEnd + 1, name);
+                string inner = closeStart < 0 ? rowInner[(tagEnd + 1)..] : rowInner[(tagEnd + 1)..closeStart];
+                yield return inner;
+                i = closeStart < 0 ? rowInner.Length : SkipHtmlClosingTag(rowInner, closeStart);
+            }
+            else
+            {
+                i = lt + 1;
+            }
+        }
+    }
+
+    private static string? HtmlTagNameAt(string s, int ltIndex)
+    {
+        int i = ltIndex + 1;
+        if (i < s.Length && s[i] == '/')
+            i++;
+        int start = i;
+        while (i < s.Length && char.IsLetterOrDigit(s[i]))
+            i++;
+        return i > start ? s[start..i].ToLowerInvariant() : null;
+    }
+
+    /// <summary>Finds the index of the matching &lt;/tag&gt;, honoring nesting. -1 if none.</summary>
+    private static int FindMatchingHtmlClose(string s, int from, string tag)
+    {
+        int depth = 0;
+        int i = from;
+        while (i < s.Length)
+        {
+            int lt = s.IndexOf('<', i);
+            if (lt < 0)
+                return -1;
+            bool isClose = lt + 1 < s.Length && s[lt + 1] == '/';
+            var name = HtmlTagNameAt(s, lt);
+            if (string.Equals(name, tag, StringComparison.OrdinalIgnoreCase))
+            {
+                if (isClose)
+                {
+                    if (depth == 0)
+                        return lt;
+                    depth--;
+                }
+                else if (!IsHtmlSelfClosing(s, lt))
+                {
+                    depth++;
+                }
+            }
+            i = lt + 1;
+        }
+        return -1;
+    }
+
+    private static bool IsHtmlSelfClosing(string s, int lt)
+    {
+        int gt = s.IndexOf('>', lt);
+        return gt > lt && s[gt - 1] == '/';
+    }
+
+    private static int SkipHtmlClosingTag(string s, int closeStart)
+    {
+        int gt = s.IndexOf('>', closeStart);
+        return gt < 0 ? s.Length : gt + 1;
+    }
+
+    /// <summary>Strips tags from a cell's inner HTML -- turning &lt;br&gt; into a literal newline
+    /// kept WITHIN the cell's own text (never a row separator) -- decodes entities, and trims.</summary>
+    private static string DecodeHtmlCellText(string innerHtml)
+    {
+        var sb = new StringBuilder(innerHtml.Length);
+        int i = 0;
+        while (i < innerHtml.Length)
+        {
+            char c = innerHtml[i];
+            if (c == '<')
+            {
+                var name = HtmlTagNameAt(innerHtml, i);
+                int gt = innerHtml.IndexOf('>', i);
+                if (gt < 0)
+                    break;
+                if (name is "br")
+                    sb.Append('\n');
+                i = gt + 1;
+            }
+            else
+            {
+                sb.Append(c);
+                i++;
+            }
+        }
+
+        return System.Net.WebUtility.HtmlDecode(sb.ToString()).Trim();
     }
 
     private void ExecuteInsertCopiedCells()
@@ -886,10 +1107,15 @@ public partial class MainWindow
     // resolved font/fill color, horizontal alignment, per-edge borders) so pasting into FreeX's
     // own HTML importer — or re-exporting to .html — sees consistent styling either way.
     //
-    // Read-side (importing a foreign app's CF_HTML/RTF payload back into styled cells) is NOT
-    // implemented here — that is a materially larger feature (HTML table parsing + per-cell style
-    // reconstruction) and is left for a follow-up; plain-text/plain-image paste continues to work
-    // unchanged via the existing TryGetClipboardText/TryClipboardContainsImage paths.
+    // Read-side: ExecutePaste's external-clipboard fallback (TryGetClipboardHtml +
+    // TryParseHtmlClipboardTableRows below) recovers the pasted table's actual <tr>/<td> row/column
+    // structure from a foreign app's CF_HTML payload when present, so a source cell whose text spans
+    // multiple lines doesn't get misread as a row break by the plain-text splitter
+    // (R39-io-external-clipboard-2-3). Full per-cell STYLE reconstruction (fonts/fills/borders/merges
+    // from the pasted HTML, mirroring FreeX.Core.IO.HtmlTableReader used for whole-file HTML import)
+    // is a materially larger feature and remains a follow-up; plain-text/plain-image paste continues
+    // to work unchanged via the existing TryGetClipboardText/TryClipboardContainsImage paths when no
+    // HTML table is found.
 
     /// <summary>
     /// Builds a CF_HTML-wrapped clipboard payload (header + HTML fragment) for <paramref name="range"/>,

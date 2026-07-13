@@ -341,9 +341,36 @@ public partial class FunctionLibraryTests
     }
 
     [Fact]
-    public void Hyperlink_OmittedFriendlyNameSlot_ReturnsLinkLocation()
+    public void Hyperlink_TrailingCommaEmptyFriendlyNameSlot_DisplaysZeroNotLinkLocation()
     {
+        // `=HYPERLINK("url",)` supplies the friendly_name argument slot (unlike the
+        // arity-omitted `=HYPERLINK("url")` case above) -- Excel's parser evaluates an empty
+        // comma-slot argument as the same "Empty" value as a blank cell reference, so it is
+        // subject to the same blank-coerces-to-"0" HYPERLINK quirk, not the link-location
+        // fallback (which is reserved for a genuinely omitted argument slot).
         _eval.Evaluate("=HYPERLINK(\"https://example.com\",)", MakeSheet())
+            .Should().Be(new TextValue("0"));
+    }
+
+    [Fact]
+    public void Hyperlink_PresentButBlankFriendlyNameCell_DisplaysZeroNotLinkLocation()
+    {
+        // B2 is a genuinely empty (never-written) cell: the friendly_name argument slot IS
+        // supplied (it's `B2`, not omitted), so real Excel does NOT fall back to the link
+        // location -- it coerces the blank the same way it would for a numeric argument and
+        // displays "0" (the documented HYPERLINK quirk; the workaround is `B2&""`).
+        var sheet = MakeSheet();
+
+        _eval.Evaluate("=HYPERLINK(\"https://example.com\",B2)", sheet)
+            .Should().Be(new TextValue("0"));
+    }
+
+    [Fact]
+    public void Hyperlink_OmittedFriendlyNameArgument_StillReturnsLinkLocation()
+    {
+        // Sibling/no-regression case: a genuinely omitted argument (no comma at all) must
+        // keep falling back to the link location, unlike the present-but-blank-cell case above.
+        _eval.Evaluate("=HYPERLINK(\"https://example.com\")", MakeSheet())
             .Should().Be(new TextValue("https://example.com"));
     }
 

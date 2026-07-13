@@ -791,6 +791,24 @@ internal static class XlsxStylesheetMetadataPreserver
         if (targetXfsBySignature.Count == 0)
             return;
 
+        // Provenance guard: a rebuilt cellXfs <xf> record can be shared by ClosedXML across several
+        // source cells that render identically even though only some of them were bound to a named
+        // style in the source (e.g. a "Good"-styled cell and an unrelated plain-formatted cell that
+        // happens to look pixel-identical). Reconnecting such a shared target xf would silently pull
+        // the plain cell into the named style's gallery membership too. Since this pass only sees
+        // styles.xml (no per-cell xf usage), the best available signal is: does ANY source cellXfs
+        // record with that same rendered signature lack a named-style link (xfId 0/absent)? If so,
+        // the shared target xf cannot be safely attributed to the named style alone, so skip it.
+        var plainSourceSignatures = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var sourceXf in sourceCellXfs)
+        {
+            if (TryGetIntAttribute(sourceXf, "xfId", out var xfId) && xfId != 0)
+                continue;
+
+            plainSourceSignatures.Add(
+                BuildXfStyleSignature(sourceXf, sourceFonts, sourceFills, sourceBorders, sourceNumFmts, workbookNs));
+        }
+
         foreach (var sourceXf in sourceCellXfs)
         {
             if (!TryGetIntAttribute(sourceXf, "xfId", out var sourceXfId) ||
@@ -801,6 +819,9 @@ internal static class XlsxStylesheetMetadataPreserver
             }
 
             var signature = BuildXfStyleSignature(sourceXf, sourceFonts, sourceFills, sourceBorders, sourceNumFmts, workbookNs);
+            if (plainSourceSignatures.Contains(signature))
+                continue;
+
             if (!targetXfsBySignature.TryGetValue(signature, out var candidates) || candidates.Count == 0)
                 continue;
 

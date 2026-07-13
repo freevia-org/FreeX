@@ -818,7 +818,11 @@ public sealed partial class XlsxNonChartSchemaValidationTests
         var calcPr = ReadWorkbookChildElement(saved, "calcPr");
         calcPr.Attribute("calcId").Should().BeNull();
         calcPr.Attribute("refMode").Should().BeNull();
-        calcPr.Attribute("fullPrecision").Should().BeNull();
+        // fullPrecision is now a MODELED workbook attribute (Workbook.FullPrecision, default true) so a
+        // user "Precision as displayed" toggle survives a save instead of being reverted from the stale
+        // native bag. The invalid source value "maybe" coerces to false on load, so the modeled writer
+        // emits the schema-valid fullPrecision="0" (rather than the old over-strip to absent).
+        calcPr.Attribute("fullPrecision")!.Value.Should().Be("0");
         calcPr.Attribute("iterateCount").Should().BeNull();
         calcPr.Attribute("iterateDelta").Should().BeNull();
         calcPr.Attribute("concurrentManualCount").Should().BeNull();

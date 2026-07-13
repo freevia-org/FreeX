@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
@@ -274,8 +275,14 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                     // absolute value for the null-vs-non-null case, so it must not be run through
                     // the ascending/descending negation below (unlike the two-colors-present case,
                     // which still goes through CompareKey/negation unchanged).
-                    var aColor = sortOn == SortOn.CellColor ? GetStyle(ctx.Workbook, a.Payloads[index].Cell).FillColor : GetStyle(ctx.Workbook, a.Payloads[index].Cell).FontColor;
-                    var bColor = sortOn == SortOn.CellColor ? GetStyle(ctx.Workbook, b.Payloads[index].Cell).FillColor : GetStyle(ctx.Workbook, b.Payloads[index].Cell).FontColor;
+                    // R39-commands-sort-custom-2-2: resolve the EFFECTIVE color (static style
+                    // overlaid with any matching conditional-formatting rule's color), not just
+                    // the cell's stored style, so a CF-only-colored cell isn't wrongly treated
+                    // as "no fill".
+                    var addrA = new CellAddress(_sheetId, startRow + (uint)a.OriginalIndex, startCol + (uint)index);
+                    var addrB = new CellAddress(_sheetId, startRow + (uint)b.OriginalIndex, startCol + (uint)index);
+                    var aColor = GetEffectiveColor(ctx.Workbook, sheet, addrA, a.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
+                    var bColor = GetEffectiveColor(ctx.Workbook, sheet, addrB, b.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
                     bool aNoFill = aColor is null;
                     bool bNoFill = bColor is null;
                     if (aNoFill != bNoFill)
@@ -284,7 +291,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                         continue;
                 }
 
-                var cmp = CompareKey(ctx.Workbook, a.Payloads[index].Cell, b.Payloads[index].Cell, sortOn, targetColor, customOrder, _options.CaseSensitive);
+                var keyAddrA = new CellAddress(_sheetId, startRow + (uint)a.OriginalIndex, startCol + (uint)index);
+                var keyAddrB = new CellAddress(_sheetId, startRow + (uint)b.OriginalIndex, startCol + (uint)index);
+                var cmp = CompareKey(ctx.Workbook, sheet, keyAddrA, a.Payloads[index].Cell, keyAddrB, b.Payloads[index].Cell, sortOn, targetColor, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -406,8 +415,12 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                     // R27-sort-deep-3: with no specific target color chosen, "no fill"/"no font
                     // color" must always sort last, direction-independent — mirrors the guard in
                     // Apply's top-to-bottom comparator above.
-                    var aColor = sortOn == SortOn.CellColor ? GetStyle(workbook, a.Payloads[index].Cell).FillColor : GetStyle(workbook, a.Payloads[index].Cell).FontColor;
-                    var bColor = sortOn == SortOn.CellColor ? GetStyle(workbook, b.Payloads[index].Cell).FillColor : GetStyle(workbook, b.Payloads[index].Cell).FontColor;
+                    // R39-commands-sort-custom-2-2: resolve the EFFECTIVE color (static style
+                    // overlaid with any matching conditional-formatting rule's color) here too.
+                    var addrA = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)a.OriginalIndex);
+                    var addrB = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)b.OriginalIndex);
+                    var aColor = GetEffectiveColor(workbook, sheet, addrA, a.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
+                    var bColor = GetEffectiveColor(workbook, sheet, addrB, b.Payloads[index].Cell, wantFill: sortOn == SortOn.CellColor);
                     bool aNoFill = aColor is null;
                     bool bNoFill = bColor is null;
                     if (aNoFill != bNoFill)
@@ -416,7 +429,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
                         continue;
                 }
 
-                var cmp = CompareKey(workbook, a.Payloads[index].Cell, b.Payloads[index].Cell, sortOn, targetColor, customOrder, _options.CaseSensitive);
+                var keyAddrA = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)a.OriginalIndex);
+                var keyAddrB = new CellAddress(_sheetId, startRow + (uint)index, startCol + (uint)b.OriginalIndex);
+                var cmp = CompareKey(workbook, sheet, keyAddrA, a.Payloads[index].Cell, keyAddrB, b.Payloads[index].Cell, sortOn, targetColor, customOrder, _options.CaseSensitive);
                 if (cmp != 0)
                     return ascending ? cmp : -cmp;
             }
@@ -875,25 +890,234 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         }
     }
 
-    private static int CompareKey(Workbook workbook, Cell? a, Cell? b, SortOn sortOn, CellColor? targetColor, CustomSortOrder? customOrder, bool caseSensitive)
+    private static int CompareKey(Workbook workbook, Sheet sheet, CellAddress addressA, Cell? a, CellAddress addressB, Cell? b, SortOn sortOn, CellColor? targetColor, CustomSortOrder? customOrder, bool caseSensitive)
     {
         if (targetColor is not null && sortOn is SortOn.CellColor or SortOn.FontColor)
         {
-            var aColor = sortOn == SortOn.CellColor ? GetStyle(workbook, a).FillColor : GetStyle(workbook, a).FontColor;
-            var bColor = sortOn == SortOn.CellColor ? GetStyle(workbook, b).FillColor : GetStyle(workbook, b).FontColor;
+            var aColor = GetEffectiveColor(workbook, sheet, addressA, a, wantFill: sortOn == SortOn.CellColor);
+            var bColor = GetEffectiveColor(workbook, sheet, addressB, b, wantFill: sortOn == SortOn.CellColor);
             return CompareTargetColor(aColor, bColor, targetColor.Value);
         }
 
         return sortOn switch
         {
-            SortOn.CellColor => CompareNullableColor(GetStyle(workbook, a).FillColor, GetStyle(workbook, b).FillColor),
-            SortOn.FontColor => CompareNullableColor(GetStyle(workbook, a).FontColor, GetStyle(workbook, b).FontColor),
+            SortOn.CellColor => CompareNullableColor(GetEffectiveColor(workbook, sheet, addressA, a, wantFill: true), GetEffectiveColor(workbook, sheet, addressB, b, wantFill: true)),
+            SortOn.FontColor => CompareNullableColor(GetEffectiveColor(workbook, sheet, addressA, a, wantFill: false), GetEffectiveColor(workbook, sheet, addressB, b, wantFill: false)),
             _ => CompareScalar(a?.Value ?? BlankValue.Instance, b?.Value ?? BlankValue.Instance, customOrder, caseSensitive)
         };
     }
 
     private static CellStyle GetStyle(Workbook workbook, Cell? cell) =>
         workbook.GetStyle(cell?.StyleId ?? StyleId.Default);
+
+    /// <summary>
+    /// R39-commands-sort-custom-2-2: resolves the color Excel would actually show for a cell
+    /// when "Sort On" is Cell Color/Font Color — the cell's static stored style overlaid with the
+    /// color contributed by the highest-precedence matching conditional-formatting rule, mirroring
+    /// how Sort On > Cell Color/Font Color includes CF-driven colors in real Excel.
+    /// <para>
+    /// This intentionally only evaluates CF rule shapes that can be judged purely from the cell's
+    /// own value (literal CellValue comparisons, Blanks/NoBlanks/Errors/NoErrors, and the simple
+    /// text-match rules) — rule types that need cross-cell aggregation or arbitrary formula
+    /// evaluation (AboveAverage, Top10, Duplicate/UniqueValues, ColorScale, DataBar, IconSet,
+    /// Formula) are left unresolved here and fall through to the cell's static style. A full
+    /// formula/aggregate CF evaluator already exists for viewport rendering in
+    /// FreeX.Core.Calc.ViewportConditionalFormatEvaluator, but that project is not referenced by
+    /// FreeX.Core.Commands, so reusing it here is out of scope for this fix.
+    /// </para>
+    /// </summary>
+    private static CellColor? GetEffectiveColor(Workbook workbook, Sheet sheet, CellAddress address, Cell? cell, bool wantFill)
+    {
+        var style = GetStyle(workbook, cell);
+        CellColor? effective = wantFill ? style.FillColor : style.FontColor;
+        if (sheet.ConditionalFormats.Count == 0)
+            return effective;
+
+        foreach (var rule in sheet.ConditionalFormats.OrderBy(r => r.Priority))
+        {
+            var applies = false;
+            foreach (var range in rule.AllRanges)
+            {
+                if (range.Contains(address))
+                {
+                    applies = true;
+                    break;
+                }
+            }
+            if (!applies)
+                continue;
+
+            if (!TryEvaluateSimpleConditionalFormatRule(rule, cell, out var matches) || !matches)
+                continue;
+
+            // FontColor is a non-nullable CellStyle member defaulting to Black, so (matching the
+            // convention already used by ViewportConditionalFormatEvaluator.MergeStyles/
+            // StackDifferentialStyle) a dxf whose FontColor is still the default Black is treated
+            // as "this rule doesn't override font color" rather than "this rule sets font color to
+            // black" — otherwise a fill-only CF rule (font color untouched) would wrongly stomp
+            // the effective font color to black for every FontColor sort.
+            CellColor? ruleColor = wantFill
+                ? rule.FormatIfTrue?.FillColor
+                : rule.FormatIfTrue is { } fmt && fmt.FontColor != CellColor.Black ? fmt.FontColor : null;
+            if (ruleColor is not null)
+            {
+                effective = ruleColor;
+                break; // highest-precedence (lowest Priority number) matching rule wins for this aspect
+            }
+            if (rule.StopIfTrue)
+                break;
+        }
+
+        return effective;
+    }
+
+    /// <summary>
+    /// Evaluates the subset of conditional-format rule types that can be judged from the cell's
+    /// own value alone. Returns false (rule not evaluated, treated as non-matching for color
+    /// resolution purposes) for rule types this minimal resolver does not support.
+    /// </summary>
+    private static bool TryEvaluateSimpleConditionalFormatRule(ConditionalFormat rule, Cell? cell, out bool matches)
+    {
+        matches = false;
+        var value = cell?.Value ?? BlankValue.Instance;
+        switch (rule.RuleType)
+        {
+            case CfRuleType.Blanks:
+                matches = value is BlankValue || (value is TextValue tv && tv.Value.Length == 0);
+                return true;
+            case CfRuleType.NoBlanks:
+                matches = !(value is BlankValue) && !(value is TextValue tvNoBlank && tvNoBlank.Value.Length == 0);
+                return true;
+            case CfRuleType.Errors:
+                matches = value is ErrorValue;
+                return true;
+            case CfRuleType.NoErrors:
+                matches = value is not ErrorValue;
+                return true;
+            case CfRuleType.ContainsText:
+            case CfRuleType.NotContainsText:
+            case CfRuleType.BeginsWith:
+            case CfRuleType.EndsWith:
+                return TryEvaluateTextRule(rule, value, out matches);
+            case CfRuleType.CellValue:
+                return TryEvaluateCellValueRule(rule, value, out matches);
+            default:
+                return false;
+        }
+    }
+
+    private static bool TryEvaluateTextRule(ConditionalFormat rule, ScalarValue value, out bool matches)
+    {
+        matches = false;
+        if (value is not TextValue textValue || rule.TextRuleText is not { Length: > 0 } needle)
+            return false;
+
+        var haystack = textValue.Value;
+        matches = rule.RuleType switch
+        {
+            CfRuleType.ContainsText => haystack.Contains(needle, StringComparison.OrdinalIgnoreCase),
+            CfRuleType.NotContainsText => !haystack.Contains(needle, StringComparison.OrdinalIgnoreCase),
+            CfRuleType.BeginsWith => haystack.StartsWith(needle, StringComparison.OrdinalIgnoreCase),
+            CfRuleType.EndsWith => haystack.EndsWith(needle, StringComparison.OrdinalIgnoreCase),
+            _ => false
+        };
+        return true;
+    }
+
+    private static bool TryEvaluateCellValueRule(ConditionalFormat rule, ScalarValue value, out bool matches)
+    {
+        matches = false;
+        if (!TryParseLiteralThreshold(rule.Value1, out var v1Num, out var v1Text))
+            return false;
+
+        double? v2Num = null;
+        if (rule.Operator is CfOperator.Between or CfOperator.NotBetween)
+        {
+            if (!TryParseLiteralThreshold(rule.Value2, out var v2n, out _) || v2n is null)
+                return false;
+            v2Num = v2n;
+        }
+
+        if (TryGetNumber(value, out var cellNumber) && v1Num.HasValue)
+        {
+            var lo = v2Num.HasValue ? Math.Min(v1Num.Value, v2Num.Value) : 0;
+            var hi = v2Num.HasValue ? Math.Max(v1Num.Value, v2Num.Value) : 0;
+            matches = rule.Operator switch
+            {
+                CfOperator.Equal => cellNumber == v1Num.Value,
+                CfOperator.NotEqual => cellNumber != v1Num.Value,
+                CfOperator.GreaterThan => cellNumber > v1Num.Value,
+                CfOperator.GreaterThanOrEqual => cellNumber >= v1Num.Value,
+                CfOperator.LessThan => cellNumber < v1Num.Value,
+                CfOperator.LessThanOrEqual => cellNumber <= v1Num.Value,
+                CfOperator.Between => cellNumber >= lo && cellNumber <= hi,
+                CfOperator.NotBetween => cellNumber < lo || cellNumber > hi,
+                _ => false
+            };
+            return true;
+        }
+
+        if (value is TextValue textValue && v1Text is not null)
+        {
+            var cmp = string.Compare(textValue.Value, v1Text, StringComparison.OrdinalIgnoreCase);
+            matches = rule.Operator switch
+            {
+                CfOperator.Equal => cmp == 0,
+                CfOperator.NotEqual => cmp != 0,
+                _ => false // ordering operators against a literal text threshold aren't handled here
+            };
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryGetNumber(ScalarValue value, out double number)
+    {
+        switch (value)
+        {
+            case NumberValue n:
+                number = n.Value;
+                return true;
+            case DateTimeValue d:
+                number = d.Value;
+                return true;
+            case BoolValue b:
+                number = b.Value ? 1 : 0;
+                return true;
+            default:
+                number = 0;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// Parses a cfRule Value1/Value2 attribute that is a plain numeric or quoted-string literal
+    /// (e.g. "100" or "&quot;Done&quot;"). Anything else — a cell reference, a function call, or
+    /// any other formula-shaped text — is a threshold this minimal, non-formula-evaluating
+    /// resolver intentionally does not support, and returns false for.
+    /// </summary>
+    private static bool TryParseLiteralThreshold(string? text, out double? number, out string? quotedText)
+    {
+        number = null;
+        quotedText = null;
+        if (string.IsNullOrEmpty(text))
+            return false;
+
+        if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+        {
+            number = parsed;
+            return true;
+        }
+
+        if (text.Length >= 2 && text[0] == '"' && text[^1] == '"')
+        {
+            quotedText = text.Substring(1, text.Length - 2).Replace("\"\"", "\"");
+            return true;
+        }
+
+        return false;
+    }
 
     private static int CompareNullableColor(CellColor? a, CellColor? b)
     {
@@ -948,7 +1172,9 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             return customOrder.Compare(textA.Value, textB.Value, caseSensitive);
         return (a, b) switch
         {
-            (TextValue ta,   TextValue tb  ) => string.Compare(ta.Value, tb.Value, caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase),
+            (TextValue ta,   TextValue tb  ) => caseSensitive
+                ? CompareCaseSensitiveText(ta.Value, tb.Value)
+                : string.Compare(ta.Value, tb.Value, StringComparison.OrdinalIgnoreCase),
             (TextValue,      _             ) => -1,  // text before bool/blank
             (_,              TextValue     ) =>  1,
             (BoolValue ba,   BoolValue bb  ) => ba.Value.CompareTo(bb.Value),
@@ -959,5 +1185,40 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             (_,              BlankValue    ) => -1,
             _                               =>  0,
         };
+    }
+
+    /// <summary>
+    /// R39-commands-sort-custom-2-1: Excel's "Case Sensitive" sort option does NOT switch to raw
+    /// ordinal/codepoint ordering (which would clump all uppercase-leading words ahead of all
+    /// lowercase-leading ones, e.g. "Mango","Zebra","apple","banana"). It still sorts
+    /// alphabetically first — case only breaks a tie between strings that are otherwise
+    /// letter-for-letter identical, and in that tiebreak lowercase sorts before uppercase (e.g.
+    /// "apple" before "Apple"). This compares case-insensitively first, then falls back to a
+    /// per-character lowercase-before-uppercase tiebreak only when the case-insensitive compare
+    /// found the strings equal.
+    /// </summary>
+    private static int CompareCaseSensitiveText(string a, string b)
+    {
+        var primary = string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
+        if (primary != 0)
+            return primary;
+
+        var len = Math.Min(a.Length, b.Length);
+        for (var i = 0; i < len; i++)
+        {
+            var ca = a[i];
+            var cb = b[i];
+            if (ca == cb)
+                continue;
+
+            var aLower = char.IsLower(ca);
+            var bLower = char.IsLower(cb);
+            if (aLower != bLower)
+                return aLower ? -1 : 1; // lowercase before uppercase, as a same-letter tiebreak only
+
+            return ca.CompareTo(cb);
+        }
+
+        return a.Length.CompareTo(b.Length);
     }
 }

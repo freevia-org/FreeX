@@ -475,7 +475,8 @@ internal static class XlsxWorkbookMetadataPreserver
             "forceFullCalc",
             "iterate",
             "iterateCount",
-            "iterateDelta"
+            "iterateDelta",
+            "fullPrecision"
         ];
         var modeledAttributeNames = modeledAttributes
             .Select(name => XName.Get(name))

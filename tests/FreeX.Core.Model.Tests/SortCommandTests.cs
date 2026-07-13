@@ -46,6 +46,12 @@ public sealed class SortCommandTests
     [Fact]
     public void SortCommand_SupportsCaseSensitiveTextOrder()
     {
+        // R39-commands-sort-custom-2-1: Excel's case-sensitive sort is still alphabetical first —
+        // case only breaks a tie between letter-identical strings, and lowercase sorts before
+        // uppercase in that tiebreak. "apple" and "Banana" differ by their first letter (a < b),
+        // so alphabetical order puts "apple" first regardless of case sensitivity — the previous
+        // version of this test wrongly asserted the opposite (raw codepoint/ordinal order, which
+        // clumps "Banana" ahead of "apple" purely because 'B' < 'a' as UTF-16 code units).
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         var ctx = new TestCommandContext(workbook);
@@ -57,8 +63,8 @@ public sealed class SortCommandTests
 
         command.Apply(ctx).Success.Should().BeTrue();
 
-        sheet.GetValue(1, 1).Should().Be(new TextValue("Banana"));
-        sheet.GetValue(2, 1).Should().Be(new TextValue("apple"));
+        sheet.GetValue(1, 1).Should().Be(new TextValue("apple"));
+        sheet.GetValue(2, 1).Should().Be(new TextValue("Banana"));
     }
 
     [Fact]

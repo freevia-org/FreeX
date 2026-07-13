@@ -188,9 +188,17 @@ internal static class XlsxWorksheetFormControlPreserver
         {
             case FormControlKind.CheckBox:
             case FormControlKind.OptionButton:
-                // Excel's tri-state checkbox value ("Mixed") is not modeled — we only ever write
-                // the two states FormControlModel.IsChecked can represent.
-                formControlPr.SetAttributeValue("checked", control.IsChecked ? "Checked" : "Unchecked");
+                // R39-meta-2: for CheckBox/OptionButton, FormControlModel.Value carries Excel's
+                // tri-state ST_Checked encoding (0=Unchecked/1=Checked/2=Mixed) — see
+                // XlsxFormControlMapper.ReadControlProperties. IsChecked alone cannot represent
+                // "Mixed" (it stays false), so writing IsChecked ? "Checked" : "Unchecked"
+                // unconditionally silently downgrades a Mixed control to Unchecked on a
+                // full-rebuild save. Prefer the tri-state Value when it carries the "Mixed"
+                // reading; otherwise fall back to the two-state IsChecked (kept for controls
+                // whose Value was never populated, e.g. constructed purely in-memory).
+                formControlPr.SetAttributeValue(
+                    "checked",
+                    control.Value == 2 ? "Mixed" : control.IsChecked ? "Checked" : "Unchecked");
                 break;
 
             case FormControlKind.Spinner:

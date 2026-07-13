@@ -74,7 +74,13 @@ internal static class XlsxWorksheetColumnWidthWriter
                     continue;
                 }
 
-                max = Math.Min(max, Math.Max(min, maxModelColumn)); // cap whole-sheet default ranges
+                // Cap whole-sheet default-width ranges (e.g. ClosedXML's min="1" max="16384" carrier)
+                // down to the modelled range so they don't expand into thousands of spurious <col>
+                // entries. A run that carries real hidden/outline/collapsed state must keep its full
+                // min..max span regardless of where the modelled widths fall, or that state would be
+                // silently truncated to a single column.
+                if (!HasMeaningfulColumnAttributes(col))
+                    max = Math.Min(max, Math.Max(min, maxModelColumn));
                 for (var c = min; c <= max; c++)
                 {
                     var clone = new XElement(col);

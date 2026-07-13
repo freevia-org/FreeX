@@ -374,6 +374,48 @@ public static class SortDialogPlanner
         return BuildColorChoices(colors);
     }
 
+    /// <summary>
+    /// R39-commands-sort-custom-2-3: a per-level color-swatch scan, scoped to the single column
+    /// (<paramref name="columnOffset"/>, relative to <paramref name="range"/>.Start.Col) that sort
+    /// level actually targets, with the header row excluded when <paramref name="hasHeaders"/> is
+    /// set — mirroring Excel, which only ever offers the colors actually present in that column's
+    /// data rows. The whole-range overload above scans every column and is only appropriate when
+    /// no single target column is known yet (e.g. before a level's column is chosen).
+    /// </summary>
+    public static IReadOnlyList<SortColorChoice> BuildColorChoices(
+        Workbook workbook,
+        Sheet? sheet,
+        GridRange range,
+        SortOn sortOn,
+        uint columnOffset,
+        bool hasHeaders)
+    {
+        if (sheet is null)
+            return [new SortColorChoice("")];
+
+        var col = range.Start.Col + columnOffset;
+        if (col > range.End.Col)
+            return [new SortColorChoice("")];
+
+        var columnRange = new GridRange(
+            new CellAddress(range.Start.Sheet, range.Start.Row, col),
+            new CellAddress(range.Start.Sheet, range.End.Row, col));
+        var dataRange = ExcludeHeaderRow(columnRange, hasHeaders);
+
+        var colors = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var address in dataRange.AllCells())
+        {
+            var style = GetCellStyle(workbook, sheet, address);
+            var color = sortOn == SortOn.FontColor
+                ? style.FontColor
+                : style.FillColor;
+            if (color is { } resolvedColor)
+                colors.Add(CellColorPalettePlanner.FormatHexColor(resolvedColor));
+        }
+
+        return BuildColorChoices(colors);
+    }
+
     public static IReadOnlyList<SortColorChoice> BuildColorChoicesForSortOn(
         string? sortOn,
         IReadOnlyList<SortColorChoice> cellColorChoices,
