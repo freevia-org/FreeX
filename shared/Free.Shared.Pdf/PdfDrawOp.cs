@@ -114,4 +114,5 @@ public sealed record PdfImage(
     byte[] ImageBytes,
     string ContentType,
     double RotationDegrees = 0,
-    PdfImageClipKind ClipKind = PdfImageClipKind.None) : PdfDrawOp;
+    PdfImageClipKind ClipKind = PdfImageClipKind.None,
+    double Opacity = 1) : PdfDrawOp;

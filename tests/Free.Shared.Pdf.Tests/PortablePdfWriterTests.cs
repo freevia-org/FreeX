@@ -206,6 +206,23 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsImageOpacityExtGState()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(10, 30, 20, 10, MinimalPngBytes(), "image/png", Opacity: 0.5),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("/ExtGState << /GS1 ");
+        pdf.Should().Contain("<< /Type /ExtGState /ca 0.5 /CA 0.5 >>");
+        pdf.Should().Contain("/GS1 gs\n20 0 0 10 10 30 cm");
+        pdf.Should().Contain("/Im1 Do");
+    }
+
+    [Fact]
     public void Write_ClipsImageToEllipse()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]
