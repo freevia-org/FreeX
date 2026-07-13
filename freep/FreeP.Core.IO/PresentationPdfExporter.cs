@@ -206,7 +206,8 @@ public static class PresentationPdfExporter
             shape.RotationDeg,
             MapPictureFrameClip(shape.PictureFrameGeometry),
             MapPictureOpacity(shape),
-            MapPictureSourceCrop(shape)));
+            MapPictureSourceCrop(shape),
+            MapPictureColorEffects(shape)));
         return true;
     }
 
@@ -232,6 +233,18 @@ public static class PresentationPdfExporter
                 format.CropTop,
                 format.CropRight,
                 format.CropBottom)
+            : default;
+    }
+
+    private static PdfImageColorEffects MapPictureColorEffects(SlideShape shape)
+    {
+        var format = shape.PictureFormat;
+        return format is { HasColorEffect: true }
+            ? new PdfImageColorEffects(
+                format.Grayscale,
+                format.BiLevelThreshold,
+                format.Brightness,
+                format.Contrast)
             : default;
     }
 

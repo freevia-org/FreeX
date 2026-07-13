@@ -154,6 +154,22 @@ public readonly record struct PdfImageSourceCrop(
 }
 
 /// <summary>
+/// Office-style per-pixel color effects to apply to a picture image before it is drawn or embedded.
+/// </summary>
+public readonly record struct PdfImageColorEffects(
+    bool Grayscale,
+    double? BiLevelThreshold,
+    double? Brightness,
+    double? Contrast)
+{
+    public bool HasPixelEffects =>
+        Grayscale ||
+        BiLevelThreshold.HasValue ||
+        Brightness.HasValue ||
+        Contrast.HasValue;
+}
+
+/// <summary>
 /// Draws an encoded bitmap image into a rectangular PDF user-space bounds. Supported portable
 /// content types are PNG and JPEG; unsupported content types are skipped by the dependency-free
 /// writer instead of emitting a corrupt image stream.
@@ -168,4 +184,5 @@ public sealed record PdfImage(
     double RotationDegrees = 0,
     PdfImageClipKind ClipKind = PdfImageClipKind.None,
     double Opacity = 1,
-    PdfImageSourceCrop SourceCrop = default) : PdfDrawOp;
+    PdfImageSourceCrop SourceCrop = default,
+    PdfImageColorEffects ColorEffects = default) : PdfDrawOp;

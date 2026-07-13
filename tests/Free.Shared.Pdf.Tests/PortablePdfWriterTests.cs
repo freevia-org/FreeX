@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text;
 using FluentAssertions;
 using Free.Shared.Pdf;
@@ -255,6 +256,49 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_AppliesPngImageColorEffectsBeforeEmbedding()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(
+                10,
+                30,
+                20,
+                10,
+                RgbPngBytes(255, 0, 0),
+                "image/png",
+                ColorEffects: new PdfImageColorEffects(
+                    Grayscale: true,
+                    BiLevelThreshold: null,
+                    Brightness: null,
+                    Contrast: null)),
+        });
+
+        var bytes = PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page }));
+        var pdf = Encoding.Latin1.GetString(bytes);
+        var pixels = InflateZlib(ExtractFirstPdfStream(bytes));
+
+        pdf.Should().Contain("/ColorSpace /DeviceRGB");
+        pixels.Should().Equal(54, 54, 54);
+    }
+
+    [Fact]
+    public void PdfImageColorEffectPixels_AppliesBrightnessContrastAndBiLevelInRendererOrder()
+    {
+        byte[] pixels = [51, 102, 204];
+
+        PdfImageColorEffectPixels.ApplyToRgb24(
+            pixels,
+            new PdfImageColorEffects(
+                Grayscale: false,
+                BiLevelThreshold: 0.5,
+                Brightness: 0.25,
+                Contrast: -0.5));
+
+        pixels.Should().Equal(255, 255, 255);
+    }
+
+    [Fact]
     public void Write_EmitsSourceCroppedImagePlacementWithDestinationClip()
     {
         var page = new PdfContentPage(120, 90, new PdfDrawOp[]
@@ -388,6 +432,82 @@ public sealed class PortablePdfWriterTests
         0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
         0x42, 0x60, 0x82
     ];
+
+    private static byte[] RgbPngBytes(byte red, byte green, byte blue)
+    {
+        var bytes = new List<byte>(128);
+        bytes.AddRange([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+        AppendPngChunk(bytes, "IHDR", [0, 0, 0, 1, 0, 0, 0, 1, 8, 2, 0, 0, 0]);
+        AppendPngChunk(bytes, "IDAT", DeflateZlib([0, red, green, blue]));
+        AppendPngChunk(bytes, "IEND", []);
+        return bytes.ToArray();
+    }
+
+    private static void AppendPngChunk(List<byte> target, string type, byte[] data)
+    {
+        target.AddRange(ToBigEndian(data.Length));
+        target.AddRange(Encoding.ASCII.GetBytes(type));
+        target.AddRange(data);
+        target.AddRange([0, 0, 0, 0]);
+    }
+
+    private static byte[] ToBigEndian(int value)
+    {
+        var bytes = BitConverter.GetBytes(value);
+        if (BitConverter.IsLittleEndian)
+            Array.Reverse(bytes);
+        return bytes;
+    }
+
+    private static byte[] ExtractFirstPdfStream(byte[] pdfBytes)
+    {
+        var streamMarker = Encoding.ASCII.GetBytes("stream\n");
+        var endMarker = Encoding.ASCII.GetBytes("\nendstream");
+        var start = IndexOf(pdfBytes, streamMarker, 0);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        start += streamMarker.Length;
+        var end = IndexOf(pdfBytes, endMarker, start);
+        end.Should().BeGreaterThan(start);
+        return pdfBytes[start..end];
+    }
+
+    private static int IndexOf(byte[] source, byte[] pattern, int startIndex)
+    {
+        for (var i = startIndex; i <= source.Length - pattern.Length; i++)
+        {
+            var matched = true;
+            for (var j = 0; j < pattern.Length; j++)
+            {
+                if (source[i + j] == pattern[j])
+                    continue;
+
+                matched = false;
+                break;
+            }
+
+            if (matched)
+                return i;
+        }
+
+        return -1;
+    }
+
+    private static byte[] DeflateZlib(byte[] data)
+    {
+        using var output = new MemoryStream();
+        using (var stream = new ZLibStream(output, CompressionLevel.Optimal, leaveOpen: true))
+            stream.Write(data);
+        return output.ToArray();
+    }
+
+    private static byte[] InflateZlib(byte[] data)
+    {
+        using var input = new MemoryStream(data);
+        using var output = new MemoryStream();
+        using (var stream = new ZLibStream(input, CompressionMode.Decompress))
+            stream.CopyTo(output);
+        return output.ToArray();
+    }
 
     private static byte[] MinimalJpegBytes() => Convert.FromBase64String(
         "/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCAAQABADASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD9U6KKKAP/2Q==");

@@ -238,6 +238,8 @@ public static class SkiaPdfWriter
                 if (skImage is null)
                     break;
 
+                using var transformedImage = ApplyColorEffects(skImage, image.ColorEffects);
+                var drawImage = transformedImage ?? skImage;
                 var top = pageHeight - (float)(image.Y + image.Height);
                 var left = (float)image.X;
                 var width = (float)image.Width;
@@ -250,13 +252,13 @@ public static class SkiaPdfWriter
                     canvas.RotateDegrees((float)image.RotationDegrees);
                     var localRect = new SKRect(-width / 2f, -height / 2f, width / 2f, height / 2f);
                     ClipImage(canvas, image.ClipKind, localRect);
-                    DrawImage(canvas, skImage, image, localRect, imagePaint);
+                    DrawImage(canvas, drawImage, image, localRect, imagePaint);
                 }
                 else
                 {
                     var destRect = new SKRect(left, top, left + width, top + height);
                     ClipImage(canvas, image.ClipKind, destRect);
-                    DrawImage(canvas, skImage, image, destRect, imagePaint);
+                    DrawImage(canvas, drawImage, image, destRect, imagePaint);
                 }
 
                 canvas.Restore();
@@ -276,6 +278,29 @@ public static class SkiaPdfWriter
             canvas.DrawImage(skImage, sourceRect, destRect, imagePaint);
         else
             canvas.DrawImage(skImage, destRect, imagePaint);
+    }
+
+    internal static SKImage? ApplyColorEffects(SKImage image, PdfImageColorEffects effects)
+    {
+        if (!effects.HasPixelEffects || image.Width <= 0 || image.Height <= 0)
+            return null;
+
+        var info = new SKImageInfo(image.Width, image.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
+        using var bitmap = new SKBitmap(info);
+        if (!image.ReadPixels(info, bitmap.GetPixels(), bitmap.RowBytes, 0, 0))
+            return null;
+
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var color = bitmap.GetPixel(x, y);
+                var (r, g, b) = PdfImageColorEffectPixels.TransformRgb(color.Red, color.Green, color.Blue, effects);
+                bitmap.SetPixel(x, y, new SKColor(r, g, b, color.Alpha));
+            }
+        }
+
+        return SKImage.FromBitmap(bitmap);
     }
 
     internal static bool TryGetSourceRect(SKImage image, PdfImageSourceCrop crop, out SKRect sourceRect)

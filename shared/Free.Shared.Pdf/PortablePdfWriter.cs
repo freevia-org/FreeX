@@ -291,7 +291,7 @@ public static class PortablePdfWriter
             var contentType = NormalizeContentType(image.ContentType);
             resource = contentType switch
             {
-                "image/png" => DecodePng(resourceName, image.ImageBytes),
+                "image/png" => DecodePng(resourceName, image),
                 "image/jpeg" or "image/jpg" => DecodeJpeg(resourceName, image.ImageBytes),
                 _ => null!,
             };
@@ -346,9 +346,12 @@ public static class PortablePdfWriter
         return new PdfImageResource(resourceName, width, height, colorSpace, "DCTDecode", bytes);
     }
 
-    private static PdfImageResource DecodePng(string resourceName, byte[] bytes)
+    private static PdfImageResource DecodePng(string resourceName, PdfImage image)
     {
-        var decoded = DecodePngToPdfPixels(bytes);
+        var decoded = DecodePngToPdfPixels(image.ImageBytes);
+        if (image.ColorEffects.HasPixelEffects)
+            decoded = ApplyColorEffects(decoded, image.ColorEffects);
+
         return new PdfImageResource(
             resourceName,
             decoded.Width,
@@ -470,6 +473,24 @@ public static class PortablePdfWriter
         }
 
         return new PngPdfPixels(width, height, "DeviceRGB", rgb);
+    }
+
+    private static PngPdfPixels ApplyColorEffects(PngPdfPixels pixels, PdfImageColorEffects effects)
+    {
+        var transformed = pixels.Pixels.ToArray();
+        switch (pixels.ColorSpace)
+        {
+            case "DeviceGray":
+                PdfImageColorEffectPixels.ApplyToGray8(transformed, effects);
+                break;
+            case "DeviceRGB":
+                PdfImageColorEffectPixels.ApplyToRgb24(transformed, effects);
+                break;
+            default:
+                throw new NotSupportedException($"Portable PDF image color effects do not support {pixels.ColorSpace} PNG pixels.");
+        }
+
+        return pixels with { Pixels = transformed };
     }
 
     private static byte[] Inflate(Stream zlib)

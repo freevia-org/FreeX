@@ -47,6 +47,30 @@ public sealed class SkiaPdfWriterTests
         stream.Length.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void ApplyColorEffects_TransformsDecodedImagePixels()
+    {
+        using var bitmap = new SKBitmap(1, 1);
+        bitmap.SetPixel(0, 0, new SKColor(255, 0, 0, 128));
+        using var image = SKImage.FromBitmap(bitmap);
+
+        using var transformed = SkiaPdfWriter.ApplyColorEffects(
+            image,
+            new PdfImageColorEffects(
+                Grayscale: true,
+                BiLevelThreshold: null,
+                Brightness: null,
+                Contrast: null));
+
+        transformed.Should().NotBeNull();
+        using var transformedBitmap = SKBitmap.FromImage(transformed!);
+        var pixel = transformedBitmap.GetPixel(0, 0);
+        pixel.Red.Should().Be(54);
+        pixel.Green.Should().Be(54);
+        pixel.Blue.Should().Be(54);
+        pixel.Alpha.Should().Be(128);
+    }
+
     private static SKBitmap CreateTestBitmap()
     {
         var bitmap = new SKBitmap(16, 16);

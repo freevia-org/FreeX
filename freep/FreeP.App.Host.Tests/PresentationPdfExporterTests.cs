@@ -611,6 +611,42 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_CarriesPictureColorEffectsToPdfImage()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Picture,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            PictureFormat = new PictureFormat
+            {
+                Grayscale = true,
+                BiLevelThreshold = 0.62,
+                Brightness = 0.2,
+                Contrast = -0.1,
+            },
+            Picture = new ImagePart { Bytes = MinimalPngBytes(), ContentType = "image/png" },
+        });
+        deck.Slides.Add(slide);
+
+        var image = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops
+            .OfType<PdfImage>()
+            .Should().ContainSingle()
+            .Subject;
+
+        image.ColorEffects.HasPixelEffects.Should().BeTrue();
+        image.ColorEffects.Grayscale.Should().BeTrue();
+        image.ColorEffects.BiLevelThreshold.Should().Be(0.62);
+        image.ColorEffects.Brightness.Should().Be(0.2);
+        image.ColorEffects.Contrast.Should().Be(-0.1);
+    }
+
+    [Fact]
     public void ExportToBytes_EmbedsPictureImageXObject()
     {
         var deck = Presentation.CreateEmpty();
