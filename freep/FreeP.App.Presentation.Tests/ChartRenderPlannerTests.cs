@@ -121,9 +121,37 @@ public sealed class ChartRenderPlannerTests
     [InlineData(1234, "[>=1000000]0.0,,\"M\";[>=1000]0.0,\"K\";0", "1.2K")]
     [InlineData(1234567, "[>=1000000]0.0,,\"M\";[>=1000]0.0,\"K\";0", "1.2M")]
     [InlineData(42, "[>=1000000]0.0,,\"M\";[>=1000]0.0,\"K\";0", "42")]
+    [InlineData(1.0625, "[h]:mm:ss", "25:30:00")]
+    [InlineData(0.0625, "[m]:ss", "90:00")]
+    [InlineData(0.00001736111111111111, "[s].0", "1.5")]
+    [InlineData(1.25, "# ?/?", "1 1/4")]
+    [InlineData(0.3333333333333333, "# ??/??", "1/3")]
+    [InlineData(0.125, "?/??", "1/8")]
+    [InlineData(1.2, "# ?/??", "1 1/5")]
     public void FormatWithCode_UsesPowerPointStyleNumericCodes(double value, string code, string expected)
     {
         ChartRenderPlanner.FormatWithCode(value, code).Should().Be(expected);
+    }
+
+    [Fact]
+    public void AxisLabelPlans_FormatElapsedTimeNumberFormats()
+    {
+        var series = new ChartSeries { Name = "Duration" };
+        series.Values.AddRange(new double?[] { 0, 1 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(series);
+        chart.ValueAxis.Min = 0;
+        chart.ValueAxis.Max = 1;
+        chart.ValueAxis.NumberFormatCode = "[h]:mm:ss";
+        chart.ValueAxis.NumberFormatSourceLinked = false;
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var valueLabels = ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame);
+
+        valueLabels.Select(label => label.Text)
+            .Should().StartWith(new[] { "0:00:00", "6:00:00", "12:00:00", "18:00:00", "24:00:00" });
+        valueLabels.Should().OnlyContain(label =>
+            label.AxisLabelFormat == new ChartAxisLabelFormatPlan("[h]:mm:ss", false));
     }
 
     [Fact]
@@ -239,6 +267,20 @@ public sealed class ChartRenderPlannerTests
 
         ChartRenderPlanner.FormatDataLabel(labels, 1250000, 1250000, "Q1", "Sales")
             .Should().Be("1.3M");
+    }
+
+    [Fact]
+    public void FormatDataLabel_UsesBoundedFractionNumberFormat()
+    {
+        var labels = new ChartDataLabels
+        {
+            ShowCategoryName = true,
+            ShowValue = true,
+            NumberFormat = "# ??/??"
+        };
+
+        ChartRenderPlanner.FormatDataLabel(labels, 1.125, 1.125, "Elapsed", "Series")
+            .Should().Be("Elapsed 1 1/8");
     }
 
     [Fact]

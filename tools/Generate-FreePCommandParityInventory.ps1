@@ -362,7 +362,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/ChartDataLabelsTests.cs",
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs"
             ],
-            RemainingWork: "Shared chart label planning now applies preserved PowerPoint-style number/date format codes for common axis and category label cases, including conditional threshold sections and scaled display-unit commas. Broader Excel custom-format semantics, exact locale behavior, and PowerPoint-authoritative chart visual baselines remain deferred."),
+            RemainingWork: "Shared chart label planning now applies preserved PowerPoint-style number/date format codes for common axis and category label cases, including conditional threshold sections, scaled display-unit commas, bounded elapsed-time labels, and bounded fraction labels. Broader Excel custom-format semantics, exact locale behavior, and PowerPoint-authoritative chart visual baselines remain deferred."),
         new(
             EvidenceId: "freep.chart.edge-manual-layout",
             Area: "Chart manual plot and legend edge layout rendering",
