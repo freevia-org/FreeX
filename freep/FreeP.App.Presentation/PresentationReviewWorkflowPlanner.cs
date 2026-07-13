@@ -704,6 +704,8 @@ public static class PresentationReviewWorkflowPlanner
         "Add a space after list punctuation.";
     public const string ProofingExtraSpacesMessage =
         "Remove extra spaces between words or sentences.";
+    public const string ProofingRepeatedTerminalPunctuationMessage =
+        "Use a single terminal punctuation mark.";
     public const string SlideTitleMissingSlideMessage =
         "Slide title target slide was not found.";
     public const string SlideTitleEmptyMessage =
@@ -2236,6 +2238,9 @@ public static class PresentationReviewWorkflowPlanner
         foreach (var repeatedWord in ScanRepeatedWords(scope.Text))
             yield return repeatedWord;
 
+        foreach (var repeatedTerminalPunctuation in ScanRepeatedTerminalPunctuation(scope.Text))
+            yield return repeatedTerminalPunctuation;
+
         foreach (var punctuationSpacing in ScanPunctuationSpacing(scope.Text))
             yield return punctuationSpacing;
 
@@ -2256,6 +2261,9 @@ public static class PresentationReviewWorkflowPlanner
 
         if (TryBuildPunctuationSpacingReplacement(text, out var punctuationSpacingReplacement))
             return punctuationSpacingReplacement;
+
+        if (TryBuildRepeatedTerminalPunctuationReplacement(text, out var terminalPunctuationReplacement))
+            return terminalPunctuationReplacement;
 
         if (TryBuildExtraInteriorSpacesReplacement(text, out var extraSpacingReplacement))
             return extraSpacingReplacement;
@@ -2300,6 +2308,82 @@ public static class PresentationReviewWorkflowPlanner
         if (text.Length >= 2 && text.All(IsHorizontalProofingWhitespace))
         {
             replacement = " ";
+            return true;
+        }
+
+        replacement = string.Empty;
+        return false;
+    }
+
+    private static IEnumerable<PresentationProofingIssueMatch> ScanRepeatedTerminalPunctuation(string text)
+    {
+        var index = 0;
+        while (index < text.Length)
+        {
+            if (!IsSentenceTerminator(text[index]))
+            {
+                index++;
+                continue;
+            }
+
+            var start = index;
+            while (index < text.Length && IsSentenceTerminator(text[index]))
+                index++;
+
+            var length = index - start;
+            if (length >= 2 &&
+                ShouldFlagRepeatedTerminalPunctuation(text, start, length))
+            {
+                yield return new PresentationProofingIssueMatch(
+                    start,
+                    length,
+                    text.Substring(start, length),
+                    ProofingRepeatedTerminalPunctuationMessage);
+            }
+        }
+    }
+
+    private static bool ShouldFlagRepeatedTerminalPunctuation(string text, int start, int length)
+    {
+        if (IsGuardedTerminalPunctuationRun(text, start, length))
+        {
+            return false;
+        }
+
+        var first = text[start];
+        var allSame = true;
+        for (var index = start; index < start + length; index++)
+        {
+            if (text[index] == '.')
+                return false;
+
+            allSame &= text[index] == first;
+        }
+
+        if (allSame)
+            return true;
+
+        return length >= 3;
+    }
+
+    private static bool IsGuardedTerminalPunctuationRun(string text, int start, int length)
+    {
+        for (var index = start; index < start + length; index++)
+        {
+            if (TryGetUrlOrEmailCoreEnd(text, index, out _))
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryBuildRepeatedTerminalPunctuationReplacement(string text, out string replacement)
+    {
+        if (text.Length >= 2 &&
+            text.All(IsSentenceTerminator) &&
+            ShouldFlagRepeatedTerminalPunctuation(text, 0, text.Length))
+        {
+            replacement = text[0].ToString();
             return true;
         }
 
