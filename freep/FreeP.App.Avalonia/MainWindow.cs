@@ -287,6 +287,7 @@ public sealed class MainWindow : Window
     internal PresentationVideoExportPlan? LastVideoExportPlan { get; private set; }
     internal PresentationVideoFramePackage? LastVideoFramePackage { get; private set; }
     internal PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
+    internal PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor { get; private set; }
     internal PresentationLayoutPickerPlan? LastLayoutPickerPlan { get; private set; }
     internal PresentationLayoutChoice? LastAppliedLayoutChoice { get; private set; }
     internal TableInsertionPickerPlan? LastTablePickerPlan { get; private set; }
@@ -3170,9 +3171,11 @@ public sealed class MainWindow : Window
             request,
             SlideRenderer.RenderToBytes);
         LastVideoExportPlan = LastVideoFramePackage.Plan.ExportPlan;
-        LastVideoExportHandoffPlan = PresentationVideoFramePackageExecutor.BuildHandoffPlan(
-            LastVideoFramePackage.Plan,
-            VideoExportHostCapabilities);
+        LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
+            LastVideoFramePackage,
+            VideoExportHostCapabilities,
+            _fileWorkflow.CurrentFileName);
+        LastVideoExportHandoffPlan = LastVideoExecutionDescriptor.HandoffPlan;
         _statusText.Text = LastVideoExportHandoffPlan.StatusText;
         return LastVideoFramePackage;
     }

@@ -1989,6 +1989,7 @@ public sealed class MainWindowHeadlessTests
         PresentationVideoExportPlan? videoPlan = null;
         PresentationVideoFramePackage? videoPackage = null;
         PresentationVideoExportHandoffPlan? videoHandoff = null;
+        PresentationVideoFramePackageExecutionDescriptor? videoDescriptor = null;
 
         var ran = await OnUiThread(() =>
         {
@@ -2003,6 +2004,7 @@ public sealed class MainWindowHeadlessTests
             videoPlan = window.LastVideoExportPlan;
             videoPackage = window.LastVideoFramePackage;
             videoHandoff = window.LastVideoExportHandoffPlan;
+            videoDescriptor = window.LastVideoExecutionDescriptor;
         });
 
         if (!ran) return;
@@ -2010,8 +2012,18 @@ public sealed class MainWindowHeadlessTests
         videoPackage.Should().NotBeNull();
         videoPlan.Should().NotBeNull();
         videoHandoff.Should().NotBeNull();
+        videoDescriptor.Should().NotBeNull();
         videoPackage!.Plan.ExportPlan.Should().BeSameAs(videoPlan);
         videoHandoff!.PackagePlan.Should().BeSameAs(videoPackage.Plan);
+        videoDescriptor!.PackagePlan.Should().BeSameAs(videoPackage.Plan);
+        videoDescriptor.HandoffPlan.Should().BeSameAs(videoHandoff);
+        videoDescriptor.Validation.IsValid.Should().BeTrue();
+        videoDescriptor.Validation.ExpectedFrameCount.Should().Be(3);
+        videoDescriptor.Validation.ManifestFrameCount.Should().Be(3);
+        videoDescriptor.Validation.ZipFrameEntryCount.Should().Be(3);
+        videoDescriptor.ContentType.Should().Be(PresentationVideoFramePackageExecutor.PackageContentType);
+        videoDescriptor.SuggestedPackageName.Should().Be("Presentation-video-encoder-input.zip");
+        videoDescriptor.CanMaterialize.Should().BeTrue();
         videoHandoff.Status.Should().Be(PresentationVideoExportHandoffStatus.EncoderInputPackageReadyHostDeferred);
         videoHandoff.IsFramePackageReady.Should().BeTrue();
         videoHandoff.CanOpenHostEncoder.Should().BeFalse();

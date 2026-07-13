@@ -22,8 +22,11 @@ public sealed class PresentationExportBackstageEvidencePlannerTests
             "freep.export.backstage.video-frame-package");
         plan.Rows.Should().OnlyContain(row =>
             row.SharedPlanner == PresentationExportBackstageEvidencePlanner.SharedPlannerEvidence &&
-            row.PowerPointBaseline == PresentationExportBackstageEvidencePlanner.PowerPointBaselineDeferred &&
-            row.RequiresPowerPointComBaseline);
+            row.PowerPointBaseline == PresentationExportBackstageEvidencePlanner.PowerPointBaselineDeferred);
+        plan.Rows
+            .Where(row => row.EvidenceId != "freep.export.backstage.video-frame-package")
+            .Should()
+            .OnlyContain(row => row.RequiresPowerPointComBaseline);
 
         var fullPage = plan.Rows.Single(row => row.EvidenceId == "freep.export.backstage.print-full-page");
         fullPage.Status.Should().Be("shared-package-ready-host-deferred");
@@ -37,9 +40,11 @@ public sealed class PresentationExportBackstageEvidencePlannerTests
         handout.AvaloniaEvidence.Should().Be("Avalonia:HandoutPdf:2:HostPrinterUnavailableDeferredByHost");
 
         var video = plan.Rows.Single(row => row.EvidenceId == "freep.export.backstage.video-frame-package");
-        video.Status.Should().Be("shared-frame-package-ready-host-deferred");
+        video.Status.Should().Be("package-materialization-ready/host-deferred");
+        video.RequiresPowerPointComBaseline.Should().BeFalse();
         video.WpfEvidence.Should().Contain("WPF video export host:4:EncoderInputPackageReadyHostDeferred");
         video.AvaloniaEvidence.Should().Contain("Avalonia video export host:4:EncoderInputPackageReadyHostDeferred");
+        video.Detail.Should().Contain("materialization=package-materialization-ready/host-deferred");
     }
 
     [Fact]

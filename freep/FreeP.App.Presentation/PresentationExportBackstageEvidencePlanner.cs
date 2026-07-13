@@ -179,8 +179,8 @@ public static class PresentationExportBackstageEvidencePlanner
             FormatVideoEvidence(wpf),
             FormatVideoEvidence(avalonia),
             PowerPointBaselineDeferred,
-            RequiresPowerPointComBaseline: true,
-            $"source={sourceName}; frames={packagePlan.ExportPlan.Storyboard.Segments.Count}; duration={packagePlan.ExportPlan.EstimatedDuration}; encoder={wpf.Status}");
+            RequiresPowerPointComBaseline: false,
+            $"source={sourceName}; frames={packagePlan.ExportPlan.Storyboard.Segments.Count}; duration={packagePlan.ExportPlan.EstimatedDuration}; materialization={status}; encoder={wpf.Status}");
     }
 
     private static string ClassifyPrintStatus(
@@ -212,7 +212,7 @@ public static class PresentationExportBackstageEvidencePlanner
             wpf.Status == PresentationVideoExportHandoffStatus.EncoderInputPackageReadyHostDeferred &&
             avalonia.Status == PresentationVideoExportHandoffStatus.EncoderInputPackageReadyHostDeferred)
         {
-            return "shared-frame-package-ready-host-deferred";
+            return "package-materialization-ready/host-deferred";
         }
 
         return "mismatched-host-evidence";
