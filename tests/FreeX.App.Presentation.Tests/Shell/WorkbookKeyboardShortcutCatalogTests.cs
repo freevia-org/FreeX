@@ -41,6 +41,8 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     [InlineData(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatCurrency)]
     [InlineData(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatPercentage)]
     [InlineData(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatScientific)]
+    [InlineData(WorkbookShortcutKey.D7, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ApplyOutlineBorder)]
+    [InlineData(WorkbookShortcutKey.OemMinus, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ClearOutlineBorder)]
     [InlineData(WorkbookShortcutKey.F, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Find)]
     [InlineData(WorkbookShortcutKey.H, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Replace)]
     [InlineData(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.GoTo)]
@@ -68,7 +70,9 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     [InlineData(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatCurrency)]
     [InlineData(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatPercentage)]
     [InlineData(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatScientific)]
-    public void TryGetNativeMenuRoute_ResolvesSharedNumberFormatShortcutRoutes(
+    [InlineData(WorkbookShortcutKey.D7, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ApplyOutlineBorder)]
+    [InlineData(WorkbookShortcutKey.OemMinus, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.ClearOutlineBorder)]
+    public void TryGetNativeMenuRoute_ResolvesSharedMacShortcutRoutes(
         WorkbookShortcutKey key,
         WorkbookShortcutModifiers modifiers,
         WorkbookShortcutRoute expected)

@@ -21720,6 +21720,18 @@ public sealed partial class MainWindow : Window
         WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(key, modifiers, out route) ||
         WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out route);
 
+    private static bool TryGetWorkbookShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
+    {
+        shortcutKey = key switch
+        {
+            Key.D7 => WorkbookShortcutKey.D7,
+            Key.OemMinus => WorkbookShortcutKey.OemMinus,
+            _ => default
+        };
+
+        return key is Key.D7 or Key.OemMinus;
+    }
+
     private static bool TryGetWorkbookNumberFormatShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
     {
         shortcutKey = key switch
@@ -21773,6 +21785,20 @@ public sealed partial class MainWindow : Window
             WorkbookShortcutRoute.NumberFormatCurrency or
             WorkbookShortcutRoute.NumberFormatPercentage or
             WorkbookShortcutRoute.NumberFormatScientific;
+
+    private static bool TryGetBorderShortcut(
+        Key key,
+        KeyModifiers modifiers,
+        out WorkbookShortcutRoute route)
+    {
+        route = default;
+        return TryGetWorkbookShortcutKey(key, out var shortcutKey) &&
+            TryGetWorkbookShortcutRoute(shortcutKey, ToWorkbookShortcutModifiers(modifiers), out route) &&
+            IsBorderRoute(route);
+    }
+
+    private static bool IsBorderRoute(WorkbookShortcutRoute route) =>
+        route is WorkbookShortcutRoute.ApplyOutlineBorder or WorkbookShortcutRoute.ClearOutlineBorder;
 
     /// <summary>
     /// The worksheet-cell context-menu shortcut (Menu key / Shift+F10) — the same key combo used for
@@ -22140,12 +22166,14 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             ApplySelectedRangeNumberFormatShortcut(numberFormatShortcut);
         }
-        else if (e.Key == Key.D7 && HasCommandAndShiftModifiers(e.KeyModifiers))
+        else if (TryGetBorderShortcut(e.Key, e.KeyModifiers, out var borderRoute))
         {
-            // Ctrl+Shift+7 ("Outline Border") — applies a border around the outside edge of the
-            // selection, matching the WPF host's ApplyOutlineBorderShortcut / BorderKeyboardShortcut.Outline.
+            // Shared outline and clear-outline border shortcuts come from the workbook catalog.
             e.Handled = true;
-            ApplySelectedRangeBorderPreset(CellBorderPreset.Outside);
+            ApplySelectedRangeBorderPreset(
+                borderRoute == WorkbookShortcutRoute.ApplyOutlineBorder
+                    ? CellBorderPreset.Outside
+                    : CellBorderPreset.NoBorder);
         }
         else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))
         {

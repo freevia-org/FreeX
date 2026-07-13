@@ -65,6 +65,21 @@ public sealed partial class KeyboardShortcutMatcherTests
         }
     }
 
+    [Fact]
+    public void SharedWorkbookShortcutMatrix_RoutesWpfBorderShortcuts()
+    {
+        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => IsBorderRoute(rule.Route)))
+        {
+            KeyboardShortcutMatcher.TryGetBorderShortcut(
+                    ToWpfKey(rule.WindowsChord.Key),
+                    ToWpfModifiers(rule.WindowsChord.Modifiers),
+                    out var shortcut)
+                .Should().BeTrue($"WPF should route {rule.WindowsChord} through the shared workbook shortcut matrix");
+
+            shortcut.Should().Be(ToBorderShortcut(rule.Route));
+        }
+    }
+
     private static Key ToWpfKey(WorkbookShortcutKey key) =>
         key switch
         {
@@ -78,6 +93,7 @@ public sealed partial class KeyboardShortcutMatcherTests
             WorkbookShortcutKey.D4 => Key.D4,
             WorkbookShortcutKey.D5 => Key.D5,
             WorkbookShortcutKey.D6 => Key.D6,
+            WorkbookShortcutKey.D7 => Key.D7,
             WorkbookShortcutKey.Delete => Key.Delete,
             WorkbookShortcutKey.E => Key.E,
             WorkbookShortcutKey.F => Key.F,
@@ -92,6 +108,7 @@ public sealed partial class KeyboardShortcutMatcherTests
             WorkbookShortcutKey.N => Key.N,
             WorkbookShortcutKey.O => Key.O,
             WorkbookShortcutKey.Oem3 => Key.Oem3,
+            WorkbookShortcutKey.OemMinus => Key.OemMinus,
             WorkbookShortcutKey.OemPlus => Key.OemPlus,
             WorkbookShortcutKey.R => Key.R,
             WorkbookShortcutKey.S => Key.S,
@@ -164,10 +181,19 @@ public sealed partial class KeyboardShortcutMatcherTests
             _ => throw new ArgumentOutOfRangeException(nameof(route), route, null)
         };
 
+    private static BorderKeyboardShortcut ToBorderShortcut(WorkbookShortcutRoute route) =>
+        route switch
+        {
+            WorkbookShortcutRoute.ApplyOutlineBorder => BorderKeyboardShortcut.Outline,
+            WorkbookShortcutRoute.ClearOutlineBorder => BorderKeyboardShortcut.ClearOutline,
+            _ => throw new ArgumentOutOfRangeException(nameof(route), route, null)
+        };
+
     private static bool ShouldRouteAsCommandShortcut(WorkbookShortcutRoute route) =>
         route != WorkbookShortcutRoute.PasteSpecial &&
         !IsFontToggleRoute(route) &&
-        !IsNumberFormatRoute(route);
+        !IsNumberFormatRoute(route) &&
+        !IsBorderRoute(route);
 
     private static bool IsFontToggleRoute(WorkbookShortcutRoute route) =>
         route is
@@ -185,4 +211,7 @@ public sealed partial class KeyboardShortcutMatcherTests
             WorkbookShortcutRoute.NumberFormatCurrency or
             WorkbookShortcutRoute.NumberFormatPercentage or
             WorkbookShortcutRoute.NumberFormatScientific;
+
+    private static bool IsBorderRoute(WorkbookShortcutRoute route) =>
+        route is WorkbookShortcutRoute.ApplyOutlineBorder or WorkbookShortcutRoute.ClearOutlineBorder;
 }

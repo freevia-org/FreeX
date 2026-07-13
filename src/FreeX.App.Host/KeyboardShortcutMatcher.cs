@@ -125,6 +125,7 @@ public static partial class KeyboardShortcutMatcher
             Key.D4 or Key.NumPad4 => WorkbookShortcutKey.D4,
             Key.D5 or Key.NumPad5 => WorkbookShortcutKey.D5,
             Key.D6 => WorkbookShortcutKey.D6,
+            Key.D7 => WorkbookShortcutKey.D7,
             Key.Delete => WorkbookShortcutKey.Delete,
             Key.E => WorkbookShortcutKey.E,
             Key.F => WorkbookShortcutKey.F,
@@ -139,6 +140,7 @@ public static partial class KeyboardShortcutMatcher
             Key.N => WorkbookShortcutKey.N,
             Key.O => WorkbookShortcutKey.O,
             Key.Oem3 => WorkbookShortcutKey.Oem3,
+            Key.OemMinus => WorkbookShortcutKey.OemMinus,
             Key.OemPlus or Key.Add => WorkbookShortcutKey.OemPlus,
             Key.P => WorkbookShortcutKey.P,
             Key.R => WorkbookShortcutKey.R,
@@ -167,6 +169,7 @@ public static partial class KeyboardShortcutMatcher
             Key.D5 or
             Key.NumPad5 or
             Key.D6 or
+            Key.D7 or
             Key.Delete or
             Key.E or
             Key.F or
@@ -181,6 +184,7 @@ public static partial class KeyboardShortcutMatcher
             Key.N or
             Key.O or
             Key.Oem3 or
+            Key.OemMinus or
             Key.OemPlus or
             Key.Add or
             Key.P or
@@ -290,20 +294,27 @@ public static partial class KeyboardShortcutMatcher
     public static bool TryGetBorderShortcut(Key key, ModifierKeys modifiers, out BorderKeyboardShortcut shortcut)
     {
         shortcut = default;
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.D7)
+        if (!TryGetWorkbookShortcutKey(key, out var shortcutKey) ||
+            !WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
+                shortcutKey,
+                ToWorkbookModifiers(modifiers),
+                out var route))
         {
-            shortcut = BorderKeyboardShortcut.Outline;
-            return true;
+            return false;
         }
 
-        if (modifiers == (ModifierKeys.Control | ModifierKeys.Shift) && key == Key.OemMinus)
+        shortcut = route switch
         {
-            shortcut = BorderKeyboardShortcut.ClearOutline;
-            return true;
-        }
+            WorkbookShortcutRoute.ApplyOutlineBorder => BorderKeyboardShortcut.Outline,
+            WorkbookShortcutRoute.ClearOutlineBorder => BorderKeyboardShortcut.ClearOutline,
+            _ => default
+        };
 
-        return false;
+        return IsBorderRoute(route);
     }
+
+    private static bool IsBorderRoute(WorkbookShortcutRoute route) =>
+        route is WorkbookShortcutRoute.ApplyOutlineBorder or WorkbookShortcutRoute.ClearOutlineBorder;
 
 }
 

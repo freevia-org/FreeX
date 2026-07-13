@@ -135,7 +135,9 @@ public static partial class KeyboardShortcutMatcher
             WorkbookShortcutRoute.NumberFormatDate or
             WorkbookShortcutRoute.NumberFormatCurrency or
             WorkbookShortcutRoute.NumberFormatPercentage or
-            WorkbookShortcutRoute.NumberFormatScientific);
+            WorkbookShortcutRoute.NumberFormatScientific or
+            WorkbookShortcutRoute.ApplyOutlineBorder or
+            WorkbookShortcutRoute.ClearOutlineBorder);
 
     private readonly record struct KeyboardCommandShortcutRule(
         KeyboardCommandShortcut Shortcut,
