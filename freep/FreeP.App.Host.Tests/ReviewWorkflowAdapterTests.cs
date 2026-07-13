@@ -487,6 +487,48 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_AccessibilityCheckerLowTextContrastRow_UsesSharedPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var shape = new SlideShape
+            {
+                Id = 812,
+                Name = "Muted caption",
+                Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x777777)),
+                TextBody = MakeTextBodyWithColor("Muted KPI", SrgbColor.FromRgb(0x777777))
+            };
+            window.Editor.CurrentSlide!.Title = "Intro";
+            window.Editor.CurrentSlide.Shapes.Add(shape);
+
+            var opened = window.ShowAccessibilityCheckerPane();
+            var actioned = window.ApplyAccessibilityCheckerRowAction(0);
+
+            opened.Rows.Should().ContainSingle().Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+                row.Title == "Low text contrast" &&
+                row.Category == "Text contrast" &&
+                row.ShapeId == shape.Id &&
+                row.ShapeName == "Muted caption" &&
+                row.ActionLabel == "Select Object" &&
+                row.CommandHint == null &&
+                row.Detail.Contains("threshold is 4.5:1.", StringComparison.Ordinal) &&
+                row.ShouldNavigateToSlide &&
+                row.ShouldSelectShape);
+            actioned.SelectedRow!.Title.Should().Be("Low text contrast");
+            window.LastAccessibilitySummaryPlan!.Issues.Should().ContainSingle(issue =>
+                issue.ShapeId == shape.Id &&
+                issue.Title == "Low text contrast" &&
+                issue.Action.Summary == PresentationReviewWorkflowPlanner.LowTextContrastActionSummary);
+            window.Editor.SelectedShapeIds.Should().Equal(shape.Id);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_AccessibilityCheckerLowQualityAltTextRow_UsesSharedPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
@@ -1852,6 +1894,15 @@ public sealed class ReviewWorkflowAdapterTests
             body.Paragraphs.Add(paragraph);
         }
 
+        return body;
+    }
+
+    private static TextBody MakeTextBodyWithColor(string text, SrgbColor color)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text, Color = new ThemeAwareColor(color) });
+        body.Paragraphs.Add(paragraph);
         return body;
     }
 

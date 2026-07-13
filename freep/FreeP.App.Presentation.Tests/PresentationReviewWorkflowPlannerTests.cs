@@ -1668,6 +1668,164 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilitySummaryPlan_FlagsLowContrastShapeAndTableText()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Contrast checks";
+        slide.Background = new ShapeFill.Solid(SrgbColor.White);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 31,
+            Name = "Muted caption",
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x777777)),
+            TextBody = TextBodyWithColor("Muted KPI", SrgbColor.FromRgb(0x777777))
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 32,
+            Name = "Readable caption",
+            Fill = new ShapeFill.Solid(SrgbColor.White),
+            TextBody = TextBodyWithColor("Readable KPI", SrgbColor.Black)
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 33,
+            Name = "Solid text fill",
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x202020)),
+            TextBody = TextBodyWithFill(
+                "Solid fill text",
+                new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x202020))))
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 34,
+            Name = "KPI table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = new TableStyleFlags { FirstRow = true },
+                StyleData = new TableStyleData
+                {
+                    WholeTbl = new TableStyleEntry
+                    {
+                        TextColor = new ThemeAwareColor(SrgbColor.White)
+                    }
+                },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell
+                            {
+                                Fill = new ShapeFill.Solid(SrgbColor.White),
+                                TextBody = TextBody("Quarter")
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(presentation, summary);
+
+        var contrastIssues = summary.Issues
+            .Where(issue => issue.Title == "Low text contrast")
+            .ToArray();
+        contrastIssues.Should().HaveCount(3);
+        contrastIssues.Select(issue => issue.ShapeId).Should().Equal(31u, 33u, 34u);
+        contrastIssues.Select(issue => issue.Detail).Should().Equal(
+            "Muted caption text \"Muted KPI\" has 1:1 contrast against its solid background; threshold is 4.5:1.",
+            "Solid text fill text \"Solid fill text\" has 1:1 contrast against its solid background; threshold is 4.5:1.",
+            "KPI table cell R1C1 text \"Quarter\" has 1:1 contrast against its solid background; threshold is 4.5:1.");
+        contrastIssues.Should().AllSatisfy(issue =>
+        {
+            issue.Severity.Should().Be(PresentationAccessibilityIssueSeverity.Warning);
+            issue.Action.Should().Be(new PresentationAccessibilityIssueActionSummary(
+                PresentationReviewWorkflowPlanner.LowTextContrastActionSummary,
+                null,
+                true));
+        });
+        pane.Rows
+            .Where(row => row.Title == "Low text contrast")
+            .Should()
+            .AllSatisfy(row =>
+            {
+                row.Category.Should().Be("Text contrast");
+                row.ActionLabel.Should().Be("Select Object");
+                row.CommandHint.Should().BeNull();
+                row.ShouldNavigateToSlide.Should().BeTrue();
+                row.ShouldSelectShape.Should().BeTrue();
+            });
+        summary.Issues.Should().NotContain(issue => issue.ShapeId == 32);
+    }
+
+    [Fact]
+    public void BuildAccessibilitySummaryPlan_SkipsLowContrastWhenColorsAreComplexAlphaOrInherited()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Skipped contrast checks";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 41,
+            Name = "No explicit slide background",
+            TextBody = TextBodyWithColor("Inherited background", SrgbColor.White)
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Name = "Gradient background",
+            Fill = new ShapeFill.Gradient(
+                new ThemeAwareColor(SrgbColor.White),
+                new ThemeAwareColor(SrgbColor.Black)),
+            TextBody = TextBodyWithColor("Gradient text", SrgbColor.White)
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 43,
+            Name = "Theme foreground",
+            Fill = new ShapeFill.Solid(SrgbColor.White),
+            TextBody = TextBodyWithColor(
+                "Theme text",
+                new ThemeAwareColor(
+                    SrgbColor.White,
+                    new SchemeColorRef { Slot = ThemeColorSlot.Lt1, RoleName = "tx1" }))
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 44,
+            Name = "Alpha foreground",
+            Fill = new ShapeFill.Solid(SrgbColor.White),
+            TextBody = TextBodyWithColor("Alpha text", new ThemeAwareColor(SrgbColor.White, alpha: 128))
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 45,
+            Name = "Gradient text fill",
+            Fill = new ShapeFill.Solid(SrgbColor.White),
+            TextBody = TextBodyWithFill(
+                "Complex text",
+                new ShapeFill.Gradient(
+                    new ThemeAwareColor(SrgbColor.White),
+                    new ThemeAwareColor(SrgbColor.Black)))
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 46,
+            Name = "Decorative box",
+            Fill = new ShapeFill.Solid(SrgbColor.White)
+        });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+
+        summary.Issues.Should().NotContain(issue => issue.Title == "Low text contrast");
+    }
+
+    [Fact]
     public void SlideTitleMutationPlan_SuggestsPlaceholderTextAndAppliesThroughEditingSession()
     {
         var presentation = Presentation.CreateEmpty();
@@ -3724,6 +3882,27 @@ public sealed class PresentationReviewWorkflowPlannerTests
         var body = new TextBody();
         var paragraph = new Paragraph();
         paragraph.Runs.Add(new Run { Text = text, Hyperlink = hyperlink });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
+    private static TextBody TextBodyWithColor(string text, SrgbColor color)
+        => TextBodyWithColor(text, new ThemeAwareColor(color));
+
+    private static TextBody TextBodyWithColor(string text, ThemeAwareColor color)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text, Color = color });
+        body.Paragraphs.Add(paragraph);
+        return body;
+    }
+
+    private static TextBody TextBodyWithFill(string text, ShapeFill textFill)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text, TextFill = textFill });
         body.Paragraphs.Add(paragraph);
         return body;
     }

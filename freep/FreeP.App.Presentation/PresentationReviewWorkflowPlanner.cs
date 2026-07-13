@@ -1,3 +1,4 @@
+using System.Globalization;
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
@@ -819,6 +820,9 @@ public static class PresentationReviewWorkflowPlanner
         "Add concise text to blank body cells or remove unused rows and columns.";
     public const string MergedTableCellsActionSummary =
         "Review merged or split cells and simplify the table structure or add clear text cues.";
+    public const double TextContrastMinimumRatio = 4.5;
+    public const string LowTextContrastActionSummary =
+        "Select the object and use text or background colors with at least a 4.5:1 contrast ratio.";
 
     public static PresentationCommentPanePlan BuildCommentPanePlan(
         IReadOnlyList<Slide> slides,
@@ -1586,6 +1590,7 @@ public static class PresentationReviewWorkflowPlanner
                 AddChartAccessibilityIssues(issues, slideIndex, shape);
                 AddMediaAccessibilityIssues(issues, slideIndex, shape);
                 AddTextHyperlinkAccessibilityIssues(issues, slideIndex, shape);
+                AddTextContrastAccessibilityIssues(issues, slideIndex, slide, shape);
                 AddTableAccessibilityIssues(issues, slideIndex, shape);
             }
         }
@@ -2412,6 +2417,11 @@ public static class PresentationReviewWorkflowPlanner
         if (issue.Action.CommandId == InsertLinkCommandId)
         {
             return "Hyperlink";
+        }
+
+        if (issue.Title == "Low text contrast")
+        {
+            return "Text contrast";
         }
 
         if (issue.Title == "Chart title missing")
@@ -4386,8 +4396,207 @@ public static class PresentationReviewWorkflowPlanner
                 new PresentationAccessibilityIssueActionSummary(
                     UnclearHyperlinkTextActionSummary,
                     InsertLinkCommandId,
-                    true)));
+                true)));
         }
+    }
+
+    private sealed record TextContrastMatch(string TextPreview, double ContrastRatio, string? CellReference);
+
+    private static void AddTextContrastAccessibilityIssues(
+        List<PresentationAccessibilityIssueDescriptor> issues,
+        int slideIndex,
+        Slide slide,
+        SlideShape shape)
+    {
+        AddShapeTextContrastAccessibilityIssue(issues, slideIndex, slide, shape);
+        AddTableTextContrastAccessibilityIssues(issues, slideIndex, shape);
+    }
+
+    private static void AddShapeTextContrastAccessibilityIssue(
+        List<PresentationAccessibilityIssueDescriptor> issues,
+        int slideIndex,
+        Slide slide,
+        SlideShape shape)
+    {
+        if (shape.TextBody is null
+            || !TryGetShapeTextBackgroundColor(slide, shape, out var backgroundColor)
+            || !TryFindLowContrastText(shape.TextBody, inheritedTextColor: null, backgroundColor, out var match))
+        {
+            return;
+        }
+
+        issues.Add(new PresentationAccessibilityIssueDescriptor(
+            PresentationAccessibilityIssueSeverity.Warning,
+            slideIndex,
+            shape.Id,
+            "Low text contrast",
+            BuildLowTextContrastDetail(DescribeShape(shape), match),
+            new PresentationAccessibilityIssueActionSummary(
+                LowTextContrastActionSummary,
+                null,
+                true)));
+    }
+
+    private static void AddTableTextContrastAccessibilityIssues(
+        List<PresentationAccessibilityIssueDescriptor> issues,
+        int slideIndex,
+        SlideShape shape)
+    {
+        if (shape.Table is not { } table)
+        {
+            return;
+        }
+
+        for (int rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            for (int columnIndex = 0; columnIndex < row.Cells.Count; columnIndex++)
+            {
+                var cell = row.Cells[columnIndex];
+                if (cell.TextBody is null
+                    || !TryGetExplicitOpaqueSolidColor(table.ComputeEffectiveFill(rowIndex, columnIndex, cell), out var backgroundColor))
+                {
+                    continue;
+                }
+
+                var inheritedTextColor = TryGetExplicitOpaqueColor(
+                    table.ComputeEffectiveTextColor(rowIndex, columnIndex),
+                    out var effectiveTextColor)
+                    ? effectiveTextColor
+                    : (SrgbColor?)null;
+                var cellReference = BuildTableCellReference(rowIndex, columnIndex);
+                if (!TryFindLowContrastText(cell.TextBody, inheritedTextColor, backgroundColor, out var match))
+                {
+                    continue;
+                }
+
+                issues.Add(new PresentationAccessibilityIssueDescriptor(
+                    PresentationAccessibilityIssueSeverity.Warning,
+                    slideIndex,
+                    shape.Id,
+                    "Low text contrast",
+                    BuildLowTextContrastDetail(DescribeShape(shape), match with { CellReference = cellReference }),
+                    new PresentationAccessibilityIssueActionSummary(
+                        LowTextContrastActionSummary,
+                        null,
+                        true)));
+            }
+        }
+    }
+
+    private static bool TryFindLowContrastText(
+        TextBody textBody,
+        SrgbColor? inheritedTextColor,
+        SrgbColor backgroundColor,
+        out TextContrastMatch match)
+    {
+        foreach (var run in textBody.Paragraphs.SelectMany(paragraph => paragraph.Runs))
+        {
+            if (string.IsNullOrWhiteSpace(run.Text)
+                || !TryGetRunForegroundColor(run, inheritedTextColor, out var foregroundColor))
+            {
+                continue;
+            }
+
+            var ratio = CalculateContrastRatio(foregroundColor, backgroundColor);
+            if (ratio < TextContrastMinimumRatio)
+            {
+                match = new TextContrastMatch(BuildPreview(run.Text), ratio, null);
+                return true;
+            }
+        }
+
+        match = new TextContrastMatch(string.Empty, 0, null);
+        return false;
+    }
+
+    private static bool TryGetRunForegroundColor(
+        Run run,
+        SrgbColor? inheritedTextColor,
+        out SrgbColor color)
+    {
+        if (run.TextFill is not null)
+        {
+            return TryGetExplicitOpaqueSolidColor(run.TextFill, out color);
+        }
+
+        if (TryGetExplicitOpaqueColor(run.Color, out color))
+        {
+            return true;
+        }
+
+        if (inheritedTextColor is { } inherited)
+        {
+            color = inherited;
+            return true;
+        }
+
+        color = default;
+        return false;
+    }
+
+    private static bool TryGetShapeTextBackgroundColor(Slide slide, SlideShape shape, out SrgbColor color)
+    {
+        if (shape.Fill is null || shape.Fill is ShapeFill.None)
+        {
+            return TryGetExplicitOpaqueSolidColor(slide.Background, out color);
+        }
+
+        return TryGetExplicitOpaqueSolidColor(shape.Fill, out color);
+    }
+
+    private static bool TryGetExplicitOpaqueSolidColor(ShapeFill? fill, out SrgbColor color)
+    {
+        if (fill is ShapeFill.Solid solid)
+        {
+            return TryGetExplicitOpaqueColor(solid.Color, out color);
+        }
+
+        color = default;
+        return false;
+    }
+
+    private static bool TryGetExplicitOpaqueColor(ThemeAwareColor? color, out SrgbColor resolved)
+    {
+        if (color is { Alpha: 255, SchemeColor: null })
+        {
+            resolved = color.Resolved;
+            return true;
+        }
+
+        resolved = default;
+        return false;
+    }
+
+    private static string BuildLowTextContrastDetail(string sourceName, TextContrastMatch match)
+    {
+        var location = match.CellReference is null ? sourceName : $"{sourceName} cell {match.CellReference}";
+        return $"{location} text \"{match.TextPreview}\" has {FormatContrastRatio(match.ContrastRatio)}:1 contrast against its solid background; threshold is {TextContrastMinimumRatio.ToString("0.0", CultureInfo.InvariantCulture)}:1.";
+    }
+
+    private static string FormatContrastRatio(double ratio)
+        => ratio.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static double CalculateContrastRatio(SrgbColor foreground, SrgbColor background)
+    {
+        var foregroundLuminance = CalculateRelativeLuminance(foreground);
+        var backgroundLuminance = CalculateRelativeLuminance(background);
+        var lighter = Math.Max(foregroundLuminance, backgroundLuminance);
+        var darker = Math.Min(foregroundLuminance, backgroundLuminance);
+        return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    private static double CalculateRelativeLuminance(SrgbColor color)
+        => 0.2126 * ConvertSrgbChannelToLinear(color.R)
+            + 0.7152 * ConvertSrgbChannelToLinear(color.G)
+            + 0.0722 * ConvertSrgbChannelToLinear(color.B);
+
+    private static double ConvertSrgbChannelToLinear(byte channel)
+    {
+        var value = channel / 255.0;
+        return value <= 0.03928
+            ? value / 12.92
+            : Math.Pow((value + 0.055) / 1.055, 2.4);
     }
 
     private static bool HasTextRunHyperlinkWithoutScreenTip(SlideShape shape)

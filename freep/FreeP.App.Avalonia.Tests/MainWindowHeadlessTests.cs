@@ -3154,6 +3154,55 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Accessibility_checker_low_text_contrast_row_uses_shared_plan()
+    {
+        PresentationAccessibilityCheckerPanePlan? opened = null;
+        PresentationAccessibilityCheckerPanePlan? actioned = null;
+        PresentationAccessibilitySummaryPlan? summary = null;
+        uint[] selection = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = new SlideShape
+            {
+                Id = 912,
+                Name = "Muted caption",
+                Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x777777)),
+                TextBody = MakeTextBodyWithColor("Muted KPI", SrgbColor.FromRgb(0x777777))
+            };
+            window.Editor.CurrentSlide!.Title = "Intro";
+            window.Editor.CurrentSlide.Shapes.Add(shape);
+
+            opened = window.ShowAccessibilityCheckerPane();
+            actioned = window.ApplyAccessibilityCheckerRowAction(0);
+            summary = window.LastAccessibilitySummaryPlan;
+            selection = window.Editor.SelectedShapeIds.ToArray();
+        });
+
+        if (!ran) return;
+        opened.Should().NotBeNull();
+        opened!.Rows.Should().ContainSingle().Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
+            row.Title == "Low text contrast" &&
+            row.Category == "Text contrast" &&
+            row.ShapeId == 912 &&
+            row.ShapeName == "Muted caption" &&
+            row.ActionLabel == "Select Object" &&
+            row.CommandHint == null &&
+            row.Detail.Contains("threshold is 4.5:1.", StringComparison.Ordinal) &&
+            row.ShouldNavigateToSlide &&
+            row.ShouldSelectShape);
+        actioned.Should().NotBeNull();
+        actioned!.SelectedRow!.Title.Should().Be("Low text contrast");
+        summary.Should().NotBeNull();
+        summary!.Issues.Should().ContainSingle(issue =>
+            issue.ShapeId == 912 &&
+            issue.Title == "Low text contrast" &&
+            issue.Action.Summary == PresentationReviewWorkflowPlanner.LowTextContrastActionSummary);
+        selection.Should().Equal(912u);
+    }
+
+    [Fact]
     public async Task Accessibility_checker_table_header_action_uses_shared_mutation_and_refreshes_pane()
     {
         PresentationAccessibilityCheckerPanePlan? actioned = null;
@@ -4544,6 +4593,15 @@ public sealed class MainWindowHeadlessTests
             body.Paragraphs.Add(paragraph);
         }
 
+        return body;
+    }
+
+    private static TextBody MakeTextBodyWithColor(string text, SrgbColor color)
+    {
+        var body = new TextBody();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run { Text = text, Color = new ThemeAwareColor(color) });
+        body.Paragraphs.Add(paragraph);
         return body;
     }
 
