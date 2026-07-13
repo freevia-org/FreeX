@@ -263,15 +263,17 @@ public sealed class MediaFieldsTests
             zip.Entries.Should().NotContain(entry =>
                 entry.FullName.StartsWith("ppt/media/recording-captions/", StringComparison.OrdinalIgnoreCase));
 
-            ReadBytes(zip, "ppt/media/slide1_caption1.vtt").Should().Equal(expectedCaptionBytes,
-                "the native caption sidecar bytes should survive a modeled slide edit");
+            ReadBytes(zip, "ppt/media/captions1.vtt").Should().Equal(expectedCaptionBytes,
+                "the native caption sidecar bytes should survive a modeled slide edit at the original PowerPoint package path");
+            zip.GetEntry("ppt/media/slide1_caption1.vtt").Should().BeNull(
+                "read/native caption tracks should not be unnecessarily renamed during save");
 
             var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
             var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
             var captionRel = rels.Root!.Elements(relNs + "Relationship")
                 .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption");
             captionRel.Attribute("Id")!.Value.Should().Be("rIdCaption1");
-            captionRel.Attribute("Target")!.Value.Should().Be("../media/slide1_caption1.vtt");
+            captionRel.Attribute("Target")!.Value.Should().Be("../media/captions1.vtt");
             captionRel.Attribute("TargetMode").Should().BeNull();
 
             var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
@@ -293,7 +295,7 @@ public sealed class MediaFieldsTests
         var reopened = PptxPackageReader.Read(saved);
         reopened.RecordingMediaArtifacts.Should().BeEmpty();
         var reopenedTrack = reopened.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
-        reopenedTrack.Source.Should().Be("ppt/media/slide1_caption1.vtt");
+        reopenedTrack.Source.Should().Be("ppt/media/captions1.vtt");
         reopenedTrack.ContentType.Should().Be("text/vtt");
         reopenedTrack.Language.Should().Be("en-US");
         reopenedTrack.Label.Should().Be("English captions");
@@ -510,8 +512,10 @@ public sealed class MediaFieldsTests
             zip.Entries.Should().NotContain(entry =>
                 entry.FullName.StartsWith("ppt/media/recording-captions/", StringComparison.OrdinalIgnoreCase));
 
-            ReadBytes(zip, "ppt/media/slide1_caption1.vtt").Should().Equal(CaptionPayload(tracks[0].Text));
-            ReadBytes(zip, "ppt/media/slide1_caption2.vtt").Should().Equal(CaptionPayload(tracks[1].Text));
+            ReadBytes(zip, "ppt/media/captions1.vtt").Should().Equal(CaptionPayload(tracks[0].Text));
+            ReadBytes(zip, "ppt/media/captions-es.vtt").Should().Equal(CaptionPayload(tracks[1].Text));
+            zip.GetEntry("ppt/media/slide1_caption1.vtt").Should().BeNull();
+            zip.GetEntry("ppt/media/slide1_caption2.vtt").Should().BeNull();
 
             var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
             var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
@@ -520,8 +524,8 @@ public sealed class MediaFieldsTests
                 .ToArray();
             captionRels.Select(e => (Id: e.Attribute("Id")!.Value, Target: e.Attribute("Target")!.Value, TargetMode: e.Attribute("TargetMode")?.Value))
                 .Should().Equal(
-                    ("rIdCaption1", "../media/slide1_caption1.vtt", null),
-                    ("rIdCaption2", "../media/slide1_caption2.vtt", null));
+                    ("rIdCaption1", "../media/captions1.vtt", null),
+                    ("rIdCaption2", "../media/captions-es.vtt", null));
 
             var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
             var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
@@ -544,9 +548,88 @@ public sealed class MediaFieldsTests
         reopened.Slides[0].Shapes[0].Media!.CaptionTracks
             .Select(track => (track.Source, track.Language, track.Label, Text: Encoding.UTF8.GetString(track.Bytes)))
             .Should().Equal(
-                ("ppt/media/slide1_caption1.vtt", "en-US", "English captions", CaptionText(tracks[0].Text)),
-                ("ppt/media/slide1_caption2.vtt", "es-ES", "Spanish subtitles", CaptionText(tracks[1].Text)));
+                ("ppt/media/captions1.vtt", "en-US", "English captions", CaptionText(tracks[0].Text)),
+                ("ppt/media/captions-es.vtt", "es-ES", "Spanish subtitles", CaptionText(tracks[1].Text)));
         reopened.Slides[0].Shapes.Should().Contain(shape => shape.Name == "Modeled edit");
+    }
+
+    [Fact]
+    public void Media_PowerPointNativeCaptionPackage_NestedSidecar_PreservesOriginalPathRelationshipIdAndTranscript()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "PowerPoint nested captioned video",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 },
+                ContentType = "video/mp4"
+            }
+        });
+        pres.Slides.Add(slide);
+
+        var fixture = new CaptionTrackFixture(
+            "rIdPowerPointCaption42",
+            "ppt/media/captionTracks/en-US/native-captions.vtt",
+            "en-US",
+            "Native nested captions",
+            "Nested package caption");
+
+        using var source = new MemoryStream();
+        PptxPackageWriter.Write(pres, source);
+        AddCaptionTracks(source, [fixture]);
+
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        var loadedTrack = loaded.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        loadedTrack.RelationshipId.Should().Be("rIdPowerPointCaption42");
+        loadedTrack.Source.Should().Be("ppt/media/captionTracks/en-US/native-captions.vtt");
+        loaded.PackageSnapshot!.TryGetEntry(fixture.PackagePath, out var snapshotCaptionBytes).Should().BeTrue();
+        snapshotCaptionBytes.Should().Equal(CaptionPayload(fixture.Text));
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+
+        saved.Position = 0;
+        using (var zip = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            ReadBytes(zip, fixture.PackagePath).Should().Equal(CaptionPayload(fixture.Text));
+            zip.GetEntry("ppt/media/slide1_caption1.vtt").Should().BeNull();
+
+            var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+            var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            var captionRel = rels.Root!.Elements(relNs + "Relationship")
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption");
+            captionRel.Attribute("Id")!.Value.Should().Be("rIdPowerPointCaption42");
+            captionRel.Attribute("Target")!.Value.Should().Be("../media/captionTracks/en-US/native-captions.vtt");
+            captionRel.Attribute("TargetMode").Should().BeNull();
+
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+            var captionEl = slideXml.Descendants().Single(e => e.Name.LocalName == "caption");
+            captionEl.Attribute(r + "embed")!.Value.Should().Be("rIdPowerPointCaption42");
+            captionEl.Attribute("lang")!.Value.Should().Be("en-US");
+            captionEl.Attribute("label")!.Value.Should().Be("Native nested captions");
+        }
+
+        saved.Position = 0;
+        var reopened = PptxPackageReader.Read(saved);
+        var transcript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(reopened);
+        transcript.Tracks.Should().ContainSingle()
+            .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
+                descriptor.Source == fixture.PackagePath &&
+                descriptor.Status == PresentationMediaTranscriptTrackStatus.Available &&
+                descriptor.CueCount == 1 &&
+                descriptor.Cues[0].Text == fixture.Text);
     }
 
     [Fact]
@@ -1044,7 +1127,7 @@ public sealed class MediaFieldsTests
                 relNs + "Relationship",
                 new XAttribute("Id", track.RelationshipId),
                 new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/mediaCaption"),
-                new XAttribute("Target", "../media/" + Path.GetFileName(track.PackagePath))));
+                new XAttribute("Target", CaptionRelationshipTarget(track.PackagePath))));
         }
         WriteXml(archive, "ppt/slides/_rels/slide1.xml.rels", rels);
 
@@ -1112,5 +1195,13 @@ public sealed class MediaFieldsTests
         using var stream = archive.GetEntry(path)!.Open();
         using var reader = new StreamReader(stream, Encoding.UTF8);
         return reader.ReadToEnd();
+    }
+
+    private static string CaptionRelationshipTarget(string packagePath)
+    {
+        const string mediaPrefix = "ppt/media/";
+        var normalized = packagePath.Replace('\\', '/');
+        normalized.Should().StartWith(mediaPrefix);
+        return "../media/" + normalized[mediaPrefix.Length..];
     }
 }
