@@ -1070,6 +1070,42 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedEquationArrayCells_SurviveRoundTripAndEmitDirectCellChildren()
+    {
+        var scriptCell = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+        var fractionCell = new Equation([MathRun.Fraction("p", "q")]);
+        var array = MathMatrix.FromCellEquations([[scriptCell], [fractionCell]]);
+        var equation = new Equation([MathRun.EquationArrayOf(array)]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var roundTrippedArray = roundTripped.Runs[0];
+        roundTrippedArray.Kind.Should().Be(MathRunKind.EquationArray);
+        roundTrippedArray.Matrix!.RowCount.Should().Be(2);
+        roundTrippedArray.Matrix.CellEquationAt(0, 0)!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        roundTrippedArray.Matrix.CellEquationAt(1, 0)!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Fraction);
+        roundTripped.LinearText.Should().Be("a+x^2; p/q");
+
+        var writtenArray = xml.Descendants(M + "eqArr").Single();
+        writtenArray.Elements(M + "e").Should().HaveCount(2);
+        writtenArray.Elements(M + "e").First().Elements(M + "oMath").Should().BeEmpty();
+        writtenArray.Elements(M + "e").First().Elements(M + "sSup").Should().ContainSingle();
+        writtenArray.Elements(M + "e").Last().Elements(M + "f").Should().ContainSingle();
+    }
+
+    [Fact]
     public void FunctionApplyEquation_SurvivesRoundTrip()
     {
         var read = RoundTripEquation(new Equation([MathRun.FunctionApply("sin", "x")]));

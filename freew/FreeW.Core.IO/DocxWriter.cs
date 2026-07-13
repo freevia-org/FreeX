@@ -2621,6 +2621,7 @@ public static class DocxWriter
         MathRunKind.Bar => BuildBar(run, depth),
         MathRunKind.Delimiter => BuildDelimiter(run, depth),
         MathRunKind.Matrix => BuildMatrix(run.Matrix, depth),
+        MathRunKind.EquationArray => BuildEquationArray(run.Matrix, depth),
         MathRunKind.FunctionApply => BuildFunctionApply(run, depth),
         MathRunKind.GroupChar => BuildGroupChar(run, depth),
         _ => MathText(run.Text)
@@ -2747,6 +2748,29 @@ public static class DocxWriter
                 m.Add(mr);
             }
         return m;
+    }
+
+    /// <summary>
+    /// Builds an equation array (m:eqArr): one m:e per row/cell, preserving nested child math runs.
+    /// </summary>
+    private static XElement BuildEquationArray(MathMatrix? array, int depth)
+    {
+        var eqArr = new XElement(M + "eqArr");
+        if (array is not null)
+            for (var rowIndex = 0; rowIndex < array.RowCount; rowIndex++)
+            {
+                var columnCount = array.Rows.Count > rowIndex
+                    ? Math.Max(array.Rows[rowIndex].Count, array.CellEquations.Count > rowIndex ? array.CellEquations[rowIndex].Count : 0)
+                    : array.CellEquations.Count > rowIndex ? array.CellEquations[rowIndex].Count : 0;
+                for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
+                    eqArr.Add(BuildMathSlot(
+                        M + "e",
+                        array.CellEquationAt(rowIndex, columnIndex),
+                        array.CellTextAt(rowIndex, columnIndex),
+                        depth));
+            }
+
+        return eqArr;
     }
 
     /// <summary>

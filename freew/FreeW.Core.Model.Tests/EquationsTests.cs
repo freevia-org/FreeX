@@ -402,6 +402,22 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathRun_EquationArray_CanCarryNestedCellEquations()
+    {
+        var structuredCell = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+        var array = MathMatrix.FromCellEquations([[structuredCell], [Equation.FromText("z")]]);
+
+        var run = MathRun.EquationArrayOf(array);
+
+        run.Kind.Should().Be(MathRunKind.EquationArray);
+        run.Matrix.Should().BeSameAs(array);
+        run.LinearText.Should().Be("a+x^2; z");
+    }
+
+    [Fact]
     public void MathMatrix_CellEquationLinearText_IsDepthBoundedForCyclicNestedCell()
     {
         var equation = new Equation();

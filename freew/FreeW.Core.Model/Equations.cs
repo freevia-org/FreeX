@@ -9,13 +9,14 @@ namespace FreeW.Core.Model;
 // ordered list of MathRun parts; each part is either plain math text (m:r/m:t) or one of the common OMML
 // structures — superscript (m:sSup), subscript (m:sSub), sub-superscript (m:sSubSup), fraction (m:f),
 // radical (m:rad), n-ary (m:nary, sum/integral/product with limits), an accented character (m:acc),
-// an over/under-bar (m:bar), a bracketed delimiter (m:d) or a matrix (m:m). Most structure slots store
+// an over/under-bar (m:bar), a bracketed delimiter (m:d), a matrix (m:m) or an equation array
+// (m:eqArr). Most structure slots store
 // plain math text; scripts carry optional nested base/sub/sup equations, fractions additionally carry
 // optional nested numerator/denominator equations, radicals carry an optional nested radicand, n-ary
 // operators carry optional nested lower/upper/operand equations, delimiters carry an optional nested
-// content equation, and matrices carry optional nested cell equations so common OfficeMath slots can
-// round-trip without a broad recursive-slot rewrite. A Matrix additionally carries a small grid of text
-// cells as its fallback display/editing surface. That
+// content equation, and matrices/equation arrays carry optional nested cell equations so common
+// OfficeMath slots can round-trip without a broad recursive-slot rewrite. A Matrix additionally carries
+// a small grid of text cells as its fallback display/editing surface. That
 // covers the high-value structures from Word's Equation tools while staying well short of the full
 // recursive OMML schema — richer constructs degrade to their plain math text on read so nothing throws.
 
@@ -48,6 +49,7 @@ public enum MathRunKind
     Bar,
     Delimiter,
     Matrix,
+    EquationArray,
     FunctionApply,
     GroupChar
 }
@@ -161,7 +163,7 @@ public sealed record MathRun
     /// <summary>The closing delimiter glyph (default ")"). Only for <see cref="MathRunKind.Delimiter"/>.</summary>
     public string CloseChar { get; init; } = ")";
 
-    /// <summary>The matrix grid (only meaningful for <see cref="MathRunKind.Matrix"/>).</summary>
+    /// <summary>The matrix/equation-array grid (only meaningful for <see cref="MathRunKind.Matrix"/> or <see cref="MathRunKind.EquationArray"/>).</summary>
     public MathMatrix? Matrix { get; init; }
 
     /// <summary>The function name (only meaningful for <see cref="MathRunKind.FunctionApply"/>).</summary>
@@ -405,6 +407,10 @@ public sealed record MathRun
     public static MathRun MatrixOf(MathMatrix matrix) =>
         new() { Kind = MathRunKind.Matrix, Matrix = matrix };
 
+    /// <summary>Creates an equation-array fragment (m:eqArr) from one-cell rows.</summary>
+    public static MathRun EquationArrayOf(MathMatrix array) =>
+        new() { Kind = MathRunKind.EquationArray, Matrix = array };
+
     /// <summary>Creates a function-application fragment (m:func): <paramref name="funcName"/> applied to <paramref name="argument"/>.</summary>
     public static MathRun FunctionApply(string funcName, string argument) =>
         new() { Kind = MathRunKind.FunctionApply, FuncName = funcName, Base = argument };
@@ -468,6 +474,7 @@ public sealed record MathRun
         MathRunKind.Bar => BarTop ? $"‾{SlotLinearText(DecoratorBaseEquation, Base, depth)}‾" : $"_{SlotLinearText(DecoratorBaseEquation, Base, depth)}_",
         MathRunKind.Delimiter => $"{OpenChar}{SlotLinearText(DelimiterContentEquation, Base, depth)}{CloseChar}",
         MathRunKind.Matrix => Matrix?.LinearTextWithDepth(depth) ?? string.Empty,
+        MathRunKind.EquationArray => Matrix?.EquationArrayLinearTextWithDepth(depth) ?? string.Empty,
         MathRunKind.FunctionApply => FunctionLinearText(depth),
         MathRunKind.GroupChar => string.Equals(GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase)
             ? $"{SlotLinearText(DecoratorBaseEquation, Base, depth)}{GroupChr}"
@@ -589,13 +596,18 @@ public sealed class MathMatrix
         "[" + string.Join("; ", Enumerable.Range(0, RowCount)
             .Select(rowIndex => string.Join(", ", Enumerable.Range(0, RowColumnCount(rowIndex))
                 .Select(columnIndex => CellTextAt(rowIndex, columnIndex, depth))))) + "]";
+
+    internal string EquationArrayLinearTextWithDepth(int depth) =>
+        string.Join("; ", Enumerable.Range(0, RowCount)
+            .Select(rowIndex => string.Join(", ", Enumerable.Range(0, RowColumnCount(rowIndex))
+                .Select(columnIndex => CellTextAt(rowIndex, columnIndex, depth)))));
 }
 
 /// <summary>
 /// A basic inline mathematical equation: an ordered list of <see cref="MathRun"/> fragments that maps onto
 /// an OMML <c>m:oMath</c>. Carried by a <see cref="Run"/> via <see cref="Run.Equation"/>. Stores the OMML
 /// subset FreeW round-trips (plain text, sub/super-scripts, fraction, radical, n-ary, accent, bar,
-/// delimiter, matrix); richer structures degrade to plain math text on read so nothing throws.
+/// delimiter, matrix, equation array); richer structures degrade to plain math text on read so nothing throws.
 /// </summary>
 public sealed class Equation
 {
