@@ -72,6 +72,66 @@ public sealed class TableCellEditPlannerTests
     }
 
     [Fact]
+    public void PlanNavigation_ContinuationCell_MovesToNextEditableAnchor()
+    {
+        var shape = MakeMergedTableShape();
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanNavigation(
+            slide,
+            [shape.Id],
+            activeCell: (0, 1),
+            TableCellNavigationDirection.Next);
+
+        plan.Status.Should().Be(TableCellNavigationStatus.Ready);
+        plan.ShapeId.Should().Be(shape.Id);
+        plan.Row.Should().Be(0);
+        plan.Col.Should().Be(2);
+    }
+
+    [Fact]
+    public void PlanNavigation_PreviousFromRightCell_MovesToMergedAnchor()
+    {
+        var shape = MakeMergedTableShape();
+        var slide = new Slide { Shapes = { shape } };
+
+        var plan = TableCellEditPlanner.PlanNavigation(
+            slide,
+            [shape.Id],
+            activeCell: (0, 2),
+            TableCellNavigationDirection.Previous);
+
+        plan.Status.Should().Be(TableCellNavigationStatus.Ready);
+        plan.Row.Should().Be(0);
+        plan.Col.Should().Be(0);
+    }
+
+    [Fact]
+    public void PlanNavigation_RowMajorAcrossRows_StopsAtTableBoundary()
+    {
+        var shape = MakeTwoRowTableShape();
+        var slide = new Slide { Shapes = { shape } };
+
+        var nextRow = TableCellEditPlanner.PlanNavigation(
+            slide,
+            [shape.Id],
+            activeCell: (0, 1),
+            TableCellNavigationDirection.Next);
+        var atEnd = TableCellEditPlanner.PlanNavigation(
+            slide,
+            [shape.Id],
+            activeCell: (1, 1),
+            TableCellNavigationDirection.Next);
+
+        nextRow.Status.Should().Be(TableCellNavigationStatus.Ready);
+        nextRow.Row.Should().Be(1);
+        nextRow.Col.Should().Be(0);
+        atEnd.Status.Should().Be(TableCellNavigationStatus.NoTargetCell);
+        atEnd.Row.Should().Be(1);
+        atEnd.Col.Should().Be(1);
+    }
+
+    [Fact]
     public void BeginEdit_MixedRichRuns_ReturnsRendererNeutralRichTextPlan()
     {
         var presentation = Presentation.CreateEmpty();
@@ -1361,6 +1421,32 @@ public sealed class TableCellEditPlannerTests
             OffsetYEmu = 0,
             ExtentCxEmu = ToEmu(288),
             ExtentCyEmu = ToEmu(48),
+            Table = table,
+        };
+    }
+
+    private static SlideShape MakeTwoRowTableShape()
+    {
+        var table = new TableShape();
+        table.ColumnWidthsEmu.Add(ToEmu(96));
+        table.ColumnWidthsEmu.Add(ToEmu(96));
+
+        for (int rowIndex = 0; rowIndex < 2; rowIndex++)
+        {
+            var row = new TableRow { HeightEmu = ToEmu(48) };
+            row.Cells.Add(new TableCell { TextBody = MakeBody($"R{rowIndex}C0") });
+            row.Cells.Add(new TableCell { TextBody = MakeBody($"R{rowIndex}C1") });
+            table.Rows.Add(row);
+        }
+
+        return new SlideShape
+        {
+            Id = 84,
+            Kind = SlideShapeKind.Table,
+            OffsetXEmu = 0,
+            OffsetYEmu = 0,
+            ExtentCxEmu = ToEmu(192),
+            ExtentCyEmu = ToEmu(96),
             Table = table,
         };
     }

@@ -48,6 +48,19 @@ public static class AvaloniaTableCellEditAdapter
     public static InCanvasTextEditDecision Cancel(InCanvasTableCellTextEditPlanner? editPlanner) =>
         TableCellEditPlanner.Cancel(editPlanner);
 
+    public static TableCellNavigationPlan PlanNavigation(
+        EditingSession editor,
+        TableCellNavigationDirection direction)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        return TableCellEditPlanner.PlanNavigation(
+            editor.CurrentSlide,
+            editor.SelectedShapeIds,
+            editor.ActiveTableCell,
+            direction);
+    }
+
     public static TableCellTextFormatPlan PlanTextFormat(
         EditingSession editor,
         TableCellTextFormatKind kind,

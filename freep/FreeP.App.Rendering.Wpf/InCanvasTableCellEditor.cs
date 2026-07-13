@@ -318,6 +318,24 @@ public sealed class InCanvasTableCellEditor
     /// <summary>True when a cell's RichTextBox is open and focused.</summary>
     public bool IsCellRichEditActive => _cellEditActive && _cellTextBox is not null;
 
+    public bool TryNavigateActiveTableCell(TableCellNavigationDirection direction)
+    {
+        if (!_cellEditActive || _cellTextBox is null)
+            return false;
+
+        var plan = TableCellEditPlanner.PlanNavigation(
+            _editor.CurrentSlide,
+            _editor.SelectedShapeIds,
+            _editor.ActiveTableCell,
+            direction);
+        if (!plan.IsReady || plan.ShapeId is null || plan.Row is null || plan.Col is null)
+            return false;
+
+        CommitCellEdit();
+        ActivateCellEdit(plan.ShapeId.Value, plan.Row.Value, plan.Col.Value);
+        return true;
+    }
+
     /// <summary>Toggles bold on the current cell RichTextBox selection.</summary>
     public void ApplyBold() => ExecuteCellFormattingCommand(EditingCommands.ToggleBold);
     /// <summary>Toggles italic on the current cell RichTextBox selection.</summary>
@@ -384,6 +402,17 @@ public sealed class InCanvasTableCellEditor
 
     private void OnCellTextBoxPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (e.Key == Key.Tab &&
+            (e.KeyboardDevice.Modifiers & (ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows)) == 0)
+        {
+            var direction = (e.KeyboardDevice.Modifiers & ModifierKeys.Shift) != 0
+                ? TableCellNavigationDirection.Previous
+                : TableCellNavigationDirection.Next;
+            if (TryNavigateActiveTableCell(direction))
+                e.Handled = true;
+            return;
+        }
+
         if ((e.KeyboardDevice.Modifiers & ModifierKeys.Control) == 0) return;
         if (e.Key == Key.B) { ApplyBold();      e.Handled = true; }
         else if (e.Key == Key.I) { ApplyItalic();    e.Handled = true; }

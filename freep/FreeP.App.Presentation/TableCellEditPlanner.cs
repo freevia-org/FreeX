@@ -50,6 +50,23 @@ public enum TableCellTextFormatStatus
     NoTextRuns,
 }
 
+public enum TableCellNavigationDirection
+{
+    Next,
+    Previous,
+}
+
+public enum TableCellNavigationStatus
+{
+    Ready,
+    MissingSlide,
+    ShapeNotFound,
+    NotTable,
+    MissingActiveCell,
+    CellOutOfRange,
+    NoTargetCell,
+}
+
 public sealed record TableCellEditState(
     uint? ShapeId,
     int? Row,
@@ -81,6 +98,16 @@ public sealed record TableCellEditState(
         CanMergeWithRight: false,
         CanMergeWithBelow: false,
         CanSplitCell: false);
+}
+
+public sealed record TableCellNavigationPlan(
+    TableCellNavigationStatus Status,
+    uint? ShapeId,
+    int? Row,
+    int? Col,
+    TableCellNavigationDirection Direction)
+{
+    public bool IsReady => Status == TableCellNavigationStatus.Ready;
 }
 
 public sealed record TableCellEditStartPlan(
@@ -463,6 +490,58 @@ public static class TableCellEditPlanner
     public static InCanvasTextEditDecision Cancel(InCanvasTableCellTextEditPlanner? editPlanner) =>
         editPlanner?.Cancel()
         ?? new InCanvasTextEditDecision(InCanvasTextEditOutcome.Canceled, null);
+
+    public static TableCellNavigationPlan PlanNavigation(
+        Slide? slide,
+        IReadOnlyList<uint> selectedShapeIds,
+        (int Row, int Col)? activeCell,
+        TableCellNavigationDirection direction)
+    {
+        ArgumentNullException.ThrowIfNull(selectedShapeIds);
+
+        if (slide is null)
+            return DisabledNavigation(TableCellNavigationStatus.MissingSlide, direction);
+        if (selectedShapeIds.Count == 0)
+            return DisabledNavigation(TableCellNavigationStatus.ShapeNotFound, direction);
+
+        var shape = slide.Shapes.FirstOrDefault(s => s.Id == selectedShapeIds[0]);
+        if (shape is null)
+            return DisabledNavigation(TableCellNavigationStatus.ShapeNotFound, direction);
+        if (shape.Kind != SlideShapeKind.Table || shape.Table is null)
+            return DisabledNavigation(TableCellNavigationStatus.NotTable, direction, shape.Id);
+        if (activeCell is not { } requested)
+            return DisabledNavigation(TableCellNavigationStatus.MissingActiveCell, direction, shape.Id);
+
+        var normalized = NormalizeCell(shape.Table, requested.Row, requested.Col);
+        if (normalized is null)
+            return DisabledNavigation(TableCellNavigationStatus.CellOutOfRange, direction, shape.Id);
+
+        var anchors = GetEditableCellAnchors(shape.Table);
+        int currentIndex = anchors.FindIndex(cell => cell.Row == normalized.Value.Row && cell.Col == normalized.Value.Col);
+        if (currentIndex < 0)
+            return DisabledNavigation(TableCellNavigationStatus.CellOutOfRange, direction, shape.Id);
+
+        int targetIndex = direction == TableCellNavigationDirection.Next
+            ? currentIndex + 1
+            : currentIndex - 1;
+        if (targetIndex < 0 || targetIndex >= anchors.Count)
+        {
+            return DisabledNavigation(
+                TableCellNavigationStatus.NoTargetCell,
+                direction,
+                shape.Id,
+                normalized.Value.Row,
+                normalized.Value.Col);
+        }
+
+        var target = anchors[targetIndex];
+        return new TableCellNavigationPlan(
+            TableCellNavigationStatus.Ready,
+            shape.Id,
+            target.Row,
+            target.Col,
+            direction);
+    }
 
     public static InCanvasEditorTextSelection PlanInitialSelection(TextBody? body)
     {
@@ -1359,6 +1438,34 @@ public static class TableCellEditPlanner
         int? row = null,
         int? col = null) =>
         new(status, shapeId, row, col, kind, value, null);
+
+    private static TableCellNavigationPlan DisabledNavigation(
+        TableCellNavigationStatus status,
+        TableCellNavigationDirection direction,
+        uint? shapeId = null,
+        int? row = null,
+        int? col = null) =>
+        new(status, shapeId, row, col, direction);
+
+    private static List<(int Row, int Col)> GetEditableCellAnchors(TableShape table)
+    {
+        var anchors = new List<(int Row, int Col)>();
+        for (int row = 0; row < table.Rows.Count; row++)
+        {
+            for (int col = 0; col < table.ColumnWidthsEmu.Count; col++)
+            {
+                var normalized = NormalizeCell(table, row, col);
+                if (normalized is null)
+                    continue;
+                if (normalized.Value.Row != row || normalized.Value.Col != col)
+                    continue;
+                if (!anchors.Contains((row, col)))
+                    anchors.Add((row, col));
+            }
+        }
+
+        return anchors;
+    }
 
     private static TextBody ApplyParagraphAlignment(
         TextBody source,

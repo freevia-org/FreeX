@@ -544,6 +544,20 @@ public sealed class AvaloniaInCanvasTextEditor
         }
     }
 
+    public bool TryNavigateActiveTableCell(TableCellNavigationDirection direction)
+    {
+        if (!_cellEditActive || _cellTextBox is null)
+            return false;
+
+        var plan = AvaloniaTableCellEditAdapter.PlanNavigation(_editor, direction);
+        if (!plan.IsReady || plan.ShapeId is null || plan.Row is null || plan.Col is null)
+            return false;
+
+        CommitCellEdit();
+        ActivateCellEdit(plan.ShapeId.Value, plan.Row.Value, plan.Col.Value);
+        return true;
+    }
+
     /// <summary>Cancels the edit without committing.</summary>
     public void Cancel()
     {
@@ -668,6 +682,17 @@ public sealed class AvaloniaInCanvasTextEditor
         {
             CancelCellEdit();
             e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Tab &&
+            (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Meta)) == 0)
+        {
+            var direction = (e.KeyModifiers & KeyModifiers.Shift) != 0
+                ? TableCellNavigationDirection.Previous
+                : TableCellNavigationDirection.Next;
+            if (TryNavigateActiveTableCell(direction))
+                e.Handled = true;
         }
     }
 

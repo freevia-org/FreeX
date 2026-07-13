@@ -100,6 +100,8 @@ public sealed class CanvasEditingTests
         source.Should().Contain("TextBodyFlowDocumentConverter.FromFlowDocument");
         source.Should().Contain("TableCellEditPlanner.CommitRichText");
         source.Should().Contain("ApplyInitialSelection(_cellTextBox, editStart.InitialSelection)");
+        source.Should().Contain("TableCellEditPlanner.PlanNavigation");
+        source.Should().Contain("TryNavigateActiveTableCell");
         source.Should().Contain("RichTextBox");
         source.Should().Contain("ExecuteCellFormattingCommand(EditingCommands.ToggleBold)");
         source.Should().Contain("ApplyWithPreservedSelection");

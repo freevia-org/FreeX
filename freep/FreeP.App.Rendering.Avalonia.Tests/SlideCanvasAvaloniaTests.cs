@@ -925,6 +925,47 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public async Task TableCellTextEditor_TabNavigation_CommitsAndReopensNextEditableCell()
+    {
+        EditingSession? editor = null;
+        SlideShape? shape = null;
+        AvaloniaInCanvasTextEditor? textEditor = null;
+        global::Avalonia.Controls.Canvas? overlay = null;
+
+        await Run(() =>
+        {
+            var presentation = MakePresentation(pres =>
+            {
+                pres.Slides[0].Shapes.Clear();
+                shape = MakeMergedTableShape(26);
+                pres.Slides[0].Shapes.Add(shape);
+            });
+
+            var bus = new PresentationCommandBus(presentation);
+            editor = new EditingSession(presentation, bus);
+            editor.Select(shape!.Id);
+            var canvas = new SlideCanvas { Presentation = presentation, Slide = presentation.Slides[0] };
+            overlay = new global::Avalonia.Controls.Canvas();
+            textEditor = new AvaloniaInCanvasTextEditor(canvas, editor, overlay);
+
+            textEditor.ActivateCellEdit(shape.Id, 0, 1);
+            var box = overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single();
+            box.Text = "Edited Anchor";
+
+            textEditor.TryNavigateActiveTableCell(TableCellNavigationDirection.Next).Should().BeTrue();
+
+            editor.ActiveTableCell.Should().Be((0, 2));
+            shape.Table!.Rows[0].Cells[0].TextBody!.Paragraphs[0].Runs[0].Text.Should().Be("Edited Anchor");
+            overlay.Children.OfType<global::Avalonia.Controls.TextBox>().Single().Text.Should().Be("Right");
+        });
+
+        textEditor!.IsCellEditActive.Should().BeTrue();
+        textEditor.ActiveTableShapeId.Should().Be(shape!.Id);
+        overlay!.Children.OfType<global::Avalonia.Controls.TextBox>().Should().ContainSingle();
+        editor!.CanUndo.Should().BeTrue();
+    }
+
+    [Fact]
     public void TableCellEditAdapter_DelegatesToSharedPlanner()
     {
         var root = FindRepositoryRoot();
@@ -938,6 +979,7 @@ public sealed class SlideCanvasAvaloniaTests
         adapter.Should().Contain("TableCellEditPlanner.BeginEdit");
         adapter.Should().Contain("TableCellEditPlanner.CommitRichText");
         adapter.Should().Contain("TableCellEditPlanner.Cancel");
+        adapter.Should().Contain("TableCellEditPlanner.PlanNavigation");
         adapter.Should().Contain("TableCellEditPlanner.PlanTextFormat");
         adapter.Should().Contain("TableCellEditPlanner.PlanFontFamily");
         adapter.Should().Contain("TableCellEditPlanner.PlanFontSize");
@@ -978,6 +1020,7 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().Contain("AvaloniaTableCellEditAdapter.BeginEdit");
         source.Should().Contain("AvaloniaTableCellEditAdapter.CommitRichText");
         source.Should().Contain("AvaloniaTableCellEditAdapter.Cancel");
+        source.Should().Contain("AvaloniaTableCellEditAdapter.PlanNavigation");
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanTextFormat");
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontFamily");
         source.Should().Contain("AvaloniaTableCellEditAdapter.PlanFontSize");
@@ -988,6 +1031,7 @@ public sealed class SlideCanvasAvaloniaTests
         source.Should().NotContain("_editor.PlanActiveTableCell");
         source.Should().Contain("TryApplyActiveTableCellTextFormat");
         source.Should().Contain("TryApplyActiveTableCellParagraphListPreset");
+        source.Should().Contain("TryNavigateActiveTableCell");
     }
 
     // ── 1. Geometry factory round-trip ────────────────────────────────────────
