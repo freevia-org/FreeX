@@ -696,14 +696,15 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt hierarchy-family layout planner; no renderer-local SmartArt policy",
             EvidenceDocs:
             [
-                "docs/parity/freep-smartart-org-chart-2026-07-07.md"
+                "docs/parity/freep-smartart-org-chart-2026-07-07.md",
+                "docs/parity/freep-smartart-org-chart-assistant-geometry-2026-07-13.md"
             ],
             Verification:
             [
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "orgChart now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes as a generic organization tree approximation. Unsupported hierarchy siblings remain on cached drawing fallback. Assistant placement, special org-chart branch styling, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "orgChart now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes plus assistant side-slot geometry when imported nodes carry dgm:pt type=\"asst\". Unsupported hierarchy siblings remain on cached drawing fallback. Exact PowerPoint assistant connector routing, special org-chart branch styling, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
       ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)

@@ -447,6 +447,79 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void OrgChart_AssistantNode_UsesSideSlotBeforeRegularReports()
+    {
+        var root = new SmartArtNode { Text = "CEO", Level = 0 };
+        var assistant = new SmartArtNode { Text = "Assistant", Level = 1, IsAssistant = true };
+        root.Children.Add(assistant);
+        root.Children.Add(new SmartArtNode { Text = "Sales", Level = 1 });
+        root.Children.Add(new SmartArtNode { Text = "Engineering", Level = 1 });
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart"
+        };
+        data.Nodes.Add(root);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("orgChart assistant nodes are a bounded shared geometry nuance");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "manager, assistant, and two regular reports should all render live");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "assistant and report relationships still use shared connector ops");
+
+        var boxesByText = shapes
+            .Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .ToDictionary(
+                s => s.TextBody!.Paragraphs.First().Runs.First().Text,
+                StringComparer.Ordinal);
+
+        var managerBox = boxesByText["CEO"];
+        var assistantBox = boxesByText["Assistant"];
+        var salesBox = boxesByText["Sales"];
+        var engineeringBox = boxesByText["Engineering"];
+
+        assistantBox.OffsetYEmu.Should().BeGreaterThan(managerBox.OffsetYEmu,
+            "assistant boxes sit below the manager");
+        salesBox.OffsetYEmu.Should().BeGreaterThan(assistantBox.OffsetYEmu,
+            "regular reports move below the assistant band");
+        engineeringBox.OffsetYEmu.Should().Be(salesBox.OffsetYEmu,
+            "regular reports stay in the same report row");
+        assistantBox.OffsetXEmu.Should().BeGreaterThan(managerBox.OffsetXEmu + managerBox.ExtentCxEmu / 2,
+            "assistant placement uses the side slot rather than the ordinary report row");
+        assistantBox.ExtentCxEmu.Should().BeLessThan(salesBox.ExtentCxEmu,
+            "assistant boxes use a smaller bounded side-slot width");
+    }
+
+    [Fact]
+    public void BasicHierarchy_AssistantTypedNode_RemainsInRegularChildRow()
+    {
+        var root = new SmartArtNode { Text = "CEO", Level = 0 };
+        root.Children.Add(new SmartArtNode { Text = "Assistant", Level = 1, IsAssistant = true });
+        root.Children.Add(new SmartArtNode { Text = "Sales", Level = 1 });
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicHierarchy"
+        };
+        data.Nodes.Add(root);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!;
+
+        var boxesByText = shapes
+            .Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .ToDictionary(
+                s => s.TextBody!.Paragraphs.First().Runs.First().Text,
+                StringComparer.Ordinal);
+
+        boxesByText["Assistant"].OffsetYEmu.Should().Be(boxesByText["Sales"].OffsetYEmu,
+            "assistant side-slot geometry is gated to orgChart, not every hierarchy layout");
+    }
+
+    [Fact]
     public void VerticalBulletList_ReturnsLiveTreeBoxesAndConnectors()
     {
         var data = MakeHierarchyData("Project", "Scope", "Timeline", "Risks");
