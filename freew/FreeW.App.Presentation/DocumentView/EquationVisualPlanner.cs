@@ -72,7 +72,11 @@ public sealed record EquationVisualSegment(
     EquationVisualSegmentRole Role,
     EquationVisualStyle Style);
 
-public sealed record EquationVisualMatrixCell(int RowIndex, int ColumnIndex, string Text);
+public sealed record EquationVisualMatrixCell(
+    int RowIndex,
+    int ColumnIndex,
+    string Text,
+    EquationVisualPlan? CellPlan = null);
 
 public sealed record EquationVisualMatrixRow(
     int RowIndex,
@@ -511,7 +515,7 @@ public static class EquationVisualPlanner
                 break;
 
             case MathRunKind.Matrix:
-                AddMatrixElement(run, segments, elements);
+                AddMatrixElement(run, segments, elements, depth);
                 break;
 
             case MathRunKind.Accent:
@@ -696,7 +700,8 @@ public static class EquationVisualPlanner
     private static void AddMatrixElement(
         MathRun run,
         List<EquationVisualSegment> segments,
-        List<EquationVisualElement> elements)
+        List<EquationVisualElement> elements,
+        int depth)
     {
         if (run.Matrix is null)
         {
@@ -708,7 +713,7 @@ public static class EquationVisualPlanner
             return;
         }
 
-        var matrixRows = BuildMatrixRows(run.Matrix);
+        var matrixRows = BuildMatrixRows(run.Matrix, depth);
         var runSegments = new List<EquationVisualSegment>
         {
             new(MatrixOpenDelimiterText, EquationVisualSegmentRole.MatrixOpenDelimiter, MatrixDelimiterStyle)
@@ -748,19 +753,19 @@ public static class EquationVisualPlanner
         elements.Add(EquationVisualElement.Matrix(run.LinearText, matrixRows, runSegments));
     }
 
-    private static IReadOnlyList<EquationVisualMatrixRow> BuildMatrixRows(MathMatrix matrix)
+    private static IReadOnlyList<EquationVisualMatrixRow> BuildMatrixRows(MathMatrix matrix, int depth)
     {
         var columnCount = matrix.ColumnCount;
         var rows = new List<EquationVisualMatrixRow>();
 
-        for (var rowIndex = 0; rowIndex < matrix.Rows.Count; rowIndex++)
+        for (var rowIndex = 0; rowIndex < matrix.RowCount; rowIndex++)
         {
-            var sourceRow = matrix.Rows[rowIndex];
             var cells = new List<EquationVisualMatrixCell>();
             for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
             {
-                var text = columnIndex < sourceRow.Count ? sourceRow[columnIndex] : string.Empty;
-                cells.Add(new EquationVisualMatrixCell(rowIndex, columnIndex, text));
+                var cellPlan = BuildSlotPlan(matrix.CellEquationAt(rowIndex, columnIndex), depth);
+                var text = cellPlan?.LinearText ?? matrix.CellTextAt(rowIndex, columnIndex);
+                cells.Add(new EquationVisualMatrixCell(rowIndex, columnIndex, text, cellPlan));
             }
 
             rows.Add(new EquationVisualMatrixRow(rowIndex, cells));

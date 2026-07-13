@@ -1031,6 +1031,45 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedMatrixCellEquations_SurviveRoundTripAndEmitDirectCellChildren()
+    {
+        var scriptCell = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+        var fractionCell = new Equation([MathRun.Fraction("p", "q")]);
+        var matrix = new MathMatrix([["a+x2", "plain"], ["p/q", ""]]);
+        matrix.CellEquations.Add([scriptCell, null]);
+        matrix.CellEquations.Add([fractionCell, null]);
+        var equation = new Equation([MathRun.MatrixOf(matrix)]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Should().ContainSingle();
+        var roundTrippedMatrix = roundTripped.Runs[0].Matrix!;
+        roundTrippedMatrix.RowCount.Should().Be(2);
+        roundTrippedMatrix.ColumnCount.Should().Be(2);
+        roundTrippedMatrix.CellEquationAt(0, 0)!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        roundTrippedMatrix.CellEquationAt(1, 0)!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Fraction);
+        roundTrippedMatrix.CellEquationAt(0, 1).Should().BeNull();
+        roundTripped.LinearText.Should().Be("[a+x^2, plain; p/q, ]");
+
+        var writtenMatrix = xml.Descendants(M + "m").Single();
+        var writtenRows = writtenMatrix.Elements(M + "mr").ToArray();
+        writtenRows[0].Elements(M + "e").First().Elements(M + "oMath").Should().BeEmpty();
+        writtenRows[0].Elements(M + "e").First().Elements(M + "sSup").Should().ContainSingle();
+        writtenRows[1].Elements(M + "e").First().Elements(M + "f").Should().ContainSingle();
+    }
+
+    [Fact]
     public void FunctionApplyEquation_SurvivesRoundTrip()
     {
         var read = RoundTripEquation(new Equation([MathRun.FunctionApply("sin", "x")]));

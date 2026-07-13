@@ -2620,7 +2620,7 @@ public static class DocxWriter
         MathRunKind.Accent => BuildAccent(run, depth),
         MathRunKind.Bar => BuildBar(run, depth),
         MathRunKind.Delimiter => BuildDelimiter(run, depth),
-        MathRunKind.Matrix => BuildMatrix(run.Matrix),
+        MathRunKind.Matrix => BuildMatrix(run.Matrix, depth),
         MathRunKind.FunctionApply => BuildFunctionApply(run, depth),
         MathRunKind.GroupChar => BuildGroupChar(run, depth),
         _ => MathText(run.Text)
@@ -2728,15 +2728,22 @@ public static class DocxWriter
     /// Builds a matrix (m:m): one m:mr per row, each holding one m:e (cell) per column. An absent/empty
     /// matrix degrades to an empty math run so nothing is lost.
     /// </summary>
-    private static XElement BuildMatrix(MathMatrix? matrix)
+    private static XElement BuildMatrix(MathMatrix? matrix, int depth)
     {
         var m = new XElement(M + "m");
         if (matrix is not null)
-            foreach (var row in matrix.Rows)
+            for (var rowIndex = 0; rowIndex < matrix.RowCount; rowIndex++)
             {
                 var mr = new XElement(M + "mr");
-                foreach (var cell in row)
-                    mr.Add(new XElement(M + "e", MathText(cell)));
+                var columnCount = matrix.Rows.Count > rowIndex
+                    ? Math.Max(matrix.Rows[rowIndex].Count, matrix.CellEquations.Count > rowIndex ? matrix.CellEquations[rowIndex].Count : 0)
+                    : matrix.CellEquations.Count > rowIndex ? matrix.CellEquations[rowIndex].Count : 0;
+                for (var columnIndex = 0; columnIndex < columnCount; columnIndex++)
+                    mr.Add(BuildMathSlot(
+                        M + "e",
+                        matrix.CellEquationAt(rowIndex, columnIndex),
+                        matrix.CellTextAt(rowIndex, columnIndex),
+                        depth));
                 m.Add(mr);
             }
         return m;

@@ -382,6 +382,41 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathMatrix_CanCarryNestedCellEquations()
+    {
+        var structuredCell = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+        var plainCell = Equation.FromText("z");
+
+        var matrix = MathMatrix.FromCellEquations([[structuredCell, plainCell]]);
+
+        matrix.RowCount.Should().Be(1);
+        matrix.ColumnCount.Should().Be(2);
+        matrix.Rows[0].Should().Equal("a+x^2", "z");
+        matrix.CellEquationAt(0, 0).Should().BeSameAs(structuredCell);
+        matrix.CellEquationAt(0, 1).Should().BeSameAs(plainCell);
+        matrix.CellTextAt(0, 0).Should().Be("a+x^2");
+        matrix.LinearText.Should().Be("[a+x^2, z]");
+    }
+
+    [Fact]
+    public void MathMatrix_CellEquationLinearText_IsDepthBoundedForCyclicNestedCell()
+    {
+        var equation = new Equation();
+        var matrix = new MathMatrix();
+        matrix.Rows.Add(["fallback"]);
+        matrix.CellEquations.Add([equation]);
+        equation.Runs.Add(MathRun.MatrixOf(matrix));
+
+        var text = equation.LinearText;
+
+        text.Length.Should().BeLessThan(500);
+        text.Should().Contain("fallback");
+    }
+
+    [Fact]
     public void Equation_LinearText_ConcatenatesFragments()
     {
         var equation = new Equation([
