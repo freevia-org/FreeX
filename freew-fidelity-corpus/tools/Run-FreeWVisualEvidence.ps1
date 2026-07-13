@@ -29,7 +29,9 @@ param(
     [int]$MaxPages = 6,
     [string]$WordBaselineDir,
     [switch]$IncludeWordBaseline,
-    [string]$BaselineTolerance = 'word-png-default'
+    [string]$BaselineTolerance = 'word-png-default',
+    [string]$WordBaselineUnavailableReason,
+    [string[]]$ScenarioId
 )
 
 $ErrorActionPreference = 'Stop'
@@ -73,6 +75,13 @@ elseif (-not [string]::IsNullOrWhiteSpace($WordBaselineDir)) {
     if (-not (Test-Path -LiteralPath $wordBaselineRoot -PathType Container)) {
         throw "Word baseline directory does not exist: $wordBaselineRoot"
     }
+}
+elseif (-not [string]::IsNullOrWhiteSpace($WordBaselineUnavailableReason)) {
+    $wordBaselineRoot = $null
+}
+
+if ($wordBaselineRoot -and -not [string]::IsNullOrWhiteSpace($WordBaselineUnavailableReason)) {
+    throw "-WordBaselineUnavailableReason cannot be combined with -WordBaselineDir or -IncludeWordBaseline."
 }
 
 $fixtureDir = Join-Path $runRoot 'fixtures\f2'
@@ -130,8 +139,8 @@ function Assert-BackstageEvidenceReadiness {
     }
 
     $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
-    if ([int]$summary.schemaVersion -ne 24) {
-        throw "Backstage evidence readiness requires FreeW visual evidence summary schema v24, found v$($summary.schemaVersion)"
+    if ([int]$summary.schemaVersion -lt 24) {
+        throw "Backstage evidence readiness requires FreeW visual evidence summary schema v24 or newer, found v$($summary.schemaVersion)"
     }
 
     $readinessRows = @($summary.backstagePrintEvidenceReadiness)
@@ -151,6 +160,10 @@ function Assert-BackstageEvidenceReadiness {
     $requiredPipelineByScenario = @{
         'backstage-print-preview-fidelity' = 'print-preview-fixed-layout-artifact'
         'backstage-pdf-export-fidelity' = 'pdf-export-rasterized-artifact'
+    }
+    $requiredRouteByScenario = @{
+        'backstage-print-preview-fidelity' = 'backstage-print-preview-fixed-layout-capture'
+        'backstage-pdf-export-fidelity' = 'backstage-pdf-export-raster-capture'
     }
     $requiredHosts = @(
         'wpf-fidelity-render',
@@ -216,6 +229,13 @@ function Assert-BackstageEvidenceReadiness {
                     $failures.Add("$scenarioId/$hostId/p${pageNumber}: backstagePipeline '$pipeline' expected '$expectedPipeline'")
                     continue
                 }
+
+                $expectedRoute = $requiredRouteByScenario[$scenarioId]
+                $route = [string]$metadata.backstageCaptureRoute
+                if ($route -ne $expectedRoute) {
+                    $failures.Add("$scenarioId/$hostId/p${pageNumber}: backstageCaptureRoute '$route' expected '$expectedRoute'")
+                    continue
+                }
             }
         }
     }
@@ -226,6 +246,7 @@ function Assert-BackstageEvidenceReadiness {
 
     Write-Host "Backstage evidence readiness: trusted required rows=$trustedCount"
     Write-Host "Backstage artifact metadata: verified rows=$trustedCount schema=v$($summary.schemaVersion)"
+    Write-Host "Backstage capture routes: verified rows=$trustedCount"
 }
 
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
@@ -297,6 +318,18 @@ if ($wordBaselineRoot) {
         '--baseline-tolerance', $BaselineTolerance
     )
 }
+elseif (-not [string]::IsNullOrWhiteSpace($WordBaselineUnavailableReason)) {
+    $summaryArgs += @(
+        '--word-baseline-unavailable-reason', $WordBaselineUnavailableReason,
+        '--baseline-tolerance', $BaselineTolerance
+    )
+}
+
+foreach ($scenario in @($ScenarioId)) {
+    if (-not [string]::IsNullOrWhiteSpace($scenario)) {
+        $summaryArgs += @('--include-scenario', $scenario)
+    }
+}
 
 Invoke-DotNetStep 'Validate and normalize combined visual evidence' $summaryArgs
 Assert-BackstageEvidenceReadiness $summaryJson
@@ -309,8 +342,16 @@ if ($wordBaselineRoot) {
     Write-Host "Word baseline directory: $wordBaselineRoot"
     Write-Host "Baseline tolerance: $BaselineTolerance"
 }
+elseif (-not [string]::IsNullOrWhiteSpace($WordBaselineUnavailableReason)) {
+    Write-Host "Word baseline mode: word-baseline-unavailable"
+    Write-Host "Word baseline unavailable reason: $WordBaselineUnavailableReason"
+    Write-Host "Baseline tolerance: $BaselineTolerance"
+}
 else {
     Write-Host "Word baseline mode: visual-evidence-only"
+}
+if (@($ScenarioId).Count -gt 0) {
+    Write-Host "Scenario filter: $($ScenarioId -join ', ')"
 }
 Write-Host "Summary JSON: $summaryJson"
 Write-Host "Summary Markdown: $summaryMarkdown"

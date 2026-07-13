@@ -20,7 +20,8 @@ try
 {
     var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
         options.ManifestPaths,
-        runRoot);
+        runRoot,
+        includedScenarioIds: options.IncludeScenarioIds);
     if (!string.IsNullOrWhiteSpace(options.WordBaselineUnavailableReason))
     {
         var tolerance = FreeWVisualBaselineComparisonPlanner.ResolveTolerance(options.BaselineToleranceName);
@@ -113,6 +114,10 @@ static Options Parse(string[] args)
             case "--manifest":
                 options.ManifestPaths.Add(ReadValue(args, ref i, arg));
                 break;
+            case "--include-scenario":
+            case "--scenario":
+                AddScenarioIds(options, ReadValue(args, ref i, arg));
+                break;
             default:
                 if (arg.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                     options.ManifestPaths.Add(arg);
@@ -136,9 +141,15 @@ static string ReadValue(string[] args, ref int index, string option)
     return args[index];
 }
 
+static void AddScenarioIds(Options options, string value)
+{
+    foreach (var scenarioId in value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        options.IncludeScenarioIds.Add(scenarioId);
+}
+
 static void PrintUsage()
 {
-    Console.Error.WriteLine("usage: FreeW.VisualEvidenceSummary --run-root <dir> --manifest <manifest.json> [--manifest <manifest.json>] [--word-baseline-dir <dir> | --word-baseline-unavailable-reason <reason>] [--baseline-tolerance <name>] [--word-baseline-scope all|generated-corpus] [--output-json <path>] [--output-md <path>]");
+    Console.Error.WriteLine("usage: FreeW.VisualEvidenceSummary --run-root <dir> --manifest <manifest.json> [--manifest <manifest.json>] [--include-scenario <id>] [--word-baseline-dir <dir> | --word-baseline-unavailable-reason <reason>] [--baseline-tolerance <name>] [--word-baseline-scope all|generated-corpus] [--output-json <path>] [--output-md <path>]");
     Console.Error.WriteLine("baseline tolerances: " + string.Join(", ", FreeWVisualBaselineComparisonTolerance.BuiltIn.Select(t => t.Name)));
     Console.Error.WriteLine("baseline scopes: all, generated-corpus");
 }
@@ -310,6 +321,7 @@ sealed class Options
     public string? BaselineScopeName { get; set; }
     public bool ShowHelp { get; set; }
     public List<string> ManifestPaths { get; } = [];
+    public List<string> IncludeScenarioIds { get; } = [];
 }
 
 readonly record struct DecodedPng(int Width, int Height, int Stride, byte[] Pixels);

@@ -4708,6 +4708,80 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_FiltersIncludedScenariosBeforeValidation()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-print-preview-fidelity",
+                        pageNumber: 1,
+                        pageCount: 2),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "backstage-print-preview-fidelity",
+                        pageNumber: 2,
+                        pageCount: 2),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        "drawing-objects-complex",
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-print-preview-fidelity",
+                        pageNumber: 1,
+                        pageCount: 2),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-print-preview-fidelity",
+                        pageNumber: 2,
+                        pageCount: 2)
+                ],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                includedScenarioIds: ["backstage-print-preview-fidelity"]);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.Evidence.Should().HaveCount(4);
+            summary.Evidence.Select(e => e.ScenarioId)
+                .Should().OnlyContain(id => id == "backstage-print-preview-fidelity");
+            summary.ExpectedScenarios.Select(s => s.ScenarioId)
+                .Should().OnlyContain(id => id == "backstage-print-preview-fidelity");
+            summary.BackstagePrintEvidenceReadiness
+                .Where(row => row.ScenarioId == "backstage-print-preview-fidelity")
+                .Should().HaveCount(4)
+                .And.OnlyContain(row => row.Status == "trusted");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void ComputeBaselineComparisonMetrics_EvaluatesNamedTolerance()
     {
         var baseline = BuildBgraPixels(2, 2, (10, 10, 10));

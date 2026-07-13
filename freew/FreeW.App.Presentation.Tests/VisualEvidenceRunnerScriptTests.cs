@@ -32,14 +32,19 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("[string]$WordBaselineDir");
         source.Should().Contain("[switch]$IncludeWordBaseline");
         source.Should().Contain("[string]$BaselineTolerance = 'word-png-default'");
+        source.Should().Contain("[string]$WordBaselineUnavailableReason");
+        source.Should().Contain("[string[]]$ScenarioId");
         source.Should().Contain("Render-WordBaseline.ps1");
         source.Should().Contain("Resolve-RepositoryPath $WordBaselineDir");
         source.Should().Contain("Join-Path $wordBaselineRenderRoot 'word'");
         source.Should().Contain("Test-Path -LiteralPath $wordBaselineRoot -PathType Container");
+        source.Should().Contain("-WordBaselineUnavailableReason cannot be combined with -WordBaselineDir or -IncludeWordBaseline.");
         source.Should().Contain("Invoke-PowerShellStep 'Render MS Word baseline PNGs'");
         source.Should().Contain("'--manifest', $wpfManifest");
         source.Should().Contain("'--manifest', $avaloniaManifest");
         source.Should().Contain("'--word-baseline-dir', $wordBaselineRoot");
+        source.Should().Contain("'--word-baseline-unavailable-reason', $WordBaselineUnavailableReason");
+        source.Should().Contain("'--include-scenario', $scenario");
         source.Should().Contain("'--baseline-tolerance', $BaselineTolerance");
         source.Should().Contain("Invoke-DotNetStep 'Validate and normalize combined visual evidence' $summaryArgs");
         source.Should().Contain("Assert-BackstageEvidenceReadiness $summaryJson");
@@ -47,27 +52,51 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("backstage-pdf-export-fidelity");
         source.Should().Contain("wpf-fidelity-render");
         source.Should().Contain("avalonia-page-layout-shot");
-        source.Should().Contain("[int]$summary.schemaVersion -ne 24");
-        source.Should().Contain("Backstage evidence readiness requires FreeW visual evidence summary schema v24");
+        source.Should().Contain("[int]$summary.schemaVersion -lt 24");
+        source.Should().Contain("Backstage evidence readiness requires FreeW visual evidence summary schema v24 or newer");
         source.Should().Contain("$evidenceRows = @($summary.evidence)");
         source.Should().Contain("$requiredWorkflowByScenario");
         source.Should().Contain("$requiredArtifactKindByScenario");
         source.Should().Contain("$requiredPipelineByScenario");
+        source.Should().Contain("$requiredRouteByScenario");
         source.Should().Contain("'backstage-print-preview-fidelity' = 'print-preview'");
         source.Should().Contain("'backstage-pdf-export-fidelity' = 'pdf-export'");
         source.Should().Contain("'backstage-print-preview-fidelity' = 'print-preview-fixed-layout'");
         source.Should().Contain("'backstage-pdf-export-fidelity' = 'pdf-export-rasterized'");
         source.Should().Contain("'backstage-print-preview-fidelity' = 'print-preview-fixed-layout-artifact'");
         source.Should().Contain("'backstage-pdf-export-fidelity' = 'pdf-export-rasterized-artifact'");
+        source.Should().Contain("'backstage-print-preview-fidelity' = 'backstage-print-preview-fixed-layout-capture'");
+        source.Should().Contain("'backstage-pdf-export-fidelity' = 'backstage-pdf-export-raster-capture'");
         source.Should().Contain("missing trusted normalized evidence row for backstage artifact metadata");
         source.Should().Contain("backstageWorkflow '$workflow' expected '$expectedWorkflow'");
         source.Should().Contain("backstageArtifactKind '$artifactKind' expected '$expectedArtifactKind'");
         source.Should().Contain("backstagePipeline '$pipeline' expected '$expectedPipeline'");
+        source.Should().Contain("backstageCaptureRoute '$route' expected '$expectedRoute'");
         source.Should().Contain("Backstage evidence readiness failed");
         source.Should().Contain("Backstage evidence readiness: trusted required rows=");
         source.Should().Contain("Backstage artifact metadata: verified rows=");
+        source.Should().Contain("Backstage capture routes: verified rows=");
         source.Should().Contain("Word baseline mode: word-png-comparison");
+        source.Should().Contain("Word baseline mode: word-baseline-unavailable");
         source.Should().Contain("Word baseline mode: visual-evidence-only");
+        source.Should().Contain("Scenario filter:");
+    }
+
+    [Fact]
+    public void VisualEvidenceSummaryTool_SupportsScenarioFilter()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "freew",
+            "tools",
+            "FreeW.VisualEvidenceSummary",
+            "Program.cs"));
+
+        source.Should().Contain("--include-scenario");
+        source.Should().Contain("--scenario");
+        source.Should().Contain("AddScenarioIds(options, ReadValue(args, ref i, arg));");
+        source.Should().Contain("value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)");
+        source.Should().Contain("includedScenarioIds: options.IncludeScenarioIds");
+        source.Should().Contain("public List<string> IncludeScenarioIds { get; } = [];");
     }
 
     [Fact]

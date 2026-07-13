@@ -217,7 +217,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     public static FreeWVisualEvidenceNormalizedSummary BuildNormalizedSummaryFromFiles(
         IReadOnlyList<string> manifestPaths,
         string runRoot,
-        IReadOnlyList<FreeWVisualEvidenceExpectedScenario>? expectedScenarios = null)
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario>? expectedScenarios = null,
+        IReadOnlyCollection<string>? includedScenarioIds = null)
     {
         ArgumentNullException.ThrowIfNull(manifestPaths);
         ArgumentException.ThrowIfNullOrWhiteSpace(runRoot);
@@ -226,7 +227,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             throw new ArgumentException("At least one visual evidence manifest is required.", nameof(manifestPaths));
 
         var normalizedRoot = Path.GetFullPath(runRoot);
+        var included = includedScenarioIds?
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id.Trim())
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var expected = (expectedScenarios ?? DefaultExpectedScenarios)
+            .Where(e => included is null || included.Count == 0 || included.Contains(e.ScenarioId))
             .OrderBy(e => e.HostId, StringComparer.OrdinalIgnoreCase)
             .ThenBy(e => e.ScenarioId, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -249,7 +255,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
             var manifest = ReadManifest(fullManifestPath);
             ValidateManifestHeader(manifest, sourceManifestPath, failures);
 
-            var hostIds = manifest.Evidence
+            var manifestRows = manifest.Evidence
+                .Where(e => included is null || included.Count == 0 || included.Contains(e.ScenarioId))
+                .ToList();
+
+            var hostIds = manifestRows
                 .Select(e => e.HostId)
                 .Where(h => !string.IsNullOrWhiteSpace(h))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -258,10 +268,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
             sources.Add(new FreeWVisualEvidenceNormalizedSource(
                 sourceManifestPath,
                 hostIds,
-                manifest.Evidence.Count));
+                manifestRows.Count));
 
             var manifestDirectory = Path.GetDirectoryName(fullManifestPath) ?? normalizedRoot;
-            foreach (var row in manifest.Evidence)
+            foreach (var row in manifestRows)
             {
                 rows.Add(NormalizeRow(
                     row,
