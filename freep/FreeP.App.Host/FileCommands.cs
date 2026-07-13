@@ -101,6 +101,8 @@ internal sealed class FileCommands
 
     public PresentationVideoExportHandoffPlan? LastVideoExportHandoffPlan { get; private set; }
 
+    public PresentationVideoFramePackageExecutionDescriptor? LastVideoExecutionDescriptor { get; private set; }
+
     public void MarkDirty()
     {
         _workflow.MarkDirty();
@@ -340,7 +342,11 @@ internal sealed class FileCommands
             _getModel(),
             request,
             WpfPresentationSlideImageRenderer.RenderSlideToPng);
-        LastVideoExportHandoffPlan = BuildVideoExportHandoffPlan(LastVideoFramePackage.Plan);
+        LastVideoExecutionDescriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
+            LastVideoFramePackage,
+            VideoExportHostCapabilities,
+            _workflow.CurrentFileName);
+        LastVideoExportHandoffPlan = LastVideoExecutionDescriptor.HandoffPlan;
         return LastVideoFramePackage;
     }
 

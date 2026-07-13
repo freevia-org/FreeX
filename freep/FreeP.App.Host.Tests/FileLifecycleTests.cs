@@ -291,6 +291,19 @@ public sealed class FileLifecycleTests : IDisposable
 
         file.LastVideoFramePackage.Should().BeSameAs(package);
         file.LastVideoExportHandoffPlan.Should().NotBeNull();
+        file.LastVideoExecutionDescriptor.Should().NotBeNull();
+        file.LastVideoExecutionDescriptor!.PackagePlan.Should().BeSameAs(package.Plan);
+        file.LastVideoExecutionDescriptor.HandoffPlan.Should().BeSameAs(file.LastVideoExportHandoffPlan);
+        file.LastVideoExecutionDescriptor.Validation.IsValid.Should().BeTrue();
+        file.LastVideoExecutionDescriptor.Validation.HasManifest.Should().BeTrue();
+        file.LastVideoExecutionDescriptor.Validation.HasEncoderDeferredMarker.Should().BeTrue();
+        file.LastVideoExecutionDescriptor.Validation.ExpectedFrameCount.Should().Be(1);
+        file.LastVideoExecutionDescriptor.Validation.ManifestFrameCount.Should().Be(1);
+        file.LastVideoExecutionDescriptor.Validation.ZipFrameEntryCount.Should().Be(1);
+        file.LastVideoExecutionDescriptor.ContentType.Should().Be(PresentationVideoFramePackageExecutor.PackageContentType);
+        file.LastVideoExecutionDescriptor.SuggestedPackageName.Should().Be("Presentation-video-encoder-input.zip");
+        file.LastVideoExecutionDescriptor.ByteCount.Should().Be(package.Bytes.Length);
+        file.LastVideoExecutionDescriptor.CanMaterialize.Should().BeTrue();
         file.LastVideoExportHandoffPlan!.PackagePlan.Should().BeSameAs(package.Plan);
         file.LastVideoExportHandoffPlan.Status.Should()
             .Be(PresentationVideoExportHandoffStatus.EncoderInputPackageReadyHostDeferred);

@@ -1534,7 +1534,7 @@ public sealed class PresentationExportPlannerTests
 
         using var manifest = JsonDocument.Parse(ReadZipText(archive, "manifest.json"));
         var root = manifest.RootElement;
-        root.GetProperty("PackageKind").GetString().Should().Be("FreePVideoFramePackage");
+        root.GetProperty("PackageKind").GetString().Should().Be(PresentationVideoFramePackageExecutor.EncoderInputPackageKind);
         root.GetProperty("DeferredCapabilities")
             .EnumerateArray()
             .Select(value => value.GetString())
@@ -1562,6 +1562,115 @@ public sealed class PresentationExportPlannerTests
         TimeSpan.Parse(frames[1].GetProperty("StartTime").GetString()!).Should().Be(TimeSpan.FromMilliseconds(2500));
         TimeSpan.Parse(frames[1].GetProperty("Duration").GetString()!).Should().Be(TimeSpan.FromSeconds(4));
         frames[1].GetProperty("TimingSource").GetString().Should().Be(nameof(PresentationVideoTimingSource.DefaultDuration));
+    }
+
+    [Fact]
+    public void VideoFramePackageExecutionDescriptor_ValidatesAndMaterializesEncoderInputZip()
+    {
+        var package = PresentationVideoFramePackageExecutor.BuildPackage(
+            BuildHandoutDeck(2),
+            new PresentationVideoExportRequest(
+                Quality: PresentationVideoQualityKind.Standard,
+                SecondsPerSlide: 2,
+                UseRecordedTimings: false,
+                IncludeNarration: false),
+            (_, _, _, _) => TinyPng.ToArray());
+        var targetPath = Path.Combine(Path.GetTempPath(), $"freep-video-encoder-input-{Guid.NewGuid():N}.zip");
+
+        try
+        {
+            var descriptor = PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(
+                package,
+                PresentationVideoExportHandoffHostCapabilities.Deferred(
+                    "Unit test video host",
+                    "Unit tests do not open MP4 encoders."),
+                "Quarter Review.pptx");
+
+            descriptor.PackageKind.Should().Be(PresentationVideoFramePackageExecutor.EncoderInputPackageKind);
+            descriptor.PackagePlan.Should().BeSameAs(package.Plan);
+            descriptor.HandoffPlan.Status.Should().Be(PresentationVideoExportHandoffStatus.EncoderInputPackageReadyHostDeferred);
+            descriptor.HandoffPlan.Mp4EncoderDeferredByHost.Should().BeTrue();
+            descriptor.ContentType.Should().Be(PresentationVideoFramePackageExecutor.PackageContentType);
+            descriptor.DefaultExtensionWithDot.Should().Be(PresentationVideoFramePackageExecutor.PackageExtension);
+            descriptor.SuggestedPackageName.Should().Be("Quarter Review-video-encoder-input.zip");
+            descriptor.FrameCount.Should().Be(2);
+            descriptor.ByteCount.Should().Be(package.Bytes.Length);
+            descriptor.IsEncoderInputPackage.Should().BeTrue();
+            descriptor.CanMaterialize.Should().BeTrue();
+            descriptor.DisabledReason.Should().BeNull();
+            descriptor.Validation.Should().Match<PresentationVideoFramePackageValidation>(validation =>
+                validation.IsValid &&
+                validation.HasBytes &&
+                validation.HasZipContainer &&
+                validation.HasManifest &&
+                validation.HasEncoderDeferredMarker &&
+                validation.ExpectedFrameCount == 2 &&
+                validation.ManifestFrameCount == 2 &&
+                validation.ZipFrameEntryCount == 2 &&
+                validation.FrameCountMatchesPackage &&
+                validation.ContentTypeIsZip &&
+                validation.ExtensionIsZip &&
+                validation.ByteCount == package.Bytes.Length);
+
+            var result = PresentationVideoFramePackageExecutor.MaterializePackageForHandoff(
+                package,
+                targetPath,
+                suggestedBaseFileName: "Quarter Review.pptx");
+
+            result.Succeeded.Should().BeTrue();
+            result.FailureReason.Should().BeNull();
+            result.Descriptor.CanMaterialize.Should().BeTrue();
+            File.ReadAllBytes(targetPath).Should().Equal(package.Bytes);
+        }
+        finally
+        {
+            if (File.Exists(targetPath))
+                File.Delete(targetPath);
+        }
+    }
+
+    [Fact]
+    public void VideoFramePackageExecutionDescriptor_BlocksMaterializationForEmptyOrInvalidZipBytes()
+    {
+        var validPackage = PresentationVideoFramePackageExecutor.BuildPackage(
+            BuildHandoutDeck(1),
+            request: null,
+            (_, _, _, _) => TinyPng.ToArray());
+        var emptyTargetPath = Path.Combine(Path.GetTempPath(), $"freep-empty-video-encoder-input-{Guid.NewGuid():N}.zip");
+        var invalidTargetPath = Path.Combine(Path.GetTempPath(), $"freep-invalid-video-encoder-input-{Guid.NewGuid():N}.zip");
+        var emptyPackage = validPackage with { Bytes = [] };
+        var invalidPackage = validPackage with { Bytes = Encoding.ASCII.GetBytes("not a zip") };
+
+        try
+        {
+            var empty = PresentationVideoFramePackageExecutor.MaterializePackageForHandoff(
+                emptyPackage,
+                emptyTargetPath,
+                suggestedBaseFileName: "Empty.pptx");
+            var invalid = PresentationVideoFramePackageExecutor.MaterializePackageForHandoff(
+                invalidPackage,
+                invalidTargetPath,
+                suggestedBaseFileName: "Broken.pptx");
+
+            empty.Succeeded.Should().BeFalse();
+            empty.Descriptor.CanMaterialize.Should().BeFalse();
+            empty.Descriptor.Validation.HasBytes.Should().BeFalse();
+            empty.FailureReason.Should().Be("Video encoder-input package contains no bytes.");
+            File.Exists(emptyTargetPath).Should().BeFalse();
+
+            invalid.Succeeded.Should().BeFalse();
+            invalid.Descriptor.CanMaterialize.Should().BeFalse();
+            invalid.Descriptor.Validation.HasZipContainer.Should().BeFalse();
+            invalid.FailureReason.Should().Be("Video encoder-input package is not a valid ZIP archive.");
+            File.Exists(invalidTargetPath).Should().BeFalse();
+        }
+        finally
+        {
+            if (File.Exists(emptyTargetPath))
+                File.Delete(emptyTargetPath);
+            if (File.Exists(invalidTargetPath))
+                File.Delete(invalidTargetPath);
+        }
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using Free.Shared.Shell;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -67,6 +68,42 @@ public sealed record PresentationVideoFramePackage(
     IReadOnlyList<PresentationVideoFramePackageFrame> Frames,
     byte[] Bytes);
 
+public sealed record PresentationVideoFramePackageValidation(
+    int ByteCount,
+    bool HasBytes,
+    bool HasZipContainer,
+    bool HasManifest,
+    bool HasEncoderDeferredMarker,
+    int ExpectedFrameCount,
+    int ManifestFrameCount,
+    int ZipFrameEntryCount,
+    bool FrameCountMatchesPackage,
+    bool ContentTypeIsZip,
+    bool ExtensionIsZip,
+    bool PlanCanBuildPackage,
+    bool IsValid,
+    string? FailureReason);
+
+public sealed record PresentationVideoFramePackageExecutionDescriptor(
+    PresentationVideoFramePackagePlan PackagePlan,
+    PresentationVideoExportHandoffPlan HandoffPlan,
+    PresentationVideoFramePackageValidation Validation,
+    string PackageKind,
+    string ContentType,
+    string DefaultExtensionWithDot,
+    string SuggestedPackageName,
+    int FrameCount,
+    int ByteCount,
+    bool IsEncoderInputPackage,
+    bool CanMaterialize,
+    string? DisabledReason);
+
+public sealed record PresentationVideoFramePackageMaterializationResult(
+    PresentationVideoFramePackageExecutionDescriptor Descriptor,
+    string TargetPath,
+    bool Succeeded,
+    string? FailureReason);
+
 /// <summary>
 /// Shared video encoder-input execution for FreeP. Hosts provide only a slide PNG renderer;
 /// range, quality, timing, metadata, and the MP4-deferred boundary stay in the presentation layer.
@@ -75,6 +112,7 @@ public static class PresentationVideoFramePackageExecutor
 {
     public const string PackageContentType = "application/zip";
     public const string PackageExtension = ".zip";
+    public const string EncoderInputPackageKind = "FreePVideoEncoderInputPackage";
     public const string EncoderDeferred = nameof(EncoderDeferred);
     public const string Mp4EncoderDeferred = nameof(Mp4EncoderDeferred);
     public const string NarrationCaptureDeferred = nameof(NarrationCaptureDeferred);
@@ -86,6 +124,8 @@ public static class PresentationVideoFramePackageExecutor
         "Video frame package is ready for host handoff; MP4 encoder integration is deferred by this host.";
     public const string HostEncoderReadyStatus =
         "Video frame package is ready for host MP4 encoder handoff.";
+    public const string InvalidPackageReason =
+        "Video encoder-input handoff requires a valid ZIP package.";
 
     private static readonly DateTimeOffset DeterministicZipTimestamp = new(1980, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
@@ -93,6 +133,9 @@ public static class PresentationVideoFramePackageExecutor
     {
         WriteIndented = true,
     };
+
+    private static readonly PresentationVideoExportHandoffHostCapabilities DefaultHostCapabilities =
+        PresentationVideoExportHandoffHostCapabilities.Deferred("Host video export host", HostEncoderDeferredReason);
 
     public static PresentationVideoFramePackagePlan BuildPackagePlan(
         PresentationVideoExportRequest? request,
@@ -201,6 +244,130 @@ public static class PresentationVideoFramePackageExecutor
             BuildCapabilityPlans(packagePlan, hostCapabilities));
     }
 
+    public static PresentationVideoFramePackageValidation ValidatePackage(PresentationVideoFramePackage package)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        var bytes = package.Bytes;
+        var expectedFrameCount = package.Frames.Count;
+        var hasBytes = bytes.Length > 0;
+        var hasZipContainer = false;
+        var hasManifest = false;
+        var hasEncoderDeferredMarker = false;
+        var manifestFrameCount = -1;
+        var zipFrameEntryCount = 0;
+        string? zipFailureReason = null;
+
+        if (hasBytes)
+        {
+            try
+            {
+                using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+                hasZipContainer = true;
+                hasManifest = archive.GetEntry("manifest.json") is not null;
+                hasEncoderDeferredMarker = EntryContains(archive.GetEntry("encoder-deferred.txt"), "MP4 encoding");
+                zipFrameEntryCount = archive.Entries.Count(entry =>
+                    entry.FullName.StartsWith("frames/", StringComparison.Ordinal) &&
+                    entry.FullName.EndsWith(".png", StringComparison.OrdinalIgnoreCase) &&
+                    entry.Length > 0);
+                manifestFrameCount = CountManifestFrames(archive.GetEntry("manifest.json"));
+            }
+            catch (InvalidDataException)
+            {
+                zipFailureReason = "Video encoder-input package is not a valid ZIP archive.";
+            }
+        }
+
+        var frameCountMatchesPackage =
+            expectedFrameCount > 0 &&
+            manifestFrameCount == expectedFrameCount &&
+            zipFrameEntryCount == expectedFrameCount;
+        var contentTypeIsZip = string.Equals(package.Plan.ContentType, PackageContentType, StringComparison.OrdinalIgnoreCase);
+        var extensionIsZip = string.Equals(package.Plan.DefaultExtensionWithDot, PackageExtension, StringComparison.OrdinalIgnoreCase);
+        var planCanBuild = package.Plan.CanBuildPackage && expectedFrameCount > 0;
+        var failureReason =
+            !planCanBuild ? package.Plan.DisabledReason ?? "Video encoder-input package requires at least one frame." :
+            !hasBytes ? "Video encoder-input package contains no bytes." :
+            !hasZipContainer ? zipFailureReason ?? "Video encoder-input package is not a valid ZIP archive." :
+            !contentTypeIsZip ? "Video encoder-input package content type must be application/zip." :
+            !extensionIsZip ? "Video encoder-input package extension must be .zip." :
+            !hasManifest ? "Video encoder-input package is missing manifest.json." :
+            !hasEncoderDeferredMarker ? "Video encoder-input package is missing encoder-deferred.txt." :
+            !frameCountMatchesPackage ? "Video encoder-input package frame counts do not match the manifest and ZIP entries." :
+            null;
+
+        return new PresentationVideoFramePackageValidation(
+            bytes.Length,
+            hasBytes,
+            hasZipContainer,
+            hasManifest,
+            hasEncoderDeferredMarker,
+            expectedFrameCount,
+            manifestFrameCount,
+            zipFrameEntryCount,
+            frameCountMatchesPackage,
+            contentTypeIsZip,
+            extensionIsZip,
+            planCanBuild,
+            failureReason is null,
+            failureReason);
+    }
+
+    public static PresentationVideoFramePackageExecutionDescriptor BuildExecutionDescriptor(
+        PresentationVideoFramePackage package,
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null,
+        string? suggestedBaseFileName = null)
+    {
+        ArgumentNullException.ThrowIfNull(package);
+
+        var handoffPlan = BuildHandoffPlan(package.Plan, hostCapabilities ?? DefaultHostCapabilities);
+        var validation = ValidatePackage(package);
+        var isEncoderInputPackage = validation.IsValid &&
+            string.Equals(package.Plan.ContentType, PackageContentType, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(package.Plan.DefaultExtensionWithDot, PackageExtension, StringComparison.OrdinalIgnoreCase);
+        var disabledReason = isEncoderInputPackage ? null : validation.FailureReason ?? InvalidPackageReason;
+
+        return new PresentationVideoFramePackageExecutionDescriptor(
+            package.Plan,
+            handoffPlan,
+            validation,
+            EncoderInputPackageKind,
+            package.Plan.ContentType,
+            package.Plan.DefaultExtensionWithDot,
+            BuildSuggestedPackageName(suggestedBaseFileName),
+            package.Frames.Count,
+            validation.ByteCount,
+            isEncoderInputPackage,
+            isEncoderInputPackage,
+            disabledReason);
+    }
+
+    public static PresentationVideoFramePackageMaterializationResult MaterializePackageForHandoff(
+        PresentationVideoFramePackage package,
+        string targetPath,
+        PresentationVideoExportHandoffHostCapabilities? hostCapabilities = null,
+        string? suggestedBaseFileName = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetPath);
+
+        var descriptor = BuildExecutionDescriptor(package, hostCapabilities, suggestedBaseFileName);
+        if (!descriptor.CanMaterialize)
+        {
+            return new PresentationVideoFramePackageMaterializationResult(
+                descriptor,
+                targetPath,
+                Succeeded: false,
+                descriptor.DisabledReason);
+        }
+
+        ExportAtomicWriter.WriteAllBytes(targetPath, package.Bytes);
+        return new PresentationVideoFramePackageMaterializationResult(
+            descriptor,
+            targetPath,
+            Succeeded: true,
+            FailureReason: null);
+    }
+
     private static PresentationVideoFramePackagePlan BuildPackagePlan(PresentationVideoExportPlan exportPlan)
     {
         var canBuild = exportPlan.Storyboard.Segments.Count > 0;
@@ -217,6 +384,19 @@ public static class PresentationVideoFramePackageExecutor
                 MediaCaptureDeferred,
             ],
             canBuild ? null : "Video frame package requires at least one slide.");
+    }
+
+    private static string BuildSuggestedPackageName(string? suggestedBaseFileName)
+    {
+        var baseName = string.IsNullOrWhiteSpace(suggestedBaseFileName)
+            ? "Presentation"
+            : Path.GetFileNameWithoutExtension(suggestedBaseFileName.Trim());
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new string(baseName.Select(ch => invalid.Contains(ch) ? '-' : ch).ToArray()).Trim();
+        if (string.IsNullOrWhiteSpace(sanitized))
+            sanitized = "Presentation";
+
+        return $"{sanitized}-video-encoder-input{PackageExtension}";
     }
 
     private static IReadOnlyList<PresentationVideoExportCapabilityPlan> BuildCapabilityPlans(
@@ -283,7 +463,7 @@ public static class PresentationVideoFramePackageExecutor
         var export = plan.ExportPlan;
         var storyboard = export.Storyboard;
         return new PresentationVideoFramePackageManifest(
-            PackageKind: "FreePVideoFramePackage",
+            PackageKind: EncoderInputPackageKind,
             PackageStatus: "EncoderInputPackageBuilt",
             DeferredCapabilities: plan.DeferredCapabilities,
             EncoderDeferredReason,
@@ -329,6 +509,36 @@ public static class PresentationVideoFramePackageExecutor
         entry.LastWriteTime = DeterministicZipTimestamp;
         using var entryStream = entry.Open();
         entryStream.Write(bytes, 0, bytes.Length);
+    }
+
+    private static bool EntryContains(ZipArchiveEntry? entry, string marker)
+    {
+        if (entry is null)
+            return false;
+
+        using var stream = entry.Open();
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd().Contains(marker, StringComparison.Ordinal);
+    }
+
+    private static int CountManifestFrames(ZipArchiveEntry? entry)
+    {
+        if (entry is null)
+            return -1;
+
+        try
+        {
+            using var stream = entry.Open();
+            using var document = JsonDocument.Parse(stream);
+            return document.RootElement.TryGetProperty("Frames", out var frames) &&
+                frames.ValueKind == JsonValueKind.Array
+                    ? frames.GetArrayLength()
+                    : -1;
+        }
+        catch (JsonException)
+        {
+            return -1;
+        }
     }
 
     private sealed record PresentationVideoFramePackageManifest(
