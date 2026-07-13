@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.Model;
 
@@ -77,6 +78,11 @@ public static class HeaderFooterVisualPlanner
             return EmptyExpectation;
 
         var pageSection = pageToSection[safePageNumber - 1];
+        var displayPlan = PageNumberFormatDialogPlanner.BuildDisplayPlans(
+                pageToSection,
+                document,
+                assignments)
+            .ElementAtOrDefault(safePageNumber - 1);
         var diffOddEven = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(document);
         var slots = HeaderFooterPagePlanner.ResolveSlots(
             pageSection.HeadersFooters,
@@ -85,8 +91,8 @@ public static class HeaderFooterVisualPlanner
             diffOddEven);
 
         var slotPlans = new List<FreeWVisualHeaderFooterSlotPlan>();
-        AddSlot(slotPlans, slots.Header, slots.HeaderSlotName, isFooter: false, safePageNumber, pageSection);
-        AddSlot(slotPlans, slots.Footer, slots.FooterSlotName, isFooter: true, safePageNumber, pageSection);
+        AddSlot(slotPlans, slots.Header, slots.HeaderSlotName, isFooter: false, safePageNumber, safePageCount, pageSection, displayPlan);
+        AddSlot(slotPlans, slots.Footer, slots.FooterSlotName, isFooter: true, safePageNumber, safePageCount, pageSection, displayPlan);
 
         var imageSignatures = slotPlans
             .SelectMany(slot => slot.ImageSignatures)
@@ -150,7 +156,9 @@ public static class HeaderFooterVisualPlanner
         string slotName,
         bool isFooter,
         int pageNumber,
-        HeaderFooterPageSectionPlan pageSection)
+        int pageCount,
+        HeaderFooterPageSectionPlan pageSection,
+        PageNumberDisplayPlan? displayPlan)
     {
         if (slot is null || slot.IsEmpty)
             return;
@@ -160,8 +168,10 @@ public static class HeaderFooterVisualPlanner
             slot,
             slotName,
             pageNumber,
+            pageCount,
             sectionOrdinal,
-            pageSection.SectionRelativePageNumber);
+            pageSection.SectionRelativePageNumber,
+            displayPlan);
         var imageSignatures = lines
             .SelectMany(line => line.ImageSignatures)
             .OrderBy(signature => signature, StringComparer.Ordinal)
@@ -183,8 +193,10 @@ public static class HeaderFooterVisualPlanner
         HeaderFooter slot,
         string slotName,
         int pageNumber,
+        int pageCount,
         int sectionOrdinal,
-        int sectionRelativePageNumber)
+        int sectionRelativePageNumber,
+        PageNumberDisplayPlan? displayPlan = null)
     {
         var lines = new List<FreeWVisualHeaderFooterLinePlan>();
         for (var paragraphIndex = 0; paragraphIndex < slot.Paragraphs.Count; paragraphIndex++)
@@ -195,10 +207,12 @@ public static class HeaderFooterVisualPlanner
                 paragraph,
                 slotName,
                 pageNumber,
+                pageCount,
                 sectionOrdinal,
                 sectionRelativePageNumber,
                 paragraphIndex,
-                alignment);
+                alignment,
+                displayPlan);
             var imageSignatures = runs
                 .Where(run => string.Equals(run.Kind, ImageRunKind, StringComparison.Ordinal))
                 .Select(run => run.ImageSignature)
@@ -223,10 +237,12 @@ public static class HeaderFooterVisualPlanner
         Paragraph paragraph,
         string slotName,
         int pageNumber,
+        int pageCount,
         int sectionOrdinal,
         int sectionRelativePageNumber,
         int paragraphIndex,
-        TextAlignment alignment)
+        TextAlignment alignment,
+        PageNumberDisplayPlan? displayPlan)
     {
         var runs = new List<FreeWVisualHeaderFooterRunPlan>();
         for (var runIndex = 0; runIndex < paragraph.Runs.Count; runIndex++)
@@ -260,12 +276,13 @@ public static class HeaderFooterVisualPlanner
             var fieldKind = FieldKindFor(run);
             if (!string.IsNullOrEmpty(fieldKind))
             {
+                var text = ResolveHeaderFooterFieldText(run, fieldKind, pageCount, displayPlan);
                 runs.Add(new FreeWVisualHeaderFooterRunPlan(
                     FieldRunKind,
                     paragraphIndex,
                     runIndex,
                     SegmentIndex: 0,
-                    Text: run.Text,
+                    Text: text,
                     FieldKind: fieldKind,
                     ImageSignature: null,
                     WidthDip: 0,
@@ -361,6 +378,29 @@ public static class HeaderFooterVisualPlanner
             return run.FieldKind.ToString();
         return run.ComplexField?.Keyword.Length > 0 ? run.ComplexField.Keyword : null;
     }
+
+    private static string ResolveHeaderFooterFieldText(
+        Run run,
+        string fieldKind,
+        int pageCount,
+        PageNumberDisplayPlan? displayPlan)
+    {
+        if (IsPageNumberField(fieldKind))
+            return displayPlan?.Text ?? run.Text;
+
+        if (IsNumPagesField(fieldKind))
+            return Math.Max(1, pageCount).ToString(CultureInfo.InvariantCulture);
+
+        return run.Text;
+    }
+
+    private static bool IsPageNumberField(string fieldKind) =>
+        string.Equals(fieldKind, nameof(RunFieldKind.PageNumber), StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fieldKind, "PAGE", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsNumPagesField(string fieldKind) =>
+        string.Equals(fieldKind, nameof(RunFieldKind.NumPages), StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fieldKind, "NUMPAGES", StringComparison.OrdinalIgnoreCase);
 
     private static string DominantAlignment(IReadOnlyList<FreeWVisualHeaderFooterLinePlan> lines) =>
         lines

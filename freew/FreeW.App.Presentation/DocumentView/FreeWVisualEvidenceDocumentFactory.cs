@@ -88,6 +88,10 @@ public static class FreeWVisualEvidenceDocumentFactory
         doc.Properties.Comments = "Exercises shared field rendering evidence.";
         doc.Page.DifferentFirstPage = true;
         doc.Page.DifferentOddEvenPages = true;
+        doc.Page.PageNumberFormat = PageNumberFormat.Decimal;
+        doc.Page.PageNumberStartAt = 1;
+        doc.Page.PageNumberChapterStyleLevel = 1;
+        doc.Page.PageNumberChapterSeparator = PageNumberChapterSeparator.Hyphen;
 
         doc.FinalSectionHeadersFooters.FirstHeader = FieldHeaderFooter(
             new Run("First header page "),
@@ -121,7 +125,7 @@ public static class FreeWVisualEvidenceDocumentFactory
         doc.Blocks.Add(StyledParagraph("Field/Page Number Variants", "Heading1"));
         doc.Blocks.Add(new Paragraph(
             "This shared fixture exercises PAGE and NUMPAGES fields across first, even, and default " +
-            "header/footer slots, plus document-property fields in the body."));
+            "header/footer slots, chapter-prefixed page numbering, plus document-property fields in the body."));
 
         var propertyParagraph = new Paragraph();
         propertyParagraph.Runs.Add(new Run("Properties: title="));

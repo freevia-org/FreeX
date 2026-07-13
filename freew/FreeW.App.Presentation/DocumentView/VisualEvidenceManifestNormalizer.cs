@@ -148,7 +148,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 31;
+    public const int SummarySchemaVersion = 32;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -2342,6 +2342,54 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("field evidence expects cached complex field results but the field expectation records none");
         if (tags.Contains("header-footer-fields", StringComparer.OrdinalIgnoreCase) && !fields.HasHeaderFooterFields)
             rowFailures.Add("field evidence expects header/footer fields but the field expectation records none");
+        if (tags.Contains("resolved-header-footer-field-text", StringComparer.OrdinalIgnoreCase))
+        {
+            var signatures = OrderedSummaries(fields.HeaderFooterResolvedFieldSignatures ?? []);
+            if (signatures.Count == 0)
+            {
+                rowFailures.Add("field evidence expects resolved header/footer field text but records no resolved field signatures");
+            }
+            if (tags.Contains("page-number-fields", StringComparer.OrdinalIgnoreCase)
+                && !signatures.Any(signature => signature.Contains("field=PAGE", StringComparison.Ordinal)))
+            {
+                rowFailures.Add("field evidence expects resolved PAGE header/footer field text but records none");
+            }
+            if (tags.Contains("numpages-fields", StringComparer.OrdinalIgnoreCase)
+                && !signatures.Any(signature => signature.Contains("field=NUMPAGES", StringComparison.Ordinal)))
+            {
+                rowFailures.Add("field evidence expects resolved NUMPAGES header/footer field text but records none");
+            }
+        }
+        if (tags.Contains("chapter-prefixed-page-number-fields", StringComparer.OrdinalIgnoreCase)
+            && !(fields.HeaderFooterResolvedFieldSignatures ?? []).Any(signature =>
+                signature.Contains("field=PAGE", StringComparison.Ordinal)
+                && TryGetResolvedFieldSignatureText(signature, out var text)
+                && text.Contains('-', StringComparison.Ordinal)))
+        {
+            rowFailures.Add("field evidence expects chapter-prefixed PAGE display text but records none");
+        }
+    }
+
+    private static bool TryGetResolvedFieldSignatureText(
+        string? signature,
+        out string text)
+    {
+        text = string.Empty;
+        if (string.IsNullOrWhiteSpace(signature))
+            return false;
+
+        const string TextPrefix = "text=";
+        var parts = signature.Split('|', StringSplitOptions.None);
+        foreach (var part in parts)
+        {
+            if (!part.StartsWith(TextPrefix, StringComparison.Ordinal))
+                continue;
+
+            text = part[TextPrefix.Length..];
+            return text.Length > 0;
+        }
+
+        return false;
     }
 
     private static void ValidateProofingFeatureTags(
@@ -3584,6 +3632,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             failures.Add(
                 $"{pairName} header/footer field slots differ: WPF '{FormatSummaries(wpfSlots)}', Avalonia '{FormatSummaries(avaloniaSlots)}'");
+        }
+
+        var wpfResolvedFieldSignatures = OrderedSummaries(wpfFields.HeaderFooterResolvedFieldSignatures ?? []);
+        var avaloniaResolvedFieldSignatures = OrderedSummaries(avaloniaFields.HeaderFooterResolvedFieldSignatures ?? []);
+        if (!wpfResolvedFieldSignatures.SequenceEqual(avaloniaResolvedFieldSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} resolved header/footer field signatures differ: WPF '{FormatSummaries(wpfResolvedFieldSignatures)}', Avalonia '{FormatSummaries(avaloniaResolvedFieldSignatures)}'");
         }
     }
 

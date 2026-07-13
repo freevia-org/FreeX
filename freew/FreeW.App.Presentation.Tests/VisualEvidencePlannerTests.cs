@@ -129,6 +129,9 @@ public sealed class VisualEvidencePlannerTests
             "document-property-fields",
             "complex-fields",
             "header-footer-fields"]);
+        fieldScenario.ExpectedFeatureTags.Should().Contain([
+            "resolved-header-footer-field-text",
+            "chapter-prefixed-page-number-fields"]);
         fieldScenario.ExpectedOutputNamePattern.Should().Be("field-page-number-variants_p{page}.png");
         fieldScenario.MinimumExpectedOutputs.Should().Be(3);
         fieldScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
@@ -737,6 +740,10 @@ public sealed class VisualEvidencePlannerTests
 
         document.Page.DifferentFirstPage.Should().BeTrue();
         document.Page.DifferentOddEvenPages.Should().BeTrue();
+        document.Page.PageNumberFormat.Should().Be(PageNumberFormat.Decimal);
+        document.Page.PageNumberStartAt.Should().Be(1);
+        document.Page.PageNumberChapterStyleLevel.Should().Be(1);
+        document.Page.PageNumberChapterSeparator.Should().Be(PageNumberChapterSeparator.Hyphen);
         document.FinalSectionHeadersFooters.FirstHeader.Should().NotBeNull();
         document.FinalSectionHeadersFooters.FirstFooter.Should().NotBeNull();
         document.FinalSectionHeadersFooters.EvenHeader.Should().NotBeNull();
@@ -783,6 +790,23 @@ public sealed class VisualEvidencePlannerTests
             "NUMPAGES=3",
             "PAGE=1",
             "TITLE=Field Page Number Evidence"]);
+
+        var pageExpectations = Enumerable.Range(1, 3)
+            .Select(page => FreeWVisualEvidencePlanner.BuildPageExpectation(
+                "field-page-number-variants",
+                document.Page,
+                page,
+                pageCount: 3,
+                outputName: $"field-page-number-variants_p{page}.png",
+                document: document))
+            .ToList();
+
+        pageExpectations.SelectMany(expectation => expectation.Fields.HeaderFooterResolvedFieldSignatures)
+            .Where(signature => signature.Contains("field=PAGE", StringComparison.Ordinal))
+            .Should().Contain([
+                "slot=first-header|page=1|section=1|sectionPage=1|paragraph=0|run=1|field=PAGE|text=1-1",
+                "slot=even-header|page=2|section=1|sectionPage=2|paragraph=0|run=1|field=PAGE|text=1-2",
+                "slot=header|page=3|section=1|sectionPage=3|paragraph=0|run=1|field=PAGE|text=1-3"]);
     }
 
     [Fact]
@@ -1597,6 +1621,11 @@ public sealed class VisualEvidencePlannerTests
         expectation.Fields.HasComplexFields.Should().BeTrue();
         expectation.Fields.HasHeaderFooterFields.Should().BeTrue();
         expectation.Fields.ComplexFieldKeywords.Should().Contain(["PAGE", "NUMPAGES", "TITLE", "AUTHOR"]);
+        expectation.HeaderFooters.Slots.Single(slot => slot.SlotName == "even-header")
+            .Lines.Single().Text.Should().Be("Even header page 1-2 of 3");
+        expectation.Fields.HeaderFooterResolvedFieldSignatures.Should().Contain([
+            "slot=even-header|page=2|section=1|sectionPage=2|paragraph=0|run=1|field=PAGE|text=1-2",
+            "slot=even-header|page=2|section=1|sectionPage=2|paragraph=0|run=3|field=NUMPAGES|text=3"]);
     }
 
     [Fact]
@@ -3348,13 +3377,22 @@ public sealed class VisualEvidencePlannerTests
                     page,
                     pageCount: 3))
                 .ToList();
+            var alteredResolvedFieldSignatures = avaloniaRows[1]
+                .PageExpectation
+                .Fields
+                .HeaderFooterResolvedFieldSignatures
+                .Select(signature => signature.Contains("field=PAGE", StringComparison.Ordinal)
+                    ? signature.Replace("text=1-2", "text=1-99", StringComparison.Ordinal)
+                    : signature)
+                .ToList();
             avaloniaRows[1] = avaloniaRows[1] with
             {
                 PageExpectation = avaloniaRows[1].PageExpectation with
                 {
                     Fields = avaloniaRows[1].PageExpectation.Fields with
                     {
-                        ComplexFieldKeywords = ["AUTHOR", "NUMPAGES", "PAGE"]
+                        ComplexFieldKeywords = ["AUTHOR", "NUMPAGES", "PAGE"],
+                        HeaderFooterResolvedFieldSignatures = alteredResolvedFieldSignatures
                     }
                 }
             };
@@ -3390,6 +3428,68 @@ public sealed class VisualEvidencePlannerTests
                 f.Contains("field renderer pair 'field-page-number-variants' page 2", StringComparison.Ordinal)
                 && f.Contains("complex field keywords differ", StringComparison.Ordinal)
                 && f.Contains("TITLE", StringComparison.Ordinal));
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("field renderer pair 'field-page-number-variants' page 2", StringComparison.Ordinal)
+                && f.Contains("resolved header/footer field signatures differ", StringComparison.Ordinal)
+                && f.Contains("1-99", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresChapterPrefixInResolvedPageText()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "field-page-number-variants";
+            var wpfRow = RemoveChapterPrefixFromResolvedPageText(BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 2,
+                pageCount: 3));
+            var avaloniaRow = RemoveChapterPrefixFromResolvedPageText(BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 2,
+                pageCount: 3));
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaRow],
+                new DateTimeOffset(2026, 7, 1, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("field evidence expects chapter-prefixed PAGE display text but records none", StringComparison.Ordinal));
         }
         finally
         {
@@ -6782,6 +6882,22 @@ public sealed class VisualEvidencePlannerTests
             PageExpectation = row.PageExpectation with
             {
                 HeaderFooters = HeaderFooterVisualPlanner.EmptyExpectation
+            }
+        };
+
+    private static FreeWVisualEvidenceRow RemoveChapterPrefixFromResolvedPageText(FreeWVisualEvidenceRow row) =>
+        row with
+        {
+            PageExpectation = row.PageExpectation with
+            {
+                Fields = row.PageExpectation.Fields with
+                {
+                    HeaderFooterResolvedFieldSignatures = row.PageExpectation.Fields.HeaderFooterResolvedFieldSignatures
+                        .Select(signature => signature.Contains("field=PAGE", StringComparison.Ordinal)
+                            ? signature.Replace("text=1-2", "text=2", StringComparison.Ordinal)
+                            : signature)
+                        .ToList()
+                }
             }
         };
 

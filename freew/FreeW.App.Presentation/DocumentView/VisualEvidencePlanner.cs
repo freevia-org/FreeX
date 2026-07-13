@@ -235,7 +235,8 @@ public sealed record FreeWVisualFieldExpectation(
     IReadOnlyList<string> FieldKinds,
     IReadOnlyList<string> ComplexFieldKeywords,
     IReadOnlyList<string> ComplexFieldResultSignatures,
-    IReadOnlyList<string> HeaderFooterSlotNames);
+    IReadOnlyList<string> HeaderFooterSlotNames,
+    IReadOnlyList<string> HeaderFooterResolvedFieldSignatures);
 
 public sealed record FreeWVisualTableOfAuthoritiesPageReference(
     string Category,
@@ -445,7 +446,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 21;
+    public const int SchemaVersion = 22;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -548,6 +549,8 @@ public static class FreeWVisualEvidencePlanner
                 "document-property-fields",
                 "complex-fields",
                 "header-footer-fields",
+                "resolved-header-footer-field-text",
+                "chapter-prefixed-page-number-fields",
                 "page-composition",
                 "print-layout",
                 "header-footer",
@@ -1201,9 +1204,9 @@ public static class FreeWVisualEvidencePlanner
         var tables = BuildTableExpectation(document);
         var drawingObjects = BuildDrawingObjectExpectation(document, surface, features.Columns.Count);
         var chartSmartArt = BuildChartSmartArtExpectation(document);
-        var fields = BuildFieldExpectation(document);
         var equations = BuildEquationExpectation(document);
         var headerFooters = BuildHeaderFooterExpectation(document, pageNumber, pageCount);
+        var fields = BuildFieldExpectation(document, headerFooters);
         var tableOfAuthorities = BuildTableOfAuthoritiesExpectation(document);
         var proofingDiagnostics = BuildProofingDiagnosticExpectation(document);
         var reviewProtection = BuildReviewProtectionExpectation(document);
@@ -2047,7 +2050,9 @@ public static class FreeWVisualEvidencePlanner
             SmartArts: smartArts);
     }
 
-    public static FreeWVisualFieldExpectation BuildFieldExpectation(TextDocument? document)
+    public static FreeWVisualFieldExpectation BuildFieldExpectation(
+        TextDocument? document,
+        FreeWVisualHeaderFooterExpectation? headerFooters = null)
     {
         if (document is null)
             return EmptyFieldExpectation;
@@ -2110,8 +2115,29 @@ public static class FreeWVisualEvidencePlanner
                 .Select(item => item.HeaderFooterSlotName!)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(slot => slot, StringComparer.OrdinalIgnoreCase)
-                .ToList());
+                .ToList(),
+            HeaderFooterResolvedFieldSignatures: BuildHeaderFooterResolvedFieldSignatures(headerFooters));
     }
+
+    public static IReadOnlyList<string> BuildHeaderFooterResolvedFieldSignatures(
+        FreeWVisualHeaderFooterExpectation? headerFooters) =>
+        (headerFooters?.Slots ?? [])
+            .SelectMany(slot => slot.Lines.SelectMany(line => line.Runs
+                .Where(run => string.Equals(run.Kind, HeaderFooterVisualPlanner.FieldRunKind, StringComparison.Ordinal)
+                    && IsPageNumberFieldKind(run.FieldKind))
+                .Select(run => string.Join(
+                    "|",
+                    $"slot={slot.SlotName}",
+                    $"page={slot.PageNumber.ToString(CultureInfo.InvariantCulture)}",
+                    $"section={slot.SectionOrdinal.ToString(CultureInfo.InvariantCulture)}",
+                    $"sectionPage={slot.SectionRelativePageNumber.ToString(CultureInfo.InvariantCulture)}",
+                    $"paragraph={run.ParagraphIndex.ToString(CultureInfo.InvariantCulture)}",
+                    $"run={run.RunIndex.ToString(CultureInfo.InvariantCulture)}",
+                    $"field={NormalizePageNumberFieldKind(run.FieldKind)}",
+                    $"text={NormalizeEvidenceSignatureText(run.Text)}"))))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
 
     public static FreeWVisualTableOfAuthoritiesExpectation BuildTableOfAuthoritiesExpectation(TextDocument? document)
     {
@@ -2705,7 +2731,8 @@ public static class FreeWVisualEvidencePlanner
         FieldKinds: [],
         ComplexFieldKeywords: [],
         ComplexFieldResultSignatures: [],
-        HeaderFooterSlotNames: []);
+        HeaderFooterSlotNames: [],
+        HeaderFooterResolvedFieldSignatures: []);
 
     private static FreeWVisualTableOfAuthoritiesExpectation EmptyTableOfAuthoritiesExpectation { get; } = new(
         EntryCount: 0,
@@ -3020,6 +3047,29 @@ public static class FreeWVisualEvidencePlanner
         return string.IsNullOrWhiteSpace(normalizedKeyword) || string.IsNullOrWhiteSpace(normalizedResult)
             ? string.Empty
             : normalizedKeyword + "=" + normalizedResult;
+    }
+
+    private static bool IsPageNumberFieldKind(string? fieldKind) =>
+        string.Equals(fieldKind, nameof(RunFieldKind.PageNumber), StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fieldKind, nameof(RunFieldKind.NumPages), StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fieldKind, "PAGE", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(fieldKind, "NUMPAGES", StringComparison.OrdinalIgnoreCase);
+
+    private static string NormalizePageNumberFieldKind(string? fieldKind)
+    {
+        if (string.Equals(fieldKind, nameof(RunFieldKind.PageNumber), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(fieldKind, "PAGE", StringComparison.OrdinalIgnoreCase))
+        {
+            return "PAGE";
+        }
+
+        if (string.Equals(fieldKind, nameof(RunFieldKind.NumPages), StringComparison.OrdinalIgnoreCase)
+            || string.Equals(fieldKind, "NUMPAGES", StringComparison.OrdinalIgnoreCase))
+        {
+            return "NUMPAGES";
+        }
+
+        return NormalizeEvidenceSignatureText(fieldKind).ToUpperInvariant();
     }
 
     private static string ClassifyTableOfAuthoritiesPageReference(
