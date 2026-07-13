@@ -24,6 +24,9 @@
 
 .EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/core-layout-proof -ScenarioSet CoreLayoutProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/drawing-object-proof -ScenarioSet DrawingObjectVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 #>
 [CmdletBinding()]
 param(
@@ -127,6 +130,13 @@ $namedScenarioSets = @{
         'table-layout-complex',
         'table-pagination-repeat-header',
         'table-page-composition-stress'
+    )
+    DrawingObjectVisualProof = @(
+        'drawing-objects-complex',
+        'object-format-position-size-style',
+        'chart-smartart-complex',
+        'wordart-watermark-stress',
+        'wordart-picture-watermark-layout'
     )
 }
 
@@ -610,6 +620,213 @@ function Assert-TableLayoutProofReadiness {
     Write-Host "Table layout Word-baseline policy rows: verified rows=$verifiedBaselineRows"
 }
 
+function Assert-DrawingObjectVisualProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $requiredScenarioIds = @(
+        'drawing-objects-complex',
+        'object-format-position-size-style',
+        'chart-smartart-complex',
+        'wordart-watermark-stress',
+        'wordart-picture-watermark-layout'
+    )
+    $selectedScenarioIds = @($requiredScenarioIds | Where-Object { $ScenarioIds -contains $_ })
+    if ($selectedScenarioIds.Count -eq 0) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Drawing object visual proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 28) {
+        throw "Drawing object visual proof readiness requires FreeW visual evidence summary schema v28 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $readinessRows = @($summary.drawingObjectProofReadiness)
+    $scenarios = @($summary.scenarios)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $summaryFailures = @($summary.trust.failures)
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedSemanticRows = 0
+    $verifiedBaselineRows = 0
+
+    foreach ($scenarioId in $selectedScenarioIds) {
+        $proofRows = @($readinessRows | Where-Object { $_.scenarioId -eq $scenarioId })
+        if ($proofRows.Count -eq 0) {
+            $failures.Add("${scenarioId}: missing drawing/object proof readiness row")
+        }
+        foreach ($proofRow in $proofRows) {
+            if ($proofRow.trust.passed -ne $true -or $proofRow.status -ne 'paired-renderer-proof-ready') {
+                $notes = @($proofRow.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$proofRow.baselineReadiness
+                }
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): readiness status '$($proofRow.status)' failed ($notes)")
+            }
+
+            if ([string]::IsNullOrWhiteSpace([string]$proofRow.semanticEvidence) -or [string]$proofRow.semanticEvidence -eq '-') {
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing drawing/object semantic readiness summary")
+            }
+        }
+
+        $semanticFailureFragments = @(
+            "drawing-object renderer pair '$scenarioId'",
+            "chart/SmartArt renderer pair '$scenarioId'",
+            "WordArt watermark renderer pair '$scenarioId'"
+        )
+        $semanticFailures = @($summaryFailures | Where-Object {
+            $failure = [string]$_
+            @($semanticFailureFragments | Where-Object { $failure.IndexOf($_, [StringComparison]::Ordinal) -ge 0 }).Count -gt 0
+        })
+        foreach ($semanticFailure in $semanticFailures) {
+            $failures.Add("${scenarioId}: WPF/Avalonia semantic parity drift ($semanticFailure)")
+        }
+
+        foreach ($hostId in $requiredHosts) {
+            $match = @($scenarios | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId
+            })
+
+            if ($match.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing normalized scenario row")
+                continue
+            }
+
+            $row = $match[0]
+            if ($row.trust.passed -ne $true) {
+                $notes = @($row.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = 'no notes'
+                }
+                $failures.Add("${hostId}/${scenarioId}: scenario trust failed ($notes)")
+                continue
+            }
+
+            if ([int]$row.trustedOutputs -lt 1) {
+                $failures.Add("${hostId}/${scenarioId}: expected at least 1 trusted output, found $($row.trustedOutputs)")
+                continue
+            }
+
+            $trustedScenarioRows++
+
+            $evidenceRows = @($summary.evidence | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.trust.passed -eq $true
+            })
+            if ($evidenceRows.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing trusted normalized evidence row for drawing-object visual semantics")
+            }
+            foreach ($evidenceRow in $evidenceRows) {
+                switch ($scenarioId) {
+                    'drawing-objects-complex' {
+                        if ([int]$evidenceRow.drawingObjects.floatingObjectCount -lt 1 -or
+                            $evidenceRow.drawingObjects.hasCharts -ne $true -or
+                            $evidenceRow.drawingObjects.hasSmartArt -ne $true -or
+                            $evidenceRow.drawingObjects.hasWordArt -ne $true -or
+                            @($evidenceRow.drawingObjects.groupChildren.childVisualSignatures).Count -eq 0 -or
+                            [int]$evidenceRow.drawingObjects.effects.renderedGroupChildEffectObjectCount -lt 1) {
+                            $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing grouped drawing/chart/SmartArt/WordArt semantic evidence")
+                            continue
+                        }
+                    }
+                    'object-format-position-size-style' {
+                        if ([int]$evidenceRow.drawingObjects.altTextObjectCount -lt 1 -or
+                            [int]$evidenceRow.drawingObjects.effects.effectObjectCount -lt 1 -or
+                            $evidenceRow.drawingObjects.hasZOrder -ne $true) {
+                            $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing object-format alt text, effects, or z-order semantic evidence")
+                            continue
+                        }
+                    }
+                    'chart-smartart-complex' {
+                        if ([int]$evidenceRow.chartSmartArt.chartCount -lt 1 -or
+                            [int]$evidenceRow.chartSmartArt.smartArtCount -lt 1 -or
+                            @($evidenceRow.chartSmartArt.chartVisualSignatures).Count -eq 0 -or
+                            @($evidenceRow.chartSmartArt.smartArtVisualSignatures).Count -eq 0) {
+                            $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing chart/SmartArt semantic visual signatures")
+                            continue
+                        }
+                    }
+                    'wordart-watermark-stress' {
+                        if ($evidenceRow.drawingObjects.hasWordArt -ne $true -or
+                            $evidenceRow.pageFeatures.watermark.present -ne $true -or
+                            $evidenceRow.pageFeatures.pageBorder.present -ne $true -or
+                            [int]$evidenceRow.drawingObjects.effects.effectObjectCount -lt 1) {
+                            $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing WordArt, watermark, page-border, or effect semantic evidence")
+                            continue
+                        }
+                    }
+                    'wordart-picture-watermark-layout' {
+                        if ($evidenceRow.drawingObjects.hasWordArt -ne $true -or
+                            $evidenceRow.pageFeatures.watermark.present -ne $true -or
+                            $evidenceRow.pageFeatures.watermark.isPicture -ne $true -or
+                            $evidenceRow.pageFeatures.pageBorder.present -ne $true -or
+                            [int]$evidenceRow.pageFeatures.columns.count -lt 2) {
+                            $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing WordArt picture-watermark layout semantic evidence")
+                            continue
+                        }
+                    }
+                }
+
+                $verifiedSemanticRows++
+            }
+
+            $comparisonRows = @($baselineComparisons | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.baselineScenarioId -eq $scenarioId
+            })
+            if ($baselineComparisons.Count -gt 0 -and $comparisonRows.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+                continue
+            }
+
+            foreach ($comparison in $comparisonRows) {
+                if ($comparison.trust.passed -ne $true) {
+                    $notes = @($comparison.trust.failures) -join '; '
+                    if ([string]::IsNullOrWhiteSpace($notes)) {
+                        $notes = [string]$comparison.skipReason
+                    }
+                    $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                    continue
+                }
+
+                $baselineId = [string]$comparison.baselineId
+                if (-not $baselineId.StartsWith($scenarioId + '/', [StringComparison]::OrdinalIgnoreCase)) {
+                    $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baselineId '$baselineId' expected scenario '$scenarioId'")
+                    continue
+                }
+
+                $verifiedBaselineRows++
+            }
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Drawing object visual proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Drawing object visual proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "Drawing object visual semantic rows: verified rows=$verifiedSemanticRows"
+    if ($baselineComparisons.Count -gt 0) {
+        Write-Host "Drawing object Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    }
+    else {
+        Write-Host "Drawing object Word-baseline policy rows: no Word baseline mode requested"
+    }
+}
+
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
 New-Item -ItemType Directory -Force $wpfDir | Out-Null
 New-Item -ItemType Directory -Force $avaloniaDir | Out-Null
@@ -700,6 +917,7 @@ else {
 Assert-CoreLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
+Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds
 
 Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green

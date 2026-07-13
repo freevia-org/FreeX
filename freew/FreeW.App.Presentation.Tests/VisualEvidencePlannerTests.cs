@@ -1147,6 +1147,13 @@ public sealed class VisualEvidencePlannerTests
                 e.ScenarioId == scenarioId &&
                 e.MinimumExpectedOutputs == 1);
         }
+
+        FreeWVisualEvidenceManifestNormalizer.DrawingObjectVisualProofScenarioIds.Should().Contain([
+            "drawing-objects-complex",
+            "object-format-position-size-style",
+            "chart-smartart-complex",
+            "wordart-watermark-stress",
+            "wordart-picture-watermark-layout"]);
     }
 
     [Fact]
@@ -2133,10 +2140,21 @@ public sealed class VisualEvidencePlannerTests
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
             markdown.Should().Contain("Scenario Coverage");
             markdown.Should().Contain("avalonia-page-layout-shot");
+            markdown.Should().Contain("## Drawing/Object Visual Proof Readiness");
+            markdown.Should().Contain("| drawing-objects-complex | 1 | paired-renderer-proof-ready |");
+            markdown.Should().Contain("paired renderer evidence is present; run Word PNG baseline comparison for drawing-objects-complex");
             markdown.Should().Contain(
                 "5 grouped child object(s): Group0Child0:Image/Group0Child1:Shape/Group0Child2:Chart/Group0Child3:WordArt/Group0Child4:SmartArt");
             markdown.Should().Contain("2 rendered grouped child effect object(s): GroupChild1:Shape:glow/GroupChild3:WordArt:glow");
             markdown.Should().NotContain("planned grouped child effect object(s)");
+
+            summary.DrawingObjectProofReadiness.Should().Contain(row =>
+                row.ScenarioId == "drawing-objects-complex" &&
+                row.Status == "paired-renderer-proof-ready" &&
+                row.WordBaselineStatus == "not-run" &&
+                row.SemanticEvidence.Contains("WPF 6 object(s)", StringComparison.Ordinal) &&
+                row.SemanticEvidence.Contains("Avalonia 6 object(s)", StringComparison.Ordinal) &&
+                row.Trust.Passed);
         }
         finally
         {
@@ -5327,6 +5345,215 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("category=Cases\\|entry=Example v. FreeW, 123 F.4th 456 (2026)\\|kind=explicit-page-numbers\\|pages=1,2\\|text=1, 2");
             markdown.Should().Contain("yes");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void WithBaselineComparisons_SurfacesDrawingObjectVisualProofReadiness()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioIds = new[]
+            {
+                "drawing-objects-complex",
+                "object-format-position-size-style",
+                "chart-smartart-complex",
+                "wordart-watermark-stress",
+                "wordart-picture-watermark-layout"
+            };
+            var wpfRows = scenarioIds
+                .Select(scenarioId => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1))
+                .ToList();
+            var avaloniaRows = scenarioIds
+                .Select(scenarioId => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1))
+                .ToList();
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            var expected = scenarioIds
+                .SelectMany(scenarioId => new[]
+                {
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                })
+                .ToList();
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                expected);
+
+            summary.Trust.Passed.Should().BeTrue();
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.DrawingObjectProofReadiness.Should().HaveCount(5);
+            withBaseline.DrawingObjectProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "word-baseline-unavailable=2"
+                && row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal)
+                && row.Trust.Passed);
+            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
+                .SemanticEvidence.Should().Contain("chart signatures=2");
+            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "wordart-picture-watermark-layout")
+                .SemanticEvidence.Should().Contain("picture watermark");
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            var readiness = doc.RootElement.GetProperty("drawingObjectProofReadiness");
+            readiness.GetArrayLength().Should().Be(5);
+            readiness.EnumerateArray()
+                .Should().OnlyContain(row =>
+                    row.GetProperty("trust").GetProperty("passed").GetBoolean()
+                    && row.GetProperty("wordBaselineStatus").GetString() == "word-baseline-unavailable=2");
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Drawing/Object Visual Proof Readiness");
+            markdown.Should().Contain("word-baseline-unavailable=2");
+            markdown.Should().Contain("paired WPF/Avalonia evidence is retained without authoritative Word parity");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DrawingObjectNoWordSummary_ReportsPairedProofReadinessWithoutAuthoritativeWordParity()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarios = FreeWVisualEvidenceManifestNormalizer.DrawingObjectVisualProofScenarioIds;
+            var wpfRows = scenarios
+                .Select(scenarioId => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1))
+                .ToList();
+            var avaloniaRows = scenarios
+                .Select(scenarioId => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1))
+                .ToList();
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var expected = scenarios
+                .SelectMany(scenarioId => new[]
+                {
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                })
+                .ToList();
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                expected);
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.DrawingObjectProofReadiness.Should().HaveCount(scenarios.Count);
+            withBaseline.DrawingObjectProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready" &&
+                row.WordBaselineStatus == "word-baseline-unavailable=2" &&
+                row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal) &&
+                row.SemanticEvidence.Contains("WPF", StringComparison.Ordinal) &&
+                row.SemanticEvidence.Contains("Avalonia", StringComparison.Ordinal) &&
+                row.Trust.Passed);
+
+            var drawingRow = withBaseline.DrawingObjectProofReadiness.Single(row =>
+                row.ScenarioId == "drawing-objects-complex");
+            drawingRow.SemanticEvidence.Should().Contain("6 object(s)");
+            drawingRow.SemanticEvidence.Should().Contain("5 grouped child object(s)");
+            drawingRow.SemanticEvidence.Should().Contain("2 rendered grouped child effect object(s)");
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            var readiness = doc.RootElement
+                .GetProperty("drawingObjectProofReadiness")
+                .EnumerateArray()
+                .ToArray();
+            readiness.Should().Contain(row =>
+                row.GetProperty("scenarioId").GetString() == "drawing-objects-complex" &&
+                row.GetProperty("wordBaselineStatus").GetString() == "word-baseline-unavailable=2" &&
+                row.GetProperty("trust").GetProperty("passed").GetBoolean());
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Drawing/Object Visual Proof Readiness");
+            markdown.Should().Contain("| drawing-objects-complex | 1 | paired-renderer-proof-ready |");
+            markdown.Should().Contain("word-baseline-unavailable=2");
+            markdown.Should().Contain("Word COM or baseline generation unavailable; paired WPF/Avalonia evidence is retained without authoritative Word parity");
         }
         finally
         {
