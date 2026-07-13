@@ -69,12 +69,16 @@ public abstract class MathBox
         /// <summary>True = italic style (single-letter math variables).</summary>
         public bool IsItalic { get; }
 
-        public Glyph(string text, string fontFamily, double fontSizePt, bool isItalic)
+        /// <summary>True = bold style.</summary>
+        public bool IsBold { get; }
+
+        public Glyph(string text, string fontFamily, double fontSizePt, bool isItalic, bool isBold = false)
         {
             Text = text;
             FontFamily = fontFamily;
             FontSizePt = fontSizePt;
             IsItalic = isItalic;
+            IsBold = isBold;
         }
     }
 

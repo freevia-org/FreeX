@@ -13,7 +13,7 @@ public sealed class MathLayoutEngineTests
     private const double FontSizePt = 18.0;
     private const string M = "http://schemas.openxmlformats.org/officeDocument/2006/math";
 
-    private static MathNode Run(string text, bool isItalic = true) => new MathNode.Run(text, isItalic);
+    private static MathNode Run(string text, bool isItalic = true, bool isBold = false) => new MathNode.Run(text, isItalic, isBold);
 
     private static MathNode ParseOmml(string oMathInner)
     {
@@ -179,6 +179,38 @@ public sealed class MathLayoutEngineTests
         ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text)
             .Should().Equal(new[] { "x", "3" },
                 "visible degree and radicand glyphs must both reach the renderer-neutral plan");
+    }
+
+    [Fact]
+    public void Run_WithBoldStyle_LayoutAndRenderPlanCarryBoldMetadata()
+    {
+        var layout = MathLayoutEngine.Layout(Run("x", isItalic: false, isBold: true), "Cambria Math", FontSizePt);
+
+        var glyph = Assert.IsType<MathBox.Glyph>(layout.Children[0]);
+        glyph.IsItalic.Should().BeFalse();
+        glyph.IsBold.Should().BeTrue();
+
+        var op = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+        op.Text.Should().Be("x");
+        op.IsItalic.Should().BeFalse();
+        op.IsBold.Should().BeTrue();
+    }
+
+    [Fact]
+    public void OmmlStyBoldItalic_RenderPlanCarriesItalicAndBold()
+    {
+        var node = ParseOmml("<m:r><m:rPr><m:sty m:val=\"bi\"/></m:rPr><m:t>x</m:t></m:r>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var op = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        op.Text.Should().Be("x");
+        op.IsItalic.Should().BeTrue();
+        op.IsBold.Should().BeTrue();
     }
 
     [Fact]

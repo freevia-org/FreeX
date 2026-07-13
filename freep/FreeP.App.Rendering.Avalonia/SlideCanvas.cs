@@ -1754,7 +1754,7 @@ public sealed class SlideCanvas : Control
                 var typeface = new Typeface(
                     g.FontFamily,
                     g.IsItalic ? FontStyle.Italic : FontStyle.Normal,
-                    FontWeight.Normal, FontStretch.Normal);
+                    g.IsBold ? FontWeight.Bold : FontWeight.Normal, FontStretch.Normal);
                 double emPx = g.FontSizePt * (96.0 / 72.0);
                 var brush = new SolidColorBrush(Color.FromRgb(g.Color.R, g.Color.G, g.Color.B));
                 var ft = new FormattedText(g.Text,

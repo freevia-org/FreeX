@@ -27,14 +27,18 @@ public abstract class MathNode
         /// <summary>True when m:rPr/m:nor is absent (italic = normal math style).</summary>
         public bool IsItalic { get; }
 
+        /// <summary>True when m:rPr/m:sty requests bold math text.</summary>
+        public bool IsBold { get; }
+
         /// <summary>
         /// When m:rPr/m:lit is present or m:nor is absent the run uses the math italic style.
         /// When m:nor is set (literal/roman) the run is upright.
         /// </summary>
-        public Run(string text, bool isItalic = true)
+        public Run(string text, bool isItalic = true, bool isBold = false)
         {
             Text = text;
             IsItalic = isItalic;
+            IsBold = isBold;
         }
     }
 

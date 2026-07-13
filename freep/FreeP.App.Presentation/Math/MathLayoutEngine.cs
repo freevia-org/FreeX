@@ -79,7 +79,7 @@ public static class MathLayoutEngine
 
     private static MathBox LayoutRun(MathNode.Run run, string fontFamily, double fontSizePt)
     {
-        return MakeGlyph(run.Text, fontFamily, fontSizePt, run.IsItalic);
+        return MakeGlyph(run.Text, fontFamily, fontSizePt, run.IsItalic, run.IsBold);
     }
 
     // ── Fallback (unknown) ────────────────────────────────────────────────
@@ -1470,12 +1470,12 @@ public static class MathLayoutEngine
     ///   ascent x em * 0.75
     ///   height x em * 1.0
     /// </summary>
-    private static MathBox.Glyph MakeGlyph(string text, string fontFamily, double fontSizePt, bool isItalic)
+    private static MathBox.Glyph MakeGlyph(string text, string fontFamily, double fontSizePt, bool isItalic, bool isBold = false)
     {
         double em = Em(fontSizePt);
         if (string.IsNullOrEmpty(text))
         {
-            var empty = new MathBox.Glyph(string.Empty, fontFamily, fontSizePt, isItalic);
+            var empty = new MathBox.Glyph(string.Empty, fontFamily, fontSizePt, isItalic, isBold);
             empty.Metrics.Width = 0;
             empty.Metrics.Height = 0;
             empty.Metrics.Ascent = 0;
@@ -1493,7 +1493,7 @@ public static class MathLayoutEngine
         double descent = em * 0.25;
         double height  = ascent + descent;
 
-        var g = new MathBox.Glyph(text, fontFamily, fontSizePt, isItalic);
+        var g = new MathBox.Glyph(text, fontFamily, fontSizePt, isItalic, isBold);
         g.Metrics.Width  = charW;
         g.Metrics.Height = height;
         g.Metrics.Ascent = ascent;

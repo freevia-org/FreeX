@@ -27,6 +27,7 @@ public abstract class MathDrawOp
         public string FontFamily { get; }
         public double FontSizePt { get; }
         public bool IsItalic { get; }
+        public bool IsBold { get; }
         public SrgbColor Color { get; }
         /// <summary>X position in DIP (slide-space).</summary>
         public double X { get; }
@@ -35,9 +36,15 @@ public abstract class MathDrawOp
 
         public DrawGlyph(string text, string fontFamily, double fontSizePt, bool isItalic,
                          SrgbColor color, double x, double y)
+            : this(text, fontFamily, fontSizePt, isItalic, false, color, x, y)
+        {
+        }
+
+        public DrawGlyph(string text, string fontFamily, double fontSizePt, bool isItalic, bool isBold,
+                         SrgbColor color, double x, double y)
         {
             Text = text; FontFamily = fontFamily; FontSizePt = fontSizePt;
-            IsItalic = isItalic; Color = color; X = x; Y = y;
+            IsItalic = isItalic; IsBold = isBold; Color = color; X = x; Y = y;
         }
     }
 
@@ -155,7 +162,7 @@ public static class MathBoxRenderPlanner
             case MathBox.Glyph g:
                 if (!string.IsNullOrEmpty(g.Text))
                     ops.Add(new MathDrawOp.DrawGlyph(
-                        g.Text, g.FontFamily, g.FontSizePt, g.IsItalic, color, absX, absY));
+                        g.Text, g.FontFamily, g.FontSizePt, g.IsItalic, g.IsBold, color, absX, absY));
                 break;
 
             case MathBox.HRule hr:

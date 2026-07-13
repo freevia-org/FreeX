@@ -292,6 +292,47 @@ public sealed class OmmlParserTests
 
         var run = Assert.IsType<MathNode.Run>(node);
         Assert.True(run.IsItalic);
+        Assert.False(run.IsBold);
+    }
+
+    [Fact]
+    public void Run_WithStyPlain_IsUprightAndNotBold()
+    {
+        var node = Parse("<m:r><m:rPr><m:sty m:val=\"p\"/></m:rPr><m:t>x</m:t></m:r>");
+
+        var run = Assert.IsType<MathNode.Run>(node);
+        Assert.False(run.IsItalic);
+        Assert.False(run.IsBold);
+    }
+
+    [Fact]
+    public void Run_WithStyItalic_IsItalicAndNotBold()
+    {
+        var node = Parse("<m:r><m:rPr><m:sty m:val=\"i\"/></m:rPr><m:t>x</m:t></m:r>");
+
+        var run = Assert.IsType<MathNode.Run>(node);
+        Assert.True(run.IsItalic);
+        Assert.False(run.IsBold);
+    }
+
+    [Fact]
+    public void Run_WithStyBold_IsUprightAndBold()
+    {
+        var node = Parse("<m:r><m:rPr><m:sty m:val=\"b\"/></m:rPr><m:t>x</m:t></m:r>");
+
+        var run = Assert.IsType<MathNode.Run>(node);
+        Assert.False(run.IsItalic);
+        Assert.True(run.IsBold);
+    }
+
+    [Fact]
+    public void Run_WithStyBoldItalic_IsItalicAndBold()
+    {
+        var node = Parse("<m:r><m:rPr><m:nor/><m:sty m:val=\"bi\"/></m:rPr><m:t>x</m:t></m:r>");
+
+        var run = Assert.IsType<MathNode.Run>(node);
+        Assert.True(run.IsItalic);
+        Assert.True(run.IsBold);
     }
 
     // ── HA4: m:d sepChr (separator between multiple m:e children) ─────────

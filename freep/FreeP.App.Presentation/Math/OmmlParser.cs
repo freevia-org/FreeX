@@ -176,11 +176,15 @@ public static class OmmlParser
         // m:sty attribute: "b", "bi", "i" (italic), "p" (plain/upright)
         // "p" or "b" → not italic
         var sty = rPr?.Element(M + "sty")?.Attribute(M + "val")?.Value
+               ?? rPr?.Element(M + "sty")?.Attribute("val")?.Value
+               ?? rPr?.Element(M + "sty")?.Value
                ?? rPr?.Attribute(M + "sty")?.Value;
+        var isBold = false;
         if (sty is "p" or "b") isItalic = false;
         else if (sty is "i" or "bi") isItalic = true;
+        if (sty is "b" or "bi") isBold = true;
 
-        return new MathNode.Run(text, isItalic);
+        return new MathNode.Run(text, isItalic, isBold);
     }
 
     // ── m:f fraction ──────────────────────────────────────────────────────

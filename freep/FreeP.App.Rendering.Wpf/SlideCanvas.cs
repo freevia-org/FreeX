@@ -1739,7 +1739,7 @@ public sealed class SlideCanvas : FrameworkElement
                 var typeface = new Typeface(
                     new FontFamily(g.FontFamily),
                     g.IsItalic ? FontStyles.Italic : FontStyles.Normal,
-                    FontWeights.Normal,
+                    g.IsBold ? FontWeights.Bold : FontWeights.Normal,
                     FontStretches.Normal);
                 double emPx = g.FontSizePt * (96.0 / 72.0);
                 var brush = FreezeBrush(new SolidColorBrush(
