@@ -381,6 +381,19 @@ public sealed record PresentationTableStructureReviewPlan(
     bool ShouldSelectTable,
     string? ValidationMessage);
 
+public sealed record PresentationTableStructureReviewDetailRowPlan(
+    string Category,
+    string Summary,
+    string Detail);
+
+public sealed record PresentationTableStructureReviewDisplayPlan(
+    bool CanReview,
+    string Heading,
+    string Summary,
+    string Guidance,
+    IReadOnlyList<PresentationTableStructureReviewDetailRowPlan> Details,
+    string? ValidationMessage);
+
 public sealed record PresentationAccessibilityIssueDescriptor(
     PresentationAccessibilityIssueSeverity Severity,
     int SlideIndex,
@@ -1786,6 +1799,45 @@ public static class PresentationReviewWorkflowPlanner
             TableStructureReviewGuidance,
             true,
             true,
+            null);
+    }
+
+    public static PresentationTableStructureReviewDisplayPlan BuildTableStructureReviewDisplayPlan(
+        PresentationTableStructureReviewPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        if (!plan.CanReview)
+        {
+            return new PresentationTableStructureReviewDisplayPlan(
+                false,
+                "Review Table Structure",
+                plan.ValidationMessage ?? "Select a table to review its structure.",
+                plan.Guidance,
+                [],
+                plan.ValidationMessage);
+        }
+
+        var details = new List<PresentationTableStructureReviewDetailRowPlan>();
+        details.AddRange(plan.BlankHeaderCells.Select(cell => new PresentationTableStructureReviewDetailRowPlan(
+            "Blank header cell",
+            $"{cell.CellReference} is blank.",
+            "Add descriptive header text or remove the empty header cell.")));
+        details.AddRange(plan.BlankBodyCells.Select(cell => new PresentationTableStructureReviewDetailRowPlan(
+            "Blank body cell",
+            $"{cell.CellReference} is blank.",
+            "Confirm the blank data cell is intentional or add visible text.")));
+        details.AddRange(plan.MergedOrSplitCells.Select(cell => new PresentationTableStructureReviewDetailRowPlan(
+            "Merged or split cell",
+            cell.Summary,
+            "Verify the table still reads correctly in row and column order.")));
+
+        return new PresentationTableStructureReviewDisplayPlan(
+            true,
+            "Review Table Structure",
+            BuildTableStructureReviewSummary(plan),
+            plan.Guidance,
+            details,
             null);
     }
 
@@ -4255,6 +4307,16 @@ public static class PresentationReviewWorkflowPlanner
 
     private static string BuildTableCellReference(int rowIndex, int columnIndex)
         => $"R{rowIndex + 1}C{columnIndex + 1}";
+
+    private static string BuildTableStructureReviewSummary(PresentationTableStructureReviewPlan plan)
+    {
+        var tableName = string.IsNullOrWhiteSpace(plan.TableName) ? "Selected table" : plan.TableName;
+        var dimensions = $"{PresentationCommentMetadataPolicy.BuildCountSummary(plan.RowCount, "row")}, {PresentationCommentMetadataPolicy.BuildCountSummary(plan.ColumnCount, "column")}";
+        var blankHeader = PresentationCommentMetadataPolicy.BuildCountSummary(plan.BlankHeaderCells.Count, "blank header cell");
+        var blankBody = PresentationCommentMetadataPolicy.BuildCountSummary(plan.BlankBodyCells.Count, "blank body cell");
+        var merged = PresentationCommentMetadataPolicy.BuildCountSummary(plan.MergedOrSplitCells.Count, "merged or split cell");
+        return $"{tableName}: {dimensions}. {blankHeader}, {blankBody}, {merged}.";
+    }
 
     private static string BuildTableCellSpanSummary(string cellReference, TableCell cell)
     {

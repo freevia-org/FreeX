@@ -3230,6 +3230,8 @@ public sealed class MainWindowHeadlessTests
     {
         PresentationAccessibilityCheckerPanePlan? actioned = null;
         PresentationTableStructureReviewPlan? reviewPlan = null;
+        PresentationTableStructureReviewDisplayPlan? displayPlan = null;
+        IReadOnlyList<string> renderedLines = [];
         var actionLabel = string.Empty;
         var commandHint = string.Empty;
         uint[] selection = [];
@@ -3279,6 +3281,8 @@ public sealed class MainWindowHeadlessTests
 
             actioned = window.ApplyAccessibilityCheckerRowAction(tableRow.RowIndex);
             reviewPlan = window.LastTableStructureReviewPlan;
+            displayPlan = window.LastTableStructureReviewDisplayPlan;
+            renderedLines = window.AccessibilityCheckerTableStructureReviewRenderedLines;
             selection = window.Editor.SelectedShapeIds.ToArray();
             dirty = window.IsDirty;
             headerRowStillSet = table.Table!.Flags.FirstRow;
@@ -3305,6 +3309,36 @@ public sealed class MainWindowHeadlessTests
             new PresentationTableStructureCellPlan(1, 1, "R2C2")
         });
         reviewPlan.MergedOrSplitCells.Select(cell => cell.CellReference).Should().Equal("R1C1", "R1C2");
+        displayPlan.Should().NotBeNull();
+        displayPlan!.Summary.Should()
+            .Be("Forecast table: 2 rows, 3 columns. 1 blank header cell, 1 blank body cell, 2 merged or split cells.");
+        displayPlan.Details.Should().Equal(new[]
+        {
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Blank header cell",
+                "R1C3 is blank.",
+                "Add descriptive header text or remove the empty header cell."),
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Blank body cell",
+                "R2C2 is blank.",
+                "Confirm the blank data cell is intentional or add visible text."),
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Merged or split cell",
+                "R1C1 spans 2 columns.",
+                "Verify the table still reads correctly in row and column order."),
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Merged or split cell",
+                "R1C2 continues a horizontal merge.",
+                "Verify the table still reads correctly in row and column order.")
+        });
+        renderedLines.Should().Equal(
+            "Review Table Structure",
+            "Forecast table: 2 rows, 3 columns. 1 blank header cell, 1 blank body cell, 2 merged or split cells.",
+            PresentationReviewWorkflowPlanner.TableStructureReviewGuidance,
+            "Blank header cell: R1C3 is blank. Add descriptive header text or remove the empty header cell.",
+            "Blank body cell: R2C2 is blank. Confirm the blank data cell is intentional or add visible text.",
+            "Merged or split cell: R1C1 spans 2 columns. Verify the table still reads correctly in row and column order.",
+            "Merged or split cell: R1C2 continues a horizontal merge. Verify the table still reads correctly in row and column order.");
         actioned.Should().NotBeNull();
         actioned!.SelectedRow!.CommandHint.Should().Be(PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId);
         selection.Should().Equal(779u);

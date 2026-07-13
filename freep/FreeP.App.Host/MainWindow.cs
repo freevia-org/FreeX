@@ -140,8 +140,10 @@ public sealed class MainWindow : Window
     private Border _accessibilityCheckerPaneHost = null!;
     private TextBlock _accessibilityCheckerPaneHeading = null!;
     private TextBlock _accessibilityCheckerPaneMessage = null!;
+    private StackPanel _accessibilityCheckerReviewDetailsPanel = null!;
     private StackPanel _accessibilityCheckerRowsPanel = null!;
     private int? _selectedAccessibilityCheckerRowIndex;
+    private readonly List<string> _accessibilityCheckerTableStructureReviewRenderedLines = new();
     private Border _readingOrderPaneHost = null!;
     private TextBlock _readingOrderPaneHeading = null!;
     private TextBlock _readingOrderPaneMessage = null!;
@@ -182,6 +184,7 @@ public sealed class MainWindow : Window
     internal PresentationSlideTitleMutationPlan? LastSlideTitleMutationPlan { get; private set; }
     internal PresentationTableHeaderRowMutationPlan? LastTableHeaderRowMutationPlan { get; private set; }
     internal PresentationTableStructureReviewPlan? LastTableStructureReviewPlan { get; private set; }
+    internal PresentationTableStructureReviewDisplayPlan? LastTableStructureReviewDisplayPlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
     internal PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
@@ -229,6 +232,8 @@ public sealed class MainWindow : Window
         LastAccessibilityCheckerPanePlan?.Rows.Count(row => row.IsSelected) ?? 0;
     internal string AccessibilityCheckerPaneHeading => _accessibilityCheckerPaneHeading?.Text ?? string.Empty;
     internal string AccessibilityCheckerPaneMessage => _accessibilityCheckerPaneMessage?.Text ?? string.Empty;
+    internal IReadOnlyList<string> AccessibilityCheckerTableStructureReviewRenderedLines =>
+        _accessibilityCheckerTableStructureReviewRenderedLines.ToArray();
     internal bool IsDirty => _file.IsDirty;
     internal int ReviewCommentSelectedCount => LastCommentPanePlan?.Comments.Count(comment => comment.IsSelected) ?? 0;
     internal string ReviewCommentPaneSummary => LastCommentPanePlan?.DeckSummaryLabel ?? string.Empty;
@@ -948,11 +953,17 @@ public sealed class MainWindow : Window
         {
             Orientation = Orientation.Vertical,
         };
+        _accessibilityCheckerReviewDetailsPanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Margin = new Thickness(12, 0, 12, 8),
+        };
 
         var panel = new DockPanel();
         var header = new StackPanel { Orientation = Orientation.Vertical };
         header.Children.Add(_accessibilityCheckerPaneHeading);
         header.Children.Add(_accessibilityCheckerPaneMessage);
+        header.Children.Add(_accessibilityCheckerReviewDetailsPanel);
         DockPanel.SetDock(header, Dock.Top);
         panel.Children.Add(header);
         panel.Children.Add(new ScrollViewer
@@ -1774,6 +1785,8 @@ public sealed class MainWindow : Window
                 _selectedAccessibilityCheckerRowIndex);
         if (LastAccessibilityCheckerPanePlan.SelectedRow is { } row)
             NavigateToAccessibilityCheckerRow(row);
+        if (LastAccessibilityCheckerPanePlan.SelectedRow?.CommandHint != PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
+            ClearTableStructureReviewDisplay();
         RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
         _accessibilityCheckerPaneHost.Visibility = Visibility.Visible;
         return LastAccessibilityCheckerPanePlan;
@@ -1823,6 +1836,8 @@ public sealed class MainWindow : Window
             _presentation,
             row.SlideIndex,
             row.ShapeId);
+        LastTableStructureReviewDisplayPlan =
+            PresentationReviewWorkflowPlanner.BuildTableStructureReviewDisplayPlan(reviewPlan);
         RefreshAccessibilitySummaryPlan();
         LastAccessibilityCheckerPanePlan =
             PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
@@ -1849,6 +1864,7 @@ public sealed class MainWindow : Window
         _accessibilityCheckerPaneMessage.Text = plan.SelectedRow is { } selected
             ? $"{selected.SlideDisplay}: {selected.Title}"
             : "No accessibility issues found.";
+        RenderTableStructureReviewDetails(LastTableStructureReviewDisplayPlan);
 
         _accessibilityCheckerRowsPanel.Children.Clear();
         if (plan.Rows.Count == 0)
@@ -1932,6 +1948,85 @@ public sealed class MainWindow : Window
         };
         card.MouseLeftButtonUp += (_, _) => SelectAccessibilityCheckerRow(row.RowIndex);
         return card;
+    }
+
+    private void ClearTableStructureReviewDisplay()
+    {
+        LastTableStructureReviewPlan = null;
+        LastTableStructureReviewDisplayPlan = null;
+    }
+
+    private void RenderTableStructureReviewDetails(PresentationTableStructureReviewDisplayPlan? display)
+    {
+        _accessibilityCheckerReviewDetailsPanel.Children.Clear();
+        _accessibilityCheckerTableStructureReviewRenderedLines.Clear();
+        if (display is null)
+            return;
+
+        _accessibilityCheckerTableStructureReviewRenderedLines.Add(display.Heading);
+        _accessibilityCheckerTableStructureReviewRenderedLines.Add(display.Summary);
+        _accessibilityCheckerTableStructureReviewRenderedLines.Add(display.Guidance);
+
+        _accessibilityCheckerReviewDetailsPanel.Children.Add(new TextBlock
+        {
+            Text = display.Heading,
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        _accessibilityCheckerReviewDetailsPanel.Children.Add(new TextBlock
+        {
+            Text = display.Summary,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x44, 0x44, 0x44)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 2, 0, 4),
+        });
+        _accessibilityCheckerReviewDetailsPanel.Children.Add(new TextBlock
+        {
+            Text = display.Guidance,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 6),
+        });
+
+        foreach (var detail in display.Details)
+        {
+            _accessibilityCheckerTableStructureReviewRenderedLines.Add(
+                $"{detail.Category}: {detail.Summary} {detail.Detail}");
+            _accessibilityCheckerReviewDetailsPanel.Children.Add(BuildTableStructureReviewDetail(detail));
+        }
+    }
+
+    private static UIElement BuildTableStructureReviewDetail(PresentationTableStructureReviewDetailRowPlan detail)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Vertical };
+        panel.Children.Add(new TextBlock
+        {
+            Text = detail.Category,
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = detail.Summary,
+            TextWrapping = TextWrapping.Wrap,
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = detail.Detail,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            TextWrapping = TextWrapping.Wrap,
+        });
+
+        return new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(0xF7, 0xF7, 0xF7)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xE2, 0xE2)),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(8),
+            Margin = new Thickness(0, 0, 0, 6),
+            Child = panel,
+        };
     }
 
     private void RefreshAltTextRequestPlan()

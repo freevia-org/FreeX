@@ -2433,6 +2433,46 @@ public sealed class PresentationReviewWorkflowPlannerTests
             new PresentationTableStructureSpanPlan(2, 0, "R3C1", 1, 1, false, true, "R3C1 continues a vertical merge.")
         });
         plan.Guidance.Should().Be(PresentationReviewWorkflowPlanner.TableStructureReviewGuidance);
+
+        var display = PresentationReviewWorkflowPlanner.BuildTableStructureReviewDisplayPlan(plan);
+
+        display.Should().Match<PresentationTableStructureReviewDisplayPlan>(review =>
+            review.CanReview &&
+            review.Heading == "Review Table Structure" &&
+            review.Summary == "Forecast table: 3 rows, 3 columns. 1 blank header cell, 2 blank body cells, 4 merged or split cells." &&
+            review.Guidance == PresentationReviewWorkflowPlanner.TableStructureReviewGuidance &&
+            review.ValidationMessage == null);
+        display.Details.Should().Equal(new[]
+        {
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Blank header cell",
+                "R1C3 is blank.",
+                "Add descriptive header text or remove the empty header cell."),
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Blank body cell",
+                "R2C2 is blank.",
+                "Confirm the blank data cell is intentional or add visible text."),
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Blank body cell",
+                "R3C3 is blank.",
+                "Confirm the blank data cell is intentional or add visible text."),
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Merged or split cell",
+                "R1C1 spans 2 columns.",
+                "Verify the table still reads correctly in row and column order."),
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Merged or split cell",
+                "R1C2 continues a horizontal merge.",
+                "Verify the table still reads correctly in row and column order."),
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Merged or split cell",
+                "R2C1 spans 2 rows.",
+                "Verify the table still reads correctly in row and column order."),
+            new PresentationTableStructureReviewDetailRowPlan(
+                "Merged or split cell",
+                "R3C1 continues a vertical merge.",
+                "Verify the table still reads correctly in row and column order.")
+        });
     }
 
     [Fact]
