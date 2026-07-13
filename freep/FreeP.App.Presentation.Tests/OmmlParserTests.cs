@@ -364,6 +364,15 @@ public sealed class OmmlParserTests
         Assert.Equal(MathNode.MathAlphabet.Default, run.Alphabet);
     }
 
+    [Fact]
+    public void Run_WithMultipleTextChildren_ConcatenatesAllText()
+    {
+        var node = Parse("<m:r><m:t>sin</m:t><m:t>^2</m:t><m:t>x</m:t></m:r>");
+
+        var run = Assert.IsType<MathNode.Run>(node);
+        Assert.Equal("sin^2x", run.Text);
+    }
+
     [Theory]
     [InlineData("roman", MathNode.MathAlphabet.Roman)]
     [InlineData("script", MathNode.MathAlphabet.Script)]

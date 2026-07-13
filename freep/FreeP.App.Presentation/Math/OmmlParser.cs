@@ -158,7 +158,7 @@ public static class OmmlParser
 
     private static MathNode ParseRun(XElement rEl)
     {
-        var text = rEl.Element(M + "t")?.Value ?? string.Empty;
+        var text = string.Concat(rEl.Elements(M + "t").Select(static t => t.Value));
         var rPr  = rEl.Element(M + "rPr");
 
         // m:nor is a CT_OnOff: presence alone doesn't mean "on". Its m:val must be

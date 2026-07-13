@@ -262,6 +262,20 @@ public sealed class MathLayoutEngineTests
         op.IsBold.Should().BeTrue();
     }
 
+    [Fact]
+    public void OmmlRunWithMultipleTextChildren_RenderPlanCarriesFullRunText()
+    {
+        var node = ParseOmml("<m:r><m:t>sin</m:t><m:t>^2</m:t><m:t>x</m:t></m:r>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var op = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        op.Text.Should().Be("sin^2x",
+            "PowerPoint-authored OMML can split one math run across multiple m:t nodes, and both hosts consume this shared draw plan");
+    }
+
     [Theory]
     [InlineData(MathNode.MathAlphabet.Script, "\U0001D49C\U0001D4B6-1")]
     [InlineData(MathNode.MathAlphabet.Fraktur, "\U0001D504\U0001D51E-1")]
