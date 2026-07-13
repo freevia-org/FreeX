@@ -94,7 +94,9 @@ internal static class PptxChartWriter
                     new XElement(C + "autoTitleDeleted", new XAttribute("val", chart.Title is null ? "1" : "0")),
                     plotArea,
                     legendEl,
-                    new XElement(C + "plotVisOnly", new XAttribute("val", "1")))));
+                    new XElement(C + "plotVisOnly", new XAttribute("val", "1")),
+                    BuildDisplayBlanksAsEl(chart),
+                    BuildShowDataLabelsOverMaximumEl(chart))));
     }
 
     private static XElement BuildTitleEl(string title) =>
@@ -441,6 +443,22 @@ internal static class PptxChartWriter
     private static XElement? BuildVaryColorsEl(ChartShape chart) =>
         chart.VaryColors
             ? new XElement(C + "varyColors", new XAttribute("val", "1"))
+            : null;
+
+    private static XElement? BuildDisplayBlanksAsEl(ChartShape chart) =>
+        chart.DisplayBlanksAs is { } value
+            ? new XElement(C + "dispBlanksAs", new XAttribute("val", value switch
+            {
+                ChartDisplayBlanksAs.Span => "span",
+                ChartDisplayBlanksAs.Gap => "gap",
+                ChartDisplayBlanksAs.Zero => "zero",
+                _ => "gap"
+            }))
+            : null;
+
+    private static XElement? BuildShowDataLabelsOverMaximumEl(ChartShape chart) =>
+        chart.ShowDataLabelsOverMaximum is { } value
+            ? new XElement(C + "showDLblsOverMax", new XAttribute("val", BoolValue(value)))
             : null;
 
     // CA2+CA3: Build dLbls in CT_DLbls schema order and gate dLblPos by chart type.

@@ -43,6 +43,8 @@ public sealed class ChartTests : IDisposable
         chart.Series.Should().BeEmpty();
         chart.Legend.Should().BeNull();
         chart.VaryColors.Should().BeFalse();
+        chart.DisplayBlanksAs.Should().BeNull();
+        chart.ShowDataLabelsOverMaximum.Should().BeNull();
         chart.BarGapWidthPercent.Should().BeNull();
         chart.BarOverlapPercent.Should().BeNull();
         chart.BarGapDepthPercent.Should().BeNull();
@@ -61,6 +63,8 @@ public sealed class ChartTests : IDisposable
         chart.BarGapWidthPercent = 25;
         chart.BarOverlapPercent = -40;
         chart.BarGapDepthPercent = 125;
+        chart.DisplayBlanksAs = ChartDisplayBlanksAs.Span;
+        chart.ShowDataLabelsOverMaximum = true;
         slide.Shapes.Add(new SlideShape
         {
             Id = 7,
@@ -78,6 +82,8 @@ public sealed class ChartTests : IDisposable
         clonedChart.BarGapWidthPercent.Should().Be(25);
         clonedChart.BarOverlapPercent.Should().Be(-40);
         clonedChart.BarGapDepthPercent.Should().Be(125);
+        clonedChart.DisplayBlanksAs.Should().Be(ChartDisplayBlanksAs.Span);
+        clonedChart.ShowDataLabelsOverMaximum.Should().BeTrue();
     }
 
     [Fact]
@@ -195,6 +201,102 @@ public sealed class ChartTests : IDisposable
 
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.Title.Should().Be("Quarterly Performance");
+    }
+
+    [Fact]
+    public void RoundTrip_ChartLevelMetadata_DefaultsStayAbsentAndNull()
+    {
+        var path = WriteToPptx(BuildPresWithChart(BuildColumnChart()));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var chartEl = chartDoc.Root!.Element(ChartNs + "chart")!;
+            chartEl.Element(ChartNs + "dispBlanksAs").Should().BeNull();
+            chartEl.Element(ChartNs + "showDLblsOverMax").Should().BeNull();
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.DisplayBlanksAs.Should().BeNull();
+        rt.ShowDataLabelsOverMaximum.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(ChartDisplayBlanksAs.Span, "span")]
+    [InlineData(ChartDisplayBlanksAs.Gap, "gap")]
+    [InlineData(ChartDisplayBlanksAs.Zero, "zero")]
+    public void RoundTrip_ChartLevelDisplayBlanksAs_PreservedInPackageAndModel(
+        ChartDisplayBlanksAs modelValue,
+        string xmlValue)
+    {
+        var chart = BuildColumnChart();
+        chart.DisplayBlanksAs = modelValue;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var chartEl = chartDoc.Root!.Element(ChartNs + "chart")!;
+            chartEl.Element(ChartNs + "dispBlanksAs")
+                ?.Attribute("val")
+                ?.Value
+                .Should()
+                .Be(xmlValue);
+            ChartChildIndex(chartEl, "plotVisOnly").Should().BeLessThan(ChartChildIndex(chartEl, "dispBlanksAs"));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.DisplayBlanksAs.Should().Be(modelValue);
+    }
+
+    [Theory]
+    [InlineData(true, "1")]
+    [InlineData(false, "0")]
+    public void RoundTrip_ChartLevelShowDataLabelsOverMaximum_PreservedInPackageAndModel(
+        bool modelValue,
+        string xmlValue)
+    {
+        var chart = BuildColumnChart();
+        chart.DisplayBlanksAs = ChartDisplayBlanksAs.Gap;
+        chart.ShowDataLabelsOverMaximum = modelValue;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var chartEl = chartDoc.Root!.Element(ChartNs + "chart")!;
+            chartEl.Element(ChartNs + "showDLblsOverMax")
+                ?.Attribute("val")
+                ?.Value
+                .Should()
+                .Be(xmlValue);
+            ChartChildIndex(chartEl, "plotVisOnly").Should().BeLessThan(ChartChildIndex(chartEl, "dispBlanksAs"));
+            ChartChildIndex(chartEl, "dispBlanksAs").Should().BeLessThan(ChartChildIndex(chartEl, "showDLblsOverMax"));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.DisplayBlanksAs.Should().Be(ChartDisplayBlanksAs.Gap);
+        rt.ShowDataLabelsOverMaximum.Should().Be(modelValue);
+    }
+
+    [Fact]
+    public void Read_ChartLevelShowDataLabelsOverMaximum_BareElementMeansTrue()
+    {
+        var path = WriteToPptx(BuildPresWithChart(BuildColumnChart()));
+        RewriteChartXml(path, chartIndex: 1, chartDoc =>
+        {
+            var chartEl = chartDoc.Root!.Element(ChartNs + "chart")!;
+            chartEl.Element(ChartNs + "plotVisOnly")!
+                .AddAfterSelf(new XElement(ChartNs + "showDLblsOverMax"));
+        });
+
+        var reloaded = PptxPackageReader.Read(path);
+
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ShowDataLabelsOverMaximum.Should().BeTrue();
     }
 
     [Fact]

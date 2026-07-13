@@ -58,6 +58,9 @@ public enum LegendPosition { Right, Left, Top, Bottom }
 /// <summary>Coordinate mode for OOXML chart <c>c:manualLayout</c> values.</summary>
 public enum ChartManualLayoutMode { Factor, Edge, Unsupported }
 
+/// <summary>How blank cells are displayed in a chart.</summary>
+public enum ChartDisplayBlanksAs { Span, Gap, Zero }
+
 /// <summary>Small modeled subset of OOXML chart <c>c:manualLayout</c>.</summary>
 public sealed class ChartManualLayout
 {
@@ -411,6 +414,12 @@ public sealed class ChartShape
 
     /// <summary>True when OOXML <c>c:varyColors</c> asks chart points to use independent fallback colors.</summary>
     public bool VaryColors { get; set; }
+
+    /// <summary>Authored chart-level blank-cell display behavior from <c>c:chart/c:dispBlanksAs</c>.</summary>
+    public ChartDisplayBlanksAs? DisplayBlanksAs { get; set; }
+
+    /// <summary>Authored chart-level <c>c:showDLblsOverMax</c> flag. Null means unspecified.</summary>
+    public bool? ShowDataLabelsOverMaximum { get; set; }
 
     /// <summary>
     /// Authored bar/column gap width percentage from <c>c:gapWidth/@val</c>.
