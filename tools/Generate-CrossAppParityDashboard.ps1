@@ -231,7 +231,7 @@ try {
             actionableGaps = [int]$freew.summary.actionableGaps
             classifiedRows = $true
         }
-        nextSlice = "Backstage print/export planner evidence now has paired WPF/Avalonia renderer contracts for PDF/preview fidelity; missing real captures fail the visual-evidence summary instead of being inferred."
+        nextSlice = "Backstage print/export now has strict paired WPF/Avalonia renderer contracts plus a July 13 no-Word real-capture smoke run for print-preview and PDF-export fidelity. Next FreeW evidence slices are the same run with real Word PNG baselines on a Word-capable host, cleanup of unrelated all-up visual runner drift, and broader visual proof beyond Backstage print/export."
     }
 
     $freeP = [ordered]@{
