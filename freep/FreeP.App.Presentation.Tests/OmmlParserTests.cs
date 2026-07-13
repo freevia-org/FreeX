@@ -324,6 +324,33 @@ public sealed class OmmlParserTests
         var run = Assert.IsType<MathNode.Run>(node);
         Assert.True(run.IsItalic);
         Assert.False(run.IsBold);
+        Assert.Equal(MathNode.MathAlphabet.Default, run.Alphabet);
+    }
+
+    [Theory]
+    [InlineData("roman", MathNode.MathAlphabet.Roman)]
+    [InlineData("script", MathNode.MathAlphabet.Script)]
+    [InlineData("fraktur", MathNode.MathAlphabet.Fraktur)]
+    [InlineData("double-struck", MathNode.MathAlphabet.DoubleStruck)]
+    [InlineData("sans-serif", MathNode.MathAlphabet.SansSerif)]
+    [InlineData("monospace", MathNode.MathAlphabet.Monospace)]
+    public void Run_WithScr_MapsKnownMathAlphabet(string val, MathNode.MathAlphabet expected)
+    {
+        var node = Parse($"<m:r><m:rPr><m:scr m:val=\"{val}\"/></m:rPr><m:t>Ab1</m:t></m:r>");
+
+        var run = Assert.IsType<MathNode.Run>(node);
+        Assert.Equal("Ab1", run.Text);
+        Assert.Equal(expected, run.Alphabet);
+    }
+
+    [Fact]
+    public void Run_WithUnknownScr_UsesDefaultAlphabet()
+    {
+        var node = Parse("<m:r><m:rPr><m:scr m:val=\"unknown\"/></m:rPr><m:t>x</m:t></m:r>");
+
+        var run = Assert.IsType<MathNode.Run>(node);
+        Assert.Equal(MathNode.MathAlphabet.Default, run.Alphabet);
+        Assert.True(run.IsItalic);
     }
 
     [Fact]

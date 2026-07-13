@@ -184,7 +184,24 @@ public static class OmmlParser
         else if (sty is "i" or "bi") isItalic = true;
         if (sty is "b" or "bi") isBold = true;
 
-        return new MathNode.Run(text, isItalic, isBold);
+        var alphabet = ParseMathAlphabet(ReadVal(rPr?.Element(M + "scr")));
+
+        return new MathNode.Run(text, isItalic, isBold, alphabet);
+    }
+
+    private static MathNode.MathAlphabet ParseMathAlphabet(string? value)
+    {
+        var normalized = value?.Trim().ToLowerInvariant().Replace("_", "-");
+        return normalized switch
+        {
+            "roman" => MathNode.MathAlphabet.Roman,
+            "script" => MathNode.MathAlphabet.Script,
+            "fraktur" => MathNode.MathAlphabet.Fraktur,
+            "double-struck" or "doublestruck" or "double-struck-italic" => MathNode.MathAlphabet.DoubleStruck,
+            "sans-serif" or "sansserif" => MathNode.MathAlphabet.SansSerif,
+            "monospace" => MathNode.MathAlphabet.Monospace,
+            _ => MathNode.MathAlphabet.Default
+        };
     }
 
     // ── m:f fraction ──────────────────────────────────────────────────────
