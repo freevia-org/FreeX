@@ -930,7 +930,7 @@ public static class FreeWVisualEvidenceDocumentFactory
         doc.Blocks.Add(new Paragraph(
             "This shared fixture exercises Word-style chart and SmartArt visual planning: named chart " +
             "palettes, quick layouts, scatter markers, data labels, axis titles, plot fills, SmartArt " +
-            "hierarchy depth, connectors, color schemes, styles, and node fill sequences."));
+            "hierarchy depth, connectors, Basic Pyramid polygon bands, color schemes, styles, and node fill sequences."));
 
         var chartParagraph = new Paragraph();
         chartParagraph.Runs.Add(new Run("Column chart with quick-layout annotations: "));
@@ -946,6 +946,11 @@ public static class FreeWVisualEvidenceDocumentFactory
         smartArtParagraph.Runs.Add(new Run("SmartArt hierarchy colors and style: "));
         smartArtParagraph.Runs.Add(Run.FromSmartArt(BuildStyledSmartArt()));
         doc.Blocks.Add(smartArtParagraph);
+
+        var pyramidParagraph = new Paragraph();
+        pyramidParagraph.Runs.Add(new Run("Basic Pyramid SmartArt polygon bands: "));
+        pyramidParagraph.Runs.Add(Run.FromSmartArt(BuildPyramidSmartArt()));
+        doc.Blocks.Add(pyramidParagraph);
 
         doc.Blocks.Add(new Paragraph(
             "The same model is rendered by WPF FidelityRender and Avalonia PageLayoutShot, and both " +
@@ -1492,6 +1497,17 @@ public static class FreeWVisualEvidenceDocumentFactory
         smartArt.LayoutId = "orgchart1";
         smartArt.ColorSchemeId = "accent1";
         smartArt.StyleId = "intense1";
+        return smartArt;
+    }
+
+    private static SmartArt BuildPyramidSmartArt()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+        smartArt.WidthPt = 300;
+        smartArt.HeightPt = 150;
+        smartArt.LayoutId = "pyramid1";
+        smartArt.ColorSchemeId = "accent2";
+        smartArt.StyleId = "flat1";
         return smartArt;
     }
 

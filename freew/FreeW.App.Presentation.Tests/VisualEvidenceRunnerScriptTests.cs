@@ -44,6 +44,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("TableLayoutProof = @(");
         source.Should().Contain("DrawingObjectVisualProof = @(");
         source.Should().Contain("ShapeObjectVisualProof = @(");
+        source.Should().Contain("SmartArtPolygonVisualProof = @(");
         source.Should().Contain("ReviewCompareCombineVisualProof = @(");
         source.Should().Contain("ReviewProofingVisualProof = @(");
         source.Should().Contain("EquationStructureVisualProof = @(");
@@ -68,6 +69,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'wordart-watermark-stress'");
         source.Should().Contain("'wordart-picture-watermark-layout'");
         source.Should().Contain("freew-fidelity-corpus/runs/shape-object-proof");
+        source.Should().Contain("freew-fidelity-corpus/runs/smartart-polygon-proof");
         source.Should().Contain("'review-compare-visual-proof'");
         source.Should().Contain("'review-combine-visual-proof'");
         source.Should().Contain("'review-proofing-visual-depth'");
@@ -167,6 +169,13 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Drawing object visual semantic rows: verified rows=");
         source.Should().Contain("Drawing object Word-baseline policy rows: verified rows=");
         source.Should().Contain("Drawing object Word-baseline policy rows: no Word baseline mode requested");
+        source.Should().Contain("Assert-SmartArtPolygonVisualProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("SmartArt polygon visual proof readiness requires FreeW visual evidence summary schema v38 or newer");
+        source.Should().Contain("missing Basic Pyramid polygon geometry signature");
+        source.Should().Contain("missing honest word-baseline-unavailable SmartArt polygon blocker");
+        source.Should().Contain("chart-smartart-complex-word-baseline-fidelity");
+        source.Should().Contain("SmartArt polygon visual proof readiness: trusted semantic rows=");
+        source.Should().Contain("SmartArt polygon Word-baseline unavailable blocker: verified");
         source.Should().Contain("Assert-ReviewCompareCombineVisualProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("Review compare/combine visual proof readiness requires FreeW visual evidence summary schema v30 or newer");
         source.Should().Contain("$readinessRows = @($summary.reviewCompareCombineProofReadiness)");

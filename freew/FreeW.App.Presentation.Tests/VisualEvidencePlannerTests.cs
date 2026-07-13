@@ -310,6 +310,7 @@ public sealed class VisualEvidencePlannerTests
             "chart-visual-signature",
             "smartart-style",
             "smartart-node-fills",
+            "smartart-polygon-geometry",
             "smartart-visual-signature"]);
         chartSmartArtScenario.ExpectedOutputNamePattern.Should().Be("chart-smartart-complex_p{page}.png");
         chartSmartArtScenario.MinimumExpectedOutputs.Should().Be(1);
@@ -2105,7 +2106,7 @@ public sealed class VisualEvidencePlannerTests
             document: document);
 
         expectation.ChartSmartArt.ChartCount.Should().Be(2);
-        expectation.ChartSmartArt.SmartArtCount.Should().Be(1);
+        expectation.ChartSmartArt.SmartArtCount.Should().Be(2);
         expectation.ChartSmartArt.HasChartPalette.Should().BeTrue();
         expectation.ChartSmartArt.HasChartQuickLayout.Should().BeTrue();
         expectation.ChartSmartArt.HasMarkerOnlyScatter.Should().BeTrue();
@@ -2117,7 +2118,7 @@ public sealed class VisualEvidencePlannerTests
         expectation.ChartSmartArt.HasSmartArtLayout.Should().BeTrue();
         expectation.ChartSmartArt.HasSmartArtColorScheme.Should().BeTrue();
         expectation.ChartSmartArt.HasSmartArtStyle.Should().BeTrue();
-        expectation.ChartSmartArt.SmartArtNodeCount.Should().Be(3);
+        expectation.ChartSmartArt.SmartArtNodeCount.Should().Be(7);
         expectation.ChartSmartArt.DistinctSmartArtFillCount.Should().BeGreaterThan(1);
         expectation.ChartSmartArt.ChartVisualSignatures.Should().HaveCount(2);
         expectation.ChartSmartArt.ChartVisualSignatures.Should().Contain(signature =>
@@ -2134,7 +2135,8 @@ public sealed class VisualEvidencePlannerTests
             signature.Contains("markers=1", StringComparison.Ordinal) &&
             signature.Contains("categoryAxis=Height", StringComparison.Ordinal) &&
             signature.Contains("valueAxis=Weight", StringComparison.Ordinal));
-        expectation.ChartSmartArt.SmartArtVisualSignatures.Should().ContainSingle(signature =>
+        expectation.ChartSmartArt.SmartArtVisualSignatures.Should().HaveCount(2);
+        expectation.ChartSmartArt.SmartArtVisualSignatures.Should().Contain(signature =>
             signature.Contains("layout=orgchart1", StringComparison.Ordinal) &&
             signature.Contains("hierarchy=maxDepth=2/nodes=3/connectors=2", StringComparison.Ordinal) &&
             signature.Contains("colorScheme=accent1", StringComparison.Ordinal) &&
@@ -2142,16 +2144,28 @@ public sealed class VisualEvidencePlannerTests
             signature.Contains("#38517D", StringComparison.Ordinal) &&
             signature.Contains("#486DAF", StringComparison.Ordinal) &&
             signature.Contains("#679AD6", StringComparison.Ordinal));
+        expectation.ChartSmartArt.SmartArtVisualSignatures.Should().Contain(signature =>
+            signature.Contains("layout=pyramid1", StringComparison.Ordinal) &&
+            signature.Contains("colorScheme=accent2", StringComparison.Ordinal) &&
+            signature.Contains("style=flat1", StringComparison.Ordinal) &&
+            signature.Contains("geometry=kind=Pyramid", StringComparison.Ordinal) &&
+            signature.Contains("polygons=0=", StringComparison.Ordinal) &&
+            signature.Contains("polygons=", StringComparison.Ordinal));
         expectation.ChartSmartArt.Charts.Should().Contain(plan =>
             plan.Kind == ChartKind.Scatter &&
             plan.GeometryKind == ChartVisualGeometryKind.MarkerOnly);
-        var smartArt = expectation.ChartSmartArt.SmartArts.Single();
+        var smartArt = expectation.ChartSmartArt.SmartArts.Single(plan => plan.LayoutId == "orgchart1");
         smartArt.LayoutId.Should().Be("orgchart1");
         smartArt.HierarchyGeometry.Should().NotBeNull();
         smartArt.HierarchyGeometry!.MaxDepth.Should().Be(2);
         smartArt.HierarchyGeometry.Connectors.Should().HaveCount(2);
         smartArt.Nodes.Select(node => node.FillHex)
             .Should().ContainInOrder("#38517D", "#486DAF", "#679AD6");
+        var pyramid = expectation.ChartSmartArt.SmartArts.Single(plan => plan.LayoutId == "pyramid1");
+        pyramid.LayoutGeometry.Should().NotBeNull();
+        pyramid.LayoutGeometry!.Kind.Should().Be(SmartArtLayoutGeometryKind.Pyramid);
+        pyramid.LayoutGeometry.Nodes.Should().HaveCount(4);
+        pyramid.LayoutGeometry.Nodes.Should().OnlyContain(node => node.HasPolygon);
     }
 
     [Fact]
@@ -2947,21 +2961,25 @@ public sealed class VisualEvidencePlannerTests
                 pageNumber: 1,
                 pageCount: 1);
             var avaloniaPlan = avaloniaRow.PageExpectation.ChartSmartArt;
-            var alteredSmartArt = avaloniaPlan.SmartArts.Single() with
+            var alteredSmartArt = avaloniaPlan.SmartArts.Single(plan => plan.LayoutId == "orgchart1") with
             {
-                Nodes = avaloniaPlan.SmartArts.Single().Nodes
+                Nodes = avaloniaPlan.SmartArts.Single(plan => plan.LayoutId == "orgchart1").Nodes
                     .Select((node, index) => index == 1 ? node with { FillHex = "#101010" } : node)
                     .ToList()
             };
-            var alteredSmartArtSignatures = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignatures([alteredSmartArt]);
             var avaloniaWithDifferentSmartArtPlan = avaloniaRow with
             {
                 PageExpectation = avaloniaRow.PageExpectation with
                 {
                     ChartSmartArt = avaloniaPlan with
                     {
-                        SmartArts = [alteredSmartArt],
-                        SmartArtVisualSignatures = alteredSmartArtSignatures
+                        SmartArts = avaloniaPlan.SmartArts
+                            .Select(plan => plan.LayoutId == "orgchart1" ? alteredSmartArt : plan)
+                            .ToList(),
+                        SmartArtVisualSignatures = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignatures(
+                            avaloniaPlan.SmartArts
+                                .Select(plan => plan.LayoutId == "orgchart1" ? alteredSmartArt : plan)
+                                .ToList())
                     }
                 }
             };
@@ -6530,11 +6548,25 @@ public sealed class VisualEvidencePlannerTests
                 && row.Trust.Passed);
             withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
                 .SemanticEvidence.Should().Contain("chart signatures=2");
+            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
+                .SemanticEvidence.Should().Contain("SmartArt layouts=orgchart1/pyramid1");
+            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
+                .SemanticEvidence.Should().Contain("SmartArt polygon nodes=4");
             withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "wordart-picture-watermark-layout")
                 .SemanticEvidence.Should().Contain("picture watermark");
+            var smartArtBlocker = withBaseline.RemainingEvidenceBlockers.Single(blocker =>
+                blocker.BlockerId == "chart-smartart-complex-word-baseline-fidelity");
+            smartArtBlocker.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            smartArtBlocker.Area.Should().Be("SmartArt polygon visual fidelity");
+            smartArtBlocker.RequiresWordBaseline.Should().BeTrue();
+            smartArtBlocker.SemanticEvidence.Should().HaveCount(2);
+            smartArtBlocker.SemanticEvidence.Should().OnlyContain(evidence =>
+                evidence.Contains("pyramid1", StringComparison.Ordinal) &&
+                evidence.Contains("polygonNodes=4", StringComparison.Ordinal));
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(38);
             var readiness = doc.RootElement.GetProperty("drawingObjectProofReadiness");
             readiness.GetArrayLength().Should().Be(5);
             readiness.EnumerateArray()
@@ -6545,6 +6577,8 @@ public sealed class VisualEvidencePlannerTests
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
             markdown.Should().Contain("## Drawing/Object Visual Proof Readiness");
             markdown.Should().Contain("word-baseline-unavailable=2");
+            markdown.Should().Contain("SmartArt polygon nodes=4");
+            markdown.Should().Contain("chart-smartart-complex-word-baseline-fidelity");
             markdown.Should().Contain("paired WPF/Avalonia evidence is retained without authoritative Word parity");
         }
         finally
@@ -6633,6 +6667,11 @@ public sealed class VisualEvidencePlannerTests
             drawingRow.SemanticEvidence.Should().Contain("6 object(s)");
             drawingRow.SemanticEvidence.Should().Contain("5 grouped child object(s)");
             drawingRow.SemanticEvidence.Should().Contain("2 rendered grouped child effect object(s)");
+            var smartArtRow = withBaseline.DrawingObjectProofReadiness.Single(row =>
+                row.ScenarioId == "chart-smartart-complex");
+            smartArtRow.SemanticEvidence.Should().Contain("SmartArt layouts=orgchart1/pyramid1");
+            smartArtRow.SemanticEvidence.Should().Contain("SmartArt geometry=Pyramid");
+            smartArtRow.SemanticEvidence.Should().Contain("SmartArt polygon nodes=4");
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);

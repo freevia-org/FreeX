@@ -174,7 +174,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 37;
+    public const int SummarySchemaVersion = 38;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -1679,6 +1679,27 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 parts.Add("chart signatures=" + chartSmartArt.ChartVisualSignatures.Count.ToString(CultureInfo.InvariantCulture));
             if (chartSmartArt.SmartArtVisualSignatures.Count > 0)
                 parts.Add("SmartArt signatures=" + chartSmartArt.SmartArtVisualSignatures.Count.ToString(CultureInfo.InvariantCulture));
+            var smartArtLayoutIds = chartSmartArt.SmartArts
+                .Select(plan => plan.LayoutId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(id => id, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (smartArtLayoutIds.Count > 0)
+                parts.Add("SmartArt layouts=" + string.Join("/", smartArtLayoutIds));
+            var smartArtGeometryKinds = chartSmartArt.SmartArts
+                .Select(plan => plan.LayoutGeometry?.Kind.ToString())
+                .Where(kind => !string.IsNullOrWhiteSpace(kind))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(kind => kind, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (smartArtGeometryKinds.Count > 0)
+                parts.Add("SmartArt geometry=" + string.Join("/", smartArtGeometryKinds));
+            var smartArtPolygonCount = chartSmartArt.SmartArts
+                .SelectMany(plan => plan.LayoutGeometry?.Nodes ?? Array.Empty<SmartArtLayoutNodeGeometry>())
+                .Count(node => node.HasPolygon);
+            if (smartArtPolygonCount > 0)
+                parts.Add("SmartArt polygon nodes=" + smartArtPolygonCount.ToString(CultureInfo.InvariantCulture));
         }
 
         if (row.PageFeatures.Watermark.Present)
@@ -2026,6 +2047,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
     {
         var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
         blockers.AddRange(BuildBackstageRealCaptureBlockers(summary));
+        blockers.AddRange(BuildSmartArtPolygonWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildReviewProofingWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildEquationStructureWordBaselineBlockers(summary, baselineComparisons));
 
@@ -2262,6 +2284,172 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 requiresWordBaseline: false)
         ];
     }
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildSmartArtPolygonWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        const string scenarioId = "chart-smartart-complex";
+        var rows = summary.Evidence
+            .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .Where(row => row.Trust.Passed)
+            .ToList();
+        if (rows.Count == 0)
+            return [];
+
+        var semanticEvidence = BuildSmartArtPolygonSemanticEvidence(rows);
+        if (semanticEvidence.Count == 0)
+        {
+            return
+            [
+                BuildSmartArtPolygonVisualBlocker(
+                    "semantic-smartart-polygon-geometry-missing",
+                    "trusted WPF and Avalonia Basic Pyramid SmartArt polygon metadata",
+                    "trusted chart/SmartArt evidence did not record Basic Pyramid polygon geometry; regenerate current-schema evidence or fix shared SmartArt planning before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false)
+            ];
+        }
+
+        var related = baselineComparisons
+            .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (related.Count == 0)
+        {
+            return
+            [
+                BuildSmartArtPolygonVisualBlocker(
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for Basic Pyramid SmartArt polygon layout",
+                    "trusted FreeW SmartArt polygon evidence is present; run a Word-baseline comparison for chart-smartart-complex to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        var statuses = related
+            .Select(comparison => comparison.Status)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var candidates = related
+            .SelectMany(comparison => comparison.CandidateBaselinePaths)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            var reasons = related
+                .Where(comparison => string.Equals(
+                    comparison.Status,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(FormatComparisonNotes)
+                .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var reason = reasons.Count == 0
+                ? "MS Word baseline PNG generation was unavailable for chart-smartart-complex"
+                : string.Join("; ", reasons);
+            return
+            [
+                BuildSmartArtPolygonVisualBlocker(
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for Basic Pyramid SmartArt polygon layout",
+                    reason,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return
+            [
+                BuildSmartArtPolygonVisualBlocker(
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for Basic Pyramid SmartArt polygon layout",
+                    "trusted SmartArt polygon evidence is present, but mapped Word baseline PNGs are missing for chart-smartart-complex",
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        if (related.All(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return [];
+        }
+
+        return
+        [
+            BuildSmartArtPolygonVisualBlocker(
+                "needs-render-review",
+                "render-review resolution for failed SmartArt polygon Word PNG comparisons",
+                "chart-smartart-complex Word baseline comparison did not fully pass; inspect SmartArt polygon rendering differences",
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false)
+        ];
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildSmartArtPolygonVisualBlocker(
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline) =>
+        new(
+            "chart-smartart-complex-word-baseline-fidelity",
+            "chart-smartart-complex",
+            "SmartArt polygon visual fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
+
+    private static IReadOnlyList<string> BuildSmartArtPolygonSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
+        rows
+            .Where(row => HasSmartArtPolygonGeometry(row.ChartSmartArt))
+            .Select(row => string.Concat(
+                row.HostId,
+                "/p",
+                row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                ": SmartArt=",
+                row.ChartSmartArt.SmartArtCount.ToString(CultureInfo.InvariantCulture),
+                "; layouts=",
+                FormatSummaries(row.ChartSmartArt.SmartArts.Select(plan => plan.LayoutId).ToList()),
+                "; polygonNodes=",
+                row.ChartSmartArt.SmartArts
+                    .SelectMany(plan => plan.LayoutGeometry?.Nodes ?? Array.Empty<SmartArtLayoutNodeGeometry>())
+                    .Count(node => node.HasPolygon)
+                    .ToString(CultureInfo.InvariantCulture),
+                "; signatures=",
+                FormatSummaries(row.ChartSmartArt.SmartArtVisualSignatures)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     private static FreeWVisualRemainingEvidenceBlocker BuildEquationStructureVisualBlocker(
         string status,
@@ -3061,6 +3249,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("chart/SmartArt evidence expects SmartArt style metadata but the SmartArt plan records none");
         if (tags.Contains("smartart-node-fills", StringComparer.OrdinalIgnoreCase) && chartSmartArt.DistinctSmartArtFillCount <= 1)
             rowFailures.Add("chart/SmartArt evidence expects distinct SmartArt node fills but the SmartArt plan records one or fewer");
+        if (tags.Contains("smartart-polygon-geometry", StringComparer.OrdinalIgnoreCase)
+            && !HasSmartArtPolygonGeometry(chartSmartArt))
+        {
+            rowFailures.Add("chart/SmartArt evidence expects SmartArt polygon layout geometry but the SmartArt plan records none");
+        }
         if (tags.Contains("smartart-visual-signature", StringComparer.OrdinalIgnoreCase)
             && (chartSmartArt.SmartArtVisualSignatures is null || chartSmartArt.SmartArtVisualSignatures.Count == 0))
         {
@@ -3070,6 +3263,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
             rowFailures.Add("chart/SmartArt evidence includes SmartArt but records no nodes");
         ValidateChartSmartArtVisualSignatures(chartSmartArt, rowFailures);
     }
+
+    private static bool HasSmartArtPolygonGeometry(FreeWVisualChartSmartArtExpectation chartSmartArt) =>
+        chartSmartArt.SmartArts.Any(plan =>
+            plan.LayoutGeometry is { Kind: SmartArtLayoutGeometryKind.Pyramid } geometry
+            && geometry.Nodes.Any(node => node.HasPolygon));
 
     private static void ValidateChartSmartArtVisualSignatures(
         FreeWVisualChartSmartArtExpectation chartSmartArt,

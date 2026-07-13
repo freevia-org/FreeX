@@ -35,6 +35,9 @@
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/shape-object-proof -ScenarioSet ShapeObjectVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/smartart-polygon-proof -ScenarioSet SmartArtPolygonVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/floating-wrapping-proof -ScenarioSet FloatingWrappingVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
@@ -165,6 +168,9 @@ $namedScenarioSets = @{
     ShapeObjectVisualProof = @(
         'drawing-objects-complex',
         'object-format-position-size-style'
+    )
+    SmartArtPolygonVisualProof = @(
+        'chart-smartart-complex'
     )
     ReviewCompareCombineVisualProof = @(
         'review-compare-visual-proof',
@@ -1122,6 +1128,144 @@ function Assert-DrawingObjectVisualProofReadiness {
     }
 }
 
+function Assert-SmartArtPolygonVisualProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $scenarioId = 'chart-smartart-complex'
+    if (-not ($ScenarioIds -contains $scenarioId)) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "SmartArt polygon visual proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 38) {
+        throw "SmartArt polygon visual proof readiness requires FreeW visual evidence summary schema v38 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $readinessRows = @($summary.drawingObjectProofReadiness | Where-Object { $_.scenarioId -eq $scenarioId })
+    $evidenceRows = @($summary.evidence)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $remainingBlockers = @($summary.remainingEvidenceBlockers)
+    $failures = New-Object System.Collections.Generic.List[string]
+    $verifiedSemanticRows = 0
+    $verifiedBaselineRows = 0
+
+    if ($readinessRows.Count -eq 0) {
+        $failures.Add("${scenarioId}: missing SmartArt drawing/object proof readiness row")
+    }
+    foreach ($proofRow in $readinessRows) {
+        if ($proofRow.trust.passed -ne $true -or $proofRow.status -ne 'paired-renderer-proof-ready') {
+            $notes = @($proofRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = [string]$proofRow.baselineReadiness
+            }
+            $failures.Add("${scenarioId}/p$($proofRow.pageNumber): readiness status '$($proofRow.status)' failed ($notes)")
+        }
+        if ([string]$proofRow.semanticEvidence -notmatch 'SmartArt polygon nodes=') {
+            $failures.Add("${scenarioId}/p$($proofRow.pageNumber): semantic readiness does not report SmartArt polygon nodes")
+        }
+        if ([string]$proofRow.semanticEvidence -notmatch 'SmartArt layouts=.*pyramid1') {
+            $failures.Add("${scenarioId}/p$($proofRow.pageNumber): semantic readiness does not report pyramid1 SmartArt layout")
+        }
+    }
+
+    foreach ($hostId in $requiredHosts) {
+        $hostRows = @($evidenceRows | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.trust.passed -eq $true
+        })
+        if ($hostRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing trusted normalized evidence row for SmartArt polygon proof")
+            continue
+        }
+
+        foreach ($row in $hostRows) {
+            $smartArt = $row.chartSmartArt
+            if ([int]$smartArt.smartArtCount -lt 2 -or
+                [int]$smartArt.smartArtNodeCount -lt 7 -or
+                @($smartArt.smartArtVisualSignatures).Count -lt 2) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing multiple SmartArt plans or signatures")
+                continue
+            }
+
+            $signatures = @($smartArt.smartArtVisualSignatures)
+            if (@($signatures | Where-Object {
+                ([string]$_).IndexOf('layout=pyramid1', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('geometry=kind=Pyramid', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('polygons=0=', [StringComparison]::Ordinal) -ge 0
+            }).Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing Basic Pyramid polygon geometry signature")
+                continue
+            }
+
+            $verifiedSemanticRows++
+        }
+
+        $comparisonRows = @($baselineComparisons | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.baselineScenarioId -eq $scenarioId
+        })
+        if ($baselineComparisons.Count -gt 0 -and $comparisonRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+            continue
+        }
+        foreach ($comparison in $comparisonRows) {
+            if ($comparison.trust.passed -ne $true) {
+                $notes = @($comparison.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$comparison.skipReason
+                }
+                $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                continue
+            }
+            $verifiedBaselineRows++
+        }
+    }
+
+    $unavailableComparisons = @($baselineComparisons | Where-Object {
+        $_.scenarioId -eq $scenarioId -and
+        $_.status -eq 'word-baseline-unavailable'
+    })
+    if ($unavailableComparisons.Count -gt 0) {
+        $blocker = @($remainingBlockers | Where-Object {
+            $_.blockerId -eq 'chart-smartart-complex-word-baseline-fidelity' -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.status -eq 'word-baseline-unavailable' -and
+            $_.requiresWordBaseline -eq $true
+        }) | Select-Object -First 1
+        if (-not $blocker) {
+            $failures.Add("${scenarioId}: missing honest word-baseline-unavailable SmartArt polygon blocker")
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "SmartArt polygon visual proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "SmartArt polygon visual proof readiness: trusted semantic rows=$verifiedSemanticRows"
+    if ($baselineComparisons.Count -gt 0) {
+        Write-Host "SmartArt polygon Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    }
+    else {
+        Write-Host "SmartArt polygon Word-baseline policy rows: no Word baseline mode requested"
+    }
+    if ($unavailableComparisons.Count -gt 0) {
+        Write-Host "SmartArt polygon Word-baseline unavailable blocker: verified"
+    }
+}
+
 function Assert-ReviewCompareCombineVisualProofReadiness {
     param(
         [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
@@ -1765,6 +1909,7 @@ Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-FloatingWrappingProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds
+Assert-SmartArtPolygonVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-ReviewCompareCombineVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-ReviewProofingVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-EquationStructureVisualProofReadiness $summaryJson $effectiveScenarioIds

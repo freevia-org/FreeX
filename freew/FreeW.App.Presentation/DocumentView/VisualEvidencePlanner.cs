@@ -923,6 +923,7 @@ public static class FreeWVisualEvidencePlanner
                 "smartart-colors",
                 "smartart-style",
                 "smartart-node-fills",
+                "smartart-polygon-geometry",
                 "smartart-visual-signature"
             ],
             "chart-smartart-complex_p{page}.png",
