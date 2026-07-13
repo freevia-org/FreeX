@@ -1150,6 +1150,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesClosedChevronProcessAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/closedChevronProcess",
+            nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process,
+            "closedChevronProcess reuses the shared process-family geometry");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "closedChevronProcess is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2");
+    }
+
+    [Fact]
     public void Reader_ParsesBasicBlockListAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1461,10 +1480,10 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownFamilyButDisablesLiveLayoutForUnsupportedVariant()
+    public void Reader_ParsesKnownProcessFamilyButDisablesLiveLayoutForUnsupportedVariant()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/closedChevronProcess",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess",
             nodes: [("id1", "Stage 1"), ("id2", "Stage 2")],
             parOfConnections: []);
 
@@ -1473,7 +1492,7 @@ public sealed class SmartArtTests : IDisposable
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Process,
-            "unsupported variants still retain broad family metadata for future layout slices");
+            "unsupported process variants still retain broad family metadata for future layout slices");
         sa.Data.IsLiveLayoutSupported.Should().BeFalse(
             "process-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2");
@@ -1627,6 +1646,36 @@ public sealed class SmartArtTests : IDisposable
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared basic-chevron-process DrawOps");
         liveShapes.Where(op => op.Text is null)
             .Should().HaveCount(2, "WPF and Avalonia hosts consume shared basic-chevron-process connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_ClosedChevronProcessSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/closedChevronProcess",
+            nodes: [("n1", "Plan"), ("n2", "Build"), ("n3", "Ship")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(5, "three closed-chevron-process boxes plus two connectors should render from shared live data");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Plan", "Build", "Ship");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.BoundsDip.X)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared closed-chevron-process DrawOps");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume shared closed-chevron-process connector DrawOps");
     }
 
     [Fact]
@@ -1937,7 +1986,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Process,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/closedChevronProcess",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess",
             IsLiveLayoutSupported = false
         };
         data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });
