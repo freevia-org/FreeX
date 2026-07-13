@@ -1044,10 +1044,10 @@ public sealed class SlideCanvas : Control
         var plan = ChartRenderPlanner.BuildStockPrimitivePlan(chart, plot);
         foreach (var segment in plan.HighLowLines)
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
-        foreach (var segment in plan.OpenTicks)
-            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
-        foreach (var segment in plan.CloseTicks)
-            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+        foreach (var tick in plan.OpenTicks)
+            dc.DrawLine(ToPen(tick.Segment.Stroke), ToPoint(tick.Segment.Start), ToPoint(tick.Segment.End));
+        foreach (var tick in plan.CloseTicks)
+            dc.DrawLine(ToPen(tick.Segment.Stroke), ToPoint(tick.Segment.Start), ToPoint(tick.Segment.End));
     }
 
     // Combo-chart secondary series overlay.

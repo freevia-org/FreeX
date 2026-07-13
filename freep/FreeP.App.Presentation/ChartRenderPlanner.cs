@@ -231,8 +231,20 @@ public readonly record struct ChartRectPrimitive(
 
 public readonly record struct ChartStockPrimitivePlan(
     IReadOnlyList<ChartLineSegmentPrimitive> HighLowLines,
-    IReadOnlyList<ChartLineSegmentPrimitive> OpenTicks,
-    IReadOnlyList<ChartLineSegmentPrimitive> CloseTicks);
+    IReadOnlyList<ChartStockTickPrimitive> OpenTicks,
+    IReadOnlyList<ChartStockTickPrimitive> CloseTicks);
+
+public enum ChartStockPriceMove
+{
+    Unknown,
+    Rising,
+    Falling,
+    Unchanged
+}
+
+public readonly record struct ChartStockTickPrimitive(
+    ChartLineSegmentPrimitive Segment,
+    ChartStockPriceMove PriceMove);
 
 public readonly record struct ChartSurfaceCellPrimitive(
     int SeriesIndex,
@@ -1617,8 +1629,8 @@ public static partial class ChartRenderPlanner
         double tickHalfWidth = Math.Max(2.0, categoryWidth * StockTickWidthFraction / 2.0);
         var stroke = new ChartStrokePlan(new SrgbColor(0x44, 0x44, 0x44), Alpha: 255, Thickness: 1.2);
         var highLowLines = new List<ChartLineSegmentPrimitive>();
-        var openTicks = new List<ChartLineSegmentPrimitive>();
-        var closeTicks = new List<ChartLineSegmentPrimitive>();
+        var openTicks = new List<ChartStockTickPrimitive>();
+        var closeTicks = new List<ChartStockTickPrimitive>();
 
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
         {
@@ -1646,25 +1658,31 @@ public static partial class ChartRenderPlanner
             if (open is not null)
             {
                 double y = MapCartesianValueToY(open.Value, primaryMin, primaryRange, plot);
-                openTicks.Add(new ChartLineSegmentPrimitive(
-                    openSeriesIndex,
-                    categoryIndex,
-                    categoryIndex,
-                    new ChartPlanPoint(x - tickHalfWidth, y),
-                    new ChartPlanPoint(x, y),
-                    stroke));
+                var priceMove = ResolveStockPriceMove(open, close);
+                openTicks.Add(new ChartStockTickPrimitive(
+                    new ChartLineSegmentPrimitive(
+                        openSeriesIndex,
+                        categoryIndex,
+                        categoryIndex,
+                        new ChartPlanPoint(x - tickHalfWidth, y),
+                        new ChartPlanPoint(x, y),
+                        ResolveStockTickStroke(priceMove)),
+                    priceMove));
             }
 
             if (close is not null)
             {
                 double y = MapCartesianValueToY(close.Value, primaryMin, primaryRange, plot);
-                closeTicks.Add(new ChartLineSegmentPrimitive(
-                    closeSeriesIndex,
-                    categoryIndex,
-                    categoryIndex,
-                    new ChartPlanPoint(x, y),
-                    new ChartPlanPoint(x + tickHalfWidth, y),
-                    stroke));
+                var priceMove = ResolveStockPriceMove(open, close);
+                closeTicks.Add(new ChartStockTickPrimitive(
+                    new ChartLineSegmentPrimitive(
+                        closeSeriesIndex,
+                        categoryIndex,
+                        categoryIndex,
+                        new ChartPlanPoint(x, y),
+                        new ChartPlanPoint(x + tickHalfWidth, y),
+                        ResolveStockTickStroke(priceMove)),
+                    priceMove));
             }
         }
 
@@ -1736,8 +1754,30 @@ public static partial class ChartRenderPlanner
     private static ChartStockPrimitivePlan EmptyStockPrimitivePlan() =>
         new(
             Array.Empty<ChartLineSegmentPrimitive>(),
-            Array.Empty<ChartLineSegmentPrimitive>(),
-            Array.Empty<ChartLineSegmentPrimitive>());
+            Array.Empty<ChartStockTickPrimitive>(),
+            Array.Empty<ChartStockTickPrimitive>());
+
+    private static ChartStockPriceMove ResolveStockPriceMove(double? open, double? close)
+    {
+        if (open is null || close is null)
+            return ChartStockPriceMove.Unknown;
+
+        const double epsilon = 1e-9;
+        double delta = close.Value - open.Value;
+        if (delta > epsilon)
+            return ChartStockPriceMove.Rising;
+        if (delta < -epsilon)
+            return ChartStockPriceMove.Falling;
+        return ChartStockPriceMove.Unchanged;
+    }
+
+    private static ChartStrokePlan ResolveStockTickStroke(ChartStockPriceMove priceMove) =>
+        priceMove switch
+        {
+            ChartStockPriceMove.Rising => new ChartStrokePlan(new SrgbColor(0x2E, 0x7D, 0x32), Alpha: 255, Thickness: 1.35),
+            ChartStockPriceMove.Falling => new ChartStrokePlan(new SrgbColor(0xC6, 0x28, 0x28), Alpha: 255, Thickness: 1.35),
+            _ => new ChartStrokePlan(new SrgbColor(0x44, 0x44, 0x44), Alpha: 255, Thickness: 1.2)
+        };
 
     private static bool TryResolveStockSeries(
         ChartShape chart,

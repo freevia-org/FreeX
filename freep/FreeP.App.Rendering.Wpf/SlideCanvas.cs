@@ -768,9 +768,12 @@ public sealed class SlideCanvas : FrameworkElement
 
             case FreeP.Core.Model.ChartType.Line:
             case FreeP.Core.Model.ChartType.LineMarkers:
-            case FreeP.Core.Model.ChartType.Stock:
                 RenderLineChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH,
                     withMarkers: chart.ChartType == FreeP.Core.Model.ChartType.LineMarkers);
+                break;
+
+            case FreeP.Core.Model.ChartType.Stock:
+                RenderStockChart(dc, chart, plotX, plotY, plotW, plotH);
                 break;
 
             case FreeP.Core.Model.ChartType.Pie:
@@ -1128,6 +1131,25 @@ public sealed class SlideCanvas : FrameworkElement
     }
 
     // ── Bubble chart ──────────────────────────────────────────────────────────
+
+    private static void RenderStockChart(
+        DrawingContext dc,
+        FreeP.Core.Model.ChartShape chart,
+        double plotX,
+        double plotY,
+        double plotW,
+        double plotH)
+    {
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        var plan = ChartRenderPlanner.BuildStockPrimitivePlan(chart, plot);
+
+        foreach (var segment in plan.HighLowLines)
+            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+        foreach (var tick in plan.OpenTicks)
+            dc.DrawLine(ToPen(tick.Segment.Stroke), ToPoint(tick.Segment.Start), ToPoint(tick.Segment.End));
+        foreach (var tick in plan.CloseTicks)
+            dc.DrawLine(ToPen(tick.Segment.Stroke), ToPoint(tick.Segment.Start), ToPoint(tick.Segment.End));
+    }
 
     private static void RenderBubbleChart(
         DrawingContext dc, FreeP.Core.Model.ChartShape chart,

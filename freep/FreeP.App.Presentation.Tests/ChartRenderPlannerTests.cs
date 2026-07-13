@@ -343,10 +343,41 @@ public sealed class ChartRenderPlannerTests
         plan.HighLowLines.Should().OnlyContain(line => line.Start.X == line.End.X);
         plan.HighLowLines[0].Start.Y.Should().BeGreaterThan(plan.HighLowLines[0].End.Y,
             "low values should sit below high values in the stock stem");
-        plan.OpenTicks[0].Start.X.Should().BeLessThan(plan.OpenTicks[0].End.X);
-        plan.OpenTicks[0].End.X.Should().Be(plan.HighLowLines[0].Start.X);
-        plan.CloseTicks[0].Start.X.Should().Be(plan.HighLowLines[0].Start.X);
-        plan.CloseTicks[0].End.X.Should().BeGreaterThan(plan.CloseTicks[0].Start.X);
+        plan.OpenTicks[0].Segment.Start.X.Should().BeLessThan(plan.OpenTicks[0].Segment.End.X);
+        plan.OpenTicks[0].Segment.End.X.Should().Be(plan.HighLowLines[0].Start.X);
+        plan.CloseTicks[0].Segment.Start.X.Should().Be(plan.HighLowLines[0].Start.X);
+        plan.CloseTicks[0].Segment.End.X.Should().BeGreaterThan(plan.CloseTicks[0].Segment.Start.X);
+    }
+
+    [Fact]
+    public void BuildStockPrimitivePlan_ClassifiesOpenClosePriceMovesForSharedRendering()
+    {
+        var chart = MakeStockChart();
+        chart.Series[0].Values.Clear();
+        chart.Series[0].Values.AddRange(new double?[] { 10, 12, 11, 10 });
+        chart.Series[1].Values.Add(14);
+        chart.Series[2].Values.Add(8);
+        chart.Series[3].Values.Clear();
+        chart.Series[3].Values.AddRange(new double?[] { 13, 11, 11, null });
+
+        var plan = ChartRenderPlanner.BuildStockPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 400, 200));
+
+        plan.CloseTicks.Select(tick => tick.PriceMove)
+            .Should().Equal(
+                ChartStockPriceMove.Rising,
+                ChartStockPriceMove.Falling,
+                ChartStockPriceMove.Unchanged);
+        plan.OpenTicks.Select(tick => tick.PriceMove)
+            .Should().Equal(
+                ChartStockPriceMove.Rising,
+                ChartStockPriceMove.Falling,
+                ChartStockPriceMove.Unchanged,
+                ChartStockPriceMove.Unknown);
+        plan.CloseTicks[0].Segment.Stroke.Color.Should().Be(new SrgbColor(0x2E, 0x7D, 0x32));
+        plan.CloseTicks[1].Segment.Stroke.Color.Should().Be(new SrgbColor(0xC6, 0x28, 0x28));
+        plan.CloseTicks[2].Segment.Stroke.Color.Should().Be(new SrgbColor(0x44, 0x44, 0x44));
     }
 
     [Theory]
