@@ -886,10 +886,97 @@ public static class PortablePdfWriter
                 AppendRoundedRectanglePath(content, image.X, image.Y, image.Width, image.Height);
                 content.AppendLine("W n");
                 break;
+            case PdfImageClipKind.Triangle:
+            case PdfImageClipKind.Diamond:
+            case PdfImageClipKind.Parallelogram:
+            case PdfImageClipKind.Hexagon:
+            case PdfImageClipKind.Chevron:
+                AppendPresetClipPolygonPath(content, image.X, image.Y, image.Width, image.Height, image.ClipKind);
+                content.AppendLine("W n");
+                break;
             case PdfImageClipKind.None when includeRectangularClip:
                 content.AppendLine($"{FormatNumber(image.X)} {FormatNumber(image.Y)} {FormatNumber(image.Width)} {FormatNumber(image.Height)} re W n");
                 break;
         }
+    }
+
+    private static void AppendPresetClipPolygonPath(
+        StringBuilder content,
+        double x,
+        double y,
+        double width,
+        double height,
+        PdfImageClipKind clipKind)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        var points = GetPresetClipPolygonPoints(x, y, width, height, clipKind);
+        if (points.Length == 0)
+            return;
+
+        content.AppendLine($"{FormatNumber(points[0].X)} {FormatNumber(points[0].Y)} m");
+        for (var i = 1; i < points.Length; i++)
+            content.AppendLine($"{FormatNumber(points[i].X)} {FormatNumber(points[i].Y)} l");
+        content.AppendLine("h");
+    }
+
+    private static PdfPathPoint[] GetPresetClipPolygonPoints(
+        double x,
+        double y,
+        double width,
+        double height,
+        PdfImageClipKind clipKind)
+    {
+        var right = x + width;
+        var top = y + height;
+        var midX = x + width / 2.0;
+        var midY = y + height / 2.0;
+        var quarterX = x + width * 0.25;
+        var threeQuarterX = x + width * 0.75;
+
+        return clipKind switch
+        {
+            PdfImageClipKind.Triangle =>
+            [
+                new PdfPathPoint(midX, top),
+                new PdfPathPoint(right, y),
+                new PdfPathPoint(x, y),
+            ],
+            PdfImageClipKind.Diamond =>
+            [
+                new PdfPathPoint(midX, top),
+                new PdfPathPoint(right, midY),
+                new PdfPathPoint(midX, y),
+                new PdfPathPoint(x, midY),
+            ],
+            PdfImageClipKind.Parallelogram =>
+            [
+                new PdfPathPoint(quarterX, top),
+                new PdfPathPoint(right, top),
+                new PdfPathPoint(threeQuarterX, y),
+                new PdfPathPoint(x, y),
+            ],
+            PdfImageClipKind.Hexagon =>
+            [
+                new PdfPathPoint(quarterX, top),
+                new PdfPathPoint(threeQuarterX, top),
+                new PdfPathPoint(right, midY),
+                new PdfPathPoint(threeQuarterX, y),
+                new PdfPathPoint(quarterX, y),
+                new PdfPathPoint(x, midY),
+            ],
+            PdfImageClipKind.Chevron =>
+            [
+                new PdfPathPoint(x, top),
+                new PdfPathPoint(threeQuarterX, top),
+                new PdfPathPoint(right, midY),
+                new PdfPathPoint(threeQuarterX, y),
+                new PdfPathPoint(x, y),
+                new PdfPathPoint(quarterX, midY),
+            ],
+            _ => [],
+        };
     }
 
     private static void AppendRoundedRectanglePath(

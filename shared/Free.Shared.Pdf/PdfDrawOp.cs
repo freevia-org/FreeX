@@ -144,6 +144,11 @@ public enum PdfImageClipKind
     None,
     Ellipse,
     RoundedRectangle,
+    Triangle,
+    Diamond,
+    Parallelogram,
+    Hexagon,
+    Chevron,
 }
 
 /// <summary>

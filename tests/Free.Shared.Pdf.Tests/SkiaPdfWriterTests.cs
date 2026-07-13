@@ -47,6 +47,47 @@ public sealed class SkiaPdfWriterTests
         stream.Length.Should().BeGreaterThan(0);
     }
 
+    [Theory]
+    [InlineData(PdfImageClipKind.Triangle)]
+    [InlineData(PdfImageClipKind.Diamond)]
+    [InlineData(PdfImageClipKind.Parallelogram)]
+    [InlineData(PdfImageClipKind.Hexagon)]
+    [InlineData(PdfImageClipKind.Chevron)]
+    public void Write_AcceptsPresetClippedImages(PdfImageClipKind clipKind)
+    {
+        var imageBytes = EncodePng(CreateTestBitmap());
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(
+                10,
+                20,
+                60,
+                40,
+                imageBytes,
+                "image/png",
+                ClipKind: clipKind),
+        });
+        using var stream = new MemoryStream();
+
+        var pageCount = SkiaPdfWriter.Write(new PdfContentDocument(new[] { page }), stream);
+
+        pageCount.Should().Be(1);
+        stream.Length.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void CreatePresetClipPath_BuildsChevronWithinImageBounds()
+    {
+        using var path = SkiaPdfWriter.CreatePresetClipPath(
+            PdfImageClipKind.Chevron,
+            new SKRect(10, 20, 70, 60));
+
+        path.Bounds.Left.Should().Be(10);
+        path.Bounds.Top.Should().Be(20);
+        path.Bounds.Right.Should().Be(70);
+        path.Bounds.Bottom.Should().Be(60);
+    }
+
     [Fact]
     public void Write_AcceptsOpacityGroups()
     {

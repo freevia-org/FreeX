@@ -390,6 +390,34 @@ public sealed class PortablePdfWriterTests
         pdf.Should().Contain("/Im1 Do");
     }
 
+    [Theory]
+    [InlineData(PdfImageClipKind.Triangle, "20 40 m\n30 30 l\n10 30 l\nh\nW n")]
+    [InlineData(PdfImageClipKind.Diamond, "20 40 m\n30 35 l\n20 30 l\n10 35 l\nh\nW n")]
+    [InlineData(PdfImageClipKind.Parallelogram, "15 40 m\n30 40 l\n25 30 l\n10 30 l\nh\nW n")]
+    [InlineData(PdfImageClipKind.Hexagon, "15 40 m\n25 40 l\n30 35 l\n25 30 l\n15 30 l\n10 35 l\nh\nW n")]
+    [InlineData(PdfImageClipKind.Chevron, "10 40 m\n25 40 l\n30 35 l\n25 30 l\n10 30 l\n15 35 l\nh\nW n")]
+    public void Write_ClipsImageToPresetPolygon(PdfImageClipKind clipKind, string expectedPath)
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(
+                10,
+                30,
+                20,
+                10,
+                MinimalPngBytes(),
+                "image/png",
+                ClipKind: clipKind),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain(expectedPath);
+        pdf.Should().Contain("W n\n20 0 0 10 10 30 cm");
+        pdf.Should().Contain("/Im1 Do");
+    }
+
     [Fact]
     public void Write_EmbedsJpegImageWithDctDecode()
     {

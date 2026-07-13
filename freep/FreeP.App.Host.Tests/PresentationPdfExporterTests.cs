@@ -751,7 +751,13 @@ public class PresentationPdfExporterTests
     [Theory]
     [InlineData("ellipse", PdfImageClipKind.Ellipse)]
     [InlineData("roundRect", PdfImageClipKind.RoundedRectangle)]
+    [InlineData(" Triangle ", PdfImageClipKind.Triangle)]
+    [InlineData("DIAMOND", PdfImageClipKind.Diamond)]
+    [InlineData("parallelogram", PdfImageClipKind.Parallelogram)]
+    [InlineData("hexagon", PdfImageClipKind.Hexagon)]
+    [InlineData("chevron", PdfImageClipKind.Chevron)]
     [InlineData("rect", PdfImageClipKind.None)]
+    [InlineData("rtTriangle", PdfImageClipKind.None)]
     public void BuildDocument_CarriesPictureFrameGeometryToPdfImageClip(string frameGeometry, PdfImageClipKind expectedClip)
     {
         var deck = Presentation.CreateEmpty();

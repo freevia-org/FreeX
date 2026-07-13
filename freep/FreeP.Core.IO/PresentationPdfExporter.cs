@@ -430,10 +430,15 @@ public static class PresentationPdfExporter
     }
 
     private static PdfImageClipKind MapPictureFrameClip(string? pictureFrameGeometry) =>
-        pictureFrameGeometry switch
+        pictureFrameGeometry?.Trim() switch
         {
-            "ellipse" => PdfImageClipKind.Ellipse,
-            "roundRect" => PdfImageClipKind.RoundedRectangle,
+            string geometry when geometry.Equals("ellipse", StringComparison.OrdinalIgnoreCase) => PdfImageClipKind.Ellipse,
+            string geometry when geometry.Equals("roundRect", StringComparison.OrdinalIgnoreCase) => PdfImageClipKind.RoundedRectangle,
+            string geometry when geometry.Equals("triangle", StringComparison.OrdinalIgnoreCase) => PdfImageClipKind.Triangle,
+            string geometry when geometry.Equals("diamond", StringComparison.OrdinalIgnoreCase) => PdfImageClipKind.Diamond,
+            string geometry when geometry.Equals("parallelogram", StringComparison.OrdinalIgnoreCase) => PdfImageClipKind.Parallelogram,
+            string geometry when geometry.Equals("hexagon", StringComparison.OrdinalIgnoreCase) => PdfImageClipKind.Hexagon,
+            string geometry when geometry.Equals("chevron", StringComparison.OrdinalIgnoreCase) => PdfImageClipKind.Chevron,
             _ => PdfImageClipKind.None,
         };
 

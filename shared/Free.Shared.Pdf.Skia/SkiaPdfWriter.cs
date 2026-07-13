@@ -409,7 +409,82 @@ public static class SkiaPdfWriter
                 canvas.ClipRoundRect(roundRect, antialias: true);
                 break;
             }
+            case PdfImageClipKind.Triangle:
+            case PdfImageClipKind.Diamond:
+            case PdfImageClipKind.Parallelogram:
+            case PdfImageClipKind.Hexagon:
+            case PdfImageClipKind.Chevron:
+            {
+                using var path = CreatePresetClipPath(clipKind, bounds);
+                canvas.ClipPath(path, antialias: true);
+                break;
+            }
         }
+    }
+
+    internal static SKPath CreatePresetClipPath(PdfImageClipKind clipKind, SKRect bounds)
+    {
+        var path = new SKPath();
+        var points = GetPresetClipPolygonPoints(clipKind, bounds);
+        if (points.Length == 0)
+            return path;
+
+        path.MoveTo(points[0]);
+        for (var i = 1; i < points.Length; i++)
+            path.LineTo(points[i]);
+        path.Close();
+        return path;
+    }
+
+    private static SKPoint[] GetPresetClipPolygonPoints(PdfImageClipKind clipKind, SKRect bounds)
+    {
+        var midX = bounds.MidX;
+        var midY = bounds.MidY;
+        var quarterX = bounds.Left + bounds.Width * 0.25f;
+        var threeQuarterX = bounds.Left + bounds.Width * 0.75f;
+
+        return clipKind switch
+        {
+            PdfImageClipKind.Triangle =>
+            [
+                new SKPoint(midX, bounds.Top),
+                new SKPoint(bounds.Right, bounds.Bottom),
+                new SKPoint(bounds.Left, bounds.Bottom),
+            ],
+            PdfImageClipKind.Diamond =>
+            [
+                new SKPoint(midX, bounds.Top),
+                new SKPoint(bounds.Right, midY),
+                new SKPoint(midX, bounds.Bottom),
+                new SKPoint(bounds.Left, midY),
+            ],
+            PdfImageClipKind.Parallelogram =>
+            [
+                new SKPoint(quarterX, bounds.Top),
+                new SKPoint(bounds.Right, bounds.Top),
+                new SKPoint(threeQuarterX, bounds.Bottom),
+                new SKPoint(bounds.Left, bounds.Bottom),
+            ],
+            PdfImageClipKind.Hexagon =>
+            [
+                new SKPoint(quarterX, bounds.Top),
+                new SKPoint(threeQuarterX, bounds.Top),
+                new SKPoint(bounds.Right, midY),
+                new SKPoint(threeQuarterX, bounds.Bottom),
+                new SKPoint(quarterX, bounds.Bottom),
+                new SKPoint(bounds.Left, midY),
+            ],
+            PdfImageClipKind.Chevron =>
+            [
+                new SKPoint(bounds.Left, bounds.Top),
+                new SKPoint(threeQuarterX, bounds.Top),
+                new SKPoint(bounds.Right, midY),
+                new SKPoint(threeQuarterX, bounds.Bottom),
+                new SKPoint(bounds.Left, bounds.Bottom),
+                new SKPoint(quarterX, midY),
+            ],
+            _ => [],
+        };
     }
 
     private static SKColor ToSkColor(PdfColor color) => new(color.R, color.G, color.B);
