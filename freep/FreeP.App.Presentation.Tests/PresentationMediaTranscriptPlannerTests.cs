@@ -271,6 +271,97 @@ public sealed class PresentationMediaTranscriptPlannerTests
     }
 
     [Fact]
+    public void CaptionAuthoringPanePlan_ExposesSharedCreateReplaceDeleteState()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var media = new MediaInfo
+        {
+            IsVideo = true,
+            CaptionTracks =
+            {
+                new MediaCaptionTrackInfo
+                {
+                    Source = "https://cdn.example.com/external.vtt",
+                    Label = "External captions",
+                    IsExternal = true
+                },
+                new MediaCaptionTrackInfo
+                {
+                    Source = "ppt/media/internal.vtt",
+                    ContentType = "text/vtt",
+                    Label = "Internal captions",
+                    Language = "en-US",
+                    Bytes = Encoding.UTF8.GetBytes("WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nExisting cue\r\n")
+                }
+            }
+        };
+        presentation.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 401,
+            Name = "Captioned media",
+            Kind = SlideShapeKind.Media,
+            Media = media
+        });
+
+        var externalPlan = PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(
+            presentation.Slides[0],
+            0,
+            [401],
+            selectedTrackIndex: 0,
+            proposedLabel: null,
+            proposedLanguage: null,
+            proposedSource: null,
+            proposedTranscriptText: null);
+
+        externalPlan.ShapeId.Should().Be(401);
+        externalPlan.Tracks.Should().HaveCount(2);
+        externalPlan.SelectedTrackIndex.Should().Be(0);
+        externalPlan.Message.Should().Be(PresentationMediaTranscriptPlanner.CaptionAuthoringExternalTrackMessage);
+        externalPlan.Actions.Single(action =>
+                action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId)
+            .DisabledReason.Should().Be(PresentationMediaTranscriptPlanner.ExternalCaptionTrackMessage);
+        externalPlan.Actions.Single(action =>
+                action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneDeleteCommandId)
+            .DisabledReason.Should().Be(PresentationMediaTranscriptPlanner.ExternalCaptionTrackMessage);
+
+        var internalPlan = PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(
+            presentation.Slides[0],
+            0,
+            [401],
+            selectedTrackIndex: 1,
+            proposedLabel: null,
+            proposedLanguage: null,
+            proposedSource: null,
+            proposedTranscriptText: null);
+
+        internalPlan.Label.Value.Should().Be("Internal captions");
+        internalPlan.Language.Value.Should().Be("en-US");
+        internalPlan.Source.Value.Should().Be("ppt/media/internal.vtt");
+        internalPlan.TranscriptText.Value.Should().Contain("Existing cue");
+        internalPlan.Actions.Single(action =>
+                action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId)
+            .IsEnabled.Should().BeTrue();
+        internalPlan.Actions.Single(action =>
+                action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneDeleteCommandId)
+            .IsEnabled.Should().BeTrue();
+
+        var missingSelection = PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(
+            presentation.Slides[0],
+            0,
+            [],
+            selectedTrackIndex: null,
+            proposedLabel: null,
+            proposedLanguage: null,
+            proposedSource: null,
+            proposedTranscriptText: null);
+
+        missingSelection.HasSelectedMedia.Should().BeFalse();
+        missingSelection.Actions.Should().Contain(action =>
+            action.CommandId == PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId &&
+            action.DisabledReason == PresentationMediaTranscriptPlanner.MissingSelectedMediaMessage);
+    }
+
+    [Fact]
     public void CaptionTrackAuthoring_RejectsInvalidCuesAndDoesNotMutateExternalTracks()
     {
         var media = new MediaInfo

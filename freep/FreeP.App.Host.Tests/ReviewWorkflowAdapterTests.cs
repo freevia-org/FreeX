@@ -668,6 +668,76 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_MediaCaptionPane_CreateReplaceDelete_UsesSharedPlanner()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var mediaShape = new SlideShape
+            {
+                Id = 722,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true },
+                AlternativeText = "Demo walkthrough."
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            var opened = window.ShowMediaCaptionPane();
+
+            opened.ShapeId.Should().Be(mediaShape.Id);
+            window.IsMediaCaptionPaneVisible.Should().BeTrue();
+            window.MediaCaptionPaneHeading.Should().Be("Media Captions - Demo video");
+            window.MediaCaptionPaneTrackCount.Should().Be(0);
+            window.IsMediaCaptionCreateEnabled.Should().BeFalse();
+
+            window.SetMediaCaptionPaneInput(
+                "English captions",
+                "en-US",
+                "ppt/media/demo-captions.vtt",
+                "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInitial cue\r\n");
+            window.IsMediaCaptionCreateEnabled.Should().BeTrue();
+
+            var create = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Create);
+
+            create.Succeeded.Should().BeTrue();
+            create.TrackIndex.Should().Be(0);
+            mediaShape.Media!.CaptionTracks.Should().ContainSingle()
+                .Which.Label.Should().Be("English captions");
+            window.LastMediaCaptionAuthoringMutationPlan!.Intent.Should().Be(PresentationMediaCaptionAuthoringIntentKind.Create);
+            window.MediaCaptionPaneTrackCount.Should().Be(1);
+            window.IsMediaCaptionReplaceEnabled.Should().BeTrue();
+            window.IsMediaCaptionDeleteEnabled.Should().BeTrue();
+            window.IsDirty.Should().BeTrue();
+            window.LastMediaTranscriptPlan!.Tracks.Should().ContainSingle()
+                .Which.Cues.Single().Text.Should().Be("Initial cue");
+
+            window.SetMediaCaptionPaneInput(
+                "English captions",
+                "en-US",
+                "ppt/media/demo-captions.vtt",
+                "WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nUpdated cue\r\n",
+                selectedTrackIndex: 0);
+            var replace = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Replace);
+
+            replace.Succeeded.Should().BeTrue();
+            window.LastMediaTranscriptPlan!.Tracks.Should().ContainSingle()
+                .Which.Cues.Single().Text.Should().Be("Updated cue");
+
+            var delete = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Delete);
+
+            delete.Succeeded.Should().BeTrue();
+            mediaShape.Media.CaptionTracks.Should().BeEmpty();
+            window.MediaCaptionPaneTrackCount.Should().Be(0);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ApplyProofingCorrection_UsesSharedMutationAndRefreshesPlans()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
@@ -1701,6 +1771,9 @@ public sealed class ReviewWorkflowAdapterTests
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(_presentation)");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
+        source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");
+        source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringMutationPlan(");
+        source.Should().Contain("PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(");
         source.Should().Contain("LastCommentPanePlan = plan;");
         source.Should().Contain("cm.AuthorDisplayName");
         source.Should().Contain("cm.InitialsBadgeText");

@@ -154,6 +154,24 @@ public sealed class MainWindow : Window
     private StackPanel _proofingPaneRowsPanel = null!;
     private int? _selectedProofingIssueRowIndex;
     private PresentationProofingIgnoreState _proofingIgnoreState = PresentationProofingIgnoreState.Empty;
+    private Border _mediaCaptionPaneHost = null!;
+    private TextBlock _mediaCaptionPaneHeading = null!;
+    private TextBlock _mediaCaptionPaneMessage = null!;
+    private ComboBox _mediaCaptionTrackBox = null!;
+    private TextBlock _mediaCaptionLabelText = null!;
+    private TextBox _mediaCaptionLabelBox = null!;
+    private TextBlock _mediaCaptionLanguageText = null!;
+    private TextBox _mediaCaptionLanguageBox = null!;
+    private TextBlock _mediaCaptionSourceText = null!;
+    private TextBox _mediaCaptionSourceBox = null!;
+    private TextBlock _mediaCaptionTranscriptText = null!;
+    private TextBox _mediaCaptionTranscriptBox = null!;
+    private Button _mediaCaptionCreateButton = null!;
+    private Button _mediaCaptionReplaceButton = null!;
+    private Button _mediaCaptionDeleteButton = null!;
+    private Button _mediaCaptionCloseButton = null!;
+    private bool _mediaCaptionPaneRefreshing;
+    private int? _selectedMediaCaptionTrackIndex;
 
     internal PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
     internal PresentationCommentNavigationPlan? LastCommentNavigationPlan { get; private set; }
@@ -170,6 +188,9 @@ public sealed class MainWindow : Window
     internal PresentationProofingExecutionPlan? LastProofingExecutionPlan { get; private set; }
     internal PresentationProofingPanePlan? LastProofingPanePlan { get; private set; }
     internal PresentationMediaTranscriptPlan? LastMediaTranscriptPlan { get; private set; }
+    internal PresentationMediaCaptionAuthoringPanePlan? LastMediaCaptionAuthoringPanePlan { get; private set; }
+    internal PresentationMediaCaptionAuthoringMutationPlan? LastMediaCaptionAuthoringMutationPlan { get; private set; }
+    internal PresentationMediaCaptionTrackMutationResult? LastMediaCaptionTrackMutationResult { get; private set; }
     internal PresentationDesignCommandPlan? LastLayoutRequestPlan { get; private set; }
     internal PresentationNotesPagePreviewPlan? LastNotesPagePreviewPlan { get; private set; }
     internal PresentationNotesPagePdfRenderPlan? LastNotesPagePdfRenderPlan { get; private set; }
@@ -233,6 +254,14 @@ public sealed class MainWindow : Window
             action.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreAllCommandId)?.IsEnabled == true;
     internal string ProofingPaneHeading => _proofingPaneHeading?.Text ?? string.Empty;
     internal string ProofingPaneMessage => _proofingPaneMessage?.Text ?? string.Empty;
+    internal bool IsMediaCaptionPaneVisible => _mediaCaptionPaneHost?.Visibility == Visibility.Visible;
+    internal string MediaCaptionPaneHeading => _mediaCaptionPaneHeading?.Text ?? string.Empty;
+    internal string MediaCaptionPaneMessage => _mediaCaptionPaneMessage?.Text ?? string.Empty;
+    internal int MediaCaptionPaneTrackCount => LastMediaCaptionAuthoringPanePlan?.Tracks.Count ?? 0;
+    internal bool IsMediaCaptionCreateEnabled => _mediaCaptionCreateButton?.IsEnabled == true;
+    internal bool IsMediaCaptionReplaceEnabled => _mediaCaptionReplaceButton?.IsEnabled == true;
+    internal bool IsMediaCaptionDeleteEnabled => _mediaCaptionDeleteButton?.IsEnabled == true;
+    internal string MediaCaptionPaneTranscriptText => _mediaCaptionTranscriptBox?.Text ?? string.Empty;
     internal string? ReadingOrderMoveEarlierDisabledReason =>
         LastReadingOrderPlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ReadingOrderMoveEarlierCommandId)?.DisabledReason;
@@ -406,13 +435,14 @@ public sealed class MainWindow : Window
         Editor  = new EditingSession(_presentation, bus);
 
         Editor.Changed           += () => { _file.MarkDirty(); RefreshCanvas(); RefreshNotesPane(); UpdateSlideCount(); UpdateTitle(); RefreshReviewWorkflowPlans(); };
-        Editor.CurrentSlideChanged += (_, _) => { _selectedCommentIndex = null; RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); };
+        Editor.CurrentSlideChanged += (_, _) => { _selectedCommentIndex = null; _selectedMediaCaptionTrackIndex = null; RefreshCanvas(); RefreshNotesPane(); RefreshCommentPane(); RefreshReviewWorkflowPlans(); RefreshVisibleMediaCaptionPaneFromFields(); };
         Editor.SelectionChanged += (_, _) =>
         {
             RefreshAltTextRequestPlan();
             RefreshReadingOrderPlan();
             if (IsAltTextPaneVisible)
                 ShowAltTextPane();
+            RefreshVisibleMediaCaptionPaneFromFields();
         };
 
         // Re-attach editing layer whenever the editor is rebuilt (file open/new).
@@ -655,10 +685,12 @@ public sealed class MainWindow : Window
 
         _readingOrderPaneHost = BuildReadingOrderPaneHost();
         _proofingPaneHost = BuildProofingPaneHost();
+        _mediaCaptionPaneHost = BuildMediaCaptionPaneHost();
 
         var splitter = new Grid();
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         splitter.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -670,17 +702,137 @@ public sealed class MainWindow : Window
         Grid.SetColumn(_altTextPaneHost, 3);
         Grid.SetColumn(_readingOrderPaneHost, 4);
         Grid.SetColumn(_proofingPaneHost, 5);
-        Grid.SetColumn(_animPaneHost,  6); // 16B
+        Grid.SetColumn(_mediaCaptionPaneHost, 6);
+        Grid.SetColumn(_animPaneHost,  7); // 16B
         splitter.Children.Add(SlidePaneHost);
         splitter.Children.Add(rightPanel);
         splitter.Children.Add(_accessibilityCheckerPaneHost);
         splitter.Children.Add(_altTextPaneHost);
         splitter.Children.Add(_readingOrderPaneHost);
         splitter.Children.Add(_proofingPaneHost);
+        splitter.Children.Add(_mediaCaptionPaneHost);
         splitter.Children.Add(_animPaneHost); // 16B
 
         return splitter;
     }
+
+    private Border BuildMediaCaptionPaneHost()
+    {
+        _mediaCaptionPaneHeading = new TextBlock
+        {
+            Text = "Media Captions",
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _mediaCaptionPaneMessage = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _mediaCaptionTrackBox = new ComboBox
+        {
+            Margin = new Thickness(12, 0, 12, 6),
+            MinHeight = 28,
+        };
+        _mediaCaptionTrackBox.SelectionChanged += (_, _) =>
+        {
+            if (_mediaCaptionPaneRefreshing)
+                return;
+            _selectedMediaCaptionTrackIndex = _mediaCaptionTrackBox.SelectedItem is ComboBoxItem { Tag: int trackIndex }
+                ? trackIndex
+                : null;
+            RefreshVisibleMediaCaptionPaneFromFields();
+        };
+
+        _mediaCaptionLabelText = BuildMediaCaptionPaneLabel();
+        _mediaCaptionLabelBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        _mediaCaptionLanguageText = BuildMediaCaptionPaneLabel();
+        _mediaCaptionLanguageBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        _mediaCaptionSourceText = BuildMediaCaptionPaneLabel();
+        _mediaCaptionSourceBox = BuildMediaCaptionPaneTextBox(singleLine: true);
+        _mediaCaptionTranscriptText = BuildMediaCaptionPaneLabel();
+        _mediaCaptionTranscriptBox = BuildMediaCaptionPaneTextBox(singleLine: false);
+        _mediaCaptionCreateButton = BuildMediaCaptionPaneButton();
+        _mediaCaptionReplaceButton = BuildMediaCaptionPaneButton();
+        _mediaCaptionDeleteButton = BuildMediaCaptionPaneButton();
+        _mediaCaptionCloseButton = BuildMediaCaptionPaneButton();
+
+        _mediaCaptionLabelBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
+        _mediaCaptionLanguageBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
+        _mediaCaptionSourceBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
+        _mediaCaptionTranscriptBox.TextChanged += (_, _) => RefreshVisibleMediaCaptionPaneFromFields();
+        _mediaCaptionCreateButton.Click += (_, _) => ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Create);
+        _mediaCaptionReplaceButton.Click += (_, _) => ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Replace);
+        _mediaCaptionDeleteButton.Click += (_, _) => ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Delete);
+        _mediaCaptionCloseButton.Click += (_, _) => HideMediaCaptionPane();
+
+        var buttons = new WrapPanel
+        {
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(12, 8, 12, 12),
+        };
+        buttons.Children.Add(_mediaCaptionCreateButton);
+        buttons.Children.Add(_mediaCaptionReplaceButton);
+        buttons.Children.Add(_mediaCaptionDeleteButton);
+        buttons.Children.Add(_mediaCaptionCloseButton);
+
+        var panel = new StackPanel { Orientation = Orientation.Vertical };
+        panel.Children.Add(_mediaCaptionPaneHeading);
+        panel.Children.Add(_mediaCaptionPaneMessage);
+        panel.Children.Add(_mediaCaptionTrackBox);
+        panel.Children.Add(_mediaCaptionLabelText);
+        panel.Children.Add(_mediaCaptionLabelBox);
+        panel.Children.Add(_mediaCaptionLanguageText);
+        panel.Children.Add(_mediaCaptionLanguageBox);
+        panel.Children.Add(_mediaCaptionSourceText);
+        panel.Children.Add(_mediaCaptionSourceBox);
+        panel.Children.Add(_mediaCaptionTranscriptText);
+        panel.Children.Add(_mediaCaptionTranscriptBox);
+        panel.Children.Add(buttons);
+
+        return new Border
+        {
+            Width = 320,
+            Visibility = Visibility.Collapsed,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = panel,
+        };
+    }
+
+    private static TextBlock BuildMediaCaptionPaneLabel()
+        => new()
+        {
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(12, 6, 12, 2),
+        };
+
+    private static TextBox BuildMediaCaptionPaneTextBox(bool singleLine)
+        => new()
+        {
+            AcceptsReturn = !singleLine,
+            TextWrapping = singleLine ? TextWrapping.NoWrap : TextWrapping.Wrap,
+            MinHeight = singleLine ? 28 : 128,
+            MaxHeight = singleLine ? 28 : 180,
+            Margin = new Thickness(12, 0, 12, 4),
+            Padding = new Thickness(6, 4, 6, 4),
+            VerticalScrollBarVisibility = singleLine ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto,
+        };
+
+    private static Button BuildMediaCaptionPaneButton()
+        => new()
+        {
+            MinWidth = 72,
+            Padding = new Thickness(10, 4, 10, 4),
+            Margin = new Thickness(0, 0, 6, 6),
+        };
+
+    private static string FormatAvailability(bool isAvailable)
+        => isAvailable ? "available" : "unavailable";
 
     private Border BuildAltTextPaneHost()
     {
@@ -1652,6 +1804,10 @@ public sealed class MainWindow : Window
         {
             OpenHyperlinkDialog();
         }
+        else if (row?.Category == "Media")
+        {
+            ShowMediaCaptionPane();
+        }
 
         return LastAccessibilityCheckerPanePlan!;
     }
@@ -1775,6 +1931,217 @@ public sealed class MainWindow : Window
     {
         if (_altTextPaneHost is not null)
             _altTextPaneHost.Visibility = Visibility.Collapsed;
+    }
+
+    internal PresentationMediaCaptionAuthoringPanePlan ShowMediaCaptionPane()
+    {
+        RefreshMediaCaptionAuthoringPlans(null, null, null, null);
+        RenderMediaCaptionPane(LastMediaCaptionAuthoringPanePlan!);
+        _mediaCaptionPaneHost.Visibility = Visibility.Visible;
+        return LastMediaCaptionAuthoringPanePlan!;
+    }
+
+    internal void HideMediaCaptionPane()
+    {
+        if (_mediaCaptionPaneHost is not null)
+            _mediaCaptionPaneHost.Visibility = Visibility.Collapsed;
+    }
+
+    internal void SetMediaCaptionPaneInput(
+        string label,
+        string language,
+        string source,
+        string transcriptText,
+        int? selectedTrackIndex = null)
+    {
+        if (!IsMediaCaptionPaneVisible)
+            ShowMediaCaptionPane();
+
+        _mediaCaptionPaneRefreshing = true;
+        try
+        {
+            if (selectedTrackIndex.HasValue)
+                _selectedMediaCaptionTrackIndex = selectedTrackIndex;
+            _mediaCaptionLabelBox.Text = label;
+            _mediaCaptionLanguageBox.Text = language;
+            _mediaCaptionSourceBox.Text = source;
+            _mediaCaptionTranscriptBox.Text = transcriptText;
+        }
+        finally
+        {
+            _mediaCaptionPaneRefreshing = false;
+        }
+
+        RefreshVisibleMediaCaptionPaneFromFields();
+    }
+
+    internal PresentationMediaCaptionTrackMutationResult ApplyMediaCaptionPane(
+        PresentationMediaCaptionAuthoringIntentKind intent)
+    {
+        var media = PresentationMediaTranscriptPlanner
+            .FindSelectedMediaShape(Editor.CurrentSlide, Editor.SelectedShapeIds)
+            ?.Media;
+        var descriptor = new PresentationMediaCaptionTrackAuthoringDescriptor(
+            _mediaCaptionLabelBox.Text,
+            _mediaCaptionLanguageBox.Text,
+            _mediaCaptionSourceBox.Text,
+            _mediaCaptionTranscriptBox.Text);
+        LastMediaCaptionAuthoringMutationPlan =
+            PresentationMediaTranscriptPlanner.BuildCaptionAuthoringMutationPlan(
+                media,
+                intent,
+                _selectedMediaCaptionTrackIndex ?? -1,
+                descriptor);
+        LastMediaCaptionTrackMutationResult =
+            PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(
+                media,
+                LastMediaCaptionAuthoringMutationPlan);
+        if (LastMediaCaptionTrackMutationResult.Succeeded)
+        {
+            _selectedMediaCaptionTrackIndex = NormalizeMediaCaptionSelectionAfterMutation(
+                media,
+                intent,
+                LastMediaCaptionTrackMutationResult.TrackIndex);
+            _file.MarkDirty();
+            RefreshReviewWorkflowPlans();
+            UpdateTitle();
+        }
+
+        RefreshVisibleMediaCaptionPaneFromFields();
+        return LastMediaCaptionTrackMutationResult;
+    }
+
+    private void RefreshMediaCaptionAuthoringPlans(
+        string? proposedLabel,
+        string? proposedLanguage,
+        string? proposedSource,
+        string? proposedTranscriptText)
+    {
+        LastMediaCaptionAuthoringPanePlan =
+            PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(
+                Editor.CurrentSlide,
+                Editor.CurrentSlideIndex,
+                Editor.SelectedShapeIds,
+                _selectedMediaCaptionTrackIndex,
+                proposedLabel,
+                proposedLanguage,
+                proposedSource,
+                proposedTranscriptText);
+        _selectedMediaCaptionTrackIndex = LastMediaCaptionAuthoringPanePlan.SelectedTrackIndex >= 0
+            ? LastMediaCaptionAuthoringPanePlan.SelectedTrackIndex
+            : null;
+    }
+
+    private void RefreshVisibleMediaCaptionPaneFromFields()
+    {
+        if (_mediaCaptionPaneRefreshing || !IsMediaCaptionPaneVisible)
+            return;
+
+        RefreshMediaCaptionAuthoringPlans(
+            _mediaCaptionLabelBox.Text,
+            _mediaCaptionLanguageBox.Text,
+            _mediaCaptionSourceBox.Text,
+            _mediaCaptionTranscriptBox.Text);
+        RenderMediaCaptionPane(LastMediaCaptionAuthoringPanePlan!);
+    }
+
+    private void RenderMediaCaptionPane(PresentationMediaCaptionAuthoringPanePlan plan)
+    {
+        _mediaCaptionPaneRefreshing = true;
+        try
+        {
+            _mediaCaptionPaneHeading.Text = string.IsNullOrWhiteSpace(plan.ShapeName)
+                ? "Media Captions"
+                : $"Media Captions - {plan.ShapeName}";
+            _mediaCaptionPaneMessage.Text = plan.Message;
+            RenderMediaCaptionTrackOptions(plan);
+            RenderMediaCaptionField(_mediaCaptionLabelText, _mediaCaptionLabelBox, plan.Label);
+            RenderMediaCaptionField(_mediaCaptionLanguageText, _mediaCaptionLanguageBox, plan.Language);
+            RenderMediaCaptionField(_mediaCaptionSourceText, _mediaCaptionSourceBox, plan.Source);
+            RenderMediaCaptionField(_mediaCaptionTranscriptText, _mediaCaptionTranscriptBox, plan.TranscriptText);
+            ApplyMediaCaptionButtonPlan(
+                _mediaCaptionCreateButton,
+                GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCreateCommandId));
+            ApplyMediaCaptionButtonPlan(
+                _mediaCaptionReplaceButton,
+                GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneReplaceCommandId));
+            ApplyMediaCaptionButtonPlan(
+                _mediaCaptionDeleteButton,
+                GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneDeleteCommandId));
+            ApplyMediaCaptionButtonPlan(
+                _mediaCaptionCloseButton,
+                GetMediaCaptionPaneAction(plan, PresentationMediaTranscriptPlanner.CaptionAuthoringPaneCloseCommandId));
+        }
+        finally
+        {
+            _mediaCaptionPaneRefreshing = false;
+        }
+    }
+
+    private void RenderMediaCaptionTrackOptions(PresentationMediaCaptionAuthoringPanePlan plan)
+    {
+        _mediaCaptionTrackBox.Items.Clear();
+        foreach (var track in plan.Tracks)
+        {
+            _mediaCaptionTrackBox.Items.Add(new ComboBoxItem
+            {
+                Content = $"{track.TrackIndex + 1}. {track.Label} ({FormatAvailability(!track.IsExternal)})",
+                Tag = track.TrackIndex,
+            });
+        }
+
+        _mediaCaptionTrackBox.IsEnabled = plan.Tracks.Count > 0;
+        for (var index = 0; index < _mediaCaptionTrackBox.Items.Count; index++)
+        {
+            if (_mediaCaptionTrackBox.Items[index] is ComboBoxItem { Tag: int trackIndex }
+                && trackIndex == plan.SelectedTrackIndex)
+            {
+                _mediaCaptionTrackBox.SelectedIndex = index;
+                return;
+            }
+        }
+
+        _mediaCaptionTrackBox.SelectedIndex = -1;
+    }
+
+    private static void RenderMediaCaptionField(
+        TextBlock label,
+        TextBox textBox,
+        PresentationMediaCaptionAuthoringFieldPlan field)
+    {
+        label.Text = field.ValidationMessage is null
+            ? field.Label
+            : $"{field.Label} - {field.ValidationMessage}";
+        textBox.ToolTip = field.ValidationMessage ?? field.Placeholder;
+        textBox.IsEnabled = field.IsEnabled;
+        SetTextIfChanged(textBox, field.Value);
+    }
+
+    private static PresentationMediaCaptionAuthoringActionPlan GetMediaCaptionPaneAction(
+        PresentationMediaCaptionAuthoringPanePlan plan,
+        string commandId)
+        => plan.Actions.Single(action => action.CommandId == commandId);
+
+    private static void ApplyMediaCaptionButtonPlan(
+        Button button,
+        PresentationMediaCaptionAuthoringActionPlan action)
+    {
+        button.Content = action.Label;
+        button.IsEnabled = action.IsEnabled;
+        button.ToolTip = action.DisabledReason;
+    }
+
+    private static int? NormalizeMediaCaptionSelectionAfterMutation(
+        MediaInfo? media,
+        PresentationMediaCaptionAuthoringIntentKind intent,
+        int changedTrackIndex)
+    {
+        if (media is null || media.CaptionTracks.Count == 0)
+            return null;
+
+        return intent == PresentationMediaCaptionAuthoringIntentKind.Delete
+            ? Math.Min(changedTrackIndex, media.CaptionTracks.Count - 1)
+            : changedTrackIndex;
     }
 
     internal PresentationReadingOrderPlan ShowReadingOrderPane()

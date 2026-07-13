@@ -3293,8 +3293,103 @@ public sealed class MainWindowHeadlessTests
                 track.Language == "en-US" &&
                 track.Source == "ppt/media/training.vtt" &&
                 track.Status == PresentationMediaTranscriptTrackStatus.Available &&
-                track.CueCount == 1 &&
-                track.Cues[0].Text == "Shared transcript cue");
+            track.CueCount == 1 &&
+            track.Cues[0].Text == "Shared transcript cue");
+    }
+
+    [Fact]
+    public async Task Media_caption_pane_create_replace_delete_uses_shared_planner()
+    {
+        PresentationMediaCaptionAuthoringPanePlan? opened = null;
+        PresentationMediaCaptionTrackMutationResult? create = null;
+        PresentationMediaCaptionTrackMutationResult? replace = null;
+        PresentationMediaCaptionTrackMutationResult? delete = null;
+        PresentationMediaTranscriptPlan? transcriptAfterCreate = null;
+        PresentationMediaTranscriptPlan? transcriptAfterReplace = null;
+        PresentationMediaCaptionAuthoringMutationPlan? mutation = null;
+        var visible = false;
+        var heading = string.Empty;
+        var trackCountAfterCreate = -1;
+        var trackCountAfterDelete = -1;
+        var createEnabledBeforeInput = true;
+        var createEnabledAfterInput = false;
+        var replaceEnabledAfterCreate = false;
+        var deleteEnabledAfterCreate = false;
+        var dirty = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var mediaShape = new SlideShape
+            {
+                Id = 724,
+                Name = "Demo video",
+                Kind = SlideShapeKind.Media,
+                Media = new MediaInfo { IsVideo = true },
+                AlternativeText = "Demo walkthrough."
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(mediaShape);
+            window.Editor.Select(mediaShape.Id);
+
+            opened = window.ShowMediaCaptionPane();
+            visible = window.IsMediaCaptionPaneVisible;
+            heading = window.MediaCaptionPaneHeading;
+            createEnabledBeforeInput = window.IsMediaCaptionCreateEnabled;
+
+            window.SetMediaCaptionPaneInput(
+                "English captions",
+                "en-US",
+                "ppt/media/demo-captions.vtt",
+                "WEBVTT\r\n\r\n00:00:00.000 --> 00:00:01.000\r\nInitial cue\r\n");
+            createEnabledAfterInput = window.IsMediaCaptionCreateEnabled;
+            create = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Create);
+            mutation = window.LastMediaCaptionAuthoringMutationPlan;
+            transcriptAfterCreate = window.LastMediaTranscriptPlan;
+            trackCountAfterCreate = window.MediaCaptionPaneTrackCount;
+            replaceEnabledAfterCreate = window.IsMediaCaptionReplaceEnabled;
+            deleteEnabledAfterCreate = window.IsMediaCaptionDeleteEnabled;
+            dirty = window.IsDirty;
+
+            window.SetMediaCaptionPaneInput(
+                "English captions",
+                "en-US",
+                "ppt/media/demo-captions.vtt",
+                "WEBVTT\r\n\r\n00:00:01.000 --> 00:00:02.000\r\nUpdated cue\r\n",
+                selectedTrackIndex: 0);
+            replace = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Replace);
+            transcriptAfterReplace = window.LastMediaTranscriptPlan;
+
+            delete = window.ApplyMediaCaptionPane(PresentationMediaCaptionAuthoringIntentKind.Delete);
+            trackCountAfterDelete = window.MediaCaptionPaneTrackCount;
+        });
+
+        if (!ran) return;
+        opened.Should().NotBeNull();
+        opened!.ShapeId.Should().Be(724);
+        visible.Should().BeTrue();
+        heading.Should().Be("Media Captions - Demo video");
+        createEnabledBeforeInput.Should().BeFalse();
+        createEnabledAfterInput.Should().BeTrue();
+        create.Should().NotBeNull();
+        create!.Succeeded.Should().BeTrue();
+        create.TrackIndex.Should().Be(0);
+        mutation.Should().NotBeNull();
+        mutation!.Intent.Should().Be(PresentationMediaCaptionAuthoringIntentKind.Create);
+        trackCountAfterCreate.Should().Be(1);
+        replaceEnabledAfterCreate.Should().BeTrue();
+        deleteEnabledAfterCreate.Should().BeTrue();
+        dirty.Should().BeTrue();
+        transcriptAfterCreate.Should().NotBeNull();
+        transcriptAfterCreate!.Tracks.Should().ContainSingle()
+            .Which.Cues.Single().Text.Should().Be("Initial cue");
+        replace.Should().NotBeNull();
+        replace!.Succeeded.Should().BeTrue();
+        transcriptAfterReplace.Should().NotBeNull();
+        transcriptAfterReplace!.Tracks.Should().ContainSingle()
+            .Which.Cues.Single().Text.Should().Be("Updated cue");
+        delete.Should().NotBeNull();
+        delete!.Succeeded.Should().BeTrue();
+        trackCountAfterDelete.Should().Be(0);
     }
 
     [Fact]

@@ -80,9 +80,75 @@ public sealed record PresentationMediaCaptionTrackMutationResult(
         new(false, errorMessage, -1, null);
 }
 
+public enum PresentationMediaCaptionAuthoringIntentKind
+{
+    Create,
+    Replace,
+    Delete,
+    Close
+}
+
+public sealed record PresentationMediaCaptionAuthoringFieldPlan(
+    string Label,
+    string Value,
+    string Placeholder,
+    bool IsEnabled,
+    string? ValidationMessage);
+
+public sealed record PresentationMediaCaptionAuthoringTrackPlan(
+    int TrackIndex,
+    string Label,
+    string Language,
+    string Source,
+    PresentationMediaTranscriptTrackStatus Status,
+    bool IsExternal,
+    bool CanReplace,
+    bool CanDelete);
+
+public sealed record PresentationMediaCaptionAuthoringActionPlan(
+    string CommandId,
+    string Label,
+    PresentationMediaCaptionAuthoringIntentKind Intent,
+    bool IsEnabled,
+    string? DisabledReason);
+
+public sealed record PresentationMediaCaptionAuthoringPanePlan(
+    int SlideIndex,
+    uint? ShapeId,
+    string ShapeName,
+    int SelectedTrackIndex,
+    string Message,
+    PresentationMediaCaptionAuthoringFieldPlan Label,
+    PresentationMediaCaptionAuthoringFieldPlan Language,
+    PresentationMediaCaptionAuthoringFieldPlan Source,
+    PresentationMediaCaptionAuthoringFieldPlan TranscriptText,
+    IReadOnlyList<PresentationMediaCaptionAuthoringTrackPlan> Tracks,
+    IReadOnlyList<PresentationMediaCaptionAuthoringActionPlan> Actions)
+{
+    public bool HasSelectedMedia => ShapeId.HasValue;
+
+    public bool HasSelectedTrack => SelectedTrackIndex >= 0;
+
+    public PresentationMediaCaptionAuthoringTrackPlan? SelectedTrack =>
+        Tracks.FirstOrDefault(track => track.TrackIndex == SelectedTrackIndex);
+}
+
+public sealed record PresentationMediaCaptionAuthoringMutationPlan(
+    bool ShouldApply,
+    PresentationMediaCaptionAuthoringIntentKind Intent,
+    int TrackIndex,
+    PresentationMediaCaptionTrackAuthoringDescriptor? Descriptor,
+    string? ErrorMessage);
+
 public static class PresentationMediaTranscriptPlanner
 {
+    public const string CaptionAuthoringPaneCreateCommandId = "freep.media-captions.create";
+    public const string CaptionAuthoringPaneReplaceCommandId = "freep.media-captions.replace";
+    public const string CaptionAuthoringPaneDeleteCommandId = "freep.media-captions.delete";
+    public const string CaptionAuthoringPaneCloseCommandId = "freep.media-captions.close";
+
     public const string MissingMediaMessage = "Media object is required.";
+    public const string MissingSelectedMediaMessage = "Select one media shape to author captions.";
     public const string MissingCaptionTrackMessage = "Caption track was not found.";
     public const string ExternalCaptionTrackMessage = "External caption tracks must remain link metadata; create a new internal track instead.";
     public const string MissingCaptionDescriptorMessage = "Caption authoring descriptor is required.";
@@ -91,6 +157,8 @@ public static class PresentationMediaTranscriptPlanner
     public const string EmptyCaptionContentMessage = "Caption authoring requires at least one valid cue.";
     public const string InvalidCaptionCueTimingMessage = "Caption cues must have non-negative, increasing, non-overlapping time ranges.";
     public const string InvalidCaptionSourceMessage = "Internal caption track source must be a relative .vtt package path or file name.";
+    public const string CaptionAuthoringReadyMessage = "Author internal WebVTT caption tracks for the selected media.";
+    public const string CaptionAuthoringExternalTrackMessage = "External caption tracks can be inspected but not replaced or deleted.";
 
     private enum CaptionTrackFormat
     {
@@ -172,6 +240,147 @@ public static class PresentationMediaTranscriptPlanner
         return PresentationMediaCaptionTrackMutationResult.Deleted(trackIndex, track);
     }
 
+    public static SlideShape? FindSelectedMediaShape(
+        Slide? slide,
+        IReadOnlyList<uint>? selectedShapeIds)
+    {
+        if (slide is null || selectedShapeIds is not { Count: 1 })
+        {
+            return null;
+        }
+
+        var selectedShapeId = selectedShapeIds[0];
+        return EnumerateShapes(slide.Shapes).FirstOrDefault(shape =>
+            shape.Id == selectedShapeId
+            && shape.Kind == SlideShapeKind.Media
+            && shape.Media is not null);
+    }
+
+    public static PresentationMediaCaptionAuthoringPanePlan BuildCaptionAuthoringPanePlan(
+        Slide? slide,
+        int slideIndex,
+        IReadOnlyList<uint>? selectedShapeIds,
+        int? selectedTrackIndex,
+        string? proposedLabel,
+        string? proposedLanguage,
+        string? proposedSource,
+        string? proposedTranscriptText)
+    {
+        var mediaShape = FindSelectedMediaShape(slide, selectedShapeIds);
+        if (mediaShape?.Media is not { } media)
+        {
+            return EmptyCaptionAuthoringPanePlan(slideIndex);
+        }
+
+        var tracks = new List<PresentationMediaCaptionAuthoringTrackPlan>();
+        for (var index = 0; index < media.CaptionTracks.Count; index++)
+        {
+            var descriptor = BuildTrack(slideIndex, mediaShape, index, media.CaptionTracks[index]);
+            tracks.Add(new PresentationMediaCaptionAuthoringTrackPlan(
+                index,
+                descriptor.Label,
+                descriptor.Language,
+                descriptor.Source,
+                descriptor.Status,
+                media.CaptionTracks[index].IsExternal,
+                !media.CaptionTracks[index].IsExternal,
+                !media.CaptionTracks[index].IsExternal));
+        }
+
+        var normalizedTrackIndex = NormalizeSelectedTrackIndex(media, selectedTrackIndex);
+        var selectedTrack = normalizedTrackIndex >= 0 ? media.CaptionTracks[normalizedTrackIndex] : null;
+        var enabled = true;
+        var labelValue = proposedLabel ?? NormalizeText(selectedTrack?.Label) ?? string.Empty;
+        var languageValue = proposedLanguage ?? NormalizeText(selectedTrack?.Language) ?? string.Empty;
+        var sourceValue = proposedSource ?? NormalizeText(selectedTrack?.Source) ?? string.Empty;
+        var transcriptValue = proposedTranscriptText ?? DecodeCaptionAuthoringText(selectedTrack);
+
+        var descriptorForValidation = new PresentationMediaCaptionTrackAuthoringDescriptor(
+            labelValue,
+            languageValue,
+            sourceValue,
+            transcriptValue);
+        var createError = ValidateCaptionAuthoringMutation(
+            media,
+            PresentationMediaCaptionAuthoringIntentKind.Create,
+            media.CaptionTracks.Count,
+            descriptorForValidation);
+        var replaceError = ValidateCaptionAuthoringMutation(
+            media,
+            PresentationMediaCaptionAuthoringIntentKind.Replace,
+            normalizedTrackIndex,
+            descriptorForValidation);
+        var deleteError = ValidateCaptionAuthoringMutation(
+            media,
+            PresentationMediaCaptionAuthoringIntentKind.Delete,
+            normalizedTrackIndex,
+            descriptor: null);
+        var selectedIsExternal = selectedTrack?.IsExternal == true;
+        var message = selectedIsExternal
+            ? CaptionAuthoringExternalTrackMessage
+            : CaptionAuthoringReadyMessage;
+
+        return new PresentationMediaCaptionAuthoringPanePlan(
+            slideIndex,
+            mediaShape.Id,
+            DescribeShape(mediaShape),
+            normalizedTrackIndex,
+            message,
+            new PresentationMediaCaptionAuthoringFieldPlan("Label", labelValue, "English captions", enabled, null),
+            new PresentationMediaCaptionAuthoringFieldPlan("Language", languageValue, "en-US", enabled, null),
+            new PresentationMediaCaptionAuthoringFieldPlan("Package path", sourceValue, "ppt/media/authored-captions.vtt", enabled, createError == InvalidCaptionSourceMessage || replaceError == InvalidCaptionSourceMessage ? InvalidCaptionSourceMessage : null),
+            new PresentationMediaCaptionAuthoringFieldPlan("Transcript", transcriptValue, "WEBVTT caption text or SRT transcript text", enabled, FirstContentError(createError, replaceError)),
+            tracks,
+            [
+                new PresentationMediaCaptionAuthoringActionPlan(CaptionAuthoringPaneCreateCommandId, "Create", PresentationMediaCaptionAuthoringIntentKind.Create, createError is null, createError),
+                new PresentationMediaCaptionAuthoringActionPlan(CaptionAuthoringPaneReplaceCommandId, "Replace", PresentationMediaCaptionAuthoringIntentKind.Replace, replaceError is null, replaceError),
+                new PresentationMediaCaptionAuthoringActionPlan(CaptionAuthoringPaneDeleteCommandId, "Delete", PresentationMediaCaptionAuthoringIntentKind.Delete, deleteError is null, deleteError),
+                new PresentationMediaCaptionAuthoringActionPlan(CaptionAuthoringPaneCloseCommandId, "Close", PresentationMediaCaptionAuthoringIntentKind.Close, true, null)
+            ]);
+    }
+
+    public static PresentationMediaCaptionAuthoringMutationPlan BuildCaptionAuthoringMutationPlan(
+        MediaInfo? media,
+        PresentationMediaCaptionAuthoringIntentKind intent,
+        int trackIndex,
+        PresentationMediaCaptionTrackAuthoringDescriptor? descriptor)
+    {
+        if (intent == PresentationMediaCaptionAuthoringIntentKind.Close)
+        {
+            return new(false, intent, trackIndex, descriptor, null);
+        }
+
+        var errorMessage = ValidateCaptionAuthoringMutation(media, intent, trackIndex, descriptor);
+        return new PresentationMediaCaptionAuthoringMutationPlan(
+            errorMessage is null,
+            intent,
+            trackIndex,
+            descriptor,
+            errorMessage);
+    }
+
+    public static PresentationMediaCaptionTrackMutationResult ApplyCaptionAuthoringMutation(
+        MediaInfo? media,
+        PresentationMediaCaptionAuthoringMutationPlan plan)
+    {
+        if (!plan.ShouldApply)
+        {
+            return PresentationMediaCaptionTrackMutationResult.Failure(
+                plan.ErrorMessage ?? MissingCaptionDescriptorMessage);
+        }
+
+        return plan.Intent switch
+        {
+            PresentationMediaCaptionAuthoringIntentKind.Create =>
+                CreateInternalCaptionTrack(media, plan.Descriptor),
+            PresentationMediaCaptionAuthoringIntentKind.Replace =>
+                ReplaceInternalCaptionTrack(media, plan.TrackIndex, plan.Descriptor),
+            PresentationMediaCaptionAuthoringIntentKind.Delete =>
+                DeleteInternalCaptionTrack(media, plan.TrackIndex),
+            _ => PresentationMediaCaptionTrackMutationResult.Failure(MissingCaptionDescriptorMessage)
+        };
+    }
+
     public static PresentationMediaTranscriptPlan BuildTranscriptPlan(Presentation presentation)
     {
         ArgumentNullException.ThrowIfNull(presentation);
@@ -204,6 +413,111 @@ public static class PresentationMediaTranscriptPlanner
             tracks.Sum(track => track.Cues.Count),
             tracks);
     }
+
+    private static PresentationMediaCaptionAuthoringPanePlan EmptyCaptionAuthoringPanePlan(int slideIndex)
+        => new(
+            slideIndex,
+            null,
+            string.Empty,
+            -1,
+            MissingSelectedMediaMessage,
+            new PresentationMediaCaptionAuthoringFieldPlan("Label", string.Empty, "English captions", false, null),
+            new PresentationMediaCaptionAuthoringFieldPlan("Language", string.Empty, "en-US", false, null),
+            new PresentationMediaCaptionAuthoringFieldPlan("Package path", string.Empty, "ppt/media/authored-captions.vtt", false, null),
+            new PresentationMediaCaptionAuthoringFieldPlan("Transcript", string.Empty, "WEBVTT caption text or SRT transcript text", false, null),
+            [],
+            [
+                new PresentationMediaCaptionAuthoringActionPlan(CaptionAuthoringPaneCreateCommandId, "Create", PresentationMediaCaptionAuthoringIntentKind.Create, false, MissingSelectedMediaMessage),
+                new PresentationMediaCaptionAuthoringActionPlan(CaptionAuthoringPaneReplaceCommandId, "Replace", PresentationMediaCaptionAuthoringIntentKind.Replace, false, MissingSelectedMediaMessage),
+                new PresentationMediaCaptionAuthoringActionPlan(CaptionAuthoringPaneDeleteCommandId, "Delete", PresentationMediaCaptionAuthoringIntentKind.Delete, false, MissingSelectedMediaMessage),
+                new PresentationMediaCaptionAuthoringActionPlan(CaptionAuthoringPaneCloseCommandId, "Close", PresentationMediaCaptionAuthoringIntentKind.Close, true, null)
+            ]);
+
+    private static int NormalizeSelectedTrackIndex(MediaInfo media, int? selectedTrackIndex)
+    {
+        if (selectedTrackIndex is { } requested
+            && requested >= 0
+            && requested < media.CaptionTracks.Count)
+        {
+            return requested;
+        }
+
+        for (var index = 0; index < media.CaptionTracks.Count; index++)
+        {
+            if (!media.CaptionTracks[index].IsExternal)
+            {
+                return index;
+            }
+        }
+
+        return media.CaptionTracks.Count > 0 ? 0 : -1;
+    }
+
+    private static string? ValidateCaptionAuthoringMutation(
+        MediaInfo? media,
+        PresentationMediaCaptionAuthoringIntentKind intent,
+        int trackIndex,
+        PresentationMediaCaptionTrackAuthoringDescriptor? descriptor)
+    {
+        if (media is null)
+        {
+            return MissingMediaMessage;
+        }
+
+        return intent switch
+        {
+            PresentationMediaCaptionAuthoringIntentKind.Create =>
+                TryBuildInternalCaptionTrack(media.CaptionTracks.Count, descriptor, existingTrack: null, out _, out var createError)
+                    ? null
+                    : createError,
+            PresentationMediaCaptionAuthoringIntentKind.Replace =>
+                ValidateReplaceCaptionAuthoringMutation(media, trackIndex, descriptor),
+            PresentationMediaCaptionAuthoringIntentKind.Delete =>
+                ValidateDeleteCaptionAuthoringMutation(media, trackIndex),
+            _ => MissingCaptionDescriptorMessage
+        };
+    }
+
+    private static string? ValidateReplaceCaptionAuthoringMutation(
+        MediaInfo media,
+        int trackIndex,
+        PresentationMediaCaptionTrackAuthoringDescriptor? descriptor)
+    {
+        if (!TryGetCaptionTrack(media, trackIndex, out var existingTrack))
+        {
+            return MissingCaptionTrackMessage;
+        }
+
+        if (existingTrack.IsExternal)
+        {
+            return ExternalCaptionTrackMessage;
+        }
+
+        return TryBuildInternalCaptionTrack(trackIndex, descriptor, existingTrack, out _, out var errorMessage)
+            ? null
+            : errorMessage;
+    }
+
+    private static string? ValidateDeleteCaptionAuthoringMutation(MediaInfo media, int trackIndex)
+    {
+        if (!TryGetCaptionTrack(media, trackIndex, out var existingTrack))
+        {
+            return MissingCaptionTrackMessage;
+        }
+
+        return existingTrack.IsExternal ? ExternalCaptionTrackMessage : null;
+    }
+
+    private static string? FirstContentError(params string?[] errorMessages)
+        => errorMessages.FirstOrDefault(message => message is MissingCaptionContentMessage
+            or AmbiguousCaptionContentMessage
+            or EmptyCaptionContentMessage
+            or InvalidCaptionCueTimingMessage);
+
+    private static string DecodeCaptionAuthoringText(MediaCaptionTrackInfo? track)
+        => track is { IsExternal: false, Bytes: { Length: > 0 } }
+            ? DecodeUtf8(track.Bytes)
+            : string.Empty;
 
     private static bool TryBuildInternalCaptionTrack(
         int trackIndex,
