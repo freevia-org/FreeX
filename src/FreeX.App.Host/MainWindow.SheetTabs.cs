@@ -1635,7 +1635,21 @@ public partial class MainWindow
 
         foreach (var sheetId in selectedSheetIds)
             _worksheetSelections.Remove(sheetId);
-        _currentSheetId = _workbook.Sheets[0].Id;
+
+        // Workbook.RemoveSheet (invoked above via TryExecuteCommand) already reprojects
+        // ActiveSheetIndex onto the Excel-correct adjacent surviving sheet -- the sheet that was
+        // immediately to the right of the one just deleted, falling back to the sheet now at the
+        // end of the tab strip if the deletion was at the end -- for each sheet removed, in order.
+        // Use it instead of unconditionally jumping to the workbook's first sheet.
+        var visibleSheetIds = GetVisibleSheetIds();
+        var adjacentSheetId = _workbook.ActiveSheetIndex is { } activeIndex &&
+            activeIndex >= 0 &&
+            activeIndex < _workbook.Sheets.Count
+                ? _workbook.Sheets[activeIndex].Id
+                : (SheetId?)null;
+        _currentSheetId = adjacentSheetId is { } candidate && visibleSheetIds.Contains(candidate)
+            ? candidate
+            : visibleSheetIds.Count > 0 ? visibleSheetIds[0] : _workbook.Sheets[0].Id;
         _groupedSheetIds.Clear();
         _groupedSheetIds.Add(_currentSheetId);
         _sheetGroupAnchor = _currentSheetId;

@@ -116,7 +116,7 @@ public sealed partial class ViewportService : IViewportService
                         sheetId,
                         rowMetric.Row,
                         colMetric.Col,
-                        EstimateCharacterWidth(colMetric.Width),
+                        EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, rowMetric.Row, colMetric.Col, colMetric.Width)),
                         request.IncludeFormulas,
                         cfContext,
                         hasAnyCellComments,
@@ -704,15 +704,15 @@ public sealed partial class ViewportService : IViewportService
         foreach (var row in topRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, row.Row, column.Col, column.Width)), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
             foreach (var column in topRightColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, row.Row, column.Col, column.Width)), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
         }
 
         foreach (var row in bottomLeftRows)
         {
             foreach (var column in leftColumns)
-                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(column.Width), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
+                AddDisplayCell(cells, ref seen, dedupeCells, workbook, sheet, sheetId, row.Row, column.Col, EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, row.Row, column.Col, column.Width)), includeFormulas, cfContext, hasAnyCellComments, hasAnyStyleOnlyCells, hasConditionalStyles, hasConditionalIcons, hasConditionalDataBars, ref styleCache);
         }
 
         return cells;

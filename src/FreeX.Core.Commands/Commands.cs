@@ -328,9 +328,17 @@ internal static class StructuredTableEditEffects
         }
 
         // A lone-row table (the edit's row is the only data row) has no sibling rows to
-        // propagate into or check for a consistent shape — nothing to do until it grows.
+        // propagate into or check for a consistent shape — nothing to VERIFY yet, but Excel still
+        // recognizes column as a calculated column the instant a formula is typed into its only
+        // existing data row (there being nothing else to check for consistency against), so it
+        // still needs recording as CalculatedColumnFormula: otherwise a later grow
+        // (ResizeStructuredTableCommand.FillGrownCalculatedColumns /
+        // InsertDeleteRowsCommand.FillGrownCalculatedColumnsForInsertedRows) finds nothing to
+        // auto-fill into the new row and silently leaves it blank. PropagateCalculatedColumnCommand
+        // with an empty target-row list writes no cells — it only persists the (row-shifted, anchor
+        // -relative) formula onto the column's metadata.
         if (otherDataRows.Count == 0)
-            return null;
+            return new PropagateCalculatedColumnCommand(address.Sheet, table.Id, column.Id, address.Row, formulaText, otherDataRows);
 
         // Only treat this as "typing a calculated column" when every other data-body row in the
         // column is either blank or already carries the same row-shifted formula shape as the

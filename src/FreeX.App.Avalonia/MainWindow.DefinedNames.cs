@@ -134,8 +134,10 @@ public sealed partial class MainWindow
             if (namesList.SelectedIndex < 0 || namesList.SelectedIndex >= rows.Count)
                 return;
 
-            var name = rows[namesList.SelectedIndex].Name;
-            var command = DefinedNamesShellGlue.BuildDeleteCommand(name);
+            var row = rows[namesList.SelectedIndex];
+            var name = row.Name;
+            var scopeSheetId = DefinedNamesShellGlue.ResolveScopeSheetId(_session.Workbook, row.ScopeLabel);
+            var command = DefinedNamesShellGlue.BuildDeleteCommand(name, scopeSheetId);
             var result = _session.ExecuteReviewCommand(command);
             if (!result.Success)
             {
@@ -281,7 +283,8 @@ public sealed partial class MainWindow
         void ValidateLive(object? _, EventArgs __)
         {
             var name = nameBox.Text?.Trim() ?? string.Empty;
-            var existing = ExistingDefinedNames(_session.Workbook);
+            var liveScope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)].Scope;
+            var existing = ExistingDefinedNames(_session.Workbook, liveScope);
             var nameResult = DefinedNameValidator.Validate(name, existing, seed?.Name);
             if (!nameResult.IsValid)
             {
@@ -304,12 +307,14 @@ public sealed partial class MainWindow
 
         nameBox.GetObservable(TextBox.TextProperty).Subscribe(new SimpleObserver<string?>(_ => ValidateLive(null, EventArgs.Empty)));
         refersToBox.GetObservable(TextBox.TextProperty).Subscribe(new SimpleObserver<string?>(_ => ValidateLive(null, EventArgs.Empty)));
+        scopeBox.SelectionChanged += ValidateLive;
         ValidateLive(null, EventArgs.Empty);
 
         okButton.Click += (_, _) =>
         {
             var name = nameBox.Text?.Trim() ?? string.Empty;
-            var existing = ExistingDefinedNames(_session.Workbook);
+            var scope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)].Scope;
+            var existing = ExistingDefinedNames(_session.Workbook, scope);
             var nameResult = DefinedNameValidator.Validate(name, existing, seed?.Name);
             if (!nameResult.IsValid)
             {
@@ -324,7 +329,6 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var scope = scopeChoices[Math.Max(0, scopeBox.SelectedIndex)].Scope;
             var draft = new DefinedNameDraft(name, scope, refersToText, commentBox.Text?.Trim() ?? string.Empty);
 
             // The refers-to text is first tried as a range/cell/existing-name reference (the common case);
@@ -336,7 +340,9 @@ public sealed partial class MainWindow
             // Renaming an existing name: remove the old entry first so it does not linger alongside the new one.
             if (seed is not null && !string.Equals(seed.Name, name, StringComparison.OrdinalIgnoreCase))
             {
-                var removeResult = _session.ExecuteReviewCommand(DefinedNamesShellGlue.BuildDeleteCommand(seed.Name));
+                var seedScopeSheetId = DefinedNamesShellGlue.ResolveScopeSheetId(_session.Workbook, seed.ScopeLabel);
+                var removeResult = _session.ExecuteReviewCommand(
+                    DefinedNamesShellGlue.BuildDeleteCommand(seed.Name, seedScopeSheetId));
                 if (!removeResult.Success)
                 {
                     ShowWarning(removeResult.ErrorMessage ?? UiText.Format("InsertLoc_CouldNotRenameName", seed.Name));
@@ -541,13 +547,29 @@ public sealed partial class MainWindow
         $"{row.Name}    [{row.ScopeLabel}]    {row.RefersTo}    {row.Value}";
 
     /// <summary>
-    /// Every name already defined in the workbook, range- or formula-valued, for the Define Name dialog's
-    /// duplicate check. A formula/constant name (<see cref="Workbook.NamedFormulas"/>) occupies the same name
-    /// namespace as a range name, so both must be considered or a new name could silently collide with one of
-    /// the other kind.
+    /// Every name already defined within <paramref name="scope"/> — the workbook scope, or a single
+    /// worksheet's scope — for the Define Name dialog's duplicate check. A formula/constant name (<see
+    /// cref="Workbook.NamedFormulas"/>/<see cref="Workbook.ScopedNamedFormulas"/>) occupies the same name
+    /// namespace as a range name, so both kinds must be considered or a new name could silently collide with
+    /// one of the other kind. Scoped separately from workbook-global names: Excel allows a workbook-scoped name
+    /// and a sheet-scoped name with identical text to coexist (resolved by scope precedence), so only names
+    /// already occupying the SAME scope as the one being defined count as duplicates here — otherwise a
+    /// sheet-scoped name could never be told apart from an unrelated same-text sheet-scoped name on another
+    /// sheet, or from a workbook-global name it is meant to coexist with.
     /// </summary>
-    private static IEnumerable<string> ExistingDefinedNames(Workbook workbook) =>
-        workbook.NamedRanges.Keys.Concat(workbook.NamedFormulas.Keys);
+    private static IEnumerable<string> ExistingDefinedNames(Workbook workbook, DefinedNameScope scope)
+    {
+        if (scope.IsWorkbook)
+            return workbook.NamedRanges.Keys.Concat(workbook.NamedFormulas.Keys);
+
+        var sheetId = scope.Sheet!.Value;
+        return workbook.ScopedNamedRanges.Keys
+            .Where(key => key.Sheet.Equals(sheetId))
+            .Select(key => key.Name)
+            .Concat(workbook.ScopedNamedFormulas.Keys
+                .Where(key => key.Sheet.Equals(sheetId))
+                .Select(key => key.Name));
+    }
 
     private static int FindScopeIndex(
         IReadOnlyList<DefinedNamesShellGlue.ScopeChoice> choices,

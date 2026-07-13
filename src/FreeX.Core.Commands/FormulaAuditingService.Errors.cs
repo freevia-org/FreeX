@@ -519,8 +519,19 @@ public static partial class FormulaAuditingService
             if (columnIndex < 0 || columnIndex >= table.Columns.Count)
                 continue;
 
-            calculatedColumnFormula = table.Columns[columnIndex].CalculatedColumnFormula ?? string.Empty;
-            return !string.IsNullOrWhiteSpace(calculatedColumnFormula);
+            var anchoredFormula = table.Columns[columnIndex].CalculatedColumnFormula;
+            if (string.IsNullOrWhiteSpace(anchoredFormula))
+                return false;
+
+            // CalculatedColumnFormula is always stored anchored to the table's first data-body row
+            // (startRow here -- matching the OOXML <calculatedColumnFormula> convention, and the
+            // same anchor PropagateCalculatedColumnCommand/FillGrownCalculatedColumns use). Every
+            // other data-body row's actual formula text is row-shifted from that anchor for ordinary
+            // relative references, so the anchor text itself must be shifted to address.Row before
+            // comparing -- otherwise a perfectly consistent calculated column that uses ordinary
+            // (non-structured) relative refs would be falsely flagged on every row but the anchor row.
+            calculatedColumnFormula = StructuredTableEditEffects.ShiftFormulaRows(anchoredFormula, startRow, address.Row, sheet.Name);
+            return true;
         }
 
         return false;

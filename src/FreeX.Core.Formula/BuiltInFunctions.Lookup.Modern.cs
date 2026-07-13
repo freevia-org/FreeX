@@ -172,7 +172,14 @@ public static partial class BuiltInFunctions
                 if (result is RangeValue) hasRangeResult = true;
             }
 
-        if (!hasRangeResult) return new RangeValue(results);
+        // The return array's width/height for the non-lookup axis is fixed by returnArr's shape
+        // regardless of whether any individual lookup hit or missed -- a miss just yields the
+        // scalar ifNotFound (via XlookupScalar) rather than a RangeValue, so hasRangeResult alone
+        // can't be trusted to decide whether reshaping is needed (e.g. when EVERY lookup misses,
+        // hasRangeResult is false even though returnArr has multiple columns/rows and the spilled
+        // result must still be that full width/height, filled with ifNotFound).
+        bool needsReshape = lookupIsVertical ? returnArr.ColCount > 1 : returnArr.RowCount > 1;
+        if (!hasRangeResult && !needsReshape) return new RangeValue(results);
 
         if (lookupValues.ColCount == 1)
         {
@@ -187,6 +194,7 @@ public static partial class BuiltInFunctions
                 if (outputCols < 0) outputCols = rv.ColCount;
                 else if (rv.ColCount != outputCols) return ErrorValue.Value;
             }
+            if (outputCols < 0) outputCols = returnArr.ColCount;
 
             var cells = new ScalarValue[lookupValues.RowCount, outputCols];
             for (int r = 0; r < lookupValues.RowCount; r++)
@@ -217,6 +225,7 @@ public static partial class BuiltInFunctions
                 if (outputRows < 0) outputRows = rv.RowCount;
                 else if (rv.RowCount != outputRows) return ErrorValue.Value;
             }
+            if (outputRows < 0) outputRows = returnArr.RowCount;
 
             var cells = new ScalarValue[outputRows, lookupValues.ColCount];
             for (int c = 0; c < lookupValues.ColCount; c++)

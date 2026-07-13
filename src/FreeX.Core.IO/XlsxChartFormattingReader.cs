@@ -40,21 +40,33 @@ internal static class XlsxChartFormattingReader
         if (shapeProperties is null)
             return;
 
-        var solidFill = shapeProperties.Element(DrawingNs + "solidFill");
-        if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+        // R42-io-chart-plotarea-legend-3-1: an explicit <a:noFill/> (the user picked "No Fill")
+        // must be distinguished from simply having no fill element at all, so it can be
+        // re-emitted on save instead of silently reverting to the themed default.
+        if (shapeProperties.Element(DrawingNs + "noFill") is not null)
         {
-            chart.ChartAreaFillThemeColor = themeColor;
+            chart.ChartAreaNoFill = true;
             chart.ChartAreaFillColor = null;
-        }
-        else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
-        {
-            chart.ChartAreaFillColor = color;
             chart.ChartAreaFillThemeColor = null;
         }
-        else if (TryReadGradientFillFirstStop(shapeProperties, out var gradThemeColor, out var gradColor))
+        else
         {
-            chart.ChartAreaFillThemeColor = gradThemeColor;
-            chart.ChartAreaFillColor = gradColor;
+            var solidFill = shapeProperties.Element(DrawingNs + "solidFill");
+            if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+            {
+                chart.ChartAreaFillThemeColor = themeColor;
+                chart.ChartAreaFillColor = null;
+            }
+            else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+            {
+                chart.ChartAreaFillColor = color;
+                chart.ChartAreaFillThemeColor = null;
+            }
+            else if (TryReadGradientFillFirstStop(shapeProperties, out var gradThemeColor, out var gradColor))
+            {
+                chart.ChartAreaFillThemeColor = gradThemeColor;
+                chart.ChartAreaFillColor = gradColor;
+            }
         }
 
         var line = shapeProperties.Element(DrawingNs + "ln");
@@ -63,6 +75,15 @@ internal static class XlsxChartFormattingReader
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
             chart.ChartAreaBorderThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+
+        // Same noFill-vs-absent distinction as above, but for the border/line ("No Line").
+        if (line.Element(DrawingNs + "noFill") is not null)
+        {
+            chart.ChartAreaNoLine = true;
+            chart.ChartAreaBorderColor = null;
+            chart.ChartAreaBorderThemeColor = null;
+            return;
+        }
 
         var lineFill = line.Element(DrawingNs + "solidFill");
         if (lineFill is null)
@@ -85,24 +106,36 @@ internal static class XlsxChartFormattingReader
         if (shapeProperties is null)
             return;
 
-        var solidFill = shapeProperties.Element(DrawingNs + "solidFill");
-        if (solidFill is not null)
+        // R42-io-chart-plotarea-legend-3-1: see ApplyChartAreaShapeProperties -- an explicit
+        // <a:noFill/> must be preserved as an explicit "No Fill" choice, not just treated as
+        // "nothing set".
+        if (shapeProperties.Element(DrawingNs + "noFill") is not null)
         {
-            if (XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
-            {
-                chart.PlotAreaFillThemeColor = themeColor;
-                chart.PlotAreaFillColor = null;
-            }
-            else if (XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
-            {
-                chart.PlotAreaFillColor = color;
-                chart.PlotAreaFillThemeColor = null;
-            }
+            chart.PlotAreaNoFill = true;
+            chart.PlotAreaFillColor = null;
+            chart.PlotAreaFillThemeColor = null;
         }
-        else if (TryReadGradientFillFirstStop(shapeProperties, out var gradThemeColor, out var gradColor))
+        else
         {
-            chart.PlotAreaFillThemeColor = gradThemeColor;
-            chart.PlotAreaFillColor = gradColor;
+            var solidFill = shapeProperties.Element(DrawingNs + "solidFill");
+            if (solidFill is not null)
+            {
+                if (XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
+                {
+                    chart.PlotAreaFillThemeColor = themeColor;
+                    chart.PlotAreaFillColor = null;
+                }
+                else if (XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
+                {
+                    chart.PlotAreaFillColor = color;
+                    chart.PlotAreaFillThemeColor = null;
+                }
+            }
+            else if (TryReadGradientFillFirstStop(shapeProperties, out var gradThemeColor, out var gradColor))
+            {
+                chart.PlotAreaFillThemeColor = gradThemeColor;
+                chart.PlotAreaFillColor = gradColor;
+            }
         }
 
         var line = shapeProperties.Element(DrawingNs + "ln");
@@ -111,6 +144,15 @@ internal static class XlsxChartFormattingReader
 
         if (int.TryParse(line.Attribute("w")?.Value, out var emus))
             chart.PlotAreaBorderThickness = Math.Clamp(emus / (double)DrawingMlUnits.EmuPerPoint, 0, 10);
+
+        // Same noFill-vs-absent distinction as above, but for the border/line ("No Line").
+        if (line.Element(DrawingNs + "noFill") is not null)
+        {
+            chart.PlotAreaNoLine = true;
+            chart.PlotAreaBorderColor = null;
+            chart.PlotAreaBorderThemeColor = null;
+            return;
+        }
 
         var lineFill = line.Element(DrawingNs + "solidFill");
         if (lineFill is null)

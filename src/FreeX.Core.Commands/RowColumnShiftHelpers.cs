@@ -6,6 +6,12 @@ internal static partial class RowColumnShiftHelpers
 {
     private static GridRange ShiftRangeRowsUp(GridRange range, uint start, uint count)
     {
+        // A whole-column range (Start.Row == 1, End.Row == MaxRow) already spans every row on
+        // the sheet. Row insert is a perpendicular-axis edit for it: the range must stay "all
+        // rows" and not have its endpoints nudged, or it stops being a full-column range.
+        if (SelectionRangeService.IsWholeColumnSelection(range))
+            return range;
+
         if (range.End.Row < start)
             return range;
 
@@ -22,6 +28,11 @@ internal static partial class RowColumnShiftHelpers
 
     private static GridRange? ShiftRangeRowsDown(GridRange range, uint start, uint count)
     {
+        // A whole-column range spans every row already; deleting rows (a perpendicular-axis
+        // edit for it) must leave it untouched instead of eroding its full row extent.
+        if (SelectionRangeService.IsWholeColumnSelection(range))
+            return range;
+
         var end = start + count - 1;
         if (range.End.Row < start)
             return range;    // entirely above: unchanged
@@ -46,6 +57,12 @@ internal static partial class RowColumnShiftHelpers
 
     private static GridRange ShiftRangeColumnsUp(GridRange range, uint start, uint count)
     {
+        // A whole-row range (Start.Col == 1, End.Col == MaxCol) already spans every column on
+        // the sheet. Column insert is a perpendicular-axis edit for it: the range must stay
+        // "all columns" and not have its endpoints nudged.
+        if (SelectionRangeService.IsWholeRowSelection(range))
+            return range;
+
         if (range.End.Col < start)
             return range;
 
@@ -62,6 +79,11 @@ internal static partial class RowColumnShiftHelpers
 
     private static GridRange? ShiftRangeColumnsDown(GridRange range, uint start, uint count)
     {
+        // A whole-row range spans every column already; deleting columns (a perpendicular-axis
+        // edit for it) must leave it untouched instead of eroding its full column extent.
+        if (SelectionRangeService.IsWholeRowSelection(range))
+            return range;
+
         var end = start + count - 1;
         if (range.End.Col < start)
             return range;    // entirely left: unchanged

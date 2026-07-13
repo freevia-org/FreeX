@@ -252,6 +252,7 @@ public sealed partial class XlsxFileAdapter
                                 AdditionalRanges = additionalRanges,
                                 Priority = priority,
                                 RuleType = CfRuleType.DuplicateValues,
+                                StopIfTrue = IsTruthy(x14CfRule.Attribute("stopIfTrue")?.Value),
                                 NativeChildXmls = [x14CfRule.ToString(SaveOptions.DisableFormatting)]
                             };
                             result.Add(format);

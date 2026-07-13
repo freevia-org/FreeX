@@ -250,12 +250,15 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         var workbookViewProperties = workbookMetadata.WorkbookViewProperties;
         workbook.ShowSheetTabs = workbookViewProperties.ShowSheetTabs;
         workbook.SheetTabRatio = workbookViewProperties.SheetTabRatio is { } tabRatio ? Math.Clamp(tabRatio, 0, 1000) : null;
-        workbook.FirstVisibleSheetIndex = workbookViewProperties.FirstVisibleSheetIndex is { } firstSheet
-            ? Math.Clamp(firstSheet, 0, Math.Max(0, xlWorkbook.Worksheets.Count - 1))
-            : null;
-        workbook.ActiveSheetIndex = workbookViewProperties.ActiveSheetIndex is { } activeTab
-            ? Math.Clamp(activeTab, 0, Math.Max(0, xlWorkbook.Worksheets.Count - 1))
-            : null;
+        // NOTE: workbookView/@firstSheet and @activeTab are indices into the workbook's FULL <sheets>
+        // order (worksheets AND chartsheets interspersed), matching XlsxChartsheet.WorkbookSheetIndex
+        // below. They must not be clamped/assigned against `xlWorkbook.Worksheets.Count` (ClosedXML's
+        // worksheet-only count) here -- that count excludes chartsheets, which are only spliced into
+        // `workbook.Sheets` later by InsertChartsheets. Assigning here would both under-count the
+        // clamp bound and, once InsertChartsheets shifts later sheets to the right, leave the index
+        // pointing at whatever chartsheet(s) got inserted before it instead of the originally active
+        // sheet. The actual assignment (clamped against the final, post-splice sheet count) happens
+        // after InsertChartsheets runs, below.
         workbook.FileSharing = workbookMetadata.FileSharing;
         workbook.FileRecoveryProperties.AddRange(workbookMetadata.FileRecoveryProperties);
         workbook.FileVersion = workbookMetadata.FileVersion;
@@ -837,6 +840,16 @@ public sealed partial class XlsxFileAdapter : IFileAdapter
         }
 
         InsertChartsheets(workbook, chartsheets, warnings);
+
+        // Assign firstSheet/activeTab now that chartsheets have been spliced into `workbook.Sheets` at
+        // their original interspersed positions, so both the clamp bound and the resulting index refer
+        // to the workbook's final, full tab order (see the note where these were previously read, above).
+        workbook.FirstVisibleSheetIndex = workbookViewProperties.FirstVisibleSheetIndex is { } firstSheet
+            ? Math.Clamp(firstSheet, 0, Math.Max(0, workbook.Sheets.Count - 1))
+            : null;
+        workbook.ActiveSheetIndex = workbookViewProperties.ActiveSheetIndex is { } activeTab
+            ? Math.Clamp(activeTab, 0, Math.Max(0, workbook.Sheets.Count - 1))
+            : null;
 
         // Load per-run rich-text into sheet.RichTextRuns (best-effort, separate XML pass).
         try

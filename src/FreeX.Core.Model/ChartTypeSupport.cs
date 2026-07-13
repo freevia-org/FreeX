@@ -65,7 +65,10 @@ public static class ChartTypeSupport
         type is ChartType.Column or ChartType.Line or ChartType.ThreeDLine or ChartType.Bar or ChartType.Scatter or ChartType.Bubble or ChartType.Area or ChartType.ThreeDArea;
 
     public static bool SupportsSecondaryAxis(ChartType type) =>
-        type is ChartType.Column or ChartType.Line or ChartType.ThreeDLine or ChartType.Area or ChartType.ThreeDArea or ChartType.Scatter
+        type is ChartType.Column or ChartType.StackedColumn or ChartType.PercentStackedColumn
+            or ChartType.Line or ChartType.ThreeDLine
+            or ChartType.Area or ChartType.StackedArea or ChartType.PercentStackedArea or ChartType.ThreeDArea
+            or ChartType.Scatter
             or ChartType.Bar or ChartType.StackedBar or ChartType.PercentStackedBar;
 
     public static bool SupportsAxes(ChartType type) =>

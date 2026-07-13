@@ -258,16 +258,25 @@ public partial class GridView
             }
         }
 
+        // Comments/notes are only ever keyed on a merged range's anchor cell (ViewportService only
+        // populates CommentDisplay for the anchor address), so a hit-test or selection landing
+        // anywhere else in the merged footprint must be redirected to the anchor before matching
+        // against DisplayCell.CommentDisplay -- otherwise hovering/selecting the non-anchor part of
+        // a merged cell silently finds nothing.
+        var merge = FindMerge(row, col);
+        var anchorRow = merge?.Start.Row ?? row;
+        var anchorCol = merge?.Start.Col ?? col;
+
         foreach (var candidate in viewport.Cells)
         {
-            if (candidate.Row != row ||
-                candidate.Col != col ||
+            if (candidate.Row != anchorRow ||
+                candidate.Col != anchorCol ||
                 candidate.CommentDisplay is null)
             {
                 continue;
             }
 
-            if (!TryGetCellRect(viewport, row, col, out rect))
+            if (!TryGetCellRect(viewport, anchorRow, anchorCol, merge, out rect))
                 break;
 
             cell = candidate;
@@ -279,7 +288,17 @@ public partial class GridView
         return false;
     }
 
-    private bool TryGetCellRect(ViewportModel? viewport, uint row, uint col, out Rect rect)
+    private bool TryGetCellRect(ViewportModel? viewport, uint row, uint col, out Rect rect) =>
+        TryGetCellRect(viewport, row, col, FindMerge(row, col), out rect);
+
+    /// <summary>
+    /// Computes the on-screen rect for the cell at (row, col). When <paramref name="merge"/> is a
+    /// merged range anchored at (row, col), the rect is expanded to the full merged footprint (the
+    /// same geometry the render passes use in GridView.Rendering.cs) so hover/selection popups and
+    /// note indicators line up with the merged range's true visible bounds instead of just the
+    /// anchor's own single-cell footprint.
+    /// </summary>
+    private bool TryGetCellRect(ViewportModel? viewport, uint row, uint col, GridRange? merge, out Rect rect)
     {
         if (viewport is null)
         {
@@ -295,11 +314,21 @@ public partial class GridView
             return false;
         }
 
+        double width = colMetric.Width;
+        double height = rowMetric.Height;
+        if (merge is { } m && m.Start.Row == row && m.Start.Col == col)
+        {
+            for (var c2 = m.Start.Col + 1; c2 <= m.End.Col; c2++)
+                if (FindColMetric(viewport.ColMetrics, c2) is { } cm2) width += cm2.Width;
+            for (var r2 = m.Start.Row + 1; r2 <= m.End.Row; r2++)
+                if (FindRowMetric(viewport.RowMetrics, r2) is { } rm2) height += rm2.Height;
+        }
+
         rect = new Rect(
             ActualRowHeaderWidth + colMetric.LeftOffset,
             EffectiveColHeaderHeight + rowMetric.TopOffset,
-            colMetric.Width,
-            rowMetric.Height);
+            width,
+            height);
         return true;
     }
 

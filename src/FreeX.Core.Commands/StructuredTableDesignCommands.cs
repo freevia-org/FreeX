@@ -38,10 +38,22 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
 
         var normalizedName = _newName.Trim();
         _previousTable = sheet.StructuredTables[tableIndex];
+        var renameOp = new RenameTableOp(_previousTable.Name, normalizedName);
+
+        // A table's own CalculatedColumnFormula/TotalsRowFormula metadata can carry a
+        // fully-qualified self-reference to its OWN (old) name (e.g. a totals-to-totals custom
+        // aggregate like "Table1[[#Totals],[Revenue]]-Table1[[#Totals],[Cost]]" -- the only way to
+        // write a cross-column custom total). That metadata is copied verbatim by CopyTable below
+        // unless rewritten here first, so it must be run through the same RenameTableOp used for
+        // ordinary sheet-cell formulas or it goes stale: still naming the pre-rename table, and
+        // later gets re-persisted to XLSX (XlsxStructuredTableWriter) or re-injected into a totals
+        // cell (RefreshStructuredTableTotalsCommand.ResolveTotalsCell) verbatim.
+        var renamedColumns = RewriteTableSelfReferenceFormulas(_previousTable, renameOp, sheet.Name);
         sheet.StructuredTables[tableIndex] = StructuredTableDesignCommandHelpers.CopyTable(
             _previousTable,
             name: normalizedName,
-            displayName: normalizedName);
+            displayName: normalizedName,
+            columns: renamedColumns);
 
         // Structured references carry the table name as a bare literal (TableName[Column]) with no
         // table-ID indirection, so every formula referencing the old name must be rewritten across the
@@ -49,7 +61,6 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
         // reference rewrite via the same FormulaRewriter/RewriteOperation mechanism.
         _formulaSnapshot.Clear();
         _namedFormulaSnapshot.Clear();
-        var renameOp = new RenameTableOp(_previousTable.Name, normalizedName);
         RowColumnShiftHelpers.RewriteAllFormulas(ctx.Workbook, renameOp, _formulaSnapshot);
         RowColumnShiftHelpers.RewriteNamedFormulas(ctx.Workbook, renameOp, _namedFormulaSnapshot);
 
@@ -89,6 +100,43 @@ public sealed class RenameStructuredTableCommand : IWorkbookCommand
         if (CommandGuards.TryFindStructuredTableIndex(sheet, _tableId, out var tableIndex))
             sheet.StructuredTables[tableIndex] = _previousTable;
         _previousTable = null;
+    }
+
+    /// <summary>
+    /// Rewrites <paramref name="renameOp"/>'s old-table-name references inside every column's
+    /// <see cref="StructuredTableColumnModel.CalculatedColumnFormula"/>/<see cref="StructuredTableColumnModel.TotalsRowFormula"/>
+    /// so the table's own persisted formula metadata stays in sync with the rename, matching how
+    /// <see cref="RowColumnShiftHelpers.RewriteAllFormulas"/> keeps ordinary sheet-cell formulas in
+    /// sync. A malformed stored formula is left untouched (mirrors <see cref="FormulaRewriter.Rewrite"/>'s
+    /// own malformed-formula behavior for cell formulas elsewhere in this command).
+    /// </summary>
+    private static IReadOnlyList<StructuredTableColumnModel> RewriteTableSelfReferenceFormulas(
+        StructuredTableModel table, RenameTableOp renameOp, string hostSheetName)
+    {
+        if (table.Columns.Count == 0)
+            return table.Columns;
+
+        var columns = new List<StructuredTableColumnModel>(table.Columns.Count);
+        foreach (var column in table.Columns)
+        {
+            var calculatedColumnFormula = RewriteFormulaTableSelfReference(column.CalculatedColumnFormula, renameOp, hostSheetName);
+            var totalsRowFormula = RewriteFormulaTableSelfReference(column.TotalsRowFormula, renameOp, hostSheetName);
+            columns.Add(column with
+            {
+                CalculatedColumnFormula = calculatedColumnFormula,
+                TotalsRowFormula = totalsRowFormula
+            });
+        }
+
+        return columns;
+    }
+
+    private static string? RewriteFormulaTableSelfReference(string? formulaText, RenameTableOp renameOp, string hostSheetName)
+    {
+        if (string.IsNullOrWhiteSpace(formulaText))
+            return formulaText;
+
+        return FormulaRewriter.Rewrite(formulaText, renameOp, hostSheetName) ?? formulaText;
     }
 }
 

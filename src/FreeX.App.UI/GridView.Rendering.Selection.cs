@@ -1107,7 +1107,13 @@ public partial class GridView
         double drawLeft   = rect.Left;
         double drawRight  = rect.Right;
 
-        dc.DrawRectangle(SelectionBrush, null, rect);
+        // Excel never tints the active cell itself: the selection fill covers the whole
+        // range except the active cell, which stays unfilled (only the heavy selection
+        // border, drawn below, outlines it). For a single-cell selection the "hole" equals
+        // the whole rect, so no tint is drawn at all - matching Excel's plain-border look.
+        var activeCellHole = GetActiveCellFillHole(Viewport, range, rowHeaderWidth, columnHeaderHeight);
+        if (BuildSelectionFillGeometry(rect, activeCellHole) is { } fillGeometry)
+            dc.DrawGeometry(SelectionBrush, null, fillGeometry);
 
         if (selectionLayout.HasTopEdge)    dc.DrawLine(SelectionPen, new Point(drawLeft,  drawTop),    new Point(drawRight, drawTop));
         if (selectionLayout.HasBottomEdge) dc.DrawLine(SelectionPen, new Point(drawLeft,  drawBottom), new Point(drawRight, drawBottom));
@@ -1116,6 +1122,57 @@ public partial class GridView
 
         if (drawHandle)
             DrawSelectionHandle(dc, selectionLayout.HasRightEdge, selectionLayout.HasBottomEdge, drawRight, drawBottom);
+    }
+
+    // Resolves the pixel rect of the active cell within `range` (or null if there is no active
+    // cell inside this range, e.g. a non-active range in a multi-range selection, or the active
+    // cell can't currently be resolved to a visible pixel rect).
+    private Rect? GetActiveCellFillHole(
+        ViewportModel? viewport,
+        GridRange range,
+        double rowHeaderWidth,
+        double columnHeaderHeight)
+    {
+        if (viewport == null)
+            return null;
+
+        var activeAddress = ActiveCell ?? SelectedRange?.Start;
+        if (activeAddress is not { } address || !range.Contains(address))
+            return null;
+
+        var activeCellRange = new GridRange(address, address);
+        var layout = CalculateVisibleSingleCellSelectionLayout(viewport, activeCellRange, rowHeaderWidth, columnHeaderHeight);
+        return layout?.Rect;
+    }
+
+    // Builds the geometry for the selection tint fill over `rect`, leaving `hole` (the active
+    // cell, if any) unfilled - matching Excel, which never tints the active cell within a
+    // selection. Returns null when nothing should be filled: either `rect` is degenerate, or
+    // `hole` covers the entire `rect` (a single-cell selection, which gets only its border).
+    internal static Geometry? BuildSelectionFillGeometry(Rect rect, Rect? hole)
+    {
+        if (rect.Width <= 0 || rect.Height <= 0)
+            return null;
+
+        if (hole is not { } holeRect || holeRect.Width <= 0 || holeRect.Height <= 0 || !rect.IntersectsWith(holeRect))
+            return new RectangleGeometry(rect);
+
+        var clippedHole = Rect.Intersect(rect, holeRect);
+        if (clippedHole.Width <= 0 || clippedHole.Height <= 0)
+            return new RectangleGeometry(rect);
+
+        if (clippedHole == rect)
+            return null;
+
+        var geometry = new StreamGeometry { FillRule = FillRule.EvenOdd };
+        using (var context = geometry.Open())
+        {
+            AppendRectangleFigure(context, rect);
+            AppendRectangleFigure(context, clippedHole);
+        }
+
+        geometry.Freeze();
+        return geometry;
     }
 
     private void RenderSelectionMovePreview(DrawingContext dc, GridRange selectedRange)

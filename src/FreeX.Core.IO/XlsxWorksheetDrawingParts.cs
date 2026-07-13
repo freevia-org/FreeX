@@ -165,6 +165,8 @@ internal static partial class XlsxWorksheetDrawingPartReader
         XNamespace chartExNs = "http://schemas.microsoft.com/office/drawing/2014/chartex";
         XNamespace relNs = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
         XNamespace packageRelNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        XNamespace spreadsheetDrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+        XNamespace drawingNs = "http://schemas.openxmlformats.org/drawingml/2006/main";
         var relationshipTargets = ReadRelationshipTargetsById(drawingRelsXml.Root, packageRelNs);
 
         // A single chart part referenced by more than one anchor in the same worksheet drawing is one
@@ -192,11 +194,30 @@ internal static partial class XlsxWorksheetDrawingPartReader
                 ? XlsxPackageXmlEditor.LoadXml(chartRelsEntry)
                 : null;
 
+            // R42-io-drawing-group-transform-3-1: a chart nested inside one or more <xdr:grpSp>
+            // groups shares its nearest worksheet anchor with every sibling in the group -- that
+            // anchor alone only describes the GROUP's outer bounding box. Compose the ancestor
+            // group transform chain (the same mechanism ReadPictureParts/ReadSpElement/
+            // ReadCxnSpElement use -- see ComputeGroupTransform) so the chart's own local
+            // <xdr:graphicFrame><xdr:xfrm><a:off>/<a:ext> is translated into worksheet coordinates
+            // and the chart gets its own sub-position and sub-size within the group instead of
+            // inheriting the whole group's anchor as-is.
+            var graphicFrameElement = chartElement.Ancestors(spreadsheetDrawingNs + "graphicFrame").FirstOrDefault();
+            var chartTransform = graphicFrameElement?.Element(spreadsheetDrawingNs + "xfrm");
+            var chartGroupTransform = ComputeGroupTransform(chartElement, spreadsheetDrawingNs, drawingNs);
+            var chartAnchor = ReadNearestAnchor(chartElement, chartTransform, chartGroupTransform);
+            if (chartAnchor is not null && chartGroupTransform != DrawingGroupTransform.Identity)
+            {
+                var (xfrmWidthPixels, xfrmHeightPixels) = ReadDrawingXfrmExtent(chartTransform, drawingNs, chartGroupTransform);
+                if (xfrmWidthPixels is > 0 && xfrmHeightPixels is > 0)
+                    chartAnchor = chartAnchor with { Width = xfrmWidthPixels, Height = xfrmHeightPixels };
+            }
+
             charts.Add(new XlsxChartPackagePart(
                 XlsxPackageXmlEditor.LoadXml(chartEntry),
                 chartRelationships,
                 ReadNonVisualName(chartElement),
-                ReadNearestAnchor(chartElement)));
+                chartAnchor));
         }
 
         return charts;
@@ -900,12 +921,29 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// <summary>
     /// Composed child-space-to-anchor-space transform accumulated from the chain of ancestor
     /// <c>&lt;xdr:grpSp&gt;</c> group transforms enclosing a shape.  Identity (<c>OffsetXEmu</c>/
-    /// <c>OffsetYEmu</c> = 0, <c>ScaleX</c>/<c>ScaleY</c> = 1) when the shape is not inside a group.
-    /// See <see cref="ComputeGroupTransform"/>.
+    /// <c>OffsetYEmu</c> = 0, <c>ScaleX</c>/<c>ScaleY</c> = 1, <c>Matrix</c> = the 2x2 identity)
+    /// when the shape is not inside a group. See <see cref="ComputeGroupTransform"/>.
+    /// <para>
+    /// <c>ScaleX</c>/<c>ScaleY</c> remain the plain magnitude-only chOff/chExt-to-off/ext scale
+    /// product (ignoring any ancestor group rotation/flip) — used only for extent/size scaling
+    /// (<see cref="ReadDrawingXfrmExtent"/>), where composing a rotated bounding-box size is a
+    /// separate, deferred problem (R42-io-drawing-group-transform-3-2/3-3 only cover position).
+    /// </para>
+    /// <para>
+    /// <c>MatrixA</c>/<c>MatrixB</c>/<c>MatrixC</c>/<c>MatrixD</c> together with <c>OffsetXEmu</c>/
+    /// <c>OffsetYEmu</c> form the full 2D affine <c>(x, y) -&gt; (MatrixA*x + MatrixB*y +
+    /// OffsetXEmu, MatrixC*x + MatrixD*y + OffsetYEmu)</c> used for POSITION mapping — this one
+    /// does include every ancestor group's own rotation and flip about its own bounding-box center
+    /// (see <see cref="ComputeGroupLevelAffine"/>). When no ancestor group carries rotation or
+    /// flip, this reduces to the same diagonal (no-cross-term) transform as
+    /// <c>ScaleX</c>/<c>ScaleY</c>, so existing (non-rotated) callers are unaffected.
+    /// </para>
     /// </summary>
-    private readonly record struct DrawingGroupTransform(double OffsetXEmu, double OffsetYEmu, double ScaleX, double ScaleY)
+    private readonly record struct DrawingGroupTransform(
+        double OffsetXEmu, double OffsetYEmu, double ScaleX, double ScaleY,
+        double MatrixA, double MatrixB, double MatrixC, double MatrixD)
     {
-        public static readonly DrawingGroupTransform Identity = new(0, 0, 1, 1);
+        public static readonly DrawingGroupTransform Identity = new(0, 0, 1, 1, 1, 0, 0, 1);
     }
 
     /// <summary>
@@ -920,43 +958,132 @@ internal static partial class XlsxWorksheetDrawingPartReader
     /// size in its parent's space) and <c>chOff</c>/<c>chExt</c> (the origin and extent of the
     /// coordinate space its direct children are authored in, which can differ in scale from
     /// <c>ext</c> — the group can stretch its contents). A child's local coordinate <c>(x, y)</c>
-    /// maps to the parent space as <c>off + (x - chOff) * (ext / chExt)</c>.
+    /// maps to the parent space as <c>off + (x - chOff) * (ext / chExt)</c> — and, when the group
+    /// itself carries a <c>rot</c> and/or <c>flipH</c>/<c>flipV</c>, that whole mapped point (and
+    /// everything else in the group) is additionally rotated/mirrored about the group's own
+    /// off/ext bounding-box center (R42-io-drawing-group-transform-3-2/3-3).
     /// </para>
     /// Returns <see cref="DrawingGroupTransform.Identity"/> when the element has no enclosing
     /// group or any ancestor group lacks a usable <c>chOff</c>/<c>chExt</c>.
     /// </summary>
     private static DrawingGroupTransform ComputeGroupTransform(XElement element, XNamespace spreadsheetDrawingNs, XNamespace drawingNs)
     {
-        double offsetX = 0, offsetY = 0, scaleX = 1, scaleY = 1;
+        double scaleX = 1, scaleY = 1;
+        double matrixA = 1, matrixB = 0, matrixC = 0, matrixD = 1, translateX = 0, translateY = 0;
         foreach (var group in element.Ancestors(spreadsheetDrawingNs + "grpSp"))
         {
             var groupXfrm = group.Element(spreadsheetDrawingNs + "grpSpPr")?.Element(drawingNs + "xfrm");
             if (!TryReadGroupXfrm(groupXfrm, drawingNs, out var groupOffX, out var groupOffY,
                     out var groupExtCx, out var groupExtCy,
                     out var groupChOffX, out var groupChOffY,
-                    out var groupChExtCx, out var groupChExtCy))
+                    out var groupChExtCx, out var groupChExtCy,
+                    out var groupRotationDegrees, out var groupFlipH, out var groupFlipV))
             {
                 continue;
             }
 
             var groupScaleX = groupChExtCx != 0 ? groupExtCx / groupChExtCx : 1;
             var groupScaleY = groupChExtCy != 0 ? groupExtCy / groupChExtCy : 1;
-
-            offsetX = groupOffX + (offsetX - groupChOffX) * groupScaleX;
-            offsetY = groupOffY + (offsetY - groupChOffY) * groupScaleY;
             scaleX *= groupScaleX;
             scaleY *= groupScaleY;
+
+            var (levelA, levelB, levelC, levelD, levelE, levelF) = ComputeGroupLevelAffine(
+                groupOffX, groupOffY, groupExtCx, groupExtCy,
+                groupChOffX, groupChOffY, groupChExtCx, groupChExtCy,
+                groupRotationDegrees, groupFlipH, groupFlipV);
+
+            // Compose this level's own affine AFTER everything accumulated so far: this group sits
+            // one step further OUT than every level already folded in (innermost-first iteration),
+            // i.e. composed_new(p) = levelAffine(composed_old(p)).
+            var newMatrixA = levelA * matrixA + levelB * matrixC;
+            var newMatrixB = levelA * matrixB + levelB * matrixD;
+            var newMatrixC = levelC * matrixA + levelD * matrixC;
+            var newMatrixD = levelC * matrixB + levelD * matrixD;
+            var newTranslateX = levelA * translateX + levelB * translateY + levelE;
+            var newTranslateY = levelC * translateX + levelD * translateY + levelF;
+
+            matrixA = newMatrixA;
+            matrixB = newMatrixB;
+            matrixC = newMatrixC;
+            matrixD = newMatrixD;
+            translateX = newTranslateX;
+            translateY = newTranslateY;
         }
 
-        return new DrawingGroupTransform(offsetX, offsetY, scaleX, scaleY);
+        return new DrawingGroupTransform(translateX, translateY, scaleX, scaleY, matrixA, matrixB, matrixC, matrixD);
+    }
+
+    /// <summary>
+    /// Computes the single-group-level affine <c>(x, y) -&gt; (A*x + B*y + E, C*x + D*y + F)</c>
+    /// mapping a point in this group's child coordinate space (<c>chOff</c>/<c>chExt</c>) into its
+    /// parent's coordinate space, including the group's own rotation and flip about its own
+    /// off/ext bounding-box center (evaluated numerically at three probe points — (0,0), (1,0),
+    /// (0,1) — via <see cref="ApplyGroupLevelPoint"/> rather than hand-derived symbolically, since
+    /// any 2D affine map is fully determined by its image of the origin and the two unit vectors).
+    /// </summary>
+    private static (double A, double B, double C, double D, double E, double F) ComputeGroupLevelAffine(
+        double offX, double offY, double extCx, double extCy,
+        double chOffX, double chOffY, double chExtCx, double chExtCy,
+        double rotationDegrees, bool flipH, bool flipV)
+    {
+        var origin = ApplyGroupLevelPoint(0, 0, offX, offY, extCx, extCy, chOffX, chOffY, chExtCx, chExtCy, rotationDegrees, flipH, flipV);
+        var unitX = ApplyGroupLevelPoint(1, 0, offX, offY, extCx, extCy, chOffX, chOffY, chExtCx, chExtCy, rotationDegrees, flipH, flipV);
+        var unitY = ApplyGroupLevelPoint(0, 1, offX, offY, extCx, extCy, chOffX, chOffY, chExtCx, chExtCy, rotationDegrees, flipH, flipV);
+
+        return (unitX.X - origin.X, unitY.X - origin.X, unitX.Y - origin.Y, unitY.Y - origin.Y, origin.X, origin.Y);
+    }
+
+    /// <summary>
+    /// Maps a single point <c>(x, y)</c> from a group's child coordinate space into its parent's
+    /// space for exactly one group level: scale by <c>ext/chExt</c> relative to <c>chOff</c>,
+    /// mirror about the group's own off/ext box center when <c>flipH</c>/<c>flipV</c>, rotate
+    /// about that same center by the group's own <c>rot</c>, then translate by <c>off</c>.
+    /// </summary>
+    private static (double X, double Y) ApplyGroupLevelPoint(
+        double x, double y,
+        double offX, double offY, double extCx, double extCy,
+        double chOffX, double chOffY, double chExtCx, double chExtCy,
+        double rotationDegrees, bool flipH, bool flipV)
+    {
+        var scaleX = chExtCx != 0 ? extCx / chExtCx : 1;
+        var scaleY = chExtCy != 0 ? extCy / chExtCy : 1;
+
+        var localX = (x - chOffX) * scaleX;
+        var localY = (y - chOffY) * scaleY;
+        if (flipH)
+            localX = extCx - localX;
+        if (flipV)
+            localY = extCy - localY;
+
+        var centerX = extCx / 2;
+        var centerY = extCy / 2;
+        var dx = localX - centerX;
+        var dy = localY - centerY;
+
+        if (rotationDegrees != 0)
+        {
+            var radians = rotationDegrees * Math.PI / 180.0;
+            var cos = Math.Cos(radians);
+            var sin = Math.Sin(radians);
+            var rotatedX = dx * cos - dy * sin;
+            var rotatedY = dx * sin + dy * cos;
+            dx = rotatedX;
+            dy = rotatedY;
+        }
+
+        return (offX + dx + centerX, offY + dy + centerY);
     }
 
     private static bool TryReadGroupXfrm(
         XElement? groupXfrm, XNamespace drawingNs,
         out double offX, out double offY, out double extCx, out double extCy,
-        out double chOffX, out double chOffY, out double chExtCx, out double chExtCy)
+        out double chOffX, out double chOffY, out double chExtCx, out double chExtCy,
+        out double rotationDegrees, out bool flipH, out bool flipV)
     {
         offX = offY = extCx = extCy = chOffX = chOffY = chExtCx = chExtCy = 0;
+        rotationDegrees = 0;
+        flipH = false;
+        flipV = false;
         if (groupXfrm is null)
             return false;
 
@@ -967,14 +1094,26 @@ internal static partial class XlsxWorksheetDrawingPartReader
         if (off is null || ext is null || chOff is null || chExt is null)
             return false;
 
-        return TryParseEmuAttribute(off, "x", out offX) &&
-               TryParseEmuAttribute(off, "y", out offY) &&
-               TryParseEmuAttribute(ext, "cx", out extCx) &&
-               TryParseEmuAttribute(ext, "cy", out extCy) &&
-               TryParseEmuAttribute(chOff, "x", out chOffX) &&
-               TryParseEmuAttribute(chOff, "y", out chOffY) &&
-               TryParseEmuAttribute(chExt, "cx", out chExtCx) &&
-               TryParseEmuAttribute(chExt, "cy", out chExtCy);
+        if (!(TryParseEmuAttribute(off, "x", out offX) &&
+              TryParseEmuAttribute(off, "y", out offY) &&
+              TryParseEmuAttribute(ext, "cx", out extCx) &&
+              TryParseEmuAttribute(ext, "cy", out extCy) &&
+              TryParseEmuAttribute(chOff, "x", out chOffX) &&
+              TryParseEmuAttribute(chOff, "y", out chOffY) &&
+              TryParseEmuAttribute(chExt, "cx", out chExtCx) &&
+              TryParseEmuAttribute(chExt, "cy", out chExtCy)))
+        {
+            return false;
+        }
+
+        // R42-io-drawing-group-transform-3-2/3-3: the group's OWN rotation/flip (as opposed to a
+        // child shape's local rotation/flip, read elsewhere via these same helpers applied to the
+        // shape's own xfrm) rotates/mirrors the group's entire rendered content -- including every
+        // descendant's computed position -- about the group's own off/ext bounding-box center.
+        rotationDegrees = ReadDrawingRotation(groupXfrm);
+        flipH = ReadDrawingFlipHorizontal(groupXfrm);
+        flipV = ReadDrawingFlipVertical(groupXfrm);
+        return true;
     }
 
     private static bool TryParseEmuAttribute(XElement element, string attributeName, out double value) =>
@@ -991,8 +1130,7 @@ internal static partial class XlsxWorksheetDrawingPartReader
     private static XlsxDrawingAnchor? ReadNearestAnchor(XElement element, XElement? transform, DrawingGroupTransform groupTransform)
     {
         var anchor = ReadNearestAnchor(element);
-        if (anchor is null || (groupTransform.OffsetXEmu == 0 && groupTransform.OffsetYEmu == 0 &&
-                                groupTransform.ScaleX == 1 && groupTransform.ScaleY == 1))
+        if (anchor is null || groupTransform == DrawingGroupTransform.Identity)
         {
             return anchor;
         }
@@ -1003,10 +1141,12 @@ internal static partial class XlsxWorksheetDrawingPartReader
         var localOffYEmu = ReadEmuAttributeOrZero(off, "y");
 
         // Map the shape's own local off (in the innermost group's child space) through the
-        // composed group transform into the outermost group's child space, which is the same
-        // space the worksheet anchor positions the group tree in.
-        var absoluteOffXEmu = groupTransform.OffsetXEmu + localOffXEmu * groupTransform.ScaleX;
-        var absoluteOffYEmu = groupTransform.OffsetYEmu + localOffYEmu * groupTransform.ScaleY;
+        // composed group transform -- the full affine, including every ancestor group's own
+        // rotation and flip about its own bounding-box center (R42-io-drawing-group-transform-3-2/
+        // 3-3) -- into the outermost group's child space, which is the same space the worksheet
+        // anchor positions the group tree in.
+        var absoluteOffXEmu = groupTransform.MatrixA * localOffXEmu + groupTransform.MatrixB * localOffYEmu + groupTransform.OffsetXEmu;
+        var absoluteOffYEmu = groupTransform.MatrixC * localOffXEmu + groupTransform.MatrixD * localOffYEmu + groupTransform.OffsetYEmu;
 
         var deltaXPixels = DrawingMlUnits.EmuToPixels(absoluteOffXEmu);
         var deltaYPixels = DrawingMlUnits.EmuToPixels(absoluteOffYEmu);

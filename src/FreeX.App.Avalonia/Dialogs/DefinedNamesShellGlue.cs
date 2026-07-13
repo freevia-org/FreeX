@@ -145,11 +145,28 @@ internal static class DefinedNamesShellGlue
         return new DefineNamedFormulaCommand(draft.Name, text, draft.Scope.Sheet);
     }
 
-    /// <summary>Maps a name deletion onto a <see cref="RemoveNamedRangeCommand"/>.</summary>
-    public static RemoveNamedRangeCommand BuildDeleteCommand(string name)
+    /// <summary>
+    /// Maps a name deletion onto a <see cref="RemoveNamedRangeCommand"/>. <paramref name="scopeSheetId"/> must
+    /// be passed for a sheet-scoped name (resolve it via <see cref="ResolveScopeSheetId"/>) so the command
+    /// probes <see cref="Workbook.ScopedNamedRanges"/>/<see cref="Workbook.ScopedNamedFormulas"/> instead of
+    /// the workbook-global dictionaries — otherwise a sheet-scoped name can never be found for deletion.
+    /// </summary>
+    public static RemoveNamedRangeCommand BuildDeleteCommand(string name, SheetId? scopeSheetId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        return new RemoveNamedRangeCommand(name);
+        return new RemoveNamedRangeCommand(name, scopeSheetId);
+    }
+
+    /// <summary>
+    /// Resolves a Name Manager scope label (<see cref="DefinedNameScope.WorkbookLabel"/> or a sheet's display
+    /// name) to the sheet-scope <see cref="SheetId"/> to pass to <see cref="BuildDeleteCommand"/> /
+    /// <see cref="DefineNamedRangeCommand"/>, or null for the workbook scope. Mirrors the WPF host's
+    /// NamedRangeDialog.ResolveScopeSheetId.
+    /// </summary>
+    public static SheetId? ResolveScopeSheetId(Workbook workbook, string? scopeLabel)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        return DefinedNameScope.IsWorkbookLabel(scopeLabel) ? null : workbook.GetSheet(scopeLabel!)?.Id;
     }
 
     /// <summary>

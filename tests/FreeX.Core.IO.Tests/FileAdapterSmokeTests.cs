@@ -206,7 +206,9 @@ public partial class FileAdapterSmokeTests
         var sheet = workbook.AddSheet("Data");
         sheet.Charts.Add(new ChartModel
         {
-            Type = ChartType.StackedColumn,
+            // Pie is genuinely unsupported for a secondary axis (StackedColumn is now supported per
+            // the R42-meta-2 family completion), so the sanitizer must still clear the state here.
+            Type = ChartType.Pie,
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 3, 3)),
             ShowSecondaryAxis = true,
             SecondaryAxisSeriesIndexes = [1]

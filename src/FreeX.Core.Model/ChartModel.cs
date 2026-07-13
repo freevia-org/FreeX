@@ -96,11 +96,40 @@ public sealed class ChartModel
     public CellColor? ChartAreaBorderColor { get; set; }
     public WorkbookThemeColorReference? ChartAreaBorderThemeColor { get; set; }
     public double? ChartAreaBorderThickness { get; set; }
+
+    /// <summary>
+    /// R42-io-chart-plotarea-legend-3-1: true when the source file explicitly declared
+    /// <c>&lt;a:noFill/&gt;</c> on the chart area's shape properties (the user picked "No Fill"),
+    /// as distinct from simply not setting a fill at all. Takes priority over
+    /// <see cref="ChartAreaFillColor"/>/<see cref="ChartAreaFillThemeColor"/> on write.
+    /// </summary>
+    public bool? ChartAreaNoFill { get; set; }
+
+    /// <summary>
+    /// R42-io-chart-plotarea-legend-3-1: true when the source file explicitly declared
+    /// <c>&lt;a:ln&gt;&lt;a:noFill/&gt;&lt;/a:ln&gt;</c> on the chart area (the user picked "No
+    /// Line"), as distinct from simply not setting a border. Takes priority over
+    /// <see cref="ChartAreaBorderColor"/>/<see cref="ChartAreaBorderThemeColor"/>/
+    /// <see cref="ChartAreaBorderThickness"/> on write.
+    /// </summary>
+    public bool? ChartAreaNoLine { get; set; }
     public CellColor? PlotAreaFillColor { get; set; }
     public WorkbookThemeColorReference? PlotAreaFillThemeColor { get; set; }
     public CellColor? PlotAreaBorderColor { get; set; }
     public WorkbookThemeColorReference? PlotAreaBorderThemeColor { get; set; }
     public double PlotAreaBorderThickness { get; set; } = 1;
+
+    /// <summary>
+    /// R42-io-chart-plotarea-legend-3-1: same as <see cref="ChartAreaNoFill"/> but for the plot
+    /// area's own shape properties.
+    /// </summary>
+    public bool? PlotAreaNoFill { get; set; }
+
+    /// <summary>
+    /// R42-io-chart-plotarea-legend-3-1: same as <see cref="ChartAreaNoLine"/> but for the plot
+    /// area's own shape properties.
+    /// </summary>
+    public bool? PlotAreaNoLine { get; set; }
     public CellColor? LegendTextColor { get; set; }
     public WorkbookThemeColorReference? LegendTextThemeColor { get; set; }
     public CellColor? LegendFillColor { get; set; }

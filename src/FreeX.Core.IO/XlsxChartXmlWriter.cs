@@ -35,9 +35,9 @@ internal static partial class XlsxChartXmlWriter
                     ToPivotSourceXml(chart, sheet, chartNs),
                     ToChartProtectionXml(chart, chartNs),
                     new XElement(chartNs + "chart",
-                        string.IsNullOrWhiteSpace(chart.Title)
-                            ? null
-                            : ToChartTitleXml(chart, chartNs, drawingNs),
+                        ShouldWriteChartTitle(chart, chartNs)
+                            ? ToChartTitleXml(chart, chartNs, drawingNs)
+                            : null,
                         chart.AutoTitleDeleted ? new XElement(chartNs + "autoTitleDeleted", new XAttribute("val", "1")) : null,
                         ToPivotFormatsXml(chart, chartNs),
                         ToChart3DViewXml(chart, chartNs),
@@ -233,12 +233,19 @@ internal static partial class XlsxChartXmlWriter
             ChartType.Bubble => new XElement(chartNs + "bubbleChart",
                 BuildBubbleChartSeries(chart, sheet, chartNs, drawingNs),
                 ToBubbleChartOptionXml(chart, chartNs)),
+            // R42-io-chart-plotarea-legend-3-2: varyColors must precede the <c:ser> elements per
+            // CT_PieChart/CT_Pie3DChart/CT_DoughnutChart -- an explicit "Vary Colors by Point"
+            // choice (including turning it OFF, val="0") is only preserved on round-trip if it is
+            // actually written; previously only bar/bar3D charts emitted this element.
             ChartType.Pie => new XElement(chartNs + "pieChart",
+                ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
                 BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs),
                 ToFirstSliceAngleXml(chart, chartNs)),
             ChartType.ThreeDPie => new XElement(chartNs + "pie3DChart",
+                ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
                 BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs)),
             ChartType.Doughnut => new XElement(chartNs + "doughnutChart",
+                ToChartBooleanValueXml(chartNs, "varyColors", chart.VaryColorsByPoint),
                 BuildPieFamilyChartSeries(chart, sheet, chartNs, drawingNs),
                 ToFirstSliceAngleXml(chart, chartNs),
                 new XElement(chartNs + "holeSize",

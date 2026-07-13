@@ -657,11 +657,26 @@ public partial class GridView
             if (!rowLookupAll.TryGetValue(cell.Row, out var rowMetric)) continue;
             if (!colLookupAll.TryGetValue(cell.Col, out var colMetric)) continue;
 
+            // Comments/notes are only ever keyed on a merged range's anchor cell, so when the
+            // anchor is merged, expand the indicator rect to the full merged footprint (matching
+            // the border pass at line 605 and the text pass at line 690) so the triangle lands at
+            // the merged range's true top-right corner instead of an interior gridline.
+            double w = colMetric.Width;
+            double h = rowMetric.Height;
+            var commentMerge = hasMergedSurfaces ? FindMerge(cell.Row, cell.Col) : null;
+            if (commentMerge.HasValue)
+            {
+                for (uint c2 = commentMerge.Value.Start.Col + 1; c2 <= commentMerge.Value.End.Col; c2++)
+                    if (colLookupAll.TryGetValue(c2, out var cm2)) w += cm2.Width;
+                for (uint r2 = commentMerge.Value.Start.Row + 1; r2 <= commentMerge.Value.End.Row; r2++)
+                    if (rowLookupAll.TryGetValue(r2, out var rm2)) h += rm2.Height;
+            }
+
             var rect = new Rect(
                 colMetric.LeftOffset + rowHeaderWidth,
                 rowMetric.TopOffset + columnHeaderHeight,
-                colMetric.Width,
-                rowMetric.Height);
+                w,
+                h);
             if (!IntersectsVisibleGrid(rect, visibleLeft, visibleTop, visibleRight, visibleBottom))
                 continue;
 

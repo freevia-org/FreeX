@@ -10,19 +10,39 @@ internal static partial class XlsxChartXmlWriter
     {
         var fontSize = ToEffectiveChartTitleFontSize(chart);
         return new XElement(chartNs + "title",
-            new XElement(chartNs + "tx",
-                new XElement(chartNs + "rich",
-                    // CT_TextBody requires bodyPr before the paragraph(s).
-                    new XElement(drawingNs + "bodyPr"),
-                    new XElement(drawingNs + "p",
-                        new XElement(drawingNs + "r",
-                            ToTextRunProperties(chart.ChartTitleTextThemeColor, chart.ChartTitleTextColor, fontSize, drawingNs),
-                            new XElement(drawingNs + "t", chart.Title))))),
+            // R42-io-chart-plotarea-legend-3-4: only emit <c:tx> when there is literal title
+            // text. An auto-linked/blank title (no <c:tx> in the source file) can still carry an
+            // explicit manual layout/overlay below -- omitting <c:tx> here keeps that case
+            // faithful instead of writing a bogus empty <a:t/> run.
+            string.IsNullOrWhiteSpace(chart.Title)
+                ? null
+                : new XElement(chartNs + "tx",
+                    new XElement(chartNs + "rich",
+                        // CT_TextBody requires bodyPr before the paragraph(s).
+                        new XElement(drawingNs + "bodyPr"),
+                        new XElement(drawingNs + "p",
+                            new XElement(drawingNs + "r",
+                                ToTextRunProperties(chart.ChartTitleTextThemeColor, chart.ChartTitleTextColor, fontSize, drawingNs),
+                                new XElement(drawingNs + "t", chart.Title))))),
             ToManualLayoutXml(chart.TitleLayout, chartNs),
             chart.TitleOverlay
                 ? new XElement(chartNs + "overlay", new XAttribute("val", "1"))
                 : null);
     }
+
+    /// <summary>
+    /// R42-io-chart-plotarea-legend-3-4: whether the chart-level &lt;c:title&gt; element should be
+    /// emitted at all. The reader populates <see cref="ChartModel.TitleLayout"/>/
+    /// <see cref="ChartModel.TitleOverlay"/> directly off &lt;c:title&gt; independent of whether the
+    /// title carries literal text (an auto-linked title can still be manually repositioned or set
+    /// to overlay the plot area without ever being retyped) -- so gating emission on title text
+    /// alone would silently drop a loaded title's manual position/overlay. Emit whenever there is
+    /// *something* to write: text, a meaningful manual layout, or overlay.
+    /// </summary>
+    private static bool ShouldWriteChartTitle(ChartModel chart, XNamespace chartNs) =>
+        !string.IsNullOrWhiteSpace(chart.Title) ||
+        ToManualLayoutXml(chart.TitleLayout, chartNs) is not null ||
+        chart.TitleOverlay;
 
     /// <summary>
     /// R41-io-hyperlink-drawing-rels-3-2: <see cref="ToChartTitleXml"/> rebuilds the main chart title
@@ -139,7 +159,9 @@ internal static partial class XlsxChartXmlWriter
             chart.ChartAreaFillColor,
             chart.ChartAreaBorderThemeColor,
             chart.ChartAreaBorderColor,
-            chart.ChartAreaBorderThickness);
+            chart.ChartAreaBorderThickness,
+            chart.ChartAreaNoFill == true,
+            chart.ChartAreaNoLine == true);
 
     private static XElement? ToChartDefaultTextPropertiesXml(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {
@@ -170,8 +192,18 @@ internal static partial class XlsxChartXmlWriter
             chart.PlotAreaFillColor,
             chart.PlotAreaBorderThemeColor,
             chart.PlotAreaBorderColor,
-            chart.PlotAreaBorderThickness);
+            chart.PlotAreaBorderThickness,
+            chart.PlotAreaNoFill == true,
+            chart.PlotAreaNoLine == true);
 
+    /// <summary>
+    /// Builds a &lt;c:spPr&gt; element from resolved fill/border data. R42-io-chart-plotarea-
+    /// legend-3-1: <paramref name="noFill"/>/<paramref name="noLine"/> let a caller re-emit an
+    /// explicit "No Fill"/"No Line" choice (&lt;a:noFill/&gt;) instead of silently omitting the
+    /// whole shape-properties element (which would revert to Excel's themed default on reload).
+    /// They take priority over any fill/border color, matching how the reader clears the color
+    /// fields when it detects an explicit noFill.
+    /// </summary>
     private static XElement? ToShapeProperties(
         XNamespace chartNs,
         XNamespace drawingNs,
@@ -179,17 +211,30 @@ internal static partial class XlsxChartXmlWriter
         CellColor? fillColor,
         WorkbookThemeColorReference? borderThemeColor,
         CellColor? borderColor,
-        double? borderThickness)
+        double? borderThickness,
+        bool noFill = false,
+        bool noLine = false)
     {
-        var fill = ToSolidFill(fillThemeColor, fillColor, drawingNs);
-        var lineFill = ToSolidFill(borderThemeColor, borderColor, drawingNs);
-        var line = lineFill is null && borderThickness is null
-            ? null
-            : new XElement(drawingNs + "ln",
-                borderThickness is null
-                    ? null
-                    : new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(borderThickness.Value, 0, 10) * DrawingMlUnits.EmuPerPoint))),
-                lineFill);
+        var fill = noFill
+            ? new XElement(drawingNs + "noFill")
+            : ToSolidFill(fillThemeColor, fillColor, drawingNs);
+
+        XElement? line;
+        if (noLine)
+        {
+            line = new XElement(drawingNs + "ln", new XElement(drawingNs + "noFill"));
+        }
+        else
+        {
+            var lineFill = ToSolidFill(borderThemeColor, borderColor, drawingNs);
+            line = lineFill is null && borderThickness is null
+                ? null
+                : new XElement(drawingNs + "ln",
+                    borderThickness is null
+                        ? null
+                        : new XAttribute("w", Math.Max(0, (int)Math.Round(Math.Clamp(borderThickness.Value, 0, 10) * DrawingMlUnits.EmuPerPoint))),
+                    lineFill);
+        }
 
         return fill is null && line is null
             ? null
