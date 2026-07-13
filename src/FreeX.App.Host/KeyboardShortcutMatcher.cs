@@ -124,6 +124,7 @@ public static partial class KeyboardShortcutMatcher
             Key.D3 or Key.NumPad3 => WorkbookShortcutKey.D3,
             Key.D4 or Key.NumPad4 => WorkbookShortcutKey.D4,
             Key.D5 or Key.NumPad5 => WorkbookShortcutKey.D5,
+            Key.D6 => WorkbookShortcutKey.D6,
             Key.Delete => WorkbookShortcutKey.Delete,
             Key.E => WorkbookShortcutKey.E,
             Key.F => WorkbookShortcutKey.F,
@@ -165,6 +166,7 @@ public static partial class KeyboardShortcutMatcher
             Key.NumPad4 or
             Key.D5 or
             Key.NumPad5 or
+            Key.D6 or
             Key.Delete or
             Key.E or
             Key.F or
@@ -206,23 +208,56 @@ public static partial class KeyboardShortcutMatcher
     public static bool TryGetNumberFormatShortcut(Key key, ModifierKeys modifiers, out NumberFormatShortcut shortcut)
     {
         shortcut = default;
-        if (modifiers != (ModifierKeys.Control | ModifierKeys.Shift))
-            return false;
-
-        shortcut = key switch
+        if (!TryGetWorkbookNumberFormatShortcutKey(key, out var shortcutKey) ||
+            !WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
+                shortcutKey,
+                ToWorkbookModifiers(modifiers),
+                out var route))
         {
-            Key.Oem3 => NumberFormatShortcut.General,
-            Key.D1 => NumberFormatShortcut.Number,
-            Key.D2 => NumberFormatShortcut.Time,
-            Key.D3 => NumberFormatShortcut.Date,
-            Key.D4 => NumberFormatShortcut.Currency,
-            Key.D5 => NumberFormatShortcut.Percentage,
-            Key.D6 => NumberFormatShortcut.Scientific,
+            return false;
+        }
+
+        shortcut = route switch
+        {
+            WorkbookShortcutRoute.NumberFormatGeneral => NumberFormatShortcut.General,
+            WorkbookShortcutRoute.NumberFormatNumber => NumberFormatShortcut.Number,
+            WorkbookShortcutRoute.NumberFormatTime => NumberFormatShortcut.Time,
+            WorkbookShortcutRoute.NumberFormatDate => NumberFormatShortcut.Date,
+            WorkbookShortcutRoute.NumberFormatCurrency => NumberFormatShortcut.Currency,
+            WorkbookShortcutRoute.NumberFormatPercentage => NumberFormatShortcut.Percentage,
+            WorkbookShortcutRoute.NumberFormatScientific => NumberFormatShortcut.Scientific,
+            _ => default
+        };
+
+        return IsNumberFormatRoute(route);
+    }
+
+    private static bool TryGetWorkbookNumberFormatShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
+    {
+        shortcutKey = key switch
+        {
+            Key.Oem3 => WorkbookShortcutKey.Oem3,
+            Key.D1 => WorkbookShortcutKey.D1,
+            Key.D2 => WorkbookShortcutKey.D2,
+            Key.D3 => WorkbookShortcutKey.D3,
+            Key.D4 => WorkbookShortcutKey.D4,
+            Key.D5 => WorkbookShortcutKey.D5,
+            Key.D6 => WorkbookShortcutKey.D6,
             _ => default
         };
 
         return key is Key.Oem3 or Key.D1 or Key.D2 or Key.D3 or Key.D4 or Key.D5 or Key.D6;
     }
+
+    private static bool IsNumberFormatRoute(WorkbookShortcutRoute route) =>
+        route is
+            WorkbookShortcutRoute.NumberFormatGeneral or
+            WorkbookShortcutRoute.NumberFormatNumber or
+            WorkbookShortcutRoute.NumberFormatTime or
+            WorkbookShortcutRoute.NumberFormatDate or
+            WorkbookShortcutRoute.NumberFormatCurrency or
+            WorkbookShortcutRoute.NumberFormatPercentage or
+            WorkbookShortcutRoute.NumberFormatScientific;
 
     public static bool TryGetFontToggleShortcut(Key key, ModifierKeys modifiers, out FontToggleShortcut shortcut)
     {

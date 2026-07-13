@@ -50,6 +50,21 @@ public sealed partial class KeyboardShortcutMatcherTests
             .Should().BeTrue();
     }
 
+    [Fact]
+    public void SharedWorkbookShortcutMatrix_RoutesWpfNumberFormatShortcuts()
+    {
+        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => IsNumberFormatRoute(rule.Route)))
+        {
+            KeyboardShortcutMatcher.TryGetNumberFormatShortcut(
+                    ToWpfKey(rule.WindowsChord.Key),
+                    ToWpfModifiers(rule.WindowsChord.Modifiers),
+                    out var shortcut)
+                .Should().BeTrue($"WPF should route {rule.WindowsChord} through the shared workbook shortcut matrix");
+
+            shortcut.Should().Be(ToNumberFormatShortcut(rule.Route));
+        }
+    }
+
     private static Key ToWpfKey(WorkbookShortcutKey key) =>
         key switch
         {
@@ -62,6 +77,7 @@ public sealed partial class KeyboardShortcutMatcherTests
             WorkbookShortcutKey.D3 => Key.D3,
             WorkbookShortcutKey.D4 => Key.D4,
             WorkbookShortcutKey.D5 => Key.D5,
+            WorkbookShortcutKey.D6 => Key.D6,
             WorkbookShortcutKey.Delete => Key.Delete,
             WorkbookShortcutKey.E => Key.E,
             WorkbookShortcutKey.F => Key.F,
@@ -125,6 +141,19 @@ public sealed partial class KeyboardShortcutMatcherTests
             _ => throw new ArgumentOutOfRangeException(nameof(route), route, null)
         };
 
+    private static NumberFormatShortcut ToNumberFormatShortcut(WorkbookShortcutRoute route) =>
+        route switch
+        {
+            WorkbookShortcutRoute.NumberFormatGeneral => NumberFormatShortcut.General,
+            WorkbookShortcutRoute.NumberFormatNumber => NumberFormatShortcut.Number,
+            WorkbookShortcutRoute.NumberFormatTime => NumberFormatShortcut.Time,
+            WorkbookShortcutRoute.NumberFormatDate => NumberFormatShortcut.Date,
+            WorkbookShortcutRoute.NumberFormatCurrency => NumberFormatShortcut.Currency,
+            WorkbookShortcutRoute.NumberFormatPercentage => NumberFormatShortcut.Percentage,
+            WorkbookShortcutRoute.NumberFormatScientific => NumberFormatShortcut.Scientific,
+            _ => throw new ArgumentOutOfRangeException(nameof(route), route, null)
+        };
+
     private static FontToggleShortcut ToFontToggleShortcut(WorkbookShortcutRoute route) =>
         route switch
         {
@@ -136,7 +165,9 @@ public sealed partial class KeyboardShortcutMatcherTests
         };
 
     private static bool ShouldRouteAsCommandShortcut(WorkbookShortcutRoute route) =>
-        route != WorkbookShortcutRoute.PasteSpecial && !IsFontToggleRoute(route);
+        route != WorkbookShortcutRoute.PasteSpecial &&
+        !IsFontToggleRoute(route) &&
+        !IsNumberFormatRoute(route);
 
     private static bool IsFontToggleRoute(WorkbookShortcutRoute route) =>
         route is
@@ -144,4 +175,14 @@ public sealed partial class KeyboardShortcutMatcherTests
             WorkbookShortcutRoute.ToggleItalic or
             WorkbookShortcutRoute.ToggleUnderline or
             WorkbookShortcutRoute.ToggleStrikethrough;
+
+    private static bool IsNumberFormatRoute(WorkbookShortcutRoute route) =>
+        route is
+            WorkbookShortcutRoute.NumberFormatGeneral or
+            WorkbookShortcutRoute.NumberFormatNumber or
+            WorkbookShortcutRoute.NumberFormatTime or
+            WorkbookShortcutRoute.NumberFormatDate or
+            WorkbookShortcutRoute.NumberFormatCurrency or
+            WorkbookShortcutRoute.NumberFormatPercentage or
+            WorkbookShortcutRoute.NumberFormatScientific;
 }

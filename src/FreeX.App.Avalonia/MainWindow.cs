@@ -21689,6 +21689,91 @@ public sealed partial class MainWindow : Window
     private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args) =>
         args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;
 
+    private static bool TryGetNumberFormatShortcut(Key key, KeyModifiers modifiers, out NumberFormatShortcut shortcut)
+    {
+        shortcut = default;
+        if (!TryGetWorkbookNumberFormatShortcutKey(key, out var shortcutKey) ||
+            !TryGetWorkbookShortcutRoute(shortcutKey, ToWorkbookShortcutModifiers(modifiers), out var route))
+        {
+            return false;
+        }
+
+        shortcut = route switch
+        {
+            WorkbookShortcutRoute.NumberFormatGeneral => NumberFormatShortcut.General,
+            WorkbookShortcutRoute.NumberFormatNumber => NumberFormatShortcut.Number,
+            WorkbookShortcutRoute.NumberFormatTime => NumberFormatShortcut.Time,
+            WorkbookShortcutRoute.NumberFormatDate => NumberFormatShortcut.Date,
+            WorkbookShortcutRoute.NumberFormatCurrency => NumberFormatShortcut.Currency,
+            WorkbookShortcutRoute.NumberFormatPercentage => NumberFormatShortcut.Percentage,
+            WorkbookShortcutRoute.NumberFormatScientific => NumberFormatShortcut.Scientific,
+            _ => default
+        };
+
+        return IsNumberFormatRoute(route);
+    }
+
+    private static bool TryGetWorkbookShortcutRoute(
+        WorkbookShortcutKey key,
+        WorkbookShortcutModifiers modifiers,
+        out WorkbookShortcutRoute route) =>
+        WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(key, modifiers, out route) ||
+        WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out route);
+
+    private static bool TryGetWorkbookNumberFormatShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
+    {
+        shortcutKey = key switch
+        {
+            Key.Oem3 => WorkbookShortcutKey.Oem3,
+            Key.D1 or Key.NumPad1 => WorkbookShortcutKey.D1,
+            Key.D2 or Key.NumPad2 => WorkbookShortcutKey.D2,
+            Key.D3 or Key.NumPad3 => WorkbookShortcutKey.D3,
+            Key.D4 or Key.NumPad4 => WorkbookShortcutKey.D4,
+            Key.D5 or Key.NumPad5 => WorkbookShortcutKey.D5,
+            Key.D6 or Key.NumPad6 => WorkbookShortcutKey.D6,
+            _ => default
+        };
+
+        return key is
+            Key.Oem3 or
+            Key.D1 or
+            Key.NumPad1 or
+            Key.D2 or
+            Key.NumPad2 or
+            Key.D3 or
+            Key.NumPad3 or
+            Key.D4 or
+            Key.NumPad4 or
+            Key.D5 or
+            Key.NumPad5 or
+            Key.D6 or
+            Key.NumPad6;
+    }
+
+    private static WorkbookShortcutModifiers ToWorkbookShortcutModifiers(KeyModifiers modifiers)
+    {
+        var result = WorkbookShortcutModifiers.None;
+        if (modifiers.HasFlag(KeyModifiers.Control))
+            result |= WorkbookShortcutModifiers.Control;
+        else if (modifiers.HasFlag(KeyModifiers.Meta))
+            result |= WorkbookShortcutModifiers.Meta;
+        if (modifiers.HasFlag(KeyModifiers.Alt))
+            result |= WorkbookShortcutModifiers.Alt;
+        if (modifiers.HasFlag(KeyModifiers.Shift))
+            result |= WorkbookShortcutModifiers.Shift;
+        return result;
+    }
+
+    private static bool IsNumberFormatRoute(WorkbookShortcutRoute route) =>
+        route is
+            WorkbookShortcutRoute.NumberFormatGeneral or
+            WorkbookShortcutRoute.NumberFormatNumber or
+            WorkbookShortcutRoute.NumberFormatTime or
+            WorkbookShortcutRoute.NumberFormatDate or
+            WorkbookShortcutRoute.NumberFormatCurrency or
+            WorkbookShortcutRoute.NumberFormatPercentage or
+            WorkbookShortcutRoute.NumberFormatScientific;
+
     /// <summary>
     /// The worksheet-cell context-menu shortcut (Menu key / Shift+F10) — the same key combo used for
     /// the sheet-tab context menu (<see cref="IsSheetTabContextMenuKey"/>), Excel's universal
@@ -22050,40 +22135,10 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);
         }
-        else if (e.Key == Key.Oem3 && HasCommandAndShiftModifiers(e.KeyModifiers))
+        else if (TryGetNumberFormatShortcut(e.Key, e.KeyModifiers, out var numberFormatShortcut))
         {
             e.Handled = true;
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.General);
-        }
-        else if (e.Key is Key.D1 or Key.NumPad1 && HasCommandAndShiftModifiers(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Number);
-        }
-        else if (e.Key is Key.D2 or Key.NumPad2 && HasCommandAndShiftModifiers(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Time);
-        }
-        else if (e.Key is Key.D3 or Key.NumPad3 && HasCommandAndShiftModifiers(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Date);
-        }
-        else if (e.Key is Key.D4 or Key.NumPad4 && HasCommandAndShiftModifiers(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Currency);
-        }
-        else if (e.Key is Key.D5 or Key.NumPad5 && HasCommandAndShiftModifiers(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Percentage);
-        }
-        else if (e.Key is Key.D6 or Key.NumPad6 && HasCommandAndShiftModifiers(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ApplySelectedRangeNumberFormatShortcut(NumberFormatShortcut.Scientific);
+            ApplySelectedRangeNumberFormatShortcut(numberFormatShortcut);
         }
         else if (e.Key == Key.D7 && HasCommandAndShiftModifiers(e.KeyModifiers))
         {

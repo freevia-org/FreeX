@@ -34,6 +34,13 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
     [InlineData(WorkbookShortcutKey.E, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.FlashFill)]
     [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.ToggleShowFormulas)]
     [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.OpenFormatCells)]
+    [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatGeneral)]
+    [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatNumber)]
+    [InlineData(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatTime)]
+    [InlineData(WorkbookShortcutKey.D3, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatDate)]
+    [InlineData(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatCurrency)]
+    [InlineData(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatPercentage)]
+    [InlineData(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatScientific)]
     [InlineData(WorkbookShortcutKey.F, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Find)]
     [InlineData(WorkbookShortcutKey.H, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.Replace)]
     [InlineData(WorkbookShortcutKey.G, WorkbookShortcutModifiers.Control, WorkbookShortcutRoute.GoTo)]
@@ -51,6 +58,37 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
             .Should().BeTrue();
 
         route.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatGeneral)]
+    [InlineData(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatNumber)]
+    [InlineData(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatTime)]
+    [InlineData(WorkbookShortcutKey.D3, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatDate)]
+    [InlineData(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatCurrency)]
+    [InlineData(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatPercentage)]
+    [InlineData(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift, WorkbookShortcutRoute.NumberFormatScientific)]
+    public void TryGetNativeMenuRoute_ResolvesSharedNumberFormatShortcutRoutes(
+        WorkbookShortcutKey key,
+        WorkbookShortcutModifiers modifiers,
+        WorkbookShortcutRoute expected)
+    {
+        WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out var route)
+            .Should().BeTrue();
+
+        route.Should().Be(expected);
+    }
+
+    [Fact]
+    public void WindowsChords_AreUnique()
+    {
+        var duplicateChords = WorkbookKeyboardShortcutCatalog.Rules
+            .GroupBy(rule => rule.WindowsChord)
+            .Where(group => group.Count() > 1)
+            .Select(group => $"{group.Key}: {string.Join(", ", group.Select(rule => rule.Route))}")
+            .ToArray();
+
+        duplicateChords.Should().BeEmpty();
     }
 
     [Fact]

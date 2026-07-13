@@ -20,6 +20,13 @@ public enum WorkbookShortcutRoute
     FlashFill,
     ToggleShowFormulas,
     OpenFormatCells,
+    NumberFormatGeneral,
+    NumberFormatNumber,
+    NumberFormatTime,
+    NumberFormatDate,
+    NumberFormatCurrency,
+    NumberFormatPercentage,
+    NumberFormatScientific,
     Find,
     Replace,
     GoTo,
@@ -41,6 +48,7 @@ public enum WorkbookShortcutKey
     D3,
     D4,
     D5,
+    D6,
     Delete,
     E,
     F,
@@ -172,6 +180,34 @@ public static class WorkbookKeyboardShortcutCatalog
             new WorkbookShortcutChord(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control),
             new WorkbookShortcutChord(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Meta)),
         new(
+            WorkbookShortcutRoute.NumberFormatGeneral,
+            new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.Oem3, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+        new(
+            WorkbookShortcutRoute.NumberFormatNumber,
+            new WorkbookShortcutChord(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D1, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+        new(
+            WorkbookShortcutRoute.NumberFormatTime,
+            new WorkbookShortcutChord(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D2, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+        new(
+            WorkbookShortcutRoute.NumberFormatDate,
+            new WorkbookShortcutChord(WorkbookShortcutKey.D3, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D3, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+        new(
+            WorkbookShortcutRoute.NumberFormatCurrency,
+            new WorkbookShortcutChord(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D4, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+        new(
+            WorkbookShortcutRoute.NumberFormatPercentage,
+            new WorkbookShortcutChord(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D5, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+        new(
+            WorkbookShortcutRoute.NumberFormatScientific,
+            new WorkbookShortcutChord(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift),
+            new WorkbookShortcutChord(WorkbookShortcutKey.D6, WorkbookShortcutModifiers.Meta | WorkbookShortcutModifiers.Shift)),
+        new(
             WorkbookShortcutRoute.Find,
             new WorkbookShortcutChord(WorkbookShortcutKey.F, WorkbookShortcutModifiers.Control),
             new WorkbookShortcutChord(WorkbookShortcutKey.F, WorkbookShortcutModifiers.Meta)),
@@ -211,6 +247,28 @@ public static class WorkbookKeyboardShortcutCatalog
         {
             if (rule.WindowsChord.Key != key || rule.WindowsChord.Modifiers != modifiers)
                 continue;
+
+            route = rule.Route;
+            return true;
+        }
+
+        route = default;
+        return false;
+    }
+
+    public static bool TryGetNativeMenuRoute(
+        WorkbookShortcutKey key,
+        WorkbookShortcutModifiers modifiers,
+        out WorkbookShortcutRoute route)
+    {
+        foreach (var rule in Rules)
+        {
+            if (rule.NativeMenuChord is not { } chord ||
+                chord.Key != key ||
+                chord.Modifiers != modifiers)
+            {
+                continue;
+            }
 
             route = rule.Route;
             return true;

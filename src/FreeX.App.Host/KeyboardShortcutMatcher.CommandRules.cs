@@ -128,7 +128,14 @@ public static partial class KeyboardShortcutMatcher
             WorkbookShortcutRoute.ToggleBold or
             WorkbookShortcutRoute.ToggleItalic or
             WorkbookShortcutRoute.ToggleUnderline or
-            WorkbookShortcutRoute.ToggleStrikethrough);
+            WorkbookShortcutRoute.ToggleStrikethrough or
+            WorkbookShortcutRoute.NumberFormatGeneral or
+            WorkbookShortcutRoute.NumberFormatNumber or
+            WorkbookShortcutRoute.NumberFormatTime or
+            WorkbookShortcutRoute.NumberFormatDate or
+            WorkbookShortcutRoute.NumberFormatCurrency or
+            WorkbookShortcutRoute.NumberFormatPercentage or
+            WorkbookShortcutRoute.NumberFormatScientific);
 
     private readonly record struct KeyboardCommandShortcutRule(
         KeyboardCommandShortcut Shortcut,
