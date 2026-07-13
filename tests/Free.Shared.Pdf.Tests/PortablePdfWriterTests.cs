@@ -206,6 +206,54 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_ClipsImageToEllipse()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(
+                10,
+                30,
+                20,
+                10,
+                MinimalPngBytes(),
+                "image/png",
+                ClipKind: PdfImageClipKind.Ellipse),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("30 35 m");
+        pdf.Should().Contain("30 37.761 25.523 40 20 40 c");
+        pdf.Should().Contain("W n\n20 0 0 10 10 30 cm");
+        pdf.Should().Contain("/Im1 Do");
+    }
+
+    [Fact]
+    public void Write_ClipsImageToRoundedRectangle()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfImage(
+                10,
+                30,
+                20,
+                10,
+                MinimalPngBytes(),
+                "image/png",
+                ClipKind: PdfImageClipKind.RoundedRectangle),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("11.8 30 m");
+        pdf.Should().Contain("28.2 30 l");
+        pdf.Should().Contain("W n\n20 0 0 10 10 30 cm");
+        pdf.Should().Contain("/Im1 Do");
+    }
+
+    [Fact]
     public void Write_EmbedsJpegImageWithDctDecode()
     {
         var page = new PdfContentPage(120, 90, new PdfDrawOp[]

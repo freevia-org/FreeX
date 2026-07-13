@@ -193,9 +193,25 @@ public static class PresentationPdfExporter
         if (!IsSupportedImageContentType(picture.ContentType))
             return false;
 
-        ops.Add(new PdfImage(x, y, width, height, picture.Bytes, picture.ContentType, shape.RotationDeg));
+        ops.Add(new PdfImage(
+            x,
+            y,
+            width,
+            height,
+            picture.Bytes,
+            picture.ContentType,
+            shape.RotationDeg,
+            MapPictureFrameClip(shape.PictureFrameGeometry)));
         return true;
     }
+
+    private static PdfImageClipKind MapPictureFrameClip(string? pictureFrameGeometry) =>
+        pictureFrameGeometry switch
+        {
+            "ellipse" => PdfImageClipKind.Ellipse,
+            "roundRect" => PdfImageClipKind.RoundedRectangle,
+            _ => PdfImageClipKind.None,
+        };
 
     private static bool TryAppendConnectorGeometry(
         List<PdfDrawOp> ops,

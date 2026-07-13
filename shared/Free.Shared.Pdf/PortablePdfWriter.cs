@@ -539,6 +539,12 @@ public static class PortablePdfWriter
 
     private static void AppendImage(StringBuilder content, PdfImage image, string resourceName)
     {
+        if (image.ClipKind != PdfImageClipKind.None)
+        {
+            AppendClippedImage(content, image, resourceName);
+            return;
+        }
+
         content.AppendLine("q");
         var rotation = -image.RotationDegrees * Math.PI / 180d;
         var cos = Math.Cos(rotation);
@@ -556,6 +562,18 @@ public static class PortablePdfWriter
         content.AppendLine("Q");
     }
 
+    private static void AppendClippedImage(StringBuilder content, PdfImage image, string resourceName)
+    {
+        content.AppendLine("q");
+        if (Math.Abs(image.RotationDegrees) > 0.001)
+            AppendRotationTransform(content, image.X + image.Width / 2d, image.Y + image.Height / 2d, image.RotationDegrees);
+
+        AppendImageClipPath(content, image);
+        content.AppendLine($"{FormatNumber(image.Width)} 0 0 {FormatNumber(image.Height)} {FormatNumber(image.X)} {FormatNumber(image.Y)} cm");
+        content.AppendLine($"/{resourceName} Do");
+        content.AppendLine("Q");
+    }
+
     private static void AppendRotationGroup(
         StringBuilder content,
         PdfRotationGroup group,
@@ -565,18 +583,27 @@ public static class PortablePdfWriter
             return;
 
         content.AppendLine("q");
-        var rotation = -group.RotationDegrees * Math.PI / 180d;
-        var cos = Math.Cos(rotation);
-        var sin = Math.Sin(rotation);
-        var e = group.CenterX - (cos * group.CenterX) + (sin * group.CenterY);
-        var f = group.CenterY - (sin * group.CenterX) - (cos * group.CenterY);
-        content.AppendLine(
-            $"{FormatNumber(cos)} {FormatNumber(sin)} {FormatNumber(-sin)} {FormatNumber(cos)} {FormatNumber(e)} {FormatNumber(f)} cm");
+        AppendRotationTransform(content, group.CenterX, group.CenterY, group.RotationDegrees);
 
         foreach (var op in group.Ops)
             AppendDrawOp(content, op, imageResources);
 
         content.AppendLine("Q");
+    }
+
+    private static void AppendRotationTransform(
+        StringBuilder content,
+        double centerX,
+        double centerY,
+        double rotationDegrees)
+    {
+        var rotation = -rotationDegrees * Math.PI / 180d;
+        var cos = Math.Cos(rotation);
+        var sin = Math.Sin(rotation);
+        var e = centerX - (cos * centerX) + (sin * centerY);
+        var f = centerY - (sin * centerX) - (cos * centerY);
+        content.AppendLine(
+            $"{FormatNumber(cos)} {FormatNumber(sin)} {FormatNumber(-sin)} {FormatNumber(cos)} {FormatNumber(e)} {FormatNumber(f)} cm");
     }
 
     private static void AppendFilledRectangle(
@@ -667,6 +694,49 @@ public static class PortablePdfWriter
         content.AppendLine($"{FormatNumber(cx - ox)} {FormatNumber(cy + ry)} {FormatNumber(cx - rx)} {FormatNumber(cy + oy)} {FormatNumber(cx - rx)} {FormatNumber(cy)} c");
         content.AppendLine($"{FormatNumber(cx - rx)} {FormatNumber(cy - oy)} {FormatNumber(cx - ox)} {FormatNumber(cy - ry)} {FormatNumber(cx)} {FormatNumber(cy - ry)} c");
         content.AppendLine($"{FormatNumber(cx + ox)} {FormatNumber(cy - ry)} {FormatNumber(cx + rx)} {FormatNumber(cy - oy)} {FormatNumber(cx + rx)} {FormatNumber(cy)} c");
+    }
+
+    private static void AppendImageClipPath(StringBuilder content, PdfImage image)
+    {
+        switch (image.ClipKind)
+        {
+            case PdfImageClipKind.Ellipse:
+                AppendEllipsePath(content, image.X, image.Y, image.Width, image.Height);
+                content.AppendLine("W n");
+                break;
+            case PdfImageClipKind.RoundedRectangle:
+                AppendRoundedRectanglePath(content, image.X, image.Y, image.Width, image.Height);
+                content.AppendLine("W n");
+                break;
+        }
+    }
+
+    private static void AppendRoundedRectanglePath(
+        StringBuilder content,
+        double x,
+        double y,
+        double width,
+        double height)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        const double kappa = 0.5522847498307936;
+        var radius = Math.Min(width, height) * 0.18;
+        radius = Math.Min(radius, Math.Min(width, height) / 2d);
+        var offset = radius * kappa;
+        var right = x + width;
+        var top = y + height;
+
+        content.AppendLine($"{FormatNumber(x + radius)} {FormatNumber(y)} m");
+        content.AppendLine($"{FormatNumber(right - radius)} {FormatNumber(y)} l");
+        content.AppendLine($"{FormatNumber(right - radius + offset)} {FormatNumber(y)} {FormatNumber(right)} {FormatNumber(y + radius - offset)} {FormatNumber(right)} {FormatNumber(y + radius)} c");
+        content.AppendLine($"{FormatNumber(right)} {FormatNumber(top - radius)} l");
+        content.AppendLine($"{FormatNumber(right)} {FormatNumber(top - radius + offset)} {FormatNumber(right - radius + offset)} {FormatNumber(top)} {FormatNumber(right - radius)} {FormatNumber(top)} c");
+        content.AppendLine($"{FormatNumber(x + radius)} {FormatNumber(top)} l");
+        content.AppendLine($"{FormatNumber(x + radius - offset)} {FormatNumber(top)} {FormatNumber(x)} {FormatNumber(top - radius + offset)} {FormatNumber(x)} {FormatNumber(top - radius)} c");
+        content.AppendLine($"{FormatNumber(x)} {FormatNumber(y + radius)} l");
+        content.AppendLine($"{FormatNumber(x)} {FormatNumber(y + radius - offset)} {FormatNumber(x + radius - offset)} {FormatNumber(y)} {FormatNumber(x + radius)} {FormatNumber(y)} c");
     }
 
     private static void AppendLine(

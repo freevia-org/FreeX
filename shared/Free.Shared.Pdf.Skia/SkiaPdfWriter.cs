@@ -228,14 +228,39 @@ public static class SkiaPdfWriter
                 {
                     canvas.Translate(left + width / 2f, top + height / 2f);
                     canvas.RotateDegrees((float)image.RotationDegrees);
-                    canvas.DrawImage(skImage, new SKRect(-width / 2f, -height / 2f, width / 2f, height / 2f));
+                    var localRect = new SKRect(-width / 2f, -height / 2f, width / 2f, height / 2f);
+                    ClipImage(canvas, image.ClipKind, localRect);
+                    canvas.DrawImage(skImage, localRect);
                 }
                 else
                 {
-                    canvas.DrawImage(skImage, new SKRect(left, top, left + width, top + height));
+                    var destRect = new SKRect(left, top, left + width, top + height);
+                    ClipImage(canvas, image.ClipKind, destRect);
+                    canvas.DrawImage(skImage, destRect);
                 }
 
                 canvas.Restore();
+                break;
+            }
+        }
+    }
+
+    private static void ClipImage(SKCanvas canvas, PdfImageClipKind clipKind, SKRect bounds)
+    {
+        switch (clipKind)
+        {
+            case PdfImageClipKind.Ellipse:
+            {
+                using var path = new SKPath();
+                path.AddOval(bounds);
+                canvas.ClipPath(path, antialias: true);
+                break;
+            }
+            case PdfImageClipKind.RoundedRectangle:
+            {
+                var radius = Math.Min(bounds.Width, bounds.Height) * 0.18f;
+                using var roundRect = new SKRoundRect(bounds, radius, radius);
+                canvas.ClipRoundRect(roundRect, antialias: true);
                 break;
             }
         }
