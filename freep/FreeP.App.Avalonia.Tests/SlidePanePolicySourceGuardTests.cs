@@ -41,7 +41,12 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("IsSelected  = plan.IsSelected");
         source.Should().Contain("ToolTip.SetTip(item, plan.ToolTipText)");
         source.Should().Contain("ContextMenu = BuildSlidePaneContextMenu(plan.SlideIndex)");
-        source.Should().Contain("Content                    = SlidePanePlanner.NewSlideButtonText");
+        source.Should().Contain("SlidePanePlanner.BuildBottomNewSlideAffordance(");
+        source.Should().Contain("Content                    = plan.Text");
+        source.Should().Contain("IsVisible                  = plan.IsVisible");
+        source.Should().Contain("IsEnabled                  = plan.Action.IsEnabled");
+        source.Should().Contain("AutomationProperties.SetName(button, plan.AccessibleName)");
+        source.Should().Contain("ToolTip.SetTip(button, plan.ToolTipText)");
         source.Should().Contain("button.Click += (_, _) => InsertSlideFromSlidePaneAffordance();");
         source.Should().Contain("slidePaneHost.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });");
         source.Should().Contain("slidePaneListHost.Children.Add(_slidePaneList);");
@@ -65,7 +70,8 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorAccentHex");
         source.Should().Contain("_slidePaneInsertionIndicator.Background = BrushFromHex(plan.AccentColorHex)");
         source.Should().Contain("SlidePanePlanner.PlanMoveAction(");
-        source.Should().Contain("private void InsertSlideFromSlidePaneAffordance()");
+        source.Should().Contain("private bool InsertSlideFromSlidePaneAffordance()");
+        source.Should().Contain("SlidePanePlanner.TryApplyBottomNewSlideAffordance(Editor)");
         source.Should().Contain("SelectSlidePaneItem(Editor.CurrentSlideIndex)");
         source.Should().Contain("UpdateSlidePaneItemChrome()");
         source.Should().NotContain("SlidePaneAvaloniaSlideItemHeight");

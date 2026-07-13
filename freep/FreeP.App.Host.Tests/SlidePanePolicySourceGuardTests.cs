@@ -23,7 +23,13 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlidePanePlanner.DefaultDropIndicatorAccentHex");
         source.Should().Contain("SlidePanePlanner.BuildContextActions(");
         source.Should().Contain("SlidePanePlanner.TryApplyAction(");
-        source.Should().Contain("SlidePanePlanner.NewSlideButtonText");
+        source.Should().Contain("SlidePanePlanner.BuildBottomNewSlideAffordance(");
+        source.Should().Contain("Content             = plan.Text");
+        source.Should().Contain("Visibility          = plan.IsVisible ? Visibility.Visible : Visibility.Collapsed");
+        source.Should().Contain("IsEnabled           = plan.Action.IsEnabled");
+        source.Should().Contain("ToolTip             = plan.ToolTipText");
+        source.Should().Contain("AutomationProperties.SetName(btn, plan.AccessibleName)");
+        source.Should().Contain("SlidePanePlanner.TryApplyBottomNewSlideAffordance(_editor)");
         source.Should().Contain("Width            = plan.ThumbnailWidth");
         source.Should().Contain("Height           = plan.ThumbnailHeight");
         source.Should().Contain("ToolTip         = plan.ToolTipText");
@@ -53,6 +59,7 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("new Thickness(0, indicatorY - 1, 0, 0)");
         source.Should().NotContain("\"+ New Slide\"");
         source.Should().NotContain("\"Duplicate Slide\"");
+        source.Should().NotContain("_editor.InsertSlide();");
         source.Should().NotContain("_editor.DuplicateCurrentSlide();");
         source.Should().NotContain("_editor.DeleteCurrentSlide();");
         source.Should().NotContain("_editor.MoveSlide(from, to);");

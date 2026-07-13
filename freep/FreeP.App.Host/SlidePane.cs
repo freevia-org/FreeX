@@ -323,9 +323,12 @@ public sealed class SlidePane : Border
 
     private Button BuildNewSlideButton()
     {
+        var plan = SlidePanePlanner.BuildBottomNewSlideAffordance(
+            _editor.Presentation.Slides.Count,
+            _editor.CurrentSlideIndex);
         var btn = new Button
         {
-            Content             = SlidePanePlanner.NewSlideButtonText,
+            Content             = plan.Text,
             Margin              = new Thickness(12, 8, 12, 12),
             Padding             = new Thickness(0, 6, 0, 6),
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -333,9 +336,13 @@ public sealed class SlidePane : Border
             Foreground          = Brushes.White,
             BorderThickness     = new Thickness(0),
             FontSize            = 12,
-            Cursor              = Cursors.Hand
+            Cursor              = Cursors.Hand,
+            Visibility          = plan.IsVisible ? Visibility.Visible : Visibility.Collapsed,
+            IsEnabled           = plan.Action.IsEnabled,
+            ToolTip             = plan.ToolTipText,
         };
-        btn.Click += (_, _) => _editor.InsertSlide();
+        AutomationProperties.SetName(btn, plan.AccessibleName);
+        btn.Click += (_, _) => SlidePanePlanner.TryApplyBottomNewSlideAffordance(_editor);
         return btn;
     }
 

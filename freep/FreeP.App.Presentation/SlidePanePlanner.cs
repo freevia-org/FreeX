@@ -78,6 +78,13 @@ public sealed record SlidePaneDropVisualPlan(
     string AccentColorHex,
     string AutomationDescription);
 
+public sealed record SlidePaneBottomAffordancePlan(
+    string Text,
+    string ToolTipText,
+    string AccessibleName,
+    bool IsVisible,
+    SlidePaneActionPlan Action);
+
 public sealed record SlidePaneDragSessionState(
     bool IsTracking,
     bool IsDragging,
@@ -298,6 +305,37 @@ public static class SlidePanePlanner
                 slideIndex,
                 hasTargetSlide && slideCount > 1),
         ];
+    }
+
+    public static SlidePaneBottomAffordancePlan BuildBottomNewSlideAffordance(
+        int slideCount,
+        int currentSlideIndex)
+    {
+        var hasCurrentSlide = IsValidSlideIndex(slideCount, currentSlideIndex);
+        var action = new SlidePaneActionPlan(
+            SlidePaneActionKind.InsertAfterSlide,
+            NewSlideButtonText,
+            currentSlideIndex,
+            currentSlideIndex + 1,
+            hasCurrentSlide);
+
+        return new SlidePaneBottomAffordancePlan(
+            NewSlideButtonText,
+            "Insert a new slide after the current slide",
+            "New Slide",
+            IsVisible: true,
+            action);
+    }
+
+    public static bool TryApplyBottomNewSlideAffordance(EditingSession editor)
+    {
+        ArgumentNullException.ThrowIfNull(editor);
+
+        var plan = BuildBottomNewSlideAffordance(
+            editor.Presentation.Slides.Count,
+            editor.CurrentSlideIndex);
+
+        return TryApplyAction(editor, plan.Action);
     }
 
     public static SlidePaneActionPlan PlanMoveAction(
