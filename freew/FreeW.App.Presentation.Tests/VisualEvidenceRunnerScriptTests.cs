@@ -39,6 +39,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("BackstagePrintExport = @(");
         source.Should().Contain("CoreLayoutProof = @(");
         source.Should().Contain("ReferencesHeavyWordBaselineProof = @(");
+        source.Should().Contain("LegalReferenceSectionPageProof = @(");
         source.Should().Contain("PageCompositionProof = @(");
         source.Should().Contain("FloatingWrappingVisualProof = @(");
         source.Should().Contain("TableLayoutProof = @(");
@@ -133,6 +134,16 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("References-heavy semantic field/TOA rows: verified rows=");
         source.Should().Contain("References-heavy Word-baseline policy rows: verified rows=");
         source.Should().Contain("References-heavy Word-baseline unavailable blocker: verified");
+        source.Should().Contain("Assert-LegalReferenceSectionPageProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Legal-reference section page-number proof readiness requires FreeW visual evidence summary schema v39 or newer");
+        source.Should().Contain("$readinessRows = @($summary.legalReferenceProofReadiness)");
+        source.Should().Contain("missing legal-reference section page-number proof readiness row");
+        source.Should().Contain("missing generated TOA page-reference metadata");
+        source.Should().Contain("missing honest word-baseline-unavailable legal-reference blocker");
+        source.Should().Contain("legal-reference-section-page-number-fidelity");
+        source.Should().Contain("Legal-reference section page-number proof readiness: trusted scenario rows=");
+        source.Should().Contain("Legal-reference section page-number semantic rows: verified rows=");
+        source.Should().Contain("Legal-reference section page-number Word-baseline unavailable blocker: verified");
         source.Should().Contain("Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("Page composition proof readiness requires FreeW visual evidence summary schema v25 or newer");
         source.Should().Contain("'avalonia-page-layout-shot'");

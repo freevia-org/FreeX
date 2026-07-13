@@ -6253,6 +6253,55 @@ public sealed class VisualEvidencePlannerTests
             caseReference.PageReferenceKind.Should().Be("section-formatted-page-numbers");
             wpfPage1.TableOfAuthorities.PageReferenceSignatures.Should().Contain(
                 "category=Cases|entry=Matter of Sectioned Pages, 101 F. Supp. 3d 2026 (D. FreeW)|kind=section-formatted-page-numbers|pages=1,2|text=i, 1");
+
+            summary.LegalReferenceProofReadiness.Should().HaveCount(2);
+            summary.LegalReferenceProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "not-run"
+                && row.Trust.Passed);
+            summary.LegalReferenceProofReadiness.Should().Contain(row =>
+                row.SemanticEvidence.Contains("section-formatted-page-numbers", StringComparison.Ordinal));
+
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.LegalReferenceProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "word-baseline-unavailable=2"
+                && row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal)
+                && row.Trust.Passed);
+            var blocker = withBaseline.RemainingEvidenceBlockers.Should().ContainSingle().Subject;
+            blocker.BlockerId.Should().Be("legal-reference-section-page-number-fidelity");
+            blocker.ScenarioId.Should().Be(scenarioId);
+            blocker.Area.Should().Be("Section-formatted TOA page-number fidelity");
+            blocker.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            blocker.RequiredEvidence.Should().Contain("real MS Word PNG comparisons");
+            blocker.Reason.Should().Contain("Word.Application");
+            blocker.SemanticEvidence.Should().Contain(evidence =>
+                evidence.Contains("wpf-fidelity-render/p1", StringComparison.Ordinal)
+                && evidence.Contains("kind=section-formatted-page-numbers|pages=1,2|text=i, 1", StringComparison.Ordinal));
+            blocker.RequiresWordBaseline.Should().BeTrue();
+            blocker.CandidateBaselinePaths.Should().Contain("legal-reference-section-page-numbers/legal-reference-section-page-numbers_p1.png");
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("legalReferenceProofReadiness").GetArrayLength().Should().Be(2);
+            doc.RootElement.GetProperty("remainingEvidenceBlockers")[0].GetProperty("blockerId").GetString()
+                .Should().Be("legal-reference-section-page-number-fidelity");
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Legal Reference Section Page-Number Proof Readiness");
+            markdown.Should().Contain("paired-renderer-proof-ready");
+            markdown.Should().Contain("word-baseline-unavailable=2");
+            markdown.Should().Contain("legal-reference-section-page-number-fidelity");
         }
         finally
         {

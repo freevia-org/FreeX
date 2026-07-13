@@ -29,6 +29,9 @@
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/references-heavy-word-baseline-proof -ScenarioSet ReferencesHeavyWordBaselineProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/legal-reference-section-page-proof -ScenarioSet LegalReferenceSectionPageProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/drawing-object-proof -ScenarioSet DrawingObjectVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
@@ -145,6 +148,9 @@ $namedScenarioSets = @{
     )
     ReferencesHeavyWordBaselineProof = @(
         'references-heavy-fields'
+    )
+    LegalReferenceSectionPageProof = @(
+        'legal-reference-section-page-numbers'
     )
     PageCompositionProof = @(
         'f2-columns',
@@ -606,6 +612,208 @@ function Assert-ReferencesHeavyWordBaselineProofReadiness {
     Write-Host "References-heavy Word-baseline policy rows: verified rows=$verifiedBaselineRows"
     if ($unavailableComparisons.Count -gt 0) {
         Write-Host "References-heavy Word-baseline unavailable blocker: verified"
+    }
+}
+
+function Assert-LegalReferenceSectionPageProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $scenarioId = 'legal-reference-section-page-numbers'
+    if (-not ($ScenarioIds -contains $scenarioId)) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Legal-reference section page-number proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 39) {
+        throw "Legal-reference section page-number proof readiness requires FreeW visual evidence summary schema v39 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $readinessRows = @($summary.legalReferenceProofReadiness)
+    $scenarios = @($summary.scenarios)
+    $evidenceRows = @($summary.evidence)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $remainingBlockers = @($summary.remainingEvidenceBlockers)
+    $summaryFailures = @($summary.trust.failures)
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $requiredSignatures = @(
+        'category=Cases|entry=Matter of Sectioned Pages, 101 F. Supp. 3d 2026 (D. FreeW)|kind=section-formatted-page-numbers|pages=1,2|text=i, 1',
+        'category=Statutes|entry=Restart Numbering Act, 7 FreeW Code 13|kind=explicit-page-numbers|pages=2|text=1'
+    )
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedSemanticRows = 0
+    $verifiedBaselineRows = 0
+    $verifiedUnavailableBlockers = 0
+
+    $proofRows = @($readinessRows | Where-Object { $_.scenarioId -eq $scenarioId })
+    if ($proofRows.Count -eq 0) {
+        $failures.Add("${scenarioId}: missing legal-reference section page-number proof readiness row")
+    }
+    foreach ($proofRow in $proofRows) {
+        if ($proofRow.trust.passed -ne $true -or $proofRow.status -ne 'paired-renderer-proof-ready') {
+            $notes = @($proofRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = [string]$proofRow.baselineReadiness
+            }
+            $failures.Add("${scenarioId}/p$($proofRow.pageNumber): readiness status '$($proofRow.status)' failed ($notes)")
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$proofRow.semanticEvidence) -or [string]$proofRow.semanticEvidence -eq '-') {
+            $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing legal-reference semantic readiness summary")
+        }
+    }
+
+    $semanticFailures = @($summaryFailures | Where-Object {
+        ([string]$_).IndexOf("field renderer pair '$scenarioId'", [StringComparison]::Ordinal) -ge 0 -or
+        ([string]$_).IndexOf('legal-reference', [StringComparison]::OrdinalIgnoreCase) -ge 0
+    })
+    foreach ($semanticFailure in $semanticFailures) {
+        $failures.Add("${scenarioId}: WPF/Avalonia legal-reference semantic parity drift ($semanticFailure)")
+    }
+
+    foreach ($hostId in $requiredHosts) {
+        $scenarioRows = @($scenarios | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId
+        })
+        if ($scenarioRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing normalized scenario row")
+            continue
+        }
+
+        $scenarioRow = $scenarioRows[0]
+        if ($scenarioRow.trust.passed -ne $true) {
+            $notes = @($scenarioRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = 'no notes'
+            }
+            $failures.Add("${hostId}/${scenarioId}: scenario trust failed ($notes)")
+            continue
+        }
+
+        if ([int]$scenarioRow.trustedOutputs -lt 2) {
+            $failures.Add("${hostId}/${scenarioId}: expected at least 2 trusted outputs, found $($scenarioRow.trustedOutputs)")
+            continue
+        }
+
+        $trustedScenarioRows++
+
+        $hostEvidenceRows = @($evidenceRows | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.trust.passed -eq $true
+        })
+        if ($hostEvidenceRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing trusted normalized evidence row for legal-reference TOA semantics")
+        }
+        foreach ($row in $hostEvidenceRows) {
+            $fields = $row.fields
+            $toa = $row.tableOfAuthorities
+            if (@($fields.complexFieldKeywords | Where-Object { $_ -eq 'TOA' }).Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing TOA complex field keyword")
+                continue
+            }
+            if (@($fields.complexFieldResultSignatures | Where-Object { $_ -eq 'TOA=Cases\ti, 1' }).Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing cached TOA displayed page-reference sentinel")
+                continue
+            }
+            if ($toa.hasGeneratedTable -ne $true -or [int]$toa.entryWithPageReferenceCount -lt 2 -or $toa.hasExplicitPageNumbers -ne $true) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing generated TOA page-reference metadata")
+                continue
+            }
+            foreach ($signature in $requiredSignatures) {
+                if (@($toa.pageReferenceSignatures | Where-Object { $_ -eq $signature }).Count -eq 0) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing generated page-reference signature '$signature'")
+                    continue
+                }
+            }
+            if (@($toa.pageReferences | Where-Object {
+                $_.pageReferenceKind -eq 'section-formatted-page-numbers' -and
+                @($_.pageNumbers | Where-Object { [int]$_ -eq 1 }).Count -gt 0 -and
+                @($_.pageNumbers | Where-Object { [int]$_ -eq 2 }).Count -gt 0 -and
+                @($_.displayedPageReferences | Where-Object { $_ -eq 'i' }).Count -gt 0 -and
+                @($_.displayedPageReferences | Where-Object { $_ -eq '1' }).Count -gt 0
+            }).Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing section-formatted page-reference evidence for displayed pages i and 1")
+                continue
+            }
+
+            $verifiedSemanticRows++
+        }
+
+        $comparisonRows = @($baselineComparisons | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.baselineScenarioId -eq $scenarioId
+        })
+        if ($baselineComparisons.Count -gt 0 -and $comparisonRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+            continue
+        }
+
+        foreach ($comparison in $comparisonRows) {
+            if ($comparison.trust.passed -ne $true) {
+                $notes = @($comparison.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$comparison.skipReason
+                }
+                $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                continue
+            }
+
+            $baselineId = [string]$comparison.baselineId
+            if (-not $baselineId.StartsWith($scenarioId + '/', [StringComparison]::OrdinalIgnoreCase)) {
+                $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baselineId '$baselineId' expected scenario '$scenarioId'")
+                continue
+            }
+
+            $verifiedBaselineRows++
+        }
+    }
+
+    $unavailableComparisons = @($baselineComparisons | Where-Object {
+        $_.scenarioId -eq $scenarioId -and
+        $_.status -eq 'word-baseline-unavailable'
+    })
+    if ($unavailableComparisons.Count -gt 0) {
+        $blocker = @($remainingBlockers | Where-Object {
+            $_.blockerId -eq 'legal-reference-section-page-number-fidelity' -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.status -eq 'word-baseline-unavailable' -and
+            $_.requiresWordBaseline -eq $true
+        }) | Select-Object -First 1
+        if (-not $blocker) {
+            $failures.Add("${scenarioId}: missing honest word-baseline-unavailable legal-reference blocker")
+        }
+        else {
+            $verifiedUnavailableBlockers++
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Legal-reference section page-number proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Legal-reference section page-number proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "Legal-reference section page-number semantic rows: verified rows=$verifiedSemanticRows"
+    if ($baselineComparisons.Count -gt 0) {
+        Write-Host "Legal-reference section page-number Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    }
+    else {
+        Write-Host "Legal-reference section page-number Word-baseline policy rows: no Word baseline mode requested"
+    }
+    if ($verifiedUnavailableBlockers -gt 0) {
+        Write-Host "Legal-reference section page-number Word-baseline unavailable blocker: verified"
     }
 }
 
@@ -1912,6 +2120,7 @@ else {
 }
 Assert-CoreLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-ReferencesHeavyWordBaselineProofReadiness $summaryJson $effectiveScenarioIds
+Assert-LegalReferenceSectionPageProofReadiness $summaryJson $effectiveScenarioIds
 Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-FloatingWrappingProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
