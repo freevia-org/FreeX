@@ -189,6 +189,55 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_ProofingIgnoreActions_UseSharedPlannerState()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.Editor.CurrentSlide!.Title = "Title eror";
+            window.Editor.CurrentSlide.Shapes.Add(new SlideShape
+            {
+                Id = 724,
+                Name = "Body",
+                Text = "Body eror"
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Comment eror",
+                Idx = 1
+            });
+
+            var opened = window.ShowProofingPane();
+            window.IsProofingPaneIgnoreEnabled.Should().BeTrue();
+            window.IsProofingPaneIgnoreAllEnabled.Should().BeTrue();
+            opened.Actions.Select(action => action.CommandId).Should().Contain(new[]
+            {
+                PresentationReviewWorkflowPlanner.ProofingIgnoreCommandId,
+                PresentationReviewWorkflowPlanner.ProofingIgnoreAllCommandId
+            });
+
+            var selected = window.SelectProofingIssueRow(1);
+            selected.SelectedRow!.Scope.Kind.Should().Be(PresentationProofingScopeKind.ShapeText);
+            var afterIgnore = window.IgnoreSelectedProofingIssue();
+            afterIgnore.IssueCount.Should().Be(2);
+            afterIgnore.Rows.Select(row => row.Scope.Kind).Should().Equal(
+                PresentationProofingScopeKind.SlideTitle,
+                PresentationProofingScopeKind.Comment);
+            afterIgnore.SelectedRowIndex.Should().Be(1);
+
+            var afterIgnoreAll = window.IgnoreAllSelectedProofingIssues();
+            afterIgnoreAll.IssueCount.Should().Be(0);
+            afterIgnoreAll.Message.Should().Be(PresentationReviewWorkflowPlanner.ProofingNoIssuesMessage);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_ReviewCommentReply_RoutesThroughSharedMutationPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

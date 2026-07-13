@@ -2781,6 +2781,65 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task ProofingPane_ignore_actions_use_shared_planner_state()
+    {
+        PresentationProofingPanePlan? opened = null;
+        PresentationProofingPanePlan? selected = null;
+        PresentationProofingPanePlan? afterIgnore = null;
+        PresentationProofingPanePlan? afterIgnoreAll = null;
+        var ignoreEnabled = false;
+        var ignoreAllEnabled = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Title eror";
+            window.Editor.CurrentSlide.Shapes.Add(new SlideShape
+            {
+                Id = 724,
+                Name = "Body",
+                Text = "Body eror",
+            });
+            window.Editor.CurrentSlide.Comments.Add(new SlideComment
+            {
+                Author = "Reviewer",
+                Initials = "RV",
+                Text = "Comment eror",
+                Idx = 1,
+            });
+
+            opened = window.ShowProofingPane();
+            ignoreEnabled = window.IsProofingPaneIgnoreEnabled;
+            ignoreAllEnabled = window.IsProofingPaneIgnoreAllEnabled;
+            selected = window.SelectProofingIssueRow(1);
+            afterIgnore = window.IgnoreSelectedProofingIssue();
+            afterIgnoreAll = window.IgnoreAllSelectedProofingIssues();
+        });
+
+        if (!ran) return;
+        opened.Should().NotBeNull();
+        opened!.IssueCount.Should().Be(3);
+        opened.Actions.Select(action => action.CommandId).Should().Contain(new[]
+        {
+            PresentationReviewWorkflowPlanner.ProofingIgnoreCommandId,
+            PresentationReviewWorkflowPlanner.ProofingIgnoreAllCommandId
+        });
+        ignoreEnabled.Should().BeTrue();
+        ignoreAllEnabled.Should().BeTrue();
+        selected.Should().NotBeNull();
+        selected!.SelectedRow!.Scope.Kind.Should().Be(PresentationProofingScopeKind.ShapeText);
+        afterIgnore.Should().NotBeNull();
+        afterIgnore!.IssueCount.Should().Be(2);
+        afterIgnore.Rows.Select(row => row.Scope.Kind).Should().Equal(
+            PresentationProofingScopeKind.SlideTitle,
+            PresentationProofingScopeKind.Comment);
+        afterIgnore.SelectedRowIndex.Should().Be(1);
+        afterIgnoreAll.Should().NotBeNull();
+        afterIgnoreAll!.IssueCount.Should().Be(0);
+        afterIgnoreAll.Message.Should().Be(PresentationReviewWorkflowPlanner.ProofingNoIssuesMessage);
+    }
+
+    [Fact]
     public async Task ReadingOrderPane_moves_nested_group_child_through_shared_plan()
     {
         PresentationReadingOrderPlan? initialPlan = null;

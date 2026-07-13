@@ -27,6 +27,8 @@ public enum PresentationReviewWorkflowIntentKind
     SetTableHeaderRow,
     RunProofing,
     SelectProofingIssue,
+    IgnoreProofingIssue,
+    IgnoreAllProofingIssues,
     ApplyProofingCorrection
 }
 
@@ -476,6 +478,24 @@ public sealed record PresentationProofingIssueDescriptor(
     string Text,
     string Message);
 
+public sealed record PresentationProofingIgnoredIssueDescriptor(
+    PresentationProofingScopeDescriptor Scope,
+    int Start,
+    int Length,
+    string Text,
+    string Message);
+
+public sealed record PresentationProofingIgnoredIssueGroupDescriptor(
+    string NormalizedText,
+    string Message);
+
+public sealed record PresentationProofingIgnoreState(
+    IReadOnlyList<PresentationProofingIgnoredIssueDescriptor> IgnoredIssues,
+    IReadOnlyList<PresentationProofingIgnoredIssueGroupDescriptor> IgnoredIssueGroups)
+{
+    public static PresentationProofingIgnoreState Empty { get; } = new([], []);
+}
+
 public sealed record PresentationProofingExecutionPlan(
     bool CanRun,
     PresentationWorkflowCapabilityStatus Status,
@@ -498,7 +518,9 @@ public sealed record PresentationProofingIssueRowPlan(
     string Snippet,
     string SuggestedReplacement,
     bool IsSelected,
-    PresentationReviewWorkflowActionPlan CorrectionAction);
+    PresentationReviewWorkflowActionPlan CorrectionAction,
+    PresentationReviewWorkflowActionPlan IgnoreAction,
+    PresentationReviewWorkflowActionPlan IgnoreAllAction);
 
 public sealed record PresentationProofingPanePlan(
     bool CanRun,
@@ -644,6 +666,8 @@ public static class PresentationReviewWorkflowPlanner
     public const string SetTableHeaderRowCommandId = "freep.review.accessibility.set-table-header-row";
     public const string ProofingCommandId = "freep.review.proofing.spelling";
     public const string ProofingApplyCorrectionCommandId = "freep.review.proofing.apply-correction";
+    public const string ProofingIgnoreCommandId = "freep.review.proofing.ignore";
+    public const string ProofingIgnoreAllCommandId = "freep.review.proofing.ignore-all";
     public const string InsertLinkCommandId = "freep.insert-link";
 
     public const string MissingSlideMessage = "Select a slide before adding a comment.";
@@ -694,6 +718,8 @@ public static class PresentationReviewWorkflowPlanner
         "No proofing issues found in slide text, notes, or comments.";
     public const string ProofingMissingIssueMessage =
         "Select a proofing issue before applying a correction.";
+    public const string ProofingMissingIgnoreIssueMessage =
+        "Select a proofing issue before ignoring it.";
     public const string ProofingNoSuggestionMessage =
         "No replacement suggestion is available for the selected proofing issue.";
     public const string ProofingWhitespaceBeforePunctuationMessage =
@@ -1925,23 +1951,30 @@ public static class PresentationReviewWorkflowPlanner
 
     public static PresentationProofingPanePlan BuildProofingPanePlan(
         PresentationProofingExecutionPlan executionPlan,
-        int? selectedRowIndex = null)
+        int? selectedRowIndex = null,
+        PresentationProofingIgnoreState? ignoreState = null)
     {
         ArgumentNullException.ThrowIfNull(executionPlan);
 
+        ignoreState ??= PresentationProofingIgnoreState.Empty;
+        var visibleIssues = executionPlan.Issues
+            .Where(issue => !IsProofingIssueIgnored(issue, ignoreState))
+            .ToArray();
         var normalizedSelection = NormalizeProofingIssueSelection(
-            executionPlan.Issues.Count,
+            visibleIssues.Length,
             selectedRowIndex);
-        var rows = executionPlan.Issues
+        var rows = visibleIssues
             .Select((issue, index) =>
             {
                 var suggestion = SuggestProofingReplacement(issue.Text);
                 var canApply = normalizedSelection == index &&
                     suggestion.Length > 0 &&
                     !string.Equals(issue.Text, suggestion, StringComparison.Ordinal);
+                var canIgnore = normalizedSelection == index;
                 var disabledReason = normalizedSelection == index
                     ? canApply ? null : ProofingNoSuggestionMessage
                     : ProofingMissingIssueMessage;
+                var ignoreDisabledReason = canIgnore ? null : ProofingMissingIgnoreIssueMessage;
 
                 return new PresentationProofingIssueRowPlan(
                     index,
@@ -1961,28 +1994,58 @@ public static class PresentationReviewWorkflowPlanner
                         PresentationReviewWorkflowIntentKind.ApplyProofingCorrection,
                         canApply,
                         executionPlan.Status,
-                        disabledReason));
+                        disabledReason),
+                    new PresentationReviewWorkflowActionPlan(
+                        ProofingIgnoreCommandId,
+                        "Ignore",
+                        PresentationReviewWorkflowIntentKind.IgnoreProofingIssue,
+                        canIgnore,
+                        executionPlan.Status,
+                        ignoreDisabledReason),
+                    new PresentationReviewWorkflowActionPlan(
+                        ProofingIgnoreAllCommandId,
+                        "Ignore All",
+                        PresentationReviewWorkflowIntentKind.IgnoreAllProofingIssues,
+                        canIgnore,
+                        executionPlan.Status,
+                        ignoreDisabledReason));
             })
             .ToArray();
 
         var selectedAction = rows.FirstOrDefault(row => row.IsSelected)?.CorrectionAction;
+        var selectedIgnoreAction = rows.FirstOrDefault(row => row.IsSelected)?.IgnoreAction;
+        var selectedIgnoreAllAction = rows.FirstOrDefault(row => row.IsSelected)?.IgnoreAllAction;
         var applyAction = selectedAction ?? new PresentationReviewWorkflowActionPlan(
             ProofingApplyCorrectionCommandId,
             "Change",
             PresentationReviewWorkflowIntentKind.ApplyProofingCorrection,
             false,
             executionPlan.Status,
-            executionPlan.IssueCount == 0 ? ProofingNoIssuesMessage : ProofingMissingIssueMessage);
+            visibleIssues.Length == 0 ? ProofingNoIssuesMessage : ProofingMissingIssueMessage);
+        var ignoreAction = selectedIgnoreAction ?? new PresentationReviewWorkflowActionPlan(
+            ProofingIgnoreCommandId,
+            "Ignore",
+            PresentationReviewWorkflowIntentKind.IgnoreProofingIssue,
+            false,
+            executionPlan.Status,
+            visibleIssues.Length == 0 ? ProofingNoIssuesMessage : ProofingMissingIgnoreIssueMessage);
+        var ignoreAllAction = selectedIgnoreAllAction ?? new PresentationReviewWorkflowActionPlan(
+            ProofingIgnoreAllCommandId,
+            "Ignore All",
+            PresentationReviewWorkflowIntentKind.IgnoreAllProofingIssues,
+            false,
+            executionPlan.Status,
+            visibleIssues.Length == 0 ? ProofingNoIssuesMessage : ProofingMissingIgnoreIssueMessage);
 
         return new PresentationProofingPanePlan(
             executionPlan.CanRun,
             executionPlan.Status,
             executionPlan.ScopeCount,
-            executionPlan.IssueCount,
+            visibleIssues.Length,
             normalizedSelection,
             rows,
-            [.. executionPlan.Actions, applyAction],
-            executionPlan.IssueCount == 0 ? ProofingNoIssuesMessage : executionPlan.Message);
+            [.. executionPlan.Actions, applyAction, ignoreAction, ignoreAllAction],
+            visibleIssues.Length == 0 ? ProofingNoIssuesMessage : executionPlan.Message);
     }
 
     public static int NormalizeProofingSelectionAfterCorrection(
@@ -1995,6 +2058,48 @@ public static class PresentationReviewWorkflowPlanner
             return -1;
 
         return Math.Clamp(previousSelectedRowIndex, 0, refreshedPlan.Rows.Count - 1);
+    }
+
+    public static int NormalizeProofingSelectionAfterIgnore(
+        int previousSelectedRowIndex,
+        PresentationProofingPanePlan refreshedPlan)
+        => NormalizeProofingSelectionAfterCorrection(previousSelectedRowIndex, refreshedPlan);
+
+    public static PresentationProofingIgnoreState AddProofingIgnoredIssue(
+        PresentationProofingIgnoreState? ignoreState,
+        PresentationProofingIssueRowPlan? row)
+    {
+        ignoreState ??= PresentationProofingIgnoreState.Empty;
+        if (row is null)
+            return ignoreState;
+
+        var ignoredIssue = new PresentationProofingIgnoredIssueDescriptor(
+            row.Scope,
+            row.Start,
+            row.Length,
+            row.Text,
+            row.Message);
+        if (ignoreState.IgnoredIssues.Any(existing => IsSameProofingIssueOccurrence(ignoredIssue, existing)))
+            return ignoreState;
+
+        return ignoreState with { IgnoredIssues = [.. ignoreState.IgnoredIssues, ignoredIssue] };
+    }
+
+    public static PresentationProofingIgnoreState AddProofingIgnoredIssueGroup(
+        PresentationProofingIgnoreState? ignoreState,
+        PresentationProofingIssueRowPlan? row)
+    {
+        ignoreState ??= PresentationProofingIgnoreState.Empty;
+        if (row is null)
+            return ignoreState;
+
+        var group = new PresentationProofingIgnoredIssueGroupDescriptor(
+            NormalizeProofingIssueTextKey(row.Text),
+            row.Message);
+        if (ignoreState.IgnoredIssueGroups.Contains(group))
+            return ignoreState;
+
+        return ignoreState with { IgnoredIssueGroups = [.. ignoreState.IgnoredIssueGroups, group] };
     }
 
     public static PresentationProofingCorrectionMutationPlan TryApplyProofingCorrection(
@@ -2213,6 +2318,46 @@ public static class PresentationReviewWorkflowPlanner
             ? index
             : 0;
     }
+
+    private static bool IsProofingIssueIgnored(
+        PresentationProofingIssueDescriptor issue,
+        PresentationProofingIgnoreState ignoreState)
+        => ignoreState.IgnoredIssues.Any(ignoredIssue => IsSameProofingIssueOccurrence(issue, ignoredIssue)) ||
+            ignoreState.IgnoredIssueGroups.Any(group =>
+                string.Equals(group.NormalizedText, NormalizeProofingIssueTextKey(issue.Text), StringComparison.Ordinal) &&
+                string.Equals(group.Message, issue.Message, StringComparison.Ordinal));
+
+    private static bool IsSameProofingIssueOccurrence(
+        PresentationProofingIssueDescriptor issue,
+        PresentationProofingIgnoredIssueDescriptor ignoredIssue)
+        => IsSameProofingScope(issue.Scope, ignoredIssue.Scope) &&
+            issue.Start == ignoredIssue.Start &&
+            issue.Length == ignoredIssue.Length &&
+            string.Equals(NormalizeProofingIssueTextKey(issue.Text), NormalizeProofingIssueTextKey(ignoredIssue.Text), StringComparison.Ordinal) &&
+            string.Equals(issue.Message, ignoredIssue.Message, StringComparison.Ordinal);
+
+    private static bool IsSameProofingIssueOccurrence(
+        PresentationProofingIgnoredIssueDescriptor issue,
+        PresentationProofingIgnoredIssueDescriptor ignoredIssue)
+        => IsSameProofingScope(issue.Scope, ignoredIssue.Scope) &&
+            issue.Start == ignoredIssue.Start &&
+            issue.Length == ignoredIssue.Length &&
+            string.Equals(NormalizeProofingIssueTextKey(issue.Text), NormalizeProofingIssueTextKey(ignoredIssue.Text), StringComparison.Ordinal) &&
+            string.Equals(issue.Message, ignoredIssue.Message, StringComparison.Ordinal);
+
+    private static bool IsSameProofingScope(
+        PresentationProofingScopeDescriptor left,
+        PresentationProofingScopeDescriptor right)
+        => left.Kind == right.Kind &&
+            left.SlideIndex == right.SlideIndex &&
+            left.ShapeId == right.ShapeId &&
+            left.TableRowIndex == right.TableRowIndex &&
+            left.TableColumnIndex == right.TableColumnIndex &&
+            left.CommentIndex == right.CommentIndex &&
+            left.ReplyIndex == right.ReplyIndex;
+
+    private static string NormalizeProofingIssueTextKey(string text)
+        => text.ToUpperInvariant();
 
     private static IEnumerable<PresentationProofingIssueMatch> ScanBuiltInProofingIssues(
         PresentationProofingScopeDescriptor scope)
