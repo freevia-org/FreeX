@@ -496,6 +496,44 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_ExportsCustomGeometryArcAsCubicPdfPath()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var path = new CustomGeometryPath { PathW = 100, PathH = 100, Fill = true, Stroke = false };
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.MoveTo, X: 100, Y: 0));
+        path.Segments.Add(new CustomSegment(CustomSegmentKind.ArcTo, WR: 100, HR: 100, StAng: 0, SwAng: 90));
+        var slide = new Slide();
+        var shape = new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x70AD47)),
+        };
+        shape.CustomGeometry.Add(path);
+        slide.Shapes.Add(shape);
+        deck.Slides.Add(slide);
+
+        var pdfPath = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops
+            .OfType<PdfPath>()
+            .Should().ContainSingle()
+            .Subject;
+        var segment = pdfPath.Contours.Should().ContainSingle().Subject.Segments.Should().ContainSingle().Subject;
+
+        segment.Kind.Should().Be(PdfPathSegmentKind.CubicBezier);
+        segment.End.X.Should().BeApproximately(72, 0.001);
+        segment.End.Y.Should().BeApproximately(378, 0.001);
+        segment.Control1.X.Should().BeApproximately(216, 0.001);
+        segment.Control1.Y.Should().BeApproximately(410.236, 0.001);
+        segment.Control2.X.Should().BeApproximately(151.529, 0.001);
+        segment.Control2.Y.Should().BeApproximately(378, 0.001);
+    }
+
+    [Fact]
     public void BuildDocument_ExportsRotatedRectangleAndTextThroughPdfRotationGroup()
     {
         var deck = Presentation.CreateEmpty();

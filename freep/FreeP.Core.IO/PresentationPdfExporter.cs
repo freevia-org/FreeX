@@ -626,11 +626,20 @@ public static class PresentationPdfExporter
                 case CustomSegmentKind.ArcTo:
                 {
                     EnsureStarted();
-                    var endSource = GetArcEnd(currentSource, segment);
-                    var end = Map(endSource.X, endSource.Y);
-                    segments.Add(PdfPathSegment.LineTo(end));
-                    current = end;
-                    currentSource = endSource;
+                    var arcSegments = BuildArcBezierSegments(currentSource, segment, Map, scaleX, scaleY);
+                    if (arcSegments.Count == 0)
+                    {
+                        var endSource = GetArcEnd(currentSource, segment);
+                        var end = Map(endSource.X, endSource.Y);
+                        segments.Add(PdfPathSegment.LineTo(end));
+                        current = end;
+                        currentSource = endSource;
+                        break;
+                    }
+
+                    segments.AddRange(arcSegments);
+                    current = arcSegments[^1].End;
+                    currentSource = GetArcEnd(currentSource, segment);
                     break;
                 }
                 case CustomSegmentKind.Close:
@@ -649,6 +658,56 @@ public static class PresentationPdfExporter
             if (start is null)
                 start = current;
         }
+    }
+
+    private static IReadOnlyList<PdfPathSegment> BuildArcBezierSegments(
+        (double X, double Y) currentSource,
+        CustomSegment segment,
+        Func<double, double, PdfPathPoint> map,
+        double scaleX,
+        double scaleY)
+    {
+        if (Math.Abs(segment.WR) < 0.001 ||
+            Math.Abs(segment.HR) < 0.001 ||
+            Math.Abs(segment.SwAng) < 0.001)
+            return Array.Empty<PdfPathSegment>();
+
+        var radiusX = segment.WR;
+        var radiusY = segment.HR;
+        var startAngle = segment.StAng * Math.PI / 180.0;
+        var sweepAngle = segment.SwAng * Math.PI / 180.0;
+        var centerX = currentSource.X - radiusX * Math.Cos(startAngle);
+        var centerY = currentSource.Y - radiusY * Math.Sin(startAngle);
+        var segmentCount = Math.Max(1, (int)Math.Ceiling(Math.Abs(sweepAngle) / (Math.PI / 2.0)));
+        var angleStep = sweepAngle / segmentCount;
+        var result = new List<PdfPathSegment>(segmentCount);
+
+        for (var index = 0; index < segmentCount; index++)
+        {
+            var a0 = startAngle + angleStep * index;
+            var a1 = a0 + angleStep;
+            var p0 = PointAt(a0);
+            var p3 = PointAt(a1);
+            var k = 4.0 / 3.0 * Math.Tan((a1 - a0) / 4.0);
+            var d0 = DerivativeAt(a0);
+            var d1 = DerivativeAt(a1);
+            var c1 = new PdfPathPoint(p0.X + k * d0.X, p0.Y + k * d0.Y);
+            var c2 = new PdfPathPoint(p3.X - k * d1.X, p3.Y - k * d1.Y);
+
+            result.Add(PdfPathSegment.BezierTo(c1, c2, p3));
+        }
+
+        return result;
+
+        PdfPathPoint PointAt(double angle) =>
+            map(
+                centerX + radiusX * Math.Cos(angle),
+                centerY + radiusY * Math.Sin(angle));
+
+        PdfPathPoint DerivativeAt(double angle) =>
+            new(
+                -radiusX * scaleX * Math.Sin(angle),
+                -radiusY * scaleY * Math.Cos(angle));
     }
 
     private static (double X, double Y) GetArcEnd((double X, double Y) currentSource, CustomSegment segment)
