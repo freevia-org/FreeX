@@ -6075,10 +6075,25 @@ public sealed class VisualEvidencePlannerTests
                 .Should().Contain("no authoritative Word PNG parity claimed");
             baselineComparison.GetProperty("skipReason").GetString()
                 .Should().Contain("Word.Application");
+            var authority = doc.RootElement.GetProperty("evidenceAuthority");
+            authority.GetProperty("authorityLevel").GetString()
+                .Should().Be("word-baseline-unavailable");
+            authority.GetProperty("authoritativeWordPngParityClaimed").GetBoolean()
+                .Should().BeFalse();
+            authority.GetProperty("trustedEvidenceRows").GetInt32().Should().Be(1);
+            authority.GetProperty("comparableWordBaselineRows").GetInt32().Should().Be(1);
+            authority.GetProperty("realWordPngComparedRows").GetInt32().Should().Be(0);
+            authority.GetProperty("wordBaselineUnavailableRows").GetInt32().Should().Be(1);
+            authority.GetProperty("preparatoryEvidenceRows").GetInt32().Should().Be(1);
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Evidence Authority");
+            markdown.Should().Contain("Authority level: `word-baseline-unavailable`");
+            markdown.Should().Contain("Authoritative Word PNG parity claimed: no");
+            markdown.Should().Contain("| 1 | 1 | 0 | 1 | 0 | 0 | 0 | 1 |");
             markdown.Should().Contain("## Word Baseline Triage");
             markdown.Should().Contain("Word baseline unavailable: 1 row(s). Trust remains passed for unavailable rows.");
+            markdown.Should().Contain("Word COM or baseline generation was unavailable; no authoritative Word PNG parity is claimed for unavailable rows.");
             markdown.Should().Contain("Unavailable reason(s): COM ProgID 'Word.Application' is not registered");
             markdown.Should().Contain("Triage counts: word-unavailable=1");
             markdown.Should().Contain("Status counts: word-baseline-unavailable=1");
@@ -7110,8 +7125,21 @@ public sealed class VisualEvidencePlannerTests
                 .GetInt64().Should().Be(0);
             baselineComparison.GetProperty("metrics").GetProperty("meanAbsoluteChannelDelta")
                 .GetDouble().Should().Be(0);
+            var authority = doc.RootElement.GetProperty("evidenceAuthority");
+            authority.GetProperty("authorityLevel").GetString()
+                .Should().Be("real-word-png-comparison");
+            authority.GetProperty("authoritativeWordPngParityClaimed").GetBoolean()
+                .Should().BeTrue();
+            authority.GetProperty("trustedEvidenceRows").GetInt32().Should().Be(1);
+            authority.GetProperty("comparableWordBaselineRows").GetInt32().Should().Be(1);
+            authority.GetProperty("realWordPngComparedRows").GetInt32().Should().Be(1);
+            authority.GetProperty("preparatoryEvidenceRows").GetInt32().Should().Be(0);
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Evidence Authority");
+            markdown.Should().Contain("Authority level: `real-word-png-comparison`");
+            markdown.Should().Contain("Authoritative Word PNG parity claimed: yes");
+            markdown.Should().Contain("| 1 | 1 | 1 | 0 | 0 | 0 | 0 | 0 |");
             markdown.IndexOf("## Word Baseline Triage", StringComparison.Ordinal)
                 .Should().BeLessThan(markdown.IndexOf("## Word Baseline Comparison", StringComparison.Ordinal));
             markdown.Should().Contain("| wpf-fidelity-render | f2-hf-basic | p1/f2-hf-basic_p1.png | within-tolerance | passed | 0/4 (0.000 %) | 0/0 | word-png-default: changed <= 2.000 %, mean <= 3/3, pixel delta > 8, dimensions must match | f2-hf-basic/f2-hf-basic_p1.png | - |");

@@ -70,6 +70,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualReviewProofingProofReadiness> ReviewProofingProofReadiness,
     IReadOnlyList<FreeWVisualBaselineComparison> BaselineComparisons,
     IReadOnlyList<FreeWVisualBaselineTriageItem> WordBaselineTriage,
+    FreeWVisualEvidenceAuthoritySummary EvidenceAuthority,
     IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> RemainingEvidenceBlockers,
     FreeWVisualEvidenceTrust Trust);
 
@@ -144,6 +145,19 @@ public sealed record FreeWVisualBaselineTriageItem(
     string ToleranceSummary,
     string Note);
 
+public sealed record FreeWVisualEvidenceAuthoritySummary(
+    string AuthorityLevel,
+    bool AuthoritativeWordPngParityClaimed,
+    int TrustedEvidenceRows,
+    int ComparableWordBaselineRows,
+    int RealWordPngComparedRows,
+    int WordBaselineUnavailableRows,
+    int MissingWordBaselineRows,
+    int FailedOrDecodeFailedRows,
+    int SkippedOrUnmappedRows,
+    int PreparatoryEvidenceRows,
+    IReadOnlyList<string> Notes);
+
 public sealed record FreeWVisualRemainingEvidenceBlocker(
     string BlockerId,
     string ScenarioId,
@@ -160,7 +174,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 35;
+    public const int SummarySchemaVersion = 36;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -415,6 +429,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             reviewProofingProofReadiness,
             [],
             [],
+            BuildEvidenceAuthoritySummary(orderedRows, []),
             [],
             summaryTrust);
         return summary with
@@ -450,6 +465,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 sb.AppendLine($"- {failure}");
             sb.AppendLine();
         }
+
+        AppendEvidenceAuthoritySummary(sb, summary.EvidenceAuthority);
 
         sb.AppendLine("## Scenario Coverage");
         sb.AppendLine();
@@ -700,6 +717,36 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{EscapeMarkdown(counts)} | {EscapeMarkdown(roles)} | " +
                 $"{EscapeMarkdown(signatures)} | {EscapeMarkdown(spacingSignatures)} |");
         }
+    }
+
+    private static void AppendEvidenceAuthoritySummary(
+        StringBuilder sb,
+        FreeWVisualEvidenceAuthoritySummary authority)
+    {
+        sb.AppendLine("## Evidence Authority");
+        sb.AppendLine();
+        sb.AppendLine($"Authority level: `{EscapeMarkdown(authority.AuthorityLevel)}`");
+        sb.AppendLine($"Authoritative Word PNG parity claimed: {(authority.AuthoritativeWordPngParityClaimed ? "yes" : "no")}");
+        sb.AppendLine();
+        sb.AppendLine("| Trusted Evidence | Comparable Word Rows | Real Word Compared | Word Unavailable | Missing Baseline | Failed/Decode Failed | Skipped/Unmapped | Preparatory Evidence |");
+        sb.AppendLine("| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |");
+        sb.AppendLine(
+            $"| {authority.TrustedEvidenceRows.ToString(CultureInfo.InvariantCulture)} | " +
+            $"{authority.ComparableWordBaselineRows.ToString(CultureInfo.InvariantCulture)} | " +
+            $"{authority.RealWordPngComparedRows.ToString(CultureInfo.InvariantCulture)} | " +
+            $"{authority.WordBaselineUnavailableRows.ToString(CultureInfo.InvariantCulture)} | " +
+            $"{authority.MissingWordBaselineRows.ToString(CultureInfo.InvariantCulture)} | " +
+            $"{authority.FailedOrDecodeFailedRows.ToString(CultureInfo.InvariantCulture)} | " +
+            $"{authority.SkippedOrUnmappedRows.ToString(CultureInfo.InvariantCulture)} | " +
+            $"{authority.PreparatoryEvidenceRows.ToString(CultureInfo.InvariantCulture)} |");
+        if (authority.Notes.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (var note in authority.Notes)
+                sb.AppendLine($"- {EscapeMarkdown(note)}");
+        }
+
+        sb.AppendLine();
     }
 
     private static void AppendRemainingEvidenceBlockers(
@@ -1129,6 +1176,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 ordered),
             BaselineComparisons = ordered,
             WordBaselineTriage = BuildWordBaselineTriage(ordered),
+            EvidenceAuthority = BuildEvidenceAuthoritySummary(summary.Evidence, ordered),
             RemainingEvidenceBlockers = BuildRemainingEvidenceBlockers(summary, ordered),
             Trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures)
         };
@@ -1688,6 +1736,132 @@ public static class FreeWVisualEvidenceManifestNormalizer
         File.WriteAllText(jsonPath, ToJson(summary));
         File.WriteAllText(markdownPath, ToMarkdown(summary));
     }
+
+    private static FreeWVisualEvidenceAuthoritySummary BuildEvidenceAuthoritySummary(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var trustedRows = evidence
+            .Where(row => row.Trust.Passed)
+            .ToList();
+        var comparableRows = trustedRows
+            .Where(row => FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row).IsComparable)
+            .ToList();
+        var compared = baselineComparisons
+            .Count(comparison => IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.PassedStatus));
+        var unavailable = baselineComparisons
+            .Count(comparison => IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus));
+        var missing = baselineComparisons
+            .Count(comparison => IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus));
+        var failedOrDecode = baselineComparisons
+            .Count(comparison =>
+                IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.FailedStatus)
+                || IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.DecodeFailedStatus));
+        var skipped = baselineComparisons
+            .Count(comparison => IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.SkippedStatus));
+        var comparedEvidenceIds = baselineComparisons
+            .Where(comparison =>
+                IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.PassedStatus)
+                || IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.FailedStatus)
+                || IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.DecodeFailedStatus))
+            .Select(comparison => comparison.EvidenceId)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var preparatoryEvidenceRows = trustedRows.Count(row => !comparedEvidenceIds.Contains(row.EvidenceId));
+        var hasIncompleteWordBaseline = unavailable > 0 || missing > 0 || failedOrDecode > 0;
+        var authorityLevel = DetermineEvidenceAuthorityLevel(
+            baselineComparisons.Count,
+            compared,
+            unavailable,
+            missing,
+            failedOrDecode);
+        var authoritativeWordPngParityClaimed =
+            compared > 0
+            && comparableRows.Count > 0
+            && !hasIncompleteWordBaseline
+            && baselineComparisons
+                .Where(comparison => !IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.SkippedStatus))
+                .All(comparison => IsBaselineStatus(comparison, FreeWVisualBaselineComparisonPlanner.PassedStatus));
+
+        return new FreeWVisualEvidenceAuthoritySummary(
+            authorityLevel,
+            authoritativeWordPngParityClaimed,
+            trustedRows.Count,
+            comparableRows.Count,
+            compared,
+            unavailable,
+            missing,
+            failedOrDecode,
+            skipped,
+            preparatoryEvidenceRows,
+            BuildEvidenceAuthorityNotes(
+                authorityLevel,
+                authoritativeWordPngParityClaimed,
+                comparableRows.Count,
+                baselineComparisons.Count,
+                compared,
+                unavailable,
+                missing,
+                failedOrDecode));
+    }
+
+    private static string DetermineEvidenceAuthorityLevel(
+        int baselineComparisonCount,
+        int compared,
+        int unavailable,
+        int missing,
+        int failedOrDecode)
+    {
+        if (baselineComparisonCount == 0)
+            return "local-visual-evidence-only";
+        if (unavailable > 0 && compared == 0)
+            return "word-baseline-unavailable";
+        if (missing > 0)
+            return "word-baseline-missing";
+        if (failedOrDecode > 0)
+            return "word-baseline-needs-review";
+        if (compared > 0 && unavailable == 0)
+            return "real-word-png-comparison";
+
+        return "mixed-word-baseline-evidence";
+    }
+
+    private static IReadOnlyList<string> BuildEvidenceAuthorityNotes(
+        string authorityLevel,
+        bool authoritativeWordPngParityClaimed,
+        int comparableRows,
+        int baselineComparisonCount,
+        int compared,
+        int unavailable,
+        int missing,
+        int failedOrDecode)
+    {
+        var notes = new List<string>();
+        if (baselineComparisonCount == 0)
+        {
+            notes.Add(
+                comparableRows == 0
+                    ? "No comparable Word-baseline rows were present in the selected evidence."
+                    : "Trusted WPF/Avalonia evidence is preparatory only until real Word PNG baselines are supplied.");
+        }
+        if (unavailable > 0)
+        {
+            notes.Add(
+                "Word COM or baseline generation was unavailable; no authoritative Word PNG parity is claimed for unavailable rows.");
+        }
+        if (missing > 0)
+            notes.Add("Mapped Word PNG baseline paths are recorded but missing on disk.");
+        if (failedOrDecode > 0)
+            notes.Add("One or more real Word PNG comparisons failed or could not be decoded; inspect triage before claiming parity.");
+        if (compared > 0 && authoritativeWordPngParityClaimed)
+            notes.Add("All non-skipped real Word PNG comparisons passed the configured tolerance.");
+        if (compared > 0 && !authoritativeWordPngParityClaimed && authorityLevel == "real-word-png-comparison")
+            notes.Add("Real Word PNG comparisons ran, but the selected evidence does not cover every comparable row.");
+
+        return notes;
+    }
+
+    private static bool IsBaselineStatus(FreeWVisualBaselineComparison comparison, string status) =>
+        string.Equals(comparison.Status, status, StringComparison.OrdinalIgnoreCase);
 
     public static void EnsureSummaryTrusted(FreeWVisualEvidenceNormalizedSummary summary)
     {
