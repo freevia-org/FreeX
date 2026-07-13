@@ -147,6 +147,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("legal-reference-section-page-number-fidelity");
         source.Should().Contain("Legal-reference section page-number proof readiness: trusted scenario rows=");
         source.Should().Contain("Legal-reference section page-number semantic rows: verified rows=");
+        source.Should().Contain("Legal-reference section page-number Word-baseline policy rows: verified rows=");
         source.Should().Contain("Legal-reference section page-number Word-baseline unavailable blocker: verified");
         source.Should().Contain("Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("Page composition proof readiness requires FreeW visual evidence summary schema v25 or newer");
