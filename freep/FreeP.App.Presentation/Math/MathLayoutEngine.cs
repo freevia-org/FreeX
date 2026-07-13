@@ -1175,11 +1175,11 @@ public static class MathLayoutEngine
         double em = Em(fontSizePt);
         var baseBox = LayoutNode(gc.Base, fontFamily, fontSizePt);
 
-        // Group char placed above or below
-        double grpH = em * 0.25;
+        // Group char placed above or below. PowerPoint-authored braces grow
+        // toward the grouped expression width; approximate that in the shared
+        // layout before either renderer sees it.
         double gap  = em * 0.05;
-
-        var grpGlyph = MakeGlyph(gc.GrpChar, fontFamily, fontSizePt * 0.75, isItalic: false);
+        var grpGlyph = MakeGroupCharacterGlyph(gc.GrpChar, fontFamily, fontSizePt, baseBox.Metrics.Width);
 
         double totalW = Math.Max(baseBox.Metrics.Width, grpGlyph.Metrics.Width);
         double totalH = baseBox.Metrics.Height + gap + grpGlyph.Metrics.Height;
@@ -1206,6 +1206,24 @@ public static class MathLayoutEngine
         c.Children.Add(grpGlyph);
         c.Children.Add(baseBox);
         return c;
+    }
+
+    private static MathBox.Glyph MakeGroupCharacterGlyph(
+        string groupChar,
+        string fontFamily,
+        double fontSizePt,
+        double targetWidth)
+    {
+        const double groupCharBaseScale = 0.75;
+        const double maxWidthScale = 4.0;
+
+        var baseFontSizePt = fontSizePt * groupCharBaseScale;
+        var glyph = MakeGlyph(groupChar, fontFamily, baseFontSizePt, isItalic: false);
+        if (targetWidth <= glyph.Metrics.Width || glyph.Metrics.Width <= 0)
+            return glyph;
+
+        var widthScale = Math.Min(maxWidthScale, targetWidth / glyph.Metrics.Width);
+        return MakeGlyph(groupChar, fontFamily, baseFontSizePt * widthScale, isItalic: false);
     }
 
     // ── Matrix layout ─────────────────────────────────────────────────────

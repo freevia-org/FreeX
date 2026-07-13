@@ -249,6 +249,16 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void GroupChr_WithTopPosAndNoChr_DefaultsToTopCurlyBrace()
+    {
+        var node = Parse("<m:groupChr><m:groupChrPr><m:pos m:val=\"top\"/></m:groupChrPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:groupChr>");
+
+        var groupChr = Assert.IsType<MathNode.GroupChr>(node);
+        Assert.True(groupChr.IsAbove);
+        Assert.Equal("\u23DE", groupChr.GrpChar);
+    }
+
+    [Fact]
     public void GroupChr_WithExplicitChr_PreservesRequestedGlyph()
     {
         var node = Parse("<m:groupChr><m:groupChrPr><m:chr m:val=\"\u23B4\"/><m:pos m:val=\"bot\"/></m:groupChrPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:groupChr>");

@@ -1514,6 +1514,41 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void GroupChr_WithWideBase_GrowsBraceGlyphTowardBaseWidth()
+    {
+        var narrowLayout = MathLayoutEngine.Layout(
+            new MathNode.GroupChr("\u23DE", Run("x"), isAbove: true),
+            "Cambria Math",
+            FontSizePt);
+        var wideLayout = MathLayoutEngine.Layout(
+            new MathNode.GroupChr(
+                "\u23DE",
+                new MathNode.Row(new MathNode[] { Run("x"), Run("+"), Run("y") }),
+                isAbove: true),
+            "Cambria Math",
+            FontSizePt);
+
+        var narrowContainer = Assert.IsType<MathBox.Container>(narrowLayout.Children[0]);
+        var wideContainer = Assert.IsType<MathBox.Container>(wideLayout.Children[0]);
+        var narrowGlyph = Assert.IsType<MathBox.Glyph>(narrowContainer.Children[0]);
+        var wideGlyph = Assert.IsType<MathBox.Glyph>(wideContainer.Children[0]);
+        var wideBase = wideContainer.Children[1];
+
+        wideGlyph.Text.Should().Be("\u23DE");
+        wideGlyph.FontSizePt.Should().BeGreaterThan(narrowGlyph.FontSizePt,
+            "group-character glyph growth must be resolved in the shared layout, not separately in WPF/Avalonia");
+        wideGlyph.Metrics.Width.Should().BeGreaterThan(narrowGlyph.Metrics.Width);
+        wideGlyph.Metrics.Width.Should().BeGreaterThan(wideBase.Metrics.Width * 0.75,
+            "the brace should grow toward the grouped expression width instead of staying at ordinary run size");
+
+        var op = MathBoxRenderPlanner.Plan(wideLayout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single(g => g.Text == "\u23DE");
+        op.FontSizePt.Should().Be(wideGlyph.FontSizePt,
+            "the renderer-neutral draw plan must carry the grown brace size to both hosts");
+    }
+
+    [Fact]
     public void LimitLow_CentersLimitBelowBase_AndGrowsDescent()
     {
         var node = new MathNode.Limit(Run("lim"), Run("0"), isUpper: false);

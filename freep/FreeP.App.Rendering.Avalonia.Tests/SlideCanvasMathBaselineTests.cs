@@ -614,6 +614,17 @@ public sealed class SlideCanvasMathBaselineTests
                 ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Contain("\u23DF",
                     "missing bottom m:groupChrPr/m:chr should resolve to a shared underbrace glyph before Avalonia draws");
 
+                var wideMathNode = ParseOmml(
+                    "<m:groupChr>" +
+                    "<m:e><m:r><m:t>x</m:t></m:r><m:r><m:t>+</m:t></m:r><m:r><m:t>y</m:t></m:r></m:e>" +
+                    "</m:groupChr>");
+                var wideMathBox = MathLayoutEngine.Layout(wideMathNode, "Cambria Math", 18.0);
+                MathBoxRenderPlanner.Plan(wideMathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Single(g => g.Text == "\u23DE")
+                    .FontSizePt.Should().BeGreaterThan(18.0 * 0.75,
+                        "wide m:groupChr braces must grow in the shared plan before Avalonia draws them");
+
                 var para = new ResolvedParagraph
                 {
                     Runs = new[]
