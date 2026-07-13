@@ -298,4 +298,36 @@ public sealed class SlideCanvasMathBaselineTests
 
         act.Should().NotThrow();
     }
+
+    [StaFact]
+    public void RenderParaWithMath_GroupChr_UsesSharedGlyphPlan_DoesNotThrow()
+    {
+        var mathNode = ParseOmml(
+            "<m:groupChr>" +
+            "<m:groupChrPr><m:pos m:val=\"bot\"/></m:groupChrPr>" +
+            "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+            "</m:groupChr>");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+        var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Contain("\u23DF",
+            "missing bottom m:groupChrPr/m:chr should resolve to a shared underbrace glyph before WPF draws");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "G = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
 }
