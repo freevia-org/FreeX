@@ -1186,6 +1186,169 @@ public sealed class DialogVisualEvidenceSummaryTests
     }
 
     [Fact]
+    public void DialogVisualEvidenceSummary_TreatsResolvedPriorityRowsAsExpectedSizeMatches()
+    {
+        using var temp = new TestTemporaryDirectory();
+
+        var inventoryPath = Path.Combine(temp.Path, "dialog-parity-inventory.json");
+        var wpfManifestDirectory = Path.Combine(temp.Path, "wpf-capture");
+        var avaloniaManifestDirectory = Path.Combine(temp.Path, "avalonia-capture");
+        Directory.CreateDirectory(wpfManifestDirectory);
+        Directory.CreateDirectory(avaloniaManifestDirectory);
+
+        var wpfManifestPath = Path.Combine(wpfManifestDirectory, "manifest.json");
+        var avaloniaManifestPath = Path.Combine(avaloniaManifestDirectory, "manifest.json");
+        var markdownPath = Path.Combine(temp.Path, "summary.md");
+        var jsonPath = Path.Combine(temp.Path, "summary.json");
+
+        File.WriteAllText(
+            inventoryPath,
+            """
+            {
+              "summary": {
+                "totalRoutes": 4,
+                "wpfCaptures": 4,
+                "avaloniaCaptures": 4,
+                "avaloniaHarnessRoutes": 4,
+                "sharedOrPresentationBacked": 4
+              },
+              "rows": [
+                { "routeId": "dialog.ConditionalFormatNewRule" },
+                { "routeId": "dialog.Consolidate" },
+                { "routeId": "dialog.PivotTableOptions" },
+                { "routeId": "dialog.PivotTableOptions.LayoutAndFormat" }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            wpfManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "wpf",
+              "surfaces": [
+                {
+                  "id": "dialog.ConditionalFormatNewRule",
+                  "kind": "dialog",
+                  "png": "dialog.ConditionalFormatNewRule.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.Consolidate",
+                  "kind": "dialog",
+                  "png": "dialog.Consolidate.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.PivotTableOptions",
+                  "kind": "dialog",
+                  "png": "dialog.PivotTableOptions.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.PivotTableOptions.LayoutAndFormat",
+                  "kind": "dialog",
+                  "png": "dialog.PivotTableOptions.LayoutAndFormat.png",
+                  "captured": true,
+                  "note": ""
+                }
+              ]
+            }
+            """);
+
+        File.WriteAllText(
+            avaloniaManifestPath,
+            """
+            {
+              "platform": "windows",
+              "shell": "avalonia",
+              "surfaces": [
+                {
+                  "id": "dialog.ConditionalFormatNewRule",
+                  "kind": "dialog",
+                  "png": "dialog.ConditionalFormatNewRule.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.Consolidate",
+                  "kind": "dialog",
+                  "png": "dialog.Consolidate.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.PivotTableOptions",
+                  "kind": "dialog",
+                  "png": "dialog.PivotTableOptions.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.PivotTableOptions.LayoutAndFormat",
+                  "kind": "dialog",
+                  "png": "dialog.PivotTableOptions.LayoutAndFormat.png",
+                  "captured": true,
+                  "note": ""
+                }
+              ]
+            }
+            """);
+
+        var expectedSizes = new Dictionary<string, (int Width, int Height, string Source)>
+        {
+            ["dialog.ConditionalFormatNewRule"] = (634, 334, "ConditionalFormatDialogCatalog.RuleEditorCaptureWidth/Height"),
+            ["dialog.Consolidate"] = (380, 420, "ConsolidateDialogPlanner.CaptureWidth/Height"),
+            ["dialog.PivotTableOptions"] = (520, 676, "PivotOptionsPlanner.DialogWidth/LayoutAndFormatCaptureHeight"),
+            ["dialog.PivotTableOptions.LayoutAndFormat"] = (520, 676, "PivotOptionsPlanner.DialogWidth/LayoutAndFormatCaptureHeight"),
+        };
+
+        foreach (var (id, (width, height, _)) in expectedSizes)
+        {
+            WritePng(Path.Combine(wpfManifestDirectory, $"{id}.png"), width, height, nonBlank: true);
+            WritePng(Path.Combine(avaloniaManifestDirectory, $"{id}.png"), width, height, nonBlank: true);
+        }
+
+        var result = PowerShellScriptRunner.RunToolScript(
+            "Generate-DialogVisualEvidenceSummary.ps1",
+            WorkspaceFileLocator.FindWorkspaceRoot(),
+            $"-MarkdownPath \"{markdownPath}\" -JsonPath \"{jsonPath}\" -InventoryPath \"{inventoryPath}\" -WpfManifestPath \"{wpfManifestPath}\" -AvaloniaManifestPath \"{avaloniaManifestPath}\"");
+
+        result.ExitCode.Should().Be(0, result.CombinedOutput);
+        result.Output.Should().Contain("Paired dimension mismatches: 0");
+        result.Output.Should().Contain("Paired expected-size evidence mismatches: 0");
+        result.Output.Should().Contain("Stale promoted expected-size evidence: 0");
+
+        using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
+        var summary = json.RootElement.GetProperty("summary");
+        summary.GetProperty("pairedDimensionMismatches").GetInt32().Should().Be(0);
+        summary.GetProperty("pairedExpectedSizeMismatches").GetInt32().Should().Be(0);
+        summary.GetProperty("stalePromotedExpectedSizeEvidence").GetInt32().Should().Be(0);
+
+        var pairedSurfaces = json.RootElement.GetProperty("pairedSurfaces")
+            .EnumerateArray()
+            .ToDictionary(surface => surface.GetProperty("id").GetString()!);
+        pairedSurfaces.Keys.Should().BeEquivalentTo(expectedSizes.Keys);
+
+        foreach (var (id, (width, height, source)) in expectedSizes)
+        {
+            var comparison = pairedSurfaces[id].GetProperty("comparison");
+            comparison.GetProperty("expectedWidth").GetDouble().Should().Be(width);
+            comparison.GetProperty("expectedHeight").GetDouble().Should().Be(height);
+            comparison.GetProperty("expectedSizeSource").GetString().Should().Be(source);
+            comparison.GetProperty("logicalDimensionMatch").GetBoolean().Should().BeTrue();
+            comparison.GetProperty("expectedSizeMismatch").GetBoolean().Should().BeFalse();
+            comparison.GetProperty("wpfExpectedSizeMatch").GetBoolean().Should().BeTrue();
+            comparison.GetProperty("avaloniaExpectedSizeMatch").GetBoolean().Should().BeTrue();
+            comparison.GetProperty("dimensionMismatchBucket").ValueKind.Should().Be(JsonValueKind.Null);
+        }
+    }
+
+    [Fact]
     public void DialogVisualEvidenceSummary_FlagsWorkbookStatisticsEvidenceAgainstSharedDialogSize()
     {
         using var temp = new TestTemporaryDirectory();
