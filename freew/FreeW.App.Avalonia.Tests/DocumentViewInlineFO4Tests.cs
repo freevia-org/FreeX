@@ -583,6 +583,7 @@ public sealed class DocumentViewInlineFO4Tests
     [InlineData("list1", "BasicList", 0)]
     [InlineData("vertbullet1", "VerticalBulletList", 0)]
     [InlineData("process1", "BasicProcess", 2)]
+    [InlineData("pyramid1", "Pyramid", 0)]
     public async Task Inline_smartart_carries_basic_shared_layout_geometry(
         string layoutId,
         string expectedKind,

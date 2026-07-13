@@ -58,6 +58,17 @@ public class SmartArtPresetsTests
     }
 
     [Fact]
+    public void LayoutCatalog_ContainsBasicPyramidPreset()
+    {
+        var found = SmartArtLayoutPreset.FindById("pyramid1");
+
+        found.Should().NotBeNull();
+        found!.Name.Should().Be("Basic Pyramid");
+        found.Kind.Should().Be(SmartArtKind.List);
+        found.Description.Should().Contain("widening bands");
+    }
+
+    [Fact]
     public void LayoutPreset_FindById_ReturnsNullForUnknownId()
     {
         SmartArtLayoutPreset.FindById("nonexistent-xyz").Should().BeNull();

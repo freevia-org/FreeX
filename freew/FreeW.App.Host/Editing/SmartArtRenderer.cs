@@ -45,6 +45,7 @@ internal static class SmartArtRenderer
 
             // ── Cycle ────────────────────────────────────────────────────────────────────────────────
             "cycle1"                 => BuildPlannedLayout(plan, strokeThickness),
+            "pyramid1"               => BuildPlannedLayout(plan, strokeThickness),
 
             // ── Hierarchy ───────────────────────────────────────────────────────────────────────────
             "hierarchy1" or "orgchart1" => BuildHierarchy(plan, strokeThickness),

@@ -85,6 +85,7 @@ public enum SmartArtLayoutGeometryKind
     StepUp,
     StepDown,
     Cycle,
+    Pyramid,
     Radial,
     Matrix
 }
@@ -433,6 +434,7 @@ public static class ChartSmartArtVisualPlanner
             "stepup1" => BuildStepGeometry(nodeCount, ascending: true),
             "stepdown1" => BuildStepGeometry(nodeCount, ascending: false),
             "cycle1" => BuildCycleGeometry(nodeCount),
+            "pyramid1" => BuildPyramidGeometry(nodeCount),
             "radial1" => BuildRadialGeometry(nodeCount),
             "matrix1" => BuildMatrixGeometry(nodeCount),
             _ => null
@@ -739,6 +741,43 @@ public static class ChartSmartArtVisualPlanner
             connectors,
             nodeCount == 0 ? 0 : naturalWidth,
             nodeCount == 0 ? 0 : naturalHeight);
+    }
+
+    private static SmartArtLayoutGeometryPlan BuildPyramidGeometry(int nodeCount)
+    {
+        const double margin = 8;
+        const double minBandWidth = 54;
+        const double maxBandWidth = 160;
+        const double bandHeight = 30;
+        const double gap = 4;
+
+        var nodes = new List<SmartArtLayoutNodeGeometry>(nodeCount);
+        var widthRange = Math.Max(0, maxBandWidth - minBandWidth);
+        var divisor = Math.Max(1, nodeCount - 1);
+
+        for (var i = 0; i < nodeCount; i++)
+        {
+            var width = nodeCount == 1
+                ? maxBandWidth
+                : minBandWidth + widthRange * i / divisor;
+            nodes.Add(new SmartArtLayoutNodeGeometry(
+                i,
+                margin + (maxBandWidth - width) / 2,
+                margin + i * (bandHeight + gap),
+                width,
+                bandHeight));
+        }
+
+        var naturalWidth = nodeCount == 0 ? 0 : margin * 2 + maxBandWidth;
+        var naturalHeight = nodeCount == 0
+            ? 0
+            : margin * 2 + nodeCount * bandHeight + Math.Max(0, nodeCount - 1) * gap;
+        return new SmartArtLayoutGeometryPlan(
+            SmartArtLayoutGeometryKind.Pyramid,
+            nodes,
+            [],
+            naturalWidth,
+            naturalHeight);
     }
 
     private static SmartArtLayoutGeometryPlan BuildMatrixGeometry(int nodeCount)

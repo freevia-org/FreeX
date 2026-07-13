@@ -223,6 +223,7 @@ public sealed class ChartSmartArtVisualPlannerTests
     [InlineData("vertbullet1", "VerticalBulletList", 4, 0, 128, 154)]
     [InlineData("process1", "BasicProcess", 4, 3, 344, 46)]
     [InlineData("cycle1", "Cycle", 4, 4, 200, 160)]
+    [InlineData("pyramid1", "Pyramid", 4, 0, 176, 148)]
     [InlineData("radial1", "Radial", 4, 3, 220, 180)]
     [InlineData("matrix1", "Matrix", 4, 0, 182, 94)]
     [InlineData("horizbullet1", "HorizontalList", 4, 0, 320, 46)]
@@ -275,6 +276,17 @@ public sealed class ChartSmartArtVisualPlannerTests
         radialGeometry.Nodes[1].Y.Should().BeApproximately(20, 0.01);
         radialGeometry.Connectors.Select(c => (c.SourceNodeIndex, c.TargetNodeIndex))
             .Should().ContainInOrder((0, 1), (0, 2), (0, 3));
+
+        var pyramid = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+        pyramid.LayoutId = "pyramid1";
+        var pyramidGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(pyramid).LayoutGeometry!;
+        pyramidGeometry.Kind.Should().Be(SmartArtLayoutGeometryKind.Pyramid);
+        pyramidGeometry.Nodes[0].X.Should().BeApproximately(61, 0.01);
+        pyramidGeometry.Nodes[0].Width.Should().BeApproximately(54, 0.01);
+        pyramidGeometry.Nodes[3].X.Should().BeApproximately(8, 0.01);
+        pyramidGeometry.Nodes[3].Width.Should().BeApproximately(160, 0.01);
+        pyramidGeometry.Nodes.Select(n => n.Y).Should().ContainInOrder(8, 42, 76, 110);
+        pyramidGeometry.Connectors.Should().BeEmpty();
 
         var matrix = SmartArt.Create(SmartArtKind.List, ["A", "B", "C", "D"]);
         matrix.LayoutId = "matrix1";

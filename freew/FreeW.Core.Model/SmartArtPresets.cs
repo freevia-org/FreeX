@@ -27,6 +27,7 @@ public sealed record SmartArtLayoutPreset(string Name, string Id, SmartArtKind K
 
         // ── Cycle ───────────────────────────────────────────────────────────────────────────────────
         new("Basic Cycle",             "cycle1",         SmartArtKind.List,      "Circular arrangement of nodes"),
+        new("Basic Pyramid",           "pyramid1",       SmartArtKind.List,      "Top-to-bottom stack of widening bands"),
 
         // ── Hierarchy ───────────────────────────────────────────────────────────────────────────────
         new("Basic Hierarchy",         "hierarchy1",     SmartArtKind.Hierarchy, "Classic org-chart tree"),
