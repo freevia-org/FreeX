@@ -987,6 +987,53 @@ public sealed class ChartTests : IDisposable
         rt.ShowNegativeBubbles.Should().BeTrue();
     }
 
+    [Fact]
+    public void RoundTrip_StockChart_TypePreservedInPackageAndModel()
+    {
+        var chart = BuildStockChart();
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            chartDoc.Descendants(ChartNs + "stockChart").Should().ContainSingle(
+                "stock charts should keep their PowerPoint chart family instead of downgrading to c:lineChart");
+            chartDoc.Descendants(ChartNs + "lineChart").Should().BeEmpty();
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ChartType.Should().Be(ChartType.Stock);
+        rt.Series.Should().HaveCount(4);
+    }
+
+    [Theory]
+    [InlineData(ChartType.Surface, "surfaceChart")]
+    [InlineData(ChartType.Surface3D, "surface3DChart")]
+    public void RoundTrip_SurfaceChart_TypePreservedInPackageAndModel(
+        ChartType chartType,
+        string expectedElementName)
+    {
+        var chart = BuildSurfaceChart(chartType);
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var surfaceChart = chartDoc.Descendants(ChartNs + expectedElementName).Should().ContainSingle(
+                "surface charts should keep their PowerPoint chart family instead of downgrading to c:barChart").Subject;
+            surfaceChart.Elements(ChartNs + "axId").Should().HaveCount(3);
+            chartDoc.Descendants(ChartNs + "serAx").Should().ContainSingle(
+                "surface charts need a series axis in addition to category and value axes");
+            chartDoc.Descendants(ChartNs + "barChart").Should().BeEmpty();
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ChartType.Should().Be(chartType);
+        rt.Series.Should().HaveCount(2);
+    }
+
     // ── 5f: Compositor emits correct type ────────────────────────────────────
 
     [Fact]
@@ -1027,6 +1074,22 @@ public sealed class ChartTests : IDisposable
         var op   = ops.OfType<DrawOp.Chart>().First();
 
         op.ChartShape.ChartType.Should().Be(ChartType.Bubble);
+    }
+
+    [Theory]
+    [InlineData(ChartType.Stock)]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Surface3D)]
+    public void Compositor_StockAndSurfaceCharts_ProduceChartOpWithModeledType(ChartType chartType)
+    {
+        var chart = chartType == ChartType.Stock
+            ? BuildStockChart()
+            : BuildSurfaceChart(chartType);
+        var pres = BuildPresWithChart(chart);
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var op = ops.OfType<DrawOp.Chart>().First();
+
+        op.ChartShape.ChartType.Should().Be(chartType);
     }
 
     // ── 5g: Geometry helpers (pure-math, no renderer) ────────────────────────
@@ -1531,6 +1594,45 @@ public sealed class ChartTests : IDisposable
     // ──────────────────────────────────────────────────────────────────────────
     // Helpers
     // ──────────────────────────────────────────────────────────────────────────
+
+    private static ChartShape BuildStockChart()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Stock };
+        chart.Categories.AddRange(new[] { "Day 1", "Day 2", "Day 3" });
+        foreach (var (name, values) in new[]
+        {
+            ("Open", new double?[] { 10, 12, 11 }),
+            ("High", new double?[] { 14, 16, 15 }),
+            ("Low", new double?[] { 8, 9, 10 }),
+            ("Close", new double?[] { 13, 11, 14 })
+        })
+        {
+            var series = new ChartSeries { Name = name };
+            series.Values.AddRange(values);
+            chart.Series.Add(series);
+        }
+
+        return chart;
+    }
+
+    private static ChartShape BuildSurfaceChart(ChartType chartType)
+    {
+        if (chartType is not (ChartType.Surface or ChartType.Surface3D))
+            throw new ArgumentOutOfRangeException(nameof(chartType), chartType, "Expected a surface chart type.");
+
+        var chart = new ChartShape { ChartType = chartType };
+        chart.Categories.AddRange(new[] { "North", "East", "South" });
+
+        var low = new ChartSeries { Name = "Low Band" };
+        low.Values.AddRange(new double?[] { 10, 20, 15 });
+        chart.Series.Add(low);
+
+        var high = new ChartSeries { Name = "High Band" };
+        high.Values.AddRange(new double?[] { 30, 25, 35 });
+        chart.Series.Add(high);
+
+        return chart;
+    }
 
     private static ChartShape BuildColumnChart()
     {

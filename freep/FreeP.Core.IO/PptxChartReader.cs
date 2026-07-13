@@ -230,12 +230,13 @@ internal static class PptxChartReader
                     case "bubbleChart":
                         ReadBubbleChart(el, shape, scheme, idxMap); break;
                     case "stockChart":
-                        ReadLineChart(el, shape, scheme, idxMap); break;    // stock ~= line
+                        ReadStockChart(el, shape, scheme, idxMap); break;
                     case "radarChart":
                         ReadRadarChart(el, shape, scheme, idxMap); break;
                     case "surfaceChart":
+                        ReadSurfaceChart(el, shape, scheme, idxMap, is3D: false); break;
                     case "surface3DChart":
-                        ReadBarChart(el, shape, scheme, idxMap); break;     // surface ~= column best-effort
+                        ReadSurfaceChart(el, shape, scheme, idxMap, is3D: true); break;
                 }
             }
             else
@@ -262,7 +263,7 @@ internal static class PptxChartReader
                 }
                 // Derive override chart type from the secondary group element name.
                 ChartType? overrideType;
-                if (el.Name.LocalName is "lineChart" or "line3DChart" or "stockChart")
+                if (el.Name.LocalName is "lineChart" or "line3DChart")
                 {
                     bool hasMarkers = el.Elements(C + "ser").Any(s =>
                     {
@@ -270,6 +271,10 @@ internal static class PptxChartReader
                         return sym is null || sym != "none";
                     });
                     overrideType = hasMarkers ? ChartType.LineMarkers : ChartType.Line;
+                }
+                else if (el.Name.LocalName == "stockChart")
+                {
+                    overrideType = ChartType.Stock;
                 }
                 else if (el.Name.LocalName is "barChart" or "bar3DChart")
                 {
@@ -287,6 +292,12 @@ internal static class PptxChartReader
                 {
                     var grouping = el.Element(C + "grouping")?.Attribute("val")?.Value ?? "standard";
                     overrideType = grouping == "stacked" ? ChartType.AreaStacked : ChartType.Area;
+                }
+                else if (el.Name.LocalName is "surfaceChart" or "surface3DChart")
+                {
+                    overrideType = el.Name.LocalName == "surface3DChart"
+                        ? ChartType.Surface3D
+                        : ChartType.Surface;
                 }
                 else
                 {
@@ -350,6 +361,22 @@ internal static class PptxChartReader
         });
 
         shape.ChartType = hasMarkers ? ChartType.LineMarkers : ChartType.Line;
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
+    }
+
+    private static void ReadStockChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap)
+    {
+        ReadVaryColors(el, shape);
+        shape.ChartType = ChartType.Stock;
+        ReadSeriesFromChart(el, shape, scheme, idxMap);
+    }
+
+    private static void ReadSurfaceChart(XElement el, ChartShape shape, PresentationColorScheme scheme,
+        Dictionary<int, ChartSeries> idxMap, bool is3D)
+    {
+        ReadVaryColors(el, shape);
+        shape.ChartType = is3D ? ChartType.Surface3D : ChartType.Surface;
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 

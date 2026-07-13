@@ -116,6 +116,7 @@ internal static class PptxChartWriter
     private const int PrimaryValAxId   = 2;
     private const int SecondaryValAxId = 3;
     private const int SecondaryCatAxId = 4;  // hidden phantom cat axis for the secondary plot group
+    private const int PrimarySerAxId   = 5;
 
     private static XElement BuildPlotArea(ChartShape chart)
     {
@@ -181,6 +182,9 @@ internal static class PptxChartWriter
         var valAxEl  = !noCatAx
             ? BuildValAxEl(chart.ValueAxis, PrimaryValAxId, PrimaryCatAxId)
             : null;
+        var serAxEl = chart.ChartType is ChartType.Surface or ChartType.Surface3D
+            ? BuildSerAxEl(PrimarySerAxId, PrimaryValAxId)
+            : null;
         // Scatter/bubble X value axis lives at bottom (axPos="b").
         var xValAxEl = isScatterLike
             ? BuildValAxEl(chart.CategoryAxis, PrimaryCatAxId, PrimaryValAxId, axPos: "b")
@@ -215,6 +219,7 @@ internal static class PptxChartWriter
             xValAxEl,
             catAxEl,
             valAxEl,
+            serAxEl,
             secCatAxEl,
             secValAxEl,
             dataTableEl);
@@ -305,6 +310,10 @@ internal static class PptxChartWriter
                 BuildBubbleChartEl(chart, seriesEls, catAxId, valAxId),
             ChartType.Radar =>
                 BuildRadarChartEl(chart, seriesEls, catAxId, valAxId),
+            ChartType.Stock =>
+                BuildStockChartEl(chart, seriesEls, catAxId, valAxId),
+            ChartType.Surface or ChartType.Surface3D =>
+                BuildSurfaceChartEl(chart, seriesEls, catAxId, valAxId, PrimarySerAxId),
             _ =>
                 BuildBarChartEl(chart, seriesEls, isBar: false, catAxId, valAxId)
         };
@@ -439,6 +448,37 @@ internal static class PptxChartWriter
     private static XElement BuildBubbleScaleEl(ChartShape chart) =>
         new(C + "bubbleScale",
             new XAttribute("val", Math.Clamp(chart.BubbleScalePercent, 0, 300).ToString(CultureInfo.InvariantCulture)));
+
+    private static XElement BuildStockChartEl(ChartShape chart, List<XElement> seriesEls,
+        int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
+        new XElement(C + "stockChart",
+            BuildVaryColorsEl(chart),
+            seriesEls,
+            new XElement(C + "axId", new XAttribute("val", catAxId)),
+            new XElement(C + "axId", new XAttribute("val", valAxId)));
+
+    private static XElement BuildSurfaceChartEl(ChartShape chart, List<XElement> seriesEls,
+        int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId, int serAxId = PrimarySerAxId) =>
+        new XElement(C + (chart.ChartType == ChartType.Surface3D ? "surface3DChart" : "surfaceChart"),
+            BuildVaryColorsEl(chart),
+            seriesEls,
+            new XElement(C + "axId", new XAttribute("val", catAxId)),
+            new XElement(C + "axId", new XAttribute("val", valAxId)),
+            new XElement(C + "axId", new XAttribute("val", serAxId)));
+
+    private static XElement BuildSerAxEl(int axId, int crossAxId) =>
+        new XElement(C + "serAx",
+            new XElement(C + "axId", new XAttribute("val", axId)),
+            new XElement(C + "scaling",
+                new XElement(C + "orientation", new XAttribute("val", "minMax"))),
+            new XElement(C + "delete", new XAttribute("val", "0")),
+            new XElement(C + "axPos", new XAttribute("val", "r")),
+            new XElement(C + "majorTickMark", new XAttribute("val", "none")),
+            new XElement(C + "minorTickMark", new XAttribute("val", "none")),
+            new XElement(C + "tickLblPos", new XAttribute("val", "nextTo")),
+            new XElement(C + "crossAx", new XAttribute("val", crossAxId)),
+            new XElement(C + "crosses", new XAttribute("val", "autoZero")),
+            new XElement(C + "lblOffset", new XAttribute("val", "100")));
 
     private static XElement? BuildVaryColorsEl(ChartShape chart) =>
         chart.VaryColors

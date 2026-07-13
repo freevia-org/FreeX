@@ -755,6 +755,8 @@ public sealed class SlideCanvas : FrameworkElement
             case FreeP.Core.Model.ChartType.ColumnClustered:
             case FreeP.Core.Model.ChartType.ColumnStacked:
             case FreeP.Core.Model.ChartType.ColumnStacked100:
+            case FreeP.Core.Model.ChartType.Surface:
+            case FreeP.Core.Model.ChartType.Surface3D:
                 RenderColumnChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
                 break;
 
@@ -766,6 +768,7 @@ public sealed class SlideCanvas : FrameworkElement
 
             case FreeP.Core.Model.ChartType.Line:
             case FreeP.Core.Model.ChartType.LineMarkers:
+            case FreeP.Core.Model.ChartType.Stock:
                 RenderLineChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH,
                     withMarkers: chart.ChartType == FreeP.Core.Model.ChartType.LineMarkers);
                 break;

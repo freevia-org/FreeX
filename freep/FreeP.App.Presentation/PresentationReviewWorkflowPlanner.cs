@@ -4355,6 +4355,9 @@ public static class PresentationReviewWorkflowPlanner
             ChartType.Doughnut => "doughnut chart",
             ChartType.Radar => "radar chart",
             ChartType.Bubble => "bubble chart",
+            ChartType.Stock => "stock chart",
+            ChartType.Surface => "surface chart",
+            ChartType.Surface3D => "3-D surface chart",
             _ => null
         };
 

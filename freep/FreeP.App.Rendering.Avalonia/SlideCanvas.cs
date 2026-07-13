@@ -883,6 +883,8 @@ public sealed class SlideCanvas : Control
             case ChartType.ColumnClustered:
             case ChartType.ColumnStacked:
             case ChartType.ColumnStacked100:
+            case ChartType.Surface:
+            case ChartType.Surface3D:
                 RenderColumnChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotLeft, plotTop, plotW, plotH);
                 break;
             case ChartType.BarClustered:
@@ -892,6 +894,7 @@ public sealed class SlideCanvas : Control
                 break;
             case ChartType.Line:
             case ChartType.LineMarkers:
+            case ChartType.Stock:
                 RenderLineChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotLeft, plotTop, plotW, plotH,
                     withMarkers: chart.ChartType == ChartType.LineMarkers);
                 break;

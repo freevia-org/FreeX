@@ -680,6 +680,7 @@ public static partial class ChartRenderPlanner
             ChartType.BarClustered or ChartType.BarStacked or ChartType.BarStacked100 => ChartRenderFamily.HorizontalBar,
             ChartType.Scatter or ChartType.Bubble => ChartRenderFamily.ScatterLike,
             ChartType.Radar => ChartRenderFamily.Radar,
+            ChartType.Stock or ChartType.Surface or ChartType.Surface3D => ChartRenderFamily.Cartesian,
             _ => ChartRenderFamily.Cartesian
         };
 

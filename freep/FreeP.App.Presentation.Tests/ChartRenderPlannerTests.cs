@@ -314,6 +314,21 @@ public sealed class ChartRenderPlannerTests
         plan.Plot.Should().Be(new ChartPlanRect(52, 8, 340, 244));
     }
 
+    [Theory]
+    [InlineData(ChartType.Stock)]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Surface3D)]
+    public void BuildFramePlan_StockAndSurfaceFamilies_UseExplicitCartesianFallback(ChartType chartType)
+    {
+        var chart = MakeTwoSeriesChart(chartType);
+
+        var plan = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        plan.Family.Should().Be(ChartRenderFamily.Cartesian);
+        plan.Plot.HasPositiveArea.Should().BeTrue(
+            "stock/surface imports should render through the cartesian fallback, not unknown placeholders");
+    }
+
     [Fact]
     public void BuildFramePlan_ColumnAxisTitles_ReservesSharedTitleBands()
     {
