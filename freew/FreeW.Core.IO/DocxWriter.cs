@@ -2617,12 +2617,12 @@ public static class DocxWriter
         MathRunKind.Fraction => BuildFraction(run, depth),
         MathRunKind.Radical => BuildRadical(run, depth),
         MathRunKind.NAry => BuildNAry(run, depth),
-        MathRunKind.Accent => BuildAccent(run),
-        MathRunKind.Bar => BuildBar(run),
+        MathRunKind.Accent => BuildAccent(run, depth),
+        MathRunKind.Bar => BuildBar(run, depth),
         MathRunKind.Delimiter => BuildDelimiter(run, depth),
         MathRunKind.Matrix => BuildMatrix(run.Matrix),
         MathRunKind.FunctionApply => BuildFunctionApply(run, depth),
-        MathRunKind.GroupChar => BuildGroupChar(run),
+        MathRunKind.GroupChar => BuildGroupChar(run, depth),
         _ => MathText(run.Text)
     };
 
@@ -2693,25 +2693,25 @@ public static class DocxWriter
     /// accented base is the m:e element. The reader keys off m:accPr/m:chr to recover
     /// <see cref="MathRun.Accent"/>. Mirrors <c>DocxReader.ReadAccent</c>.
     /// </summary>
-    private static XElement BuildAccent(MathRun run)
+    private static XElement BuildAccent(MathRun run, int depth)
     {
         var pr = new XElement(M + "accPr");
         if (!string.IsNullOrEmpty(run.Accent))
             pr.Add(new XElement(M + "chr", new XAttribute(M + "val", run.Accent)));
         return new XElement(M + "acc",
             pr,
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "e", run.DecoratorBaseEquation, run.Base, depth));
     }
 
     /// <summary>
     /// Builds a bar (m:bar): m:barPr/m:pos carries "top" (overbar) or "bot" (underbar); the barred base
     /// is the m:e element. Mirrors <c>DocxReader.ReadBar</c>.
     /// </summary>
-    private static XElement BuildBar(MathRun run) =>
+    private static XElement BuildBar(MathRun run, int depth) =>
         new(M + "bar",
             new XElement(M + "barPr",
                 new XElement(M + "pos", new XAttribute(M + "val", run.BarTop ? "top" : "bot"))),
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "e", run.DecoratorBaseEquation, run.Base, depth));
 
     /// <summary>
     /// Builds a delimiter (m:d): m:dPr carries the begin/end glyphs (m:begChr / m:endChr); a single
@@ -2756,12 +2756,12 @@ public static class DocxWriter
     /// (m:chr/@m:val) and its position (m:pos/@m:val, "top" or "bot"); m:e holds the base.
     /// Mirrors <c>DocxReader.ReadGroupChar</c>.
     /// </summary>
-    private static XElement BuildGroupChar(MathRun run) =>
+    private static XElement BuildGroupChar(MathRun run, int depth) =>
         new(M + "groupChr",
             new XElement(M + "groupChrPr",
                 new XElement(M + "chr", new XAttribute(M + "val", run.GroupChr)),
                 new XElement(M + "pos", new XAttribute(M + "val", run.GroupChrPos))),
-            new XElement(M + "e", MathText(run.Base)));
+            BuildMathSlot(M + "e", run.DecoratorBaseEquation, run.Base, depth));
 
     /// <summary>Builds an m:r run carrying <paramref name="text"/> in an m:t (xml:space preserved).</summary>
     private static XElement MathText(string text) =>

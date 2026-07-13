@@ -225,6 +225,57 @@ public class EquationsTests
     }
 
     [Fact]
+    public void MathRun_Decorators_CanCarryNestedBaseEquation()
+    {
+        var baseEquation = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+
+        var accent = MathRun.AccentOf(baseEquation, "hat");
+        var bar = MathRun.BarOf(baseEquation, top: false);
+        var groupChar = MathRun.GroupCharOf(baseEquation, "\u23DF", "bot");
+
+        accent.Kind.Should().Be(MathRunKind.Accent);
+        accent.Base.Should().Be("a+x^2");
+        accent.Accent.Should().Be("hat");
+        accent.DecoratorBaseEquation.Should().BeSameAs(baseEquation);
+        accent.LinearText.Should().Be("a+x^2hat");
+
+        bar.Kind.Should().Be(MathRunKind.Bar);
+        bar.Base.Should().Be("a+x^2");
+        bar.BarTop.Should().BeFalse();
+        bar.DecoratorBaseEquation.Should().BeSameAs(baseEquation);
+        bar.LinearText.Should().Be("_a+x^2_");
+
+        groupChar.Kind.Should().Be(MathRunKind.GroupChar);
+        groupChar.Base.Should().Be("a+x^2");
+        groupChar.GroupChr.Should().Be("\u23DF");
+        groupChar.GroupChrPos.Should().Be("bot");
+        groupChar.DecoratorBaseEquation.Should().BeSameAs(baseEquation);
+        groupChar.LinearText.Should().Be("a+x^2\u23DF");
+    }
+
+    [Fact]
+    public void MathRun_DecoratorBase_LinearText_IsDepthBoundedForCyclicNestedBase()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.GroupChar,
+            Base = "x",
+            GroupChr = "\u23DE",
+            DecoratorBaseEquation = equation
+        });
+
+        var linearText = equation.LinearText;
+
+        linearText.Should().NotBeEmpty();
+        linearText.Length.Should().BeLessThan(100);
+        linearText.Should().Contain("\u23DEx");
+    }
+
+    [Fact]
     public void MathRun_LinearText_RendersNewStructures()
     {
         MathRun.Subscript("x", "i").LinearText.Should().Be("x_i");

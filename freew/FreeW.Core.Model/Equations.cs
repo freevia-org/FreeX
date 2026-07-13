@@ -130,6 +130,9 @@ public sealed record MathRun
     /// <summary>Optional structured operand/body equation for nested OMML n-ary slots.</summary>
     public Equation? NAryOperandEquation { get; init; }
 
+    /// <summary>Optional structured base equation for nested OMML accent/bar/group-character slots.</summary>
+    public Equation? DecoratorBaseEquation { get; init; }
+
     /// <summary>The radical's degree (empty = square root; non-empty = nth root). Only for <see cref="MathRunKind.Radical"/>.</summary>
     public string Degree { get; init; } = string.Empty;
 
@@ -311,12 +314,40 @@ public sealed record MathRun
     public static MathRun AccentOf(string @base, string accent = "̂") =>
         new() { Kind = MathRunKind.Accent, Base = @base, Accent = string.IsNullOrEmpty(accent) ? "̂" : accent };
 
+    /// <summary>Creates an accent fragment (m:acc) whose accented base is a structured equation.</summary>
+    public static MathRun AccentOf(Equation baseEquation, string accent = "̂")
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.Accent,
+            Base = baseEquation.LinearText,
+            Accent = string.IsNullOrEmpty(accent) ? "̂" : accent,
+            DecoratorBaseEquation = baseEquation
+        };
+    }
+
     /// <summary>
     /// Creates a bar fragment (m:bar): <paramref name="@base"/> with an overbar (<paramref name="top"/> true,
     /// the default) or an underbar (<paramref name="top"/> false).
     /// </summary>
     public static MathRun BarOf(string @base, bool top = true) =>
         new() { Kind = MathRunKind.Bar, Base = @base, BarTop = top };
+
+    /// <summary>Creates a bar fragment (m:bar) whose barred base is a structured equation.</summary>
+    public static MathRun BarOf(Equation baseEquation, bool top = true)
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.Bar,
+            Base = baseEquation.LinearText,
+            BarTop = top,
+            DecoratorBaseEquation = baseEquation
+        };
+    }
 
     /// <summary>Creates a delimiter fragment (m:d): <paramref name="content"/> wrapped in <paramref name="open"/>/<paramref name="close"/>.</summary>
     public static MathRun Delimiter(string content, string open = "(", string close = ")") =>
@@ -369,6 +400,21 @@ public sealed record MathRun
             GroupChrPos = string.IsNullOrEmpty(groupChrPos) ? "top" : groupChrPos
         };
 
+    /// <summary>Creates a group-character fragment (m:groupChr) whose grouped base is a structured equation.</summary>
+    public static MathRun GroupCharOf(Equation baseEquation, string groupChr = "\u23DE", string groupChrPos = "top")
+    {
+        ArgumentNullException.ThrowIfNull(baseEquation);
+
+        return new()
+        {
+            Kind = MathRunKind.GroupChar,
+            Base = baseEquation.LinearText,
+            GroupChr = string.IsNullOrEmpty(groupChr) ? "\u23DE" : groupChr,
+            GroupChrPos = string.IsNullOrEmpty(groupChrPos) ? "top" : groupChrPos,
+            DecoratorBaseEquation = baseEquation
+        };
+    }
+
     /// <summary>
     /// A best-effort linear (plain-text) rendering of this fragment, used for the host run's fallback
     /// text and for the editor's lightweight visual stand-in.
@@ -385,14 +431,14 @@ public sealed record MathRun
             ? $"√({SlotLinearText(RadicandEquation, Base, depth)})"
             : $"{Degree}√({SlotLinearText(RadicandEquation, Base, depth)})",
         MathRunKind.NAry => $"{Operator}({SlotLinearText(NAryLowerLimitEquation, Sub, depth)}..{SlotLinearText(NAryUpperLimitEquation, Sup, depth)}) {SlotLinearText(NAryOperandEquation, Base, depth)}".TrimEnd(),
-        MathRunKind.Accent => $"{Base}{Accent}",
-        MathRunKind.Bar => BarTop ? $"‾{Base}‾" : $"_{Base}_",
+        MathRunKind.Accent => $"{SlotLinearText(DecoratorBaseEquation, Base, depth)}{Accent}",
+        MathRunKind.Bar => BarTop ? $"‾{SlotLinearText(DecoratorBaseEquation, Base, depth)}‾" : $"_{SlotLinearText(DecoratorBaseEquation, Base, depth)}_",
         MathRunKind.Delimiter => $"{OpenChar}{SlotLinearText(DelimiterContentEquation, Base, depth)}{CloseChar}",
         MathRunKind.Matrix => Matrix?.LinearText ?? string.Empty,
         MathRunKind.FunctionApply => FunctionLinearText(depth),
         MathRunKind.GroupChar => string.Equals(GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase)
-            ? $"{Base}{GroupChr}"
-            : $"{GroupChr}{Base}",
+            ? $"{SlotLinearText(DecoratorBaseEquation, Base, depth)}{GroupChr}"
+            : $"{GroupChr}{SlotLinearText(DecoratorBaseEquation, Base, depth)}",
         _ => Text
     };
 

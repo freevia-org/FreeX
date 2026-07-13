@@ -615,6 +615,89 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_NestedDecoratorBaseSlots_SurfaceSharedSlotPlansAndKeepFlattenedSegments()
+    {
+        var nestedBase = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+
+        var plan = EquationVisualPlanner.Build(new Equation([
+            MathRun.AccentOf(nestedBase, "hat"),
+            MathRun.BarOf(nestedBase, top: false),
+            MathRun.GroupCharOf(nestedBase, "\u23DF", "bot")
+        ]));
+
+        plan.LinearText.Should().Be("a+x^2hat_a+x^2_a+x^2\u23DF");
+        plan.Elements.Select(element => element.Kind).Should().Equal(
+            EquationVisualElementKind.Accent,
+            EquationVisualElementKind.Bar,
+            EquationVisualElementKind.GroupChar);
+
+        var accent = plan.Elements[0];
+        accent.BaseText.Should().Be("a+x^2");
+        accent.AccentBasePlan.Should().NotBeNull();
+        accent.AccentBasePlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Superscript);
+
+        var bar = plan.Elements[1];
+        bar.BaseText.Should().Be("a+x^2");
+        bar.BarBasePlan.Should().NotBeNull();
+        bar.BarBasePlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Superscript);
+
+        var groupChar = plan.Elements[2];
+        groupChar.BaseText.Should().Be("a+x^2");
+        groupChar.GroupCharBasePlan.Should().NotBeNull();
+        groupChar.GroupCharBasePlan!.Segments.Select(segment => segment.Role)
+            .Should().Equal(
+                EquationVisualSegmentRole.Text,
+                EquationVisualSegmentRole.Base,
+                EquationVisualSegmentRole.Superscript);
+
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            "hat",
+            "a+x^2",
+            "a+x^2",
+            EquationVisualPlanner.UnderbarCueText,
+            "a+x^2",
+            "\u23DF");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.AccentMark,
+            EquationVisualSegmentRole.AccentBase,
+            EquationVisualSegmentRole.BarBase,
+            EquationVisualSegmentRole.BarMark,
+            EquationVisualSegmentRole.GroupCharBase,
+            EquationVisualSegmentRole.GroupCharMark);
+        plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
+    }
+
+    [Fact]
+    public void EquationVisualPlanner_NestedDecoratorBaseSlots_AreDepthBounded()
+    {
+        var equation = new Equation();
+        equation.Runs.Add(new MathRun
+        {
+            Kind = MathRunKind.Accent,
+            Base = "x",
+            Accent = "hat",
+            DecoratorBaseEquation = equation
+        });
+
+        var plan = EquationVisualPlanner.Build(equation);
+
+        plan.LinearText.Should().Contain("xhat");
+        plan.LinearText.Length.Should().BeLessThan(100);
+        plan.Elements.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public void EquationVisualPlanner_FunctionApply_BuildsStructuredFunctionApplicationElement()
     {
         var run = MathRun.FunctionApply("sin", "x + y");
