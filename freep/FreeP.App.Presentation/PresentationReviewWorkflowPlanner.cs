@@ -778,6 +778,8 @@ public static class PresentationReviewWorkflowPlanner
         "Remove extra spaces between words or sentences.";
     public const string ProofingRepeatedTerminalPunctuationMessage =
         "Use a single terminal punctuation mark.";
+    public const string ProofingArticleAgreementMessage =
+        "Use the article that matches the next word.";
     public const string SlideTitleMissingSlideMessage =
         "Slide title target slide was not found.";
     public const string SlideTitleEmptyMessage =
@@ -2556,6 +2558,9 @@ public static class PresentationReviewWorkflowPlanner
 
         foreach (var sentenceStart in ScanSentenceStartCapitalization(scope.Text))
             yield return sentenceStart;
+
+        foreach (var articleAgreement in ScanArticleAgreement(scope.Text))
+            yield return articleAgreement;
     }
 
     private static string SuggestProofingReplacement(string text)
@@ -2575,9 +2580,149 @@ public static class PresentationReviewWorkflowPlanner
         if (TryBuildExtraInteriorSpacesReplacement(text, out var extraSpacingReplacement))
             return extraSpacingReplacement;
 
+        if (TryBuildArticleAgreementReplacement(text, out var articleAgreementReplacement))
+            return articleAgreementReplacement;
+
         return TryBuildRepeatedWordReplacement(text, out var repeatedWordReplacement)
             ? repeatedWordReplacement
             : string.Empty;
+    }
+
+    private static IEnumerable<PresentationProofingIssueMatch> ScanArticleAgreement(string text)
+    {
+        ProofingWordSpan? previousWord = null;
+        foreach (var word in EnumerateProofingWords(text))
+        {
+            if (previousWord is { } article &&
+                TryBuildArticleAgreementReplacement(text, article, word, out _))
+            {
+                var length = word.Start + word.Length - article.Start;
+                yield return new PresentationProofingIssueMatch(
+                    article.Start,
+                    length,
+                    text.Substring(article.Start, length),
+                    ProofingArticleAgreementMessage);
+            }
+
+            previousWord = word;
+        }
+    }
+
+    private static bool TryBuildArticleAgreementReplacement(string text, out string replacement)
+    {
+        var words = EnumerateProofingWords(text).ToArray();
+        if (words.Length == 2 &&
+            TryBuildArticleAgreementReplacement(text, words[0], words[1], out replacement))
+        {
+            return true;
+        }
+
+        replacement = string.Empty;
+        return false;
+    }
+
+    private static bool TryBuildArticleAgreementReplacement(
+        string text,
+        ProofingWordSpan article,
+        ProofingWordSpan followingWord,
+        out string replacement)
+    {
+        replacement = string.Empty;
+        if (!IsIndefiniteArticle(article.Text) ||
+            !HasOnlyHorizontalWhitespaceBetween(text, article, followingWord) ||
+            TryGetUrlOrEmailCoreEnd(text, article.Start, out _) ||
+            IsGuardedArticleAgreementFollowingWord(text, followingWord))
+        {
+            return false;
+        }
+
+        var shouldUseAn = ShouldUseAnBefore(followingWord.Text);
+        if (!shouldUseAn.HasValue)
+            return false;
+
+        var desiredArticle = shouldUseAn.Value ? "an" : "a";
+        if (string.Equals(article.Text, desiredArticle, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        replacement = ReplaceTextRange(
+            text,
+            article.Start,
+            article.Length,
+            MatchArticleCasing(article.Text, desiredArticle));
+        return true;
+    }
+
+    private static bool IsIndefiniteArticle(string text)
+        => string.Equals(text, "a", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(text, "an", StringComparison.OrdinalIgnoreCase);
+
+    private static bool HasOnlyHorizontalWhitespaceBetween(
+        string text,
+        ProofingWordSpan first,
+        ProofingWordSpan second)
+    {
+        if (first.Start + first.Length >= second.Start)
+            return false;
+
+        for (var index = first.Start + first.Length; index < second.Start; index++)
+        {
+            if (!IsHorizontalProofingWhitespace(text[index]))
+                return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsGuardedArticleAgreementFollowingWord(string text, ProofingWordSpan word)
+    {
+        if (TryGetUrlOrEmailCoreEnd(text, word.Start, out _))
+            return true;
+
+        return word.Text.Length == 1 ||
+            word.Text.Any(char.IsDigit) ||
+            IsAllCapsProofingTerm(word.Text);
+    }
+
+    private static bool IsAllCapsProofingTerm(string text)
+        => text.Length > 1 &&
+            text.Any(char.IsLetter) &&
+            text.Where(char.IsLetter).All(char.IsUpper);
+
+    private static bool? ShouldUseAnBefore(string word)
+    {
+        if (word.Length == 0)
+            return null;
+
+        var normalized = word.ToLowerInvariant();
+        if (StartsWithAny(normalized, "honest", "honor", "honour", "hour", "heir"))
+            return true;
+
+        if (StartsWithAny(normalized, "user", "use", "using", "used", "useful", "usual", "unit", "union", "unique", "unicorn", "unified", "unilateral", "universal", "university"))
+            return false;
+
+        if (StartsWithAny(normalized, "one", "once"))
+            return false;
+
+        if (StartsWithAny(normalized, "euro", "ewe"))
+            return false;
+
+        return normalized[0] switch
+        {
+            'a' or 'e' or 'i' or 'o' or 'u' => true,
+            'b' or 'c' or 'd' or 'f' or 'g' or 'j' or 'k' or 'l' or 'm' or 'n' or 'p' or 'q' or 'r' or 's' or 't' or 'v' or 'w' or 'x' or 'y' or 'z' => false,
+            _ => null
+        };
+    }
+
+    private static bool StartsWithAny(string text, params string[] prefixes)
+        => prefixes.Any(prefix => text.StartsWith(prefix, StringComparison.Ordinal));
+
+    private static string MatchArticleCasing(string source, string replacement)
+    {
+        if (source.Length > 1 && source.All(char.IsUpper))
+            return replacement.ToUpperInvariant();
+
+        return MatchReplacementCasing(source, replacement);
     }
 
     private static IEnumerable<PresentationProofingIssueMatch> ScanExtraInteriorSpaces(string text)

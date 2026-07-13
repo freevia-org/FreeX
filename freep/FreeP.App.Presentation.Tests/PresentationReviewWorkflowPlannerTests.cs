@@ -3415,6 +3415,112 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildProofingPanePlan_FlagsArticleAgreementAcrossSharedProofingScopes()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "A apple";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Body",
+            Text = "We saw a honest mistake"
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Results table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("An banana") }
+                        }
+                    }
+                }
+            }
+        });
+        slide.Notes = TextBody("Bring an user guide");
+        slide.Comments.Add(new SlideComment
+        {
+            Text = "Choose a orange",
+            Replies =
+            {
+                new SlideCommentReply { Text = "Review an template" }
+            }
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var plan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+
+        execution.Issues.Should().HaveCount(6);
+        execution.Issues.Select(issue => issue.Scope.Kind).Should().Equal(
+            PresentationProofingScopeKind.SlideTitle,
+            PresentationProofingScopeKind.ShapeText,
+            PresentationProofingScopeKind.TableCellText,
+            PresentationProofingScopeKind.SpeakerNotes,
+            PresentationProofingScopeKind.Comment,
+            PresentationProofingScopeKind.CommentReply);
+        execution.Issues.Select(issue => issue.Text).Should().Equal(
+            "A apple",
+            "a honest",
+            "An banana",
+            "an user",
+            "a orange",
+            "an template");
+        execution.Issues.Select(issue => issue.Message).Should().OnlyContain(message =>
+            message == PresentationReviewWorkflowPlanner.ProofingArticleAgreementMessage);
+        plan.Rows.Select(row => row.SuggestedReplacement).Should().Equal(
+            "An apple",
+            "an honest",
+            "A banana",
+            "a user",
+            "an orange",
+            "a template");
+        plan.SelectedRow!.CorrectionAction.IsEnabled.Should().BeTrue();
+
+        var mutation = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            presentation,
+            plan.SelectedRow.Scope,
+            plan.SelectedRow.Start,
+            plan.SelectedRow.Length,
+            plan.SelectedRow.SuggestedReplacement);
+
+        mutation.Should().Be(new PresentationProofingCorrectionMutationPlan(
+            true,
+            plan.SelectedRow.Scope,
+            0,
+            7,
+            "An apple",
+            "An apple",
+            null));
+        slide.Title.Should().Be("An apple");
+    }
+
+    [Fact]
+    public void BuildProofingExecutionPlan_ArticleAgreementAvoidsGuardedAndAmbiguousText()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Correct a user guide and an honest note. Guard an MBA, a URL, an x, a 8, a 11th result, an user@example.com, a https://example.com/apple, a mailto:user@example.com, a university, a one-off result, and a euro plan."
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+
+        execution.Issues.Should().NotContain(issue =>
+            issue.Message == PresentationReviewWorkflowPlanner.ProofingArticleAgreementMessage);
+    }
+
+    [Fact]
     public void BuildProofingExecutionPlan_RepeatedTerminalPunctuationScansAllProofingScopes()
     {
         var presentation = Presentation.CreateEmpty();
