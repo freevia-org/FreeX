@@ -49,8 +49,12 @@ public sealed class ClearContentsCommandTests
     }
 
     [Fact]
-    public void ClearContents_RemovesHyperlinksAndUndoRestoresThem()
+    public void ClearContents_KeepsHyperlinksAndUndoRestoresValue()
     {
+        // R40-commands-clear-delete-3-1: a plain Clear Contents (Delete key / ribbon Clear >
+        // Clear Contents) only clears the value/formula in real Excel -- the hyperlink (and its
+        // style) stays attached to the now-blank cell. Only Clear All / Clear Hyperlinks (or the
+        // cut-source path of a Cut+Paste, covered separately) removes the hyperlink itself.
         var workbook = new Workbook("test");
         var sheet = workbook.AddSheet("Sheet1");
         var address = new CellAddress(sheet.Id, 1, 1);
@@ -69,6 +73,51 @@ public sealed class ClearContentsCommandTests
             "https://example.com");
         var context = new TestCommandContext(workbook);
         var command = new ClearContentsCommand(sheet.Id, new GridRange(address, address));
+
+        command.Apply(context).Success.Should().BeTrue();
+
+        sheet.GetCell(address)!.Value.Should().Be(BlankValue.Instance);
+        sheet.GetCell(address)!.StyleId.Should().Be(style);
+        sheet.Hyperlinks[address].Should().Be("https://example.com");
+        sheet.HyperlinkMetadata[address].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Example site",
+            "https://example.com"));
+
+        command.Revert(context);
+
+        sheet.GetValue(address).Should().Be(new TextValue("Example"));
+        sheet.Hyperlinks[address].Should().Be("https://example.com");
+        sheet.HyperlinkMetadata[address].Should().Be(new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Example site",
+            "https://example.com"));
+    }
+
+    [Fact]
+    public void ClearContents_CutSource_RemovesHyperlinksAndUndoRestoresThem()
+    {
+        // No-regression: the cross-sheet Cut+Paste fallback (isCutSource: true) clears the
+        // *source* range after the destination has already been populated with the moved
+        // hyperlink, so the source's hyperlink must still be removed there.
+        var workbook = new Workbook("test");
+        var sheet = workbook.AddSheet("Sheet1");
+        var address = new CellAddress(sheet.Id, 1, 1);
+        var style = workbook.RegisterStyle(new CellStyle
+        {
+            Underline = true,
+            FontColor = workbook.Theme.ResolveColor(WorkbookThemeColorSlot.Hyperlink)
+        });
+        var cell = Cell.FromValue(new TextValue("Example"));
+        cell.StyleId = style;
+        sheet.SetCell(address, cell);
+        sheet.Hyperlinks[address] = "https://example.com";
+        sheet.HyperlinkMetadata[address] = new HyperlinkMetadata(
+            HyperlinkTargetKind.ExistingFileOrWebPage,
+            "Example site",
+            "https://example.com");
+        var context = new TestCommandContext(workbook);
+        var command = new ClearContentsCommand(sheet.Id, new GridRange(address, address), isCutSource: true);
 
         command.Apply(context).Success.Should().BeTrue();
 

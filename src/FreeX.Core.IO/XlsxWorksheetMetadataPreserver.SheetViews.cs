@@ -31,9 +31,23 @@ internal static partial class XlsxWorksheetMetadataPreserver
             .Select(name => XName.Get(name))
             .ToHashSet();
 
+        // defaultColWidth/defaultRowHeight are modeled directly on Sheet.DefaultColumnWidth/
+        // Sheet.DefaultRowHeight (see XlsxWorksheetDimensionDefaultsWriter.ModeledSheetFormatAttributes)
+        // and are intentionally omitted by the modeled writer whenever the value is at Excel's default
+        // (XlsxWorksheetDimensionDefaultsWriter.IsNonDefaultColumnWidth/IsNonDefaultRowHeight). They
+        // must never be copied back from the stale pre-edit source sheetFormatPr, otherwise resetting
+        // either value to the Excel default is silently reverted on the next full-rebuild save.
+        string[] modeledAttributes = ["defaultColWidth", "defaultRowHeight"];
+        var modeledAttributeNames = modeledAttributes
+            .Select(name => XName.Get(name))
+            .ToHashSet();
+
         var changed = false;
         foreach (var attribute in sourceSheetFormatProperties.Attributes())
         {
+            if (modeledAttributeNames.Contains(attribute.Name))
+                continue;
+
             if (targetSheetFormatProperties.Attribute(attribute.Name) is not null &&
                 !nativeOnlyAttributeNames.Contains(attribute.Name))
             {

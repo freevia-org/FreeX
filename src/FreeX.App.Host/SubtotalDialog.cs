@@ -60,12 +60,21 @@ public sealed class SubtotalDialog : Window
     };
     private readonly CheckBox _replaceBox = new() { IsChecked = true };
     private readonly CheckBox _pageBreakBox = new();
-    private readonly CheckBox _summaryBelowBox = new() { IsChecked = true };
+    private readonly CheckBox _summaryBelowBox = new();
     private bool _isMovingSubtotalColumnFocus;
 
     public SubtotalDialogResult? Result { get; private set; }
 
-    public SubtotalDialog(IEnumerable<SubtotalColumnChoice>? columns = null)
+    /// <summary>
+    /// </summary>
+    /// <param name="columns">The candidate group/subtotal column choices for the active selection.</param>
+    /// <param name="summaryBelowData">
+    /// The initial state of the "Summary below data" checkbox. Real Excel derives this from the
+    /// active sheet's outline direction (<c>Sheet.OutlineSummaryBelow</c>, defaulting to <see langword="true"/>
+    /// when unset) rather than always defaulting to checked, so callers should pass
+    /// <c>sheet.OutlineSummaryBelow ?? true</c> here.
+    /// </param>
+    public SubtotalDialog(IEnumerable<SubtotalColumnChoice>? columns = null, bool summaryBelowData = true)
     {
         var columnChoices = NormalizeColumnChoices(columns);
         _subtotalColumns = columnChoices.Select(static column => new SubtotalColumnSelection(column)).ToList();
@@ -95,6 +104,7 @@ public sealed class SubtotalDialog : Window
         _replaceBox.Content = UiText.Get("Subtotal_ReplaceCurrentSubtotals");
         _pageBreakBox.Content = UiText.Get("Subtotal_PageBreakBetweenGroups");
         _summaryBelowBox.Content = UiText.Get("Subtotal_SummaryBelowData");
+        _summaryBelowBox.IsChecked = summaryBelowData;
         root.Children.Add(_replaceBox);
         root.Children.Add(_pageBreakBox);
         root.Children.Add(_summaryBelowBox);

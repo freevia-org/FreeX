@@ -154,24 +154,24 @@ public partial class PhaseCFinancialTests
     }
 
     [Fact]
-    public void Ipmt_Type1_Period2_EqualsType0Period1DividedBy1PlusRate()
+    public void Ipmt_Type1_Period2_MatchesAnnuityDueAmortization()
     {
-        // Excel identity: IPMT(r,per,n,pv,fv,1) = IPMT(r,per-1,n,pv,fv,0) / (1+r)  for per >= 2.
-        // Excel: =IPMT(0.05/12,2,60,10000,0,1) = IPMT(0.05/12,1,60,10000,0,0) / (1+0.05/12)
-        // = -(10000 * 0.05/12) / 1.004167 ≈ -41.4938
+        // R40-formula-financial-rate-3-1: the "IPMT(r,per,n,pv,fv,1) = IPMT(r,per-1,n,pv,fv,0)/(1+r)"
+        // identity is NOT what Excel does (it mixes the type=0 payment amount into a type=1
+        // schedule). The correct annuity-due amortization (payment first, then interest accrues
+        // on the resulting balance) gives IPMT(0.05/12,2,60,10000,0,1) ≈ -40.8836279262513,
+        // verified against a first-principles period-by-period amortization simulation.
         double type1per2 = Calc("IPMT(0.05/12,2,60,10000,0,1)");
-        double type0per1 = Calc("IPMT(0.05/12,1,60,10000,0,0)");
-        type1per2.Should().BeApproximately(type0per1 / (1 + 0.05 / 12), 1e-9);
+        type1per2.Should().BeApproximately(-40.8836279262513, 1e-6);
     }
 
     [Fact]
-    public void Ipmt_Type1_Period30_EqualsType0Period29DividedBy1PlusRate()
+    public void Ipmt_Type1_Period30_MatchesAnnuityDueAmortization()
     {
-        // Excel identity: IPMT(r,per,n,pv,fv,1) = IPMT(r,per-1,n,pv,fv,0) / (1+r)  for per >= 2.
-        // Excel: =IPMT(0.05/12,30,60,10000,0,1) = IPMT(0.05/12,29,60,10000,0,0) / (1+0.05/12)
+        // R40-formula-financial-rate-3-1: verified against a first-principles amortization
+        // simulation for the type=1 (annuity-due) schedule.
         double type1per30 = Calc("IPMT(0.05/12,30,60,10000,0,1)");
-        double type0per29 = Calc("IPMT(0.05/12,29,60,10000,0,0)");
-        type1per30.Should().BeApproximately(type0per29 / (1 + 0.05 / 12), 1e-9);
+        type1per30.Should().BeApproximately(-22.7275399070496, 1e-6);
     }
 
     [Fact]
@@ -239,16 +239,17 @@ public partial class PhaseCFinancialTests
         cumprinc.Should().BeApproximately(-pv, 0.01);
     }
 
-    // ── P1 regression: IPMT type=1 must divide by (1+rate) ─────────────────
+    // ── R40-formula-financial-rate-3-1: IPMT/PPMT type=1 annuity-due correctness ──
 
     [Fact]
     public void Ipmt_Type1_Per2_Rate10Pct_ExcelValue()
     {
-        // Excel: =IPMT(0.1,2,10,10000,0,1) = IPMT(0.1,1,10,10000,0,0) / 1.1
-        // IPMT(0.1,1,10,10000,0,0) = -(10000 * 0.1) = -1000
-        // So IPMT(0.1,2,10,10000,0,1) = -1000 / 1.1 = -909.090909...
+        // The type=1 payment (10000 at 10%, 10 periods) is discounted by CalcPmt already;
+        // per=2's interest is charged on the balance remaining after the (pure-principal)
+        // period-1 payment, verified against a first-principles amortization simulation:
+        // IPMT(0.1,2,10,10000,0,1) ≈ -852.049641015899.
         double ipmt = Calc("IPMT(0.1,2,10,10000,0,1)");
-        ipmt.Should().BeApproximately(-909.0909091, 1e-6);
+        ipmt.Should().BeApproximately(-852.049641015899, 1e-6);
     }
 
     [Fact]
@@ -265,7 +266,7 @@ public partial class PhaseCFinancialTests
     {
         // Excel identity: PPMT = PMT - IPMT for all periods.
         // PMT(0.1,10,10000,0,1) is the annuity-due payment.
-        // IPMT(0.1,2,10,10000,0,1) = -909.090909...
+        // IPMT(0.1,2,10,10000,0,1) ≈ -852.049641015899 (see Ipmt_Type1_Per2_Rate10Pct_ExcelValue).
         // PPMT should equal PMT(type=1) - IPMT(type=1, per=2).
         double pmt  = Calc("PMT(0.1,10,10000,0,1)");
         double ipmt = Calc("IPMT(0.1,2,10,10000,0,1)");
@@ -274,13 +275,11 @@ public partial class PhaseCFinancialTests
     }
 
     [Fact]
-    public void Ipmt_Type1_Per24_SmallRate_DerivedFromType0()
+    public void Ipmt_Type1_Per24_SmallRate_MatchesAnnuityDueAmortization()
     {
-        // Excel identity: IPMT(r,per,n,pv,fv,1) = IPMT(r,per-1,n,pv,fv,0) / (1+r)
-        // Derive expected from type=0 per=23, then divide by 1.005.
-        double type0per23 = Calc("IPMT(0.005,23,60,50000,0,0)");
-        double expected   = type0per23 / 1.005;
-        double actual     = Calc("IPMT(0.005,24,60,50000,0,1)");
-        actual.Should().BeApproximately(expected, 1e-6);
+        // R40-formula-financial-rate-3-1: verified against a first-principles amortization
+        // simulation for the type=1 (annuity-due) schedule with rate=0.005, nper=60, pv=50000.
+        double actual = Calc("IPMT(0.005,24,60,50000,0,1)");
+        actual.Should().BeApproximately(-162.080551113526, 1e-6);
     }
 }

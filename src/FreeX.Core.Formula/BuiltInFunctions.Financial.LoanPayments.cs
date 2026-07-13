@@ -16,15 +16,22 @@ public static partial class BuiltInFunctions
     private static double CalcIpmt(double rate, double per, double nper, double pv, double fv, int type)
     {
         if (Math.Abs(rate) < 1e-14) return 0.0;
-        // Excel: for type=1 (annuity-due), interest in period 1 is always 0 because
-        // the first payment is made at the start before any interest accrues; for later
-        // periods, the interest equals the type=0 interest of the preceding period.
+        // Excel: for type=1 (annuity-due), payments occur at the START of each period.
+        // The period-1 payment happens before any interest has had a chance to accrue, so
+        // its interest component is always 0. For per >= 2, the interest owed is charged on
+        // the balance that remained outstanding after the previous (type=1) payment - i.e.
+        // the standard annuity-due amortization recursion:
+        //   Owed[1] = pv + pmt                      (payment 1 is pure principal)
+        //   Owed[j] = Owed[j-1]*(1+rate) + pmt       for j = 2..nper
+        // using the type=1 payment amount (already correctly discounted by CalcPmt).
         if (type == 1)
         {
-            if (per == 1) return 0.0;
-            // Excel identity: IPMT(r,per,n,pv,fv,1) = IPMT(r,per-1,n,pv,fv,0) / (1+r)  for per >= 2
-            // The annuity-due payment is discounted back one period relative to ordinary annuity.
-            return CalcIpmt(rate, per - 1, nper, pv, fv, 0) / (1 + rate);
+            if (per <= 1) return 0.0;
+            double pmt1 = CalcPmt(rate, nper, pv, fv, 1);
+            double m = per - 2; // periods of growth since the balance became (pv + pmt1)
+            double growth = Math.Pow(1 + rate, m);
+            double owedBeforeThisPeriod = (pv + pmt1) * growth + pmt1 * (growth - 1) / rate;
+            return -(owedBeforeThisPeriod * rate);
         }
         double pmt = CalcPmt(rate, nper, pv, fv, 0);
         double pvAtPer = pv * Math.Pow(1 + rate, per - 1)

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Linq;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -277,7 +278,10 @@ internal static partial class XlsxPivotTableWriter
             new XAttribute("showHeaders", pivot.ShowFieldHeaders ? "1" : "0"),
             new XAttribute("showDataTips", pivot.ShowContextualTooltips ? "1" : "0"),
             new XAttribute("showMemberPropertyTips", pivot.ShowPropertiesInTooltips ? "1" : "0"),
-            new XAttribute("showDropZones", pivot.ShowClassicLayout ? "1" : "0"),
+            // showDropZones (CT_pivotTableDefinition, default true) is an unrelated flag from
+            // gridDropZones/Classic PivotTable Layout below; FreeX does not model it separately, so it is
+            // left at its schema default (omitted) rather than being conflated with ShowClassicLayout.
+            new XAttribute("fieldListSortAscending", pivot.FieldListSortAscending ? "1" : "0"),
             new XAttribute("mergeItem", pivot.MergeAndCenterLabels ? "1" : "0"),
             new XAttribute("showEmptyRow", pivot.ShowItemsWithNoDataOnRows ? "1" : "0"),
             new XAttribute("showEmptyCol", pivot.ShowItemsWithNoDataOnColumns ? "1" : "0"),
@@ -303,9 +307,13 @@ internal static partial class XlsxPivotTableWriter
             OptionalAttribute("grandTotalCaption", pivot.GrandTotalCaption),
             OptionalAttribute("missingCaption", pivot.MissingCaption),
             OptionalAttribute("errorCaption", pivot.ErrorCaption),
-            // OOXML has no single 'reportLayout' attribute; the layout is expressed through
-            // compact / compactData / outline / outlineData / gridDropZones on CT_pivotTableDefinition.
-            PivotReportLayoutAttributes(pivot.ReportLayout),
+            // OOXML has no single 'reportLayout' attribute; the compact/outline/tabular form is expressed
+            // through compact / compactData / outline / outlineData on CT_pivotTableDefinition. gridDropZones
+            // is a SEPARATE, orthogonal flag -- it is Excel's "Classic PivotTable Layout (enables dragging of
+            // fields in the grid)" checkbox, not derived from the report-layout form -- so it must be driven
+            // purely by ShowClassicLayout, not hardcoded per layout.
+            PivotReportLayoutAttributes(pivot.ReportLayout).Where(a => a.Name.LocalName != "gridDropZones"),
+            new XAttribute("gridDropZones", pivot.ShowClassicLayout ? "1" : "0"),
             new XElement(
                 workbookNs + "location",
                 new XAttribute("ref", (pivot.LastRenderedRange ?? pivot.TargetRange).ToString()),

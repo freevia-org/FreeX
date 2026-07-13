@@ -276,11 +276,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "showSerName", new XAttribute("val", chart.ShowDataLabelSeriesName ? "1" : "0")),
             new XElement(chartNs + "showPercent", new XAttribute("val", chart.ShowDataLabelPercentage && ChartTypeSupport.SupportsPercentageDataLabels(chart.Type) ? "1" : "0")),
             new XElement(chartNs + "showBubbleSize", new XAttribute("val", chart.ShowDataLabelBubbleSize ? "1" : "0")),
-            new XElement(chartNs + "separator",
-                chart.DataLabelSeparator == ChartDataLabelSeparator.NewLine
-                    ? new XAttribute(XNamespace.Xml + "space", "preserve")
-                    : null,
-                ToXlsxDataLabelSeparator(chart.DataLabelSeparator)),
+            ToDataLabelSeparatorXml(chart.DataLabelSeparator, chart.DataLabelSeparatorText, chartNs),
             new XElement(chartNs + "showLeaderLines", new XAttribute("val", chart.ShowDataLabelCallouts ? "1" : "0")),
             ToDataLabelLeaderLinesXml(chart, chartNs, drawingNs));
     }
@@ -329,6 +325,7 @@ internal static partial class XlsxChartXmlWriter
             ChartDataLabelPosition.Center => "ctr",
             ChartDataLabelPosition.InsideEnd => "inEnd",
             ChartDataLabelPosition.OutsideEnd => "outEnd",
+            ChartDataLabelPosition.InsideBase => "inBase",
             _ => "bestFit"
         };
 
@@ -342,10 +339,11 @@ internal static partial class XlsxChartXmlWriter
     ///   - Stacked/percent-stacked bar or column: only ctr is valid.
     ///   - Area (incl. 3-D area), radar, surface, stock: c:dLblPos has no valid value at all — the
     ///     element must be omitted entirely.
-    ///   - Clustered/3-D bar or column: ctr, inEnd, outEnd, inBase are valid; FreeX's model never
-    ///     produces inBase, but bestFit is invalid here too, so it is remapped down to ctr.
+    ///   - Clustered/3-D bar or column: ctr, inEnd, outEnd, inBase are all valid; FreeX's model can
+    ///     produce inBase (<see cref="ChartDataLabelPosition.InsideBase"/>) and passes it through
+    ///     unchanged for this family. bestFit is invalid here, so it is remapped down to ctr.
     ///   - Line, 3-D line, scatter, bubble: only ctr, l, r, t, b are valid; FreeX's model never
-    ///     produces l/r/t/b, so every position (including outEnd/inEnd/bestFit) is gated to ctr.
+    ///     produces l/r/t/b, so every position (including outEnd/inEnd/bestFit/inBase) is gated to ctr.
     /// </summary>
     private static XElement? GatedDataLabelPositionXml(ChartModel chart, XNamespace chartNs)
     {
@@ -363,10 +361,13 @@ internal static partial class XlsxChartXmlWriter
 
         var isPie = chartType is ChartType.Pie or ChartType.ThreeDPie;
         if (isPie)
-            return position; // ctr, inEnd, outEnd, bestFit are all valid for 2-D/3-D pie.
+            // ctr, inEnd, outEnd, bestFit are all valid for 2-D/3-D pie, but inBase is not (pie has
+            // no "base" concept); remap to bestFit, pie's closest equivalent.
+            return position == "inBase" ? "bestFit" : position;
 
         if (chartType == ChartType.Doughnut)
-            return position == "bestFit" ? "ctr" : position;
+            // Doughnut accepts ctr/inEnd/outEnd only; bestFit and inBase both fall back to ctr.
+            return position is "bestFit" or "inBase" ? "ctr" : position;
 
         var hasNoValidPosition = chartType is ChartType.Area or ChartType.ThreeDArea
             or ChartType.Radar or ChartType.Surface or ChartType.ThreeDSurface or ChartType.Stock;
@@ -374,26 +375,54 @@ internal static partial class XlsxChartXmlWriter
             return null;
 
         // Line/3-D line, scatter, bubble only accept ctr, l, r, t, b — FreeX's model never produces
-        // l/r/t/b, and inEnd/outEnd/bestFit are all invalid here (Excel rejects the chart part with a
-        // repair prompt), so gate every position down to ctr for this family.
+        // l/r/t/b, and inEnd/outEnd/bestFit/inBase are all invalid here (Excel rejects the chart part
+        // with a repair prompt), so gate every position down to ctr for this family.
         var isLineScatterOrBubble = chartType is ChartType.Line or ChartType.ThreeDLine
             or ChartType.Scatter or ChartType.Bubble;
         if (isLineScatterOrBubble)
             return "ctr";
 
         // Clustered/3-D bar/column and everything else FreeX can author: bestFit is not a valid value
-        // outside pie, so fall back to ctr.
+        // outside pie, so fall back to ctr. inBase IS valid for this family, so it passes through
+        // unchanged.
         return position == "bestFit" ? "ctr" : position;
     }
 
-    private static string ToXlsxDataLabelSeparator(ChartDataLabelSeparator separator) =>
+    private static string ToXlsxDataLabelSeparator(ChartDataLabelSeparator separator, string? customText = null) =>
         separator switch
         {
             ChartDataLabelSeparator.Semicolon => "; ",
             ChartDataLabelSeparator.NewLine => "\n",
             ChartDataLabelSeparator.Space => " ",
+            // A literal separator string this model has no dedicated member for (e.g. Excel's
+            // "Period" choice); re-emit the raw text captured by the reader. Falls back to the
+            // default comma separator if somehow captured without its raw text.
+            ChartDataLabelSeparator.Custom => customText ?? ", ",
             _ => ", "
         };
+
+    /// <summary>
+    /// True when the emitted separator text needs <c>xml:space="preserve"</c> to advertise that its
+    /// leading/trailing/newline whitespace is significant. Matches prior behavior for the fixed enum
+    /// members (only NewLine ever set it) and extends the same reasoning to a Custom literal whose
+    /// captured text happens to start/end with whitespace or contain a newline.
+    /// </summary>
+    private static bool RequiresDataLabelSeparatorSpacePreserve(ChartDataLabelSeparator separator, string separatorText) =>
+        separator == ChartDataLabelSeparator.NewLine ||
+        (separator == ChartDataLabelSeparator.Custom &&
+            separatorText.Length > 0 &&
+            (char.IsWhiteSpace(separatorText[0]) || char.IsWhiteSpace(separatorText[^1]) || separatorText.Contains('\n')));
+
+    private static XElement ToDataLabelSeparatorXml(
+        ChartDataLabelSeparator separator, string? customText, XNamespace chartNs)
+    {
+        var value = ToXlsxDataLabelSeparator(separator, customText);
+        return new XElement(chartNs + "separator",
+            RequiresDataLabelSeparatorSpacePreserve(separator, value)
+                ? new XAttribute(XNamespace.Xml + "space", "preserve")
+                : null,
+            value);
+    }
 
     private static string ToXlsxLegendPosition(ChartLegendPosition position) =>
         position switch

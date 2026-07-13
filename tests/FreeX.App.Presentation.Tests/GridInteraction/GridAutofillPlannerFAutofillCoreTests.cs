@@ -148,8 +148,11 @@ public sealed class GridAutofillPlannerFAutofillCoreTests
     }
 
     [Fact]
-    public void CalculateDoubleClickFillRange_ReturnsNullForMultiRowSelection()
+    public void CalculateDoubleClickFillRange_FillsMultiRowSelectionToAdjacentExtent()
     {
+        // Matches Excel: double-clicking the fill handle of a multi-row (pattern) selection
+        // continues the fill immediately below the selection, down to the adjacent column's
+        // populated extent -- it is not restricted to single-row selections.
         var sheet = SheetId.New();
         var source = new GridRange(
             new CellAddress(sheet, 1, 1),
@@ -157,6 +160,8 @@ public sealed class GridAutofillPlannerFAutofillCoreTests
 
         GridAutofillPlanner.CalculateDoubleClickFillRange(source, adjacentColumnLastPopulatedRow: 10)
             .Should()
-            .BeNull();
+            .Be(new GridRange(
+                new CellAddress(sheet, 3, 1),
+                new CellAddress(sheet, 10, 1)));
     }
 }

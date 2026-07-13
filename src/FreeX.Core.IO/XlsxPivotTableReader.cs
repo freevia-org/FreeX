@@ -210,7 +210,7 @@ internal static partial class XlsxPivotTableReader
         IReadOnlyDictionary<int, string> numberFormatCatalog,
         out PendingPivotTableModel pivotTable)
     {
-        pivotTable = new PendingPivotTableModel("", 0, "", "", "", pivotPath, null, null, null, true, 1, 1, 1, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, true, true, true, true, false, false, null, null, null, null, null, null, [], [], [], [], [], [], [], [], []);
+        pivotTable = new PendingPivotTableModel("", 0, "", "", "", pivotPath, null, null, null, true, 1, 1, 1, false, PivotSubtotalPlacement.Bottom, true, true, true, true, false, PivotReportLayout.Tabular, 1, "PivotStyleLight16", true, true, false, false, true, true, true, false, false, false, false, false, 0, true, true, false, true, true, true, false, true, true, true, true, true, true, false, false, null, null, null, null, null, null, false, [], [], [], [], [], [], [], [], []);
         var root = pivotXml.Root;
         if (root is null)
             return false;
@@ -295,7 +295,10 @@ internal static partial class XlsxPivotTableReader
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showHeaders", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showDataTips", defaultValue: true),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showMemberPropertyTips", defaultValue: true),
-            XlsxXmlAttributeReader.ReadBoolAttribute(root, "showDropZones"),
+            // Real Excel keys the 'Classic PivotTable Layout (enables dragging of fields in the grid)'
+            // checkbox off gridDropZones (default false), NOT showDropZones (an unrelated, unmodeled flag
+            // that defaults to true).
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "gridDropZones"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "mergeItem"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showEmptyRow"),
             XlsxXmlAttributeReader.ReadBoolAttribute(root, "showEmptyCol"),
@@ -328,6 +331,7 @@ internal static partial class XlsxPivotTableReader
             root.Attribute("grandTotalCaption")?.Value,
             root.Attribute("missingCaption")?.Value,
             root.Attribute("errorCaption")?.Value,
+            XlsxXmlAttributeReader.ReadBoolAttribute(root, "fieldListSortAscending"),
             ReadPivotFieldIndexes(root.Element(workbookNs + "rowFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
             ReadPivotFieldIndexes(root.Element(workbookNs + "colFields"), workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),
             ReadPivotPageFields(root.Element(workbookNs + "pageFields"), pivotCache, workbookNs, nativeFieldSelections, nativeFieldGroups, nativeFieldMetadata),

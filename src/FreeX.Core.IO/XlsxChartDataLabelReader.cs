@@ -112,7 +112,13 @@ internal static class XlsxChartDataLabelReader
                 || chart.ShowDataLabelBubbleSize
                 || chart.ShowDataLabelLegendKey;
             var separator = dataLabels.Element(ChartNs + "separator");
-            chart.DataLabelSeparator = FromXlsxDataLabelSeparator(separator?.Attribute("val")?.Value ?? separator?.Value);
+            var separatorLiteral = separator?.Attribute("val")?.Value ?? separator?.Value;
+            chart.DataLabelSeparator = FromXlsxDataLabelSeparator(separatorLiteral);
+            // Custom (e.g. "Period") has no dedicated enum representation; preserve the literal
+            // text out-of-band so the writer can re-emit it verbatim instead of coercing to Comma.
+            chart.DataLabelSeparatorText = chart.DataLabelSeparator == ChartDataLabelSeparator.Custom
+                ? separatorLiteral
+                : null;
             ApplyDataLabelShapeProperties(dataLabels.Element(ChartNs + "spPr"), chart);
             ApplyDataLabelTextProperties(dataLabels.Element(ChartNs + "txPr"), chart);
             ApplyDataLabelLeaderLineProperties(dataLabels.Element(ChartNs + "leaderLines")?.Element(ChartNs + "spPr"), chart);
@@ -345,6 +351,8 @@ internal static class XlsxChartDataLabelReader
         var style = ReadDataLabelStyle(label);
         var numberFormat = label.Element(ChartNs + "numFmt");
         var separator = label.Element(ChartNs + "separator");
+        var layout = XlsxChartMetadataReader.ReadManualLayout(label.Element(ChartNs + "layout"));
+        var customText = label.Element(ChartNs + "tx");
 
         return new ChartPointDataLabelFormat(
             seriesIndex,
@@ -369,7 +377,9 @@ internal static class XlsxChartDataLabelReader
             ReadNullableBool(label.Element(ChartNs + "showBubbleSize")?.Attribute("val")?.Value),
             numberFormat?.Attribute("formatCode")?.Value,
             ReadNullableBool(numberFormat?.Attribute("sourceLinked")?.Value),
-            separator?.Attribute("val")?.Value ?? separator?.Value);
+            separator?.Attribute("val")?.Value ?? separator?.Value,
+            layout,
+            customText?.ToString(SaveOptions.DisableFormatting));
     }
 
     private static DataLabelStyle ReadDataLabelStyle(XElement label)
@@ -454,7 +464,9 @@ internal static class XlsxChartDataLabelReader
         || format.ShowBubbleSize is not null
         || !string.IsNullOrEmpty(format.NumberFormatCode)
         || format.NumberFormatSourceLinked is not null
-        || format.SeparatorText is not null;
+        || format.SeparatorText is not null
+        || format.Layout is not null
+        || !string.IsNullOrEmpty(format.CustomTextXml);
 
     private static bool HasSeriesDataLabelMetadata(ChartSeriesDataLabelFormat format) =>
         format.FillColor is not null
@@ -492,6 +504,7 @@ internal static class XlsxChartDataLabelReader
             "ctr" => ChartDataLabelPosition.Center,
             "inEnd" => ChartDataLabelPosition.InsideEnd,
             "outEnd" => ChartDataLabelPosition.OutsideEnd,
+            "inBase" => ChartDataLabelPosition.InsideBase,
             _ => ChartDataLabelPosition.BestFit
         };
 
@@ -504,16 +517,24 @@ internal static class XlsxChartDataLabelReader
         };
 
     private static ChartDataLabelSeparator FromXlsxDataLabelSeparator(string? value) =>
-        value is not null && value.Contains('\n')
-            ? ChartDataLabelSeparator.NewLine
-            : value switch
-            {
-                "semicolon" => ChartDataLabelSeparator.Semicolon,
-                "newLine" => ChartDataLabelSeparator.NewLine,
-                "space" => ChartDataLabelSeparator.Space,
-                "comma" => ChartDataLabelSeparator.Comma,
-                "; " or ";" => ChartDataLabelSeparator.Semicolon,
-                " " => ChartDataLabelSeparator.Space,
-                _ => ChartDataLabelSeparator.Comma
-            };
+        value is null
+            // The element itself (or the chart-wide default when absent) means Excel's own
+            // default separator, which is a comma.
+            ? ChartDataLabelSeparator.Comma
+            : value.Contains('\n')
+                ? ChartDataLabelSeparator.NewLine
+                : value switch
+                {
+                    "semicolon" => ChartDataLabelSeparator.Semicolon,
+                    "newLine" => ChartDataLabelSeparator.NewLine,
+                    "space" => ChartDataLabelSeparator.Space,
+                    "comma" => ChartDataLabelSeparator.Comma,
+                    "; " or ";" => ChartDataLabelSeparator.Semicolon,
+                    " " => ChartDataLabelSeparator.Space,
+                    "," or ", " => ChartDataLabelSeparator.Comma,
+                    // Any other literal (e.g. Excel's "Period" separator, ". ") has no dedicated
+                    // member; the raw text is preserved separately (see FromXlsxDataLabelSeparator
+                    // callers) so it can be re-emitted verbatim instead of silently becoming Comma.
+                    _ => ChartDataLabelSeparator.Custom
+                };
 }

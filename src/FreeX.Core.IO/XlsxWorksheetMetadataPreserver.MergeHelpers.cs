@@ -239,20 +239,47 @@ internal static partial class XlsxWorksheetMetadataPreserver
         return changed;
     }
 
+    // "codeName" is modeled directly on Sheet.CodeName (see
+    // XlsxWorksheetLayoutMetadataReader.IsModeledSheetPropertiesAttribute /
+    // XlsxWorksheetSheetPropertiesMetadataWriter.ApplyNativeAttributes) and must never be copied back
+    // from the stale pre-edit source sheetPr -- otherwise clearing Sheet.CodeName is silently reverted
+    // because XlsxWorksheetCodeNameWriter only ever writes a non-blank code name and never clears one.
+    private static readonly IReadOnlyCollection<XName> SheetPropertiesModeledMergeAttributes = ["codeName"];
+
+    // pageSetUpPr (fitToPage/autoPageBreaks -> Sheet.FitToPage/Sheet.AutoPageBreaks) and outlinePr
+    // (summaryBelow/summaryRight/showOutlineSymbols/applyStyles -> Sheet.OutlineSummaryBelow/
+    // OutlineSummaryRight/ShowOutlineSymbols/ApplyOutlineStyles) are entirely modeled -- every
+    // attribute either element carries is governed by the Sheet model and (re)written by
+    // XlsxWorksheetPageSetupMetadataWriter.ApplyPageSetupProperties/ApplyOutlineProperties, which
+    // intentionally omits the element when all of its modeled flags are null/default. Wholesale-cloning
+    // either element back from the stale source when the live writer omitted it would silently
+    // resurrect a value the user just cleared, so both children are dropped from the merge entirely.
+    private static readonly string[] SheetPropertiesModeledChildElementNames = ["pageSetUpPr", "outlinePr"];
+
     private static bool MergeWorksheetSheetProperties(XElement? sourceSheetProperties, XElement targetRoot, XNamespace workbookNs)
     {
         if (sourceSheetProperties is null)
             return false;
 
+        var filteredSourceSheetProperties = new XElement(sourceSheetProperties);
+        foreach (var attributeName in SheetPropertiesModeledMergeAttributes)
+            filteredSourceSheetProperties.Attribute(attributeName)?.Remove();
+        foreach (var childName in SheetPropertiesModeledChildElementNames)
+            filteredSourceSheetProperties.Elements(workbookNs + childName).Remove();
+
         var targetSheetProperties = targetRoot.Element(workbookNs + "sheetPr");
         if (targetSheetProperties is null)
         {
-            targetRoot.AddFirst(new XElement(sourceSheetProperties));
+            if (!filteredSourceSheetProperties.HasAttributes && !filteredSourceSheetProperties.HasElements)
+                return false;
+
+            targetRoot.AddFirst(filteredSourceSheetProperties);
             return true;
         }
 
         return XlsxNativeXmlMerger.MergeElementNativeAttributesAndChildren(
-            sourceSheetProperties,
-            targetSheetProperties);
+            filteredSourceSheetProperties,
+            targetSheetProperties,
+            SheetPropertiesModeledMergeAttributes);
     }
 }

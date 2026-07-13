@@ -66,6 +66,66 @@ public sealed class GroupColumnsCommand : IWorkbookCommand
 }
 
 /// <summary>
+/// Resolves the single contiguous column-outline group nearest a selection, so ribbon
+/// Hide/Show-Detail commands can scope themselves to "the group at the cursor" (matching Excel)
+/// instead of acting on the whole sheet. Mirrors <see cref="RowOutlineGroupScope"/> for columns
+/// (R40-commands-group-outline-3-2).
+/// </summary>
+internal static class ColumnOutlineGroupScope
+{
+    /// <summary>
+    /// Given a selection [selectionStart, selectionEnd], finds the innermost contiguous run of
+    /// columns sharing an outline level that the selection sits inside (or immediately borders, for
+    /// the case where the selection is on the group's summary/toggle column). Returns null when the
+    /// selection isn't associated with any group.
+    /// </summary>
+    public static (uint Start, uint End, int Level)? Resolve(
+        IReadOnlyDictionary<uint, int> levels, uint selectionStart, uint selectionEnd)
+    {
+        uint anchor = 0;
+        var found = false;
+        for (var c = selectionStart; c <= selectionEnd; c++)
+        {
+            if (levels.TryGetValue(c, out var lvl) && lvl > 0)
+            {
+                anchor = c;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found)
+        {
+            if (selectionStart > 0 && levels.TryGetValue(selectionStart - 1, out var before) && before > 0)
+            {
+                anchor = selectionStart - 1;
+                found = true;
+            }
+            else if (levels.TryGetValue(selectionEnd + 1, out var after) && after > 0)
+            {
+                anchor = selectionEnd + 1;
+                found = true;
+            }
+        }
+
+        if (!found)
+            return null;
+
+        var level = levels[anchor];
+
+        var start = anchor;
+        while (start > 0 && levels.TryGetValue(start - 1, out var prevLevel) && prevLevel >= level)
+            start--;
+
+        var end = anchor;
+        while (levels.TryGetValue(end + 1, out var nextLevel) && nextLevel >= level)
+            end++;
+
+        return (start, end, level);
+    }
+}
+
+/// <summary>
 /// Computes the visible outline "anchor" (summary) column for a contiguous run of collapsed detail
 /// columns, matching Excel's own placement per <c>outlinePr/@summaryRight</c>: the column just past
 /// the run in the summary direction (to the right by default; to the left when
@@ -113,20 +173,28 @@ internal static class ColumnGroupAnchorHelper
         summaryRight ? runEnd + 1 : (runStart > 1 ? runStart - 1 : null);
 }
 
-/// <summary>Collapses (hides) all columns whose outline level is >= the given level.</summary>
+/// <summary>
+/// Collapses (hides) columns whose outline level is >= the given level. When a selection is
+/// supplied, only the specific contiguous group at that selection is affected (matching Excel);
+/// omitting the selection preserves the legacy sheet-wide behavior for existing callers.
+/// </summary>
 public sealed class CollapseColGroupCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly int _level;
+    private readonly uint? _selectionStart;
+    private readonly uint? _selectionEnd;
     private HashSet<uint>? _newly;
     private HashSet<uint>? _newlyAnchored;
 
     public string Label => "Collapse Column Group";
 
-    public CollapseColGroupCommand(SheetId sheetId, int level)
+    public CollapseColGroupCommand(SheetId sheetId, int level, uint? selectionStart = null, uint? selectionEnd = null)
     {
         _sheetId = sheetId;
         _level   = level;
+        _selectionStart = selectionStart;
+        _selectionEnd   = selectionEnd ?? selectionStart;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -137,6 +205,31 @@ public sealed class CollapseColGroupCommand : IWorkbookCommand
 
         _newly = [];
         _newlyAnchored = [];
+        var summaryRight = sheet.OutlineSummaryRight ?? true;
+
+        if (_selectionStart is { } selStart)
+        {
+            if (ColumnOutlineGroupScope.Resolve(sheet.ColOutlineLevels, selStart, _selectionEnd ?? selStart) is not { } group)
+                return new CommandOutcome(true);
+
+            foreach (var (col, lvl) in sheet.ColOutlineLevels)
+            {
+                if (col < group.Start || col > group.End || lvl < group.Level)
+                    continue;
+                if (sheet.GroupHiddenCols.Contains(col))
+                    continue;
+                sheet.GroupHiddenCols.Add(col);
+                _newly.Add(col);
+            }
+
+            if (ColumnGroupAnchorHelper.ComputeAnchor(summaryRight, group.Start, group.End) is { } anchor &&
+                sheet.CollapsedAnchorCols.Add(anchor))
+            {
+                _newlyAnchored.Add(anchor);
+            }
+            return new CommandOutcome(true);
+        }
+
         foreach (var (col, lvl) in sheet.ColOutlineLevels)
         {
             if (lvl >= _level && !sheet.GroupHiddenCols.Contains(col))
@@ -149,7 +242,6 @@ public sealed class CollapseColGroupCommand : IWorkbookCommand
         // Anchor placement is based on every column currently qualifying at this level (not just
         // the ones newly hidden by this call), so a repeated/partial collapse still resolves the
         // same physical anchor position for each contiguous detail run.
-        var summaryRight = sheet.OutlineSummaryRight ?? true;
         var qualifyingCols = new List<uint>();
         foreach (var (col, lvl) in sheet.ColOutlineLevels)
         {
@@ -179,20 +271,28 @@ public sealed class CollapseColGroupCommand : IWorkbookCommand
     }
 }
 
-/// <summary>Expands (shows) all columns whose outline level is >= the given level.</summary>
+/// <summary>
+/// Expands (shows) columns whose outline level is >= the given level. When a selection is
+/// supplied, only the specific contiguous group at that selection is affected (matching Excel);
+/// omitting the selection preserves the legacy sheet-wide behavior for existing callers.
+/// </summary>
 public sealed class ExpandColGroupCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly int _level;
+    private readonly uint? _selectionStart;
+    private readonly uint? _selectionEnd;
     private HashSet<uint>? _removed;
     private HashSet<uint>? _removedAnchors;
 
     public string Label => "Expand Column Group";
 
-    public ExpandColGroupCommand(SheetId sheetId, int level)
+    public ExpandColGroupCommand(SheetId sheetId, int level, uint? selectionStart = null, uint? selectionEnd = null)
     {
         _sheetId = sheetId;
         _level   = level;
+        _selectionStart = selectionStart;
+        _selectionEnd   = selectionEnd ?? selectionStart;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -203,6 +303,34 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
 
         _removed = [];
         _removedAnchors = [];
+        var summaryRight = sheet.OutlineSummaryRight ?? true;
+
+        if (_selectionStart is { } selStart)
+        {
+            if (ColumnOutlineGroupScope.Resolve(sheet.ColOutlineLevels, selStart, _selectionEnd ?? selStart) is not { } group)
+                return new CommandOutcome(true);
+
+            foreach (var col in sheet.GroupHiddenCols.ToList())
+            {
+                if (col < group.Start || col > group.End)
+                    continue;
+                if (!sheet.ColOutlineLevels.TryGetValue(col, out var lvl) || lvl < group.Level)
+                    continue;
+                sheet.GroupHiddenCols.Remove(col);
+                _removed.Add(col);
+            }
+
+            // The group's detail columns are visible again, so its anchor no longer summarizes a
+            // collapsed run -- clear the stale collapsed marker so a later save doesn't re-stamp
+            // collapsed="1" on a column that has nothing left to summarize.
+            if (ColumnGroupAnchorHelper.ComputeAnchor(summaryRight, group.Start, group.End) is { } anchor &&
+                sheet.CollapsedAnchorCols.Remove(anchor))
+            {
+                _removedAnchors.Add(anchor);
+            }
+            return new CommandOutcome(true);
+        }
+
         foreach (var col in sheet.GroupHiddenCols.ToList())
         {
             if (sheet.ColOutlineLevels.TryGetValue(col, out var lvl) && lvl >= _level)
@@ -215,7 +343,6 @@ public sealed class ExpandColGroupCommand : IWorkbookCommand
         // This call just un-hid every column at this level sheet-wide, so -- mirroring
         // CollapseColGroupCommand's placement over the same qualifying-column set -- none of those
         // runs have any hidden detail left to summarize; clear each run's anchor marker.
-        var summaryRight = sheet.OutlineSummaryRight ?? true;
         var qualifyingCols = new List<uint>();
         foreach (var (col, lvl) in sheet.ColOutlineLevels)
         {

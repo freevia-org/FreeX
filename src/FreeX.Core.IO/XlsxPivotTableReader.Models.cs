@@ -67,7 +67,8 @@ internal static partial class XlsxPivotTableReader
             DataCaption = string.IsNullOrWhiteSpace(pending.DataCaption) ? null : pending.DataCaption,
             GrandTotalCaption = string.IsNullOrWhiteSpace(pending.GrandTotalCaption) ? null : pending.GrandTotalCaption,
             MissingCaption = string.IsNullOrWhiteSpace(pending.MissingCaption) ? null : pending.MissingCaption,
-            ErrorCaption = string.IsNullOrWhiteSpace(pending.ErrorCaption) ? null : pending.ErrorCaption
+            ErrorCaption = string.IsNullOrWhiteSpace(pending.ErrorCaption) ? null : pending.ErrorCaption,
+            FieldListSortAscending = pending.FieldListSortAscending
         };
 
         pivotTable.RowFields.AddRange(pending.RowFields);
@@ -175,6 +176,7 @@ internal static partial class XlsxPivotTableReader
         string? GrandTotalCaption,
         string? MissingCaption,
         string? ErrorCaption,
+        bool FieldListSortAscending,
         IReadOnlyList<PivotFieldModel> RowFields,
         IReadOnlyList<PivotFieldModel> ColumnFields,
         IReadOnlyList<PivotFieldModel> PageFields,

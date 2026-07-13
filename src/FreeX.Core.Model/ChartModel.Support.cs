@@ -37,9 +37,16 @@ public enum ChartType
 
 public enum ChartLegendPosition { None, Left, Right, Top, Bottom }
 
-public enum ChartDataLabelPosition { BestFit, Center, InsideEnd, OutsideEnd }
+public enum ChartDataLabelPosition { BestFit, Center, InsideEnd, OutsideEnd, InsideBase }
 
-public enum ChartDataLabelSeparator { Comma, Semicolon, NewLine, Space }
+/// <summary>
+/// <see cref="Custom"/> means the source file used a literal separator string (e.g. Excel's
+/// "Period" data-label separator choice) that doesn't map to any of the other members; the raw
+/// text itself is preserved out-of-band (see <see cref="ChartModel.DataLabelSeparatorText"/> for
+/// the chart-wide default, or <c>SeparatorText</c> on the per-series/per-point override records,
+/// which already store the literal text directly).
+/// </summary>
+public enum ChartDataLabelSeparator { Comma, Semicolon, NewLine, Space, Custom }
 
 public enum ChartDataLabelNumberFormat { General, Number, Currency, Percent }
 
@@ -350,7 +357,15 @@ public sealed record ChartPointDataLabelFormat(
     bool? ShowBubbleSize = null,
     string? NumberFormatCode = null,
     bool? NumberFormatSourceLinked = null,
-    string? SeparatorText = null)
+    string? SeparatorText = null,
+    // Per-point manual layout (e.g. a data label dragged away from its computed position), read/
+    // written from the <c:dLbl>'s own <c:layout> child. Distinct from any chart/plot-area/title/
+    // legend layout - this only ever applies to this one point.
+    ChartManualLayoutModel? Layout = null,
+    // Verbatim <c:tx> XML (namespace-qualified) for a per-point custom label-text override
+    // (Excel's "type over the label text" feature). Preserved verbatim rather than modeled as
+    // plain text so multi-run rich formatting inside the override survives round-trip.
+    string? CustomTextXml = null)
 {
     public CellColor? ResolveFillColor(WorkbookTheme theme) =>
         FillThemeColor?.Resolve(theme) ?? FillColor;

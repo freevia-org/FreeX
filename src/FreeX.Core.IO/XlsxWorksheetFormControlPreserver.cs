@@ -17,8 +17,14 @@ internal static class XlsxWorksheetFormControlPreserver
 {
     private static readonly XNamespace McNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
     private static readonly XNamespace DrawingNs = "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing";
+    private static readonly XNamespace VmlNs = "urn:schemas-microsoft-com:vml";
+    private static readonly XNamespace ExcelVmlNs = "urn:schemas-microsoft-com:office:excel";
     private const string VmlDrawingRelationshipType =
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/vmlDrawing";
+
+    // Mirrors XlsxFormControlMapper.EmusPerPixel: the VML x:ClientData/x:Anchor stores its
+    // colOff/rowOff sub-cell offsets in pixels, while FormControlModel.AnchorOffsets carries EMU.
+    private const long EmusPerPixel = 9525;
 
     public static void Preserve(
         ZipArchive sourceArchive,
@@ -59,7 +65,18 @@ internal static class XlsxWorksheetFormControlPreserver
             // control's current state rather than silently reverting to its file-load state.
             var sheet = workbook?.GetSheet(sheetName);
             if (sheet is not null)
+            {
                 WriteControlStateToCtrlProps(sourceArchive, targetArchive, context, sourceWorksheetPath, sheet);
+                // R40-io-vml-shape-geometry-3-1: a row/column shift moves FormControlModel.Anchor in
+                // memory and ApplyControlAnchorsToClone rewrites the modern controlPr/anchor to match,
+                // but the VML shape (copied byte-for-byte by XlsxPackageMetadataMerger.
+                // CopyUnknownPackageParts, well before this preserver runs) is never touched, leaving
+                // legacy Form Controls — which Excel still renders via the VML layer, not DrawingML —
+                // visually stuck at their pre-shift position. Sync the VML shape's cell-relative
+                // ClientData Anchor to the live anchor/offsets regardless of whether the modern
+                // controls block below is being injected or already survived byte-identical.
+                SyncFormControlVmlAnchors(sourceArchive, targetArchive, context, sourceWorksheetPath, sheet);
+            }
 
             // If a controls block already survived (clean byte-copy path), leave it alone.
             if (FindControlsContainer(targetRoot, context.WorkbookNs) is not null)
@@ -167,6 +184,157 @@ internal static class XlsxWorksheetFormControlPreserver
             XlsxPackageXmlEditor.ReplaceXml(targetArchive, ctrlPropPath, ctrlPropXml);
         }
     }
+
+    /// <summary>
+    /// Rewrites each form control's VML shape <c>&lt;x:ClientData&gt;&lt;x:Anchor&gt;</c> (the
+    /// cell-relative, pixel-offset geometry legacy VML-rendered Form Controls are actually
+    /// repositioned from — see <see cref="XlsxFormControlMapper.ParseVmlAnchor"/>, the mirror-image
+    /// reader) from the live, possibly row/column-shifted <see cref="FormControlModel.Anchor"/>/
+    /// <see cref="FormControlModel.AnchorOffsets"/>, matched by <c>shapeId</c> the same way
+    /// <see cref="ApplyControlAnchorsToClone"/> matches the modern <c>controlPr/anchor</c>. The VML
+    /// part itself was already byte-copied into <paramref name="targetArchive"/> verbatim by
+    /// <see cref="XlsxPackageMetadataMerger.CopyUnknownPackageParts"/> before this preserver runs, so
+    /// without this rewrite a shifted control's stale VML anchor leaves it rendered at its pre-shift
+    /// position in Excel even though the modern anchor was correctly updated.
+    /// </summary>
+    private static void SyncFormControlVmlAnchors(
+        ZipArchive sourceArchive,
+        ZipArchive targetArchive,
+        XlsxSourcePackagePreservationContext context,
+        string sourceWorksheetPath,
+        Sheet sheet)
+    {
+        var controlsByShapeId = sheet.FormControls
+            .Where(c => c.ShapeId is not null && c.Anchor is not null)
+            .ToDictionary(c => c.ShapeId!.Value, c => c);
+        if (controlsByShapeId.Count == 0)
+            return;
+
+        var vmlPath = ResolveSourceLegacyDrawingVmlPath(sourceArchive, context, sourceWorksheetPath);
+        if (vmlPath is null)
+            return;
+
+        var targetVmlEntry = targetArchive.GetEntry(vmlPath);
+        if (targetVmlEntry is null)
+            return;
+
+        XDocument vmlXml;
+        try
+        {
+            vmlXml = XlsxPackageXmlEditor.LoadXml(targetVmlEntry);
+        }
+        catch
+        {
+            return;
+        }
+
+        var root = vmlXml.Root;
+        if (root is null)
+            return;
+
+        var changed = false;
+        foreach (var shape in root.Descendants(VmlNs + "shape"))
+        {
+            var id = shape.Attribute("id")?.Value;
+            if (string.IsNullOrEmpty(id))
+                continue;
+
+            FormControlModel? control = null;
+            foreach (var (shapeId, candidate) in controlsByShapeId)
+            {
+                if (id.EndsWith("s" + shapeId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal))
+                {
+                    control = candidate;
+                    break;
+                }
+            }
+
+            if (control is null)
+                continue;
+
+            ApplyAnchorToVmlShape(shape, control.Anchor!.Value, control.AnchorOffsets);
+            changed = true;
+        }
+
+        if (changed)
+            XlsxPackageXmlEditor.ReplaceXml(targetArchive, vmlPath, vmlXml);
+    }
+
+    /// <summary>
+    /// Resolves the worksheet's legacy VML drawing part path from its source <c>legacyDrawing</c>
+    /// marker's <c>r:id</c>, mirroring <see cref="InjectFormControlLegacyDrawing"/>'s resolution but
+    /// usable regardless of whether the target already carries a <c>legacyDrawing</c> marker.
+    /// </summary>
+    private static string? ResolveSourceLegacyDrawingVmlPath(
+        ZipArchive sourceArchive,
+        XlsxSourcePackagePreservationContext context,
+        string sourceWorksheetPath)
+    {
+        var sourceWorksheetXml = context.GetSourceWorksheetXml(sourceArchive, sourceWorksheetPath);
+        var sourceRoot = sourceWorksheetXml?.Root;
+        var sourceMarker = sourceRoot?.Element(context.WorkbookNs + "legacyDrawing");
+        var sourceRelId = sourceMarker?.Attribute(context.RelNs + "id")?.Value;
+        if (string.IsNullOrWhiteSpace(sourceRelId))
+            return null;
+
+        var sourceRelsPath = XlsxPackagePath.GetRelationshipPartPath(sourceWorksheetPath);
+        var sourceRels = XlsxRelationshipReader.LoadTargets(
+            sourceArchive,
+            sourceRelsPath,
+            sourceWorksheetPath,
+            context.PackageRelNs);
+
+        return sourceRels.TryGetValue(sourceRelId, out var vmlPath) && !string.IsNullOrWhiteSpace(vmlPath)
+            ? vmlPath
+            : null;
+    }
+
+    /// <summary>
+    /// Writes a live <see cref="FormControlModel.Anchor"/>/<see cref="FormControlModel.AnchorOffsets"/>
+    /// pair into a VML shape's <c>&lt;x:ClientData&gt;&lt;x:Anchor&gt;</c> text, using the same
+    /// comma-separated <c>leftCol,leftColOff,topRow,topRowOff,rightCol,rightColOff,bottomRow,bottomRowOff</c>
+    /// shape (0-based cells, offsets in PIXELS) that <see cref="XlsxFormControlMapper.ParseVmlAnchor"/>
+    /// reads. Creates the <c>&lt;x:Anchor&gt;</c> element (inside the first <c>x:ClientData</c> child)
+    /// when absent, since a control's VML shape always carries a ClientData element.
+    /// </summary>
+    private static void ApplyAnchorToVmlShape(XElement shape, GridRange anchor, DrawingAnchorRange? offsets)
+    {
+        var clientData = shape.Element(ExcelVmlNs + "ClientData");
+        if (clientData is null)
+            return;
+
+        var leftCol = anchor.Start.Col - 1;
+        var topRow = anchor.Start.Row - 1;
+        var rightCol = anchor.End.Col - 1;
+        var bottomRow = anchor.End.Row - 1;
+        var leftColOff = EmuToPixels(offsets?.From.ColumnOffsetEmu ?? 0);
+        var topRowOff = EmuToPixels(offsets?.From.RowOffsetEmu ?? 0);
+        var rightColOff = EmuToPixels(offsets?.To.ColumnOffsetEmu ?? 0);
+        var bottomRowOff = EmuToPixels(offsets?.To.RowOffsetEmu ?? 0);
+
+        var anchorText = string.Join(
+            ",",
+            leftCol.ToString(CultureInfo.InvariantCulture),
+            leftColOff.ToString(CultureInfo.InvariantCulture),
+            topRow.ToString(CultureInfo.InvariantCulture),
+            topRowOff.ToString(CultureInfo.InvariantCulture),
+            rightCol.ToString(CultureInfo.InvariantCulture),
+            rightColOff.ToString(CultureInfo.InvariantCulture),
+            bottomRow.ToString(CultureInfo.InvariantCulture),
+            bottomRowOff.ToString(CultureInfo.InvariantCulture));
+
+        var anchorElement = clientData.Element(ExcelVmlNs + "Anchor");
+        if (anchorElement is null)
+        {
+            anchorElement = new XElement(ExcelVmlNs + "Anchor");
+            clientData.AddFirst(anchorElement);
+        }
+
+        anchorElement.Value = anchorText;
+    }
+
+    private static long EmuToPixels(long emu) =>
+        Math.Max(0, (long)Math.Round(emu / (double)EmusPerPixel, MidpointRounding.AwayFromZero));
 
     /// <summary>
     /// Writes IsChecked/Value/SelectedIndex/LinkedCell/ListFillRange onto a <c>formControlPr</c>

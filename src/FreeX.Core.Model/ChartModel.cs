@@ -245,6 +245,14 @@ public sealed class ChartModel
     public bool ShowDataLabelSeriesName { get; set; }
     public bool ShowDataLabelPercentage { get; set; }
     public ChartDataLabelSeparator DataLabelSeparator { get; set; } = ChartDataLabelSeparator.Comma;
+
+    /// <summary>
+    /// The literal separator text when <see cref="DataLabelSeparator"/> is
+    /// <see cref="ChartDataLabelSeparator.Custom"/> (e.g. Excel's "Period" separator choice, whose
+    /// <c>&lt;c:separator&gt;</c> value is a literal string with no dedicated enum member). Null for
+    /// every other <see cref="DataLabelSeparator"/> value.
+    /// </summary>
+    public string? DataLabelSeparatorText { get; set; }
     public ChartDataLabelNumberFormat DataLabelNumberFormat { get; set; } = ChartDataLabelNumberFormat.General;
     public string? DataLabelNumberFormatCode { get; set; }
     public bool? DataLabelNumberFormatSourceLinked { get; set; }

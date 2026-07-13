@@ -139,9 +139,23 @@ public static class FormControlInteractionService
 
         // Snapshot prior state before any mutation so undo can restore it.
         var priorIsChecked = control.IsChecked;
+        var priorValue = control.Value;
 
         // Flip the in-model state immediately so re-renders during the current frame look correct.
         control.IsChecked = !control.IsChecked;
+
+        // R40-meta-1: an explicit user toggle always resolves a tri-state checkbox (Value ==
+        // 0/1/2 for Unchecked/Checked/Mixed — see XlsxFormControlMapper.ReadControlProperties) to
+        // the concrete 0/1 state matching the NEW IsChecked, clearing any inherited "Mixed" (2).
+        // Excel's Mixed state only ever exists BEFORE the user interacts with the control (e.g. a
+        // checkbox loaded from a workbook whose ctrlProp carried checked="Mixed"); once the user
+        // clicks it, it commits to Checked/Unchecked like any two-state control. Without this reset,
+        // a Mixed control that the user checks/unchecks keeps writing checked="Mixed" to the XLSX on
+        // every subsequent save (XlsxWorksheetFormControlPreserver.ApplyControlStateToFormControlPr
+        // prefers Value==2 over IsChecked — see R39-meta-2), silently undoing the user's click on
+        // every save forever. This must run BEFORE Wrap() below, which snapshots control.Value as
+        // the "applied" state captured for undo/redo.
+        control.Value = control.IsChecked ? 1 : 0;
 
         // No linked cell → nothing to write; the model flip above is the whole of Excel's
         // behaviour here, so no undoable command is produced.
@@ -152,7 +166,7 @@ public static class FormControlInteractionService
         var cellEdit = EditCellsCommand.ForValue(address.Sheet, address, value);
         return FormControlInteractionCommand.Wrap(
             control, cellEdit, "Toggle CheckBox",
-            priorIsChecked, control.Value, control.SelectedIndex);
+            priorIsChecked, priorValue, control.SelectedIndex);
     }
 
     // ── OptionButton ──────────────────────────────────────────────────────────

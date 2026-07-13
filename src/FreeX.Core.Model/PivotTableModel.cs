@@ -125,6 +125,11 @@ public sealed class PivotTableModel
     public bool ShowContextualTooltips { get; set; } = true;
     public bool ShowPropertiesInTooltips { get; set; } = true;
     public bool ShowClassicLayout { get; set; }
+    /// <summary>
+    /// CT_pivotTableDefinition's fieldListSortAscending (default false): whether the PivotTable Field
+    /// List panel sorts fields A-to-Z instead of in data-source order.
+    /// </summary>
+    public bool FieldListSortAscending { get; set; }
     public bool MergeAndCenterLabels { get; set; }
     public bool ShowItemsWithNoDataOnRows { get; set; }
     public bool ShowItemsWithNoDataOnColumns { get; set; }

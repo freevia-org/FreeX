@@ -89,20 +89,19 @@ public static class GridAutofillPlanner
     /// Computes the range Excel fills when the fill handle is double-clicked: the selection
     /// extends straight down to match the populated data extent of the nearest non-blank adjacent
     /// column (checked to the left first, then the right, matching Excel), stopping at the first
-    /// blank row. Returns null when there is no adjacent data to match (nothing to fill) or the
-    /// source spans more than one row (double-click fill-down only applies to a single header/seed
-    /// row selection).
+    /// blank row. Works for any rectangular source selection -- a single seed cell, a single
+    /// header/seed row, or a multi-row (and/or multi-column) block establishing a repeating
+    /// pattern -- continuing the fill immediately below the source's last row, across the
+    /// source's full column span. Returns null when there is no adjacent data to match (nothing
+    /// to fill).
     /// </summary>
     public static GridRange? CalculateDoubleClickFillRange(GridRange source, uint? adjacentColumnLastPopulatedRow)
     {
-        if (source.RowCount != 1)
-            return null;
-
-        if (adjacentColumnLastPopulatedRow is not { } lastRow || lastRow <= source.Start.Row)
+        if (adjacentColumnLastPopulatedRow is not { } lastRow || lastRow <= source.End.Row)
             return null;
 
         return new GridRange(
-            new CellAddress(source.Start.Sheet, source.Start.Row + 1, source.Start.Col),
+            new CellAddress(source.Start.Sheet, source.End.Row + 1, source.Start.Col),
             new CellAddress(source.Start.Sheet, lastRow, source.End.Col));
     }
 

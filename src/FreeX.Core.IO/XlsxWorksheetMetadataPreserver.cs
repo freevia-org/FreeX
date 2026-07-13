@@ -780,14 +780,33 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XNamespace packageRelNs)
     {
         var copy = new XElement(sourceBlock);
-        if (copy.Name == workbookNs + "picture")
-            RebindWorksheetPictureRelationshipId(copy, sourceArchive, targetArchive, sourceWorksheetPath, targetWorksheetPath, relNs, packageRelNs);
+
+        // R40-io-vml-shape-geometry-3-3: <picture> was the only retained-block kind whose r:id got
+        // collision-safe rebound here. A <legacyDrawing> marker restored through this same fallback
+        // (e.g. an OLE-object preview-icon VML shape that is neither a modeled comment nor a form
+        // control, so neither XlsxWorksheetVmlReferencePreserver nor XlsxWorksheetFormControlPreserver
+        // ever touch it) carries an r:id just like <picture> does, and its target vmlDrawing part can
+        // just as easily collide with one of ClosedXML's own worksheet-local relationship ids and get
+        // remapped by XlsxPackageMetadataMerger.MergeRelationshipParts (which always runs before this
+        // preserver — see XlsxFileAdapter.SourcePackage.cs). Left un-rebound, the copied marker still
+        // carries the stale source r:id and resolves to the wrong (or no) relationship in the target
+        // package. Rebind it the same way <picture> is rebound.
+        if (copy.Name == workbookNs + "picture" || copy.Name == workbookNs + "legacyDrawing")
+            RebindWorksheetElementRelationshipId(copy, sourceArchive, targetArchive, sourceWorksheetPath, targetWorksheetPath, relNs, packageRelNs);
 
         return copy;
     }
 
-    private static void RebindWorksheetPictureRelationshipId(
-        XElement picture,
+    /// <summary>
+    /// Rebinds a retained worksheet block's <c>r:id</c> attribute from the source package's
+    /// relationship id to whichever id the target package's <c>.rels</c> part now uses for the same
+    /// relationship (matched by Type + resolved Target + TargetMode), after
+    /// <see cref="XlsxPackageMetadataMerger.MergeRelationshipParts"/> may have renumbered it to avoid
+    /// colliding with one of the regenerated worksheet's own relationship ids. Used for both
+    /// <c>&lt;picture&gt;</c> and <c>&lt;legacyDrawing&gt;</c> retained blocks.
+    /// </summary>
+    private static void RebindWorksheetElementRelationshipId(
+        XElement element,
         ZipArchive sourceArchive,
         ZipArchive targetArchive,
         string sourceWorksheetPath,
@@ -795,7 +814,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         XNamespace relNs,
         XNamespace packageRelNs)
     {
-        var sourceRelId = picture.Attribute(relNs + "id")?.Value;
+        var sourceRelId = element.Attribute(relNs + "id")?.Value;
         if (string.IsNullOrWhiteSpace(sourceRelId))
             return;
 
@@ -806,7 +825,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
         var targetRelationship = FindMatchingRelationship(targetArchive, targetWorksheetPath, sourceWorksheetPath, sourceRelationship, packageRelNs);
         var targetRelId = targetRelationship?.Attribute("Id")?.Value;
         if (!string.IsNullOrWhiteSpace(targetRelId))
-            picture.SetAttributeValue(relNs + "id", targetRelId);
+            element.SetAttributeValue(relNs + "id", targetRelId);
     }
 
     private static XElement? FindRelationshipById(

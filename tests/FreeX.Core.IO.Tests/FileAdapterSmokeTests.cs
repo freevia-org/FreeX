@@ -20415,7 +20415,11 @@ public partial class FileAdapterSmokeTests
             pivotXml.Root!.Attribute("showHeaders")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("showDataTips")!.Value.Should().Be("0");
             pivotXml.Root!.Attribute("showMemberPropertyTips")!.Value.Should().Be("0");
-            pivotXml.Root!.Attribute("showDropZones")!.Value.Should().Be("1");
+            // ShowClassicLayout maps to the OOXML gridDropZones attribute (Classic PivotTable Layout /
+            // "enables dragging of fields in the grid"), NOT showDropZones (an unrelated, unmodeled flag
+            // that is left at its schema default and therefore omitted).
+            pivotXml.Root!.Attribute("gridDropZones")!.Value.Should().Be("1");
+            pivotXml.Root!.Attribute("showDropZones").Should().BeNull();
             pivotXml.Root!.Attribute("mergeItem")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("pageOverThenDown")!.Value.Should().Be("1");
             pivotXml.Root!.Attribute("pageWrap")!.Value.Should().Be("2");

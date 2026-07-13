@@ -151,9 +151,12 @@ public sealed class ConditionalFormatCommandTests
     }
 
     [Fact]
-    public void ClearConditionalFormats_RuleStartsOutsideClearRange_ButOverlaps_IsRemoved()
+    public void ClearConditionalFormats_RuleStartsOutsideClearRange_ButOverlaps_IsShrunkNotRemoved()
     {
-        // Rule applies to A1:Z100; clear B2:Y50 — start (A1) is outside but range overlaps
+        // R40-commands-clear-delete-3-2: rule applies to A1:Z100; clear only the interior B2:Y50.
+        // Excel's "Clear Rules from Selected Cells" only removes the rule from the selected cells --
+        // the un-selected perimeter (row 1, row 100, col A, col Z) must keep the rule, so it survives
+        // shrunk rather than being deleted outright.
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var ctx = new TestCommandContext(wb);
@@ -174,7 +177,15 @@ public sealed class ConditionalFormatCommandTests
             new CellAddress(sheet.Id, 50, 25));
         new ClearConditionalFormatsCommand(sheet.Id, clearRange).Apply(ctx);
 
-        sheet.ConditionalFormats.Should().BeEmpty();
+        sheet.ConditionalFormats.Should().NotBeEmpty();
+        // Cells inside the cleared interior no longer carry the rule...
+        sheet.ConditionalFormats.Should().NotContain(r => r.AllRanges.Any(range =>
+            range.Contains(new CellAddress(sheet.Id, 25, 10))));
+        // ...but the untouched perimeter (row 1 and column Z, both outside the clear range) still does.
+        sheet.ConditionalFormats.Should().Contain(r => r.AllRanges.Any(range =>
+            range.Contains(new CellAddress(sheet.Id, 1, 1))));
+        sheet.ConditionalFormats.Should().Contain(r => r.AllRanges.Any(range =>
+            range.Contains(new CellAddress(sheet.Id, 100, 26))));
     }
 
     [Fact]
@@ -187,12 +198,17 @@ public sealed class ConditionalFormatCommandTests
         var ctx = new TestCommandContext(wb);
         sheet.ConditionalFormats.Add(NewRule(sheet.Id));
 
+        // NewRule's AppliesTo is A1:A5; clearing only A1 leaves A2:A5 still covered by the rule
+        // (R40-commands-clear-delete-3-2 -- shrink, don't delete, when the clear is a proper subset).
         var outcome = new ClearConditionalFormatsCommand(
             sheet.Id,
             new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1))).Apply(ctx);
 
         outcome.Success.Should().BeTrue();
-        sheet.ConditionalFormats.Should().BeEmpty();
+        sheet.ConditionalFormats.Should().ContainSingle();
+        sheet.ConditionalFormats[0].AppliesTo.Should().Be(new GridRange(
+            new CellAddress(sheet.Id, 2, 1),
+            new CellAddress(sheet.Id, 5, 1)));
     }
 
     private static ConditionalFormat NewRule(SheetId sheetId) =>

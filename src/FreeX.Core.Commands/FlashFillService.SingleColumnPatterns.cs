@@ -1205,8 +1205,16 @@ public static partial class FlashFillService
             exampleTokens.Add(tokens);
         }
 
-        if (exampleTokens.Select(tokens => tokens[0]).Distinct(StringComparer.Ordinal).Count() == 1)
+        // With 2+ examples, require the first tokens to vary; otherwise "always take the
+        // last token" is indistinguishable from a coincidental fixed-prefix pattern and we
+        // defer to more specific patterns. With exactly one example there is nothing to
+        // disambiguate against, so a single training pair is enough to infer "last token"
+        // (matching Excel's Flash Fill, which generalizes a single example this way).
+        if (examples.Count > 1
+            && exampleTokens.Select(tokens => tokens[0]).Distinct(StringComparer.Ordinal).Count() == 1)
+        {
             return null;
+        }
 
         return source => TrySplitVariableWhitespaceTokens(source, out var tokens)
             ? tokens[^1]

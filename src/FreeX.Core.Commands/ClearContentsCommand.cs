@@ -110,8 +110,16 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             else if (oldStyleOnly.HasValue)
                 cleared.StyleId = oldStyleOnly.Value;
             sheet.SetCell(address, cleared);
-            sheet.Hyperlinks.Remove(address);
-            sheet.HyperlinkMetadata.Remove(address);
+            // R40-commands-clear-delete-3-1: a plain "Clear Contents" (Delete key / ribbon Clear >
+            // Clear Contents) only clears the cell's value/formula in real Excel -- the hyperlink
+            // (and its formatting/style, already preserved above) stays attached to the now-blank
+            // cell. Only "Clear All" / "Clear Hyperlinks" or a genuine Cut (which relocates the
+            // hyperlink to the destination -- see _isCutSource above) actually removes it here.
+            if (_isCutSource)
+            {
+                sheet.Hyperlinks.Remove(address);
+                sheet.HyperlinkMetadata.Remove(address);
+            }
             sheet.RichTextRuns.Remove(address);
             affected.Add(address);
         }

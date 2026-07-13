@@ -904,8 +904,11 @@ public sealed class AutofillCommand : IWorkbookCommand
                 : (plan.Direction is FillDirection.Up or FillDirection.Left ? -1 : 1);
             var lastIndex = plan.Direction is FillDirection.Up or FillDirection.Left ? indices[0] : indices[^1];
             var directedStep = plan.Direction is FillDirection.Up or FillDirection.Left ? -step : step;
-            if (directedStep == 0)
-                directedStep = 1;
+            // Note: unlike the single-sample fallback above (which always seeds a nonzero
+            // ±1 step so a lone seed value still advances through the list), a genuine 0
+            // step computed here from 2+ identical samples is NOT overridden -- Excel's
+            // fill handle treats 2+ identical list values the same as 2+ identical
+            // numbers/dates: a flat series that copies the value, not one that advances.
 
             return offset =>
             {

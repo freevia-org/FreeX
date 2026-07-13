@@ -57,7 +57,9 @@ internal static partial class XlsxChartXmlWriter
         || format.ShowBubbleSize is not null
         || !string.IsNullOrEmpty(format.NumberFormatCode)
         || format.NumberFormatSourceLinked is not null
-        || format.SeparatorText is not null;
+        || format.SeparatorText is not null
+        || format.Layout is not null
+        || !string.IsNullOrEmpty(format.CustomTextXml);
 
     private static bool HasSeriesDataLabelFormatting(ChartSeriesDataLabelFormat format) =>
         format.FillColor is not null
@@ -123,6 +125,10 @@ internal static partial class XlsxChartXmlWriter
             format.IsDeleted is { } isDeleted
                 ? new XElement(chartNs + "delete", new XAttribute("val", isDeleted ? "1" : "0"))
                 : null,
+            // Schema order for CT_DLbl/Group_DLbl: idx, delete?, layout?, tx?, numFmt?, spPr?,
+            // txPr?, dLblPos?, show*?, separator?.
+            ToManualLayoutXml(format.Layout, chartNs),
+            TryParseChartXml(format.CustomTextXml),
             ToPointDataLabelNumberFormatXml(format, chartNs),
             ToShapeProperties(
                 chartNs,
