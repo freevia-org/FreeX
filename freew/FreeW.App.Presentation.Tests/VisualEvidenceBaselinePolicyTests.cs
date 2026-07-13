@@ -235,6 +235,7 @@ public sealed class VisualEvidenceBaselinePolicyTests
             DrawingObjects: expectation.DrawingObjects,
             ChartSmartArt: expectation.ChartSmartArt,
             Fields: expectation.Fields,
+            Equations: expectation.Equations,
             HeaderFooters: expectation.HeaderFooters,
             TableOfAuthorities: expectation.TableOfAuthorities,
             ProofingDiagnostics: expectation.ProofingDiagnostics,
