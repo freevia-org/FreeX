@@ -27,6 +27,9 @@
 
 .EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/drawing-object-proof -ScenarioSet DrawingObjectVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/floating-wrapping-proof -ScenarioSet FloatingWrappingVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 #>
 [CmdletBinding()]
 param(
@@ -98,6 +101,7 @@ $summaryJson = Join-Path $runRoot 'freew_visual_evidence_summary.json'
 $summaryMarkdown = Join-Path $runRoot 'freew_visual_evidence_summary.md'
 
 $fidelityProject = Join-Path $repoRoot 'freew\tools\FreeW.FidelityRender\FreeW.FidelityRender.csproj'
+$f2ObjectsProject = Join-Path $repoRoot 'freew\tools\_corpus_f2_objects\_corpus_f2_objects.csproj'
 $pageShotProject = Join-Path $repoRoot 'freew\tools\FreeW.PageLayoutShot\FreeW.PageLayoutShot.csproj'
 $summaryProject = Join-Path $repoRoot 'freew\tools\FreeW.VisualEvidenceSummary\FreeW.VisualEvidenceSummary.csproj'
 $wordBaselineScript = Join-Path $repoRoot 'freew-fidelity-corpus\tools\Render-WordBaseline.ps1'
@@ -125,6 +129,10 @@ $namedScenarioSets = @{
         'f2-border-watermark',
         'page-composition-columns',
         'page-composition-border-watermark'
+    )
+    FloatingWrappingVisualProof = @(
+        'f2-01-float-wrap',
+        'page-composition-floating-image'
     )
     TableLayoutProof = @(
         'table-layout-complex',
@@ -512,6 +520,94 @@ function Assert-PageCompositionProofReadiness {
     Write-Host "Page composition Word-baseline policy rows: verified rows=$verifiedBaselineRows"
 }
 
+function Assert-FloatingWrappingProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $requiredScenarioIds = @(
+        'f2-01-float-wrap',
+        'page-composition-floating-image'
+    )
+    if (@($ScenarioIds).Count -gt 0 -and @($requiredScenarioIds | Where-Object { $ScenarioIds -contains $_ }).Count -eq 0) {
+        return
+    }
+
+    if (@($ScenarioIds).Count -gt 0 -and @($requiredScenarioIds | Where-Object { $ScenarioIds -notcontains $_ }).Count -gt 0) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Floating/wrapping proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 29) {
+        throw "Floating/wrapping proof readiness requires FreeW visual evidence summary schema v29 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $readinessRows = @($summary.floatingWrappingProofReadiness)
+    $row = @($readinessRows | Where-Object {
+        $_.scenarioId -eq 'floating-wrapping-visual-proof' -and
+        [int]$_.pageNumber -eq 1
+    }) | Select-Object -First 1
+    if (-not $row) {
+        throw "Floating/wrapping proof readiness failed: missing readiness row"
+    }
+
+    $failures = New-Object System.Collections.Generic.List[string]
+    if ($row.trust.passed -ne $true -or $row.status -ne 'paired-renderer-proof-ready') {
+        $notes = @($row.trust.failures) -join '; '
+        if ([string]::IsNullOrWhiteSpace($notes)) {
+            $notes = [string]$row.baselineReadiness
+        }
+        $failures.Add("readiness status '$($row.status)' failed ($notes)")
+    }
+
+    if ([string]$row.wpfScenarioId -ne 'f2-01-float-wrap') {
+        $failures.Add("wpfScenarioId '$($row.wpfScenarioId)' expected 'f2-01-float-wrap'")
+    }
+
+    if ([string]$row.avaloniaScenarioId -ne 'page-composition-floating-image') {
+        $failures.Add("avaloniaScenarioId '$($row.avaloniaScenarioId)' expected 'page-composition-floating-image'")
+    }
+
+    $semanticEvidence = [string]$row.semanticEvidence
+    if ($semanticEvidence.IndexOf('WPF', [StringComparison]::Ordinal) -lt 0 -or
+        $semanticEvidence.IndexOf('Avalonia', [StringComparison]::Ordinal) -lt 0 -or
+        $semanticEvidence.IndexOf('wraps=', [StringComparison]::Ordinal) -lt 0) {
+        $failures.Add("missing WPF/Avalonia floating wrap semantic evidence")
+    }
+
+    $baselineRows = @($summary.baselineComparisons | Where-Object {
+        [int]$_.pageNumber -eq 1 -and
+        ($_.scenarioId -eq 'f2-01-float-wrap' -or $_.scenarioId -eq 'page-composition-floating-image')
+    })
+    if ($baselineRows.Count -gt 0) {
+        foreach ($comparison in $baselineRows) {
+            if ($comparison.trust.passed -ne $true) {
+                $failures.Add("$($comparison.hostId)/$($comparison.scenarioId)/$($comparison.outputName): baseline policy trust failed")
+            }
+            if ([string]$comparison.baselineScenarioId -ne 'f2-01-float-wrap') {
+                $failures.Add("$($comparison.hostId)/$($comparison.scenarioId)/$($comparison.outputName): baselineScenarioId '$($comparison.baselineScenarioId)' expected 'f2-01-float-wrap'")
+            }
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Floating/wrapping proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Floating/wrapping proof readiness: trusted paired row=1"
+    if ($baselineRows.Count -gt 0) {
+        Write-Host "Floating/wrapping Word-baseline policy rows: verified rows=$($baselineRows.Count)"
+    }
+    else {
+        Write-Host "Floating/wrapping Word-baseline policy rows: no Word baseline mode requested"
+    }
+}
+
 function Assert-TableLayoutProofReadiness {
     param(
         [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
@@ -839,6 +935,16 @@ Invoke-DotNetStep 'Generate F2 DOCX fixtures' @(
     '--generate-f2-corpus', $fixtureDir
 )
 
+if (@($effectiveScenarioIds).Count -eq 0 -or $effectiveScenarioIds -contains 'f2-01-float-wrap') {
+    Invoke-DotNetStep 'Generate floating/wrapping DOCX fixtures' @(
+        'run',
+        '--project', $f2ObjectsProject,
+        '-c', $Configuration,
+        '--',
+        $fixtureDir
+    )
+}
+
 if ($IncludeWordBaseline) {
     Invoke-PowerShellStep 'Render MS Word baseline PNGs' $wordBaselineScript @(
         '-FilesDir', $fixtureDir,
@@ -916,6 +1022,7 @@ else {
 }
 Assert-CoreLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds
+Assert-FloatingWrappingProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds
 

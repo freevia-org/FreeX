@@ -38,6 +38,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("BackstagePrintExport = @(");
         source.Should().Contain("CoreLayoutProof = @(");
         source.Should().Contain("PageCompositionProof = @(");
+        source.Should().Contain("FloatingWrappingVisualProof = @(");
         source.Should().Contain("TableLayoutProof = @(");
         source.Should().Contain("DrawingObjectVisualProof = @(");
         source.Should().Contain("'field-page-number-variants'");
@@ -46,6 +47,11 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'review-protection-proofing-comments-only'");
         source.Should().Contain("'page-composition-columns'");
         source.Should().Contain("'page-composition-border-watermark'");
+        source.Should().Contain("'f2-01-float-wrap'");
+        source.Should().Contain("'page-composition-floating-image'");
+        source.Should().Contain("$f2ObjectsProject = Join-Path $repoRoot 'freew\\tools\\_corpus_f2_objects\\_corpus_f2_objects.csproj'");
+        source.Should().Contain("Generate floating/wrapping DOCX fixtures");
+        source.Should().Contain("$effectiveScenarioIds -contains 'f2-01-float-wrap'");
         source.Should().Contain("'table-layout-complex'");
         source.Should().Contain("'table-pagination-repeat-header'");
         source.Should().Contain("'table-page-composition-stress'");
@@ -110,6 +116,12 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("missing Word-baseline policy row");
         source.Should().Contain("Page composition proof readiness: trusted scenario rows=");
         source.Should().Contain("Page composition Word-baseline policy rows: verified rows=");
+        source.Should().Contain("Assert-FloatingWrappingProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Floating/wrapping proof readiness requires FreeW visual evidence summary schema v29 or newer");
+        source.Should().Contain("$readinessRows = @($summary.floatingWrappingProofReadiness)");
+        source.Should().Contain("missing WPF/Avalonia floating wrap semantic evidence");
+        source.Should().Contain("Floating/wrapping proof readiness: trusted paired row=1");
+        source.Should().Contain("Floating/wrapping Word-baseline policy rows: verified rows=");
         source.Should().Contain("Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("Table layout proof readiness requires FreeW visual evidence summary schema v25 or newer");
         source.Should().Contain("'table-layout-complex' = 1");

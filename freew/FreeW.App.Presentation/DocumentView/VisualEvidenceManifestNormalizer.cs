@@ -63,6 +63,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> Scenarios,
     IReadOnlyList<FreeWVisualEvidenceNormalizedRow> Evidence,
     IReadOnlyList<FreeWVisualEvidenceBackstagePrintReadiness> BackstagePrintEvidenceReadiness,
+    IReadOnlyList<FreeWVisualFloatingWrappingProofReadiness> FloatingWrappingProofReadiness,
     IReadOnlyList<FreeWVisualDrawingObjectProofReadiness> DrawingObjectProofReadiness,
     IReadOnlyList<FreeWVisualBaselineComparison> BaselineComparisons,
     IReadOnlyList<FreeWVisualBaselineTriageItem> WordBaselineTriage,
@@ -76,6 +77,19 @@ public sealed record FreeWVisualEvidenceBackstagePrintReadiness(
     string Status,
     string OutputSummary,
     string Notes);
+
+public sealed record FreeWVisualFloatingWrappingProofReadiness(
+    string ScenarioId,
+    int PageNumber,
+    string Status,
+    string WpfScenarioId,
+    string WpfOutputSummary,
+    string AvaloniaScenarioId,
+    string AvaloniaOutputSummary,
+    string WordBaselineStatus,
+    string BaselineReadiness,
+    string SemanticEvidence,
+    FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualDrawingObjectProofReadiness(
     string ScenarioId,
@@ -121,7 +135,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 28;
+    public const int SummarySchemaVersion = 29;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -200,6 +214,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
             .Concat(ChartSmartArtRendererScenarioIds)
             .Concat(WordArtWatermarkRendererScenarioIds)
             .ToArray();
+    public const string FloatingWrappingWpfScenarioId = "f2-01-float-wrap";
+    public const string FloatingWrappingAvaloniaScenarioId = "page-composition-floating-image";
+    public const string FloatingWrappingProofScenarioId = "floating-wrapping-visual-proof";
+    public static IReadOnlyList<string> FloatingWrappingVisualProofScenarioIds { get; } =
+    [
+        FloatingWrappingWpfScenarioId,
+        FloatingWrappingAvaloniaScenarioId
+    ];
 
     private static readonly string[] ReferencesHeavyRequiredComplexFieldKeywords =
     [
@@ -320,6 +342,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             .ToList();
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         var backstageReadiness = BuildBackstagePrintEvidenceReadinessRows(expected, orderedRows);
+        var floatingWrappingProofReadiness = BuildFloatingWrappingProofReadinessRows(expected, orderedRows, []);
         var drawingObjectProofReadiness = BuildDrawingObjectProofReadinessRows(expected, orderedRows, []);
         var summary = new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
@@ -331,6 +354,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             scenarios,
             orderedRows,
             backstageReadiness,
+            floatingWrappingProofReadiness,
             drawingObjectProofReadiness,
             [],
             [],
@@ -385,6 +409,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
 
         AppendBackstagePrintEvidenceReadiness(sb, summary);
+        AppendFloatingWrappingProofReadiness(sb, summary);
         AppendDrawingObjectProofReadiness(sb, summary);
         AppendEquationGeometryEvidence(sb, summary);
 
@@ -472,6 +497,35 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{EscapeMarkdown(row.Status)} | " +
                 $"{EscapeMarkdown(row.OutputSummary)} | " +
                 $"{EscapeMarkdown(row.Notes)} |");
+        }
+    }
+
+    private static void AppendFloatingWrappingProofReadiness(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.FloatingWrappingProofReadiness.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## Floating/Wrapping Visual Proof Readiness");
+        sb.AppendLine();
+        sb.AppendLine("| Scenario | Page | Status | WPF Scenario | WPF Output | Avalonia Scenario | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
+        sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var row in summary.FloatingWrappingProofReadiness)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.ScenarioId)} | " +
+                $"{row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(row.Status)} | " +
+                $"{EscapeMarkdown(row.WpfScenarioId)} | " +
+                $"{EscapeMarkdown(row.WpfOutputSummary)} | " +
+                $"{EscapeMarkdown(row.AvaloniaScenarioId)} | " +
+                $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | " +
+                $"{EscapeMarkdown(row.WordBaselineStatus)} | " +
+                $"{EscapeMarkdown(row.BaselineReadiness)} | " +
+                $"{EscapeMarkdown(row.SemanticEvidence)} | " +
+                $"{(row.Trust.Passed ? "passed" : "failed")} |");
         }
     }
 
@@ -663,6 +717,73 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return rows;
     }
 
+    private static IReadOnlyList<FreeWVisualFloatingWrappingProofReadiness> BuildFloatingWrappingProofReadinessRows(
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var expected = expectedScenarios.Any(e =>
+            string.Equals(e.ScenarioId, FloatingWrappingWpfScenarioId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(e.ScenarioId, FloatingWrappingAvaloniaScenarioId, StringComparison.OrdinalIgnoreCase));
+        var hasEvidence = evidence.Any(row =>
+            string.Equals(row.ScenarioId, FloatingWrappingWpfScenarioId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(row.ScenarioId, FloatingWrappingAvaloniaScenarioId, StringComparison.OrdinalIgnoreCase));
+        if (!expected && !hasEvidence)
+            return [];
+
+        const int pageNumber = 1;
+        var wpfRows = RowsForHostScenarioPage(evidence, WpfHostId, FloatingWrappingWpfScenarioId, pageNumber);
+        var avaloniaRows = RowsForHostScenarioPage(evidence, AvaloniaHostId, FloatingWrappingAvaloniaScenarioId, pageNumber);
+        var trustedWpf = wpfRows.FirstOrDefault(row => row.Trust.Passed);
+        var trustedAvalonia = avaloniaRows.FirstOrDefault(row => row.Trust.Passed);
+        var relatedBaseline = baselineComparisons
+            .Where(comparison =>
+                comparison.PageNumber == pageNumber &&
+                (string.Equals(comparison.ScenarioId, FloatingWrappingWpfScenarioId, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(comparison.ScenarioId, FloatingWrappingAvaloniaScenarioId, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+
+        if (trustedWpf is null || trustedAvalonia is null)
+        {
+            return
+            [
+                new FreeWVisualFloatingWrappingProofReadiness(
+                    FloatingWrappingProofScenarioId,
+                    pageNumber,
+                    "missing-paired-renderer-evidence",
+                    FloatingWrappingWpfScenarioId,
+                    FormatOutputSummary(wpfRows),
+                    FloatingWrappingAvaloniaScenarioId,
+                    FormatOutputSummary(avaloniaRows),
+                    FormatWordBaselineStatus(relatedBaseline),
+                    "paired WPF floating-wrap fixture evidence and Avalonia floating-image evidence are required before Word baseline comparison readiness",
+                    FormatFloatingWrappingSemanticEvidence(trustedWpf, trustedAvalonia),
+                    new FreeWVisualEvidenceTrust(false, BuildMissingFloatingWrappingPairFailures(trustedWpf, trustedAvalonia)))
+            ];
+        }
+
+        var failures = BuildFloatingWrappingSemanticFailures(trustedWpf, trustedAvalonia);
+        var baselineTrust = EvaluateDrawingObjectProofReadiness(relatedBaseline);
+        failures.AddRange(baselineTrust.Failures);
+        var trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+
+        return
+        [
+            new FreeWVisualFloatingWrappingProofReadiness(
+                FloatingWrappingProofScenarioId,
+                pageNumber,
+                trust.Passed ? "paired-renderer-proof-ready" : "floating-wrapping-proof-failed",
+                FloatingWrappingWpfScenarioId,
+                FormatOutputSummary(wpfRows),
+                FloatingWrappingAvaloniaScenarioId,
+                FormatOutputSummary(avaloniaRows),
+                FormatWordBaselineStatus(relatedBaseline),
+                FormatFloatingWrappingBaselineReadiness(relatedBaseline),
+                FormatFloatingWrappingSemanticEvidence(trustedWpf, trustedAvalonia),
+                trust)
+        ];
+    }
+
     private static IReadOnlyList<FreeWVisualDrawingObjectProofReadiness> BuildDrawingObjectProofReadinessRows(
         IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
@@ -747,6 +868,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         return summary with
         {
+            FloatingWrappingProofReadiness = BuildFloatingWrappingProofReadinessRows(
+                summary.ExpectedScenarios,
+                summary.Evidence,
+                ordered),
             DrawingObjectProofReadiness = BuildDrawingObjectProofReadinessRows(
                 summary.ExpectedScenarios,
                 summary.Evidence,
@@ -782,6 +907,43 @@ public static class FreeWVisualEvidenceManifestNormalizer
             failures.Add($"drawing/object proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted WPF visual evidence");
         if (trustedAvalonia is null)
             failures.Add($"drawing/object proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
+        return failures;
+    }
+
+    private static IReadOnlyList<string> BuildMissingFloatingWrappingPairFailures(
+        FreeWVisualEvidenceNormalizedRow? trustedWpf,
+        FreeWVisualEvidenceNormalizedRow? trustedAvalonia)
+    {
+        var failures = new List<string>();
+        if (trustedWpf is null)
+            failures.Add($"floating/wrapping proof page 1 is missing trusted WPF visual evidence for '{FloatingWrappingWpfScenarioId}'");
+        if (trustedAvalonia is null)
+            failures.Add($"floating/wrapping proof page 1 is missing trusted Avalonia visual evidence for '{FloatingWrappingAvaloniaScenarioId}'");
+        return failures;
+    }
+
+    private static List<string> BuildFloatingWrappingSemanticFailures(
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia)
+    {
+        var failures = new List<string>();
+        var wpfObjects = wpf.DrawingObjects;
+        var avaloniaObjects = avalonia.DrawingObjects;
+
+        if (wpfObjects.FloatingObjectCount <= 0 || !wpfObjects.HasImages)
+            failures.Add("floating/wrapping proof is missing WPF floating image evidence");
+        if (!wpfObjects.HasSquareWrap)
+            failures.Add("floating/wrapping proof is missing WPF square-wrap evidence");
+        if (!wpfObjects.Objects.Any(o => o.Wrapping == ImageWrapping.Tight))
+            failures.Add("floating/wrapping proof is missing WPF tight-wrap evidence");
+
+        if (avaloniaObjects.FloatingObjectCount <= 0 || !avaloniaObjects.HasImages)
+            failures.Add("floating/wrapping proof is missing Avalonia floating image evidence");
+        if (!avaloniaObjects.HasTopAndBottomWrap)
+            failures.Add("floating/wrapping proof is missing Avalonia top-and-bottom floating placement evidence");
+        if (avaloniaObjects.BehindTextCount <= 0 || avaloniaObjects.InFrontCount <= 0)
+            failures.Add("floating/wrapping proof is missing Avalonia behind-text and in-front z-order evidence");
+
         return failures;
     }
 
@@ -831,6 +993,34 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return "Word baseline policy rows are present and trusted";
     }
 
+    private static string FormatFloatingWrappingBaselineReadiness(
+        IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline)
+    {
+        if (relatedBaseline.Count == 0)
+            return "paired renderer evidence is present; run Word PNG baseline comparison for floating/wrapping proof";
+
+        if (relatedBaseline.All(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Word COM or baseline generation unavailable; paired WPF/Avalonia floating evidence is retained without authoritative Word wrap parity";
+        }
+
+        if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
+            return "one or more Word baseline comparison rows failed trust; inspect baseline triage";
+
+        if (relatedBaseline.Any(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.PassedStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "real Word PNG baseline compared within configured tolerance";
+        }
+
+        return "Word baseline policy rows are present and trusted";
+    }
+
     private static string FormatWordBaselineStatus(IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline)
     {
         if (relatedBaseline.Count == 0)
@@ -853,6 +1043,42 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return string.Join(
             ", ",
             rows.Select(row => row.Trust.Passed ? row.OutputPath : row.OutputPath + " (failed)"));
+    }
+
+    private static string FormatFloatingWrappingSemanticEvidence(
+        FreeWVisualEvidenceNormalizedRow? wpf,
+        FreeWVisualEvidenceNormalizedRow? avalonia)
+    {
+        var parts = new List<string>();
+        if (wpf is not null)
+            parts.Add("WPF " + FormatFloatingWrappingRowSemanticEvidence(wpf));
+        if (avalonia is not null)
+            parts.Add("Avalonia " + FormatFloatingWrappingRowSemanticEvidence(avalonia));
+        return parts.Count == 0 ? "-" : string.Join("; ", parts);
+    }
+
+    private static string FormatFloatingWrappingRowSemanticEvidence(FreeWVisualEvidenceNormalizedRow row)
+    {
+        var objects = row.DrawingObjects;
+        var wrapKinds = objects.Objects
+            .Select(o => o.Wrapping.ToString())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(w => w, StringComparer.Ordinal)
+            .ToList();
+        var parts = new List<string>
+        {
+            $"{objects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)} floating object(s)",
+            $"{objects.BehindTextCount.ToString(CultureInfo.InvariantCulture)} behind text",
+            $"{objects.InFrontCount.ToString(CultureInfo.InvariantCulture)} in front",
+            "wraps=" + (wrapKinds.Count == 0 ? "none" : string.Join("/", wrapKinds))
+        };
+
+        if (objects.HasImages)
+            parts.Add("image evidence");
+        if (objects.HasZOrder)
+            parts.Add("z-order evidence");
+
+        return string.Join(", ", parts);
     }
 
     private static string FormatDrawingObjectProofSemanticEvidence(

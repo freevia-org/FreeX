@@ -36,6 +36,7 @@ public static class FreeWWordBaselineEvidencePlanner
         "equation-structures",
         "f2-footnotes",
         "f2-endnotes",
+        "f2-01-float-wrap",
         "f2-columns",
         "f2-border-watermark",
         "table-layout-complex",

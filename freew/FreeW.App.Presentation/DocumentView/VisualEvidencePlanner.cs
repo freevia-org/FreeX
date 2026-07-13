@@ -637,6 +637,24 @@ public static class FreeWVisualEvidencePlanner
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsComments = true }),
         new(
+            "f2-01-float-wrap",
+            "Floating image square/tight wrap visual fidelity capture.",
+            [
+                "f2",
+                "page-composition",
+                "print-layout",
+                "floating-image",
+                "floating-objects",
+                "square-wrap",
+                "tight-wrap",
+                "text-wrap-around",
+                "body-text"
+            ],
+            "f2-01-float-wrap_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsFloatingObjects = true }),
+        new(
             "review-proofing-visual-depth",
             "Shared Review and Proofing visual depth composition.",
             [
@@ -978,7 +996,7 @@ public static class FreeWVisualEvidencePlanner
         new(
             "page-composition-floating-image",
             "Avalonia floating-image page composition shot.",
-            ["page-composition", "avalonia", "print-layout", "floating-image", "body-text"],
+            ["page-composition", "avalonia", "print-layout", "floating-image", "floating-objects", "top-bottom-wrap", "behind-text", "in-front", "z-order", "body-text"],
             "freew_floating_image.png",
             1,
             DocumentViewLayoutKind.PrintLayout,

@@ -30,6 +30,27 @@ public sealed class VisualEvidenceBaselinePolicyTests
     }
 
     [Fact]
+    public void WordBaselinePolicy_MapsAvaloniaFloatingImageEvidenceToF2FloatWrapBaseline()
+    {
+        var row = BuildRow(
+            "page-composition-floating-image",
+            FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+            "freew_floating_image.png");
+
+        var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+        var candidates = FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(row);
+
+        policy.IsComparable.Should().BeTrue();
+        policy.BaselineScenarioId.Should().Be("f2-01-float-wrap");
+        FreeWVisualBaselineComparisonPlanner.BuildBaselineMatchKey(row)
+            .Should().Be("f2-01-float-wrap/p1/f2-01-float-wrap_p1.png");
+        candidates.Should().Contain([
+            "f2-01-float-wrap/freew_floating_image.png",
+            "f2-01-float-wrap/f2-01-float-wrap_p1.png",
+            "f2-01-float-wrap_p1.png"]);
+    }
+
+    [Fact]
     public void WordBaselinePolicy_SkipsUnmappedAvaloniaLayoutRowsWithoutFailingTrust()
     {
         var row = BuildRow(

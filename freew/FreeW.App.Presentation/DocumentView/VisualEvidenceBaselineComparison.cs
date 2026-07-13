@@ -99,7 +99,8 @@ public static class FreeWVisualBaselineComparisonPlanner
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["page-composition-columns"] = "f2-columns",
-            ["page-composition-border-watermark"] = "f2-border-watermark"
+            ["page-composition-border-watermark"] = "f2-border-watermark",
+            ["page-composition-floating-image"] = "f2-01-float-wrap"
         };
 
     private static readonly IReadOnlySet<string> DirectWordBaselineScenarioIds =
