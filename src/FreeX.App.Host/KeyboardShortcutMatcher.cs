@@ -233,7 +233,7 @@ public static partial class KeyboardShortcutMatcher
             _ => default
         };
 
-        return IsNumberFormatRoute(route);
+        return WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route);
     }
 
     private static bool TryGetWorkbookNumberFormatShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
@@ -252,16 +252,6 @@ public static partial class KeyboardShortcutMatcher
 
         return key is Key.Oem3 or Key.D1 or Key.D2 or Key.D3 or Key.D4 or Key.D5 or Key.D6;
     }
-
-    private static bool IsNumberFormatRoute(WorkbookShortcutRoute route) =>
-        route is
-            WorkbookShortcutRoute.NumberFormatGeneral or
-            WorkbookShortcutRoute.NumberFormatNumber or
-            WorkbookShortcutRoute.NumberFormatTime or
-            WorkbookShortcutRoute.NumberFormatDate or
-            WorkbookShortcutRoute.NumberFormatCurrency or
-            WorkbookShortcutRoute.NumberFormatPercentage or
-            WorkbookShortcutRoute.NumberFormatScientific;
 
     public static bool TryGetFontToggleShortcut(Key key, ModifierKeys modifiers, out FontToggleShortcut shortcut)
     {
@@ -284,11 +274,7 @@ public static partial class KeyboardShortcutMatcher
             _ => default
         };
 
-        return route is
-            WorkbookShortcutRoute.ToggleBold or
-            WorkbookShortcutRoute.ToggleItalic or
-            WorkbookShortcutRoute.ToggleUnderline or
-            WorkbookShortcutRoute.ToggleStrikethrough;
+        return WorkbookKeyboardShortcutCatalog.IsFontToggleRoute(route);
     }
 
     public static bool TryGetBorderShortcut(Key key, ModifierKeys modifiers, out BorderKeyboardShortcut shortcut)
@@ -310,12 +296,8 @@ public static partial class KeyboardShortcutMatcher
             _ => default
         };
 
-        return IsBorderRoute(route);
+        return WorkbookKeyboardShortcutCatalog.IsBorderRoute(route);
     }
-
-    private static bool IsBorderRoute(WorkbookShortcutRoute route) =>
-        route is WorkbookShortcutRoute.ApplyOutlineBorder or WorkbookShortcutRoute.ClearOutlineBorder;
-
 }
 
 public enum KeyboardGridShortcut

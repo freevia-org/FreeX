@@ -11,7 +11,7 @@ public static partial class KeyboardShortcutMatcher
     private static KeyboardCommandShortcutRule[] CreateCommandShortcutRules()
     {
         var rules = new List<KeyboardCommandShortcutRule>();
-        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => ShouldRouteAsCommandShortcut(rule.Route)))
+        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => WorkbookKeyboardShortcutCatalog.IsCommandRoute(rule.Route)))
         {
             rules.Add(
                 new KeyboardCommandShortcutRule(
@@ -121,23 +121,6 @@ public static partial class KeyboardShortcutMatcher
             WorkbookShortcutRoute.InsertWorksheet => KeyboardCommandShortcut.InsertWorksheet,
             _ => throw new ArgumentOutOfRangeException(nameof(route), route, null)
         };
-
-    private static bool ShouldRouteAsCommandShortcut(WorkbookShortcutRoute route) =>
-        route is not (
-            WorkbookShortcutRoute.PasteSpecial or
-            WorkbookShortcutRoute.ToggleBold or
-            WorkbookShortcutRoute.ToggleItalic or
-            WorkbookShortcutRoute.ToggleUnderline or
-            WorkbookShortcutRoute.ToggleStrikethrough or
-            WorkbookShortcutRoute.NumberFormatGeneral or
-            WorkbookShortcutRoute.NumberFormatNumber or
-            WorkbookShortcutRoute.NumberFormatTime or
-            WorkbookShortcutRoute.NumberFormatDate or
-            WorkbookShortcutRoute.NumberFormatCurrency or
-            WorkbookShortcutRoute.NumberFormatPercentage or
-            WorkbookShortcutRoute.NumberFormatScientific or
-            WorkbookShortcutRoute.ApplyOutlineBorder or
-            WorkbookShortcutRoute.ClearOutlineBorder);
 
     private readonly record struct KeyboardCommandShortcutRule(
         KeyboardCommandShortcut Shortcut,

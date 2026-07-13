@@ -107,4 +107,21 @@ public sealed class WorkbookKeyboardShortcutCatalogTests
 
         duplicateRoutes.Should().BeEmpty();
     }
+
+    [Fact]
+    public void RouteCategories_PartitionWorkbookShortcutMatrix()
+    {
+        var uncategorizedRoutes = WorkbookKeyboardShortcutCatalog.Rules
+            .Select(rule => rule.Route)
+            .Distinct()
+            .Where(route =>
+                !WorkbookKeyboardShortcutCatalog.IsCommandRoute(route) &&
+                route != WorkbookShortcutRoute.PasteSpecial &&
+                !WorkbookKeyboardShortcutCatalog.IsFontToggleRoute(route) &&
+                !WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route) &&
+                !WorkbookKeyboardShortcutCatalog.IsBorderRoute(route))
+            .ToArray();
+
+        uncategorizedRoutes.Should().BeEmpty();
+    }
 }

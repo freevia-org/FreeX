@@ -10,7 +10,7 @@ public sealed partial class KeyboardShortcutMatcherTests
     [Fact]
     public void SharedWorkbookShortcutMatrix_RoutesWpfCommandShortcuts()
     {
-        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => ShouldRouteAsCommandShortcut(rule.Route)))
+        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => WorkbookKeyboardShortcutCatalog.IsCommandRoute(rule.Route)))
         {
             KeyboardShortcutMatcher.TryGetCommandShortcut(
                     ToWpfKey(rule.WindowsChord.Key),
@@ -26,7 +26,7 @@ public sealed partial class KeyboardShortcutMatcherTests
     [Fact]
     public void SharedWorkbookShortcutMatrix_RoutesWpfFontToggleShortcuts()
     {
-        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => IsFontToggleRoute(rule.Route)))
+        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => WorkbookKeyboardShortcutCatalog.IsFontToggleRoute(rule.Route)))
         {
             KeyboardShortcutMatcher.TryGetFontToggleShortcut(
                     ToWpfKey(rule.WindowsChord.Key),
@@ -53,7 +53,7 @@ public sealed partial class KeyboardShortcutMatcherTests
     [Fact]
     public void SharedWorkbookShortcutMatrix_RoutesWpfNumberFormatShortcuts()
     {
-        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => IsNumberFormatRoute(rule.Route)))
+        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(rule.Route)))
         {
             KeyboardShortcutMatcher.TryGetNumberFormatShortcut(
                     ToWpfKey(rule.WindowsChord.Key),
@@ -68,7 +68,7 @@ public sealed partial class KeyboardShortcutMatcherTests
     [Fact]
     public void SharedWorkbookShortcutMatrix_RoutesWpfBorderShortcuts()
     {
-        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => IsBorderRoute(rule.Route)))
+        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules.Where(rule => WorkbookKeyboardShortcutCatalog.IsBorderRoute(rule.Route)))
         {
             KeyboardShortcutMatcher.TryGetBorderShortcut(
                     ToWpfKey(rule.WindowsChord.Key),
@@ -189,29 +189,4 @@ public sealed partial class KeyboardShortcutMatcherTests
             _ => throw new ArgumentOutOfRangeException(nameof(route), route, null)
         };
 
-    private static bool ShouldRouteAsCommandShortcut(WorkbookShortcutRoute route) =>
-        route != WorkbookShortcutRoute.PasteSpecial &&
-        !IsFontToggleRoute(route) &&
-        !IsNumberFormatRoute(route) &&
-        !IsBorderRoute(route);
-
-    private static bool IsFontToggleRoute(WorkbookShortcutRoute route) =>
-        route is
-            WorkbookShortcutRoute.ToggleBold or
-            WorkbookShortcutRoute.ToggleItalic or
-            WorkbookShortcutRoute.ToggleUnderline or
-            WorkbookShortcutRoute.ToggleStrikethrough;
-
-    private static bool IsNumberFormatRoute(WorkbookShortcutRoute route) =>
-        route is
-            WorkbookShortcutRoute.NumberFormatGeneral or
-            WorkbookShortcutRoute.NumberFormatNumber or
-            WorkbookShortcutRoute.NumberFormatTime or
-            WorkbookShortcutRoute.NumberFormatDate or
-            WorkbookShortcutRoute.NumberFormatCurrency or
-            WorkbookShortcutRoute.NumberFormatPercentage or
-            WorkbookShortcutRoute.NumberFormatScientific;
-
-    private static bool IsBorderRoute(WorkbookShortcutRoute route) =>
-        route is WorkbookShortcutRoute.ApplyOutlineBorder or WorkbookShortcutRoute.ClearOutlineBorder;
 }

@@ -21689,15 +21689,8 @@ public sealed partial class MainWindow : Window
     private static bool IsOpenActiveDropdownShortcut(KeyEventArgs args) =>
         args.Key == Key.Down && args.KeyModifiers == KeyModifiers.Alt;
 
-    private static bool TryGetNumberFormatShortcut(Key key, KeyModifiers modifiers, out NumberFormatShortcut shortcut)
+    private static bool TryGetNumberFormatShortcut(WorkbookShortcutRoute route, out NumberFormatShortcut shortcut)
     {
-        shortcut = default;
-        if (!TryGetWorkbookNumberFormatShortcutKey(key, out var shortcutKey) ||
-            !TryGetWorkbookShortcutRoute(shortcutKey, ToWorkbookShortcutModifiers(modifiers), out var route))
-        {
-            return false;
-        }
-
         shortcut = route switch
         {
             WorkbookShortcutRoute.NumberFormatGeneral => NumberFormatShortcut.General,
@@ -21710,7 +21703,17 @@ public sealed partial class MainWindow : Window
             _ => default
         };
 
-        return IsNumberFormatRoute(route);
+        return WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route);
+    }
+
+    private static bool TryGetWorkbookShortcutRoute(
+        Key key,
+        KeyModifiers modifiers,
+        out WorkbookShortcutRoute route)
+    {
+        route = default;
+        return TryGetWorkbookShortcutKey(key, out var shortcutKey) &&
+            TryGetWorkbookShortcutRoute(shortcutKey, ToWorkbookShortcutModifiers(modifiers), out route);
     }
 
     private static bool TryGetWorkbookShortcutRoute(
@@ -21724,30 +21727,51 @@ public sealed partial class MainWindow : Window
     {
         shortcutKey = key switch
         {
-            Key.D7 => WorkbookShortcutKey.D7,
-            Key.OemMinus => WorkbookShortcutKey.OemMinus,
-            _ => default
-        };
-
-        return key is Key.D7 or Key.OemMinus;
-    }
-
-    private static bool TryGetWorkbookNumberFormatShortcutKey(Key key, out WorkbookShortcutKey shortcutKey)
-    {
-        shortcutKey = key switch
-        {
-            Key.Oem3 => WorkbookShortcutKey.Oem3,
+            Key.A => WorkbookShortcutKey.A,
+            Key.Back => WorkbookShortcutKey.Back,
+            Key.B => WorkbookShortcutKey.B,
+            Key.C => WorkbookShortcutKey.C,
+            Key.D => WorkbookShortcutKey.D,
             Key.D1 or Key.NumPad1 => WorkbookShortcutKey.D1,
             Key.D2 or Key.NumPad2 => WorkbookShortcutKey.D2,
             Key.D3 or Key.NumPad3 => WorkbookShortcutKey.D3,
             Key.D4 or Key.NumPad4 => WorkbookShortcutKey.D4,
             Key.D5 or Key.NumPad5 => WorkbookShortcutKey.D5,
             Key.D6 or Key.NumPad6 => WorkbookShortcutKey.D6,
+            Key.D7 => WorkbookShortcutKey.D7,
+            Key.Delete => WorkbookShortcutKey.Delete,
+            Key.E => WorkbookShortcutKey.E,
+            Key.F => WorkbookShortcutKey.F,
+            Key.F3 => WorkbookShortcutKey.F3,
+            Key.F5 => WorkbookShortcutKey.F5,
+            Key.F11 => WorkbookShortcutKey.F11,
+            Key.F12 => WorkbookShortcutKey.F12,
+            Key.G => WorkbookShortcutKey.G,
+            Key.H => WorkbookShortcutKey.H,
+            Key.I => WorkbookShortcutKey.I,
+            Key.Insert => WorkbookShortcutKey.Insert,
+            Key.N => WorkbookShortcutKey.N,
+            Key.O => WorkbookShortcutKey.O,
+            Key.Oem3 => WorkbookShortcutKey.Oem3,
+            Key.OemMinus => WorkbookShortcutKey.OemMinus,
+            Key.OemPlus or Key.Add => WorkbookShortcutKey.OemPlus,
+            Key.P => WorkbookShortcutKey.P,
+            Key.R => WorkbookShortcutKey.R,
+            Key.S => WorkbookShortcutKey.S,
+            Key.U => WorkbookShortcutKey.U,
+            Key.V => WorkbookShortcutKey.V,
+            Key.X => WorkbookShortcutKey.X,
+            Key.Y => WorkbookShortcutKey.Y,
+            Key.Z => WorkbookShortcutKey.Z,
             _ => default
         };
 
         return key is
-            Key.Oem3 or
+            Key.A or
+            Key.Back or
+            Key.B or
+            Key.C or
+            Key.D or
             Key.D1 or
             Key.NumPad1 or
             Key.D2 or
@@ -21759,7 +21783,33 @@ public sealed partial class MainWindow : Window
             Key.D5 or
             Key.NumPad5 or
             Key.D6 or
-            Key.NumPad6;
+            Key.NumPad6 or
+            Key.D7 or
+            Key.Delete or
+            Key.E or
+            Key.F or
+            Key.F3 or
+            Key.F5 or
+            Key.F11 or
+            Key.F12 or
+            Key.G or
+            Key.H or
+            Key.I or
+            Key.Insert or
+            Key.N or
+            Key.O or
+            Key.Oem3 or
+            Key.OemMinus or
+            Key.OemPlus or
+            Key.Add or
+            Key.P or
+            Key.R or
+            Key.S or
+            Key.U or
+            Key.V or
+            Key.X or
+            Key.Y or
+            Key.Z;
     }
 
     private static WorkbookShortcutModifiers ToWorkbookShortcutModifiers(KeyModifiers modifiers)
@@ -21767,7 +21817,7 @@ public sealed partial class MainWindow : Window
         var result = WorkbookShortcutModifiers.None;
         if (modifiers.HasFlag(KeyModifiers.Control))
             result |= WorkbookShortcutModifiers.Control;
-        else if (modifiers.HasFlag(KeyModifiers.Meta))
+        if (modifiers.HasFlag(KeyModifiers.Meta))
             result |= WorkbookShortcutModifiers.Meta;
         if (modifiers.HasFlag(KeyModifiers.Alt))
             result |= WorkbookShortcutModifiers.Alt;
@@ -21775,30 +21825,6 @@ public sealed partial class MainWindow : Window
             result |= WorkbookShortcutModifiers.Shift;
         return result;
     }
-
-    private static bool IsNumberFormatRoute(WorkbookShortcutRoute route) =>
-        route is
-            WorkbookShortcutRoute.NumberFormatGeneral or
-            WorkbookShortcutRoute.NumberFormatNumber or
-            WorkbookShortcutRoute.NumberFormatTime or
-            WorkbookShortcutRoute.NumberFormatDate or
-            WorkbookShortcutRoute.NumberFormatCurrency or
-            WorkbookShortcutRoute.NumberFormatPercentage or
-            WorkbookShortcutRoute.NumberFormatScientific;
-
-    private static bool TryGetBorderShortcut(
-        Key key,
-        KeyModifiers modifiers,
-        out WorkbookShortcutRoute route)
-    {
-        route = default;
-        return TryGetWorkbookShortcutKey(key, out var shortcutKey) &&
-            TryGetWorkbookShortcutRoute(shortcutKey, ToWorkbookShortcutModifiers(modifiers), out route) &&
-            IsBorderRoute(route);
-    }
-
-    private static bool IsBorderRoute(WorkbookShortcutRoute route) =>
-        route is WorkbookShortcutRoute.ApplyOutlineBorder or WorkbookShortcutRoute.ClearOutlineBorder;
 
     /// <summary>
     /// The worksheet-cell context-menu shortcut (Menu key / Shift+F10) — the same key combo used for
@@ -22032,65 +22058,15 @@ public sealed partial class MainWindow : Window
         {
             e.Handled = SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false);
         }
-        else if (e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            await ShowFindDialogAsync();
-        }
         else if (e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta)
         {
             e.Handled = true;
             FindNext();
         }
-        else if (e.Key == Key.H && HasOnlyControlModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            await ShowReplaceDialogAsync();
-        }
-        else if (e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))
-        {
-            e.Handled = true;
-            await ShowWorkbookStatisticsDialogAsync();
-        }
-        else if (e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            await ShowGoToDialogAsync();
-        }
         else if (e.Key == Key.K && HasOnlyControlModifier(e.KeyModifiers))
         {
             e.Handled = true;
             await ShowInsertHyperlinkDialogAsync();
-        }
-        else if ((e.Key is Key.D1 or Key.NumPad1) && HasOnlyCommandModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            await ShowFormatCellsDialogAsync();
-        }
-        else if (e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
-        {
-            e.Handled = true;
-            RedoLastEdit();
-        }
-        else if (e.Key == Key.Z)
-        {
-            e.Handled = true;
-            UndoLastEdit();
-        }
-        else if (e.Key == Key.Y)
-        {
-            e.Handled = true;
-            RedoLastEdit();
-        }
-        else if (e.Key == Key.X)
-        {
-            e.Handled = true;
-            await CutSelectedRangeToClipboardAsync();
-        }
-        else if (e.Key == Key.C)
-        {
-            e.Handled = true;
-            await CopySelectedRangeToClipboardAsync();
         }
         else if (e.Key == Key.V && HasCommandAndShiftModifiers(e.KeyModifiers))
         {
@@ -22100,18 +22076,6 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             await PasteSpecialClipboardTextAsync(PasteCellsMode.Values, default, "Values");
         }
-        else if (e.Key == Key.V && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Alt))
-        {
-            // Ctrl+Alt+V ("Paste Special...") — opens the same dialog as the ribbon's Paste Special
-            // item / WPF's PasteSpecialBtn_Click, instead of falling through to a full paste.
-            e.Handled = true;
-            await ShowPasteSpecialDialogAsync();
-        }
-        else if (e.Key == Key.V)
-        {
-            e.Handled = true;
-            await PasteClipboardTextAsync();
-        }
         else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers))
         {
             e.Handled = true;
@@ -22119,86 +22083,10 @@ public sealed partial class MainWindow : Window
             SelectCurrentRegionOrAll();
             RecordLaunchSmokeLiveSelectAllCommandKey(before, _session.SelectedRange);
         }
-        else if (e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);
-        }
-        else if (e.Key == Key.I && HasOnlyCommandModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);
-        }
-        else if (e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);
-        }
-        else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            FillSelectedRange(FillCellsDirection.Down);
-        }
-        else if (e.Key == Key.R && HasOnlyControlModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            FillSelectedRange(FillCellsDirection.Right);
-        }
-        else if (e.Key == Key.E && HasOnlyControlModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            FlashFillSelectedRange();
-        }
-        else if (e.Key is Key.D2 or Key.NumPad2 && HasOnlyControlModifier(e.KeyModifiers))
-        {
-            // Ctrl+2 is Excel's alternate Bold toggle (alongside Ctrl+B, already handled above).
-            e.Handled = true;
-            ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);
-        }
-        else if (e.Key is Key.D3 or Key.NumPad3 && HasOnlyControlModifier(e.KeyModifiers))
-        {
-            // Ctrl+3 is Excel's alternate Italic toggle (alongside Ctrl+I, already handled above).
-            e.Handled = true;
-            ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);
-        }
-        else if (TryGetNumberFormatShortcut(e.Key, e.KeyModifiers, out var numberFormatShortcut))
-        {
-            e.Handled = true;
-            ApplySelectedRangeNumberFormatShortcut(numberFormatShortcut);
-        }
-        else if (TryGetBorderShortcut(e.Key, e.KeyModifiers, out var borderRoute))
-        {
-            // Shared outline and clear-outline border shortcuts come from the workbook catalog.
-            e.Handled = true;
-            ApplySelectedRangeBorderPreset(
-                borderRoute == WorkbookShortcutRoute.ApplyOutlineBorder
-                    ? CellBorderPreset.Outside
-                    : CellBorderPreset.NoBorder);
-        }
-        else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ToggleSelectedRangeUnderline();
-        }
-        else if (e.Key is Key.D5 or Key.NumPad5 && HasOnlyControlModifier(e.KeyModifiers))
-        {
-            e.Handled = true;
-            ToggleSelectedRangeStrikethrough();
-        }
         else if (e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift))
         {
             e.Handled = true;
             await SaveWorkbookAsAsync();
-        }
-        else if (e.Key == Key.S)
-        {
-            e.Handled = true;
-            await SaveCurrentWorkbookAsync();
-        }
-        else if (e.Key == Key.N)
-        {
-            e.Handled = true;
-            await CreateNewWorkbookAsync();
         }
         else if (e.Key == Key.W && HasOnlyCommandModifier(e.KeyModifiers))
         {
@@ -22222,11 +22110,136 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             SelectGoToSpecial(GoToSpecialKind.Comments);
         }
-        else if (e.Key == Key.O)
+        else if (await TryHandleWorkbookShortcutRouteAsync(e))
+        {
+        }
+    }
+
+    private async Task<bool> TryHandleWorkbookShortcutRouteAsync(KeyEventArgs e)
+    {
+        if (!TryGetWorkbookShortcutRoute(e.Key, e.KeyModifiers, out var route))
+            return false;
+
+        switch (route)
+        {
+            case WorkbookShortcutRoute.NewWorkbook:
+                e.Handled = true;
+                await CreateNewWorkbookAsync();
+                return true;
+            case WorkbookShortcutRoute.OpenWorkbook:
+                e.Handled = true;
+                await OpenWorkbookAsync();
+                return true;
+            case WorkbookShortcutRoute.SaveWorkbook:
+                e.Handled = true;
+                await SaveCurrentWorkbookAsync();
+                return true;
+            case WorkbookShortcutRoute.Copy:
+                e.Handled = true;
+                await CopySelectedRangeToClipboardAsync();
+                return true;
+            case WorkbookShortcutRoute.Cut:
+                e.Handled = true;
+                await CutSelectedRangeToClipboardAsync();
+                return true;
+            case WorkbookShortcutRoute.Paste:
+                e.Handled = true;
+                await PasteClipboardTextAsync();
+                return true;
+            case WorkbookShortcutRoute.PasteSpecial:
+                e.Handled = true;
+                await ShowPasteSpecialDialogAsync();
+                return true;
+            case WorkbookShortcutRoute.Undo:
+                e.Handled = true;
+                UndoLastEdit();
+                return true;
+            case WorkbookShortcutRoute.Redo:
+                e.Handled = true;
+                RedoLastEdit();
+                return true;
+            case WorkbookShortcutRoute.ToggleBold:
+                e.Handled = true;
+                ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: e.Key == Key.B);
+                return true;
+            case WorkbookShortcutRoute.ToggleItalic:
+                e.Handled = true;
+                ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: e.Key == Key.I);
+                return true;
+            case WorkbookShortcutRoute.ToggleUnderline:
+                e.Handled = true;
+                ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: e.Key == Key.U);
+                return true;
+            case WorkbookShortcutRoute.ToggleStrikethrough:
+                e.Handled = true;
+                ToggleSelectedRangeStrikethrough();
+                return true;
+            case WorkbookShortcutRoute.FillDown:
+                e.Handled = true;
+                FillSelectedRange(FillCellsDirection.Down);
+                return true;
+            case WorkbookShortcutRoute.FillRight:
+                e.Handled = true;
+                FillSelectedRange(FillCellsDirection.Right);
+                return true;
+            case WorkbookShortcutRoute.FlashFill:
+                e.Handled = true;
+                FlashFillSelectedRange();
+                return true;
+            case WorkbookShortcutRoute.ToggleShowFormulas:
+                e.Handled = true;
+                ToggleShowFormulas();
+                return true;
+            case WorkbookShortcutRoute.OpenFormatCells:
+                e.Handled = true;
+                await ShowFormatCellsDialogAsync();
+                return true;
+            case WorkbookShortcutRoute.Find:
+                e.Handled = true;
+                await ShowFindDialogAsync();
+                return true;
+            case WorkbookShortcutRoute.Replace:
+                e.Handled = true;
+                await ShowReplaceDialogAsync();
+                return true;
+            case WorkbookShortcutRoute.GoTo:
+                e.Handled = true;
+                await ShowGoToDialogAsync();
+                return true;
+            case WorkbookShortcutRoute.InsertFunction:
+                e.Handled = true;
+                InsertFunction();
+                return true;
+            case WorkbookShortcutRoute.AutoSum:
+                e.Handled = true;
+                InsertAutoSumFormula("SUM");
+                return true;
+            case WorkbookShortcutRoute.WorkbookStatistics:
+                e.Handled = true;
+                await ShowWorkbookStatisticsDialogAsync();
+                return true;
+            case WorkbookShortcutRoute.InsertWorksheet:
+                e.Handled = true;
+                AddNewSheet();
+                return true;
+            case WorkbookShortcutRoute.ApplyOutlineBorder:
+                e.Handled = true;
+                ApplySelectedRangeBorderPreset(CellBorderPreset.Outside);
+                return true;
+            case WorkbookShortcutRoute.ClearOutlineBorder:
+                e.Handled = true;
+                ApplySelectedRangeBorderPreset(CellBorderPreset.NoBorder);
+                return true;
+        }
+
+        if (TryGetNumberFormatShortcut(route, out var numberFormatShortcut))
         {
             e.Handled = true;
-            await OpenWorkbookAsync();
+            ApplySelectedRangeNumberFormatShortcut(numberFormatShortcut);
+            return true;
         }
+
+        return false;
     }
 
     private bool IsTextEditingEventSource(KeyEventArgs args) =>

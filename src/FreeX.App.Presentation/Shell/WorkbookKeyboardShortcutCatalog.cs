@@ -290,6 +290,32 @@ public static class WorkbookKeyboardShortcutCatalog
         return false;
     }
 
+    public static bool IsCommandRoute(WorkbookShortcutRoute route) =>
+        route != WorkbookShortcutRoute.PasteSpecial &&
+        !IsFontToggleRoute(route) &&
+        !IsNumberFormatRoute(route) &&
+        !IsBorderRoute(route);
+
+    public static bool IsFontToggleRoute(WorkbookShortcutRoute route) =>
+        route is
+            WorkbookShortcutRoute.ToggleBold or
+            WorkbookShortcutRoute.ToggleItalic or
+            WorkbookShortcutRoute.ToggleUnderline or
+            WorkbookShortcutRoute.ToggleStrikethrough;
+
+    public static bool IsNumberFormatRoute(WorkbookShortcutRoute route) =>
+        route is
+            WorkbookShortcutRoute.NumberFormatGeneral or
+            WorkbookShortcutRoute.NumberFormatNumber or
+            WorkbookShortcutRoute.NumberFormatTime or
+            WorkbookShortcutRoute.NumberFormatDate or
+            WorkbookShortcutRoute.NumberFormatCurrency or
+            WorkbookShortcutRoute.NumberFormatPercentage or
+            WorkbookShortcutRoute.NumberFormatScientific;
+
+    public static bool IsBorderRoute(WorkbookShortcutRoute route) =>
+        route is WorkbookShortcutRoute.ApplyOutlineBorder or WorkbookShortcutRoute.ClearOutlineBorder;
+
     public static WorkbookShortcutChord GetNativeMenuChord(WorkbookShortcutRoute route) =>
         Rules
             .Where(rule => rule.Route == route && rule.NativeMenuChord is not null)

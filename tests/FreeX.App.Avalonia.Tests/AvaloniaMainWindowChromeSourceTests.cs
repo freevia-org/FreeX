@@ -7,19 +7,27 @@ namespace FreeX.App.Avalonia.Tests;
 public sealed class AvaloniaMainWindowChromeSourceTests
 {
     [Fact]
-    public void WorkbookBorderShortcuts_RouteThroughSharedCatalog()
+    public void WorkbookShortcuts_RouteThroughSharedCatalog()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
-        source.Should().Contain("TryGetBorderShortcut(e.Key, e.KeyModifiers, out var borderRoute)");
+        source.Should().Contain("TryHandleWorkbookShortcutRouteAsync(e)");
+        source.Should().Contain("TryGetWorkbookShortcutRoute(e.Key, e.KeyModifiers, out var route)");
         source.Should().Contain("TryGetWorkbookShortcutRoute(shortcutKey, ToWorkbookShortcutModifiers(modifiers), out route)");
+        source.Should().Contain("WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(key, modifiers, out route)");
         source.Should().Contain("WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(key, modifiers, out route)");
+        source.Should().Contain("WorkbookKeyboardShortcutCatalog.IsNumberFormatRoute(route)");
+        source.Should().Contain("case WorkbookShortcutRoute.Find:");
+        source.Should().Contain("case WorkbookShortcutRoute.ToggleBold:");
         source.Should().Contain("Key.D7 => WorkbookShortcutKey.D7");
         source.Should().Contain("Key.OemMinus => WorkbookShortcutKey.OemMinus");
         source.Should().Contain("WorkbookShortcutRoute.ApplyOutlineBorder");
         source.Should().Contain("WorkbookShortcutRoute.ClearOutlineBorder");
         source.Should().Contain("CellBorderPreset.Outside");
         source.Should().Contain("CellBorderPreset.NoBorder");
+        source.Should().NotContain("else if (e.Key == Key.F && HasOnlyCommandModifier");
+        source.Should().NotContain("else if (e.Key == Key.B && HasOnlyCommandModifier");
+        source.Should().NotContain("else if (e.Key == Key.D && HasOnlyControlModifier");
         source.Should().NotContain("e.Key == Key.D7 && HasCommandAndShiftModifiers");
     }
 
