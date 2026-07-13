@@ -116,9 +116,14 @@ public static partial class KeyboardShortcutMatcher
         {
             Key.A => WorkbookShortcutKey.A,
             Key.Back => WorkbookShortcutKey.Back,
+            Key.B => WorkbookShortcutKey.B,
             Key.C => WorkbookShortcutKey.C,
             Key.D => WorkbookShortcutKey.D,
             Key.D1 => WorkbookShortcutKey.D1,
+            Key.D2 or Key.NumPad2 => WorkbookShortcutKey.D2,
+            Key.D3 or Key.NumPad3 => WorkbookShortcutKey.D3,
+            Key.D4 or Key.NumPad4 => WorkbookShortcutKey.D4,
+            Key.D5 or Key.NumPad5 => WorkbookShortcutKey.D5,
             Key.Delete => WorkbookShortcutKey.Delete,
             Key.E => WorkbookShortcutKey.E,
             Key.F => WorkbookShortcutKey.F,
@@ -128,6 +133,7 @@ public static partial class KeyboardShortcutMatcher
             Key.F12 => WorkbookShortcutKey.F12,
             Key.G => WorkbookShortcutKey.G,
             Key.H => WorkbookShortcutKey.H,
+            Key.I => WorkbookShortcutKey.I,
             Key.Insert => WorkbookShortcutKey.Insert,
             Key.N => WorkbookShortcutKey.N,
             Key.O => WorkbookShortcutKey.O,
@@ -136,6 +142,7 @@ public static partial class KeyboardShortcutMatcher
             Key.P => WorkbookShortcutKey.P,
             Key.R => WorkbookShortcutKey.R,
             Key.S => WorkbookShortcutKey.S,
+            Key.U => WorkbookShortcutKey.U,
             Key.V => WorkbookShortcutKey.V,
             Key.X => WorkbookShortcutKey.X,
             Key.Y => WorkbookShortcutKey.Y,
@@ -146,9 +153,18 @@ public static partial class KeyboardShortcutMatcher
         return key is
             Key.A or
             Key.Back or
+            Key.B or
             Key.C or
             Key.D or
             Key.D1 or
+            Key.D2 or
+            Key.NumPad2 or
+            Key.D3 or
+            Key.NumPad3 or
+            Key.D4 or
+            Key.NumPad4 or
+            Key.D5 or
+            Key.NumPad5 or
             Key.Delete or
             Key.E or
             Key.F or
@@ -158,6 +174,7 @@ public static partial class KeyboardShortcutMatcher
             Key.F12 or
             Key.G or
             Key.H or
+            Key.I or
             Key.Insert or
             Key.N or
             Key.O or
@@ -167,6 +184,7 @@ public static partial class KeyboardShortcutMatcher
             Key.P or
             Key.R or
             Key.S or
+            Key.U or
             Key.V or
             Key.X or
             Key.Y or
@@ -209,34 +227,29 @@ public static partial class KeyboardShortcutMatcher
     public static bool TryGetFontToggleShortcut(Key key, ModifierKeys modifiers, out FontToggleShortcut shortcut)
     {
         shortcut = default;
-        if ((key == Key.B && modifiers == ModifierKeys.Control) ||
-            (key is Key.D2 or Key.NumPad2 && modifiers == ModifierKeys.Control))
+        if (!TryGetWorkbookShortcutKey(key, out var shortcutKey) ||
+            !WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
+                shortcutKey,
+                ToWorkbookModifiers(modifiers),
+                out var route))
         {
-            shortcut = FontToggleShortcut.Bold;
-            return true;
+            return false;
         }
 
-        if ((key == Key.I && modifiers == ModifierKeys.Control) ||
-            (key is Key.D3 or Key.NumPad3 && modifiers == ModifierKeys.Control))
+        shortcut = route switch
         {
-            shortcut = FontToggleShortcut.Italic;
-            return true;
-        }
+            WorkbookShortcutRoute.ToggleBold => FontToggleShortcut.Bold,
+            WorkbookShortcutRoute.ToggleItalic => FontToggleShortcut.Italic,
+            WorkbookShortcutRoute.ToggleUnderline => FontToggleShortcut.Underline,
+            WorkbookShortcutRoute.ToggleStrikethrough => FontToggleShortcut.Strikethrough,
+            _ => default
+        };
 
-        if ((key == Key.U && modifiers == ModifierKeys.Control) ||
-            (key is Key.D4 or Key.NumPad4 && modifiers == ModifierKeys.Control))
-        {
-            shortcut = FontToggleShortcut.Underline;
-            return true;
-        }
-
-        if (key is (Key.D5 or Key.NumPad5) && modifiers == ModifierKeys.Control)
-        {
-            shortcut = FontToggleShortcut.Strikethrough;
-            return true;
-        }
-
-        return false;
+        return route is
+            WorkbookShortcutRoute.ToggleBold or
+            WorkbookShortcutRoute.ToggleItalic or
+            WorkbookShortcutRoute.ToggleUnderline or
+            WorkbookShortcutRoute.ToggleStrikethrough;
     }
 
     public static bool TryGetBorderShortcut(Key key, ModifierKeys modifiers, out BorderKeyboardShortcut shortcut)

@@ -405,6 +405,10 @@ public sealed class NativeMenuCatalogTests
     [InlineData(WorkbookShortcutRoute.Copy, NativeMenuItemId.Copy)]
     [InlineData(WorkbookShortcutRoute.Paste, NativeMenuItemId.Paste)]
     [InlineData(WorkbookShortcutRoute.PasteSpecial, NativeMenuItemId.PasteSpecial)]
+    [InlineData(WorkbookShortcutRoute.ToggleBold, NativeMenuItemId.Bold)]
+    [InlineData(WorkbookShortcutRoute.ToggleItalic, NativeMenuItemId.Italic)]
+    [InlineData(WorkbookShortcutRoute.ToggleUnderline, NativeMenuItemId.Underline)]
+    [InlineData(WorkbookShortcutRoute.ToggleStrikethrough, NativeMenuItemId.Strikethrough)]
     [InlineData(WorkbookShortcutRoute.OpenFormatCells, NativeMenuItemId.FormatCells)]
     [InlineData(WorkbookShortcutRoute.FillDown, NativeMenuItemId.FillDown)]
     [InlineData(WorkbookShortcutRoute.FillRight, NativeMenuItemId.FillRight)]
@@ -571,21 +575,25 @@ public sealed class NativeMenuCatalogTests
     private static NativeMenuGestureKey ToNativeMenuGestureKey(WorkbookShortcutKey key) =>
         key switch
         {
+            WorkbookShortcutKey.B => NativeMenuGestureKey.B,
             WorkbookShortcutKey.C => NativeMenuGestureKey.C,
             WorkbookShortcutKey.D => NativeMenuGestureKey.D,
             WorkbookShortcutKey.D1 => NativeMenuGestureKey.D1,
+            WorkbookShortcutKey.D5 => NativeMenuGestureKey.D5,
             WorkbookShortcutKey.E => NativeMenuGestureKey.E,
             WorkbookShortcutKey.F => NativeMenuGestureKey.F,
             WorkbookShortcutKey.F3 => NativeMenuGestureKey.F3,
             WorkbookShortcutKey.F11 => NativeMenuGestureKey.F11,
             WorkbookShortcutKey.G => NativeMenuGestureKey.G,
             WorkbookShortcutKey.H => NativeMenuGestureKey.H,
+            WorkbookShortcutKey.I => NativeMenuGestureKey.I,
             WorkbookShortcutKey.N => NativeMenuGestureKey.N,
             WorkbookShortcutKey.O => NativeMenuGestureKey.O,
             WorkbookShortcutKey.Oem3 => NativeMenuGestureKey.Oem3,
             WorkbookShortcutKey.OemPlus => NativeMenuGestureKey.OemPlus,
             WorkbookShortcutKey.R => NativeMenuGestureKey.R,
             WorkbookShortcutKey.S => NativeMenuGestureKey.S,
+            WorkbookShortcutKey.U => NativeMenuGestureKey.U,
             WorkbookShortcutKey.V => NativeMenuGestureKey.V,
             WorkbookShortcutKey.X => NativeMenuGestureKey.X,
             WorkbookShortcutKey.Z => NativeMenuGestureKey.Z,

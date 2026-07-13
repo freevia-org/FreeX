@@ -674,15 +674,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_clearCommentsMenuItem.Click += (_, _) => ClearSelectedRangeComments();");
         catalogSource.Should().Contain("new(NativeMenuItemId.ClearHyperlinks, \"Clear Hyperlinks\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_clearHyperlinksMenuItem.Click += (_, _) => ClearSelectedRangeHyperlinks();");
-        catalogSource.Should().Contain("new(NativeMenuItemId.Bold, \"Bold\", new NativeMenuGesturePlan(NativeMenuGestureKey.B, NativeMenuGestureModifiers.Meta))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Bold, \"Bold\", NativeMenuGesture(WorkbookShortcutRoute.ToggleBold))");
         source.Should().Contain("_boldMenuItem.Click += (_, _) => ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);");
-        catalogSource.Should().Contain("new(NativeMenuItemId.Italic, \"Italic\", new NativeMenuGesturePlan(NativeMenuGestureKey.I, NativeMenuGestureModifiers.Meta))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Italic, \"Italic\", NativeMenuGesture(WorkbookShortcutRoute.ToggleItalic))");
         source.Should().Contain("_italicMenuItem.Click += (_, _) => ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);");
-        catalogSource.Should().Contain("new(NativeMenuItemId.Underline, \"Underline\", new NativeMenuGesturePlan(NativeMenuGestureKey.U, NativeMenuGestureModifiers.Meta))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Underline, \"Underline\", NativeMenuGesture(WorkbookShortcutRoute.ToggleUnderline))");
         source.Should().Contain("_underlineMenuItem.Click += (_, _) => ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);");
         catalogSource.Should().Contain("new(NativeMenuItemId.DoubleUnderline, \"Double Underline\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_doubleUnderlineMenuItem.Click += (_, _) => ToggleSelectedRangeDoubleUnderline();");
-        catalogSource.Should().Contain("new(NativeMenuItemId.Strikethrough, \"Strikethrough\", new NativeMenuGesturePlan(NativeMenuGestureKey.D5, NativeMenuGestureModifiers.Control))");
+        catalogSource.Should().Contain("new(NativeMenuItemId.Strikethrough, \"Strikethrough\", NativeMenuGesture(WorkbookShortcutRoute.ToggleStrikethrough))");
         source.Should().Contain("_strikethroughMenuItem.Click += (_, _) => ToggleSelectedRangeStrikethrough();");
         catalogSource.Should().Contain("new(NativeMenuItemId.IncreaseFontSize, \"Increase Font Size\", RequiresGestureInSmoke: false)");
         source.Should().Contain("_increaseFontSizeMenuItem.Click += (_, _) => IncreaseSelectedRangeFontSize();");
@@ -5331,9 +5331,9 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("NativeMenuGestureKey.A, NativeMenuGestureModifiers.Meta");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.Find)");
         catalogSource.Should().Contain("NativeMenuGestureKey.G, NativeMenuGestureModifiers.Meta");
-        catalogSource.Should().Contain("NativeMenuGestureKey.B, NativeMenuGestureModifiers.Meta");
-        catalogSource.Should().Contain("NativeMenuGestureKey.I, NativeMenuGestureModifiers.Meta");
-        catalogSource.Should().Contain("NativeMenuGestureKey.U, NativeMenuGestureModifiers.Meta");
+        catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.ToggleBold)");
+        catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.ToggleItalic)");
+        catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.ToggleUnderline)");
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenFormatCells)");
         catalogSource.Should().Contain("NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta");
 
