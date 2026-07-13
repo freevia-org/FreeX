@@ -575,6 +575,42 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_CarriesPictureCropToPdfImageSourceCrop()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Picture,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            PictureFormat = new PictureFormat
+            {
+                CropLeft = 0.125,
+                CropTop = 0.25,
+                CropRight = 0.0625,
+                CropBottom = 0.1875,
+            },
+            Picture = new ImagePart { Bytes = MinimalPngBytes(), ContentType = "image/png" },
+        });
+        deck.Slides.Add(slide);
+
+        var image = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops
+            .OfType<PdfImage>()
+            .Should().ContainSingle()
+            .Subject;
+
+        image.SourceCrop.HasCrop.Should().BeTrue();
+        image.SourceCrop.Left.Should().Be(0.125);
+        image.SourceCrop.Top.Should().Be(0.25);
+        image.SourceCrop.Right.Should().Be(0.0625);
+        image.SourceCrop.Bottom.Should().Be(0.1875);
+    }
+
+    [Fact]
     public void ExportToBytes_EmbedsPictureImageXObject()
     {
         var deck = Presentation.CreateEmpty();

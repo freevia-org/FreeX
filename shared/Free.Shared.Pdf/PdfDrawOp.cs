@@ -141,6 +141,19 @@ public enum PdfImageClipKind
 }
 
 /// <summary>
+/// Fractional source-image crop margins, matching PresentationML <c>a:srcRect</c> semantics.
+/// Values are normalized by writers against the decoded image dimensions before painting.
+/// </summary>
+public readonly record struct PdfImageSourceCrop(
+    double Left,
+    double Top,
+    double Right,
+    double Bottom)
+{
+    public bool HasCrop => Left != 0 || Top != 0 || Right != 0 || Bottom != 0;
+}
+
+/// <summary>
 /// Draws an encoded bitmap image into a rectangular PDF user-space bounds. Supported portable
 /// content types are PNG and JPEG; unsupported content types are skipped by the dependency-free
 /// writer instead of emitting a corrupt image stream.
@@ -154,4 +167,5 @@ public sealed record PdfImage(
     string ContentType,
     double RotationDegrees = 0,
     PdfImageClipKind ClipKind = PdfImageClipKind.None,
-    double Opacity = 1) : PdfDrawOp;
+    double Opacity = 1,
+    PdfImageSourceCrop SourceCrop = default) : PdfDrawOp;

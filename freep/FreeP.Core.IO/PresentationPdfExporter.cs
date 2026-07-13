@@ -205,7 +205,8 @@ public static class PresentationPdfExporter
             picture.ContentType,
             shape.RotationDeg,
             MapPictureFrameClip(shape.PictureFrameGeometry),
-            MapPictureOpacity(shape)));
+            MapPictureOpacity(shape),
+            MapPictureSourceCrop(shape)));
         return true;
     }
 
@@ -221,6 +222,18 @@ public static class PresentationPdfExporter
         shape.Kind == SlideShapeKind.Picture && shape.PictureFormat?.AlphaModPct is { } opacity
             ? Math.Clamp(opacity, 0.0, 1.0)
             : 1.0;
+
+    private static PdfImageSourceCrop MapPictureSourceCrop(SlideShape shape)
+    {
+        var format = shape.PictureFormat;
+        return format is { HasCrop: true }
+            ? new PdfImageSourceCrop(
+                format.CropLeft,
+                format.CropTop,
+                format.CropRight,
+                format.CropBottom)
+            : default;
+    }
 
     private static bool TryAppendConnectorGeometry(
         List<PdfDrawOp> ops,

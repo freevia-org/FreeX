@@ -255,6 +255,29 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsSourceCroppedImagePlacementWithDestinationClip()
+    {
+        var page = new PdfContentPage(120, 90, new PdfDrawOp[]
+        {
+            new PdfImage(
+                10,
+                20,
+                80,
+                40,
+                MinimalJpegBytes(),
+                "image/jpeg",
+                SourceCrop: new PdfImageSourceCrop(0.25, 0.125, 0.25, 0.375)),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("10 20 80 40 re W n");
+        pdf.Should().Contain("160 0 0 80 -30 -10 cm");
+        pdf.Should().Contain("/Im1 Do");
+    }
+
+    [Fact]
     public void Write_ClipsImageToEllipse()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

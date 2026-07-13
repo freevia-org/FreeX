@@ -130,7 +130,7 @@ public static class PortablePdfWriter
                 break;
             case PdfImage image when imageResources.TryGetValue(image, out var resource):
                 opacityResources.TryGetValue(NormalizeOpacity(image.Opacity), out var opacityResource);
-                AppendImage(content, image, resource.ResourceName, opacityResource?.ResourceName);
+                AppendImage(content, image, resource, opacityResource?.ResourceName);
                 break;
         }
     }
@@ -583,12 +583,18 @@ public static class PortablePdfWriter
     private static void AppendImage(
         StringBuilder content,
         PdfImage image,
-        string resourceName,
+        PdfImageResource resource,
         string? opacityResourceName)
     {
-        if (image.ClipKind != PdfImageClipKind.None)
+        var hasSourceCrop = TryGetSourceCroppedImagePlacement(image, resource, out var placement);
+        if (image.ClipKind != PdfImageClipKind.None || hasSourceCrop)
         {
-            AppendClippedImage(content, image, resourceName, opacityResourceName);
+            AppendClippedImage(
+                content,
+                image,
+                resource.ResourceName,
+                opacityResourceName,
+                hasSourceCrop ? placement : null);
             return;
         }
 
@@ -606,7 +612,7 @@ public static class PortablePdfWriter
         var e = centerX - (cos * image.Width / 2d) + (sin * image.Height / 2d);
         var f = centerY - (sin * image.Width / 2d) - (cos * image.Height / 2d);
         content.AppendLine($"{FormatNumber(a)} {FormatNumber(b)} {FormatNumber(c)} {FormatNumber(d)} {FormatNumber(e)} {FormatNumber(f)} cm");
-        content.AppendLine($"/{resourceName} Do");
+        content.AppendLine($"/{resource.ResourceName} Do");
         content.AppendLine("Q");
     }
 
@@ -614,17 +620,67 @@ public static class PortablePdfWriter
         StringBuilder content,
         PdfImage image,
         string resourceName,
-        string? opacityResourceName)
+        string? opacityResourceName,
+        PdfImagePlacement? croppedPlacement = null)
     {
+        var placement = croppedPlacement ?? new PdfImagePlacement(image.X, image.Y, image.Width, image.Height);
+
         content.AppendLine("q");
         AppendOpacityState(content, opacityResourceName);
         if (Math.Abs(image.RotationDegrees) > 0.001)
             AppendRotationTransform(content, image.X + image.Width / 2d, image.Y + image.Height / 2d, image.RotationDegrees);
 
-        AppendImageClipPath(content, image);
-        content.AppendLine($"{FormatNumber(image.Width)} 0 0 {FormatNumber(image.Height)} {FormatNumber(image.X)} {FormatNumber(image.Y)} cm");
+        AppendImageClipPath(content, image, croppedPlacement is not null);
+        content.AppendLine($"{FormatNumber(placement.Width)} 0 0 {FormatNumber(placement.Height)} {FormatNumber(placement.X)} {FormatNumber(placement.Y)} cm");
         content.AppendLine($"/{resourceName} Do");
         content.AppendLine("Q");
+    }
+
+    private static bool TryGetSourceCroppedImagePlacement(
+        PdfImage image,
+        PdfImageResource resource,
+        out PdfImagePlacement placement)
+    {
+        placement = default;
+        if (!image.SourceCrop.HasCrop ||
+            image.Width <= 0 ||
+            image.Height <= 0 ||
+            resource.PixelWidth <= 0 ||
+            resource.PixelHeight <= 0)
+            return false;
+
+        var sourceX = Clamp(
+            (int)Math.Round(NormalizeCropFraction(image.SourceCrop.Left) * resource.PixelWidth),
+            0,
+            resource.PixelWidth - 1);
+        var sourceY = Clamp(
+            (int)Math.Round(NormalizeCropFraction(image.SourceCrop.Top) * resource.PixelHeight),
+            0,
+            resource.PixelHeight - 1);
+        var sourceWidth = Clamp(
+            (int)Math.Round((1.0 - NormalizeCropFraction(image.SourceCrop.Left) - NormalizeCropFraction(image.SourceCrop.Right)) * resource.PixelWidth),
+            1,
+            resource.PixelWidth - sourceX);
+        var sourceHeight = Clamp(
+            (int)Math.Round((1.0 - NormalizeCropFraction(image.SourceCrop.Top) - NormalizeCropFraction(image.SourceCrop.Bottom)) * resource.PixelHeight),
+            1,
+            resource.PixelHeight - sourceY);
+
+        if (sourceX == 0 &&
+            sourceY == 0 &&
+            sourceWidth == resource.PixelWidth &&
+            sourceHeight == resource.PixelHeight)
+            return false;
+
+        var scaleX = image.Width / sourceWidth;
+        var scaleY = image.Height / sourceHeight;
+        var sourceBottom = resource.PixelHeight - sourceY - sourceHeight;
+        placement = new PdfImagePlacement(
+            image.X - sourceX * scaleX,
+            image.Y - sourceBottom * scaleY,
+            resource.PixelWidth * scaleX,
+            resource.PixelHeight * scaleY);
+        return true;
     }
 
     private static void AppendRotationGroup(
@@ -756,7 +812,7 @@ public static class PortablePdfWriter
         content.AppendLine($"{FormatNumber(cx + ox)} {FormatNumber(cy - ry)} {FormatNumber(cx + rx)} {FormatNumber(cy - oy)} {FormatNumber(cx + rx)} {FormatNumber(cy)} c");
     }
 
-    private static void AppendImageClipPath(StringBuilder content, PdfImage image)
+    private static void AppendImageClipPath(StringBuilder content, PdfImage image, bool includeRectangularClip = false)
     {
         switch (image.ClipKind)
         {
@@ -767,6 +823,9 @@ public static class PortablePdfWriter
             case PdfImageClipKind.RoundedRectangle:
                 AppendRoundedRectanglePath(content, image.X, image.Y, image.Width, image.Height);
                 content.AppendLine("W n");
+                break;
+            case PdfImageClipKind.None when includeRectangularClip:
+                content.AppendLine($"{FormatNumber(image.X)} {FormatNumber(image.Y)} {FormatNumber(image.Width)} {FormatNumber(image.Height)} re W n");
                 break;
         }
     }
@@ -968,6 +1027,12 @@ public static class PortablePdfWriter
     private static double NormalizeOpacity(double opacity) =>
         Math.Round(Math.Clamp(double.IsFinite(opacity) ? opacity : 1.0, 0.0, 1.0), 3);
 
+    private static double NormalizeCropFraction(double value) =>
+        double.IsFinite(value) ? value : 0.0;
+
+    private static int Clamp(int value, int min, int max) =>
+        Math.Max(min, Math.Min(value, max));
+
     private static void WriteAscii(Stream stream, string text) =>
         stream.Write(PdfEncoding.GetBytes(text));
 
@@ -998,6 +1063,8 @@ public static class PortablePdfWriter
         byte[] Data);
 
     private sealed record PdfOpacityResource(string ResourceName, double Opacity);
+
+    private readonly record struct PdfImagePlacement(double X, double Y, double Width, double Height);
 
     private sealed record PngPdfPixels(
         int Width,

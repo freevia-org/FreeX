@@ -250,19 +250,65 @@ public static class SkiaPdfWriter
                     canvas.RotateDegrees((float)image.RotationDegrees);
                     var localRect = new SKRect(-width / 2f, -height / 2f, width / 2f, height / 2f);
                     ClipImage(canvas, image.ClipKind, localRect);
-                    canvas.DrawImage(skImage, localRect, imagePaint);
+                    DrawImage(canvas, skImage, image, localRect, imagePaint);
                 }
                 else
                 {
                     var destRect = new SKRect(left, top, left + width, top + height);
                     ClipImage(canvas, image.ClipKind, destRect);
-                    canvas.DrawImage(skImage, destRect, imagePaint);
+                    DrawImage(canvas, skImage, image, destRect, imagePaint);
                 }
 
                 canvas.Restore();
                 break;
             }
         }
+    }
+
+    private static void DrawImage(
+        SKCanvas canvas,
+        SKImage skImage,
+        PdfImage image,
+        SKRect destRect,
+        SKPaint imagePaint)
+    {
+        if (TryGetSourceRect(skImage, image.SourceCrop, out var sourceRect))
+            canvas.DrawImage(skImage, sourceRect, destRect, imagePaint);
+        else
+            canvas.DrawImage(skImage, destRect, imagePaint);
+    }
+
+    private static bool TryGetSourceRect(SKImage image, PdfImageSourceCrop crop, out SKRect sourceRect)
+    {
+        sourceRect = default;
+        if (!crop.HasCrop || image.Width <= 0 || image.Height <= 0)
+            return false;
+
+        var sourceX = Clamp(
+            (int)Math.Round(NormalizeCropFraction(crop.Left) * image.Width),
+            0,
+            image.Width - 1);
+        var sourceY = Clamp(
+            (int)Math.Round(NormalizeCropFraction(crop.Top) * image.Height),
+            0,
+            image.Height - 1);
+        var sourceWidth = Clamp(
+            (int)Math.Round((1.0 - NormalizeCropFraction(crop.Left) - NormalizeCropFraction(crop.Right)) * image.Width),
+            1,
+            image.Width - sourceX);
+        var sourceHeight = Clamp(
+            (int)Math.Round((1.0 - NormalizeCropFraction(crop.Top) - NormalizeCropFraction(crop.Bottom)) * image.Height),
+            1,
+            image.Height - sourceY);
+
+        if (sourceX == 0 &&
+            sourceY == 0 &&
+            sourceWidth == image.Width &&
+            sourceHeight == image.Height)
+            return false;
+
+        sourceRect = SKRect.Create(sourceX, sourceY, sourceWidth, sourceHeight);
+        return true;
     }
 
     private static SKPath ToSkPath(PdfPath pdfPath, float pageHeight)
@@ -329,6 +375,12 @@ public static class SkiaPdfWriter
 
     private static byte ToAlphaByte(double opacity) =>
         (byte)Math.Clamp(Math.Round((double.IsFinite(opacity) ? opacity : 1.0) * 255.0), 0, 255);
+
+    private static double NormalizeCropFraction(double value) =>
+        double.IsFinite(value) ? value : 0.0;
+
+    private static int Clamp(int value, int min, int max) =>
+        Math.Max(min, Math.Min(value, max));
 
     private static bool IsSupportedImageContentType(string? contentType)
     {
