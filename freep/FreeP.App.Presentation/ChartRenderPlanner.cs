@@ -1349,6 +1349,7 @@ public static partial class ChartRenderPlanner
         var (secondaryMin, secondaryMax, _) = ComputeSecondaryValueAxisRange(chart);
         double secondaryRange = secondaryMax - secondaryMin;
         bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
+        bool percentStacked = IsHundredPercentStacked(chart.ChartType);
         double categoryWidth = plot.Width / categoryCount;
         int seriesCount = Math.Max(1, chart.Series.Count);
         var spacing = ResolveBarClusterSpacing(chart, categoryWidth, seriesCount, stacked);
@@ -1389,7 +1390,16 @@ public static partial class ChartRenderPlanner
                 double drawWidth = Math.Max(1, slot.SeriesSize - (stacked ? 0 : 1));
                 if (stacked)
                 {
-                    double height = Math.Max(0.5, Math.Abs(rawValue.Value / effectiveRange) * plot.Height);
+                    double height = Math.Max(
+                        0.5,
+                        ComputeStackedExtent(
+                            chart,
+                            categoryIndex,
+                            rawValue.Value,
+                            series.OnSecondaryAxis,
+                            plot.Height,
+                            Math.Abs(rawValue.Value / effectiveRange) * plot.Height,
+                            percentStacked));
                     primitives.Add(new ChartRectPrimitive(
                         seriesIndex,
                         categoryIndex,
@@ -1433,6 +1443,7 @@ public static partial class ChartRenderPlanner
         var (secondaryMin, secondaryMax, _) = ComputeSecondaryValueAxisRange(chart);
         double secondaryRange = secondaryMax - secondaryMin;
         bool stacked = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
+        bool percentStacked = IsHundredPercentStacked(chart.ChartType);
         double categoryHeight = plot.Height / categoryCount;
         int seriesCount = Math.Max(1, chart.Series.Count);
         var spacing = ResolveBarClusterSpacing(chart, categoryHeight, seriesCount, stacked);
@@ -1459,7 +1470,18 @@ public static partial class ChartRenderPlanner
                 if (effectiveRange <= 0)
                     continue;
 
-                double width = Math.Max(0.5, Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Width));
+                double width = Math.Max(
+                    0.5,
+                    stacked
+                        ? ComputeStackedExtent(
+                            chart,
+                            categoryIndex,
+                            rawValue.Value,
+                            series.OnSecondaryAxis,
+                            plot.Width,
+                            Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Width),
+                            percentStacked)
+                        : Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Width));
                 int renderSeries = stacked ? seriesIndex : seriesCount - 1 - seriesIndex;
                 double y = stacked
                     ? slot.ClusterStart
@@ -2201,6 +2223,14 @@ public static partial class ChartRenderPlanner
     public static (double min, double max, double majorUnit) ComputePrimaryValueAxisRange(
         ChartShape chart)
     {
+        if (IsHundredPercentStacked(chart.ChartType) &&
+            chart.ValueAxis.Min is null &&
+            chart.ValueAxis.Max is null &&
+            chart.Series.Any(series => !series.OnSecondaryAxis && series.Values.Any(value => value.HasValue)))
+        {
+            return (0, 1, 0.25);
+        }
+
         double dataMin = 0;
         double dataMax = 0;
 
@@ -3290,6 +3320,7 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartDataLabelPlan>();
 
         bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
+        bool percentStacked = IsHundredPercentStacked(chart.ChartType);
         double categoryWidth = plot.Width / categoryCount;
         int seriesCount = Math.Max(1, chart.Series.Count);
         var spacing = ResolveBarClusterSpacing(chart, categoryWidth, seriesCount, stacked);
@@ -3323,11 +3354,29 @@ public static partial class ChartRenderPlanner
                     if (previousValue is null)
                         continue;
 
-                    double height = Math.Max(0.5, Math.Abs(previousValue.Value / effectiveRange) * plot.Height);
+                    double height = Math.Max(
+                        0.5,
+                        ComputeStackedExtent(
+                            chart,
+                            categoryIndex,
+                            previousValue.Value,
+                            series.OnSecondaryAxis,
+                            plot.Height,
+                            Math.Abs(previousValue.Value / effectiveRange) * plot.Height,
+                            percentStacked));
                     stackedY -= height;
                 }
 
-                barHeight = Math.Max(0.5, Math.Abs(value / effectiveRange) * plot.Height);
+                barHeight = Math.Max(
+                    0.5,
+                    ComputeStackedExtent(
+                        chart,
+                        categoryIndex,
+                        value,
+                        series.OnSecondaryAxis,
+                        plot.Height,
+                        Math.Abs(value / effectiveRange) * plot.Height,
+                        percentStacked));
                 barY = stackedY - barHeight;
             }
             else
@@ -3455,6 +3504,7 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartDataLabelPlan>();
 
         bool stacked = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
+        bool percentStacked = IsHundredPercentStacked(chart.ChartType);
         double categoryHeight = plot.Height / categoryCount;
         int seriesCount = Math.Max(1, chart.Series.Count);
         var spacing = ResolveBarClusterSpacing(chart, categoryHeight, seriesCount, stacked);
@@ -3487,10 +3537,28 @@ public static partial class ChartRenderPlanner
                     if (previousValue is null)
                         continue;
 
-                    stackedX += Math.Max(0.5, Math.Abs((previousValue.Value - effectiveMin) / effectiveRange * plot.Width));
+                    stackedX += Math.Max(
+                        0.5,
+                        ComputeStackedExtent(
+                            chart,
+                            categoryIndex,
+                            previousValue.Value,
+                            series.OnSecondaryAxis,
+                            plot.Width,
+                            Math.Abs((previousValue.Value - effectiveMin) / effectiveRange * plot.Width),
+                            percentStacked));
                 }
 
-                barWidth = Math.Max(0.5, Math.Abs((value - effectiveMin) / effectiveRange * plot.Width));
+                barWidth = Math.Max(
+                    0.5,
+                    ComputeStackedExtent(
+                        chart,
+                        categoryIndex,
+                        value,
+                        series.OnSecondaryAxis,
+                        plot.Width,
+                        Math.Abs((value - effectiveMin) / effectiveRange * plot.Width),
+                        percentStacked));
                 barX = stackedX;
                 barY = slot.ClusterStart;
             }
@@ -3621,6 +3689,51 @@ public static partial class ChartRenderPlanner
 
         return total;
     }
+
+    private static bool IsHundredPercentStacked(ChartType chartType) =>
+        chartType is ChartType.ColumnStacked100 or ChartType.BarStacked100;
+
+    private static double ComputeStackedExtent(
+        ChartShape chart,
+        int categoryIndex,
+        double value,
+        bool onSecondaryAxis,
+        double totalExtent,
+        double fallbackExtent,
+        bool percentStacked)
+    {
+        if (!percentStacked)
+            return fallbackExtent;
+
+        double categoryTotal = ComputeStackedCategoryMagnitudeTotal(chart, categoryIndex, onSecondaryAxis);
+        return categoryTotal > 0
+            ? Math.Abs(value) / categoryTotal * totalExtent
+            : fallbackExtent;
+    }
+
+    private static double ComputeStackedCategoryMagnitudeTotal(
+        ChartShape chart,
+        int categoryIndex,
+        bool onSecondaryAxis)
+    {
+        double total = 0;
+        foreach (var series in chart.Series)
+        {
+            if (series.OnSecondaryAxis != onSecondaryAxis || IsComboOverrideNonStacked(series.OverrideChartType))
+                continue;
+
+            if (categoryIndex < series.Values.Count && series.Values[categoryIndex].HasValue)
+                total += Math.Abs(series.Values[categoryIndex]!.Value);
+        }
+
+        return total;
+    }
+
+    private static bool IsComboOverrideNonStacked(ChartType? overrideType) =>
+        overrideType is ChartType.Line
+            or ChartType.LineMarkers
+            or ChartType.Scatter
+            or ChartType.Bubble;
 
     private static (double min, double max, double majorUnit) ComputeNiceRange(
         double min,
