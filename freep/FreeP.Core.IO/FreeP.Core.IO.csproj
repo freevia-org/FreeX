@@ -3,6 +3,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <DefineConstants>$(DefineConstants);FREEP_CORE_IO</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
@@ -18,5 +19,8 @@
     <ProjectReference Include="..\..\shared\Free.Shared.Opc\Free.Shared.Opc.csproj" />
     <!-- Portable (no-WPF) PDF emitter shared with FreeX/FreeW for selectable-text PDF export. -->
     <ProjectReference Include="..\..\shared\Free.Shared.Pdf\Free.Shared.Pdf.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\FreeP.App.Presentation\ShapeEffectRenderPlanner.cs" Link="ShapeEffectRenderPlanner.cs" />
   </ItemGroup>
 </Project>

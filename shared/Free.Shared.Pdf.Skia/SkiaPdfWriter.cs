@@ -228,6 +228,22 @@ public static class SkiaPdfWriter
                 break;
             }
 
+            case PdfOpacityGroup group:
+            {
+                if (group.Ops.Count == 0)
+                    break;
+
+                using var layerPaint = new SKPaint
+                {
+                    Color = new SKColor(255, 255, 255, ToAlphaByte(group.Opacity)),
+                };
+                canvas.SaveLayer(layerPaint);
+                foreach (var child in group.Ops)
+                    RenderDrawOp(canvas, child, pageHeight, regular, bold, fillPaint, strokePaint, textPaint, textRenderer);
+                canvas.Restore();
+                break;
+            }
+
             case PdfImage image:
             {
                 if (!IsSupportedImageContentType(image.ContentType) || image.ImageBytes.Length == 0)

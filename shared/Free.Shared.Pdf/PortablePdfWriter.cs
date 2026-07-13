@@ -128,9 +128,13 @@ public static class PortablePdfWriter
             case PdfRotationGroup group:
                 AppendRotationGroup(content, group, imageResources, opacityResources);
                 break;
+            case PdfOpacityGroup group:
+                opacityResources.TryGetValue(NormalizeOpacity(group.Opacity), out var groupOpacityResource);
+                AppendOpacityGroup(content, group, groupOpacityResource?.ResourceName, imageResources, opacityResources);
+                break;
             case PdfImage image when imageResources.TryGetValue(image, out var resource):
-                opacityResources.TryGetValue(NormalizeOpacity(image.Opacity), out var opacityResource);
-                AppendImage(content, image, resource, opacityResource?.ResourceName);
+                opacityResources.TryGetValue(NormalizeOpacity(image.Opacity), out var imageOpacityResource);
+                AppendImage(content, image, resource, imageOpacityResource?.ResourceName);
                 break;
         }
     }
@@ -265,8 +269,7 @@ public static class PortablePdfWriter
         foreach (var opacity in document.Pages
             .SelectMany(page => page.Ops)
             .SelectMany(EnumerateOps)
-            .OfType<PdfImage>()
-            .Select(image => NormalizeOpacity(image.Opacity))
+            .SelectMany(EnumerateOpacities)
             .Where(opacity => opacity < 1.0))
         {
             if (byOpacity.ContainsKey(opacity))
@@ -312,6 +315,25 @@ public static class PortablePdfWriter
         {
             foreach (var child in group.Ops.SelectMany(EnumerateOps))
                 yield return child;
+        }
+
+        if (op is PdfOpacityGroup opacityGroup)
+        {
+            foreach (var child in opacityGroup.Ops.SelectMany(EnumerateOps))
+                yield return child;
+        }
+    }
+
+    private static IEnumerable<double> EnumerateOpacities(PdfDrawOp op)
+    {
+        switch (op)
+        {
+            case PdfImage image:
+                yield return NormalizeOpacity(image.Opacity);
+                break;
+            case PdfOpacityGroup group:
+                yield return NormalizeOpacity(group.Opacity);
+                break;
         }
     }
 
@@ -715,6 +737,25 @@ public static class PortablePdfWriter
 
         content.AppendLine("q");
         AppendRotationTransform(content, group.CenterX, group.CenterY, group.RotationDegrees);
+
+        foreach (var op in group.Ops)
+            AppendDrawOp(content, op, imageResources, opacityResources);
+
+        content.AppendLine("Q");
+    }
+
+    private static void AppendOpacityGroup(
+        StringBuilder content,
+        PdfOpacityGroup group,
+        string? opacityResourceName,
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources)
+    {
+        if (group.Ops.Count == 0)
+            return;
+
+        content.AppendLine("q");
+        AppendOpacityState(content, opacityResourceName);
 
         foreach (var op in group.Ops)
             AppendDrawOp(content, op, imageResources, opacityResources);

@@ -1,7 +1,11 @@
 using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
+#if FREEP_CORE_IO
+namespace FreeP.Core.IO.ShapeEffectPlanning;
+#else
 namespace FreeP.App.Compositor;
+#endif
 
 public readonly record struct ShapeShadowPass(
     double OffsetX,
@@ -25,11 +29,46 @@ public sealed record ShapeEffectRenderPlan(
 
 public static class ShapeEffectRenderPlanner
 {
+#if !FREEP_CORE_IO
     public static ShapeEffectRenderPlan PlanOuterEffects(ResolvedShapeEffects? effects)
     {
         if (effects is null)
             return ShapeEffectRenderPlan.Empty;
 
+        return PlanOuterEffects(new ShapeEffectValues(
+            effects.HasOuterShadow,
+            effects.OuterShadowColor,
+            effects.OuterShadowAlpha,
+            effects.OuterShadowBlurDip,
+            effects.OuterShadowDistDip,
+            effects.OuterShadowDirDeg,
+            effects.HasGlow,
+            effects.GlowColor,
+            effects.GlowAlpha,
+            effects.GlowRadiusDip));
+    }
+#endif
+
+    public static ShapeEffectRenderPlan PlanOuterEffects(ShapeEffects? effects)
+    {
+        if (effects is null)
+            return ShapeEffectRenderPlan.Empty;
+
+        return PlanOuterEffects(new ShapeEffectValues(
+            effects.HasOuterShadow,
+            effects.OuterShadowColor,
+            effects.OuterShadowAlpha,
+            effects.OuterShadowBlurRadEmu / (double)DrawingMlCoordinateUnits.EmuPerPixel,
+            effects.OuterShadowDistEmu / (double)DrawingMlCoordinateUnits.EmuPerPixel,
+            effects.OuterShadowDirDeg,
+            effects.HasGlow,
+            effects.GlowColor,
+            effects.GlowAlpha,
+            effects.GlowRadiusEmu / (double)DrawingMlCoordinateUnits.EmuPerPixel));
+    }
+
+    private static ShapeEffectRenderPlan PlanOuterEffects(ShapeEffectValues effects)
+    {
         var shadows = PlanShadowPasses(effects);
         var glows = PlanGlowPasses(effects);
         return shadows.Count == 0 && glows.Count == 0
@@ -37,7 +76,7 @@ public static class ShapeEffectRenderPlanner
             : new ShapeEffectRenderPlan(shadows, glows);
     }
 
-    private static IReadOnlyList<ShapeShadowPass> PlanShadowPasses(ResolvedShapeEffects effects)
+    private static IReadOnlyList<ShapeShadowPass> PlanShadowPasses(ShapeEffectValues effects)
     {
         if (!effects.HasOuterShadow)
             return Array.Empty<ShapeShadowPass>();
@@ -74,7 +113,7 @@ public static class ShapeEffectRenderPlanner
         return passes;
     }
 
-    private static IReadOnlyList<ShapeGlowPass> PlanGlowPasses(ResolvedShapeEffects effects)
+    private static IReadOnlyList<ShapeGlowPass> PlanGlowPasses(ShapeEffectValues effects)
     {
         if (!effects.HasGlow)
             return Array.Empty<ShapeGlowPass>();
@@ -96,4 +135,16 @@ public static class ShapeEffectRenderPlanner
 
         return passes;
     }
+
+    private readonly record struct ShapeEffectValues(
+        bool HasOuterShadow,
+        SrgbColor OuterShadowColor,
+        byte OuterShadowAlpha,
+        double OuterShadowBlurDip,
+        double OuterShadowDistDip,
+        double OuterShadowDirDeg,
+        bool HasGlow,
+        SrgbColor GlowColor,
+        byte GlowAlpha,
+        double GlowRadiusDip);
 }

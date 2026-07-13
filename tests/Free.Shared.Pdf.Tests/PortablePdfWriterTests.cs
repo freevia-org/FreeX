@@ -256,6 +256,27 @@ public sealed class PortablePdfWriterTests
     }
 
     [Fact]
+    public void Write_EmitsOpacityGroupExtGStateForVectorOps()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfOpacityGroup(
+                0.375,
+                new PdfDrawOp[]
+                {
+                    new PdfFillRect(10, 20, 30, 40, new PdfColor(0x11, 0x22, 0x33)),
+                }),
+        });
+
+        var pdf = Encoding.Latin1.GetString(PortablePdfWriter.WriteToBytes(new PdfContentDocument(new[] { page })))
+            .Replace("\r\n", "\n");
+
+        pdf.Should().Contain("/ExtGState << /GS1 ");
+        pdf.Should().Contain("<< /Type /ExtGState /ca 0.375 /CA 0.375 >>");
+        pdf.Should().Contain("/GS1 gs\nq\n0.067 0.133 0.2 rg\n10 20 30 40 re f");
+    }
+
+    [Fact]
     public void Write_AppliesPngImageColorEffectsBeforeEmbedding()
     {
         var page = new PdfContentPage(100, 80, new PdfDrawOp[]

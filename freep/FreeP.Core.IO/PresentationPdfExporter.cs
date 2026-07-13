@@ -1,6 +1,7 @@
 using System.IO;
 using Free.Shared.Drawing;
 using Free.Shared.Pdf;
+using FreeP.Core.IO.ShapeEffectPlanning;
 using FreeP.Core.Model;
 
 namespace FreeP.Core.IO;
@@ -28,6 +29,7 @@ public static class PresentationPdfExporter
     private const double ArrowheadLengthStrokeScale = 4.0;
     private const double ArrowheadHalfWidthRatio = 0.35;
     private const double EmuPerPoint = 12700.0;
+    private const double DipToPoint = 0.75;
 
     /// <summary>Renders the presentation to PDF bytes in memory.</summary>
     public static byte[] ExportToBytes(Presentation presentation) =>
@@ -98,11 +100,18 @@ public static class PresentationPdfExporter
         {
             var shapeOps = new List<PdfDrawOp>();
             var shapeBox = TryAppendShapeGeometry(shapeOps, shape, slideHeightPoints);
+            var geometryOpsCount = shapeOps.Count;
             var hasText = !string.IsNullOrEmpty(shape.Text);
             var content = hasText ? shape.Text : $"[{shape.Kind}]";
 
             if (shapeBox is { } box)
             {
+                AppendShapeEffectOps(
+                    ops,
+                    shape,
+                    shapeOps.Take(geometryOpsCount).ToArray(),
+                    box);
+
                 if (hasText || (!IsConnectorLike(shape) && !IsPictureLike(shape)))
                     AppendShapeText(shapeOps, box, content);
 
@@ -121,6 +130,216 @@ public static class PresentationPdfExporter
 
         return new PdfContentPage(slideWidthPoints, slideHeightPoints, ops);
     }
+
+    private static void AppendShapeEffectOps(
+        List<PdfDrawOp> ops,
+        SlideShape shape,
+        IReadOnlyList<PdfDrawOp> geometryOps,
+        ShapeBox box)
+    {
+        if (geometryOps.Count == 0 || IsPictureLike(shape))
+            return;
+
+        var plan = ShapeEffectRenderPlanner.PlanOuterEffects(shape.Effects);
+        if (plan.ShadowPasses.Count == 0 && plan.GlowPasses.Count == 0)
+            return;
+
+        foreach (var shadow in plan.ShadowPasses)
+        {
+            var shadowOps = CreateShadowPassOps(geometryOps, shadow);
+            AppendEffectPass(ops, shadowOps, shadow.Alpha, box, shape.RotationDeg);
+        }
+
+        foreach (var glow in plan.GlowPasses)
+        {
+            var glowOps = CreateGlowPassOps(geometryOps, glow);
+            AppendEffectPass(ops, glowOps, glow.Alpha, box, shape.RotationDeg);
+        }
+    }
+
+    private static void AppendEffectPass(
+        List<PdfDrawOp> ops,
+        IReadOnlyList<PdfDrawOp> passOps,
+        byte alpha,
+        ShapeBox box,
+        double rotationDegrees)
+    {
+        if (passOps.Count == 0 || alpha == 0)
+            return;
+
+        AppendShapeOps(
+            ops,
+            [new PdfOpacityGroup(alpha / 255.0, passOps)],
+            box,
+            rotationDegrees);
+    }
+
+    private static IReadOnlyList<PdfDrawOp> CreateShadowPassOps(
+        IReadOnlyList<PdfDrawOp> geometryOps,
+        ShapeShadowPass shadow)
+    {
+        var color = ToPdfColor(shadow.Color);
+        var offsetX = shadow.OffsetX * DipToPoint;
+        var offsetY = -shadow.OffsetY * DipToPoint;
+        var passOps = new List<PdfDrawOp>(geometryOps.Count);
+
+        foreach (var op in geometryOps)
+        {
+            switch (op)
+            {
+                case PdfFillRect fill:
+                    passOps.Add(new PdfFillRect(
+                        fill.X + offsetX,
+                        fill.Y + offsetY,
+                        fill.Width,
+                        fill.Height,
+                        color));
+                    break;
+                case PdfStrokeRect stroke:
+                    passOps.Add(new PdfStrokeRect(
+                        stroke.X + offsetX,
+                        stroke.Y + offsetY,
+                        stroke.Width,
+                        stroke.Height,
+                        color,
+                        stroke.LineWidth));
+                    break;
+                case PdfFillEllipse fillEllipse:
+                    passOps.Add(new PdfFillEllipse(
+                        fillEllipse.X + offsetX,
+                        fillEllipse.Y + offsetY,
+                        fillEllipse.Width,
+                        fillEllipse.Height,
+                        color));
+                    break;
+                case PdfStrokeEllipse strokeEllipse:
+                    passOps.Add(new PdfStrokeEllipse(
+                        strokeEllipse.X + offsetX,
+                        strokeEllipse.Y + offsetY,
+                        strokeEllipse.Width,
+                        strokeEllipse.Height,
+                        color,
+                        strokeEllipse.LineWidth));
+                    break;
+                case PdfPath path:
+                    passOps.Add(new PdfPath(
+                        OffsetContours(path.Contours, offsetX, offsetY),
+                        path.FillColor is null ? null : color,
+                        path.StrokeColor is null ? null : color,
+                        path.StrokeWidth));
+                    break;
+                case PdfLine line:
+                    passOps.Add(new PdfLine(
+                        line.X1 + offsetX,
+                        line.Y1 + offsetY,
+                        line.X2 + offsetX,
+                        line.Y2 + offsetY,
+                        color,
+                        line.LineWidth));
+                    break;
+                case PdfFilledTriangle triangle:
+                    passOps.Add(new PdfFilledTriangle(
+                        triangle.X1 + offsetX,
+                        triangle.Y1 + offsetY,
+                        triangle.X2 + offsetX,
+                        triangle.Y2 + offsetY,
+                        triangle.X3 + offsetX,
+                        triangle.Y3 + offsetY,
+                        color));
+                    break;
+            }
+        }
+
+        return passOps;
+    }
+
+    private static IReadOnlyList<PdfDrawOp> CreateGlowPassOps(
+        IReadOnlyList<PdfDrawOp> geometryOps,
+        ShapeGlowPass glow)
+    {
+        var color = ToPdfColor(glow.Color);
+        var lineWidth = Math.Max(0.1, glow.StrokeWidthDip * DipToPoint);
+        var passOps = new List<PdfDrawOp>(geometryOps.Count);
+        var filledRects = new HashSet<ShapeBounds>();
+        var filledEllipses = new HashSet<ShapeBounds>();
+
+        foreach (var op in geometryOps)
+        {
+            switch (op)
+            {
+                case PdfFillRect fill:
+                {
+                    var bounds = new ShapeBounds(fill.X, fill.Y, fill.Width, fill.Height);
+                    filledRects.Add(bounds);
+                    passOps.Add(new PdfStrokeRect(fill.X, fill.Y, fill.Width, fill.Height, color, lineWidth));
+                    break;
+                }
+                case PdfStrokeRect stroke:
+                {
+                    var bounds = new ShapeBounds(stroke.X, stroke.Y, stroke.Width, stroke.Height);
+                    if (!filledRects.Contains(bounds))
+                        passOps.Add(new PdfStrokeRect(stroke.X, stroke.Y, stroke.Width, stroke.Height, color, lineWidth));
+                    break;
+                }
+                case PdfFillEllipse fillEllipse:
+                {
+                    var bounds = new ShapeBounds(fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height);
+                    filledEllipses.Add(bounds);
+                    passOps.Add(new PdfStrokeEllipse(fillEllipse.X, fillEllipse.Y, fillEllipse.Width, fillEllipse.Height, color, lineWidth));
+                    break;
+                }
+                case PdfStrokeEllipse strokeEllipse:
+                {
+                    var bounds = new ShapeBounds(strokeEllipse.X, strokeEllipse.Y, strokeEllipse.Width, strokeEllipse.Height);
+                    if (!filledEllipses.Contains(bounds))
+                        passOps.Add(new PdfStrokeEllipse(strokeEllipse.X, strokeEllipse.Y, strokeEllipse.Width, strokeEllipse.Height, color, lineWidth));
+                    break;
+                }
+                case PdfPath path:
+                    passOps.Add(new PdfPath(path.Contours, null, color, lineWidth));
+                    break;
+                case PdfLine line:
+                    passOps.Add(new PdfLine(line.X1, line.Y1, line.X2, line.Y2, color, lineWidth));
+                    break;
+            }
+        }
+
+        return passOps;
+    }
+
+    private static IReadOnlyList<PdfPathContour> OffsetContours(
+        IReadOnlyList<PdfPathContour> contours,
+        double offsetX,
+        double offsetY)
+    {
+        var translated = new List<PdfPathContour>(contours.Count);
+        foreach (var contour in contours)
+        {
+            var segments = new List<PdfPathSegment>(contour.Segments.Count);
+            foreach (var segment in contour.Segments)
+            {
+                segments.Add(segment.Kind switch
+                {
+                    PdfPathSegmentKind.Line => PdfPathSegment.LineTo(OffsetPoint(segment.End, offsetX, offsetY)),
+                    PdfPathSegmentKind.CubicBezier => PdfPathSegment.BezierTo(
+                        OffsetPoint(segment.Control1, offsetX, offsetY),
+                        OffsetPoint(segment.Control2, offsetX, offsetY),
+                        OffsetPoint(segment.End, offsetX, offsetY)),
+                    _ => segment,
+                });
+            }
+
+            translated.Add(new PdfPathContour(
+                OffsetPoint(contour.Start, offsetX, offsetY),
+                segments,
+                contour.Closed));
+        }
+
+        return translated;
+    }
+
+    private static PdfPathPoint OffsetPoint(PdfPathPoint point, double offsetX, double offsetY) =>
+        new(point.X + offsetX, point.Y + offsetY);
 
     private static void AppendShapeOps(
         List<PdfDrawOp> ops,
@@ -618,8 +837,11 @@ public static class PresentationPdfExporter
     private static PdfColor ToPdfColor(ThemeAwareColor color)
     {
         var resolved = color.Resolved;
-        return new PdfColor(resolved.R, resolved.G, resolved.B);
+        return ToPdfColor(resolved);
     }
 
+    private static PdfColor ToPdfColor(SrgbColor color) => new(color.R, color.G, color.B);
+
     private sealed record ShapeBox(double X, double Y, double Width, double Height);
+    private readonly record struct ShapeBounds(double X, double Y, double Width, double Height);
 }

@@ -131,6 +131,12 @@ public sealed record PdfRotationGroup(
     IReadOnlyList<PdfDrawOp> Ops) : PdfDrawOp;
 
 /// <summary>
+/// Applies a uniform opacity to a child draw-op list. Writers render the children as a graphics
+/// state/layer so callers can reuse the same vector geometry for approximate effects.
+/// </summary>
+public sealed record PdfOpacityGroup(double Opacity, IReadOnlyList<PdfDrawOp> Ops) : PdfDrawOp;
+
+/// <summary>
 /// Optional clipping geometry applied to an image before it is painted.
 /// </summary>
 public enum PdfImageClipKind

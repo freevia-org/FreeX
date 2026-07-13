@@ -125,6 +125,92 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_EmitsPlannerShadowGroupBeforeVectorShapeBody()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x4472C4)),
+            Outline = new ShapeOutline.Visible(SrgbColor.Black, widthPt: 1.5),
+            Effects = new ShapeEffects
+            {
+                HasOuterShadow = true,
+                OuterShadowColor = SrgbColor.FromRgb(0x222222),
+                OuterShadowAlpha = 128,
+                OuterShadowDistEmu = DrawingMlCoordinateUnits.PointsToEmu(12),
+                OuterShadowDirDeg = 0,
+            },
+            Text = "Shadowed",
+        });
+        deck.Slides.Add(slide);
+
+        var ops = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops.ToList();
+        var shadowGroup = ops.OfType<PdfOpacityGroup>().Should().ContainSingle().Subject;
+        var shadowFill = shadowGroup.Ops.OfType<PdfFillRect>().Should().ContainSingle().Subject;
+        var bodyFill = ops.OfType<PdfFillRect>().Should().ContainSingle().Subject;
+
+        ops.IndexOf(shadowGroup).Should().BeLessThan(ops.IndexOf(bodyFill));
+        shadowGroup.Opacity.Should().BeApproximately(128 / 255.0, 0.0001);
+        shadowFill.X.Should().Be(84);
+        shadowFill.Y.Should().Be(378);
+        shadowFill.Width.Should().Be(144);
+        shadowFill.Height.Should().Be(72);
+        shadowFill.Color.Should().Be(new PdfColor(0x22, 0x22, 0x22));
+        shadowGroup.Ops.OfType<PdfStrokeRect>().Should().ContainSingle(stroke =>
+            stroke.X == 84 &&
+            stroke.Y == 378 &&
+            stroke.LineWidth == 1.5 &&
+            stroke.Color == new PdfColor(0x22, 0x22, 0x22));
+        ops.OfType<PdfText>().Should().ContainSingle(text => text.Text == "Shadowed");
+    }
+
+    [Fact]
+    public void BuildDocument_EmitsPlannerGlowGroupForVectorShapeBounds()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(SrgbColor.FromRgb(0x4472C4)),
+            Effects = new ShapeEffects
+            {
+                HasGlow = true,
+                GlowColor = SrgbColor.FromRgb(0x00B0F0),
+                GlowAlpha = 120,
+                GlowRadiusEmu = DrawingMlCoordinateUnits.PointsToEmu(1.5),
+            },
+        });
+        deck.Slides.Add(slide);
+
+        var glowGroup = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops
+            .OfType<PdfOpacityGroup>()
+            .Should().ContainSingle()
+            .Subject;
+        var glowStroke = glowGroup.Ops.OfType<PdfStrokeRect>().Should().ContainSingle().Subject;
+
+        glowGroup.Opacity.Should().BeApproximately(60 / 255.0, 0.0001);
+        glowStroke.X.Should().Be(72);
+        glowStroke.Y.Should().Be(378);
+        glowStroke.Width.Should().Be(144);
+        glowStroke.Height.Should().Be(72);
+        glowStroke.LineWidth.Should().Be(3);
+        glowStroke.Color.Should().Be(new PdfColor(0x00, 0xB0, 0xF0));
+    }
+
+    [Fact]
     public void BuildDocument_UsesModeledSlideSizeForPageAndGeometry()
     {
         var deck = Presentation.CreateEmpty();

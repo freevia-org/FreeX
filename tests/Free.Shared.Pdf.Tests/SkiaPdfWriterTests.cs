@@ -48,6 +48,26 @@ public sealed class SkiaPdfWriterTests
     }
 
     [Fact]
+    public void Write_AcceptsOpacityGroups()
+    {
+        var page = new PdfContentPage(100, 80, new PdfDrawOp[]
+        {
+            new PdfOpacityGroup(
+                0.4,
+                new PdfDrawOp[]
+                {
+                    new PdfStrokeRect(10, 20, 30, 40, new PdfColor(0x11, 0x22, 0x33), 3),
+                }),
+        });
+        using var stream = new MemoryStream();
+
+        var pageCount = SkiaPdfWriter.Write(new PdfContentDocument(new[] { page }), stream);
+
+        pageCount.Should().Be(1);
+        stream.Length.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void ApplyColorEffects_TransformsDecodedImagePixels()
     {
         using var bitmap = new SKBitmap(1, 1);
