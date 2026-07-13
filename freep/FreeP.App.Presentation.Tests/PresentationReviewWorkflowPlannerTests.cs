@@ -2830,9 +2830,122 @@ public sealed class PresentationReviewWorkflowPlannerTests
             row.SlideDisplay == "Slide 1" &&
             row.SuggestedReplacement == "The" &&
             row.CorrectionAction.CommandId == PresentationReviewWorkflowPlanner.ProofingApplyCorrectionCommandId &&
-            row.CorrectionAction.IsEnabled);
+            row.CorrectionAction.IsEnabled &&
+            row.IgnoreAction.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreCommandId &&
+            row.IgnoreAction.IsEnabled &&
+            row.IgnoreAllAction.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreAllCommandId &&
+            row.IgnoreAllAction.IsEnabled);
         plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ProofingApplyCorrectionCommandId)
             .IsEnabled.Should().BeTrue();
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreCommandId)
+            .IsEnabled.Should().BeTrue();
+        plan.Actions.Single(action => action.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreAllCommandId)
+            .IsEnabled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildProofingPanePlan_IgnoreSuppressesOnlySelectedOccurrenceAndNormalizesSelection()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro eror";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Caption",
+            Text = "Body eror"
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var initial = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution, selectedRowIndex: 1);
+        var ignoreState = PresentationReviewWorkflowPlanner.AddProofingIgnoredIssue(
+            PresentationProofingIgnoreState.Empty,
+            initial.SelectedRow);
+        var filtered = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            execution,
+            PresentationReviewWorkflowPlanner.NormalizeProofingSelectionAfterIgnore(
+                initial.SelectedRowIndex,
+                PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution, ignoreState: ignoreState)),
+            ignoreState);
+
+        filtered.IssueCount.Should().Be(1);
+        filtered.SelectedRowIndex.Should().Be(0);
+        filtered.SelectedRow!.Scope.Kind.Should().Be(PresentationProofingScopeKind.SlideTitle);
+        filtered.SelectedRow.Text.Should().Be("eror");
+        filtered.Rows.Should().ContainSingle(row =>
+            row.Scope.Kind == PresentationProofingScopeKind.SlideTitle &&
+            row.Text == "eror");
+
+        PresentationReviewWorkflowPlanner.AddProofingIgnoredIssue(ignoreState, initial.SelectedRow)
+            .IgnoredIssues.Should().HaveCount(1);
+    }
+
+    [Fact]
+    public void BuildProofingPanePlan_IgnoreAllSuppressesMatchingIssueTextAndMessageAcrossScopes()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Title eror";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 4,
+            Name = "Body",
+            Text = "Body EROR and teh"
+        });
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 9,
+            Name = "Results table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Cell eror") }
+                        }
+                    }
+                }
+            }
+        });
+        slide.Notes = TextBody("Notes eror");
+        slide.Comments.Add(new SlideComment
+        {
+            Text = "Comment eror",
+            Replies =
+            {
+                new SlideCommentReply { Text = "Reply eror" }
+            }
+        });
+
+        var execution = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        var initial = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution);
+        var ignoreState = PresentationReviewWorkflowPlanner.AddProofingIgnoredIssueGroup(
+            PresentationProofingIgnoreState.Empty,
+            initial.SelectedRow);
+        var filtered = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(execution, ignoreState: ignoreState);
+
+        execution.Issues.Where(issue =>
+                string.Equals(issue.Text, "eror", StringComparison.OrdinalIgnoreCase) &&
+                issue.Message == "Possible misspelling.")
+            .Select(issue => issue.Scope.Kind)
+            .Should().Equal(
+                PresentationProofingScopeKind.SlideTitle,
+                PresentationProofingScopeKind.ShapeText,
+                PresentationProofingScopeKind.TableCellText,
+                PresentationProofingScopeKind.SpeakerNotes,
+                PresentationProofingScopeKind.Comment,
+                PresentationProofingScopeKind.CommentReply);
+        filtered.IssueCount.Should().Be(1);
+        filtered.SelectedRow!.Text.Should().Be("teh");
+        filtered.SelectedRow.Scope.Kind.Should().Be(PresentationProofingScopeKind.ShapeText);
+        filtered.SelectedRow.CorrectionAction.IsEnabled.Should().BeTrue();
+
+        PresentationReviewWorkflowPlanner.AddProofingIgnoredIssueGroup(ignoreState, initial.SelectedRow)
+            .IgnoredIssueGroups.Should().HaveCount(1);
     }
 
     [Fact]

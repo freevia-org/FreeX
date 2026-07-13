@@ -162,6 +162,7 @@ public sealed class MainWindow : Window
     private TextBlock _proofingPaneMessage = null!;
     private StackPanel _proofingPaneRowsPanel = null!;
     private int? _selectedProofingIssueRowIndex;
+    private PresentationProofingIgnoreState _proofingIgnoreState = PresentationProofingIgnoreState.Empty;
     private Border _animationPaneHost = null!;
     private TextBlock _animationPaneHeading = null!;
     private TextBlock _animationPaneMessage = null!;
@@ -348,6 +349,12 @@ public sealed class MainWindow : Window
     internal bool IsProofingPaneCorrectionEnabled =>
         LastProofingPanePlan?.Actions.SingleOrDefault(action =>
             action.CommandId == PresentationReviewWorkflowPlanner.ProofingApplyCorrectionCommandId)?.IsEnabled == true;
+    internal bool IsProofingPaneIgnoreEnabled =>
+        LastProofingPanePlan?.Actions.SingleOrDefault(action =>
+            action.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreCommandId)?.IsEnabled == true;
+    internal bool IsProofingPaneIgnoreAllEnabled =>
+        LastProofingPanePlan?.Actions.SingleOrDefault(action =>
+            action.CommandId == PresentationReviewWorkflowPlanner.ProofingIgnoreAllCommandId)?.IsEnabled == true;
     internal string ProofingPaneHeading => _proofingPaneHeading?.Text ?? string.Empty;
     internal string ProofingPaneMessage => _proofingPaneMessage?.Text ?? string.Empty;
     internal string? ReadingOrderMoveEarlierDisabledReason =>
@@ -4851,7 +4858,8 @@ public sealed class MainWindow : Window
         LastProofingPanePlan =
             PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
                 LastProofingExecutionPlan,
-                _selectedProofingIssueRowIndex);
+                _selectedProofingIssueRowIndex,
+                _proofingIgnoreState);
         _selectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
             ? LastProofingPanePlan.SelectedRowIndex
             : null;
@@ -4876,7 +4884,8 @@ public sealed class MainWindow : Window
         _selectedProofingIssueRowIndex = normalized >= 0 ? normalized : null;
         LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
             LastProofingExecutionPlan!,
-            _selectedProofingIssueRowIndex);
+            _selectedProofingIssueRowIndex,
+            _proofingIgnoreState);
         RenderProofingPane(LastProofingPanePlan);
         _proofingPaneHost.IsVisible = true;
         return LastProofingPanePlan;
@@ -4918,12 +4927,15 @@ public sealed class MainWindow : Window
             selectedRow.SuggestedReplacement);
         if (mutation.ShouldApply)
         {
-            var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(LastProofingExecutionPlan!);
+            var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+                LastProofingExecutionPlan!,
+                ignoreState: _proofingIgnoreState);
             LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
                 LastProofingExecutionPlan!,
                 PresentationReviewWorkflowPlanner.NormalizeProofingSelectionAfterCorrection(
                     previousSelection,
-                    refreshed));
+                    refreshed),
+                _proofingIgnoreState);
             _selectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
                 ? LastProofingPanePlan.SelectedRowIndex
                 : null;
@@ -4932,6 +4944,48 @@ public sealed class MainWindow : Window
         }
 
         return mutation;
+    }
+
+    internal PresentationProofingPanePlan IgnoreSelectedProofingIssue()
+    {
+        if (LastProofingPanePlan is null)
+            ShowProofingPane();
+
+        var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
+        _proofingIgnoreState = PresentationReviewWorkflowPlanner.AddProofingIgnoredIssue(
+            _proofingIgnoreState,
+            LastProofingPanePlan.SelectedRow);
+        return RefreshProofingPaneAfterIgnore(previousSelection);
+    }
+
+    internal PresentationProofingPanePlan IgnoreAllSelectedProofingIssues()
+    {
+        if (LastProofingPanePlan is null)
+            ShowProofingPane();
+
+        var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
+        _proofingIgnoreState = PresentationReviewWorkflowPlanner.AddProofingIgnoredIssueGroup(
+            _proofingIgnoreState,
+            LastProofingPanePlan.SelectedRow);
+        return RefreshProofingPaneAfterIgnore(previousSelection);
+    }
+
+    private PresentationProofingPanePlan RefreshProofingPaneAfterIgnore(int previousSelection)
+    {
+        var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            LastProofingExecutionPlan!,
+            ignoreState: _proofingIgnoreState);
+        LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            LastProofingExecutionPlan!,
+            PresentationReviewWorkflowPlanner.NormalizeProofingSelectionAfterIgnore(previousSelection, refreshed),
+            _proofingIgnoreState);
+        _selectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
+            ? LastProofingPanePlan.SelectedRowIndex
+            : null;
+        if (IsProofingPaneVisible)
+            RenderProofingPane(LastProofingPanePlan);
+
+        return LastProofingPanePlan;
     }
 
     private void RenderProofingPane(PresentationProofingPanePlan plan)
@@ -4976,6 +5030,38 @@ public sealed class MainWindow : Window
             ApplySelectedProofingCorrection();
         };
 
+        var ignore = new Button
+        {
+            Content = row.IgnoreAction.Label,
+            Tag = row.RowIndex,
+            MinWidth = 72,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(8, 8, 0, 0),
+            IsEnabled = row.IgnoreAction.IsEnabled,
+        };
+        ToolTip.SetTip(ignore, row.IgnoreAction.DisabledReason);
+        ignore.Click += (_, _) =>
+        {
+            SelectProofingIssueRow(row.RowIndex);
+            IgnoreSelectedProofingIssue();
+        };
+
+        var ignoreAll = new Button
+        {
+            Content = row.IgnoreAllAction.Label,
+            Tag = row.RowIndex,
+            MinWidth = 72,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(8, 8, 0, 0),
+            IsEnabled = row.IgnoreAllAction.IsEnabled,
+        };
+        ToolTip.SetTip(ignoreAll, row.IgnoreAllAction.DisabledReason);
+        ignoreAll.Click += (_, _) =>
+        {
+            SelectProofingIssueRow(row.RowIndex);
+            IgnoreAllSelectedProofingIssues();
+        };
+
         var select = new Button
         {
             Content = "Select",
@@ -4989,7 +5075,7 @@ public sealed class MainWindow : Window
         var buttons = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Children = { action, select },
+            Children = { action, ignore, ignoreAll, select },
         };
 
         var panel = new StackPanel
