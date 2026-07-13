@@ -46,6 +46,9 @@ public sealed class ChartTests : IDisposable
         chart.BarGapWidthPercent.Should().BeNull();
         chart.BarOverlapPercent.Should().BeNull();
         chart.FirstSliceAngleDegrees.Should().BeNull();
+        chart.BubbleScalePercent.Should().Be(100);
+        chart.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Area);
+        chart.ShowNegativeBubbles.Should().BeFalse();
     }
 
     [Fact]
@@ -756,6 +759,33 @@ public sealed class ChartTests : IDisposable
 
         rt.Series[0].BubbleSizes.Should().HaveCount(3, "bubble sizes preserved");
         rt.Series[0].BubbleSizes[0].Should().BeApproximately(5.0, 0.01);
+    }
+
+    [Fact]
+    public void RoundTrip_BubbleChart_SizingMetadataPreserved()
+    {
+        var chart = BuildBubbleChart();
+        chart.BubbleScalePercent = 175;
+        chart.BubbleSizeRepresents = BubbleSizeRepresentation.Width;
+        chart.ShowNegativeBubbles = true;
+        var pres = BuildPresWithChart(chart);
+        var path = WriteToPptx(pres);
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var bubbleChart = chartDoc.Descendants(ChartNs + "bubbleChart").Single();
+            bubbleChart.Element(ChartNs + "bubbleScale")?.Attribute("val")?.Value.Should().Be("175");
+            bubbleChart.Element(ChartNs + "sizeRepresents")?.Attribute("val")?.Value.Should().Be("w");
+            bubbleChart.Element(ChartNs + "showNegBubbles")?.Attribute("val")?.Value.Should().Be("1");
+        }
+
+        var rt = PptxPackageReader.Read(path).Slides[0].Shapes
+            .First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+
+        rt.BubbleScalePercent.Should().Be(175);
+        rt.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Width);
+        rt.ShowNegativeBubbles.Should().BeTrue();
     }
 
     // ── 5f: Compositor emits correct type ────────────────────────────────────

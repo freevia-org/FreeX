@@ -419,8 +419,16 @@ internal static class PptxChartWriter
         new XElement(C + "bubbleChart",
             BuildVaryColorsEl(chart),
             seriesEls,
+            BuildBubbleScaleEl(chart),
+            new XElement(C + "showNegBubbles", new XAttribute("val", chart.ShowNegativeBubbles ? "1" : "0")),
+            new XElement(C + "sizeRepresents", new XAttribute("val",
+                chart.BubbleSizeRepresents == BubbleSizeRepresentation.Width ? "w" : "area")),
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
+
+    private static XElement BuildBubbleScaleEl(ChartShape chart) =>
+        new(C + "bubbleScale",
+            new XAttribute("val", Math.Clamp(chart.BubbleScalePercent, 0, 300).ToString(CultureInfo.InvariantCulture)));
 
     private static XElement? BuildVaryColorsEl(ChartShape chart) =>
         chart.VaryColors

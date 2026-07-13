@@ -1885,15 +1885,16 @@ public static partial class ChartRenderPlanner
         {
             foreach (var value in series.BubbleSizes)
             {
-                if (value.HasValue)
-                    maxBubble = Math.Max(maxBubble, value.Value);
+                if (value.HasValue && (value.Value >= 0 || chart.ShowNegativeBubbles))
+                    maxBubble = Math.Max(maxBubble, Math.Abs(value.Value));
             }
         }
 
         if (maxBubble <= 0)
             maxBubble = 1;
 
-        double maxBubbleRadius = Math.Min(plot.Width, plot.Height) / 8.0;
+        double bubbleScale = Math.Clamp(chart.BubbleScalePercent, 0, 300) / 100.0;
+        double maxBubbleRadius = Math.Min(plot.Width, plot.Height) / 8.0 * bubbleScale;
         var bubbles = new List<ChartBubblePrimitive>();
         for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
         {
@@ -1908,9 +1909,11 @@ public static partial class ChartRenderPlanner
                 double? bubbleValue = pointIndex < series.BubbleSizes.Count ? series.BubbleSizes[pointIndex] : null;
                 if (!xValue.HasValue || !yValue.HasValue)
                     continue;
+                if (bubbleValue < 0 && !chart.ShowNegativeBubbles)
+                    continue;
 
                 double radius = bubbleValue.HasValue
-                    ? Math.Sqrt(bubbleValue.Value / maxBubble) * maxBubbleRadius
+                    ? ComputeBubbleRadius(Math.Abs(bubbleValue.Value), maxBubble, maxBubbleRadius, chart.BubbleSizeRepresents)
                     : maxBubbleRadius * 0.3;
                 radius = Math.Max(2, radius);
 
@@ -1943,6 +1946,21 @@ public static partial class ChartRenderPlanner
             xLabels,
             yLabels,
             bubbles);
+    }
+
+    private static double ComputeBubbleRadius(
+        double bubbleValue,
+        double maxBubble,
+        double maxBubbleRadius,
+        BubbleSizeRepresentation sizeRepresents)
+    {
+        if (maxBubble <= 0 || bubbleValue <= 0 || maxBubbleRadius <= 0)
+            return 0;
+
+        double normalized = Math.Clamp(bubbleValue / maxBubble, 0, 1);
+        return sizeRepresents == BubbleSizeRepresentation.Width
+            ? normalized * maxBubbleRadius
+            : Math.Sqrt(normalized) * maxBubbleRadius;
     }
 
     public static ChartRadarPrimitivePlan BuildRadarPrimitivePlan(
