@@ -37,10 +37,13 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("[string[]]$ScenarioId");
         source.Should().Contain("BackstagePrintExport = @(");
         source.Should().Contain("CoreLayoutProof = @(");
+        source.Should().Contain("PageCompositionProof = @(");
         source.Should().Contain("'field-page-number-variants'");
         source.Should().Contain("'references-heavy-fields'");
         source.Should().Contain("'equation-structures'");
         source.Should().Contain("'review-protection-proofing-comments-only'");
+        source.Should().Contain("'page-composition-columns'");
+        source.Should().Contain("'page-composition-border-watermark'");
         source.Should().Contain("Unknown ScenarioSet '$ScenarioSet'");
         source.Should().Contain("$effectiveScenarioIds = @($effectiveScenarioIds | Select-Object -Unique)");
         source.Should().Contain("Render-WordBaseline.ps1");
@@ -89,6 +92,14 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Backstage artifact metadata: verified rows=");
         source.Should().Contain("Backstage capture routes: verified rows=");
         source.Should().Contain("Core layout proof readiness: trusted scenario rows=");
+        source.Should().Contain("Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Page composition proof readiness requires FreeW visual evidence summary schema v25 or newer");
+        source.Should().Contain("'avalonia-page-layout-shot'");
+        source.Should().Contain("BaselineScenarioId = 'f2-columns'");
+        source.Should().Contain("BaselineScenarioId = 'f2-border-watermark'");
+        source.Should().Contain("missing Word-baseline policy row");
+        source.Should().Contain("Page composition proof readiness: trusted scenario rows=");
+        source.Should().Contain("Page composition Word-baseline policy rows: verified rows=");
         source.Should().Contain("Word baseline mode: word-png-comparison");
         source.Should().Contain("Word baseline mode: word-baseline-unavailable");
         source.Should().Contain("Word baseline mode: visual-evidence-only");

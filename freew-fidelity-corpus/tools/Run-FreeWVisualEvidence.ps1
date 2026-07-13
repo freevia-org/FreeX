@@ -117,6 +117,12 @@ $namedScenarioSets = @{
         'review-proofing-visual-depth',
         'review-protection-proofing-comments-only'
     )
+    PageCompositionProof = @(
+        'f2-columns',
+        'f2-border-watermark',
+        'page-composition-columns',
+        'page-composition-border-watermark'
+    )
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ScenarioSet) -and -not $namedScenarioSets.ContainsKey($ScenarioSet)) {
@@ -368,6 +374,129 @@ function Assert-CoreLayoutProofReadiness {
     Write-Host "Core layout proof readiness: trusted scenario rows=$trustedScenarioRows"
 }
 
+function Assert-PageCompositionProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $requiredScenarioIds = @(
+        'f2-columns',
+        'f2-border-watermark',
+        'page-composition-columns',
+        'page-composition-border-watermark'
+    )
+    if (@($ScenarioIds).Count -eq 0 -or @($requiredScenarioIds | Where-Object { $ScenarioIds -notcontains $_ }).Count -gt 0) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Page composition proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 25) {
+        throw "Page composition proof readiness requires FreeW visual evidence summary schema v25 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $scenarios = @($summary.scenarios)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $requirements = @(
+        [pscustomobject]@{
+            HostId = 'wpf-fidelity-render'
+            ScenarioId = 'f2-columns'
+            BaselineScenarioId = 'f2-columns'
+            MinimumTrustedOutputs = 2
+        },
+        [pscustomobject]@{
+            HostId = 'wpf-fidelity-render'
+            ScenarioId = 'f2-border-watermark'
+            BaselineScenarioId = 'f2-border-watermark'
+            MinimumTrustedOutputs = 1
+        },
+        [pscustomobject]@{
+            HostId = 'avalonia-page-layout-shot'
+            ScenarioId = 'page-composition-columns'
+            BaselineScenarioId = 'f2-columns'
+            MinimumTrustedOutputs = 1
+        },
+        [pscustomobject]@{
+            HostId = 'avalonia-page-layout-shot'
+            ScenarioId = 'page-composition-border-watermark'
+            BaselineScenarioId = 'f2-border-watermark'
+            MinimumTrustedOutputs = 1
+        }
+    )
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedBaselineRows = 0
+
+    foreach ($requirement in $requirements) {
+        $match = @($scenarios | Where-Object {
+            $_.hostId -eq $requirement.HostId -and
+            $_.scenarioId -eq $requirement.ScenarioId
+        })
+
+        if ($match.Count -eq 0) {
+            $failures.Add("$($requirement.HostId)/$($requirement.ScenarioId): missing normalized scenario row")
+            continue
+        }
+
+        $row = $match[0]
+        if ($row.trust.passed -ne $true) {
+            $notes = @($row.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = 'no notes'
+            }
+            $failures.Add("$($requirement.HostId)/$($requirement.ScenarioId): scenario trust failed ($notes)")
+            continue
+        }
+
+        if ([int]$row.trustedOutputs -lt [int]$requirement.MinimumTrustedOutputs) {
+            $failures.Add("$($requirement.HostId)/$($requirement.ScenarioId): expected at least $($requirement.MinimumTrustedOutputs) trusted output(s), found $($row.trustedOutputs)")
+            continue
+        }
+
+        $trustedScenarioRows++
+
+        $comparisonRows = @($baselineComparisons | Where-Object {
+            $_.hostId -eq $requirement.HostId -and
+            $_.scenarioId -eq $requirement.ScenarioId -and
+            $_.baselineScenarioId -eq $requirement.BaselineScenarioId
+        })
+        if ($comparisonRows.Count -eq 0) {
+            $failures.Add("$($requirement.HostId)/$($requirement.ScenarioId): missing Word-baseline policy row for $($requirement.BaselineScenarioId)")
+            continue
+        }
+
+        foreach ($comparison in $comparisonRows) {
+            if ($comparison.trust.passed -ne $true) {
+                $notes = @($comparison.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$comparison.skipReason
+                }
+                $failures.Add("$($requirement.HostId)/$($requirement.ScenarioId)/$($comparison.outputName): baseline policy trust failed ($notes)")
+                continue
+            }
+
+            $baselineId = [string]$comparison.baselineId
+            if (-not $baselineId.StartsWith($requirement.BaselineScenarioId + '/', [StringComparison]::OrdinalIgnoreCase)) {
+                $failures.Add("$($requirement.HostId)/$($requirement.ScenarioId)/$($comparison.outputName): baselineId '$baselineId' expected scenario '$($requirement.BaselineScenarioId)'")
+                continue
+            }
+
+            $verifiedBaselineRows++
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Page composition proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Page composition proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "Page composition Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+}
+
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
 New-Item -ItemType Directory -Force $wpfDir | Out-Null
 New-Item -ItemType Directory -Force $avaloniaDir | Out-Null
@@ -456,6 +585,7 @@ else {
     Write-Host "Backstage evidence readiness: skipped by scenario filter"
 }
 Assert-CoreLayoutProofReadiness $summaryJson $effectiveScenarioIds
+Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 
 Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green
