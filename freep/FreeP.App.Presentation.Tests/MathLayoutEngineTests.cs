@@ -1426,6 +1426,43 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void BorderBox_HiddenHorizontalEdgesAndDiagonalStrike_EmitExactSharedEndpoints()
+    {
+        var node = ParseOmml(
+            "<m:borderBox>" +
+            "<m:borderBoxPr><m:hideTop/><m:hideBot/><m:strikeTLBR/></m:borderBoxPr>" +
+            "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+            "</m:borderBox>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var container = Assert.IsType<MathBox.Container>(layout.Children[0]);
+        var childBox = container.Children[0];
+        var lines = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawLine>()
+            .ToList();
+
+        lines.Should().HaveCount(3,
+            "hidden top/bottom edges leave only the left/right border edges plus the requested TLBR strike");
+        lines.Should().NotContain(line => Math.Abs(line.Y1 - line.Y2) < 0.01,
+            "m:hideTop and m:hideBot must suppress horizontal border-edge draw ops");
+
+        var left = lines.Single(line => Math.Abs(line.X1 - line.X2) < 0.01 && line.X1 < 10 + container.Metrics.Width / 2.0);
+        var right = lines.Single(line => Math.Abs(line.X1 - line.X2) < 0.01 && line.X1 > 10 + container.Metrics.Width / 2.0);
+        var diagonal = lines.Single(line => Math.Abs(line.X1 - line.X2) > 0.01 && Math.Abs(line.Y1 - line.Y2) > 0.01);
+
+        left.Y1.Should().BeApproximately(diagonal.Y1, 0.01);
+        right.Y1.Should().BeApproximately(diagonal.Y1, 0.01);
+        left.Y2.Should().BeApproximately(diagonal.Y2, 0.01);
+        right.Y2.Should().BeApproximately(diagonal.Y2, 0.01);
+        diagonal.X1.Should().BeApproximately(left.X1, 0.01);
+        diagonal.X2.Should().BeApproximately(right.X1, 0.01);
+        diagonal.Y2.Should().BeGreaterThan(diagonal.Y1,
+            "m:strikeTLBR runs from the top-left border endpoint to the bottom-right endpoint");
+        childBox.X.Should().BeGreaterThan(0);
+        childBox.Y.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void GroupChr_Above_PlacesBraceAboveBaseAndGrowsAscent()
     {
         var node = new MathNode.GroupChr("\u23DE", Run("x"), isAbove: true);

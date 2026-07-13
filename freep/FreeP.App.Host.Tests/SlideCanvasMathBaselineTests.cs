@@ -233,6 +233,42 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_BorderBoxHiddenEdgesAndDiagonalStrike_UsesSharedLinePlan_DoesNotThrow()
+    {
+        var mathNode = ParseOmml(
+            "<m:borderBox>" +
+            "<m:borderBoxPr><m:hideTop/><m:hideBot/><m:strikeTLBR/></m:borderBoxPr>" +
+            "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+            "</m:borderBox>");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+        var lines = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawLine>()
+            .ToList();
+        lines.Should().HaveCount(3,
+            "hidden borderBox top/bottom edges and TLBR strike geometry must be shared before WPF draws");
+        lines.Should().ContainSingle(line => Math.Abs(line.X1 - line.X2) > 0.01 && line.Y2 > line.Y1);
+        lines.Should().NotContain(line => Math.Abs(line.Y1 - line.Y2) < 0.01);
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "B = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_BoxOperatorEmulator_UsesSharedSpacingPlan_DoesNotThrow()
     {
         var ordinaryRow = new MathNode.Row(new MathNode[]
