@@ -829,23 +829,44 @@ public sealed class FreePRibbonDefinitionProfileTests
         var workflowEvidence = root.GetProperty("workflowEvidence")
             .EnumerateArray()
             .ToArray();
-        workflowEvidence.Should().HaveCount(10);
+        var expectedWorkflowEvidenceIds = new[]
+        {
+            "freep.presenter.recording.execution",
+            "freep.presenter.ink.execution",
+            "freep.presenter.session.summary",
+            "freep.review.comments.thread-depth",
+            "freep.review.accessibility.proofing-depth",
+            "freep.animation-pane.workflow-depth",
+            "freep.export.backstage.package-handoff",
+            "freep.table.inline-text.workflow-depth",
+            "freep.header-footer.placeholder-creation",
+            "freep.chart.number-format-rendering",
+            "freep.chart.edge-manual-layout",
+            "freep.chart.pie-first-slice-angle",
+            "freep.omml.transparent-phantom-spacing",
+            "freep.smartart.continuous-block-process",
+            "freep.smartart.basic-process",
+            "freep.smartart.segmented-process",
+            "freep.smartart.chevron-process",
+            "freep.smartart.basic-block-list",
+            "freep.smartart.vertical-box-list",
+            "freep.smartart.stacked-list",
+            "freep.smartart.picture-caption-list",
+            "freep.smartart.basic-cycle",
+            "freep.smartart.radial-cycle",
+            "freep.smartart.gear-cycle",
+            "freep.smartart.vertical-bullet-list",
+            "freep.smartart.basic-hierarchy",
+            "freep.smartart.org-chart",
+        };
+
+        workflowEvidence.Should().HaveCount(expectedWorkflowEvidenceIds.Length);
         root.GetProperty("summary").GetProperty("workflowEvidenceRows").GetInt32()
             .Should()
             .Be(workflowEvidence.Length);
         workflowEvidence.Select(row => row.GetProperty("evidenceId").GetString())
             .Should()
-            .Equal(
-                "freep.presenter.recording.execution",
-                "freep.presenter.ink.execution",
-                "freep.presenter.session.summary",
-                "freep.review.comments.thread-depth",
-                "freep.review.accessibility.proofing-depth",
-                "freep.animation-pane.workflow-depth",
-                "freep.export.backstage.package-handoff",
-                "freep.table.inline-text.workflow-depth",
-                "freep.header-footer.placeholder-creation",
-                "freep.chart.number-format-rendering");
+            .Equal(expectedWorkflowEvidenceIds);
 
         workflowEvidence.Should().OnlyContain(row =>
             row.GetProperty("status").GetString()!.StartsWith("shared-", StringComparison.Ordinal) &&
@@ -853,6 +874,17 @@ public sealed class FreePRibbonDefinitionProfileTests
         workflowEvidence.Should().OnlyContain(
             row => WorkflowResidualLooksExternal(row),
             "workflow residuals should read as external PowerPoint/device/backend scope, not unresolved WPF/Avalonia command parity");
+
+        var presenterRecording = workflowEvidence.Single(row =>
+            row.GetProperty("evidenceId").GetString() == "freep.presenter.recording.execution");
+        presenterRecording.GetProperty("verification")
+            .EnumerateArray()
+            .Select(path => path.GetString())
+            .Should()
+            .Contain("freep/FreeP.App.Host.Tests/MediaFieldsTests.cs");
+        presenterRecording.GetProperty("remainingWork").GetString()
+            .Should()
+            .Contain("external-link");
 
         var presenterSummary = workflowEvidence.Single(row =>
             row.GetProperty("evidenceId").GetString() == "freep.presenter.session.summary");
@@ -926,6 +958,8 @@ public sealed class FreePRibbonDefinitionProfileTests
         markdown.Should().Contain("`freep.presenter.session.summary`");
         markdown.Should().Contain("`freep.animation-pane.workflow-depth`");
         markdown.Should().Contain("`freep.table.inline-text.workflow-depth`");
+        markdown.Should().Contain("external-link");
+        markdown.Should().Contain("`freep/FreeP.App.Host.Tests/MediaFieldsTests.cs`");
         markdown.Should().Contain("Animation pane row workflow");
         markdown.Should().Contain("Rich inline table-cell text editing");
         markdown.Should().Contain(expectedSummaryRow);
