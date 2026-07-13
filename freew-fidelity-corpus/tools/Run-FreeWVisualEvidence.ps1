@@ -21,6 +21,9 @@
 
 .EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/visual-evidence-word -IncludeWordBaseline
+
+.EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/core-layout-proof -ScenarioSet CoreLayoutProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 #>
 [CmdletBinding()]
 param(
@@ -31,6 +34,7 @@ param(
     [switch]$IncludeWordBaseline,
     [string]$BaselineTolerance = 'word-png-default',
     [string]$WordBaselineUnavailableReason,
+    [string]$ScenarioSet,
     [string[]]$ScenarioId
 )
 
@@ -94,6 +98,45 @@ $fidelityProject = Join-Path $repoRoot 'freew\tools\FreeW.FidelityRender\FreeW.F
 $pageShotProject = Join-Path $repoRoot 'freew\tools\FreeW.PageLayoutShot\FreeW.PageLayoutShot.csproj'
 $summaryProject = Join-Path $repoRoot 'freew\tools\FreeW.VisualEvidenceSummary\FreeW.VisualEvidenceSummary.csproj'
 $wordBaselineScript = Join-Path $repoRoot 'freew-fidelity-corpus\tools\Render-WordBaseline.ps1'
+
+$namedScenarioSets = @{
+    BackstagePrintExport = @(
+        'backstage-print-preview-fidelity',
+        'backstage-pdf-export-fidelity'
+    )
+    CoreLayoutProof = @(
+        'f2-hf-images',
+        'field-page-number-variants',
+        'references-heavy-fields',
+        'equation-structures',
+        'f2-footnotes',
+        'f2-endnotes',
+        'f2-section-landscape',
+        'f2-tracked-changes',
+        'f2-comments',
+        'review-proofing-visual-depth',
+        'review-protection-proofing-comments-only'
+    )
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ScenarioSet) -and -not $namedScenarioSets.ContainsKey($ScenarioSet)) {
+    throw "Unknown ScenarioSet '$ScenarioSet'. Valid values: $($namedScenarioSets.Keys -join ', ')"
+}
+
+$effectiveScenarioIds = New-Object System.Collections.Generic.List[string]
+if (-not [string]::IsNullOrWhiteSpace($ScenarioSet)) {
+    foreach ($scenario in $namedScenarioSets[$ScenarioSet]) {
+        $effectiveScenarioIds.Add($scenario)
+    }
+}
+foreach ($scenario in @($ScenarioId)) {
+    if (-not [string]::IsNullOrWhiteSpace($scenario)) {
+        foreach ($id in $scenario.Split(',', [System.StringSplitOptions]::RemoveEmptyEntries)) {
+            $effectiveScenarioIds.Add($id.Trim())
+        }
+    }
+}
+$effectiveScenarioIds = @($effectiveScenarioIds | Select-Object -Unique)
 
 function Invoke-DotNetStep {
     param(
@@ -249,6 +292,82 @@ function Assert-BackstageEvidenceReadiness {
     Write-Host "Backstage capture routes: verified rows=$trustedCount"
 }
 
+function Test-ScenarioFilterIncludesBackstage {
+    param(
+        [string[]]$ScenarioIds
+    )
+
+    if (@($ScenarioIds).Count -eq 0) {
+        return $true
+    }
+
+    return @($ScenarioIds | Where-Object {
+        $_ -eq 'backstage-print-preview-fidelity' -or
+        $_ -eq 'backstage-pdf-export-fidelity'
+    }).Count -gt 0
+}
+
+function Assert-CoreLayoutProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    if (@($ScenarioIds).Count -eq 0 -or -not @($ScenarioIds | Where-Object { $_ -eq 'f2-hf-images' }).Count) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Core layout proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    $scenarios = @($summary.scenarios)
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+
+    foreach ($scenarioId in $ScenarioIds) {
+        foreach ($hostId in $requiredHosts) {
+            $match = @($scenarios | Where-Object {
+                $_.scenarioId -eq $scenarioId -and
+                $_.hostId -eq $hostId
+            })
+
+            if ($match.Count -eq 0) {
+                $failures.Add("${scenarioId}/${hostId}: missing normalized scenario row")
+                continue
+            }
+
+            $row = $match[0]
+            if ($row.trust.passed -ne $true) {
+                $notes = @($row.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = 'no notes'
+                }
+                $failures.Add("${scenarioId}/${hostId}: scenario trust failed ($notes)")
+                continue
+            }
+
+            if ([int]$row.trustedOutputs -lt [int]$row.minimumExpectedOutputs) {
+                $failures.Add("${scenarioId}/${hostId}: expected at least $($row.minimumExpectedOutputs) trusted output(s), found $($row.trustedOutputs)")
+                continue
+            }
+
+            $trustedScenarioRows++
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Core layout proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Core layout proof readiness: trusted scenario rows=$trustedScenarioRows"
+}
+
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
 New-Item -ItemType Directory -Force $wpfDir | Out-Null
 New-Item -ItemType Directory -Force $avaloniaDir | Out-Null
@@ -325,14 +444,18 @@ elseif (-not [string]::IsNullOrWhiteSpace($WordBaselineUnavailableReason)) {
     )
 }
 
-foreach ($scenario in @($ScenarioId)) {
-    if (-not [string]::IsNullOrWhiteSpace($scenario)) {
-        $summaryArgs += @('--include-scenario', $scenario)
-    }
+foreach ($scenario in @($effectiveScenarioIds)) {
+    $summaryArgs += @('--include-scenario', $scenario)
 }
 
 Invoke-DotNetStep 'Validate and normalize combined visual evidence' $summaryArgs
-Assert-BackstageEvidenceReadiness $summaryJson
+if (Test-ScenarioFilterIncludesBackstage $effectiveScenarioIds) {
+    Assert-BackstageEvidenceReadiness $summaryJson
+}
+else {
+    Write-Host "Backstage evidence readiness: skipped by scenario filter"
+}
+Assert-CoreLayoutProofReadiness $summaryJson $effectiveScenarioIds
 
 Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green
@@ -350,8 +473,11 @@ elseif (-not [string]::IsNullOrWhiteSpace($WordBaselineUnavailableReason)) {
 else {
     Write-Host "Word baseline mode: visual-evidence-only"
 }
-if (@($ScenarioId).Count -gt 0) {
-    Write-Host "Scenario filter: $($ScenarioId -join ', ')"
+if (-not [string]::IsNullOrWhiteSpace($ScenarioSet)) {
+    Write-Host "Scenario set: $ScenarioSet"
+}
+if (@($effectiveScenarioIds).Count -gt 0) {
+    Write-Host "Scenario filter: $($effectiveScenarioIds -join ', ')"
 }
 Write-Host "Summary JSON: $summaryJson"
 Write-Host "Summary Markdown: $summaryMarkdown"

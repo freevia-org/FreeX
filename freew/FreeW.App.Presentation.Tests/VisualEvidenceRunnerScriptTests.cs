@@ -33,7 +33,16 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("[switch]$IncludeWordBaseline");
         source.Should().Contain("[string]$BaselineTolerance = 'word-png-default'");
         source.Should().Contain("[string]$WordBaselineUnavailableReason");
+        source.Should().Contain("[string]$ScenarioSet");
         source.Should().Contain("[string[]]$ScenarioId");
+        source.Should().Contain("BackstagePrintExport = @(");
+        source.Should().Contain("CoreLayoutProof = @(");
+        source.Should().Contain("'field-page-number-variants'");
+        source.Should().Contain("'references-heavy-fields'");
+        source.Should().Contain("'equation-structures'");
+        source.Should().Contain("'review-protection-proofing-comments-only'");
+        source.Should().Contain("Unknown ScenarioSet '$ScenarioSet'");
+        source.Should().Contain("$effectiveScenarioIds = @($effectiveScenarioIds | Select-Object -Unique)");
         source.Should().Contain("Render-WordBaseline.ps1");
         source.Should().Contain("Resolve-RepositoryPath $WordBaselineDir");
         source.Should().Contain("Join-Path $wordBaselineRenderRoot 'word'");
@@ -47,7 +56,10 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'--include-scenario', $scenario");
         source.Should().Contain("'--baseline-tolerance', $BaselineTolerance");
         source.Should().Contain("Invoke-DotNetStep 'Validate and normalize combined visual evidence' $summaryArgs");
+        source.Should().Contain("if (Test-ScenarioFilterIncludesBackstage $effectiveScenarioIds)");
         source.Should().Contain("Assert-BackstageEvidenceReadiness $summaryJson");
+        source.Should().Contain("Backstage evidence readiness: skipped by scenario filter");
+        source.Should().Contain("Assert-CoreLayoutProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("backstage-print-preview-fidelity");
         source.Should().Contain("backstage-pdf-export-fidelity");
         source.Should().Contain("wpf-fidelity-render");
@@ -76,9 +88,11 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Backstage evidence readiness: trusted required rows=");
         source.Should().Contain("Backstage artifact metadata: verified rows=");
         source.Should().Contain("Backstage capture routes: verified rows=");
+        source.Should().Contain("Core layout proof readiness: trusted scenario rows=");
         source.Should().Contain("Word baseline mode: word-png-comparison");
         source.Should().Contain("Word baseline mode: word-baseline-unavailable");
         source.Should().Contain("Word baseline mode: visual-evidence-only");
+        source.Should().Contain("Scenario set:");
         source.Should().Contain("Scenario filter:");
     }
 
