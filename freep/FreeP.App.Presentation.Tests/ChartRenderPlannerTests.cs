@@ -330,6 +330,44 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildStockPrimitivePlan_UsesHighLowStemsAndOpenCloseTicks()
+    {
+        var chart = MakeStockChart();
+        var plot = new ChartPlanRect(0, 0, 300, 200);
+
+        var plan = ChartRenderPlanner.BuildStockPrimitivePlan(chart, plot);
+
+        plan.HighLowLines.Should().HaveCount(3);
+        plan.OpenTicks.Should().HaveCount(3);
+        plan.CloseTicks.Should().HaveCount(3);
+        plan.HighLowLines.Should().OnlyContain(line => line.Start.X == line.End.X);
+        plan.HighLowLines[0].Start.Y.Should().BeGreaterThan(plan.HighLowLines[0].End.Y,
+            "low values should sit below high values in the stock stem");
+        plan.OpenTicks[0].Start.X.Should().BeLessThan(plan.OpenTicks[0].End.X);
+        plan.OpenTicks[0].End.X.Should().Be(plan.HighLowLines[0].Start.X);
+        plan.CloseTicks[0].Start.X.Should().Be(plan.HighLowLines[0].Start.X);
+        plan.CloseTicks[0].End.X.Should().BeGreaterThan(plan.CloseTicks[0].Start.X);
+    }
+
+    [Theory]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Surface3D)]
+    public void BuildSurfaceCellPrimitives_MapsSeriesAndCategoriesToValueGrid(ChartType chartType)
+    {
+        var chart = MakeSurfaceChart(chartType);
+        var plot = new ChartPlanRect(0, 0, 300, 120);
+
+        var cells = ChartRenderPlanner.BuildSurfaceCellPrimitives(chart, plot);
+
+        cells.Should().HaveCount(6);
+        cells[0].Bounds.Should().Be(new ChartPlanRect(0, 0, 100, 60));
+        cells[^1].Bounds.Should().Be(new ChartPlanRect(200, 60, 100, 60));
+        cells.Min(cell => cell.NormalizedValue).Should().Be(0);
+        cells.Max(cell => cell.NormalizedValue).Should().Be(1);
+        cells.Select(cell => cell.Fill.Color).Distinct().Should().HaveCountGreaterThan(1);
+    }
+
+    [Fact]
     public void BuildFramePlan_ColumnAxisTitles_ReservesSharedTitleBands()
     {
         var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
@@ -2491,6 +2529,43 @@ public sealed class ChartRenderPlannerTests
         var second = new ChartSeries { Name = "Forecast" };
         second.Values.AddRange(new double?[] { 30, 40 });
         chart.Series.Add(second);
+
+        return chart;
+    }
+
+    private static ChartShape MakeStockChart()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Stock };
+        chart.Categories.AddRange(new[] { "Day 1", "Day 2", "Day 3" });
+
+        foreach (var (name, values) in new[]
+        {
+            ("Open", new double?[] { 10, 12, 11 }),
+            ("High", new double?[] { 14, 16, 15 }),
+            ("Low", new double?[] { 8, 9, 10 }),
+            ("Close", new double?[] { 13, 11, 14 })
+        })
+        {
+            var series = new ChartSeries { Name = name };
+            series.Values.AddRange(values);
+            chart.Series.Add(series);
+        }
+
+        return chart;
+    }
+
+    private static ChartShape MakeSurfaceChart(ChartType chartType)
+    {
+        var chart = new ChartShape { ChartType = chartType };
+        chart.Categories.AddRange(new[] { "North", "East", "South" });
+
+        var low = new ChartSeries { Name = "Low Band" };
+        low.Values.AddRange(new double?[] { 10, 20, 15 });
+        chart.Series.Add(low);
+
+        var high = new ChartSeries { Name = "High Band" };
+        high.Values.AddRange(new double?[] { 30, 25, 35 });
+        chart.Series.Add(high);
 
         return chart;
     }

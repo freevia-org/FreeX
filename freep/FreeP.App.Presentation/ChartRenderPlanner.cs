@@ -229,6 +229,20 @@ public readonly record struct ChartRectPrimitive(
     public ChartBarDepthPlan? Depth { get; init; }
 }
 
+public readonly record struct ChartStockPrimitivePlan(
+    IReadOnlyList<ChartLineSegmentPrimitive> HighLowLines,
+    IReadOnlyList<ChartLineSegmentPrimitive> OpenTicks,
+    IReadOnlyList<ChartLineSegmentPrimitive> CloseTicks);
+
+public readonly record struct ChartSurfaceCellPrimitive(
+    int SeriesIndex,
+    int CategoryIndex,
+    ChartPlanRect Bounds,
+    ChartFillPlan Fill,
+    ChartStrokePlan Stroke,
+    double Value,
+    double NormalizedValue);
+
 public readonly record struct ChartBarClusterSlot(
     double CategoryStart,
     double CategorySize,
@@ -396,6 +410,8 @@ public static partial class ChartRenderPlanner
     public const double RadarSeriesStrokeThickness = 1.5;
     public const double RadarMarkerRadius = 3.0;
     public const double ThreeDPieVerticalScale = 0.72;
+    public const double StockTickWidthFraction = 0.32;
+    public const double SurfaceCellStrokeThickness = 0.4;
     private const double DipPerPoint = 96.0 / 72.0;
     private const double DefaultBarGapWidthPercent = 150.0;
 
@@ -1579,6 +1595,239 @@ public static partial class ChartRenderPlanner
         }
 
         return primitives;
+    }
+
+    public static ChartStockPrimitivePlan BuildStockPrimitivePlan(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        if (chart.ChartType != ChartType.Stock || chart.Series.Count < 3 || !plot.HasPositiveArea)
+            return EmptyStockPrimitivePlan();
+
+        if (!TryResolveStockSeries(chart, out var openSeriesIndex, out var highSeriesIndex, out var lowSeriesIndex, out var closeSeriesIndex))
+            return EmptyStockPrimitivePlan();
+
+        var (primaryMin, primaryMax, _) = ComputePrimaryValueAxisRange(chart);
+        double primaryRange = primaryMax - primaryMin;
+        if (primaryRange <= 0)
+            return EmptyStockPrimitivePlan();
+
+        int categoryCount = ResolveChartCategoryCount(chart);
+        double categoryWidth = plot.Width / Math.Max(1, categoryCount);
+        double tickHalfWidth = Math.Max(2.0, categoryWidth * StockTickWidthFraction / 2.0);
+        var stroke = new ChartStrokePlan(new SrgbColor(0x44, 0x44, 0x44), Alpha: 255, Thickness: 1.2);
+        var highLowLines = new List<ChartLineSegmentPrimitive>();
+        var openTicks = new List<ChartLineSegmentPrimitive>();
+        var closeTicks = new List<ChartLineSegmentPrimitive>();
+
+        for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+        {
+            double? high = TryGetSeriesValue(chart, highSeriesIndex, categoryIndex);
+            double? low = TryGetSeriesValue(chart, lowSeriesIndex, categoryIndex);
+            double? close = TryGetSeriesValue(chart, closeSeriesIndex, categoryIndex);
+            double? open = openSeriesIndex >= 0
+                ? TryGetSeriesValue(chart, openSeriesIndex, categoryIndex)
+                : null;
+
+            if (high is null || low is null)
+                continue;
+
+            double x = plot.X + (categoryIndex + 0.5) * categoryWidth;
+            var lowPoint = new ChartPlanPoint(x, MapCartesianValueToY(low.Value, primaryMin, primaryRange, plot));
+            var highPoint = new ChartPlanPoint(x, MapCartesianValueToY(high.Value, primaryMin, primaryRange, plot));
+            highLowLines.Add(new ChartLineSegmentPrimitive(
+                highSeriesIndex,
+                categoryIndex,
+                categoryIndex,
+                lowPoint,
+                highPoint,
+                stroke));
+
+            if (open is not null)
+            {
+                double y = MapCartesianValueToY(open.Value, primaryMin, primaryRange, plot);
+                openTicks.Add(new ChartLineSegmentPrimitive(
+                    openSeriesIndex,
+                    categoryIndex,
+                    categoryIndex,
+                    new ChartPlanPoint(x - tickHalfWidth, y),
+                    new ChartPlanPoint(x, y),
+                    stroke));
+            }
+
+            if (close is not null)
+            {
+                double y = MapCartesianValueToY(close.Value, primaryMin, primaryRange, plot);
+                closeTicks.Add(new ChartLineSegmentPrimitive(
+                    closeSeriesIndex,
+                    categoryIndex,
+                    categoryIndex,
+                    new ChartPlanPoint(x, y),
+                    new ChartPlanPoint(x + tickHalfWidth, y),
+                    stroke));
+            }
+        }
+
+        return new ChartStockPrimitivePlan(highLowLines, openTicks, closeTicks);
+    }
+
+    public static IReadOnlyList<ChartSurfaceCellPrimitive> BuildSurfaceCellPrimitives(
+        ChartShape chart,
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
+    {
+        if (chart.ChartType is not (ChartType.Surface or ChartType.Surface3D) ||
+            chart.Series.Count == 0 ||
+            !plot.HasPositiveArea)
+        {
+            return Array.Empty<ChartSurfaceCellPrimitive>();
+        }
+
+        int categoryCount = ResolveChartCategoryCount(chart);
+        if (categoryCount <= 0)
+            return Array.Empty<ChartSurfaceCellPrimitive>();
+
+        var values = chart.Series
+            .SelectMany(series => series.Values)
+            .Where(value => value.HasValue)
+            .Select(value => value!.Value)
+            .ToArray();
+        if (values.Length == 0)
+            return Array.Empty<ChartSurfaceCellPrimitive>();
+
+        double min = values.Min();
+        double max = values.Max();
+        double range = max - min;
+        double cellWidth = plot.Width / categoryCount;
+        double cellHeight = plot.Height / chart.Series.Count;
+        var stroke = new ChartStrokePlan(new SrgbColor(0xFF, 0xFF, 0xFF), Alpha: 220, SurfaceCellStrokeThickness);
+        var primitives = new List<ChartSurfaceCellPrimitive>();
+
+        for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+            {
+                double? value = TryGetSeriesValue(chart, seriesIndex, categoryIndex);
+                if (value is null)
+                    continue;
+
+                double normalized = range <= 0 ? 0.5 : (value.Value - min) / range;
+                var color = InterpolateSurfaceColor(
+                    ResolveSeriesColor(seriesIndex, seriesColors),
+                    normalized);
+                primitives.Add(new ChartSurfaceCellPrimitive(
+                    seriesIndex,
+                    categoryIndex,
+                    new ChartPlanRect(
+                        plot.X + categoryIndex * cellWidth,
+                        plot.Y + seriesIndex * cellHeight,
+                        cellWidth,
+                        cellHeight),
+                    new ChartFillPlan(color, Alpha: 230),
+                    stroke,
+                    value.Value,
+                    normalized));
+            }
+        }
+
+        return primitives;
+    }
+
+    private static ChartStockPrimitivePlan EmptyStockPrimitivePlan() =>
+        new(
+            Array.Empty<ChartLineSegmentPrimitive>(),
+            Array.Empty<ChartLineSegmentPrimitive>(),
+            Array.Empty<ChartLineSegmentPrimitive>());
+
+    private static bool TryResolveStockSeries(
+        ChartShape chart,
+        out int openSeriesIndex,
+        out int highSeriesIndex,
+        out int lowSeriesIndex,
+        out int closeSeriesIndex)
+    {
+        openSeriesIndex = FindSeriesIndex(chart, "open");
+        highSeriesIndex = FindSeriesIndex(chart, "high");
+        lowSeriesIndex = FindSeriesIndex(chart, "low");
+        closeSeriesIndex = FindSeriesIndex(chart, "close");
+
+        if (highSeriesIndex >= 0 && lowSeriesIndex >= 0 && closeSeriesIndex >= 0)
+            return true;
+
+        if (chart.Series.Count >= 4)
+        {
+            openSeriesIndex = 0;
+            highSeriesIndex = 1;
+            lowSeriesIndex = 2;
+            closeSeriesIndex = 3;
+            return true;
+        }
+
+        if (chart.Series.Count >= 3)
+        {
+            openSeriesIndex = -1;
+            highSeriesIndex = 0;
+            lowSeriesIndex = 1;
+            closeSeriesIndex = 2;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static int FindSeriesIndex(ChartShape chart, string token)
+    {
+        for (int index = 0; index < chart.Series.Count; index++)
+        {
+            if (chart.Series[index].Name?.Contains(token, StringComparison.OrdinalIgnoreCase) == true)
+                return index;
+        }
+
+        return -1;
+    }
+
+    private static int ResolveChartCategoryCount(ChartShape chart)
+    {
+        int categoryCount = chart.Categories.Count;
+        foreach (var series in chart.Series)
+            categoryCount = Math.Max(categoryCount, series.Values.Count);
+
+        return Math.Max(1, categoryCount);
+    }
+
+    private static double? TryGetSeriesValue(ChartShape chart, int seriesIndex, int categoryIndex)
+    {
+        if (seriesIndex < 0 || seriesIndex >= chart.Series.Count)
+            return null;
+
+        var series = chart.Series[seriesIndex];
+        return categoryIndex >= 0 && categoryIndex < series.Values.Count
+            ? series.Values[categoryIndex]
+            : null;
+    }
+
+    private static double MapCartesianValueToY(
+        double value,
+        double min,
+        double range,
+        ChartPlanRect plot) =>
+        plot.Bottom - (value - min) / range * plot.Height;
+
+    private static SrgbColor InterpolateSurfaceColor(SrgbColor baseColor, double normalized)
+    {
+        normalized = Math.Clamp(normalized, 0, 1);
+        double lowMix = 0.55 * (1.0 - normalized);
+        double highMix = 0.28 * normalized;
+        byte r = InterpolateChannel(baseColor.R, lowMix, highMix);
+        byte g = InterpolateChannel(baseColor.G, lowMix, highMix);
+        byte b = InterpolateChannel(baseColor.B, lowMix, highMix);
+        return new SrgbColor(r, g, b);
+    }
+
+    private static byte InterpolateChannel(byte channel, double lowMix, double highMix)
+    {
+        double value = channel + (255 - channel) * lowMix - channel * highMix;
+        return (byte)Math.Round(Math.Clamp(value, 0, 255));
     }
 
     public static IReadOnlyList<ChartLineSeriesPrimitive> BuildLineSeriesPrimitives(

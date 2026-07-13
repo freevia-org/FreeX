@@ -23,11 +23,11 @@ public enum ChartType
     Radar,
     /// <summary>Bubble chart. Like scatter but each point has a BubbleSizes list in its series.</summary>
     Bubble,
-    /// <summary>Stock chart. Rendered with the cartesian line fallback until full high-low/open-close geometry lands.</summary>
+    /// <summary>Stock chart, including high-low stems and open/close ticks when those series are modeled.</summary>
     Stock,
-    /// <summary>2-D surface chart. Rendered with the cartesian column fallback until full surface mesh geometry lands.</summary>
+    /// <summary>2-D surface chart, rendered as a value-colored matrix until full surface mesh geometry lands.</summary>
     Surface,
-    /// <summary>3-D surface chart. Rendered with the cartesian column fallback until full surface mesh geometry lands.</summary>
+    /// <summary>3-D surface chart, rendered as a value-colored matrix until full surface mesh geometry lands.</summary>
     Surface3D,
     Unknown
 }

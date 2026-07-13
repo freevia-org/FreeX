@@ -52,6 +52,39 @@ public sealed class SlideCanvasAvaloniaTests
         return p;
     }
 
+    private static ChartShape MakeStockOrSurfaceRenderChart(ChartType chartType)
+    {
+        if (chartType == ChartType.Stock)
+        {
+            var stock = new ChartShape { ChartType = ChartType.Stock };
+            stock.Categories.AddRange(new[] { "Day 1", "Day 2", "Day 3" });
+            foreach (var (name, values) in new[]
+            {
+                ("Open", new double?[] { 10, 12, 11 }),
+                ("High", new double?[] { 14, 16, 15 }),
+                ("Low", new double?[] { 8, 9, 10 }),
+                ("Close", new double?[] { 13, 11, 14 })
+            })
+            {
+                var series = new ChartSeries { Name = name };
+                series.Values.AddRange(values);
+                stock.Series.Add(series);
+            }
+
+            return stock;
+        }
+
+        var surface = new ChartShape { ChartType = chartType };
+        surface.Categories.AddRange(new[] { "North", "East", "South" });
+        var low = new ChartSeries { Name = "Low Band" };
+        low.Values.AddRange(new double?[] { 10, 20, 15 });
+        surface.Series.Add(low);
+        var high = new ChartSeries { Name = "High Band" };
+        high.Values.AddRange(new double?[] { 30, 25, 35 });
+        surface.Series.Add(high);
+        return surface;
+    }
+
     private static TextBody MakeTextBody(string text)
     {
         var body = new TextBody { Wrap = true };
@@ -1859,6 +1892,47 @@ public sealed class SlideCanvasAvaloniaTests
             "CC2 sanity: same value through primary range would be >> 1 (far off-chart)");
         correctFrac.Should().BeGreaterThanOrEqualTo(0.7,
             "CC2: value at secondary max should map well up the plot (fraction ≥ 0.7, nice range extends slightly above data max)");
+    }
+
+    /// <summary>
+    /// Stock and surface chart types render through their specialized primitive plans.
+    /// </summary>
+    [Theory]
+    [InlineData(ChartType.Stock)]
+    [InlineData(ChartType.Surface)]
+    [InlineData(ChartType.Surface3D)]
+    public async Task StockAndSurfaceCharts_RenderThroughSpecializedPrimitivePlans_DoesNotThrow(ChartType chartType)
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id = 1,
+                        Kind = SlideShapeKind.Chart,
+                        OffsetXEmu = 914400,
+                        OffsetYEmu = 457200,
+                        ExtentCxEmu = 5486400,
+                        ExtentCyEmu = 3657600,
+                        Chart = MakeStockOrSurfaceRenderChart(chartType),
+                    });
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull($"{chartType} should render through the specialized stock/surface primitive path");
     }
 
     /// <summary>

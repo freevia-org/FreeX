@@ -883,9 +883,11 @@ public sealed class SlideCanvas : Control
             case ChartType.ColumnClustered:
             case ChartType.ColumnStacked:
             case ChartType.ColumnStacked100:
+                RenderColumnChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotLeft, plotTop, plotW, plotH);
+                break;
             case ChartType.Surface:
             case ChartType.Surface3D:
-                RenderColumnChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotLeft, plotTop, plotW, plotH);
+                RenderSurfaceChart(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
                 break;
             case ChartType.BarClustered:
             case ChartType.BarStacked:
@@ -894,9 +896,11 @@ public sealed class SlideCanvas : Control
                 break;
             case ChartType.Line:
             case ChartType.LineMarkers:
-            case ChartType.Stock:
                 RenderLineChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotLeft, plotTop, plotW, plotH,
                     withMarkers: chart.ChartType == ChartType.LineMarkers);
+                break;
+            case ChartType.Stock:
+                RenderStockChart(dc, chart, plotLeft, plotTop, plotW, plotH);
                 break;
             case ChartType.Pie:
                 RenderPieChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotLeft, plotTop, plotW, plotH);
@@ -1017,7 +1021,36 @@ public sealed class SlideCanvas : Control
         }
     }
 
-    // ── Combo-chart secondary series overlay ─────────────────────────────────
+    // Stock and surface specialized chart renderers.
+    private static void RenderSurfaceChart(
+        DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildSurfaceCellPrimitives(chart, plot, seriesColors))
+        {
+            dc.DrawRectangle(
+                ToBrush(primitive.Fill),
+                ToPen(primitive.Stroke),
+                ToRect(primitive.Bounds));
+        }
+    }
+
+    private static void RenderStockChart(
+        DrawingContext dc, ChartShape chart,
+        double plotX, double plotY, double plotW, double plotH)
+    {
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        var plan = ChartRenderPlanner.BuildStockPrimitivePlan(chart, plot);
+        foreach (var segment in plan.HighLowLines)
+            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+        foreach (var segment in plan.OpenTicks)
+            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+        foreach (var segment in plan.CloseTicks)
+            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+    }
+
+    // Combo-chart secondary series overlay.
     /// <summary>
     /// Renders series that carry a per-series <see cref="ChartSeries.OverrideChartType"/>
     /// (set by the IO reader for combo charts). Only Line / LineMarkers overrides
