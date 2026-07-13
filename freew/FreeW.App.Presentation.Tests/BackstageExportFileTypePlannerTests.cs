@@ -50,6 +50,8 @@ public sealed class BackstageExportFileTypePlannerTests
             .Description.Should().Contain("Opening it creates a new unsaved document").And.Contain("preserves existing VBA project bytes");
         group.Actions.Single(action => action.Label == "OpenDocument Text (*.odt)")
             .Description.Should().Contain("Unsupported ODF constructs");
+        group.Actions.Single(action => action.Label == "OpenDocument Text Template (*.ott)")
+            .Description.Should().Contain("Opening it creates a new unsaved document").And.Contain("unsupported ODF constructs");
 
         group.Actions.Single(action => action.Label == "Plain Text (*.txt, *.text)").Invoke();
 

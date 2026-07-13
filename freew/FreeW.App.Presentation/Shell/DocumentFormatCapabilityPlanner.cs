@@ -243,7 +243,13 @@ public static class DocumentFormatCapabilityPlanner
         }
 
         if (key.Kind == DocumentFormatCapabilityKind.Template)
-            return "Template format. Opening it creates a new unsaved document; Save As writes the reusable template file.";
+        {
+            return key.FormatName switch
+            {
+                "OpenDocument Text Template" => "OpenDocument Text template. Opening it creates a new unsaved document; Save As writes the reusable template file, and unsupported ODF constructs are skipped instead of implied as fully round-trippable.",
+                _ => "Template format. Opening it creates a new unsaved document; Save As writes the reusable template file.",
+            };
+        }
 
         return key.FormatName switch
         {

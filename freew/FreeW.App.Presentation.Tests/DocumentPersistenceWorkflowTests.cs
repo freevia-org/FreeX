@@ -55,6 +55,13 @@ public sealed class DocumentPersistenceWorkflowTests : IDisposable
                 row.Description.Contains("drops macro parts", StringComparison.Ordinal));
         rows.Single(row => row.FormatName == "OpenDocument Text" && row.PrimaryExtension == ".odt")
             .Description.Should().Contain("Unsupported ODF constructs");
+        rows.Single(row => row.FormatName == "OpenDocument Text Template" && row.PrimaryExtension == ".ott")
+            .Should()
+            .Match<DocumentFormatCapabilityRow>(row =>
+                row.Kind == DocumentFormatCapabilityKind.Template &&
+                row.OpensAsTemplate &&
+                row.Description.Contains("new unsaved document", StringComparison.Ordinal) &&
+                row.Description.Contains("unsupported ODF constructs", StringComparison.OrdinalIgnoreCase));
         rows.Single(row => row.FormatName == "Word Template" && row.PrimaryExtension == ".dotx")
             .Should()
             .Match<DocumentFormatCapabilityRow>(row =>

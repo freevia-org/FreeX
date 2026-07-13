@@ -94,6 +94,9 @@ public sealed class BackstageSaveAsFileTypePlannerTests
             .Single(action => action.Label == "Word 97-2003 Document (*.doc)")
             .Description.Should().Contain("Compatibility format");
         groups.Single(group => group.Heading == "Other Formats").Actions
+            .Single(action => action.Label == "OpenDocument Text Template (*.ott)")
+            .Description.Should().Contain("Opening it creates a new unsaved document").And.Contain("unsupported ODF constructs");
+        groups.Single(group => group.Heading == "Other Formats").Actions
             .Single(action => action.Label == "Plain Text (*.txt, *.text)")
             .Description.Should().Contain("Formatting, images, tables, and document structure are not preserved");
 
