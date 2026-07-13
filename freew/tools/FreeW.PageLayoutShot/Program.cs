@@ -87,6 +87,8 @@ static int RenderAll(string outDir)
     var commentsPath = VisualEvidenceOutputPath(outDir, "f2-comments", 1);
     var reviewProofingDepthPath = VisualEvidenceOutputPath(outDir, "review-proofing-visual-depth", 1);
     var reviewProtectionProofingPath = VisualEvidenceOutputPath(outDir, "review-protection-proofing-comments-only", 1);
+    var reviewCompareProofPath = VisualEvidenceOutputPath(outDir, "review-compare-visual-proof", 1);
+    var reviewCombineProofPath = VisualEvidenceOutputPath(outDir, "review-combine-visual-proof", 1);
     var tableLayoutPath = VisualEvidenceOutputPath(outDir, "table-layout-complex", 1);
     var tablePaginationP1Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 1);
     var tablePaginationP2Path = VisualEvidenceOutputPath(outDir, "table-pagination-repeat-header", 2);
@@ -338,6 +340,26 @@ static int RenderAll(string outDir)
         scenarioId: "review-protection-proofing-comments-only",
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument,
+        pageNumber: 1,
+        pageCount: 1);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, reviewCompareProofPath,
+        width: 960, height: 1400,
+        label: "Review Compare Visual Proof",
+        scenarioId: "review-compare-visual-proof",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildReviewCompareVisualProofDocument,
+        pageNumber: 1,
+        pageCount: 1);
+    if (rc != 0) return rc;
+
+    rc = RenderMode(DocumentViewMode.PrintLayout, reviewCombineProofPath,
+        width: 960, height: 1400,
+        label: "Review Combine Visual Proof",
+        scenarioId: "review-combine-visual-proof",
+        evidence: evidence,
+        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildReviewCombineVisualProofDocument,
         pageNumber: 1,
         pageCount: 1);
     if (rc != 0) return rc;

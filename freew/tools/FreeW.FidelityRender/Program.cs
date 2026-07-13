@@ -1887,6 +1887,18 @@ static void GenerateF2FlowCorpus(string outDir)
     }
 
     {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildReviewCompareVisualProofDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "review-compare-visual-proof.docx"));
+        Console.WriteLine("  wrote review-compare-visual-proof.docx");
+    }
+
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildReviewCombineVisualProofDocument();
+        DocxWriter.Write(doc, Path.Combine(outDir, "review-combine-visual-proof.docx"));
+        Console.WriteLine("  wrote review-combine-visual-proof.docx");
+    }
+
+    {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument(
             "Backstage Print Preview Fidelity",
             "This generated document is rendered through FreeW.FidelityRender for the backstage print preview evidence contract.");

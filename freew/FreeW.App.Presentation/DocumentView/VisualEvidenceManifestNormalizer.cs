@@ -53,6 +53,7 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
     FreeWVisualProofingDiagnosticExpectation ProofingDiagnostics,
     FreeWVisualReviewProtectionExpectation ReviewProtection,
+    FreeWVisualReviewCompareCombineExpectation ReviewCompareCombine,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -65,6 +66,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceBackstagePrintReadiness> BackstagePrintEvidenceReadiness,
     IReadOnlyList<FreeWVisualFloatingWrappingProofReadiness> FloatingWrappingProofReadiness,
     IReadOnlyList<FreeWVisualDrawingObjectProofReadiness> DrawingObjectProofReadiness,
+    IReadOnlyList<FreeWVisualReviewCompareCombineProofReadiness> ReviewCompareCombineProofReadiness,
     IReadOnlyList<FreeWVisualBaselineComparison> BaselineComparisons,
     IReadOnlyList<FreeWVisualBaselineTriageItem> WordBaselineTriage,
     IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> RemainingEvidenceBlockers,
@@ -92,6 +94,17 @@ public sealed record FreeWVisualFloatingWrappingProofReadiness(
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualDrawingObjectProofReadiness(
+    string ScenarioId,
+    int PageNumber,
+    string Status,
+    string WpfOutputSummary,
+    string AvaloniaOutputSummary,
+    string WordBaselineStatus,
+    string BaselineReadiness,
+    string SemanticEvidence,
+    FreeWVisualEvidenceTrust Trust);
+
+public sealed record FreeWVisualReviewCompareCombineProofReadiness(
     string ScenarioId,
     int PageNumber,
     string Status,
@@ -135,7 +148,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 29;
+    public const int SummarySchemaVersion = 30;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -164,7 +177,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "f2-tracked-changes",
         "f2-comments",
         "review-proofing-visual-depth",
-        "review-protection-proofing-comments-only"
+        "review-protection-proofing-comments-only",
+        "review-compare-visual-proof",
+        "review-combine-visual-proof"
     ];
     public static IReadOnlyList<string> TableRendererScenarioIds { get; } =
     [
@@ -221,6 +236,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         FloatingWrappingWpfScenarioId,
         FloatingWrappingAvaloniaScenarioId
+    ];
+    public static IReadOnlyList<string> ReviewCompareCombineVisualProofScenarioIds { get; } =
+    [
+        "review-compare-visual-proof",
+        "review-combine-visual-proof"
     ];
 
     private static readonly string[] ReferencesHeavyRequiredComplexFieldKeywords =
@@ -344,6 +364,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var backstageReadiness = BuildBackstagePrintEvidenceReadinessRows(expected, orderedRows);
         var floatingWrappingProofReadiness = BuildFloatingWrappingProofReadinessRows(expected, orderedRows, []);
         var drawingObjectProofReadiness = BuildDrawingObjectProofReadinessRows(expected, orderedRows, []);
+        var reviewCompareCombineProofReadiness = BuildReviewCompareCombineProofReadinessRows(expected, orderedRows, []);
         var summary = new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
             SummarySchemaVersion,
@@ -356,6 +377,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             backstageReadiness,
             floatingWrappingProofReadiness,
             drawingObjectProofReadiness,
+            reviewCompareCombineProofReadiness,
             [],
             [],
             [],
@@ -411,6 +433,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         AppendBackstagePrintEvidenceReadiness(sb, summary);
         AppendFloatingWrappingProofReadiness(sb, summary);
         AppendDrawingObjectProofReadiness(sb, summary);
+        AppendReviewCompareCombineProofReadiness(sb, summary);
         AppendEquationGeometryEvidence(sb, summary);
 
         sb.AppendLine();
@@ -552,6 +575,29 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{EscapeMarkdown(row.WordBaselineStatus)} | " +
                 $"{EscapeMarkdown(row.BaselineReadiness)} | " +
                 $"{EscapeMarkdown(row.SemanticEvidence)} | " +
+                $"{(row.Trust.Passed ? "passed" : "failed")} |");
+        }
+    }
+
+    private static void AppendReviewCompareCombineProofReadiness(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.ReviewCompareCombineProofReadiness.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## Review Compare/Combine Visual Proof Readiness");
+        sb.AppendLine();
+        sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
+        sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var row in summary.ReviewCompareCombineProofReadiness)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.ScenarioId)} | {row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(row.Status)} | {EscapeMarkdown(row.WpfOutputSummary)} | " +
+                $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | {EscapeMarkdown(row.WordBaselineStatus)} | " +
+                $"{EscapeMarkdown(row.BaselineReadiness)} | {EscapeMarkdown(row.SemanticEvidence)} | " +
                 $"{(row.Trust.Passed ? "passed" : "failed")} |");
         }
     }
@@ -843,6 +889,68 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return rows;
     }
 
+    private static IReadOnlyList<FreeWVisualReviewCompareCombineProofReadiness> BuildReviewCompareCombineProofReadinessRows(
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var rows = new List<FreeWVisualReviewCompareCombineProofReadiness>();
+        foreach (var scenarioId in ReviewCompareCombineVisualProofScenarioIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            var expected = expectedScenarios
+                .Any(e => string.Equals(e.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            var hasEvidence = evidence
+                .Any(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            if (!expected && !hasEvidence)
+                continue;
+
+            foreach (var pageNumber in RequiredScenarioPages(scenarioId))
+            {
+                var wpfRows = RowsForHostScenarioPage(evidence, WpfHostId, scenarioId, pageNumber);
+                var avaloniaRows = RowsForHostScenarioPage(evidence, AvaloniaHostId, scenarioId, pageNumber);
+                var trustedWpf = wpfRows.FirstOrDefault(row => row.Trust.Passed);
+                var trustedAvalonia = avaloniaRows.FirstOrDefault(row => row.Trust.Passed);
+                var relatedBaseline = baselineComparisons
+                    .Where(comparison =>
+                        string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase)
+                        && comparison.PageNumber == pageNumber)
+                    .ToList();
+
+                if (trustedWpf is null || trustedAvalonia is null)
+                {
+                    rows.Add(new FreeWVisualReviewCompareCombineProofReadiness(
+                        scenarioId,
+                        pageNumber,
+                        "missing-paired-renderer-evidence",
+                        FormatOutputSummary(wpfRows),
+                        FormatOutputSummary(avaloniaRows),
+                        FormatWordBaselineStatus(relatedBaseline),
+                        "paired WPF/Avalonia compare-combine evidence is required before Word baseline comparison readiness",
+                        FormatReviewCompareCombineProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                        new FreeWVisualEvidenceTrust(false, BuildMissingReviewCompareCombinePairFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia))));
+                    continue;
+                }
+
+                var failures = BuildReviewCompareCombineSemanticFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia);
+                var baselineTrust = EvaluateDrawingObjectProofReadiness(relatedBaseline);
+                failures.AddRange(baselineTrust.Failures);
+                var trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+                rows.Add(new FreeWVisualReviewCompareCombineProofReadiness(
+                    scenarioId,
+                    pageNumber,
+                    trust.Passed ? "paired-renderer-proof-ready" : "review-compare-combine-proof-failed",
+                    FormatOutputSummary(wpfRows),
+                    FormatOutputSummary(avaloniaRows),
+                    FormatWordBaselineStatus(relatedBaseline),
+                    FormatReviewCompareCombineBaselineReadiness(relatedBaseline, scenarioId),
+                    FormatReviewCompareCombineProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                    trust));
+            }
+        }
+
+        return rows;
+    }
+
     public static FreeWVisualEvidenceNormalizedSummary WithBaselineComparisons(
         FreeWVisualEvidenceNormalizedSummary summary,
         IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
@@ -873,6 +981,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 summary.Evidence,
                 ordered),
             DrawingObjectProofReadiness = BuildDrawingObjectProofReadinessRows(
+                summary.ExpectedScenarios,
+                summary.Evidence,
+                ordered),
+            ReviewCompareCombineProofReadiness = BuildReviewCompareCombineProofReadinessRows(
                 summary.ExpectedScenarios,
                 summary.Evidence,
                 ordered),
@@ -920,6 +1032,69 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (trustedAvalonia is null)
             failures.Add($"floating/wrapping proof page 1 is missing trusted Avalonia visual evidence for '{FloatingWrappingAvaloniaScenarioId}'");
         return failures;
+    }
+
+    private static IReadOnlyList<string> BuildMissingReviewCompareCombinePairFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow? trustedWpf,
+        FreeWVisualEvidenceNormalizedRow? trustedAvalonia)
+    {
+        var failures = new List<string>();
+        if (trustedWpf is null)
+            failures.Add($"review compare/combine proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted WPF visual evidence");
+        if (trustedAvalonia is null)
+            failures.Add($"review compare/combine proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
+        return failures;
+    }
+
+    private static List<string> BuildReviewCompareCombineSemanticFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia)
+    {
+        var failures = new List<string>();
+        var pairName = $"review compare/combine proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        ValidateReviewCompareCombineSemanticRow(pairName + " WPF", scenarioId, wpf.ReviewCompareCombine, failures);
+        ValidateReviewCompareCombineSemanticRow(pairName + " Avalonia", scenarioId, avalonia.ReviewCompareCombine, failures);
+        ValidateReviewCompareCombinePairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+        return failures;
+    }
+
+    private static void ValidateReviewCompareCombineSemanticRow(
+        string rowName,
+        string scenarioId,
+        FreeWVisualReviewCompareCombineExpectation expectation,
+        List<string> failures)
+    {
+        if (string.Equals(scenarioId, "review-compare-visual-proof", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!expectation.HasCompareSemantics || !string.Equals(expectation.Operation, "compare", StringComparison.Ordinal))
+                failures.Add($"{rowName} is missing compare semantic evidence");
+            if (expectation.AuthorCount != 1 || !expectation.Authors.Contains("Riley", StringComparer.Ordinal))
+                failures.Add($"{rowName} expected single compare author Riley, found '{FormatSummaries(expectation.Authors)}'");
+        }
+        else if (string.Equals(scenarioId, "review-combine-visual-proof", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!expectation.HasCombineSemantics || !string.Equals(expectation.Operation, "combine", StringComparison.Ordinal))
+                failures.Add($"{rowName} is missing combine semantic evidence");
+            if (expectation.AuthorCount < 2
+                || !expectation.Authors.Contains("Alice", StringComparer.Ordinal)
+                || !expectation.Authors.Contains("Bob", StringComparer.Ordinal))
+            {
+                failures.Add($"{rowName} expected combined authors Alice and Bob, found '{FormatSummaries(expectation.Authors)}'");
+            }
+        }
+
+        if (expectation.RevisionCount <= 0)
+            failures.Add($"{rowName} expected tracked revision entries");
+        if (expectation.InsertionCount <= 0)
+            failures.Add($"{rowName} expected insertion revision entries");
+        if (expectation.DeletionCount <= 0)
+            failures.Add($"{rowName} expected deletion revision entries");
+        if (expectation.StableSignatures.Count != expectation.RevisionCount)
+            failures.Add($"{rowName} revision signatures must cover every review entry");
     }
 
     private static List<string> BuildFloatingWrappingSemanticFailures(
@@ -1021,6 +1196,35 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return "Word baseline policy rows are present and trusted";
     }
 
+    private static string FormatReviewCompareCombineBaselineReadiness(
+        IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline,
+        string scenarioId)
+    {
+        if (relatedBaseline.Count == 0)
+            return "paired renderer evidence is present; run Word PNG baseline comparison for " + scenarioId;
+
+        if (relatedBaseline.All(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Word COM or baseline generation unavailable; paired WPF/Avalonia compare/combine evidence is retained without authoritative Word parity";
+        }
+
+        if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
+            return "one or more Word baseline comparison rows failed trust; inspect baseline triage";
+
+        if (relatedBaseline.Any(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.PassedStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "real Word PNG baseline compared within configured tolerance";
+        }
+
+        return "Word baseline policy rows are present and trusted";
+    }
+
     private static string FormatWordBaselineStatus(IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline)
     {
         if (relatedBaseline.Count == 0)
@@ -1044,6 +1248,39 @@ public static class FreeWVisualEvidenceManifestNormalizer
             ", ",
             rows.Select(row => row.Trust.Passed ? row.OutputPath : row.OutputPath + " (failed)"));
     }
+
+    private static string FormatReviewCompareCombineProofSemanticEvidence(
+        FreeWVisualEvidenceNormalizedRow? wpf,
+        FreeWVisualEvidenceNormalizedRow? avalonia)
+    {
+        var parts = new List<string>();
+        if (wpf is not null)
+            parts.Add("WPF " + FormatReviewCompareCombineSemanticEvidence(wpf.ReviewCompareCombine));
+        if (avalonia is not null)
+            parts.Add("Avalonia " + FormatReviewCompareCombineSemanticEvidence(avalonia.ReviewCompareCombine));
+        return parts.Count == 0 ? "-" : string.Join("; ", parts);
+    }
+
+    private static string FormatReviewCompareCombineSemanticEvidence(
+        FreeWVisualReviewCompareCombineExpectation expectation) =>
+        string.Concat(
+            expectation.Operation,
+            " ",
+            FormatReviewCompareCombineCounts(expectation),
+            ", authors=",
+            expectation.Authors.Count == 0 ? "-" : string.Join("/", expectation.Authors));
+
+    private static string FormatReviewCompareCombineCounts(
+        FreeWVisualReviewCompareCombineExpectation expectation) =>
+        string.Concat(
+            "revisions=",
+            expectation.RevisionCount.ToString(CultureInfo.InvariantCulture),
+            " insertions=",
+            expectation.InsertionCount.ToString(CultureInfo.InvariantCulture),
+            " deletions=",
+            expectation.DeletionCount.ToString(CultureInfo.InvariantCulture),
+            " formatting=",
+            expectation.FormattingCount.ToString(CultureInfo.InvariantCulture));
 
     private static string FormatFloatingWrappingSemanticEvidence(
         FreeWVisualEvidenceNormalizedRow? wpf,
@@ -1659,6 +1896,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             pageExpectation.TableOfAuthorities,
             pageExpectation.ProofingDiagnostics,
             pageExpectation.ReviewProtection,
+            pageExpectation.ReviewCompareCombine,
             trust);
     }
 
@@ -1693,6 +1931,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         ValidateHeaderFooterFeatureTags(row, rowFailures);
         ValidateProofingFeatureTags(row, rowFailures);
         ValidateReviewProtectionFeatureTags(row, rowFailures);
+        ValidateReviewCompareCombineFeatureTags(row, rowFailures);
         if (row.ExpectedFeatureTags.Contains("equations", StringComparer.OrdinalIgnoreCase)
             && row.PageExpectation.Equations.EquationCount <= 0)
         {
@@ -2147,6 +2386,55 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateReviewCompareCombineFeatureTags(
+        FreeWVisualEvidenceRow row,
+        List<string> rowFailures)
+    {
+        var tags = row.ExpectedFeatureTags;
+        if (!tags.Contains("compare-semantics", StringComparer.OrdinalIgnoreCase)
+            && !tags.Contains("combine-semantics", StringComparer.OrdinalIgnoreCase)
+            && !tags.Contains("multi-author-revisions", StringComparer.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var expectation = row.PageExpectation.ReviewCompareCombine;
+        if (tags.Contains("compare-semantics", StringComparer.OrdinalIgnoreCase))
+        {
+            if (!expectation.HasCompareSemantics)
+                rowFailures.Add("scenario expects compare semantic evidence but the page expectation records none");
+            if (!string.Equals(expectation.Operation, "compare", StringComparison.Ordinal))
+                rowFailures.Add("scenario expects compare operation evidence but the page expectation records a different operation");
+        }
+
+        if (tags.Contains("combine-semantics", StringComparer.OrdinalIgnoreCase))
+        {
+            if (!expectation.HasCombineSemantics)
+                rowFailures.Add("scenario expects combine semantic evidence but the page expectation records none");
+            if (!string.Equals(expectation.Operation, "combine", StringComparison.Ordinal))
+                rowFailures.Add("scenario expects combine operation evidence but the page expectation records a different operation");
+        }
+
+        if (expectation.RevisionCount <= 0)
+            rowFailures.Add("scenario expects compare/combine revision entries but the page expectation records none");
+        if (expectation.InsertionCount <= 0)
+            rowFailures.Add("scenario expects compare/combine insertion entries but the page expectation records none");
+        if (expectation.DeletionCount <= 0)
+            rowFailures.Add("scenario expects compare/combine deletion entries but the page expectation records none");
+        if (tags.Contains("multi-author-revisions", StringComparer.OrdinalIgnoreCase)
+            && expectation.AuthorCount < 2)
+        {
+            rowFailures.Add("scenario expects multi-author combine revisions but the page expectation records fewer than two authors");
+        }
+        if (tags.Contains("compare-authorship", StringComparer.OrdinalIgnoreCase)
+            && expectation.AuthorCount <= 0)
+        {
+            rowFailures.Add("scenario expects compare/combine authorship evidence but the page expectation records none");
+        }
+        if (expectation.StableSignatures.Count != expectation.RevisionCount)
+            rowFailures.Add("compare/combine revision signatures must cover every review entry");
+    }
+
     private static void RequireProtectionDecision(
         List<string> rowFailures,
         FreeWVisualReviewProtectionExpectation protection,
@@ -2550,6 +2838,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 ValidateRendererPairRow("review renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
                 ValidateReviewProofingPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
                 ValidateReviewProtectionPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateReviewCompareCombinePairRow(scenarioId, pageNumber, wpf, avalonia, failures);
             }
         }
     }
@@ -3418,6 +3707,52 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateReviewCompareCombinePairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        if (!ReviewCompareCombineVisualProofScenarioIds.Contains(scenarioId, StringComparer.OrdinalIgnoreCase))
+            return;
+
+        var pairName = $"review renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        var wpfExpectation = wpf.ReviewCompareCombine;
+        var avaloniaExpectation = avalonia.ReviewCompareCombine;
+
+        if (!string.Equals(wpfExpectation.Operation, avaloniaExpectation.Operation, StringComparison.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} compare/combine operations differ: WPF '{wpfExpectation.Operation}', Avalonia '{avaloniaExpectation.Operation}'");
+        }
+
+        if (wpfExpectation.RevisionCount != avaloniaExpectation.RevisionCount
+            || wpfExpectation.InsertionCount != avaloniaExpectation.InsertionCount
+            || wpfExpectation.DeletionCount != avaloniaExpectation.DeletionCount
+            || wpfExpectation.FormattingCount != avaloniaExpectation.FormattingCount)
+        {
+            failures.Add(
+                $"{pairName} compare/combine revision counts differ: WPF {FormatReviewCompareCombineCounts(wpfExpectation)}, Avalonia {FormatReviewCompareCombineCounts(avaloniaExpectation)}");
+        }
+
+        var wpfAuthors = OrderedSummaries(wpfExpectation.Authors);
+        var avaloniaAuthors = OrderedSummaries(avaloniaExpectation.Authors);
+        if (!wpfAuthors.SequenceEqual(avaloniaAuthors, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} compare/combine authors differ: WPF '{FormatSummaries(wpfAuthors)}', Avalonia '{FormatSummaries(avaloniaAuthors)}'");
+        }
+
+        var wpfSignatures = OrderedSummaries(wpfExpectation.StableSignatures);
+        var avaloniaSignatures = OrderedSummaries(avaloniaExpectation.StableSignatures);
+        if (!wpfSignatures.SequenceEqual(avaloniaSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} compare/combine signatures differ: WPF '{FormatSummaries(wpfSignatures)}', Avalonia '{FormatSummaries(avaloniaSignatures)}'");
+        }
+    }
+
     private static bool IsReviewProofingEvidenceScenario(string scenarioId) =>
         string.Equals(scenarioId, "review-proofing-visual-depth", StringComparison.OrdinalIgnoreCase)
         || string.Equals(scenarioId, "review-protection-proofing-comments-only", StringComparison.OrdinalIgnoreCase);
@@ -4138,6 +4473,13 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (row.ReviewProtection.IsMarkedAsFinal || row.ReviewProtection.MarkAsFinal.IsChecked)
         {
             parts.Add("Mark as Final checked");
+        }
+        if (row.ReviewCompareCombine.RevisionCount > 0)
+        {
+            parts.Add(
+                $"{row.ReviewCompareCombine.Operation} " +
+                $"{row.ReviewCompareCombine.RevisionCount.ToString(CultureInfo.InvariantCulture)} revision(s), " +
+                $"{row.ReviewCompareCombine.AuthorCount.ToString(CultureInfo.InvariantCulture)} author(s)");
         }
 
         return string.Join(", ", parts);

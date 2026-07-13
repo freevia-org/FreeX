@@ -41,6 +41,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("FloatingWrappingVisualProof = @(");
         source.Should().Contain("TableLayoutProof = @(");
         source.Should().Contain("DrawingObjectVisualProof = @(");
+        source.Should().Contain("ReviewCompareCombineVisualProof = @(");
         source.Should().Contain("'field-page-number-variants'");
         source.Should().Contain("'references-heavy-fields'");
         source.Should().Contain("'equation-structures'");
@@ -60,6 +61,8 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'chart-smartart-complex'");
         source.Should().Contain("'wordart-watermark-stress'");
         source.Should().Contain("'wordart-picture-watermark-layout'");
+        source.Should().Contain("'review-compare-visual-proof'");
+        source.Should().Contain("'review-combine-visual-proof'");
         source.Should().Contain("Unknown ScenarioSet '$ScenarioSet'");
         source.Should().Contain("$effectiveScenarioIds = @($effectiveScenarioIds | Select-Object -Unique)");
         source.Should().Contain("Render-WordBaseline.ps1");
@@ -146,6 +149,18 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Drawing object visual semantic rows: verified rows=");
         source.Should().Contain("Drawing object Word-baseline policy rows: verified rows=");
         source.Should().Contain("Drawing object Word-baseline policy rows: no Word baseline mode requested");
+        source.Should().Contain("Assert-ReviewCompareCombineVisualProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Review compare/combine visual proof readiness requires FreeW visual evidence summary schema v30 or newer");
+        source.Should().Contain("$readinessRows = @($summary.reviewCompareCombineProofReadiness)");
+        source.Should().Contain("missing review compare/combine proof readiness row");
+        source.Should().Contain("missing compare/combine semantic readiness summary");
+        source.Should().Contain("missing compare revision/authorship semantic evidence");
+        source.Should().Contain("missing combine multi-author semantic evidence");
+        source.Should().Contain("compare/combine stable signatures do not cover every revision");
+        source.Should().Contain("Review compare/combine visual proof readiness: trusted scenario rows=");
+        source.Should().Contain("Review compare/combine visual semantic rows: verified rows=");
+        source.Should().Contain("Review compare/combine Word-baseline policy rows: verified rows=");
+        source.Should().Contain("Review compare/combine Word-baseline policy rows: no Word baseline mode requested");
         source.Should().Contain("Word baseline mode: word-png-comparison");
         source.Should().Contain("Word baseline mode: word-baseline-unavailable");
         source.Should().Contain("Word baseline mode: visual-evidence-only");

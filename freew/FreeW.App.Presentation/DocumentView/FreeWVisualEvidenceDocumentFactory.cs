@@ -591,6 +591,57 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildReviewCompareVisualProofDocument()
+    {
+        var original = BuildReviewCompareOriginalDocument();
+        var revised = BuildReviewCompareRevisedDocument();
+        var doc = DocumentCompare.Compare(
+            original,
+            revised,
+            "Riley",
+            "2026-07-13T09:00:00Z");
+
+        doc.Properties.Title = "Review Compare Visual Proof";
+        doc.Properties.Author = "FreeW Visual Evidence";
+        doc.Properties.Comments =
+            "Generated through DocumentCompare so Review compare visual evidence stays shared-first.";
+        doc.Blocks.Insert(
+            0,
+            new Paragraph(
+                "Compare proof: this generated blackline uses the shared DocumentCompare engine and should render insertions and deletions consistently in WPF and Avalonia.")
+            {
+                StyleId = "Heading1"
+            });
+        return doc;
+    }
+
+    public static TextDocument BuildReviewCombineVisualProofDocument()
+    {
+        var original = BuildReviewCombineOriginalDocument();
+        var revisedA = BuildReviewCombineReviewerADocument();
+        var revisedB = BuildReviewCombineReviewerBDocument();
+        var doc = DocumentCombine.Combine(
+            original,
+            revisedA,
+            "Alice",
+            revisedB,
+            "Bob",
+            "2026-07-13T09:30:00Z");
+
+        doc.Properties.Title = "Review Combine Visual Proof";
+        doc.Properties.Author = "FreeW Visual Evidence";
+        doc.Properties.Comments =
+            "Generated through DocumentCombine so multi-author combine visual evidence stays shared-first.";
+        doc.Blocks.Insert(
+            0,
+            new Paragraph(
+                "Combine proof: this generated blackline uses the shared DocumentCombine engine and should retain both reviewer authors in WPF and Avalonia evidence.")
+            {
+                StyleId = "Heading1"
+            });
+        return doc;
+    }
+
     public static TextDocument BuildComplexTableLayoutDocument()
     {
         var doc = TextDocument.CreateEmpty();
@@ -1502,6 +1553,76 @@ public static class FreeWVisualEvidenceDocumentFactory
         paragraph.Runs.Add(new Run(prefix));
         paragraph.Runs.Add(fieldRun);
         return paragraph;
+    }
+
+    private static TextDocument BuildReviewCompareOriginalDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph("Quarterly Policy Draft", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The policy keeps baseline controls, removes obsolete wording, and closes with the original approval sentence."));
+        doc.Blocks.Add(new Paragraph(
+            "A stable paragraph remains unchanged so the compare blackline has an anchor between edits."));
+        doc.Blocks.Add(new Paragraph(
+            "The rollout checklist references the old review channel."));
+        return doc;
+    }
+
+    private static TextDocument BuildReviewCompareRevisedDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph("Quarterly Policy Draft", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The policy keeps baseline controls, adds reviewer wording, and closes with the updated approval sentence."));
+        doc.Blocks.Add(new Paragraph(
+            "A stable paragraph remains unchanged so the compare blackline has an anchor between edits."));
+        doc.Blocks.Add(new Paragraph(
+            "The rollout checklist references the current review channel plus a final compliance note."));
+        return doc;
+    }
+
+    private static TextDocument BuildReviewCombineOriginalDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph("Combined Reviewer Draft", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The project brief keeps the launch scope stable and routes approvals through the baseline team."));
+        doc.Blocks.Add(new Paragraph(
+            "The implementation note remains unchanged for both reviewers."));
+        doc.Blocks.Add(new Paragraph(
+            "The closing paragraph asks operations to review the final package."));
+        return doc;
+    }
+
+    private static TextDocument BuildReviewCombineReviewerADocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph("Combined Reviewer Draft", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The project brief keeps the launch scope expanded and routes approvals through Alice's review board."));
+        doc.Blocks.Add(new Paragraph(
+            "The implementation note remains unchanged for both reviewers."));
+        doc.Blocks.Add(new Paragraph(
+            "The closing paragraph asks operations to review the final package."));
+        return doc;
+    }
+
+    private static TextDocument BuildReviewCombineReviewerBDocument()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(StyledParagraph("Combined Reviewer Draft", "Heading1"));
+        doc.Blocks.Add(new Paragraph(
+            "The project brief keeps the launch scope stable and routes approvals through the baseline team."));
+        doc.Blocks.Add(new Paragraph(
+            "The implementation note remains unchanged for both reviewers and adds Bob's audit reminder."));
+        doc.Blocks.Add(new Paragraph(
+            "The closing paragraph asks operations to publish the final package with release evidence."));
+        return doc;
     }
 
     private static Paragraph EquationParagraph(string prefix, Equation equation)

@@ -30,6 +30,9 @@
 
 .EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/floating-wrapping-proof -ScenarioSet FloatingWrappingVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/review-compare-combine-proof -ScenarioSet ReviewCompareCombineVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 #>
 [CmdletBinding()]
 param(
@@ -145,6 +148,10 @@ $namedScenarioSets = @{
         'chart-smartart-complex',
         'wordart-watermark-stress',
         'wordart-picture-watermark-layout'
+    )
+    ReviewCompareCombineVisualProof = @(
+        'review-compare-visual-proof',
+        'review-combine-visual-proof'
     )
 }
 
@@ -923,6 +930,181 @@ function Assert-DrawingObjectVisualProofReadiness {
     }
 }
 
+function Assert-ReviewCompareCombineVisualProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $requiredScenarioIds = @(
+        'review-compare-visual-proof',
+        'review-combine-visual-proof'
+    )
+    $selectedScenarioIds = @($requiredScenarioIds | Where-Object { $ScenarioIds -contains $_ })
+    if ($selectedScenarioIds.Count -eq 0) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Review compare/combine visual proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 30) {
+        throw "Review compare/combine visual proof readiness requires FreeW visual evidence summary schema v30 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $readinessRows = @($summary.reviewCompareCombineProofReadiness)
+    $scenarios = @($summary.scenarios)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $summaryFailures = @($summary.trust.failures)
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedSemanticRows = 0
+    $verifiedBaselineRows = 0
+
+    foreach ($scenarioId in $selectedScenarioIds) {
+        $proofRows = @($readinessRows | Where-Object { $_.scenarioId -eq $scenarioId })
+        if ($proofRows.Count -eq 0) {
+            $failures.Add("${scenarioId}: missing review compare/combine proof readiness row")
+        }
+        foreach ($proofRow in $proofRows) {
+            if ($proofRow.trust.passed -ne $true -or $proofRow.status -ne 'paired-renderer-proof-ready') {
+                $notes = @($proofRow.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$proofRow.baselineReadiness
+                }
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): readiness status '$($proofRow.status)' failed ($notes)")
+            }
+
+            if ([string]::IsNullOrWhiteSpace([string]$proofRow.semanticEvidence) -or [string]$proofRow.semanticEvidence -eq '-') {
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing compare/combine semantic readiness summary")
+            }
+        }
+
+        $semanticFailures = @($summaryFailures | Where-Object {
+            ([string]$_).IndexOf("review renderer pair '$scenarioId'", [StringComparison]::Ordinal) -ge 0 -or
+            ([string]$_).IndexOf("review compare/combine proof '$scenarioId'", [StringComparison]::Ordinal) -ge 0
+        })
+        foreach ($semanticFailure in $semanticFailures) {
+            $failures.Add("${scenarioId}: WPF/Avalonia compare-combine semantic parity drift ($semanticFailure)")
+        }
+
+        foreach ($hostId in $requiredHosts) {
+            $match = @($scenarios | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId
+            })
+
+            if ($match.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing normalized scenario row")
+                continue
+            }
+
+            $row = $match[0]
+            if ($row.trust.passed -ne $true) {
+                $notes = @($row.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = 'no notes'
+                }
+                $failures.Add("${hostId}/${scenarioId}: scenario trust failed ($notes)")
+                continue
+            }
+
+            if ([int]$row.trustedOutputs -lt 1) {
+                $failures.Add("${hostId}/${scenarioId}: expected at least 1 trusted output, found $($row.trustedOutputs)")
+                continue
+            }
+
+            $trustedScenarioRows++
+
+            $evidenceRows = @($summary.evidence | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.trust.passed -eq $true
+            })
+            if ($evidenceRows.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing trusted normalized evidence row for compare/combine semantics")
+            }
+            foreach ($evidenceRow in $evidenceRows) {
+                $semantics = $evidenceRow.reviewCompareCombine
+                if ($scenarioId -eq 'review-compare-visual-proof') {
+                    if ($semantics.operation -ne 'compare' -or
+                        $semantics.hasCompareSemantics -ne $true -or
+                        [int]$semantics.revisionCount -lt 1 -or
+                        [int]$semantics.insertionCount -lt 1 -or
+                        [int]$semantics.deletionCount -lt 1 -or
+                        [int]$semantics.authorCount -ne 1 -or
+                        @($semantics.authors | Where-Object { $_ -eq 'Riley' }).Count -ne 1) {
+                        $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing compare revision/authorship semantic evidence")
+                        continue
+                    }
+                }
+                elseif ($scenarioId -eq 'review-combine-visual-proof') {
+                    if ($semantics.operation -ne 'combine' -or
+                        $semantics.hasCombineSemantics -ne $true -or
+                        [int]$semantics.revisionCount -lt 1 -or
+                        [int]$semantics.insertionCount -lt 1 -or
+                        [int]$semantics.deletionCount -lt 1 -or
+                        [int]$semantics.authorCount -lt 2 -or
+                        @($semantics.authors | Where-Object { $_ -eq 'Alice' }).Count -ne 1 -or
+                        @($semantics.authors | Where-Object { $_ -eq 'Bob' }).Count -ne 1) {
+                        $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing combine multi-author semantic evidence")
+                        continue
+                    }
+                }
+
+                if (@($semantics.stableSignatures).Count -ne [int]$semantics.revisionCount) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): compare/combine stable signatures do not cover every revision")
+                    continue
+                }
+
+                $verifiedSemanticRows++
+            }
+
+            $comparisonRows = @($baselineComparisons | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.baselineScenarioId -eq $scenarioId
+            })
+            if ($baselineComparisons.Count -gt 0 -and $comparisonRows.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+                continue
+            }
+
+            foreach ($comparison in $comparisonRows) {
+                if ($comparison.trust.passed -ne $true) {
+                    $notes = @($comparison.trust.failures) -join '; '
+                    if ([string]::IsNullOrWhiteSpace($notes)) {
+                        $notes = [string]$comparison.skipReason
+                    }
+                    $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                    continue
+                }
+
+                $verifiedBaselineRows++
+            }
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Review compare/combine visual proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Review compare/combine visual proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "Review compare/combine visual semantic rows: verified rows=$verifiedSemanticRows"
+    if ($baselineComparisons.Count -gt 0) {
+        Write-Host "Review compare/combine Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    }
+    else {
+        Write-Host "Review compare/combine Word-baseline policy rows: no Word baseline mode requested"
+    }
+}
+
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
 New-Item -ItemType Directory -Force $wpfDir | Out-Null
 New-Item -ItemType Directory -Force $avaloniaDir | Out-Null
@@ -1025,6 +1207,7 @@ Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-FloatingWrappingProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds
+Assert-ReviewCompareCombineVisualProofReadiness $summaryJson $effectiveScenarioIds
 
 Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green

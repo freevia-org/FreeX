@@ -324,6 +324,31 @@ public sealed record FreeWVisualReviewProtectionExpectation(
     IReadOnlyList<FreeWVisualProtectionOperationExpectation> Operations,
     IReadOnlyList<string> StableSignatures);
 
+public sealed record FreeWVisualReviewCompareCombineExpectation(
+    string Operation,
+    int RevisionCount,
+    int InsertionCount,
+    int DeletionCount,
+    int FormattingCount,
+    int AuthorCount,
+    IReadOnlyList<string> Authors,
+    IReadOnlyList<string> StableSignatures,
+    bool HasCompareSemantics,
+    bool HasCombineSemantics)
+{
+    public static FreeWVisualReviewCompareCombineExpectation Empty { get; } = new(
+        Operation: "none",
+        RevisionCount: 0,
+        InsertionCount: 0,
+        DeletionCount: 0,
+        FormattingCount: 0,
+        AuthorCount: 0,
+        Authors: [],
+        StableSignatures: [],
+        HasCompareSemantics: false,
+        HasCombineSemantics: false);
+}
+
 public sealed record FreeWVisualPageExpectation(
     int PageNumber,
     int PageCount,
@@ -347,6 +372,8 @@ public sealed record FreeWVisualPageExpectation(
     bool IsSyntheticPage)
 {
     public FreeWVisualEquationExpectation Equations { get; init; } = FreeWVisualEquationExpectation.Empty;
+    public FreeWVisualReviewCompareCombineExpectation ReviewCompareCombine { get; init; } =
+        FreeWVisualReviewCompareCombineExpectation.Empty;
 }
 
 public sealed record FreeWVisualPixelStats(
@@ -416,7 +443,7 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 19;
+    public const int SchemaVersion = 20;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
@@ -716,6 +743,45 @@ public static class FreeWVisualEvidencePlanner
             1,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with { ExpectsTrackedChanges = true, ExpectsComments = true }),
+        new(
+            "review-compare-visual-proof",
+            "Shared Review Compare blackline visual proof evidence.",
+            [
+                "review",
+                "compare",
+                "document-compare",
+                "compare-result",
+                "tracked-changes",
+                "revision-marks",
+                "compare-semantics",
+                "compare-authorship",
+                "print-layout",
+                "body-text"
+            ],
+            "review-compare-visual-proof_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsTrackedChanges = true }),
+        new(
+            "review-combine-visual-proof",
+            "Shared Review Combine multi-author blackline visual proof evidence.",
+            [
+                "review",
+                "combine",
+                "document-combine",
+                "combine-result",
+                "tracked-changes",
+                "revision-marks",
+                "combine-semantics",
+                "multi-author-revisions",
+                "compare-authorship",
+                "print-layout",
+                "body-text"
+            ],
+            "review-combine-visual-proof_p{page}.png",
+            1,
+            DocumentViewLayoutKind.PrintLayout,
+            BodyPrintComposition with { ExpectsTrackedChanges = true }),
         new(
             "table-layout-complex",
             "Complex Word-style table layout fidelity capture.",
@@ -1118,6 +1184,7 @@ public static class FreeWVisualEvidencePlanner
         var tableOfAuthorities = BuildTableOfAuthoritiesExpectation(document);
         var proofingDiagnostics = BuildProofingDiagnosticExpectation(document);
         var reviewProtection = BuildReviewProtectionExpectation(document);
+        var reviewCompareCombine = BuildReviewCompareCombineExpectation(document, scenario.ScenarioId);
 
         var expectedOutputName = ExpectedOutputName(scenario.ScenarioId, pageNumber, outputName);
         return new FreeWVisualPageExpectation(
@@ -1142,7 +1209,8 @@ public static class FreeWVisualEvidencePlanner
             hasEndnotes,
             isSyntheticPage)
         {
-            Equations = equations
+            Equations = equations,
+            ReviewCompareCombine = reviewCompareCombine
         };
     }
 
@@ -2242,6 +2310,58 @@ public static class FreeWVisualEvidencePlanner
                 .Select(operation => operation.StableSignature)
                 .OrderBy(signature => signature, StringComparer.Ordinal)
                 .ToList());
+    }
+
+    public static FreeWVisualReviewCompareCombineExpectation BuildReviewCompareCombineExpectation(
+        TextDocument? document,
+        string scenarioId)
+    {
+        if (document is null)
+            return FreeWVisualReviewCompareCombineExpectation.Empty;
+
+        var operation = NormalizeScenarioId(scenarioId) switch
+        {
+            "review-compare-visual-proof" => "compare",
+            "review-combine-visual-proof" => "combine",
+            _ => "none"
+        };
+        if (string.Equals(operation, "none", StringComparison.Ordinal))
+            return FreeWVisualReviewCompareCombineExpectation.Empty;
+
+        var entries = RevisionList.Enumerate(document);
+        var authors = entries
+            .Select(entry => entry.Author)
+            .Where(author => !string.IsNullOrWhiteSpace(author))
+            .Select(author => author!.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(author => author, StringComparer.Ordinal)
+            .ToList();
+        var stableSignatures = entries
+            .Select(entry => string.Join(
+                "|",
+                "operation=" + operation,
+                "kind=" + entry.Kind,
+                "author=" + NormalizeEvidenceSignatureText(entry.Author),
+                "block=" + entry.BlockIndex.ToString(CultureInfo.InvariantCulture),
+                "text=" + NormalizeEvidenceSignatureText(entry.Text)))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+
+        return new FreeWVisualReviewCompareCombineExpectation(
+            Operation: operation,
+            RevisionCount: entries.Count,
+            InsertionCount: entries.Count(entry => entry.Kind == RevisionEntryKind.Insertion),
+            DeletionCount: entries.Count(entry => entry.Kind == RevisionEntryKind.Deletion),
+            FormattingCount: entries.Count(entry => entry.Kind == RevisionEntryKind.Formatting),
+            AuthorCount: authors.Count,
+            Authors: authors,
+            StableSignatures: stableSignatures,
+            HasCompareSemantics: string.Equals(operation, "compare", StringComparison.Ordinal)
+                && entries.Count > 0
+                && authors.Count == 1,
+            HasCombineSemantics: string.Equals(operation, "combine", StringComparison.Ordinal)
+                && entries.Count > 0
+                && authors.Count >= 2);
     }
 
     private static FreeWVisualProtectionOperationExpectation BuildReviewProtectionOperationExpectation(

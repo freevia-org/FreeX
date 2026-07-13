@@ -30,6 +30,8 @@ public sealed class VisualEvidencePlannerTests
             "f2-01-float-wrap",
             "review-proofing-visual-depth",
             "review-protection-proofing-comments-only",
+            "review-compare-visual-proof",
+            "review-combine-visual-proof",
             "table-layout-complex",
             "table-pagination-repeat-header",
             "table-page-composition-stress",
@@ -96,6 +98,26 @@ public sealed class VisualEvidencePlannerTests
             .Be("review-protection-proofing-comments-only_p{page}.png");
         reviewProtectionScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
         reviewProtectionScenario.Composition.ExpectsComments.Should().BeTrue();
+
+        var reviewCompareScenario = FreeWVisualEvidencePlanner.ResolveScenario("review-compare-visual-proof");
+        reviewCompareScenario.ExpectedFeatureTags.Should().Contain([
+            "review",
+            "compare",
+            "document-compare",
+            "compare-semantics",
+            "compare-authorship"]);
+        reviewCompareScenario.ExpectedOutputNamePattern.Should().Be("review-compare-visual-proof_p{page}.png");
+        reviewCompareScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
+
+        var reviewCombineScenario = FreeWVisualEvidencePlanner.ResolveScenario("review-combine-visual-proof");
+        reviewCombineScenario.ExpectedFeatureTags.Should().Contain([
+            "review",
+            "combine",
+            "document-combine",
+            "combine-semantics",
+            "multi-author-revisions"]);
+        reviewCombineScenario.ExpectedOutputNamePattern.Should().Be("review-combine-visual-proof_p{page}.png");
+        reviewCombineScenario.Composition.ExpectsTrackedChanges.Should().BeTrue();
 
         var fieldScenario = FreeWVisualEvidencePlanner.ResolveScenario("field-page-number-variants");
         fieldScenario.ExpectedFeatureTags.Should().Contain([
@@ -437,6 +459,8 @@ public sealed class VisualEvidencePlannerTests
         var comments = FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument();
         var reviewProofing = FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument();
         var reviewProtection = FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument();
+        var reviewCompare = FreeWVisualEvidenceDocumentFactory.BuildReviewCompareVisualProofDocument();
+        var reviewCombine = FreeWVisualEvidenceDocumentFactory.BuildReviewCombineVisualProofDocument();
 
         var revisions = tracked.Blocks
             .OfType<Paragraph>()
@@ -643,6 +667,55 @@ public sealed class VisualEvidencePlannerTests
             "operation=HistoryUndo|mutation=BodyText|allowed=0|requiresTrackedChanges=0|blockReason=MarkedAsFinal|protection=CommentsOnly",
             "operation=CommentInsert|mutation=None|allowed=0|requiresTrackedChanges=0|blockReason=MarkedAsFinal|protection=CommentsOnly"
         ]);
+
+        var compareEntries = RevisionList.Enumerate(reviewCompare);
+        compareEntries.Should().NotBeEmpty();
+        compareEntries.Select(entry => entry.Kind).Should().Contain([RevisionEntryKind.Insertion, RevisionEntryKind.Deletion]);
+        compareEntries.Select(entry => entry.Author).Should().OnlyContain(author => author == "Riley");
+        var reviewCompareExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "review-compare-visual-proof",
+            reviewCompare.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "review-compare-visual-proof_p1.png",
+            document: reviewCompare);
+        reviewCompareExpectation.ExpectedOutputName.Should().Be("review-compare-visual-proof_p1.png");
+        reviewCompareExpectation.Composition.ExpectsTrackedChanges.Should().BeTrue();
+        reviewCompareExpectation.ReviewCompareCombine.Operation.Should().Be("compare");
+        reviewCompareExpectation.ReviewCompareCombine.HasCompareSemantics.Should().BeTrue();
+        reviewCompareExpectation.ReviewCompareCombine.AuthorCount.Should().Be(1);
+        reviewCompareExpectation.ReviewCompareCombine.Authors.Should().Contain("Riley");
+        reviewCompareExpectation.ReviewCompareCombine.InsertionCount.Should().BeGreaterThan(0);
+        reviewCompareExpectation.ReviewCompareCombine.DeletionCount.Should().BeGreaterThan(0);
+        reviewCompareExpectation.ReviewCompareCombine.StableSignatures.Should()
+            .Contain(signature => signature.Contains("operation=compare", StringComparison.Ordinal)
+                && signature.Contains("author=Riley", StringComparison.Ordinal));
+
+        var combineEntries = RevisionList.Enumerate(reviewCombine);
+        combineEntries.Should().NotBeEmpty();
+        combineEntries.Select(entry => entry.Kind).Should().Contain([RevisionEntryKind.Insertion, RevisionEntryKind.Deletion]);
+        combineEntries.Select(entry => entry.Author).Should().Contain(["Alice", "Bob"]);
+        var reviewCombineExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
+            "review-combine-visual-proof",
+            reviewCombine.Page,
+            pageNumber: 1,
+            pageCount: 1,
+            outputName: "review-combine-visual-proof_p1.png",
+            document: reviewCombine);
+        reviewCombineExpectation.ExpectedOutputName.Should().Be("review-combine-visual-proof_p1.png");
+        reviewCombineExpectation.Composition.ExpectsTrackedChanges.Should().BeTrue();
+        reviewCombineExpectation.ReviewCompareCombine.Operation.Should().Be("combine");
+        reviewCombineExpectation.ReviewCompareCombine.HasCombineSemantics.Should().BeTrue();
+        reviewCombineExpectation.ReviewCompareCombine.AuthorCount.Should().BeGreaterThanOrEqualTo(2);
+        reviewCombineExpectation.ReviewCompareCombine.Authors.Should().Contain(["Alice", "Bob"]);
+        reviewCombineExpectation.ReviewCompareCombine.InsertionCount.Should().BeGreaterThan(0);
+        reviewCombineExpectation.ReviewCompareCombine.DeletionCount.Should().BeGreaterThan(0);
+        reviewCombineExpectation.ReviewCompareCombine.StableSignatures.Should()
+            .Contain(signature => signature.Contains("operation=combine", StringComparison.Ordinal)
+                && signature.Contains("author=Alice", StringComparison.Ordinal));
+        reviewCombineExpectation.ReviewCompareCombine.StableSignatures.Should()
+            .Contain(signature => signature.Contains("operation=combine", StringComparison.Ordinal)
+                && signature.Contains("author=Bob", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1211,8 +1284,8 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(26);
-            plan.ExpectedBaselinePngCount.Should().Be(78);
+            plan.ExpectedFixtureCount.Should().Be(28);
+            plan.ExpectedBaselinePngCount.Should().Be(84);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "f2-hf-images.docx",
@@ -1221,6 +1294,8 @@ public sealed class VisualEvidencePlannerTests
                 "references-heavy-fields.docx",
                 "equation-structures.docx",
                 "review-proofing-visual-depth.docx",
+                "review-compare-visual-proof.docx",
+                "review-combine-visual-proof.docx",
                 "table-layout-complex.docx",
                 "table-pagination-repeat-header.docx",
                 "table-page-composition-stress.docx",
@@ -1251,6 +1326,10 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("f2-01-float-wrap/f2-01-float-wrap_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "review-proofing-visual-depth")
                 .ExpectedBaselinePaths.Should().Contain("review-proofing-visual-depth/review-proofing-visual-depth_p1.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "review-compare-visual-proof")
+                .ExpectedBaselinePaths.Should().Contain("review-compare-visual-proof/review-compare-visual-proof_p1.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "review-combine-visual-proof")
+                .ExpectedBaselinePaths.Should().Contain("review-combine-visual-proof/review-combine-visual-proof_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "object-format-position-size-style")
                 .ExpectedBaselinePaths.Should().Contain("object-format-position-size-style/object-format-position-size-style_p1.png");
         }
@@ -4891,6 +4970,94 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_ValidatesReviewCompareCombineProofReadiness()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioIds = new[]
+            {
+                "review-compare-visual-proof",
+                "review-combine-visual-proof"
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                scenarioIds.Select(scenarioId => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1)).ToList(),
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                scenarioIds.Select(scenarioId => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1)).ToList(),
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                scenarioIds.SelectMany(scenarioId => new[]
+                {
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                }).ToList());
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.ReviewCompareCombineProofReadiness.Should().HaveCount(2);
+            summary.ReviewCompareCombineProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.Trust.Passed
+                && row.WordBaselineStatus == "not-run"
+                && row.SemanticEvidence.Contains("WPF", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("Avalonia", StringComparison.Ordinal));
+            summary.Evidence.Where(row => row.ScenarioId == "review-compare-visual-proof")
+                .Should().OnlyContain(row =>
+                    row.ReviewCompareCombine.Operation == "compare"
+                    && row.ReviewCompareCombine.HasCompareSemantics
+                    && row.ReviewCompareCombine.Authors.Contains("Riley"));
+            summary.Evidence.Where(row => row.ScenarioId == "review-combine-visual-proof")
+                .Should().OnlyContain(row =>
+                    row.ReviewCompareCombine.Operation == "combine"
+                    && row.ReviewCompareCombine.HasCombineSemantics
+                    && row.ReviewCompareCombine.Authors.Contains("Alice")
+                    && row.ReviewCompareCombine.Authors.Contains("Bob"));
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(summary);
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("reviewCompareCombineProofReadiness").GetArrayLength().Should().Be(2);
+            var firstCompareCombine = doc.RootElement.GetProperty("evidence")[0].GetProperty("reviewCompareCombine");
+            firstCompareCombine.GetProperty("revisionCount").GetInt32().Should().BeGreaterThan(0);
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
+            markdown.Should().Contain("Review Compare/Combine Visual Proof Readiness");
+            markdown.Should().Contain("review-compare-visual-proof");
+            markdown.Should().Contain("review-combine-visual-proof");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_ValidatesPairedSectionGeometryMetadata()
     {
         var root = CreateTempRoot();
@@ -6608,6 +6775,8 @@ public sealed class VisualEvidencePlannerTests
             "f2-comments" => FreeWVisualEvidenceDocumentFactory.BuildCommentsReviewDocument(),
             "review-proofing-visual-depth" => FreeWVisualEvidenceDocumentFactory.BuildReviewProofingVisualDepthDocument(),
             "review-protection-proofing-comments-only" => FreeWVisualEvidenceDocumentFactory.BuildReviewProtectionProofingEvidenceDocument(),
+            "review-compare-visual-proof" => FreeWVisualEvidenceDocumentFactory.BuildReviewCompareVisualProofDocument(),
+            "review-combine-visual-proof" => FreeWVisualEvidenceDocumentFactory.BuildReviewCombineVisualProofDocument(),
             "table-layout-complex" => FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument(),
             "table-pagination-repeat-header" => FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument(),
             "table-page-composition-stress" => FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument(),
