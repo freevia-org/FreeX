@@ -2268,11 +2268,19 @@ public static class PptxPackageReader
         using (var ms2 = new MemoryStream(dataEntry.Bytes))
             dataDoc = OpcXml.LoadXml(ms2);
 
+        var isLiveLayoutSupported = IsLiveSmartArtLayoutSupported(layoutUniqueId, family);
+        if (IsPictureCaptionListLayout(layoutUniqueId))
+        {
+            // Final admission for this picture layout depends on deterministic
+            // node-level image import from the cached diagram drawing.
+            isLiveLayoutSupported = false;
+        }
+
         var data = new SmartArtData
         {
             Family        = family,
             LayoutUniqueId = layoutUniqueId,
-            IsLiveLayoutSupported = IsLiveSmartArtLayoutSupported(layoutUniqueId, family)
+            IsLiveLayoutSupported = isLiveLayoutSupported
         };
 
         // dgm: namespace in data1.xml
@@ -2512,7 +2520,7 @@ public static class PptxPackageReader
         return family switch
         {
             SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess",
-            SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist",
+            SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist" or "picturecaptionlist",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "basiccycle" or "radialcycle" or "gearcycle" or "textcycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "basichierarchy" or "verticalbulletlist" or "orgchart",
             _ => false
