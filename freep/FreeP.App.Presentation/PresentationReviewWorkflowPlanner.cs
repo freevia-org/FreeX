@@ -25,6 +25,7 @@ public enum PresentationReviewWorkflowIntentKind
     MoveReadingOrderLater,
     SelectReadingOrderItem,
     SetTableHeaderRow,
+    ReviewTableStructure,
     RunProofing,
     SelectProofingIssue,
     IgnoreProofingIssue,
@@ -350,6 +351,36 @@ public sealed record PresentationTableHeaderRowMutationPlan(
     uint? ShapeId,
     string? ValidationMessage);
 
+public sealed record PresentationTableStructureCellPlan(
+    int RowIndex,
+    int ColumnIndex,
+    string CellReference);
+
+public sealed record PresentationTableStructureSpanPlan(
+    int RowIndex,
+    int ColumnIndex,
+    string CellReference,
+    int GridSpan,
+    int RowSpan,
+    bool IsHorizontalMergeContinuation,
+    bool IsVerticalMergeContinuation,
+    string Summary);
+
+public sealed record PresentationTableStructureReviewPlan(
+    bool CanReview,
+    int SlideIndex,
+    uint? ShapeId,
+    string TableName,
+    int RowCount,
+    int ColumnCount,
+    IReadOnlyList<PresentationTableStructureCellPlan> BlankHeaderCells,
+    IReadOnlyList<PresentationTableStructureCellPlan> BlankBodyCells,
+    IReadOnlyList<PresentationTableStructureSpanPlan> MergedOrSplitCells,
+    string Guidance,
+    bool ShouldNavigateToSlide,
+    bool ShouldSelectTable,
+    string? ValidationMessage);
+
 public sealed record PresentationAccessibilityIssueDescriptor(
     PresentationAccessibilityIssueSeverity Severity,
     int SlideIndex,
@@ -664,6 +695,7 @@ public static class PresentationReviewWorkflowPlanner
     public const string ReadingOrderMoveLaterCommandId = "freep.review.reading-order.move-later";
     public const string ReadingOrderSelectItemCommandId = "freep.review.reading-order.select";
     public const string SetTableHeaderRowCommandId = "freep.review.accessibility.set-table-header-row";
+    public const string ReviewTableStructureCommandId = "freep.review.accessibility.review-table-structure";
     public const string ProofingCommandId = "freep.review.proofing.spelling";
     public const string ProofingApplyCorrectionCommandId = "freep.review.proofing.apply-correction";
     public const string ProofingIgnoreCommandId = "freep.review.proofing.ignore";
@@ -742,6 +774,12 @@ public static class PresentationReviewWorkflowPlanner
         "Table header-row target table was not found.";
     public const string TableHeaderRowAlreadySetMessage =
         "The selected table already marks its first row as a header row.";
+    public const string TableStructureReviewMissingSlideMessage =
+        "Table-structure review target slide was not found.";
+    public const string TableStructureReviewMissingShapeMessage =
+        "Table-structure review target table was not found.";
+    public const string TableStructureReviewGuidance =
+        "Review the listed cells in PowerPoint-style table editing. Add concise header/body text, remove unused rows or columns, or split complex merged cells manually; FreeP will not auto-simplify the table.";
     public const string MissingSlideTitleActionSummary =
         "Add a concise slide title so screen-reader users can navigate the deck.";
     public const string DuplicateSlideTitleActionSummary =
@@ -1690,6 +1728,67 @@ public static class PresentationReviewWorkflowPlanner
         return plan;
     }
 
+    public static PresentationTableStructureReviewPlan BuildTableStructureReviewPlan(
+        Presentation presentation,
+        int slideIndex,
+        uint? shapeId)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        var slide = GetSlide(presentation.Slides, slideIndex);
+        if (slide is null)
+        {
+            return new PresentationTableStructureReviewPlan(
+                false,
+                slideIndex,
+                shapeId,
+                string.Empty,
+                0,
+                0,
+                [],
+                [],
+                [],
+                TableStructureReviewGuidance,
+                false,
+                false,
+                TableStructureReviewMissingSlideMessage);
+        }
+
+        var shape = shapeId is { } id ? FindShape(slide.Shapes, id) : null;
+        if (shape?.Table is not { } table)
+        {
+            return new PresentationTableStructureReviewPlan(
+                false,
+                slideIndex,
+                shapeId,
+                string.Empty,
+                0,
+                0,
+                [],
+                [],
+                [],
+                TableStructureReviewGuidance,
+                false,
+                false,
+                TableStructureReviewMissingShapeMessage);
+        }
+
+        return new PresentationTableStructureReviewPlan(
+            true,
+            slideIndex,
+            shape.Id,
+            DescribeShape(shape),
+            table.Rows.Count,
+            table.Rows.Count == 0 ? 0 : table.Rows.Max(row => row.Cells.Count),
+            BuildBlankHeaderCellPlans(table),
+            BuildBlankBodyCellPlans(table),
+            BuildMergedOrSplitCellPlans(table),
+            TableStructureReviewGuidance,
+            true,
+            true,
+            null);
+    }
+
     public static PresentationAccessibilityCheckerPanePlan BuildAccessibilityCheckerPanePlan(
         Presentation presentation,
         PresentationAccessibilitySummaryPlan summaryPlan,
@@ -2199,6 +2298,7 @@ public static class PresentationReviewWorkflowPlanner
             new(AltTextCommandId, "Alt Text", PresentationReviewWorkflowIntentKind.OpenAltText, true, PresentationWorkflowCapabilityStatus.Available),
             new(ReadingOrderPaneCommandId, "Reading Order", PresentationReviewWorkflowIntentKind.OpenReadingOrderPane, true, PresentationWorkflowCapabilityStatus.Available),
             new(SetTableHeaderRowCommandId, "Set Header Row", PresentationReviewWorkflowIntentKind.SetTableHeaderRow, true, PresentationWorkflowCapabilityStatus.Available),
+            new(ReviewTableStructureCommandId, "Review Table Structure", PresentationReviewWorkflowIntentKind.ReviewTableStructure, true, PresentationWorkflowCapabilityStatus.Available),
             new(ProofingCommandId, "Spelling", PresentationReviewWorkflowIntentKind.RunProofing, true, PresentationWorkflowCapabilityStatus.Available),
         ];
 
@@ -2290,9 +2390,9 @@ public static class PresentationReviewWorkflowPlanner
             InsertLinkCommandId => "Edit Hyperlink",
             SetSlideTitleCommandId => "Set Slide Title",
             SetTableHeaderRowCommandId => "Set Header Row",
+            ReviewTableStructureCommandId => "Review Table Structure",
             _ when issue.Title == "Chart title missing" => "Add Chart Title",
             _ when issue.Title == "Video captions missing" => "Select Media",
-            _ when issue.Title == "Merged or split table cells" => "Review Table Structure",
             _ when issue.ShapeId is null => "Go to Slide",
             _ => "Select Object"
         };
@@ -4002,7 +4102,7 @@ public static class PresentationReviewWorkflowPlanner
                 $"{DescribeShape(shape)} has {blankHeaderCellCount} blank header {noun}.",
                 new PresentationAccessibilityIssueActionSummary(
                     BlankTableHeaderCellsActionSummary,
-                    null,
+                    ReviewTableStructureCommandId,
                     true)));
         }
 
@@ -4017,7 +4117,7 @@ public static class PresentationReviewWorkflowPlanner
                 $"{DescribeShape(shape)} has {blankBodyCellCount} blank body {noun}.",
                 new PresentationAccessibilityIssueActionSummary(
                     BlankTableBodyCellsActionSummary,
-                    null,
+                    ReviewTableStructureCommandId,
                     true)));
         }
 
@@ -4031,7 +4131,7 @@ public static class PresentationReviewWorkflowPlanner
                 $"{DescribeShape(shape)} contains merged or split cells that can make table reading order ambiguous.",
                 new PresentationAccessibilityIssueActionSummary(
                     MergedTableCellsActionSummary,
-                    null,
+                    ReviewTableStructureCommandId,
                     true)));
         }
     }
@@ -4076,6 +4176,113 @@ public static class PresentationReviewWorkflowPlanner
         => table.Rows
             .SelectMany(row => row.Cells)
             .Any(cell => cell.GridSpan > 1 || cell.RowSpan > 1 || cell.HMerge || cell.VMerge);
+
+    private static IReadOnlyList<PresentationTableStructureCellPlan> BuildBlankHeaderCellPlans(TableShape table)
+    {
+        if (table.Rows.Count == 0)
+        {
+            return [];
+        }
+
+        return BuildBlankCellPlans(table.Rows[0], rowIndex: 0);
+    }
+
+    private static IReadOnlyList<PresentationTableStructureCellPlan> BuildBlankBodyCellPlans(TableShape table)
+    {
+        if (table.Rows.Count <= 1)
+        {
+            return [];
+        }
+
+        var cells = new List<PresentationTableStructureCellPlan>();
+        for (var rowIndex = 1; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            cells.AddRange(BuildBlankCellPlans(table.Rows[rowIndex], rowIndex));
+        }
+
+        return cells;
+    }
+
+    private static IReadOnlyList<PresentationTableStructureCellPlan> BuildBlankCellPlans(TableRow row, int rowIndex)
+    {
+        var cells = new List<PresentationTableStructureCellPlan>();
+        for (var columnIndex = 0; columnIndex < row.Cells.Count; columnIndex++)
+        {
+            var cell = row.Cells[columnIndex];
+            if (!cell.HMerge &&
+                !cell.VMerge &&
+                NormalizeText(GetPlainText(cell.TextBody)) is null)
+            {
+                cells.Add(new PresentationTableStructureCellPlan(
+                    rowIndex,
+                    columnIndex,
+                    BuildTableCellReference(rowIndex, columnIndex)));
+            }
+        }
+
+        return cells;
+    }
+
+    private static IReadOnlyList<PresentationTableStructureSpanPlan> BuildMergedOrSplitCellPlans(TableShape table)
+    {
+        var cells = new List<PresentationTableStructureSpanPlan>();
+        for (var rowIndex = 0; rowIndex < table.Rows.Count; rowIndex++)
+        {
+            var row = table.Rows[rowIndex];
+            for (var columnIndex = 0; columnIndex < row.Cells.Count; columnIndex++)
+            {
+                var cell = row.Cells[columnIndex];
+                if (cell.GridSpan <= 1 && cell.RowSpan <= 1 && !cell.HMerge && !cell.VMerge)
+                {
+                    continue;
+                }
+
+                var reference = BuildTableCellReference(rowIndex, columnIndex);
+                cells.Add(new PresentationTableStructureSpanPlan(
+                    rowIndex,
+                    columnIndex,
+                    reference,
+                    Math.Max(1, cell.GridSpan),
+                    Math.Max(1, cell.RowSpan),
+                    cell.HMerge,
+                    cell.VMerge,
+                    BuildTableCellSpanSummary(reference, cell)));
+            }
+        }
+
+        return cells;
+    }
+
+    private static string BuildTableCellReference(int rowIndex, int columnIndex)
+        => $"R{rowIndex + 1}C{columnIndex + 1}";
+
+    private static string BuildTableCellSpanSummary(string cellReference, TableCell cell)
+    {
+        var details = new List<string>();
+        if (cell.GridSpan > 1)
+        {
+            details.Add($"spans {cell.GridSpan} columns");
+        }
+
+        if (cell.RowSpan > 1)
+        {
+            details.Add($"spans {cell.RowSpan} rows");
+        }
+
+        if (cell.HMerge)
+        {
+            details.Add("continues a horizontal merge");
+        }
+
+        if (cell.VMerge)
+        {
+            details.Add("continues a vertical merge");
+        }
+
+        return details.Count == 0
+            ? $"{cellReference} has merged or split structure."
+            : $"{cellReference} {string.Join(", ", details)}.";
+    }
 
     private static void AddTextHyperlinkAccessibilityIssues(
         List<PresentationAccessibilityIssueDescriptor> issues,

@@ -3226,6 +3226,93 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task Accessibility_checker_table_structure_action_opens_shared_review_plan()
+    {
+        PresentationAccessibilityCheckerPanePlan? actioned = null;
+        PresentationTableStructureReviewPlan? reviewPlan = null;
+        var actionLabel = string.Empty;
+        var commandHint = string.Empty;
+        uint[] selection = [];
+        var dirty = true;
+        var headerRowStillSet = false;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var table = new SlideShape
+            {
+                Id = 779,
+                Name = "Forecast table",
+                Kind = SlideShapeKind.Table,
+                Table = new TableShape
+                {
+                    Flags = new TableStyleFlags { FirstRow = true },
+                    Rows =
+                    {
+                        new TableRow
+                        {
+                            Cells =
+                            {
+                                new TableCell { TextBody = MakeTextBody("Region"), GridSpan = 2 },
+                                new TableCell { HMerge = true },
+                                new TableCell()
+                            }
+                        },
+                        new TableRow
+                        {
+                            Cells =
+                            {
+                                new TableCell { TextBody = MakeTextBody("North") },
+                                new TableCell(),
+                                new TableCell { TextBody = MakeTextBody("$42K") }
+                            }
+                        }
+                    }
+                }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(table);
+
+            var opened = window.ShowAccessibilityCheckerPane();
+            var tableRow = opened.Rows.Single(row => row.Title == "Blank table header cells");
+            actionLabel = tableRow.ActionLabel;
+            commandHint = tableRow.CommandHint ?? string.Empty;
+
+            actioned = window.ApplyAccessibilityCheckerRowAction(tableRow.RowIndex);
+            reviewPlan = window.LastTableStructureReviewPlan;
+            selection = window.Editor.SelectedShapeIds.ToArray();
+            dirty = window.IsDirty;
+            headerRowStillSet = table.Table!.Flags.FirstRow;
+        });
+
+        if (!ran) return;
+        actionLabel.Should().Be("Review Table Structure");
+        commandHint.Should().Be(PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId);
+        reviewPlan.Should().NotBeNull();
+        reviewPlan!.Should().Match<PresentationTableStructureReviewPlan>(plan =>
+            plan.CanReview &&
+            plan.ShapeId == 779 &&
+            plan.TableName == "Forecast table" &&
+            plan.RowCount == 2 &&
+            plan.ColumnCount == 3 &&
+            plan.ShouldNavigateToSlide &&
+            plan.ShouldSelectTable);
+        reviewPlan.BlankHeaderCells.Should().Equal(new[]
+        {
+            new PresentationTableStructureCellPlan(0, 2, "R1C3")
+        });
+        reviewPlan.BlankBodyCells.Should().Equal(new[]
+        {
+            new PresentationTableStructureCellPlan(1, 1, "R2C2")
+        });
+        reviewPlan.MergedOrSplitCells.Select(cell => cell.CellReference).Should().Equal("R1C1", "R1C2");
+        actioned.Should().NotBeNull();
+        actioned!.SelectedRow!.CommandHint.Should().Be(PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId);
+        selection.Should().Equal(779u);
+        dirty.Should().BeFalse();
+        headerRowStillSet.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Accessibility_checker_media_caption_tracks_use_shared_plan()
     {
         PresentationAccessibilityCheckerPanePlan? opened = null;

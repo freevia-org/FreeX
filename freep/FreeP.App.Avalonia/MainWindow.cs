@@ -276,6 +276,7 @@ public sealed class MainWindow : Window
     internal PresentationAccessibilityCheckerPanePlan? LastAccessibilityCheckerPanePlan { get; private set; }
     internal PresentationSlideTitleMutationPlan? LastSlideTitleMutationPlan { get; private set; }
     internal PresentationTableHeaderRowMutationPlan? LastTableHeaderRowMutationPlan { get; private set; }
+    internal PresentationTableStructureReviewPlan? LastTableStructureReviewPlan { get; private set; }
     internal PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
     internal PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
     internal PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
@@ -4493,6 +4494,10 @@ public sealed class MainWindow : Window
                     row.ShapeId);
             RefreshAccessibilitySummaryPlan();
         }
+        else if (row?.CommandHint == PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
+        {
+            LastTableStructureReviewPlan = OpenTableStructureReviewPlan(row);
+        }
         else if (row?.CommandHint == PresentationReviewWorkflowPlanner.InsertLinkCommandId)
         {
             OpenHyperlinkDialog();
@@ -4503,6 +4508,23 @@ public sealed class MainWindow : Window
         }
 
         return LastAccessibilityCheckerPanePlan!;
+    }
+
+    private PresentationTableStructureReviewPlan OpenTableStructureReviewPlan(PresentationAccessibilityCheckerRowPlan row)
+    {
+        var reviewPlan = PresentationReviewWorkflowPlanner.BuildTableStructureReviewPlan(
+            _presentation,
+            row.SlideIndex,
+            row.ShapeId);
+        RefreshAccessibilitySummaryPlan();
+        LastAccessibilityCheckerPanePlan =
+            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+                _presentation,
+                LastAccessibilitySummaryPlan!,
+                row.RowIndex);
+        RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
+        _accessibilityCheckerPaneHost.IsVisible = true;
+        return reviewPlan;
     }
 
     private void NavigateToAccessibilityCheckerRow(PresentationAccessibilityCheckerRowPlan row)

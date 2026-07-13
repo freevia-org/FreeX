@@ -595,6 +595,86 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_AccessibilityCheckerTableStructureAction_OpensSharedReviewPlan()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            var table = new SlideShape
+            {
+                Id = 602,
+                Name = "Forecast table",
+                Kind = SlideShapeKind.Table,
+                Table = new TableShape
+                {
+                    Flags = new TableStyleFlags { FirstRow = true },
+                    Rows =
+                    {
+                        new TableRow
+                        {
+                            Cells =
+                            {
+                                new TableCell { TextBody = MakeTextBody("Region"), GridSpan = 2 },
+                                new TableCell { HMerge = true },
+                                new TableCell()
+                            }
+                        },
+                        new TableRow
+                        {
+                            Cells =
+                            {
+                                new TableCell { TextBody = MakeTextBody("North") },
+                                new TableCell(),
+                                new TableCell { TextBody = MakeTextBody("$42K") }
+                            }
+                        }
+                    }
+                }
+            };
+            window.Editor.CurrentSlide!.Shapes.Add(table);
+
+            var opened = window.ShowAccessibilityCheckerPane();
+            var tableRow = opened.Rows.Single(row => row.Title == "Blank table header cells");
+
+            tableRow.ActionLabel.Should().Be("Review Table Structure");
+            tableRow.CommandHint.Should().Be(PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId);
+
+            var actioned = window.ApplyAccessibilityCheckerRowAction(tableRow.RowIndex);
+
+            window.LastTableStructureReviewPlan.Should().NotBeNull();
+            window.LastTableStructureReviewPlan!.Should().Match<PresentationTableStructureReviewPlan>(plan =>
+                plan.CanReview &&
+                plan.ShapeId == table.Id &&
+                plan.TableName == "Forecast table" &&
+                plan.RowCount == 2 &&
+                plan.ColumnCount == 3 &&
+                plan.ShouldNavigateToSlide &&
+                plan.ShouldSelectTable);
+            window.LastTableStructureReviewPlan.BlankHeaderCells.Should().Equal(new[]
+            {
+                new PresentationTableStructureCellPlan(0, 2, "R1C3")
+            });
+            window.LastTableStructureReviewPlan.BlankBodyCells.Should().Equal(new[]
+            {
+                new PresentationTableStructureCellPlan(1, 1, "R2C2")
+            });
+            window.LastTableStructureReviewPlan.MergedOrSplitCells.Select(cell => cell.CellReference)
+                .Should().Equal("R1C1", "R1C2");
+            actioned.SelectedRow!.CommandHint.Should().Be(PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId);
+            window.LastAccessibilitySummaryPlan!.Issues.Should().Contain(issue =>
+                issue.Title == "Blank table header cells" &&
+                issue.Action.CommandId == PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId);
+            window.Editor.SelectedShapeIds.Should().Equal(table.Id);
+            table.Table!.Flags.FirstRow.Should().BeTrue();
+            window.IsDirty.Should().BeFalse();
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_AccessibilityCheckerMediaCaptionTracks_UsesSharedPlan()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

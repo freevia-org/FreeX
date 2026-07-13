@@ -1930,7 +1930,7 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "Results table contains merged or split cells that can make table reading order ambiguous.",
             new PresentationAccessibilityIssueActionSummary(
                 PresentationReviewWorkflowPlanner.MergedTableCellsActionSummary,
-                null,
+                PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId,
                 true)));
     }
 
@@ -1981,14 +1981,14 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "Coverage table contains merged or split cells that can make table reading order ambiguous.",
             new PresentationAccessibilityIssueActionSummary(
                 PresentationReviewWorkflowPlanner.MergedTableCellsActionSummary,
-                null,
+                PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId,
                 true)));
         pane.Rows.Should().ContainSingle().Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
             row.Category == "Table" &&
             row.ShapeId == 17 &&
             row.ShapeName == "Coverage table" &&
             row.ActionLabel == "Review Table Structure" &&
-            row.CommandHint == null &&
+            row.CommandHint == PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId &&
             row.ShouldNavigateToSlide &&
             row.ShouldSelectShape);
     }
@@ -2083,14 +2083,15 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "Forecast table has 2 blank header cells.",
             new PresentationAccessibilityIssueActionSummary(
                 PresentationReviewWorkflowPlanner.BlankTableHeaderCellsActionSummary,
-                null,
+                PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId,
                 true)));
         summary.Issues.Should().NotContain(issue => issue.Title == "Table header row missing");
         pane.Rows.Should().ContainSingle().Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
             row.Category == "Table" &&
             row.ShapeId == 14 &&
             row.ShapeName == "Forecast table" &&
-            row.ActionLabel == "Select Object" &&
+            row.ActionLabel == "Review Table Structure" &&
+            row.CommandHint == PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId &&
             row.ShouldNavigateToSlide &&
             row.ShouldSelectShape);
     }
@@ -2153,15 +2154,15 @@ public sealed class PresentationReviewWorkflowPlannerTests
             "Variance table has 2 blank body cells.",
             new PresentationAccessibilityIssueActionSummary(
                 PresentationReviewWorkflowPlanner.BlankTableBodyCellsActionSummary,
-                null,
+                PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId,
                 true)));
         summary.Issues.Should().NotContain(issue => issue.Title == "Blank table header cells");
         pane.Rows.Should().ContainSingle().Which.Should().Match<PresentationAccessibilityCheckerRowPlan>(row =>
             row.Category == "Table" &&
             row.ShapeId == 15 &&
             row.ShapeName == "Variance table" &&
-            row.ActionLabel == "Select Object" &&
-            row.CommandHint == null &&
+            row.ActionLabel == "Review Table Structure" &&
+            row.CommandHint == PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId &&
             row.ShouldNavigateToSlide &&
             row.ShouldSelectShape);
     }
@@ -2351,9 +2352,87 @@ public sealed class PresentationReviewWorkflowPlannerTests
         plan.Rows[0].ActionLabel.Should().Be("Set Header Row");
         plan.Rows[0].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.SetTableHeaderRowCommandId);
         plan.Rows[1].ActionLabel.Should().Be("Review Table Structure");
-        plan.Rows[1].CommandHint.Should().BeNull();
+        plan.Rows[1].CommandHint.Should().Be(PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId);
         plan.SelectedRowIndex.Should().Be(1);
         plan.SelectedRow.Should().BeSameAs(plan.Rows[1]);
+    }
+
+    [Fact]
+    public void BuildTableStructureReviewPlan_ListsBlankAndMergedTableDetails()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Quarterly review";
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 19,
+            Name = "Forecast table",
+            Kind = SlideShapeKind.Table,
+            Table = new TableShape
+            {
+                Flags = new TableStyleFlags { FirstRow = true },
+                Rows =
+                {
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("Region"), GridSpan = 2 },
+                            new TableCell { HMerge = true },
+                            new TableCell()
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { TextBody = TextBody("North"), RowSpan = 2 },
+                            new TableCell(),
+                            new TableCell { TextBody = TextBody("$42K") }
+                        }
+                    },
+                    new TableRow
+                    {
+                        Cells =
+                        {
+                            new TableCell { VMerge = true },
+                            new TableCell { TextBody = TextBody("$39K") },
+                            new TableCell()
+                        }
+                    }
+                }
+            }
+        });
+
+        var plan = PresentationReviewWorkflowPlanner.BuildTableStructureReviewPlan(presentation, 0, 19);
+
+        plan.Should().Match<PresentationTableStructureReviewPlan>(review =>
+            review.CanReview &&
+            review.SlideIndex == 0 &&
+            review.ShapeId == 19 &&
+            review.TableName == "Forecast table" &&
+            review.RowCount == 3 &&
+            review.ColumnCount == 3 &&
+            review.ShouldNavigateToSlide &&
+            review.ShouldSelectTable &&
+            review.ValidationMessage == null);
+        plan.BlankHeaderCells.Should().Equal(new[]
+        {
+            new PresentationTableStructureCellPlan(0, 2, "R1C3")
+        });
+        plan.BlankBodyCells.Should().Equal(new[]
+        {
+            new PresentationTableStructureCellPlan(1, 1, "R2C2"),
+            new PresentationTableStructureCellPlan(2, 2, "R3C3")
+        });
+        plan.MergedOrSplitCells.Should().Equal(new[]
+        {
+            new PresentationTableStructureSpanPlan(0, 0, "R1C1", 2, 1, false, false, "R1C1 spans 2 columns."),
+            new PresentationTableStructureSpanPlan(0, 1, "R1C2", 1, 1, true, false, "R1C2 continues a horizontal merge."),
+            new PresentationTableStructureSpanPlan(1, 0, "R2C1", 1, 2, false, false, "R2C1 spans 2 rows."),
+            new PresentationTableStructureSpanPlan(2, 0, "R3C1", 1, 1, false, true, "R3C1 continues a vertical merge.")
+        });
+        plan.Guidance.Should().Be(PresentationReviewWorkflowPlanner.TableStructureReviewGuidance);
     }
 
     [Fact]
