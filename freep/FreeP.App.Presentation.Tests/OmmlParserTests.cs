@@ -890,6 +890,33 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Box_WithOperatorEmulatorOn_PreservesSharedOperatorFlag()
+    {
+        var node = Parse(
+            "<m:box>" +
+            "<m:boxPr><m:opEmu/></m:boxPr>" +
+            "<m:e><m:r><m:t>==</m:t></m:r></m:e>" +
+            "</m:box>");
+
+        var box = Assert.IsType<MathNode.Box>(node);
+        Assert.True(box.OperatorEmulator);
+        Assert.Equal("==", Assert.IsType<MathNode.Run>(box.Base).Text);
+    }
+
+    [Fact]
+    public void Box_WithOperatorEmulatorOff_DoesNotPromoteOperatorSpacing()
+    {
+        var node = Parse(
+            "<m:box>" +
+            "<m:boxPr><m:opEmu m:val=\"false\"/></m:boxPr>" +
+            "<m:e><m:r><m:t>==</m:t></m:r></m:e>" +
+            "</m:box>");
+
+        var box = Assert.IsType<MathNode.Box>(node);
+        Assert.False(box.OperatorEmulator);
+    }
+
+    [Fact]
     public void BorderBox_ParsesHiddenSideFlags()
     {
         var node = Parse(

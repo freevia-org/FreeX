@@ -305,6 +305,51 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_BoxOperatorEmulator_UsesSharedSpacingPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var ordinaryRow = new MathNode.Row(new MathNode[]
+                {
+                    new MathNode.Run("a"),
+                    new MathNode.Box(new MathNode.Run("==", isItalic: false)),
+                    new MathNode.Run("b")
+                });
+                var emulatorRow = new MathNode.Row(new MathNode[]
+                {
+                    new MathNode.Run("a"),
+                    new MathNode.Box(new MathNode.Run("==", isItalic: false), operatorEmulator: true),
+                    new MathNode.Run("b")
+                });
+
+                var ordinaryBox = MathLayoutEngine.Layout(ordinaryRow, "Cambria Math", 18.0);
+                var mathBox = MathLayoutEngine.Layout(emulatorRow, "Cambria Math", 18.0);
+                mathBox.Metrics.Width.Should().BeGreaterThan(ordinaryBox.Metrics.Width,
+                    "m:boxPr/m:opEmu spacing must be resolved in the shared math plan before Avalonia draws it");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "E = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render m:box operator-emulator spacing from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_HiddenPhantom_UsesSharedMetricOnlyPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

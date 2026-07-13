@@ -233,6 +233,46 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_BoxOperatorEmulator_UsesSharedSpacingPlan_DoesNotThrow()
+    {
+        var ordinaryRow = new MathNode.Row(new MathNode[]
+        {
+            new MathNode.Run("a"),
+            new MathNode.Box(new MathNode.Run("==", isItalic: false)),
+            new MathNode.Run("b")
+        });
+        var emulatorRow = new MathNode.Row(new MathNode[]
+        {
+            new MathNode.Run("a"),
+            new MathNode.Box(new MathNode.Run("==", isItalic: false), operatorEmulator: true),
+            new MathNode.Run("b")
+        });
+
+        var ordinaryBox = MathLayoutEngine.Layout(ordinaryRow, "Cambria Math", 18.0);
+        var mathBox = MathLayoutEngine.Layout(emulatorRow, "Cambria Math", 18.0);
+        mathBox.Metrics.Width.Should().BeGreaterThan(ordinaryBox.Metrics.Width,
+            "m:boxPr/m:opEmu spacing must be resolved in the shared math plan before WPF draws it");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "E = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_HiddenPhantom_UsesSharedMetricOnlyPlan_DoesNotThrow()
     {
         var mathNode = new MathNode.Phantom(

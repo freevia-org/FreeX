@@ -432,8 +432,11 @@ public static class OmmlParser
 
     private static MathNode ParseBox(XElement el)
     {
+        var boxPr = el.Element(M + "boxPr");
         var eEl = el.Element(M + "e");
-        return new MathNode.Box(eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl));
+        return new MathNode.Box(
+            eEl is null ? new MathNode.Unknown(FlattenText(el)) : ParseRow(eEl),
+            operatorEmulator: IsOnOffOn(boxPr?.Element(M + "opEmu")));
     }
 
     private static MathNode ParsePhantom(XElement el)

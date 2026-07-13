@@ -1001,6 +1001,40 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Row_BoxOperatorEmulatorDoubleEquals_AddsRelationSpacingAdvance()
+    {
+        var emulatorRow = new MathNode.Row(new MathNode[]
+        {
+            Run("a"),
+            new MathNode.Box(Run("==", isItalic: false), operatorEmulator: true),
+            Run("b")
+        });
+        var ordinaryRow = new MathNode.Row(new MathNode[]
+        {
+            Run("a"),
+            new MathNode.Box(Run("==", isItalic: false)),
+            Run("b")
+        });
+
+        var emulatorLayout = MathLayoutEngine.Layout(emulatorRow, "Cambria Math", FontSizePt);
+        var ordinaryLayout = MathLayoutEngine.Layout(ordinaryRow, "Cambria Math", FontSizePt);
+        var emulatorContainer = Assert.IsType<MathBox.Container>(emulatorLayout.Children[0]);
+        var ordinaryContainer = Assert.IsType<MathBox.Container>(ordinaryLayout.Children[0]);
+
+        emulatorLayout.Metrics.Width.Should().BeGreaterThan(ordinaryLayout.Metrics.Width,
+            "m:boxPr/m:opEmu should make a boxed multi-glyph operator contribute relation-class spacing");
+        emulatorContainer.Children[1].X.Should().BeGreaterThan(ordinaryContainer.Children[1].X,
+            "the operator-emulator box receives shared spacing before it");
+        emulatorContainer.Children[2].X.Should().BeGreaterThan(ordinaryContainer.Children[2].X,
+            "the following sibling advances past shared operator-emulator spacing");
+
+        var ops = MathBoxRenderPlanner.Plan(emulatorLayout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+        ops.Select(g => g.Text).Should().Equal(new[] { "a", "==", "b" });
+    }
+
+    [Fact]
     public void Phantom_Hidden_ReservesNaturalMetricsButEmitsNoGlyphs()
     {
         var child = new MathNode.Frac(Run("1"), new MathNode.Rad(null, Run("x")));

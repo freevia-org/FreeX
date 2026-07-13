@@ -293,7 +293,15 @@ public abstract class MathNode
     public sealed class Box : MathNode
     {
         public MathNode Base { get; }
-        public Box(MathNode @base) { Base = @base; }
+
+        /// <summary>True when <c>m:boxPr/m:opEmu</c> makes the wrapped expression behave as one operator.</summary>
+        public bool OperatorEmulator { get; }
+
+        public Box(MathNode @base, bool operatorEmulator = false)
+        {
+            Base = @base;
+            OperatorEmulator = operatorEmulator;
+        }
     }
 
     /// <summary><c>m:phant</c> -- optionally hidden expression that still reserves selected metrics.</summary>
