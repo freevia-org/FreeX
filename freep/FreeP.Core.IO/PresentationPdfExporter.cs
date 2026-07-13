@@ -1,7 +1,6 @@
 using System.IO;
 using Free.Shared.Drawing;
 using Free.Shared.Pdf;
-using FreeP.Core.IO.ShapeEffectPlanning;
 using FreeP.Core.Model;
 
 namespace FreeP.Core.IO;

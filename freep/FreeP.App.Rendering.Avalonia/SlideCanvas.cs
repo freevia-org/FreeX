@@ -272,7 +272,7 @@ public sealed class SlideCanvas : Control
     private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)
     {
         if (shape.Geometry.Contours.Count == 0) return;
-        var plan = ShapeEffectRenderPlanner.PlanOuterEffects(shape.Effects);
+        var plan = ResolvedShapeEffectRenderPlanner.PlanOuterEffects(shape.Effects);
 
         if (plan.ShadowPasses.Count > 0)
         {
@@ -588,7 +588,7 @@ public sealed class SlideCanvas : Control
 
         // Wave 26: draw outer shadow behind the picture when effects are set.
         // Route the shadow-direction/blur math through the shared renderer-neutral planner
-        // (ShapeEffectRenderPlanner) so WPF + Avalonia stay in lock-step and we don't duplicate it.
+        // (ResolvedShapeEffectRenderPlanner) so WPF + Avalonia stay in lock-step and we don't duplicate it.
         foreach (var pass in plan.OuterEffects.ShadowPasses)
         {
             var shadowBrush = new SolidColorBrush(

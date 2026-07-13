@@ -1,4 +1,5 @@
 using Free.Shared.Drawing;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
 
@@ -54,7 +55,7 @@ public static class PictureRenderPlanner
             sourceRect,
             PictureColorEffectPlanner.Plan(picture),
             Math.Clamp(picture.AlphaModPct ?? 1.0, 0.0, 1.0),
-            ShapeEffectRenderPlanner.PlanOuterEffects(picture.Effects),
+            ResolvedShapeEffectRenderPlanner.PlanOuterEffects(picture.Effects),
             DefaultPhaseOrder)
         {
             HasCrop = sourceRect.X != 0 ||

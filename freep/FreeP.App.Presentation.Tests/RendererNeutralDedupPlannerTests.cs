@@ -38,7 +38,7 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
-    public void ShapeEffectRenderPlanner_ExpandsShadowAndGlowPasses()
+    public void ResolvedShapeEffectRenderPlanner_ExpandsShadowAndGlowPasses()
     {
         var effects = new ResolvedShapeEffects
         {
@@ -54,7 +54,7 @@ public sealed class RendererNeutralDedupPlannerTests
             GlowRadiusDip = 5
         };
 
-        var plan = ShapeEffectRenderPlanner.PlanOuterEffects(effects);
+        var plan = ResolvedShapeEffectRenderPlanner.PlanOuterEffects(effects);
 
         plan.ShadowPasses.Should().HaveCount(17);
         plan.ShadowPasses[0].Should().Be(new ShapeShadowPass(6, -4, new SrgbColor(1, 2, 3), 33));
@@ -211,7 +211,7 @@ public sealed class RendererNeutralDedupPlannerTests
         foreach (var source in new[] { wpf, avalonia })
         {
             source.Should().Contain("ShapeTransformPlanner.PlanShapeTransform");
-            source.Should().Contain("ShapeEffectRenderPlanner.PlanOuterEffects");
+            source.Should().Contain("ResolvedShapeEffectRenderPlanner.PlanOuterEffects");
             source.Should().Contain("TextRunEffectRenderPlanner");
             source.Should().NotContain("BuildWarpYFunc");
             source.Should().NotContain("OuterShadowDirDeg * Math.PI");
