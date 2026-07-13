@@ -46,6 +46,7 @@ public enum EquationVisualElementKind
     Radical,
     NAry,
     Matrix,
+    EquationArray,
     Accent,
     Bar,
     Delimiter,
@@ -218,6 +219,26 @@ public sealed record EquationVisualElement(
         IReadOnlyList<EquationVisualSegment> segments) =>
         new(
             EquationVisualElementKind.Matrix,
+            linearText,
+            segments,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty)
+        {
+            MatrixRows = rows
+        };
+
+    public static EquationVisualElement EquationArray(
+        string linearText,
+        IReadOnlyList<EquationVisualMatrixRow> rows,
+        IReadOnlyList<EquationVisualSegment> segments) =>
+        new(
+            EquationVisualElementKind.EquationArray,
             linearText,
             segments,
             string.Empty,
@@ -518,6 +539,10 @@ public static class EquationVisualPlanner
                 AddMatrixElement(run, segments, elements, depth);
                 break;
 
+            case MathRunKind.EquationArray:
+                AddEquationArrayElement(run, segments, elements, depth);
+                break;
+
             case MathRunKind.Accent:
                 AddAccentElement(run, segments, elements, depth);
                 break;
@@ -772,6 +797,56 @@ public static class EquationVisualPlanner
         }
 
         return rows;
+    }
+
+    private static void AddEquationArrayElement(
+        MathRun run,
+        List<EquationVisualSegment> segments,
+        List<EquationVisualElement> elements,
+        int depth)
+    {
+        if (run.Matrix is null)
+        {
+            AddSegmentElement(
+                run.LinearText,
+                segments,
+                elements,
+                Segment(run.LinearText, EquationVisualSegmentRole.LinearFallback, NormalStyle));
+            return;
+        }
+
+        var rows = BuildMatrixRows(run.Matrix, depth);
+        var runSegments = new List<EquationVisualSegment>();
+        for (var rowIndex = 0; rowIndex < rows.Count; rowIndex++)
+        {
+            if (rowIndex > 0)
+                runSegments.Add(new EquationVisualSegment(
+                    MatrixRowSeparatorText,
+                    EquationVisualSegmentRole.MatrixRowSeparator,
+                    MatrixSeparatorStyle));
+
+            var row = rows[rowIndex];
+            for (var columnIndex = 0; columnIndex < row.Cells.Count; columnIndex++)
+            {
+                if (columnIndex > 0)
+                    runSegments.Add(new EquationVisualSegment(
+                        MatrixColumnSeparatorText,
+                        EquationVisualSegmentRole.MatrixColumnSeparator,
+                        MatrixSeparatorStyle));
+
+                var cell = row.Cells[columnIndex];
+                runSegments.Add(new EquationVisualSegment(
+                    cell.Text,
+                    EquationVisualSegmentRole.MatrixCell,
+                    StructureStyle));
+            }
+        }
+
+        if (runSegments.Count == 0)
+            return;
+
+        segments.AddRange(runSegments);
+        elements.Add(EquationVisualElement.EquationArray(run.LinearText, rows, runSegments));
     }
 
     private static void AddAccentElement(

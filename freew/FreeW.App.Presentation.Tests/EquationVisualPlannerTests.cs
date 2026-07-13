@@ -575,6 +575,37 @@ public sealed class EquationVisualPlannerTests
     }
 
     [Fact]
+    public void EquationVisualPlanner_NestedEquationArrayCells_SurfaceSharedCellPlans()
+    {
+        var structuredCell = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+        var array = MathMatrix.FromCellEquations([[structuredCell], [Equation.FromText("z")]]);
+
+        var plan = EquationVisualPlanner.Build(new Equation([MathRun.EquationArrayOf(array)]));
+
+        plan.LinearText.Should().Be("a+x^2; z");
+        plan.Elements.Should().ContainSingle();
+        var element = plan.Elements[0];
+        element.Kind.Should().Be(EquationVisualElementKind.EquationArray);
+        element.MatrixRowCount.Should().Be(2);
+        element.MatrixColumnCount.Should().Be(1);
+        element.MatrixRows[0].Cells[0].Text.Should().Be("a+x^2");
+        element.MatrixRows[0].Cells[0].CellPlan.Should().NotBeNull();
+        element.MatrixRows[1].Cells[0].Text.Should().Be("z");
+        element.MatrixRows[1].Cells[0].CellPlan.Should().NotBeNull();
+        plan.Segments.Select(segment => segment.Text).Should().Equal(
+            "a+x^2",
+            EquationVisualPlanner.MatrixRowSeparatorText,
+            "z");
+        plan.Segments.Select(segment => segment.Role).Should().Equal(
+            EquationVisualSegmentRole.MatrixCell,
+            EquationVisualSegmentRole.MatrixRowSeparator,
+            EquationVisualSegmentRole.MatrixCell);
+    }
+
+    [Fact]
     public void EquationVisualPlanner_Accent_BuildsStructuredMarkOverBaseElement()
     {
         var run = MathRun.AccentOf("x", "hat");
