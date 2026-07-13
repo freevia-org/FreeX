@@ -424,6 +424,12 @@ public sealed class ChartShape
     /// </summary>
     public int? BarOverlapPercent { get; set; }
 
+    /// <summary>
+    /// Authored 3-D bar/column gap depth percentage from <c>c:gapDepth/@val</c>.
+    /// Null preserves the planner default.
+    /// </summary>
+    public int? BarGapDepthPercent { get; set; }
+
     // ── Type-specific auxiliary fields ───────────────────────────────────────────
 
     /// <summary>

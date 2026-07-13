@@ -45,6 +45,7 @@ public sealed class ChartTests : IDisposable
         chart.VaryColors.Should().BeFalse();
         chart.BarGapWidthPercent.Should().BeNull();
         chart.BarOverlapPercent.Should().BeNull();
+        chart.BarGapDepthPercent.Should().BeNull();
         chart.FirstSliceAngleDegrees.Should().BeNull();
         chart.BubbleScalePercent.Should().Be(100);
         chart.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Area);
@@ -59,6 +60,7 @@ public sealed class ChartTests : IDisposable
         chart.FirstSliceAngleDegrees = 135;
         chart.BarGapWidthPercent = 25;
         chart.BarOverlapPercent = -40;
+        chart.BarGapDepthPercent = 125;
         slide.Shapes.Add(new SlideShape
         {
             Id = 7,
@@ -75,6 +77,7 @@ public sealed class ChartTests : IDisposable
         clonedChart.FirstSliceAngleDegrees.Should().Be(135);
         clonedChart.BarGapWidthPercent.Should().Be(25);
         clonedChart.BarOverlapPercent.Should().Be(-40);
+        clonedChart.BarGapDepthPercent.Should().Be(125);
     }
 
     [Fact]
@@ -225,6 +228,65 @@ public sealed class ChartTests : IDisposable
         rt.ChartType.Should().Be(ChartType.ColumnClustered);
         rt.BarGapWidthPercent.Should().Be(40);
         rt.BarOverlapPercent.Should().Be(55);
+        rt.BarGapDepthPercent.Should().BeNull();
+    }
+
+    [Fact]
+    public void RoundTrip_ColumnChart_GapDepthPreservedInPackageAndModel()
+    {
+        var chart = BuildColumnChart();
+        chart.BarGapWidthPercent = 40;
+        chart.BarGapDepthPercent = 180;
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var bar3DChart = chartDoc.Descendants(ChartNs + "bar3DChart").Single();
+            bar3DChart.Element(ChartNs + "gapWidth")
+                ?.Attribute("val")
+                ?.Value
+                .Should()
+                .Be("40");
+            bar3DChart.Element(ChartNs + "gapDepth")
+                ?.Attribute("val")
+                ?.Value
+                .Should()
+                .Be("180");
+            bar3DChart.Element(ChartNs + "overlap").Should().BeNull("c:bar3DChart does not use c:overlap");
+            ChartChildIndex(bar3DChart, "gapWidth").Should().BeLessThan(ChartChildIndex(bar3DChart, "gapDepth"));
+            ChartChildIndex(bar3DChart, "gapDepth").Should().BeLessThan(ChartChildIndex(bar3DChart, "axId"));
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ChartType.Should().Be(ChartType.ColumnClustered);
+        rt.BarGapWidthPercent.Should().Be(40);
+        rt.BarGapDepthPercent.Should().Be(180);
+    }
+
+    [Fact]
+    public void Read_PowerPointAuthoredBar3DChart_GapDepthClampedIntoModel()
+    {
+        var path = WriteToPptx(BuildPresWithChart(BuildColumnChart()));
+        RewriteChartXml(path, chartIndex: 1, chartDoc =>
+        {
+            var barChart = chartDoc.Descendants(ChartNs + "barChart").Single();
+            barChart.Name = ChartNs + "bar3DChart";
+            barChart.Element(ChartNs + "overlap")?.Remove();
+            var gapDepth = new XElement(ChartNs + "gapDepth", new XAttribute("val", "650"));
+            var gapWidth = barChart.Element(ChartNs + "gapWidth");
+            if (gapWidth is not null)
+                gapWidth.AddAfterSelf(gapDepth);
+            else
+                barChart.Elements(ChartNs + "axId").First().AddBeforeSelf(gapDepth);
+        });
+
+        var reloaded = PptxPackageReader.Read(path);
+
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ChartType.Should().Be(ChartType.ColumnClustered);
+        rt.BarGapDepthPercent.Should().Be(500);
     }
 
     [Fact]
@@ -1171,6 +1233,24 @@ public sealed class ChartTests : IDisposable
             ?? throw new FileNotFoundException($"chart{chartIndex}.xml not found");
         using var stream = entry.Open();
         return XDocument.Load(stream);
+    }
+
+    private static void RewriteChartXml(string packagePath, int chartIndex, Action<XDocument> rewrite)
+    {
+        using var archive = ZipFile.Open(packagePath, ZipArchiveMode.Update);
+        var entry = archive.GetEntry($"ppt/charts/chart{chartIndex}.xml")
+            ?? throw new FileNotFoundException($"chart{chartIndex}.xml not found");
+        XDocument chartDoc;
+        using (var stream = entry.Open())
+        {
+            chartDoc = XDocument.Load(stream);
+        }
+
+        rewrite(chartDoc);
+        entry.Delete();
+        var replacement = archive.CreateEntry($"ppt/charts/chart{chartIndex}.xml");
+        using var replacementStream = replacement.Open();
+        chartDoc.Save(replacementStream);
     }
 
     private static int ChartChildIndex(XElement chartElement, string localName)

@@ -325,6 +325,7 @@ internal static class PptxChartReader
 
         shape.BarGapWidthPercent = ReadBarGapWidth(el);
         shape.BarOverlapPercent = ReadBarOverlap(el);
+        shape.BarGapDepthPercent = ReadBarGapDepth(el);
 
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
@@ -898,6 +899,12 @@ internal static class PptxChartReader
     {
         var value = ParseNullableInt(chartEl.Element(C + "overlap")?.Attribute("val")?.Value);
         return value.HasValue ? Math.Clamp(value.Value, -100, 100) : null;
+    }
+
+    private static int? ReadBarGapDepth(XElement chartEl)
+    {
+        var value = ParseNullableInt(chartEl.Element(C + "gapDepth")?.Attribute("val")?.Value);
+        return value.HasValue ? Math.Clamp(value.Value, 0, 500) : null;
     }
 
     private static ChartMarkerSymbol? ReadMarkerSymbol(string? value) =>
