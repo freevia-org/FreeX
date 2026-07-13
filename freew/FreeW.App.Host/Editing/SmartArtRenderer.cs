@@ -34,11 +34,11 @@ internal static class SmartArtRenderer
         return plan.LayoutId switch
         {
             // ── List layouts ────────────────────────────────────────────────────────────────────────
-            "list1" or "vertbullet1" => BuildVerticalList(plan.Nodes, strokeThickness),
+            "list1" or "vertbullet1" => BuildPlannedLayout(plan, strokeThickness),
             "horizbullet1"           => BuildPlannedLayout(plan, strokeThickness),
 
             // ── Process layouts ─────────────────────────────────────────────────────────────────────
-            "process1"               => BuildProcess(plan.Nodes, strokeThickness),
+            "process1"               => BuildPlannedLayout(plan, strokeThickness),
             "continuousBlockProcess" => BuildPlannedLayout(plan, strokeThickness),
             "stepup1"                => BuildPlannedLayout(plan, strokeThickness),
             "stepdown1"              => BuildPlannedLayout(plan, strokeThickness),

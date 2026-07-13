@@ -77,7 +77,10 @@ public sealed record SmartArtHierarchyGeometryPlan(
 
 public enum SmartArtLayoutGeometryKind
 {
+    BasicList,
+    VerticalBulletList,
     HorizontalList,
+    BasicProcess,
     ContinuousBlockProcess,
     StepUp,
     StepDown,
@@ -422,7 +425,10 @@ public static class ChartSmartArtVisualPlanner
     private static SmartArtLayoutGeometryPlan? BuildLayoutGeometry(string layoutId, int nodeCount) =>
         layoutId switch
         {
+            "list1" => BuildVerticalListGeometry(nodeCount, SmartArtLayoutGeometryKind.BasicList),
+            "vertbullet1" => BuildVerticalListGeometry(nodeCount, SmartArtLayoutGeometryKind.VerticalBulletList),
             "horizbullet1" => BuildHorizontalListGeometry(nodeCount),
+            "process1" => BuildBasicProcessGeometry(nodeCount),
             "continuousBlockProcess" => BuildContinuousBlockProcessGeometry(nodeCount),
             "stepup1" => BuildStepGeometry(nodeCount, ascending: true),
             "stepdown1" => BuildStepGeometry(nodeCount, ascending: false),
@@ -431,6 +437,38 @@ public static class ChartSmartArtVisualPlanner
             "matrix1" => BuildMatrixGeometry(nodeCount),
             _ => null
         };
+
+    private static SmartArtLayoutGeometryPlan BuildVerticalListGeometry(
+        int nodeCount,
+        SmartArtLayoutGeometryKind kind)
+    {
+        const double margin = 8;
+        const double boxWidth = 112;
+        const double boxHeight = 30;
+        const double gap = 6;
+
+        var nodes = new List<SmartArtLayoutNodeGeometry>(nodeCount);
+        for (var i = 0; i < nodeCount; i++)
+        {
+            nodes.Add(new SmartArtLayoutNodeGeometry(
+                i,
+                margin,
+                margin + i * (boxHeight + gap),
+                boxWidth,
+                boxHeight));
+        }
+
+        var naturalWidth = nodeCount == 0 ? 0 : margin * 2 + boxWidth;
+        var naturalHeight = nodeCount == 0
+            ? 0
+            : margin * 2 + nodeCount * boxHeight + Math.Max(0, nodeCount - 1) * gap;
+        return new SmartArtLayoutGeometryPlan(
+            kind,
+            nodes,
+            [],
+            naturalWidth,
+            naturalHeight);
+    }
 
     private static SmartArtLayoutGeometryPlan BuildHorizontalListGeometry(int nodeCount)
     {
@@ -458,6 +496,51 @@ public static class ChartSmartArtVisualPlanner
             SmartArtLayoutGeometryKind.HorizontalList,
             nodes,
             [],
+            naturalWidth,
+            naturalHeight);
+    }
+
+    private static SmartArtLayoutGeometryPlan BuildBasicProcessGeometry(int nodeCount)
+    {
+        const double margin = 8;
+        const double boxWidth = 70;
+        const double boxHeight = 30;
+        const double gap = 16;
+
+        var nodes = new List<SmartArtLayoutNodeGeometry>(nodeCount);
+        for (var i = 0; i < nodeCount; i++)
+        {
+            nodes.Add(new SmartArtLayoutNodeGeometry(
+                i,
+                margin + i * (boxWidth + gap),
+                margin,
+                boxWidth,
+                boxHeight));
+        }
+
+        var connectors = new List<SmartArtLayoutConnectorGeometry>(Math.Max(0, nodeCount - 1));
+        for (var i = 0; i < nodeCount - 1; i++)
+        {
+            var current = nodes[i];
+            var next = nodes[i + 1];
+            connectors.Add(new SmartArtLayoutConnectorGeometry(
+                i,
+                i + 1,
+                SmartArtLayoutConnectorKind.Arrow,
+                current.X + current.Width,
+                current.Y + current.Height / 2,
+                next.X,
+                next.Y + next.Height / 2));
+        }
+
+        var naturalWidth = nodeCount == 0
+            ? 0
+            : margin * 2 + nodeCount * boxWidth + Math.Max(0, nodeCount - 1) * gap;
+        var naturalHeight = nodeCount == 0 ? 0 : margin * 2 + boxHeight;
+        return new SmartArtLayoutGeometryPlan(
+            SmartArtLayoutGeometryKind.BasicProcess,
+            nodes,
+            connectors,
             naturalWidth,
             naturalHeight);
     }

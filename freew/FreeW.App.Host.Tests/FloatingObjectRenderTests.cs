@@ -397,7 +397,7 @@ public sealed class FloatingObjectRenderTests
         nodeColors.Should().Contain(Color.FromRgb(0x1F, 0x38, 0x64));
         nodeColors.Distinct().Should().HaveCountGreaterThan(1);
 
-        LogicalDescendants<System.Windows.Shapes.Polygon>(root)
+        LogicalDescendants<System.Windows.Shapes.Line>(root)
             .Should()
             .HaveCountGreaterThanOrEqualTo(2);
     }

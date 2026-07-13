@@ -219,6 +219,9 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Theory]
+    [InlineData("list1", "BasicList", 4, 0, 128, 154)]
+    [InlineData("vertbullet1", "VerticalBulletList", 4, 0, 128, 154)]
+    [InlineData("process1", "BasicProcess", 4, 3, 344, 46)]
     [InlineData("cycle1", "Cycle", 4, 4, 200, 160)]
     [InlineData("radial1", "Radial", 4, 3, 220, 180)]
     [InlineData("matrix1", "Matrix", 4, 0, 182, 94)]
@@ -278,6 +281,33 @@ public sealed class ChartSmartArtVisualPlannerTests
         var matrixGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(matrix).LayoutGeometry!;
         matrixGeometry.Nodes[2].X.Should().BeApproximately(8, 0.01);
         matrixGeometry.Nodes[2].Y.Should().BeApproximately(52, 0.01);
+
+        var list = SmartArt.Create(SmartArtKind.List, ["One", "Two", "Three"]);
+        list.LayoutId = "list1";
+        var listGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(list).LayoutGeometry!;
+        listGeometry.Kind.Should().Be(SmartArtLayoutGeometryKind.BasicList);
+        listGeometry.Nodes.Select(n => n.X).Should().OnlyContain(x => Math.Abs(x - 8) < 0.01);
+        listGeometry.Nodes[1].Y.Should().BeApproximately(44, 0.01);
+        listGeometry.Connectors.Should().BeEmpty();
+
+        var verticalBullet = SmartArt.Create(SmartArtKind.List, ["One", "Two", "Three"]);
+        verticalBullet.LayoutId = "vertbullet1";
+        var verticalBulletGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(verticalBullet).LayoutGeometry!;
+        verticalBulletGeometry.Kind.Should().Be(SmartArtLayoutGeometryKind.VerticalBulletList);
+        verticalBulletGeometry.Nodes.Select(n => n.X).Should().OnlyContain(x => Math.Abs(x - 8) < 0.01);
+        verticalBulletGeometry.Nodes[2].Y.Should().BeApproximately(80, 0.01);
+        verticalBulletGeometry.Connectors.Should().BeEmpty();
+
+        var process = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        process.LayoutId = "process1";
+        var processGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(process).LayoutGeometry!;
+        processGeometry.Kind.Should().Be(SmartArtLayoutGeometryKind.BasicProcess);
+        processGeometry.Nodes.Select(n => n.Y).Should().OnlyContain(y => Math.Abs(y - 8) < 0.01);
+        processGeometry.Nodes[1].X.Should().BeApproximately(94, 0.01);
+        processGeometry.Connectors.Select(c => (c.SourceNodeIndex, c.TargetNodeIndex, c.Kind))
+            .Should().ContainInOrder(
+                (0, 1, SmartArtLayoutConnectorKind.Arrow),
+                (1, 2, SmartArtLayoutConnectorKind.Arrow));
 
         var continuous = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
         continuous.LayoutId = "continuousBlockProcess";

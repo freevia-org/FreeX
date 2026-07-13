@@ -579,6 +579,36 @@ public sealed class DocumentViewInlineFO4Tests
         values.ConnectorCount.Should().Be(3);
     }
 
+    [Theory]
+    [InlineData("list1", "BasicList", 0)]
+    [InlineData("vertbullet1", "VerticalBulletList", 0)]
+    [InlineData("process1", "BasicProcess", 2)]
+    public async Task Inline_smartart_carries_basic_shared_layout_geometry(
+        string layoutId,
+        string expectedKind,
+        int expectedConnectors)
+    {
+        (string? LayoutId, string? GeometryKind, int NodeCount, int ConnectorCount) values = default;
+        var ran = await OnUiThread(() =>
+        {
+            var smartArtKind = layoutId == "process1" ? SmartArtKind.Process : SmartArtKind.List;
+            var doc = DocWithInlineSmartArt(
+                smartArtKind,
+                configure: smartArt => smartArt.LayoutId = layoutId);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            var geometry = view.InlineSmartArtLayoutGeometries.Single();
+            values = (geometry.LayoutId, geometry.GeometryKind, geometry.GeometryNodeCount, geometry.GeometryConnectorCount);
+        });
+
+        if (!ran) return;
+        values.LayoutId.Should().Be(layoutId);
+        values.GeometryKind.Should().Be(expectedKind);
+        values.NodeCount.Should().Be(3);
+        values.ConnectorCount.Should().Be(expectedConnectors);
+    }
+
     [Fact]
     public async Task Inline_smartart_carries_planned_style_values()
     {

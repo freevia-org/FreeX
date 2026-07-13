@@ -246,6 +246,49 @@ public sealed class SmartArtRenderingTests
         Assert.True(Canvas.GetTop(d) > Canvas.GetTop(b), "D should be in the second matrix row");
     }
 
+    [StaTheory]
+    [InlineData("list1")]
+    [InlineData("vertbullet1")]
+    public void BasicVerticalListLayouts_RenderSharedGeometryNodePositions(string layoutId)
+    {
+        var sa = SmartArt.Create(SmartArtKind.List, ["One", "Two", "Three"]);
+        sa.LayoutId = layoutId;
+        var view = ViewWithSmartArt(sa);
+
+        var one = NodeBorder(view, "One");
+        var two = NodeBorder(view, "Two");
+        var three = NodeBorder(view, "Three");
+
+        Assert.InRange(Canvas.GetLeft(one), 7, 9);
+        Assert.InRange(Canvas.GetTop(one), 7, 9);
+        Assert.Equal(Canvas.GetLeft(one), Canvas.GetLeft(two));
+        Assert.Equal(Canvas.GetLeft(two), Canvas.GetLeft(three));
+        Assert.True(Canvas.GetTop(two) > Canvas.GetTop(one), "second node should be below the first node");
+        Assert.True(Canvas.GetTop(three) > Canvas.GetTop(two), "third node should be below the second node");
+    }
+
+    [StaFact]
+    public void BasicProcessLayout_RendersSharedGeometryNodePositionsAndConnectors()
+    {
+        var sa = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        sa.LayoutId = "process1";
+        var view = ViewWithSmartArt(sa);
+
+        var plan = NodeBorder(view, "Plan");
+        var build = NodeBorder(view, "Build");
+        var verify = NodeBorder(view, "Verify");
+
+        Assert.InRange(Canvas.GetLeft(plan), 7, 9);
+        Assert.InRange(Canvas.GetLeft(build), 93, 95);
+        Assert.InRange(Canvas.GetLeft(verify), 179, 181);
+        Assert.Equal(Canvas.GetTop(plan), Canvas.GetTop(build));
+        Assert.Equal(Canvas.GetTop(build), Canvas.GetTop(verify));
+
+        var connectorLines = LogicalDescendants<Line>(view.Document);
+        Assert.True(connectorLines.Count >= 2,
+            $"expected shared basic process geometry to render connector lines; got {connectorLines.Count}");
+    }
+
     [StaFact]
     public void ContinuousBlockProcessLayout_RendersSharedProcessGeometry()
     {
@@ -269,21 +312,22 @@ public sealed class SmartArtRenderingTests
     }
 
     [StaFact]
-    public void ProcessDiagram_ArrowFillDiffersFromAdjacentBoxFill()
+    public void ProcessDiagram_ConnectorFillDiffersFromAdjacentBoxFill()
     {
         var sa = SmartArt.Create(SmartArtKind.Process, ["Idea", "Prototype", "Launch"]);
         var view = ViewWithSmartArt(sa);
 
-        var polygons = LogicalDescendants<Polygon>(view.Document);
-        Assert.True(polygons.Count >= 2, $"expected ≥2 arrow polygons for a 3-node process, got {polygons.Count}");
+        var connectorLines = LogicalDescendants<Line>(view.Document)
+            .Where(line => line.X2 > line.X1 && Math.Abs(line.Y2 - line.Y1) < 0.01)
+            .ToList();
+        Assert.True(connectorLines.Count >= 2, $"expected >=2 connector lines for a 3-node process, got {connectorLines.Count}");
 
         var borders = LogicalDescendants<Border>(view.Document)
             .Where(b => b.Background is SolidColorBrush)
             .Where(b => b.Background != null)
             .ToList();
 
-        // For each arrow, verify its fill is NOT equal to the fill of its preceding node box.
-        // Borders and Polygons are added in order: [box0, arrow0, box1, arrow1, box2].
+        // For each connector, verify its stroke is NOT equal to the fill of its preceding node box.
         // Collect node box colors in order.
         var nodeColors = borders
             .Where(b => b.Background is SolidColorBrush sc &&
@@ -292,15 +336,15 @@ public sealed class SmartArtRenderingTests
             .Select(b => ((SolidColorBrush)b.Background!).Color)
             .ToList();
 
-        var arrowColors = polygons
-            .Where(p => p.Fill is SolidColorBrush)
-            .Select(p => ((SolidColorBrush)p.Fill!).Color)
+        var connectorColors = connectorLines
+            .Where(line => line.Stroke is SolidColorBrush)
+            .Select(line => ((SolidColorBrush)line.Stroke!).Color)
             .ToList();
 
-        // Each arrow color must differ from the preceding node box color.
-        for (var i = 0; i < Math.Min(arrowColors.Count, nodeColors.Count); i++)
+        // Each connector color must differ from the preceding node box color.
+        for (var i = 0; i < Math.Min(connectorColors.Count, nodeColors.Count); i++)
         {
-            Assert.NotEqual(nodeColors[i], arrowColors[i]);
+            Assert.NotEqual(nodeColors[i], connectorColors[i]);
         }
     }
 }
