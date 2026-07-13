@@ -92,14 +92,23 @@ public sealed class ThemeAwareColor
     /// <summary>The resolved sRGB color. Always set; may be re-resolved from <see cref="SchemeColor"/>.</summary>
     public SrgbColor Resolved { get; init; }
 
+    /// <summary>Opacity carried from DrawingML color alpha, where 255 is fully opaque.</summary>
+    public byte Alpha { get; init; } = 255;
+
     /// <summary>If this color derives from a theme slot, the slot reference; otherwise null.</summary>
     public SchemeColorRef? SchemeColor { get; init; }
 
-    public ThemeAwareColor(SrgbColor resolved) => Resolved = resolved;
-    public ThemeAwareColor(SrgbColor resolved, SchemeColorRef schemeColor)
+    public ThemeAwareColor(SrgbColor resolved, byte alpha = 255)
+    {
+        Resolved = resolved;
+        Alpha = alpha;
+    }
+
+    public ThemeAwareColor(SrgbColor resolved, SchemeColorRef schemeColor, byte alpha = 255)
     {
         Resolved = resolved;
         SchemeColor = schemeColor;
+        Alpha = alpha;
     }
 
     public static readonly ThemeAwareColor Black = new(SrgbColor.Black);

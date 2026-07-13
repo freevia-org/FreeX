@@ -406,6 +406,41 @@ public sealed class PptxRoundTripTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_SolidFillAndOutlineAlpha_Preserved()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Name = "TransparentShape",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4), alpha: 128)),
+            Outline = new ShapeOutline.Visible(new ThemeAwareColor(SrgbColor.FromRgb(0xC00000), alpha: 64), 1.5),
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400
+        });
+        pres.Slides.Add(slide);
+
+        var path = WriteToPptx(pres);
+        using (var zip = ZipFile.OpenRead(path))
+        {
+            var slideXml = new StreamReader(zip.GetEntry("ppt/slides/slide1.xml")!.Open()).ReadToEnd();
+            slideXml.Should().Contain("<a:alpha val=\"50196\"");
+            slideXml.Should().Contain("<a:alpha val=\"25098\"");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var shape = reloaded.Slides[0].Shapes.First(x => x.Name == "TransparentShape");
+        var fill = shape.Fill.Should().BeOfType<ShapeFill.Solid>().Subject;
+        var outline = shape.Outline.Should().BeOfType<ShapeOutline.Visible>().Subject;
+
+        fill.Color.Alpha.Should().Be(128);
+        outline.Color.Alpha.Should().Be(64);
+    }
+
+    [Fact]
     public void RoundTrip_NoFill()
     {
         var pres = new Presentation();

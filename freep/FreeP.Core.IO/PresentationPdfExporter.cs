@@ -84,8 +84,8 @@ public static class PresentationPdfExporter
 
         var ops = new List<PdfDrawOp>();
 
-        if (TryMapFill(slide.Background, out var background))
-            ops.Add(new PdfFillRect(0, 0, slideWidthPoints, slideHeightPoints, background));
+        if (TryMapFill(slide.Background, out var background, out var backgroundOpacity))
+            AddWithOpacity(ops, new PdfFillRect(0, 0, slideWidthPoints, slideHeightPoints, background), backgroundOpacity);
 
         // PDF user space has its origin at the bottom-left with y increasing upward, so we lay out from the
         // top down by starting at (height - margin) and decreasing y for each line.
@@ -383,20 +383,20 @@ public static class PresentationPdfExporter
 
         if (IsEllipseLike(shape))
         {
-            if (TryMapFill(shape.Fill, out var fill))
-                ops.Add(new PdfFillEllipse(x, y, width, height, fill));
+            if (TryMapFill(shape.Fill, out var fill, out var fillOpacity))
+                AddWithOpacity(ops, new PdfFillEllipse(x, y, width, height, fill), fillOpacity);
 
-            if (TryMapOutline(shape.Outline, out var stroke, out var strokeWidth))
-                ops.Add(new PdfStrokeEllipse(x, y, width, height, stroke, strokeWidth));
+            if (TryMapOutline(shape.Outline, out var stroke, out var strokeWidth, out var strokeOpacity))
+                AddWithOpacity(ops, new PdfStrokeEllipse(x, y, width, height, stroke, strokeWidth), strokeOpacity);
 
             return new ShapeBox(x, y, width, height);
         }
 
-        if (TryMapFill(shape.Fill, out var rectFill))
-            ops.Add(new PdfFillRect(x, y, width, height, rectFill));
+        if (TryMapFill(shape.Fill, out var rectFill, out var rectFillOpacity))
+            AddWithOpacity(ops, new PdfFillRect(x, y, width, height, rectFill), rectFillOpacity);
 
-        if (TryMapOutline(shape.Outline, out var rectStroke, out var rectStrokeWidth))
-            ops.Add(new PdfStrokeRect(x, y, width, height, rectStroke, rectStrokeWidth));
+        if (TryMapOutline(shape.Outline, out var rectStroke, out var rectStrokeWidth, out var rectStrokeOpacity))
+            AddWithOpacity(ops, new PdfStrokeRect(x, y, width, height, rectStroke, rectStrokeWidth), rectStrokeOpacity);
 
         return new ShapeBox(x, y, width, height);
     }
@@ -478,7 +478,7 @@ public static class PresentationPdfExporter
         if (!IsConnectorLike(shape))
             return false;
 
-        if (!TryMapOutline(shape.Outline, out var stroke, out var strokeWidth))
+        if (!TryMapOutline(shape.Outline, out var stroke, out var strokeWidth, out var strokeOpacity))
             return true;
 
         if (shape.AutoShapeKind == DrawingShapeKind.ElbowConnector
@@ -488,7 +488,7 @@ public static class PresentationPdfExporter
             {
                 var start = ToPdfPoint(route[i - 1], slideHeightPoints);
                 var routeEnd = ToPdfPoint(route[i], slideHeightPoints);
-                ops.Add(new PdfLine(start.X, start.Y, routeEnd.X, routeEnd.Y, stroke, strokeWidth));
+                AddWithOpacity(ops, new PdfLine(start.X, start.Y, routeEnd.X, routeEnd.Y, stroke, strokeWidth), strokeOpacity);
             }
 
             if (TryGetLineEnds(shape.Outline, out var beginLineEnd, out var endLineEnd))
@@ -497,19 +497,19 @@ public static class PresentationPdfExporter
                 var second = ToPdfPoint(route[1], slideHeightPoints);
                 var penultimate = ToPdfPoint(route[^2], slideHeightPoints);
                 var last = ToPdfPoint(route[^1], slideHeightPoints);
-                AppendLineEndMarker(ops, beginLineEnd, first.X, first.Y, second.X, second.Y, stroke, strokeWidth);
-                AppendLineEndMarker(ops, endLineEnd, last.X, last.Y, penultimate.X, penultimate.Y, stroke, strokeWidth);
+                AppendLineEndMarker(ops, beginLineEnd, first.X, first.Y, second.X, second.Y, stroke, strokeWidth, strokeOpacity);
+                AppendLineEndMarker(ops, endLineEnd, last.X, last.Y, penultimate.X, penultimate.Y, stroke, strokeWidth, strokeOpacity);
             }
 
             return true;
         }
 
         var (x1, y1, x2, y2) = GetLineEndpoints(shape, x, y, width, height);
-        ops.Add(new PdfLine(x1, y1, x2, y2, stroke, strokeWidth));
+        AddWithOpacity(ops, new PdfLine(x1, y1, x2, y2, stroke, strokeWidth), strokeOpacity);
         if (TryGetLineEnds(shape.Outline, out var begin, out var lineEnd))
         {
-            AppendLineEndMarker(ops, begin, x1, y1, x2, y2, stroke, strokeWidth);
-            AppendLineEndMarker(ops, lineEnd, x2, y2, x1, y1, stroke, strokeWidth);
+            AppendLineEndMarker(ops, begin, x1, y1, x2, y2, stroke, strokeWidth, strokeOpacity);
+            AppendLineEndMarker(ops, lineEnd, x2, y2, x1, y1, stroke, strokeWidth, strokeOpacity);
         }
 
         return true;
@@ -526,8 +526,8 @@ public static class PresentationPdfExporter
         if (shape.Kind != SlideShapeKind.AutoShape || shape.CustomGeometry.Count == 0)
             return false;
 
-        var hasFill = TryMapFill(shape.Fill, out var fill);
-        var hasStroke = TryMapOutline(shape.Outline, out var stroke, out var strokeWidth);
+        var hasFill = TryMapFill(shape.Fill, out var fill, out var fillOpacity);
+        var hasStroke = TryMapOutline(shape.Outline, out var stroke, out var strokeWidth, out var strokeOpacity);
 
         foreach (var path in shape.CustomGeometry)
         {
@@ -540,7 +540,10 @@ public static class PresentationPdfExporter
             if (fillColor is null && strokeColor is null)
                 continue;
 
-            ops.Add(new PdfPath(contours, fillColor, strokeColor, strokeWidth));
+            AddWithOpacity(
+                ops,
+                new PdfPath(contours, fillColor, strokeColor, strokeWidth),
+                fillColor is not null ? fillOpacity : strokeOpacity);
         }
 
         return true;
@@ -749,7 +752,8 @@ public static class PresentationPdfExporter
         double adjacentX,
         double adjacentY,
         PdfColor color,
-        double strokeWidth)
+        double strokeWidth,
+        double opacity)
     {
         if (lineEnd?.Kind != ShapeLineEndKind.Triangle)
             return;
@@ -769,14 +773,17 @@ public static class PresentationPdfExporter
         var px = -uy;
         var py = ux;
 
-        ops.Add(new PdfFilledTriangle(
-            tipX,
-            tipY,
-            baseX + px * halfWidth,
-            baseY + py * halfWidth,
-            baseX - px * halfWidth,
-            baseY - py * halfWidth,
-            color));
+        AddWithOpacity(
+            ops,
+            new PdfFilledTriangle(
+                tipX,
+                tipY,
+                baseX + px * halfWidth,
+                baseY + py * halfWidth,
+                baseX - px * halfWidth,
+                baseY - py * halfWidth,
+                color),
+            opacity);
     }
 
     private static bool IsConnectorLike(SlideShape shape) =>
@@ -840,44 +847,63 @@ public static class PresentationPdfExporter
         }
     }
 
-    private static bool TryMapFill(ShapeFill? fill, out PdfColor color)
+    private static void AddWithOpacity(List<PdfDrawOp> ops, PdfDrawOp op, double opacity)
+    {
+        if (opacity >= 0.999)
+        {
+            ops.Add(op);
+            return;
+        }
+
+        ops.Add(new PdfOpacityGroup(opacity, [op]));
+    }
+
+    private static bool TryMapFill(ShapeFill? fill, out PdfColor color, out double opacity)
     {
         switch (fill)
         {
             case ShapeFill.Solid solid:
                 color = ToPdfColor(solid.Color);
+                opacity = ToPdfOpacity(solid.Color);
                 return true;
             case ShapeFill.Gradient gradient:
                 color = ToPdfColor(gradient.StartColor);
+                opacity = ToPdfOpacity(gradient.StartColor);
                 return true;
             case ShapeFill.Pattern pattern:
                 color = ToPdfColor(pattern.BackgroundColor);
+                opacity = ToPdfOpacity(pattern.BackgroundColor);
                 return true;
             default:
                 color = default;
+                opacity = 1.0;
                 return false;
         }
     }
 
-    private static bool TryMapOutline(ShapeOutline? outline, out PdfColor color, out double widthPt)
+    private static bool TryMapOutline(ShapeOutline? outline, out PdfColor color, out double widthPt, out double opacity)
     {
         switch (outline)
         {
             case ShapeOutline.Visible visible:
                 color = ToPdfColor(visible.Color);
                 widthPt = Math.Max(0.1, visible.WidthPt);
+                opacity = ToPdfOpacity(visible.Color);
                 return true;
             case ShapeOutline.GradientVisible gradient:
                 color = ToPdfColor(gradient.Gradient.StartColor);
                 widthPt = Math.Max(0.1, gradient.WidthPt);
+                opacity = ToPdfOpacity(gradient.Gradient.StartColor);
                 return true;
             case null:
                 color = PdfColor.Black;
                 widthPt = DefaultStrokeWidthPt;
+                opacity = 1.0;
                 return true;
             default:
                 color = default;
                 widthPt = 0;
+                opacity = 1.0;
                 return false;
         }
     }
@@ -897,6 +923,8 @@ public static class PresentationPdfExporter
         var resolved = color.Resolved;
         return ToPdfColor(resolved);
     }
+
+    private static double ToPdfOpacity(ThemeAwareColor color) => color.Alpha / 255.0;
 
     private static PdfColor ToPdfColor(SrgbColor color) => new(color.R, color.G, color.B);
 

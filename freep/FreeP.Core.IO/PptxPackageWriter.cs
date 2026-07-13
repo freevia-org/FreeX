@@ -3327,9 +3327,10 @@ public static class PptxPackageWriter
 
     private static XElement BuildColorEl(ThemeAwareColor color)
     {
+        XElement el;
         if (color.SchemeColor is { } sc)
         {
-            var el = new XElement(A + "schemeClr",
+            el = new XElement(A + "schemeClr",
                 new XAttribute("val", PptxColorReader.ToSchemeColorString(sc.Slot)));
             if (Math.Abs(sc.LumMod - 1.0) > 1e-9)
                 el.Add(new XElement(A + "lumMod", new XAttribute("val", (long)Math.Round(sc.LumMod * 100000))));
@@ -3340,9 +3341,20 @@ public static class PptxPackageWriter
                 el.Add(new XElement(A + "tint",  new XAttribute("val", (long)Math.Round(sc.Tint  * 100000))));
             if (Math.Abs(sc.Shade - 1.0) > 1e-9)
                 el.Add(new XElement(A + "shade", new XAttribute("val", (long)Math.Round(sc.Shade * 100000))));
-            return el;
         }
-        return new XElement(A + "srgbClr", new XAttribute("val", FmtColor(color.Resolved)));
+        else
+        {
+            el = new XElement(A + "srgbClr", new XAttribute("val", FmtColor(color.Resolved)));
+        }
+
+        AddAlphaEl(el, color.Alpha);
+        return el;
+    }
+
+    private static void AddAlphaEl(XElement colorEl, byte alpha)
+    {
+        if (alpha < byte.MaxValue)
+            colorEl.Add(new XElement(A + "alpha", new XAttribute("val", (long)Math.Round(alpha / 255.0 * 100000))));
     }
 
     // ── Outline elements ──────────────────────────────────────────────────────────

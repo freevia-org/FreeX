@@ -1164,9 +1164,10 @@ internal static class PptxChartWriter
 
     private static XElement BuildColorEl(ThemeAwareColor color)
     {
+        XElement el;
         if (color.SchemeColor is { } sc)
         {
-            var el = new XElement(A + "schemeClr",
+            el = new XElement(A + "schemeClr",
                 new XAttribute("val", PptxColorReader.ToSchemeColorString(sc.Slot)));
             if (Math.Abs(sc.LumMod - 1.0) > 1e-9)
                 el.Add(new XElement(A + "lumMod",
@@ -1174,11 +1175,21 @@ internal static class PptxChartWriter
             if (Math.Abs(sc.LumOff) > 1e-9)
                 el.Add(new XElement(A + "lumOff",
                     new XAttribute("val", (long)Math.Round(sc.LumOff * 100000))));
-            return el;
+        }
+        else
+        {
+            el = new XElement(A + "srgbClr",
+                new XAttribute("val", $"{color.Resolved.R:X2}{color.Resolved.G:X2}{color.Resolved.B:X2}"));
         }
 
-        return new XElement(A + "srgbClr",
-            new XAttribute("val", $"{color.Resolved.R:X2}{color.Resolved.G:X2}{color.Resolved.B:X2}"));
+        AddAlphaEl(el, color.Alpha);
+        return el;
+    }
+
+    private static void AddAlphaEl(XElement colorEl, byte alpha)
+    {
+        if (alpha < byte.MaxValue)
+            colorEl.Add(new XElement(A + "alpha", new XAttribute("val", (long)Math.Round(alpha / 255.0 * 100000))));
     }
 
     // ── Zip helpers ───────────────────────────────────────────────────────────

@@ -125,6 +125,72 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_CarriesShapeFillAndOutlineAlphaAsPdfOpacityGroups()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4), alpha: 128)),
+            Outline = new ShapeOutline.Visible(
+                new ThemeAwareColor(SrgbColor.FromRgb(0xC00000), alpha: 64),
+                widthPt: 1.5),
+        });
+        deck.Slides.Add(slide);
+
+        var groups = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops
+            .OfType<PdfOpacityGroup>()
+            .ToArray();
+
+        groups.Should().HaveCount(2);
+        groups[0].Opacity.Should().BeApproximately(128 / 255.0, 0.0001);
+        groups[0].Ops.OfType<PdfFillRect>().Should().ContainSingle(fill =>
+            fill.X == 72 &&
+            fill.Y == 378 &&
+            fill.Color == new PdfColor(0x44, 0x72, 0xC4));
+        groups[1].Opacity.Should().BeApproximately(64 / 255.0, 0.0001);
+        groups[1].Ops.OfType<PdfStrokeRect>().Should().ContainSingle(stroke =>
+            stroke.X == 72 &&
+            stroke.Y == 378 &&
+            stroke.LineWidth == 1.5 &&
+            stroke.Color == new PdfColor(0xC0, 0x00, 0x00));
+    }
+
+    [Fact]
+    public void ExportToBytes_EmitsShapeAlphaExtGStateForVectorGeometry()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        deck.Slides.Add(new Slide
+        {
+            Shapes =
+            {
+                new SlideShape
+                {
+                    OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+                    OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+                    ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+                    ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+                    Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4), alpha: 128)),
+                },
+            },
+        });
+
+        var pdf = Encoding.Latin1.GetString(PresentationPdfExporter.ExportToBytes(deck));
+
+        pdf.Should().Contain("/ExtGState");
+        pdf.Should().Contain("/ca 0.502");
+        pdf.Should().Contain("/CA 0.502");
+        pdf.Should().Contain("/GS1 gs");
+    }
+
+    [Fact]
     public void BuildDocument_EmitsPlannerShadowGroupBeforeVectorShapeBody()
     {
         var deck = Presentation.CreateEmpty();

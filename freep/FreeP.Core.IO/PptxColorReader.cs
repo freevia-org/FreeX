@@ -23,11 +23,12 @@ internal static class PptxColorReader
         if (colorContainer is null) return null;
 
         // a:srgbClr val="RRGGBB"
-        var srgb = colorContainer.Element(A + "srgbClr")?.Attribute("val")?.Value;
+        var srgbEl = colorContainer.Element(A + "srgbClr");
+        var srgb = srgbEl?.Attribute("val")?.Value;
         if (!string.IsNullOrWhiteSpace(srgb))
         {
             var rgb = ParseHexColor(srgb);
-            return rgb.HasValue ? new ThemeAwareColor(rgb.Value) : null;
+            return rgb.HasValue ? new ThemeAwareColor(rgb.Value, ReadAlpha(srgbEl)) : null;
         }
 
         // a:schemeClr val="dk1|lt1|..."
@@ -65,7 +66,7 @@ internal static class PptxColorReader
                     LumOff   = lumOff,
                     Tint     = tintFraction,
                     Shade    = shadeFraction,
-                });
+                }, ReadAlpha(schemeClr));
             }
         }
 
@@ -77,7 +78,7 @@ internal static class PptxColorReader
             if (!string.IsNullOrWhiteSpace(last))
             {
                 var rgb = ParseHexColor(last);
-                return rgb.HasValue ? new ThemeAwareColor(rgb.Value) : null;
+                return rgb.HasValue ? new ThemeAwareColor(rgb.Value, ReadAlpha(sysClr)) : null;
             }
         }
 
@@ -274,6 +275,14 @@ internal static class PptxColorReader
         long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v)
             ? Math.Clamp(v / 100000.0, 0, 2.0) // lumMod can exceed 1.0
             : null;
+
+    private static byte ReadAlpha(XElement? colorElement)
+    {
+        var alpha = ReadPercentage(colorElement?.Element(A + "alpha")?.Attribute("val")?.Value);
+        return alpha.HasValue
+            ? (byte)Math.Round(Math.Clamp(alpha.Value, 0.0, 1.0) * 255.0)
+            : byte.MaxValue;
+    }
 
     private static int ParseInt(string? value) =>
         int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : 0;
