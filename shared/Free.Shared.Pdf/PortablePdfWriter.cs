@@ -51,10 +51,11 @@ public static class PortablePdfWriter
 
         var fontResources = BuildFontResources(document);
         var imageResources = BuildImageResources(document);
+        var opacityResources = BuildOpacityResources(document);
         var pages = document.Pages
-            .Select(page => (Content: RenderContentStream(page.Ops, imageResources.ByOp), page.WidthPoints, page.HeightPoints))
+            .Select(page => (Content: RenderContentStream(page.Ops, imageResources.ByOp, opacityResources.ByOpacity), page.WidthPoints, page.HeightPoints))
             .ToArray();
-        WritePdf(stream, pages, fontResources, imageResources.Resources, headerComment);
+        WritePdf(stream, pages, fontResources, imageResources.Resources, opacityResources.Resources, headerComment);
     }
 
     /// <summary>Serializes <paramref name="document"/> to an in-memory byte array.</summary>
@@ -67,11 +68,12 @@ public static class PortablePdfWriter
 
     private static string RenderContentStream(
         IReadOnlyList<PdfDrawOp> ops,
-        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources)
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources)
     {
         var content = new StringBuilder();
         foreach (var op in ops)
-            AppendDrawOp(content, op, imageResources);
+            AppendDrawOp(content, op, imageResources, opacityResources);
 
         return content.ToString();
     }
@@ -79,7 +81,8 @@ public static class PortablePdfWriter
     private static void AppendDrawOp(
         StringBuilder content,
         PdfDrawOp op,
-        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources)
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources)
     {
         switch (op)
         {
@@ -120,10 +123,11 @@ public static class PortablePdfWriter
                     triangle.Color);
                 break;
             case PdfRotationGroup group:
-                AppendRotationGroup(content, group, imageResources);
+                AppendRotationGroup(content, group, imageResources, opacityResources);
                 break;
             case PdfImage image when imageResources.TryGetValue(image, out var resource):
-                AppendImage(content, image, resource.ResourceName);
+                opacityResources.TryGetValue(NormalizeOpacity(image.Opacity), out var opacityResource);
+                AppendImage(content, image, resource.ResourceName, opacityResource?.ResourceName);
                 break;
         }
     }
@@ -141,10 +145,11 @@ public static class PortablePdfWriter
         IReadOnlyList<(string Content, double Width, double Height)> pages,
         IReadOnlyList<(string ResourceName, string BaseFont)> fontResources,
         IReadOnlyList<PdfImageResource> imageResources,
+        IReadOnlyList<PdfOpacityResource> opacityResources,
         string headerComment)
     {
         var objects = new List<PdfObject>();
-        var firstPageObjectId = 3 + fontResources.Count + imageResources.Count;
+        var firstPageObjectId = 3 + fontResources.Count + imageResources.Count + opacityResources.Count;
         var pageObjectIds = Enumerable.Range(0, pages.Count)
             .Select(index => firstPageObjectId + (index * 2))
             .ToArray();
@@ -156,6 +161,8 @@ public static class PortablePdfWriter
 
         foreach (var image in imageResources)
             objects.Add(CreateImageObject(image));
+        foreach (var opacity in opacityResources)
+            objects.Add(CreateOpacityObject(opacity));
 
         var fontResourceDictionary = string.Join(
             " ",
@@ -163,16 +170,22 @@ public static class PortablePdfWriter
         var imageResourceDictionary = string.Join(
             " ",
             imageResources.Select((image, index) => $"/{image.ResourceName} {index + 3 + fontResources.Count} 0 R"));
+        var opacityResourceDictionary = string.Join(
+            " ",
+            opacityResources.Select((opacity, index) => $"/{opacity.ResourceName} {index + 3 + fontResources.Count + imageResources.Count} 0 R"));
         var xObjectResources = imageResources.Count == 0
             ? string.Empty
             : $" /XObject << {imageResourceDictionary} >>";
+        var extGStateResources = opacityResources.Count == 0
+            ? string.Empty
+            : $" /ExtGState << {opacityResourceDictionary} >>";
 
         for (var index = 0; index < pages.Count; index++)
         {
             var pageObjectId = pageObjectIds[index];
             var contentObjectId = pageObjectId + 1;
             objects.Add(PdfObject.Ascii(
-                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {FormatNumber(pages[index].Width)} {FormatNumber(pages[index].Height)}] /Resources << /Font << {fontResourceDictionary} >>{xObjectResources} >> /Contents {contentObjectId} 0 R >>"));
+                $"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {FormatNumber(pages[index].Width)} {FormatNumber(pages[index].Height)}] /Resources << /Font << {fontResourceDictionary} >>{xObjectResources}{extGStateResources} >> /Contents {contentObjectId} 0 R >>"));
 
             var pageStream = pages[index].Content.EndsWith("\n", StringComparison.Ordinal)
                 ? pages[index].Content
@@ -241,6 +254,29 @@ public static class PortablePdfWriter
         return new ImageResourceSet(resources, byOp);
     }
 
+    private static OpacityResourceSet BuildOpacityResources(PdfContentDocument document)
+    {
+        var byOpacity = new Dictionary<double, PdfOpacityResource>();
+        var resources = new List<PdfOpacityResource>();
+
+        foreach (var opacity in document.Pages
+            .SelectMany(page => page.Ops)
+            .SelectMany(EnumerateOps)
+            .OfType<PdfImage>()
+            .Select(image => NormalizeOpacity(image.Opacity))
+            .Where(opacity => opacity < 1.0))
+        {
+            if (byOpacity.ContainsKey(opacity))
+                continue;
+
+            var resource = new PdfOpacityResource($"GS{resources.Count + 1}", opacity);
+            resources.Add(resource);
+            byOpacity.Add(opacity, resource);
+        }
+
+        return new OpacityResourceSet(resources, byOpacity);
+    }
+
     private static bool TryCreateImageResource(string resourceName, PdfImage image, out PdfImageResource resource)
     {
         resource = default!;
@@ -289,6 +325,10 @@ public static class PortablePdfWriter
         stream.Write(PdfEncoding.GetBytes(footer));
         return new PdfObject(stream.ToArray());
     }
+
+    private static PdfObject CreateOpacityObject(PdfOpacityResource opacity) =>
+        PdfObject.Ascii(
+            $"<< /Type /ExtGState /ca {FormatNumber(opacity.Opacity)} /CA {FormatNumber(opacity.Opacity)} >>");
 
     private static PdfImageResource DecodeJpeg(string resourceName, byte[] bytes)
     {
@@ -537,15 +577,20 @@ public static class PortablePdfWriter
     private static bool IsJpegStartOfFrame(byte marker) =>
         marker is 0xC0 or 0xC1 or 0xC2 or 0xC3 or 0xC5 or 0xC6 or 0xC7 or 0xC9 or 0xCA or 0xCB or 0xCD or 0xCE or 0xCF;
 
-    private static void AppendImage(StringBuilder content, PdfImage image, string resourceName)
+    private static void AppendImage(
+        StringBuilder content,
+        PdfImage image,
+        string resourceName,
+        string? opacityResourceName)
     {
         if (image.ClipKind != PdfImageClipKind.None)
         {
-            AppendClippedImage(content, image, resourceName);
+            AppendClippedImage(content, image, resourceName, opacityResourceName);
             return;
         }
 
         content.AppendLine("q");
+        AppendOpacityState(content, opacityResourceName);
         var rotation = -image.RotationDegrees * Math.PI / 180d;
         var cos = Math.Cos(rotation);
         var sin = Math.Sin(rotation);
@@ -562,9 +607,14 @@ public static class PortablePdfWriter
         content.AppendLine("Q");
     }
 
-    private static void AppendClippedImage(StringBuilder content, PdfImage image, string resourceName)
+    private static void AppendClippedImage(
+        StringBuilder content,
+        PdfImage image,
+        string resourceName,
+        string? opacityResourceName)
     {
         content.AppendLine("q");
+        AppendOpacityState(content, opacityResourceName);
         if (Math.Abs(image.RotationDegrees) > 0.001)
             AppendRotationTransform(content, image.X + image.Width / 2d, image.Y + image.Height / 2d, image.RotationDegrees);
 
@@ -577,7 +627,8 @@ public static class PortablePdfWriter
     private static void AppendRotationGroup(
         StringBuilder content,
         PdfRotationGroup group,
-        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources)
+        IReadOnlyDictionary<PdfImage, PdfImageResource> imageResources,
+        IReadOnlyDictionary<double, PdfOpacityResource> opacityResources)
     {
         if (group.Ops.Count == 0)
             return;
@@ -586,9 +637,15 @@ public static class PortablePdfWriter
         AppendRotationTransform(content, group.CenterX, group.CenterY, group.RotationDegrees);
 
         foreach (var op in group.Ops)
-            AppendDrawOp(content, op, imageResources);
+            AppendDrawOp(content, op, imageResources, opacityResources);
 
         content.AppendLine("Q");
+    }
+
+    private static void AppendOpacityState(StringBuilder content, string? opacityResourceName)
+    {
+        if (!string.IsNullOrEmpty(opacityResourceName))
+            content.AppendLine($"/{opacityResourceName} gs");
     }
 
     private static void AppendRotationTransform(
@@ -862,6 +919,9 @@ public static class PortablePdfWriter
     private static string FormatNumber(double value) =>
         (Math.Abs(value) < 0.0005 ? 0d : value).ToString("0.###", CultureInfo.InvariantCulture);
 
+    private static double NormalizeOpacity(double opacity) =>
+        Math.Round(Math.Clamp(double.IsFinite(opacity) ? opacity : 1.0, 0.0, 1.0), 3);
+
     private static void WriteAscii(Stream stream, string text) =>
         stream.Write(PdfEncoding.GetBytes(text));
 
@@ -879,6 +939,10 @@ public static class PortablePdfWriter
         IReadOnlyList<PdfImageResource> Resources,
         IReadOnlyDictionary<PdfImage, PdfImageResource> ByOp);
 
+    private sealed record OpacityResourceSet(
+        IReadOnlyList<PdfOpacityResource> Resources,
+        IReadOnlyDictionary<double, PdfOpacityResource> ByOpacity);
+
     private sealed record PdfImageResource(
         string ResourceName,
         int PixelWidth,
@@ -886,6 +950,8 @@ public static class PortablePdfWriter
         string ColorSpace,
         string Filter,
         byte[] Data);
+
+    private sealed record PdfOpacityResource(string ResourceName, double Opacity);
 
     private sealed record PngPdfPixels(
         int Width,
