@@ -269,6 +269,20 @@ public sealed record FreeWVisualProofingDiagnosticSignature(
     int Length,
     string StableSignature);
 
+public sealed record FreeWVisualProofingAdornmentExpectation(
+    string DiagnosticStableSignature,
+    string Kind,
+    string AdornmentKind,
+    string UnderlineStyle,
+    string ColorHex,
+    int BlockIndex,
+    int RunIndex,
+    int RunOffset,
+    int ParagraphStartOffset,
+    int ParagraphEndOffset,
+    int Length,
+    string StableSignature);
+
 public sealed record FreeWVisualProofingDiagnosticExpectation(
     int DiagnosticCount,
     int SpellingCount,
@@ -278,7 +292,14 @@ public sealed record FreeWVisualProofingDiagnosticExpectation(
     IReadOnlyList<string> Kinds,
     IReadOnlyList<string> LanguageTags,
     IReadOnlyList<string> StableSignatures,
-    IReadOnlyList<FreeWVisualProofingDiagnosticSignature> Diagnostics);
+    IReadOnlyList<FreeWVisualProofingDiagnosticSignature> Diagnostics,
+    int AdornmentCount,
+    int SpellingAdornmentCount,
+    int GrammarAdornmentCount,
+    bool HasSpellingUnderline,
+    bool HasGrammarUnderline,
+    IReadOnlyList<string> AdornmentStableSignatures,
+    IReadOnlyList<FreeWVisualProofingAdornmentExpectation> Adornments);
 
 public sealed record FreeWVisualProtectionOperationExpectation(
     string Operation,
@@ -392,10 +413,15 @@ public static class FreeWVisualEvidencePlanner
 {
     public const string ManifestFileName = "freew_visual_evidence_manifest.json";
     public const string SchemaId = "freew.visual-evidence.v1";
-    public const int SchemaVersion = 17;
+    public const int SchemaVersion = 18;
     public const string SectionGeometryPageSurfaceRenderStatus = "section-page-surface";
 
     private const int MaxTrackedColorCount = 4096;
+    private const string ProofingUnderlineStyle = "wavy";
+    private const string SpellingAdornmentKind = "spelling-squiggle";
+    private const string GrammarAdornmentKind = "grammar-squiggle";
+    private const string SpellingAdornmentColorHex = "#D13438";
+    private const string GrammarAdornmentColorHex = "#2B579A";
 
     private static readonly RunFieldKind[] DocumentPropertyFieldKinds =
     [
@@ -623,6 +649,8 @@ public static class FreeWVisualEvidencePlanner
                 "table-comment-anchors",
                 "proofing-language",
                 "proofing-diagnostics",
+                "proofing-adornments",
+                "proofing-underline-intent",
                 "body-text"
             ],
             "review-proofing-visual-depth_p{page}.png",
@@ -658,6 +686,8 @@ public static class FreeWVisualEvidencePlanner
                 "table-comment-anchors",
                 "proofing-language",
                 "proofing-diagnostics",
+                "proofing-adornments",
+                "proofing-underline-intent",
                 "body-text"
             ],
             "review-protection-proofing-comments-only_p{page}.png",
@@ -2046,6 +2076,10 @@ public static class FreeWVisualEvidencePlanner
             .Select(BuildProofingDiagnosticSignature)
             .OrderBy(signature => signature.StableSignature, StringComparer.Ordinal)
             .ToList();
+        var adornments = signatures
+            .Select(BuildProofingAdornmentExpectation)
+            .OrderBy(adornment => adornment.StableSignature, StringComparer.Ordinal)
+            .ToList();
         var kinds = signatures
             .Select(signature => signature.Kind)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -2072,7 +2106,18 @@ public static class FreeWVisualEvidencePlanner
             Kinds: kinds,
             LanguageTags: languageTags,
             StableSignatures: signatures.Select(signature => signature.StableSignature).ToList(),
-            Diagnostics: signatures);
+            Diagnostics: signatures,
+            AdornmentCount: adornments.Count,
+            SpellingAdornmentCount: adornments.Count(adornment =>
+                string.Equals(adornment.Kind, nameof(ProofingDiagnosticKind.Spelling), StringComparison.Ordinal)),
+            GrammarAdornmentCount: adornments.Count(adornment =>
+                string.Equals(adornment.Kind, nameof(ProofingDiagnosticKind.Grammar), StringComparison.Ordinal)),
+            HasSpellingUnderline: adornments.Any(adornment =>
+                string.Equals(adornment.Kind, nameof(ProofingDiagnosticKind.Spelling), StringComparison.Ordinal)),
+            HasGrammarUnderline: adornments.Any(adornment =>
+                string.Equals(adornment.Kind, nameof(ProofingDiagnosticKind.Grammar), StringComparison.Ordinal)),
+            AdornmentStableSignatures: adornments.Select(adornment => adornment.StableSignature).ToList(),
+            Adornments: adornments);
     }
 
     private static FreeWVisualProofingDiagnosticSignature BuildProofingDiagnosticSignature(
@@ -2103,6 +2148,41 @@ public static class FreeWVisualEvidencePlanner
             RunIndex: diagnostic.RunIndex,
             RunOffset: diagnostic.RunOffset,
             ParagraphOffset: diagnostic.ParagraphOffset,
+            Length: diagnostic.Length,
+            StableSignature: stableSignature);
+    }
+
+    private static FreeWVisualProofingAdornmentExpectation BuildProofingAdornmentExpectation(
+        FreeWVisualProofingDiagnosticSignature diagnostic)
+    {
+        var isGrammar = string.Equals(diagnostic.Kind, nameof(ProofingDiagnosticKind.Grammar), StringComparison.Ordinal);
+        var adornmentKind = isGrammar ? GrammarAdornmentKind : SpellingAdornmentKind;
+        var colorHex = isGrammar ? GrammarAdornmentColorHex : SpellingAdornmentColorHex;
+        var paragraphEndOffset = diagnostic.ParagraphOffset + diagnostic.Length;
+        var stableSignature = string.Join(
+            "|",
+            "diagnostic=" + diagnostic.StableSignature,
+            "adornment=" + adornmentKind,
+            "style=" + ProofingUnderlineStyle,
+            "color=" + colorHex,
+            "block=" + diagnostic.BlockIndex.ToString(CultureInfo.InvariantCulture),
+            "run=" + diagnostic.RunIndex.ToString(CultureInfo.InvariantCulture),
+            "runOffset=" + diagnostic.RunOffset.ToString(CultureInfo.InvariantCulture),
+            "paragraphStart=" + diagnostic.ParagraphOffset.ToString(CultureInfo.InvariantCulture),
+            "paragraphEnd=" + paragraphEndOffset.ToString(CultureInfo.InvariantCulture),
+            "length=" + diagnostic.Length.ToString(CultureInfo.InvariantCulture));
+
+        return new FreeWVisualProofingAdornmentExpectation(
+            DiagnosticStableSignature: diagnostic.StableSignature,
+            Kind: diagnostic.Kind,
+            AdornmentKind: adornmentKind,
+            UnderlineStyle: ProofingUnderlineStyle,
+            ColorHex: colorHex,
+            BlockIndex: diagnostic.BlockIndex,
+            RunIndex: diagnostic.RunIndex,
+            RunOffset: diagnostic.RunOffset,
+            ParagraphStartOffset: diagnostic.ParagraphOffset,
+            ParagraphEndOffset: paragraphEndOffset,
             Length: diagnostic.Length,
             StableSignature: stableSignature);
     }
@@ -2457,7 +2537,14 @@ public static class FreeWVisualEvidencePlanner
         Kinds: [],
         LanguageTags: [],
         StableSignatures: [],
-        Diagnostics: []);
+        Diagnostics: [],
+        AdornmentCount: 0,
+        SpellingAdornmentCount: 0,
+        GrammarAdornmentCount: 0,
+        HasSpellingUnderline: false,
+        HasGrammarUnderline: false,
+        AdornmentStableSignatures: [],
+        Adornments: []);
 
     private sealed record RestrictEditingEvidenceOperation(
         RestrictEditingOperationKind Operation,
