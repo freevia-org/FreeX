@@ -461,6 +461,41 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Func_FunctionNameDefaultsToUprightRun()
+    {
+        var node = Parse(
+            "<m:func>" +
+            "<m:fName><m:r><m:t>sin</m:t></m:r></m:fName>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:func>");
+
+        var func = Assert.IsType<MathNode.Func>(node);
+        var functionName = Assert.IsType<MathNode.Run>(func.FunctionName);
+        Assert.Equal("sin", functionName.Text);
+        Assert.False(functionName.IsItalic);
+
+        var argument = Assert.IsType<MathNode.Run>(func.Argument);
+        Assert.Equal("x", argument.Text);
+        Assert.True(argument.IsItalic);
+    }
+
+    [Fact]
+    public void Func_FunctionNameNormalizationPreservesBoldMetadata()
+    {
+        var node = Parse(
+            "<m:func>" +
+            "<m:fName><m:r><m:rPr><m:sty m:val=\"bi\"/></m:rPr><m:t>cos</m:t></m:r></m:fName>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:func>");
+
+        var func = Assert.IsType<MathNode.Func>(node);
+        var functionName = Assert.IsType<MathNode.Run>(func.FunctionName);
+        Assert.Equal("cos", functionName.Text);
+        Assert.False(functionName.IsItalic);
+        Assert.True(functionName.IsBold);
+    }
+
+    [Fact]
     public void Parse_EqArray_ReturnsOrderedRows()
     {
         var node = Parse("<m:eqArr><m:e><m:r><m:t>x</m:t></m:r><m:r><m:t>+1</m:t></m:r></m:e><m:e><m:r><m:t>y</m:t></m:r></m:e></m:eqArr>");

@@ -1381,4 +1381,27 @@ public sealed class MathLayoutEngineTests
         glyphTexts.Should().Contain("lim");
         glyphTexts.Should().Contain("x->0");
     }
+
+    [Fact]
+    public void Func_FunctionName_RenderPlanIsUprightAndArgumentStaysItalic()
+    {
+        var node = ParseOmml(
+            "<m:func>" +
+            "<m:fName><m:r><m:t>sin</m:t></m:r></m:fName>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:func>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var ops = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        ops.Should().HaveCount(2);
+        ops[0].Text.Should().Be("sin");
+        ops[0].IsItalic.Should().BeFalse("m:func/m:fName names are function operators, not math variables");
+        ops[1].Text.Should().Be("x");
+        ops[1].IsItalic.Should().BeTrue("the function argument keeps ordinary math-run styling");
+        ops[1].X.Should().BeGreaterThan(ops[0].X + ops[0].Text.Length,
+            "the existing shared function layout keeps a visible advance between name and argument");
+    }
 }
