@@ -2066,6 +2066,53 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildPieSlicePrimitives_NullAndNonpositiveValuesHaveNoSweepAndPreservePointIdentity()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 2, null, 0, -4, 6 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            VaryColors = true
+        };
+        chart.Series.Add(series);
+        var colors = new[]
+        {
+            new SrgbColor(0x10, 0x20, 0x30),
+            new SrgbColor(0x40, 0x50, 0x60),
+            new SrgbColor(0x70, 0x80, 0x90),
+            new SrgbColor(0xA0, 0xB0, 0xC0),
+            new SrgbColor(0xD0, 0xE0, 0xF0)
+        };
+
+        var slices = ChartRenderPlanner.BuildPieSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            colors);
+
+        slices.Should().HaveCount(2);
+        slices.Select(slice => slice.PointIndex).Should().Equal(0, 4);
+        slices.Select(slice => slice.Fill!.Value.Color).Should().Equal(colors[0], colors[4]);
+        slices[0].SweepAngle.Should().BeApproximately(Math.PI / 2, 0.0001);
+        slices[1].SweepAngle.Should().BeApproximately(Math.PI * 1.5, 0.0001);
+    }
+
+    [Fact]
+    public void BuildPieSlicePrimitives_AllNullOrNonpositiveValuesReturnNoVisibleSlices()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { null, 0, -4 });
+        var chart = new ChartShape { ChartType = ChartType.Pie };
+        chart.Series.Add(series);
+
+        var slices = ChartRenderPlanner.BuildPieSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        slices.Should().BeEmpty();
+    }
+
+    [Fact]
     public void BuildDoughnutSlicePrimitives_PlansSeriesZeroAsInnermostRing()
     {
         var chart = new ChartShape
@@ -2124,6 +2171,64 @@ public sealed class ChartRenderPlannerTests
         slices[0].StartAngle.Should().BeApproximately(Math.PI / 2, 0.0001);
         slices[2].SeriesIndex.Should().Be(1);
         slices[2].StartAngle.Should().BeApproximately(Math.PI / 2, 0.0001);
+    }
+
+    [Fact]
+    public void BuildDoughnutSlicePrimitives_NullAndNonpositiveValuesHaveNoSweepPerRing()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Doughnut,
+            DoughnutHolePercent = 50
+        };
+
+        var inner = new ChartSeries { Name = "Inner" };
+        inner.Values.AddRange(new double?[] { null, 3, 0 });
+        chart.Series.Add(inner);
+
+        var outer = new ChartSeries { Name = "Outer" };
+        outer.Values.AddRange(new double?[] { -5, 2, null, 2 });
+        chart.Series.Add(outer);
+
+        var slices = ChartRenderPlanner.BuildDoughnutSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        slices.Should().HaveCount(3);
+        slices.Select(slice => (slice.SeriesIndex, slice.PointIndex))
+            .Should()
+            .Equal((0, 1), (1, 1), (1, 3));
+        slices[0].SweepAngle.Should().BeApproximately(Math.PI * 2, 0.0001);
+        slices[1].SweepAngle.Should().BeApproximately(Math.PI, 0.0001);
+        slices[2].SweepAngle.Should().BeApproximately(Math.PI, 0.0001);
+    }
+
+    [Fact]
+    public void BuildDataLabelPlans_PieLabelsPreserveOriginalCategoriesAfterNoSweepPoints()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { null, 2, 0, 6 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            DataLabels = new ChartDataLabels
+            {
+                ShowCategoryName = true,
+                ShowValue = true,
+                ShowPercent = true
+            }
+        };
+        chart.Categories.AddRange(new[] { "Blank", "Small", "Zero", "Large" });
+        chart.Series.Add(series);
+
+        var labels = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        labels.Should().HaveCount(2);
+        labels.Select(label => (label.CategoryIndex, label.Text))
+            .Should()
+            .Equal((1, "Small 2 25%"), (3, "Large 6 75%"));
     }
 
     [Fact]

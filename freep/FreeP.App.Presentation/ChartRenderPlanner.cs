@@ -3044,14 +3044,11 @@ public static partial class ChartRenderPlanner
         ChartFillPlanSet? fillPlans,
         bool varyByPoint)
     {
-        var values = series.Values
-            .Where(value => value.HasValue && value.Value > 0)
-            .Select(value => value!.Value)
-            .ToList();
+        var values = GetVisiblePieValues(series);
         if (values.Count == 0)
             return Array.Empty<ChartPieSlicePrimitive>();
 
-        double total = values.Sum();
+        double total = values.Sum(value => value.Value);
         if (total <= 0)
             return Array.Empty<ChartPieSlicePrimitive>();
 
@@ -3060,23 +3057,43 @@ public static partial class ChartRenderPlanner
             plot.Y + plot.Height / 2);
         double startAngle = initialStartAngle;
         var primitives = new List<ChartPieSlicePrimitive>(values.Count);
-        for (int pointIndex = 0; pointIndex < values.Count; pointIndex++)
+        foreach (var visibleValue in values)
         {
-            double sweepAngle = values[pointIndex] / total * 2 * Math.PI;
+            double sweepAngle = visibleValue.Value / total * 2 * Math.PI;
             double endAngle = startAngle + sweepAngle;
             primitives.Add(new ChartPieSlicePrimitive(
                 seriesIndex,
-                pointIndex,
+                visibleValue.PointIndex,
                 center,
                 innerRadius,
                 outerRadius,
                 startAngle,
                 endAngle,
-                ResolvePointFill(series, seriesIndex, pointIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint)));
+                ResolvePointFill(
+                    series,
+                    seriesIndex,
+                    visibleValue.PointIndex,
+                    seriesColors,
+                    RectSeriesFillAlpha,
+                    fillPlans,
+                    varyByPoint)));
             startAngle = endAngle;
         }
 
         return primitives;
+    }
+
+    private static IReadOnlyList<(int PointIndex, double Value)> GetVisiblePieValues(ChartSeries series)
+    {
+        var values = new List<(int PointIndex, double Value)>();
+        for (int pointIndex = 0; pointIndex < series.Values.Count; pointIndex++)
+        {
+            var value = series.Values[pointIndex];
+            if (value.HasValue && value.Value > 0)
+                values.Add((pointIndex, value.Value));
+        }
+
+        return values;
     }
 
     private static double ResolvePieStartAngle(ChartShape chart) =>
@@ -3764,14 +3781,11 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartDataLabelPlan>();
 
         var firstSeries = chart.Series[0];
-        var values = firstSeries.Values
-            .Where(value => value.HasValue && value.Value > 0)
-            .Select(value => value!.Value)
-            .ToList();
+        var values = GetVisiblePieValues(firstSeries);
         if (values.Count == 0)
             return Array.Empty<ChartDataLabelPlan>();
 
-        double total = values.Sum();
+        double total = values.Sum(value => value.Value);
         if (total <= 0)
             return Array.Empty<ChartDataLabelPlan>();
 
@@ -3785,21 +3799,21 @@ public static partial class ChartRenderPlanner
             : radius * 1.15;
         var plans = new List<ChartDataLabelPlan>();
 
-        for (int valueIndex = 0; valueIndex < values.Count; valueIndex++)
+        foreach (var visibleValue in values)
         {
-            double sweepAngle = values[valueIndex] / total * 2 * Math.PI;
+            double sweepAngle = visibleValue.Value / total * 2 * Math.PI;
             double midAngle = startAngle + sweepAngle / 2;
-            string categoryName = valueIndex < chart.Categories.Count
-                ? chart.Categories[valueIndex]
+            string categoryName = visibleValue.PointIndex < chart.Categories.Count
+                ? chart.Categories[visibleValue.PointIndex]
                 : string.Empty;
-            string text = FormatDataLabel(labels, values[valueIndex], total, categoryName, firstSeries.Name);
+            string text = FormatDataLabel(labels, visibleValue.Value, total, categoryName, firstSeries.Name);
             if (!string.IsNullOrEmpty(text))
             {
                 double labelX = centerX + labelRadius * Math.Cos(midAngle);
                 double labelY = centerY + labelRadius * Math.Sin(midAngle);
                 plans.Add(new ChartDataLabelPlan(
                     SeriesIndex: 0,
-                    CategoryIndex: valueIndex,
+                    CategoryIndex: visibleValue.PointIndex,
                     Text: text,
                     Bounds: new ChartPlanRect(labelX - 22, labelY - 6, 44, 12),
                     IsBold: false,
