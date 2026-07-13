@@ -386,13 +386,11 @@ internal static class XlsxFormControlMapper
         if (formControlPr is null)
             return null;
 
+        var checkedAttribute = formControlPr.Attribute("checked")?.Value;
         var model = new FormControlModel
         {
             Kind = MapObjectType(formControlPr.Attribute("objectType")?.Value),
-            IsChecked = string.Equals(
-                formControlPr.Attribute("checked")?.Value,
-                "Checked",
-                StringComparison.OrdinalIgnoreCase),
+            IsChecked = string.Equals(checkedAttribute, "Checked", StringComparison.OrdinalIgnoreCase),
             LinkedCell = NullIfWhiteSpace(formControlPr.Attribute("fmlaLink")?.Value),
             ListFillRange = NullIfWhiteSpace(formControlPr.Attribute("fmlaRange")?.Value),
             Value = ReadInt(formControlPr, "val"),
@@ -402,6 +400,27 @@ internal static class XlsxFormControlMapper
             PageChange = ReadInt(formControlPr, "page"),
             SelectedIndex = ReadInt(formControlPr, "sel"),
         };
+
+        // Checkboxes/option buttons never carry a "val" attribute (that's exclusive to
+        // spinner/scrollbar controls), so Value is otherwise always null for these two kinds.
+        // Reuse it to carry Excel's tri-state ST_Checked encoding (0=Unchecked/1=Checked/
+        // 2=Mixed) so an indeterminate ("Mixed") checkbox/option-button is distinguishable from
+        // a plain Unchecked one instead of being silently collapsed by the plain IsChecked bool
+        // (R38-io-vml-form-controls-2-1). IsChecked itself stays false for "Mixed" (it cannot
+        // represent a third state), but Value now preserves the distinction for any consumer
+        // that inspects it -- including the native .fxl JSON round-trip, which already
+        // serializes Value unconditionally for every FormControlModel.
+        if (model.Value is null &&
+            (model.Kind == FormControlKind.CheckBox || model.Kind == FormControlKind.OptionButton))
+        {
+            model.Value = checkedAttribute?.Trim().ToLowerInvariant() switch
+            {
+                "unchecked" => 0,
+                "checked" => 1,
+                "mixed" => 2,
+                _ => null,
+            };
+        }
 
         return model;
     }

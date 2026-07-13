@@ -57,6 +57,17 @@ public sealed class FilterCommand : IWorkbookCommand
 
         uint filterCol  = _range.Start.Col + _filterColOffset;
 
+        // R38-commands-autofilter-advanced-2-1: Excel allows only one active AutoFilter criterion
+        // per column, so applying (or clearing) a plain value-list filter here must relinquish any
+        // rows still owned by a DIFFERENT filter mechanism (Top10/Average/custom-criterion/color) on
+        // this SAME column — otherwise that mechanism's ColumnFilterOwnedRows entry is never cleared
+        // and its hidden rows compound with (rather than get replaced by) this value-list filter,
+        // and "Clear Filter From <Column>" (which runs this command with allowedValues=[]) never
+        // fully unfilters a column that was actually filtered by one of those other mechanisms.
+        // ClearColumnOwnedRange only un-hides rows no OTHER active column's filter still needs
+        // hidden, and is a no-op when filterCol owns nothing (the common case).
+        FilterHiddenRowUpdater.ClearColumnOwnedRange(sheet, filterCol, _range);
+
         // F8: a plain flat FilterHiddenRows set cannot represent "AND across columns" — hiding a row
         // for column A and then evaluating column B in isolation would un-hide rows that column A
         // hid but column B doesn't care about. Excel hides a row if it fails ANY active column's

@@ -217,7 +217,7 @@ public static partial class BuiltInFunctions
         double period = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(rate) || !double.IsFinite(period))
             return ErrorValue.Num;
-        if (cost <= 0 || salvage < 0 || rate <= 0) return ErrorValue.Num;
+        if (cost <= 0 || salvage < 0 || rate <= 0 || period < 0) return ErrorValue.Num;
 
         double life = 1.0 / rate;
         double coeff;
@@ -230,18 +230,35 @@ public static partial class BuiltInFunctions
         if (!TryGetFinancialDate(datePurchased, out DateTime dp) ||
             !TryGetFinancialDate(firstPeriod, out DateTime fp)) return ErrorValue.Num;
         double firstFrac = DayCountFraction(dp, fp, basis);
+
+        // Excel's AMORDEGRC rounds each period's depreciation to a whole currency unit
+        // (ROUND(...,0)) before subtracting it from the running book value, and applies a
+        // "tail" rule: once the running remaining basis (book value less salvage) would go
+        // negative, the depreciation for the final requested period is 50% of the current
+        // book value rather than the full declining-balance amount.
         double bookValue = cost;
+        double nRate = Math.Round(bookValue * depRate * firstFrac, 0, MidpointRounding.AwayFromZero);
+        bookValue -= nRate;
+        double rest = bookValue - salvage;
+
         int iper = (int)Math.Truncate(period);
-        for (int p = 0; p <= iper; p++)
+        double result = nRate;
+        for (int i = 0; i < iper; i++)
         {
-            double dep = p == 0 ? bookValue * depRate * firstFrac : bookValue * depRate;
-            dep = Math.Max(0, Math.Min(dep, bookValue - salvage));
-            if (p < iper)
-                bookValue -= dep;
-            else
-                return NumberResult(dep);
+            nRate = Math.Round(depRate * bookValue, 0, MidpointRounding.AwayFromZero);
+            rest -= nRate;
+            if (rest < 0)
+            {
+                int remaining = iper - i;
+                result = remaining is 0 or 1
+                    ? Math.Round(bookValue * 0.5, 0, MidpointRounding.AwayFromZero)
+                    : 0;
+                return NumberResult(result);
+            }
+            bookValue -= nRate;
+            result = nRate;
         }
-        return NumberResult(0);
+        return NumberResult(result);
     }
 
     private static ScalarValue Amorlinc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -267,7 +284,7 @@ public static partial class BuiltInFunctions
         double period = ToNumber(periodValue);
         if (!double.IsFinite(cost) || !double.IsFinite(salvage) || !double.IsFinite(rate) || !double.IsFinite(period))
             return ErrorValue.Num;
-        if (cost <= 0 || salvage < 0 || rate <= 0) return ErrorValue.Num;
+        if (cost <= 0 || salvage < 0 || rate <= 0 || period < 0) return ErrorValue.Num;
         if (!TryGetFinancialDate(datePurchased, out DateTime dp) ||
             !TryGetFinancialDate(firstPeriod, out DateTime fp)) return ErrorValue.Num;
         double firstFrac = DayCountFraction(dp, fp, basis);

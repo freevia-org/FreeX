@@ -43,7 +43,7 @@ public sealed class ConditionalFormatIconSetCatalogTests
     }
 
     [Theory]
-    [InlineData("3Arrows", new[] { "0", "33", "66" })]
+    [InlineData("3Arrows", new[] { "0", "33", "67" })]
     [InlineData("4Arrows", new[] { "0", "25", "50", "75" })]
     [InlineData("5Arrows", new[] { "0", "20", "40", "60", "80" })]
     public void CreateThresholds_UsesExcelStyleBaselineAndBandCutPoints(string style, string[] expectedValues)

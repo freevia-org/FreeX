@@ -61,6 +61,91 @@ public class XlsxFormControlMapperTests
         control.Should().NotBeNull();
         control!.Kind.Should().Be(FormControlKind.OptionButton);
         control.IsChecked.Should().BeFalse();
+        // No "checked" attribute at all (the common Excel default) must not be conflated with an
+        // explicit tri-state "Unchecked": Value stays null rather than being coerced to 0.
+        control.Value.Should().BeNull();
+    }
+
+    [Fact]
+    public void ReadControlProperties_CheckBoxMixed_PreservesTriStateDistinctFromUnchecked()
+    {
+        // R38-io-vml-form-controls-2-1: a real Excel tri-state (indeterminate) checkbox value,
+        // ctrlProp checked="Mixed". IsChecked (a plain bool) cannot represent the third state and
+        // stays false, matching its existing documented Checked-only semantics, but Value must now
+        // carry Excel's ST_Checked numeric encoding (2) so "Mixed" is distinguishable from an
+        // explicit "Unchecked" (which would read as Value == 0) instead of being silently
+        // collapsed into the same false/no-signal result.
+        var formControlPr = XElement.Parse(
+            """
+            <formControlPr xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                           objectType="CheckBox" checked="Mixed" fmlaLink="I4"/>
+            """);
+
+        var control = XlsxFormControlMapper.ReadControlProperties(formControlPr);
+
+        control.Should().NotBeNull();
+        control!.Kind.Should().Be(FormControlKind.CheckBox);
+        control.IsChecked.Should().BeFalse();
+        control.Value.Should().Be(2);
+        control.LinkedCell.Should().Be("I4");
+    }
+
+    [Fact]
+    public void ReadControlProperties_OptionButtonMixed_PreservesTriStateDistinctFromUnchecked()
+    {
+        // Sibling of the CheckBox case: option buttons share the same objectType-independent
+        // "checked" tri-state handling, so Mixed must round-trip identically for Radio/Option.
+        var formControlPr = XElement.Parse(
+            """
+            <formControlPr xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                           objectType="Radio" checked="Mixed"/>
+            """);
+
+        var control = XlsxFormControlMapper.ReadControlProperties(formControlPr);
+
+        control.Should().NotBeNull();
+        control!.Kind.Should().Be(FormControlKind.OptionButton);
+        control.IsChecked.Should().BeFalse();
+        control.Value.Should().Be(2);
+    }
+
+    [Fact]
+    public void ReadControlProperties_CheckBoxExplicitlyUnchecked_ValueIsZeroNotNull()
+    {
+        // No-regression sibling: an explicit checked="Unchecked" (as opposed to the attribute
+        // being entirely absent) is a distinct, legal ST_Checked value and must read as Value == 0,
+        // not null -- otherwise "explicitly Unchecked" and "Mixed" (2) would remain the only two
+        // distinguishable states, defeating the point of preserving the tri-state signal.
+        var formControlPr = XElement.Parse(
+            """
+            <formControlPr xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                           objectType="CheckBox" checked="Unchecked"/>
+            """);
+
+        var control = XlsxFormControlMapper.ReadControlProperties(formControlPr);
+
+        control.Should().NotBeNull();
+        control!.IsChecked.Should().BeFalse();
+        control.Value.Should().Be(0);
+    }
+
+    [Fact]
+    public void ReadControlProperties_CheckBoxChecked_ValueIsOne()
+    {
+        // No-regression sibling: the plain "Checked" case must also carry the matching numeric
+        // encoding (1) through Value now that CheckBox/OptionButton populate it, on top of the
+        // pre-existing IsChecked bool (asserted separately above).
+        var formControlPr = XElement.Parse(
+            """
+            <formControlPr xmlns="http://schemas.microsoft.com/office/spreadsheetml/2009/9/main"
+                           objectType="CheckBox" checked="Checked"/>
+            """);
+
+        var control = XlsxFormControlMapper.ReadControlProperties(formControlPr);
+
+        control.Should().NotBeNull();
+        control!.IsChecked.Should().BeTrue();
+        control.Value.Should().Be(1);
     }
 
     [Fact]

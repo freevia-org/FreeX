@@ -381,8 +381,10 @@ internal static partial class RowColumnShiftHelpers
     }
 
     // ── Band-scoped rule adjustments for Insert/Delete Cells ─────────────────
-    // Only rules whose range is FULLY INSIDE the shift band are translated.
-    // Partial-overlap rules are left unchanged (documented limitation).
+    // Rules fully inside the shift band are translated. Rules whose range STRADDLES the shift
+    // boundary (e.g. B2:D2 straddling an insert-before-C or delete-C2 op) are grown/shrunk to track
+    // the surviving/inserted cells (R38-commands-insert-delete-shift-2-1), matching Excel and
+    // FreeX's own whole-row/whole-column ShiftRange*Up/Down helpers.
 
     /// <summary>
     /// Insert Shift Down: rules fully inside [bandStartCol..bandEndCol] × [insertBeforeRow..MaxRow]
@@ -616,8 +618,16 @@ internal static partial class RowColumnShiftHelpers
     // ── Band-scoped translation helpers ──────────────────────────────────────
 
     /// <summary>
-    /// Returns the translated range if it is fully inside the Insert-Down band,
-    /// or null if it should be left unchanged (outside the band or partial overlap).
+    /// Returns the translated range if it is fully inside the Insert-Down band's column span and
+    /// touches or straddles the insert point, or null if it should be left unchanged (outside the
+    /// band, or entirely above the insert point).
+    /// <para>
+    /// R38-commands-insert-delete-shift-2-1: a range that STRADDLES <paramref name="insertBeforeRow"/>
+    /// (Start.Row &lt; insertBeforeRow &lt;= End.Row) GROWS its End.Row by <paramref name="count"/>
+    /// while its Start.Row stays put — matching Excel's own reference-adjustment behavior (and
+    /// FreeX's own whole-column <see cref="ShiftRangeRowsUp"/>, which grows the same way), instead of
+    /// being left stale. A range entirely at/below the insert point shifts both endpoints down.
+    /// </para>
     /// </summary>
     private static GridRange? TranslateRangeInsertDown(
         GridRange range,
@@ -628,18 +638,33 @@ internal static partial class RowColumnShiftHelpers
         if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol)
             return null;
 
-        // Rule must start at or below the insert point (fully inside the shift zone).
-        if (range.Start.Row < insertBeforeRow)
+        // Rule entirely above the insert point: unaffected.
+        if (range.End.Row < insertBeforeRow)
             return null;
 
+        // Straddling the insert point keeps Start.Row put and only grows End.Row; a range fully
+        // at/below the insert point shifts both endpoints down (mirrors ShiftRangeRowsUp).
+        var newStartRow = range.Start.Row < insertBeforeRow
+            ? range.Start.Row
+            : Math.Min(range.Start.Row + count, CellAddress.MaxRow);
+        var newEndRow = Math.Min(range.End.Row + count, CellAddress.MaxRow);
+
         return new GridRange(
-            new CellAddress(range.Start.Sheet, Math.Min(range.Start.Row + count, CellAddress.MaxRow), range.Start.Col),
-            new CellAddress(range.End.Sheet,   Math.Min(range.End.Row   + count, CellAddress.MaxRow), range.End.Col));
+            new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
+            new CellAddress(range.End.Sheet,   newEndRow,   range.End.Col));
     }
 
     /// <summary>
-    /// Returns the translated range if it is fully inside the Insert-Right band,
-    /// or null if unchanged.
+    /// Returns the translated range if it is fully inside the Insert-Right band's row span and
+    /// touches or straddles the insert point, or null if unchanged (outside the band, or entirely
+    /// left of the insert point).
+    /// <para>
+    /// R38-commands-insert-delete-shift-2-1: a range that STRADDLES <paramref name="insertBeforeCol"/>
+    /// (Start.Col &lt; insertBeforeCol &lt;= End.Col) GROWS its End.Col by <paramref name="count"/>
+    /// while its Start.Col stays put — matching Excel's own reference-adjustment behavior (and
+    /// FreeX's own whole-column <see cref="ShiftRangeColumnsUp"/>, which grows the same way), instead
+    /// of being left stale.
+    /// </para>
     /// </summary>
     private static GridRange? TranslateRangeInsertRight(
         GridRange range,
@@ -650,13 +675,20 @@ internal static partial class RowColumnShiftHelpers
         if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow)
             return null;
 
-        // Rule must start at or right of the insert point.
-        if (range.Start.Col < insertBeforeCol)
+        // Rule entirely left of the insert point: unaffected.
+        if (range.End.Col < insertBeforeCol)
             return null;
 
+        // Straddling the insert point keeps Start.Col put and only grows End.Col; a range fully
+        // at/right of the insert point shifts both endpoints right (mirrors ShiftRangeColumnsUp).
+        var newStartCol = range.Start.Col < insertBeforeCol
+            ? range.Start.Col
+            : Math.Min(range.Start.Col + count, CellAddress.MaxCol);
+        var newEndCol = Math.Min(range.End.Col + count, CellAddress.MaxCol);
+
         return new GridRange(
-            new CellAddress(range.Start.Sheet, range.Start.Row, Math.Min(range.Start.Col + count, CellAddress.MaxCol)),
-            new CellAddress(range.End.Sheet,   range.End.Row,   Math.Min(range.End.Col   + count, CellAddress.MaxCol)));
+            new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
+            new CellAddress(range.End.Sheet,   range.End.Row,   newEndCol));
     }
 
     // Tri-state result for delete translation: unchanged / remove / translated.
@@ -707,8 +739,14 @@ internal static partial class RowColumnShiftHelpers
                 new CellAddress(range.End.Sheet,   range.End.Row   - count, range.End.Col)));
         }
 
-        // Partial overlap with the delete boundary: leave unchanged.
-        return RangeDeleteResult.Unchanged;
+        // R38-commands-insert-delete-shift-2-1: partial overlap with the delete boundary shrinks
+        // to the surviving portion (mirrors ShiftRangeRowsDown/ColumnsDown's overlap branch) instead
+        // of being left stale, referencing rows that no longer hold the data they used to.
+        var newStartRow = range.Start.Row < deletedStartRow ? range.Start.Row : deletedStartRow;
+        var newEndRow = range.End.Row > deletedEndRow ? range.End.Row - count : deletedStartRow - 1;
+        return RangeDeleteResult.Translate(new GridRange(
+            new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
+            new CellAddress(range.End.Sheet,   newEndRow,   range.End.Col)));
     }
 
     private static RangeDeleteResult TranslateRangeDeleteLeft(
@@ -736,8 +774,13 @@ internal static partial class RowColumnShiftHelpers
                 new CellAddress(range.End.Sheet,   range.End.Row,   range.End.Col   - count)));
         }
 
-        // Partial overlap: leave unchanged.
-        return RangeDeleteResult.Unchanged;
+        // R38-commands-insert-delete-shift-2-1: partial overlap shrinks to the surviving portion
+        // (mirrors ShiftRangeColumnsDown's overlap branch) instead of being left stale.
+        var newStartCol = range.Start.Col < deletedStartCol ? range.Start.Col : deletedStartCol;
+        var newEndCol = range.End.Col > deletedEndCol ? range.End.Col - count : deletedStartCol - 1;
+        return RangeDeleteResult.Translate(new GridRange(
+            new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
+            new CellAddress(range.End.Sheet,   range.End.Row,   newEndCol)));
     }
 
     private static bool AdjustAdditionalRangesDeleteUp(

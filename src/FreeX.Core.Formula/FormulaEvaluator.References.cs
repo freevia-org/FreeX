@@ -750,6 +750,13 @@ public sealed partial class FormulaEvaluator
             {
                 columnIndex = 1;
             }
+            else
+            {
+                // Genuine 2-D range with column_num omitted: modern Excel spills the whole
+                // selected row as a 1xN array rather than collapsing to column 1 (mirrors
+                // BuiltInFunctions.IndexScalar's singleIndexArgument handling for the same case).
+                columnIndex = 0;
+            }
         }
 
         if (rowIndex < 0 || columnIndex < 0)

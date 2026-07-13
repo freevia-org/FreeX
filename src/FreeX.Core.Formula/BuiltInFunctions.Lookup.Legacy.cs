@@ -159,10 +159,15 @@ public static partial class BuiltInFunctions
 
         // For a 1-D range with a single index argument, the index selects along the
         // only dimension (column for a 1-row range, row for a 1-column range).
+        // For a genuine 2-D array (more than one row AND more than one column) with the
+        // column_num argument omitted, modern Excel does NOT collapse to a single cell in
+        // column 1 — it spills the whole selected row as a 1xN array (mirrors the explicit
+        // INDEX(array, row_num, 0) / INDEX(array, row_num,) form below).
         if (singleIndexArgument)
         {
             if (table.RowCount == 1) { colNum = rowNum; rowNum = 1; }
             else if (table.ColCount == 1) { /* rowNum already correct, colNum = 1 */ }
+            else { colNum = 0; }
         }
 
         // Negative indices â†’ #VALUE! (out-of-range positive â†’ #REF! per Excel)

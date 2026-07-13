@@ -96,15 +96,18 @@ public static class ConditionalFormatIconSetCatalog
         return 3;
     }
 
-    /// <summary>The default evenly spaced percent thresholds for a style's bucket count.</summary>
+    /// <summary>
+    /// The default evenly spaced percent thresholds for a style's bucket count, matching Excel's
+    /// rounding (e.g. the 3-icon default is 33/67, not 33/66 from truncated integer division).
+    /// </summary>
     public static IReadOnlyList<CfThresholdModel> CreateThresholds(string? style)
     {
         var iconCount = GetIconCount(style);
-        var step = 100 / iconCount;
         return Enumerable.Range(0, iconCount)
             .Select(index => new CfThresholdModel(
                 CfThresholdType.Percent,
-                (index * step).ToString(CultureInfo.InvariantCulture)))
+                ((int)Math.Round(index * 100.0 / iconCount, MidpointRounding.AwayFromZero))
+                    .ToString(CultureInfo.InvariantCulture)))
             .ToList();
     }
 

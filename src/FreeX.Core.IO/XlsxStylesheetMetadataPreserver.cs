@@ -725,7 +725,135 @@ internal static class XlsxStylesheetMetadataPreserver
         targetCellStyles.SetAttributeValue(
             "count",
             targetCellStyles.Elements(workbookNs + "cellStyle").Count().ToString(CultureInfo.InvariantCulture));
+
+        // The recovered named-style records above are useless if no cell actually references them:
+        // reconnect each rebuilt cellXfs <xf> that corresponds to a source xf bound to one of these
+        // named styles, so the style gallery membership (not just its definition) survives the rebuild.
+        ReconnectCellXfNamedStyleLinks(sourceRoot, targetRoot, workbookNs, appendedXfIndexBySourceIndex);
         return true;
+    }
+
+    /// <summary>
+    /// ClosedXML always emits xfId="0" (or omits it, same default) for every rebuilt cellXfs &lt;xf&gt;
+    /// — it has no per-cell named-style concept — so a source cell bound to a named style (e.g. the
+    /// built-in "Good" cell style) loses that binding even though <see cref="MergeStylesheetNamedCellStyles"/>
+    /// keeps the style's definition alive. There is no reliable index correspondence between source and
+    /// rebuilt cellXfs (a full rebuild renumbers/reorders them), so cellXfs are correlated by their
+    /// rendered style (the dereferenced font/fill/border/numFmt content) instead — the same technique
+    /// <see cref="RendersEquivalentDifferentialStyle"/> uses for dxfs. A named-style cell's baked direct
+    /// formatting (stamped by <see cref="XlsxClosedXmlCellMapper"/>.ApplyStyle from the resolved
+    /// CellStyle) reliably reproduces that signature in the rebuilt xf.
+    /// </summary>
+    private static void ReconnectCellXfNamedStyleLinks(
+        XElement? sourceRoot,
+        XElement targetRoot,
+        XNamespace workbookNs,
+        IReadOnlyDictionary<int, int> sourceXfIdToTargetXfId)
+    {
+        if (sourceXfIdToTargetXfId.Count == 0)
+            return;
+
+        var sourceCellXfs = sourceRoot?.Element(workbookNs + "cellXfs")?.Elements(workbookNs + "xf").ToList();
+        var targetCellXfsContainer = targetRoot.Element(workbookNs + "cellXfs");
+        if (sourceCellXfs is not { Count: > 0 } || targetCellXfsContainer is null)
+            return;
+
+        var targetCellXfs = targetCellXfsContainer.Elements(workbookNs + "xf").ToList();
+        if (targetCellXfs.Count == 0)
+            return;
+
+        var sourceFonts = sourceRoot?.Element(workbookNs + "fonts");
+        var sourceFills = sourceRoot?.Element(workbookNs + "fills");
+        var sourceBorders = sourceRoot?.Element(workbookNs + "borders");
+        var sourceNumFmts = sourceRoot?.Element(workbookNs + "numFmts");
+        var targetFonts = targetRoot.Element(workbookNs + "fonts");
+        var targetFills = targetRoot.Element(workbookNs + "fills");
+        var targetBorders = targetRoot.Element(workbookNs + "borders");
+        var targetNumFmts = targetRoot.Element(workbookNs + "numFmts");
+
+        // Bucket unclaimed target cellXfs (xfId still absent/"0" — the only value ClosedXML ever
+        // emits) by rendered-style signature. Several source cellXfs can dedupe to one rebuilt xf, so
+        // each signature maps to a queue and every candidate is claimed at most once, mirroring the
+        // gradient-fill restore's dequeue pattern above.
+        var targetXfsBySignature = new Dictionary<string, Queue<XElement>>(StringComparer.Ordinal);
+        foreach (var targetXf in targetCellXfs)
+        {
+            var currentXfId = targetXf.Attribute("xfId")?.Value;
+            if (currentXfId is not (null or "0"))
+                continue;
+
+            var signature = BuildXfStyleSignature(targetXf, targetFonts, targetFills, targetBorders, targetNumFmts, workbookNs);
+            if (!targetXfsBySignature.TryGetValue(signature, out var queue))
+                targetXfsBySignature[signature] = queue = new Queue<XElement>();
+            queue.Enqueue(targetXf);
+        }
+
+        if (targetXfsBySignature.Count == 0)
+            return;
+
+        foreach (var sourceXf in sourceCellXfs)
+        {
+            if (!TryGetIntAttribute(sourceXf, "xfId", out var sourceXfId) ||
+                sourceXfId == 0 ||
+                !sourceXfIdToTargetXfId.TryGetValue(sourceXfId, out var targetNamedStyleXfId))
+            {
+                continue;
+            }
+
+            var signature = BuildXfStyleSignature(sourceXf, sourceFonts, sourceFills, sourceBorders, sourceNumFmts, workbookNs);
+            if (!targetXfsBySignature.TryGetValue(signature, out var candidates) || candidates.Count == 0)
+                continue;
+
+            candidates.Dequeue().SetAttributeValue("xfId", targetNamedStyleXfId.ToString(CultureInfo.InvariantCulture));
+        }
+    }
+
+    // A signature of the font/fill/border records an xf's fontId/fillId/borderId indices dereference,
+    // plus its numFmtId's resolved format code (or the built-in id verbatim, universal below 164).
+    // Two xfs with equal signatures render identically, which is the same notion of equivalence
+    // <see cref="RendersEquivalentDifferentialStyle"/> uses for dxfs — just computed from indexed
+    // records instead of a dxf's inline font/fill/border children.
+    private const char SignatureSeparator = (char)0x1F;
+
+    private static string BuildXfStyleSignature(
+        XElement xf,
+        XElement? fontsList,
+        XElement? fillsList,
+        XElement? bordersList,
+        XElement? numFmtsList,
+        XNamespace workbookNs)
+    {
+        var fontXml = ResolveIndexedRecordXml(xf, "fontId", fontsList, workbookNs + "font");
+        var fillXml = ResolveIndexedRecordXml(xf, "fillId", fillsList, workbookNs + "fill");
+        var borderXml = ResolveIndexedRecordXml(xf, "borderId", bordersList, workbookNs + "border");
+        var numFmtKey = ResolveNumFmtSignatureKey(xf, numFmtsList, workbookNs);
+        return string.Join(SignatureSeparator, fontXml, fillXml, borderXml, numFmtKey);
+    }
+
+    private static string ResolveIndexedRecordXml(XElement xf, string attributeName, XElement? list, XName itemName)
+    {
+        if (list is null || !TryGetIntAttribute(xf, attributeName, out var index))
+            return string.Empty;
+
+        var items = list.Elements(itemName).ToList();
+        if (index < 0 || index >= items.Count)
+            return string.Empty;
+
+        return items[index].ToString(SaveOptions.DisableFormatting);
+    }
+
+    private static string ResolveNumFmtSignatureKey(XElement xf, XElement? numFmtsList, XNamespace workbookNs)
+    {
+        if (!TryGetIntAttribute(xf, "numFmtId", out var numFmtId))
+            return string.Empty;
+        if (numFmtId < 164)
+            return numFmtId.ToString(CultureInfo.InvariantCulture);
+
+        var formatCode = numFmtsList?
+            .Elements(workbookNs + "numFmt")
+            .FirstOrDefault(element => TryGetIntAttribute(element, "numFmtId", out var id) && id == numFmtId)?
+            .Attribute("formatCode")?.Value;
+        return formatCode ?? numFmtId.ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>

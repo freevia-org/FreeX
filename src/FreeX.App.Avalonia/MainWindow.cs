@@ -1200,7 +1200,7 @@ public sealed partial class MainWindow : Window
                     ["insert.sparklineWinLoss"] = () => InsertOrEditSparkline(SparklineKind.WinLoss),
                     // Data: Outline Group / Ungroup.
                     ["data.group"] = GroupSelectedRows,
-                    ["data.ungroup"] = ClearWorksheetOutline,
+                    ["data.ungroup"] = UngroupSelection,
                     // Home ▸ Cells: Insert / Delete Cells (with shift-direction prompt).
                     ["home.insertCells"] = () => _ = ShowInsertCellsDialogAsync(),
                     ["home.deleteCells"] = () => _ = ShowDeleteCellsDialogAsync(),
@@ -1351,7 +1351,7 @@ public sealed partial class MainWindow : Window
                     ["Hide Detail"] = HideOutlineDetail,
                     ["Clear Outline"] = ClearWorksheetOutline,
                     ["Group#GroupRowsMenuItem_Click"] = GroupSelectedRows,
-                    ["Ungroup#UngroupRowsMenuItem_Click"] = ClearWorksheetOutline,
+                    ["Ungroup#UngroupRowsMenuItem_Click"] = UngroupSelection,
 
                     // Review ▸ Proofing / Comments / Notes / Share.
                     ["Workbook Statistics"] = () => _ = ShowWorkbookStatisticsDialogAsync(),
@@ -8028,7 +8028,7 @@ public sealed partial class MainWindow : Window
                 GroupSelectedRows();
                 break;
             case WorksheetContextMenuAction.Ungroup:
-                ClearWorksheetOutline();
+                UngroupSelection();
                 break;
             // Comments and Notes submenu (create/edit/delete/resolve/show route through WorkbookSession
             // comment APIs; SetThreadedCommentCommand / UpdateThreadedCommentTextCommand /

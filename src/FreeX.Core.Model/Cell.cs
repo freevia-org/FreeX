@@ -60,6 +60,14 @@ public sealed class Cell
     /// <summary>The style applied to this cell.</summary>
     public StyleId StyleId { get; set; } = StyleId.Default;
 
+    /// <summary>
+    /// Whether this cell was forced to text via a leading apostrophe (ECMA-376 cellXfs
+    /// <c>xf@quotePrefix</c>). A cell with this set stores its value as text even though it looks
+    /// numeric, shows Excel's "Number Stored as Text" indicator, and replays the leading apostrophe
+    /// in the formula bar when re-edited. Defaults to false (no quote prefix).
+    /// </summary>
+    public bool QuotePrefix { get; set; }
+
     /// <summary>Creates a cell with a literal value (no formula).</summary>
     public static Cell FromValue(ScalarValue value) => new() { Value = value };
 
@@ -73,7 +81,8 @@ public sealed class Cell
         {
             Value = Value,
             IgnoreFormulaError = IgnoreFormulaError,
-            StyleId = StyleId
+            StyleId = StyleId,
+            QuotePrefix = QuotePrefix
         };
         copy._formulaText = _formulaText;
         copy.CachedAst = CachedAst;

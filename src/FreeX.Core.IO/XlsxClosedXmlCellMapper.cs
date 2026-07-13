@@ -271,6 +271,32 @@ internal static class XlsxClosedXmlCellMapper
     public static void ApplyStyle(IXLCell xlCell, CellStyle style) =>
         ApplyStyle(xlCell.Style, style);
 
+    /// <summary>
+    /// Reads the ECMA-376 <c>xf@quotePrefix</c> flag (the leading-apostrophe forced-text marker,
+    /// e.g. a part number entered as <c>'04512</c>) from a ClosedXML cell's style, for round-tripping
+    /// onto <see cref="Cell.QuotePrefix"/>. This flag is per-cell/per-value (not visual formatting),
+    /// so it is modelled on <see cref="Cell"/> rather than <see cref="CellStyle"/>.
+    /// </summary>
+    /// <remarks>
+    /// Scoped model+IO-mapper support only: wiring these calls into the per-cell load loop
+    /// (XlsxFileAdapter.cs) and the per-cell save loop (XlsxFileAdapter.Save.cs) so the flag actually
+    /// flows through <c>Cell.QuotePrefix</c> on real load/save is a follow-up — those files are out of
+    /// this change's scope.
+    /// </remarks>
+    public static bool MapQuotePrefix(IXLCell xlCell) => xlCell.Style.IncludeQuotePrefix;
+
+    /// <summary>
+    /// Writes the ECMA-376 <c>xf@quotePrefix</c> flag back onto a ClosedXML cell's style from
+    /// <see cref="Cell.QuotePrefix"/>. Only sets it when true, mirroring
+    /// <see cref="ApplyStyle(IXLStyle, CellStyle)"/>'s convention of never touching a property that is
+    /// already at its default (false) so unrelated cells are not perturbed.
+    /// </summary>
+    public static void ApplyQuotePrefix(IXLCell xlCell, bool quotePrefix)
+    {
+        if (quotePrefix)
+            xlCell.Style.IncludeQuotePrefix = true;
+    }
+
     // ClosedXML's SetHyperlink stamps its built-in Hyperlink style (theme-10 blue font + single underline)
     // onto the cell, overriding the modelled font. Re-apply the modelled font afterward, forcing every
     // property unconditionally — ApplyStyle skips values equal to the default (e.g. a black font colour),

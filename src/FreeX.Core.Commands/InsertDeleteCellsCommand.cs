@@ -93,7 +93,15 @@ public sealed class InsertCellsCommand : IWorkbookCommand
 
             var capture = CaptureCellsForMove(sheet, shiftRegion,
                 orig => new CellAddress(orig.Sheet, orig.Row, orig.Col + width));
-            if (capture.MaxCol > 0 && capture.MaxCol + width > CellAddress.MaxCol)
+            // R38-commands-insert-delete-shift-2-2: capture.MaxCol only sees value-bearing Cell
+            // entries (sheet.GetOccupiedCellMap()), so a blank merged region (e.g. from "merge first,
+            // type later") abutting the last column is invisible to it. Without also consulting
+            // MergedRegions here, AdjustMergesShiftRight would silently clamp/truncate such a merge
+            // past the sheet edge instead of blocking the insert the way Excel does for any content
+            // — including merges — that would be pushed past the last column.
+            var mergeMaxCol = MaxAffectedMergeEndColForShiftRight(sheet, _range.Start.Row, _range.End.Row, _range.Start.Col);
+            if ((capture.MaxCol > 0 && capture.MaxCol + width > CellAddress.MaxCol) ||
+                (mergeMaxCol > 0 && mergeMaxCol + width > CellAddress.MaxCol))
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last column ({CellAddress.MaxCol}).");
 
             _snapshot = capture.Snapshot;
@@ -186,7 +194,11 @@ public sealed class InsertCellsCommand : IWorkbookCommand
 
             var capture = CaptureCellsForMove(sheet, shiftRegion,
                 orig => new CellAddress(orig.Sheet, orig.Row + height, orig.Col));
-            if (capture.MaxRow > 0 && capture.MaxRow + height > CellAddress.MaxRow)
+            // R38-commands-insert-delete-shift-2-2: see the Shift-Right branch above — a blank
+            // merged region abutting the last row is likewise invisible to capture.MaxRow.
+            var mergeMaxRow = MaxAffectedMergeEndRowForShiftDown(sheet, _range.Start.Col, _range.End.Col, _range.Start.Row);
+            if ((capture.MaxRow > 0 && capture.MaxRow + height > CellAddress.MaxRow) ||
+                (mergeMaxRow > 0 && mergeMaxRow + height > CellAddress.MaxRow))
                 return new CommandOutcome(false, $"Cannot insert cells: data would be pushed past the last row ({CellAddress.MaxRow}).");
 
             _snapshot = capture.Snapshot;
@@ -525,6 +537,51 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         merge.Start.Row >= band.StartRow && merge.End.Row <= band.EndRow &&
         merge.Start.Col >= band.StartCol && merge.End.Col <= band.EndCol;
 
+    // ── Merge-aware edge-of-sheet guard (R38-commands-insert-delete-shift-2-2) ──
+
+    /// <summary>
+    /// Returns the largest End.Col among merged regions that a Shift-Right insert (band rows
+    /// [<paramref name="bandStartRow"/>..<paramref name="bandEndRow"/>], insert point
+    /// <paramref name="insertBeforeCol"/>) would relocate — i.e. merges fully inside the band's row
+    /// span whose End.Col is at/after the insert point, matching exactly the merges
+    /// <see cref="AdjustMergesShiftRight"/> would shift or expand — or 0 if none. Used to extend the
+    /// value-cell-only overflow guard in <see cref="InsertCellsCommand.Apply"/> so a blank merge (no
+    /// Cell entries, invisible to <c>CaptureCellsForMove</c>'s MaxCol) abutting the last column
+    /// blocks the insert instead of being silently truncated by AdjustMergesShiftRight's clamp.
+    /// </summary>
+    private static uint MaxAffectedMergeEndColForShiftRight(
+        Sheet sheet, uint bandStartRow, uint bandEndRow, uint insertBeforeCol)
+    {
+        uint maxEndCol = 0;
+        foreach (var merge in sheet.MergedRegions)
+        {
+            if (merge.Start.Row < bandStartRow || merge.End.Row > bandEndRow)
+                continue;
+            if (merge.End.Col < insertBeforeCol)
+                continue;
+            if (merge.End.Col > maxEndCol)
+                maxEndCol = merge.End.Col;
+        }
+        return maxEndCol;
+    }
+
+    /// <summary>Shift-Down analogue of <see cref="MaxAffectedMergeEndColForShiftRight"/> for rows.</summary>
+    private static uint MaxAffectedMergeEndRowForShiftDown(
+        Sheet sheet, uint bandStartCol, uint bandEndCol, uint insertBeforeRow)
+    {
+        uint maxEndRow = 0;
+        foreach (var merge in sheet.MergedRegions)
+        {
+            if (merge.Start.Col < bandStartCol || merge.End.Col > bandEndCol)
+                continue;
+            if (merge.End.Row < insertBeforeRow)
+                continue;
+            if (merge.End.Row > maxEndRow)
+                maxEndRow = merge.End.Row;
+        }
+        return maxEndRow;
+    }
+
     // ── Merge adjustment for shift-right ─────────────────────────────────────
 
     private static IReadOnlyList<GridRange> AdjustMergesShiftRight(
@@ -765,10 +822,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     // pointing into the shifted band went silently stale.
 
     /// <summary>
-    /// Insert Shift Right: named ranges fully inside [bandStartRow..bandEndRow] whose start column
-    /// is at or right of the insert point are shifted right by <paramref name="count"/>. Ranges
-    /// outside the band, or straddling the insert point, are left unchanged (matching the CF/DV
-    /// rule-range adjustment's documented partial-overlap limitation).
+    /// Insert Shift Right: named ranges fully inside [bandStartRow..bandEndRow] that touch or
+    /// straddle the insert point are adjusted. A range straddling <paramref name="insertBeforeCol"/>
+    /// (Start.Col &lt; insertBeforeCol &lt;= End.Col) GROWS its End.Col by <paramref name="count"/>
+    /// while Start.Col stays put (R38-commands-insert-delete-shift-2-1 — matches Excel's own
+    /// reference-adjustment behavior, mirroring <see cref="RowColumnShiftHelpers.RewriteRuleFormulas"/>'s
+    /// sibling fix for CF/DV rule ranges); a range fully at/right of the insert point shifts both
+    /// endpoints right. Ranges outside the band, or entirely left of the insert point, are unchanged.
     /// </summary>
     internal static void ShiftNamedRangesInBandRight(
         Workbook workbook, SheetId sheetId,
@@ -779,9 +839,12 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         {
             if (range.Start.Sheet != sheetId) continue;
             if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) continue;
-            if (range.Start.Col < insertBeforeCol) continue;
+            if (range.End.Col < insertBeforeCol) continue;
+            var newStartCol = range.Start.Col < insertBeforeCol
+                ? range.Start.Col
+                : Math.Min(range.Start.Col + count, CellAddress.MaxCol);
             workbook.NamedRanges[name] = new GridRange(
-                new CellAddress(range.Start.Sheet, range.Start.Row, Math.Min(range.Start.Col + count, CellAddress.MaxCol)),
+                new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
                 new CellAddress(range.End.Sheet, range.End.Row, Math.Min(range.End.Col + count, CellAddress.MaxCol)));
         }
 
@@ -789,17 +852,23 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         {
             if (range.Start.Sheet != sheetId) continue;
             if (range.Start.Row < bandStartRow || range.End.Row > bandEndRow) continue;
-            if (range.Start.Col < insertBeforeCol) continue;
+            if (range.End.Col < insertBeforeCol) continue;
+            var newStartCol = range.Start.Col < insertBeforeCol
+                ? range.Start.Col
+                : Math.Min(range.Start.Col + count, CellAddress.MaxCol);
             workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
             workbook.DefineNamedRange(name, new GridRange(
-                new CellAddress(range.Start.Sheet, range.Start.Row, Math.Min(range.Start.Col + count, CellAddress.MaxCol)),
+                new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
                 new CellAddress(range.End.Sheet, range.End.Row, Math.Min(range.End.Col + count, CellAddress.MaxCol))), metadata, scopeSheet);
         }
     }
 
     /// <summary>
-    /// Insert Shift Down: named ranges fully inside [bandStartCol..bandEndCol] whose start row is
-    /// at or below the insert point are shifted down by <paramref name="count"/>.
+    /// Insert Shift Down: named ranges fully inside [bandStartCol..bandEndCol] that touch or
+    /// straddle the insert point are adjusted, mirroring <see cref="ShiftNamedRangesInBandRight"/>
+    /// for rows — a range straddling <paramref name="insertBeforeRow"/> grows its End.Row while
+    /// Start.Row stays put (R38-commands-insert-delete-shift-2-1); a range fully at/below the insert
+    /// point shifts both endpoints down.
     /// </summary>
     internal static void ShiftNamedRangesInBandDown(
         Workbook workbook, SheetId sheetId,
@@ -810,9 +879,12 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         {
             if (range.Start.Sheet != sheetId) continue;
             if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) continue;
-            if (range.Start.Row < insertBeforeRow) continue;
+            if (range.End.Row < insertBeforeRow) continue;
+            var newStartRow = range.Start.Row < insertBeforeRow
+                ? range.Start.Row
+                : Math.Min(range.Start.Row + count, CellAddress.MaxRow);
             workbook.NamedRanges[name] = new GridRange(
-                new CellAddress(range.Start.Sheet, Math.Min(range.Start.Row + count, CellAddress.MaxRow), range.Start.Col),
+                new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
                 new CellAddress(range.End.Sheet, Math.Min(range.End.Row + count, CellAddress.MaxRow), range.End.Col));
         }
 
@@ -820,10 +892,13 @@ public sealed class InsertCellsCommand : IWorkbookCommand
         {
             if (range.Start.Sheet != sheetId) continue;
             if (range.Start.Col < bandStartCol || range.End.Col > bandEndCol) continue;
-            if (range.Start.Row < insertBeforeRow) continue;
+            if (range.End.Row < insertBeforeRow) continue;
+            var newStartRow = range.Start.Row < insertBeforeRow
+                ? range.Start.Row
+                : Math.Min(range.Start.Row + count, CellAddress.MaxRow);
             workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
             workbook.DefineNamedRange(name, new GridRange(
-                new CellAddress(range.Start.Sheet, Math.Min(range.Start.Row + count, CellAddress.MaxRow), range.Start.Col),
+                new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
                 new CellAddress(range.End.Sheet, Math.Min(range.End.Row + count, CellAddress.MaxRow), range.End.Col)), metadata, scopeSheet);
         }
     }
@@ -835,8 +910,9 @@ public sealed class InsertCellsCommand : IWorkbookCommand
     /// RemoveNamedRangesForSheet, which drops a dangling global/scoped range for the same reason),
     /// so it is dropped instead of being left pointing at whatever now occupies the old address —
     /// or shifted left by <paramref name="count"/> when entirely right of the deleted columns.
-    /// Ranges straddling a boundary are left unchanged (matching the CF/DV rules' documented
-    /// partial-overlap limitation).
+    /// R38-commands-insert-delete-shift-2-1: a range straddling the delete boundary now SHRINKS to
+    /// its surviving portion (mirroring RowColumnShiftHelpers.Rules.cs's TranslateRangeDeleteLeft
+    /// fix for CF/DV rule ranges) instead of being left stale.
     /// </summary>
     internal static void DeleteNamedRangesInBandLeft(
         Workbook workbook, SheetId sheetId,
@@ -858,7 +934,14 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 workbook.NamedRanges[name] = new GridRange(
                     new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col - count),
                     new CellAddress(range.End.Sheet, range.End.Row, range.End.Col - count));
+                continue;
             }
+            // Straddles the delete boundary: shrink to the surviving portion.
+            var newStartCol = range.Start.Col < deletedStartCol ? range.Start.Col : deletedStartCol;
+            var newEndCol = range.End.Col > deletedEndCol ? range.End.Col - count : deletedStartCol - 1;
+            workbook.NamedRanges[name] = new GridRange(
+                new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
+                new CellAddress(range.End.Sheet, range.End.Row, newEndCol));
         }
 
         foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
@@ -877,7 +960,15 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 workbook.DefineNamedRange(name, new GridRange(
                     new CellAddress(range.Start.Sheet, range.Start.Row, range.Start.Col - count),
                     new CellAddress(range.End.Sheet, range.End.Row, range.End.Col - count)), metadata, scopeSheet);
+                continue;
             }
+            // Straddles the delete boundary: shrink to the surviving portion.
+            var newStartCol = range.Start.Col < deletedStartCol ? range.Start.Col : deletedStartCol;
+            var newEndCol = range.End.Col > deletedEndCol ? range.End.Col - count : deletedStartCol - 1;
+            workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata2);
+            workbook.DefineNamedRange(name, new GridRange(
+                new CellAddress(range.Start.Sheet, range.Start.Row, newStartCol),
+                new CellAddress(range.End.Sheet, range.End.Row, newEndCol)), metadata2, scopeSheet);
         }
     }
 
@@ -902,7 +993,14 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 workbook.NamedRanges[name] = new GridRange(
                     new CellAddress(range.Start.Sheet, range.Start.Row - count, range.Start.Col),
                     new CellAddress(range.End.Sheet, range.End.Row - count, range.End.Col));
+                continue;
             }
+            // Straddles the delete boundary: shrink to the surviving portion.
+            var newStartRow = range.Start.Row < deletedStartRow ? range.Start.Row : deletedStartRow;
+            var newEndRow = range.End.Row > deletedEndRow ? range.End.Row - count : deletedStartRow - 1;
+            workbook.NamedRanges[name] = new GridRange(
+                new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
+                new CellAddress(range.End.Sheet, newEndRow, range.End.Col));
         }
 
         foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
@@ -921,7 +1019,15 @@ public sealed class InsertCellsCommand : IWorkbookCommand
                 workbook.DefineNamedRange(name, new GridRange(
                     new CellAddress(range.Start.Sheet, range.Start.Row - count, range.Start.Col),
                     new CellAddress(range.End.Sheet, range.End.Row - count, range.End.Col)), metadata, scopeSheet);
+                continue;
             }
+            // Straddles the delete boundary: shrink to the surviving portion.
+            var newStartRow = range.Start.Row < deletedStartRow ? range.Start.Row : deletedStartRow;
+            var newEndRow = range.End.Row > deletedEndRow ? range.End.Row - count : deletedStartRow - 1;
+            workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata2);
+            workbook.DefineNamedRange(name, new GridRange(
+                new CellAddress(range.Start.Sheet, newStartRow, range.Start.Col),
+                new CellAddress(range.End.Sheet, newEndRow, range.End.Col)), metadata2, scopeSheet);
         }
     }
 }

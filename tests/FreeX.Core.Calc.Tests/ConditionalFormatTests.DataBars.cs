@@ -125,8 +125,10 @@ public partial class ConditionalFormatTests
     }
 
     [Fact]
-    public void DataBar_NegativeAxis_NegativeFillColorDefaultsToPositiveFillColorWhenNotSet()
+    public void DataBar_NegativeAxis_NegativeFillColorDefaultsToExcelAutomaticRedWhenNotSet()
     {
+        // Excel's "automatic" negative data-bar fill is a solid red (FF0000), not the positive
+        // fill color, when the rule has no explicit negativeFillColor.
         var (wb, sheet) = MakeWorkbook();
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(-10)));
         sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(10)));
@@ -137,7 +139,7 @@ public partial class ConditionalFormatTests
             Priority = 1,
             RuleType = CfRuleType.DataBar,
             DataBarColor = new RgbColor(99, 142, 198),
-            // DataBarNegativeFillColor is NOT set — should fall back to DataBarColor
+            // DataBarNegativeFillColor is NOT set — should default to Excel automatic red.
         });
 
         var viewport = GetViewport(wb, sheet);
@@ -146,7 +148,34 @@ public partial class ConditionalFormatTests
         negativeCell.ConditionalDataBar.Should().NotBeNull();
         var bar = negativeCell.ConditionalDataBar!.Value;
         bar.IsNegative.Should().BeTrue();
-        bar.FillColor.Should().Be(new RgbColor(99, 142, 198), "falls back to positive fill color when negative fill not set");
+        bar.FillColor.Should().Be(new RgbColor(0xFF, 0x00, 0x00), "Excel automatic negative data-bar fill is red, not the positive fill color");
+        bar.NegativeFillColor.Should().BeNull("no explicit negative fill color was configured on the rule");
+    }
+
+    [Fact]
+    public void DataBar_NegativeAxis_ExplicitNegativeFillColorStillHonored()
+    {
+        // Regression guard: an explicit negativeFillColor must still win over the automatic red default.
+        var (wb, sheet) = MakeWorkbook();
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 1), Cell.FromValue(new NumberValue(-10)));
+        sheet.SetCell(new CellAddress(sheet.Id, 2, 1), Cell.FromValue(new NumberValue(10)));
+
+        sheet.ConditionalFormats.Add(new ConditionalFormat
+        {
+            AppliesTo = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1)),
+            Priority = 1,
+            RuleType = CfRuleType.DataBar,
+            DataBarColor = new RgbColor(99, 142, 198),
+            DataBarNegativeFillColor = new RgbColor(12, 34, 56),
+        });
+
+        var viewport = GetViewport(wb, sheet);
+
+        var negativeCell = GetCell(viewport, 1, 1);
+        negativeCell.ConditionalDataBar.Should().NotBeNull();
+        var bar = negativeCell.ConditionalDataBar!.Value;
+        bar.IsNegative.Should().BeTrue();
+        bar.FillColor.Should().Be(new RgbColor(12, 34, 56), "an explicit negative fill color overrides the automatic red default");
     }
 
     [Fact]

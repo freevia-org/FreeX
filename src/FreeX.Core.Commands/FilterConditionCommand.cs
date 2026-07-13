@@ -1,4 +1,5 @@
 using FreeX.Core.Model;
+using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -234,6 +235,12 @@ public sealed class FilterConditionCommand : IWorkbookCommand
     private readonly uint _filterColOffset;
     private readonly IFilterCriterion _criterion;
     private FilterUndoSnapshot _undoSnapshot;
+    // R38-commands-autofilter-advanced-2-2: keep the worksheet AutoFilter's <customFilters>
+    // filterColumn model in sync with the interactively-applied custom criterion (AND/OR, wildcard,
+    // comparison, date-bound), so it round-trips through XlsxWorksheetAutoFilterXmlMapper instead of
+    // being silently dropped on save, matching the sibling FilterCommand/TopBottomFilterCommand/
+    // AverageFilterCommand which already keep this in sync for their own criterion kinds.
+    private List<WorksheetAutoFilterColumnModel>? _previousAutoFilterColumns;
 
     public string Label => "Apply Filter";
 
@@ -256,6 +263,35 @@ public sealed class FilterConditionCommand : IWorkbookCommand
         _undoSnapshot.Capture(sheet);
 
         var filterCol = _range.Start.Col + _filterColOffset;
+
+        // Best-effort: only mechanisms expressible as Excel <customFilter> elements (wildcard text
+        // matches, numeric/date comparisons and AND/OR pairs of those, including between-bounds) are
+        // persisted. Blank/non-blank criteria have no <customFilter> representation in Excel's schema
+        // (they are the checklist's "Blanks" mechanism instead), so those intentionally leave the
+        // model unmodified rather than emit a misleading customFilters entry.
+        if (FilterCriterionAutoFilterModelBuilder.Build(_criterion) is { } built)
+        {
+            _previousAutoFilterColumns = WorksheetAutoFilterColumnSync.Apply(
+                sheet,
+                _range,
+                (int)_filterColOffset,
+                new WorksheetAutoFilterColumnModel(
+                    ColumnId: (int)_filterColOffset,
+                    Values: [],
+                    IncludeBlank: false,
+                    CustomFilters: built.Filters,
+                    CustomFiltersAnd: built.And,
+                    CustomFiltersAndRaw: null,
+                    NativeCustomFiltersAttributes: null,
+                    Top10: null,
+                    DynamicFilter: null,
+                    ColorFilter: null,
+                    IconFilter: null,
+                    DateGroups: [],
+                    NativeFiltersAttributes: null,
+                    NativeFilterXmls: []));
+        }
+
         for (uint row = _range.Start.Row + 1; row <= _range.End.Row; row++)
         {
             var value = sheet.GetValue(row, filterCol);
@@ -267,10 +303,82 @@ public sealed class FilterConditionCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
+        var sheet = ctx.GetSheet(_sheetId);
+        WorksheetAutoFilterColumnSync.Restore(sheet, _range, _previousAutoFilterColumns);
+
         if (!_undoSnapshot.HasSnapshot)
             return;
 
-        var sheet = ctx.GetSheet(_sheetId);
         _undoSnapshot.Restore(sheet);
     }
+}
+
+/// <summary>
+/// R38-commands-autofilter-advanced-2-2: converts an in-session <see cref="IFilterCriterion"/> (built
+/// by <c>FilterInputParser</c>/<c>FilterCriterionInputParser</c> from a Custom AutoFilter dialog/text
+/// prompt) into the <see cref="WorksheetAutoFilterCustomFilterModel"/> shape
+/// <c>XlsxWorksheetAutoFilterXmlMapper</c> serializes as a worksheet AutoFilter column's
+/// <c>&lt;customFilters&gt;</c> XML, so the criterion survives save/reopen instead of only affecting
+/// the in-session hidden-row state. Returns <c>null</c> for criteria with no faithful
+/// <c>&lt;customFilter&gt;</c> representation (blank/non-blank, or a composite whose operand is itself
+/// unsupported) rather than emit an incorrect/incomplete entry.
+/// </summary>
+internal static class FilterCriterionAutoFilterModelBuilder
+{
+    public static (IReadOnlyList<WorksheetAutoFilterCustomFilterModel> Filters, bool And)? Build(IFilterCriterion criterion)
+    {
+        switch (criterion)
+        {
+            case CompositeFilterCriterion composite:
+                return BuildSingle(composite.First) is { } first && BuildSingle(composite.Second) is { } second
+                    ? (new[] { first, second }, composite.UseAnd)
+                    : null;
+
+            case NumberBetweenFilterCriterion between:
+                return (new[]
+                {
+                    new WorksheetAutoFilterCustomFilterModel("greaterThanOrEqual", FormatNumber(between.Minimum)),
+                    new WorksheetAutoFilterCustomFilterModel("lessThanOrEqual", FormatNumber(between.Maximum))
+                }, true);
+
+            case DateBetweenFilterCriterion between:
+                return (new[]
+                {
+                    new WorksheetAutoFilterCustomFilterModel("greaterThanOrEqual", FormatDate(between.Start)),
+                    new WorksheetAutoFilterCustomFilterModel("lessThanOrEqual", FormatDate(between.End))
+                }, true);
+
+            default:
+                return BuildSingle(criterion) is { } single ? (new[] { single }, false) : null;
+        }
+    }
+
+    private static WorksheetAutoFilterCustomFilterModel? BuildSingle(IFilterCriterion criterion) => criterion switch
+    {
+        TextContainsFilterCriterion c => new WorksheetAutoFilterCustomFilterModel(null, $"*{c.Text}*"),
+        TextDoesNotContainFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("notEqual", $"*{c.Text}*"),
+        TextBeginsWithFilterCriterion c => new WorksheetAutoFilterCustomFilterModel(null, $"{c.Text}*"),
+        TextEndsWithFilterCriterion c => new WorksheetAutoFilterCustomFilterModel(null, $"*{c.Text}"),
+        TextEqualsFilterCriterion c => new WorksheetAutoFilterCustomFilterModel(null, c.Text),
+        TextNotEqualsFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("notEqual", c.Text),
+        NumberGreaterThanFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("greaterThan", FormatNumber(c.Threshold)),
+        NumberGreaterThanOrEqualFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("greaterThanOrEqual", FormatNumber(c.Threshold)),
+        NumberLessThanFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("lessThan", FormatNumber(c.Threshold)),
+        NumberLessThanOrEqualFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("lessThanOrEqual", FormatNumber(c.Threshold)),
+        NumberEqualsFilterCriterion c => new WorksheetAutoFilterCustomFilterModel(null, FormatNumber(c.Expected)),
+        NumberNotEqualsFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("notEqual", FormatNumber(c.Expected)),
+        DateEqualsFilterCriterion c => new WorksheetAutoFilterCustomFilterModel(null, FormatDate(c.Expected)),
+        DateNotEqualsFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("notEqual", FormatDate(c.Expected)),
+        DateAfterFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("greaterThan", FormatDate(c.Threshold)),
+        DateOnOrAfterFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("greaterThanOrEqual", FormatDate(c.Threshold)),
+        DateBeforeFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("lessThan", FormatDate(c.Threshold)),
+        DateOnOrBeforeFilterCriterion c => new WorksheetAutoFilterCustomFilterModel("lessThanOrEqual", FormatDate(c.Threshold)),
+        // Blank/NonBlank criteria have no <customFilter> equivalent in Excel's schema.
+        _ => null
+    };
+
+    private static string FormatNumber(double value) => value.ToString(CultureInfo.InvariantCulture);
+
+    private static string FormatDate(DateOnly date) =>
+        date.ToDateTime(TimeOnly.MinValue).ToOADate().ToString(CultureInfo.InvariantCulture);
 }

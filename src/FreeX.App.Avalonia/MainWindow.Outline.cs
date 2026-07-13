@@ -37,17 +37,21 @@ public sealed partial class MainWindow
     // selected rows/columns, nesting the outline level the same way WPF's CreateGroupCommand does
     // (MainWindow.OutlineCommands.cs): a whole-column selection groups by column instead of
     // marking every row on the sheet, and the level is the next nesting depth (existing deepest
-    // level in the range + 1), not always a hardcoded 1. Ungroup (data.ungroup / the "Ungroup"
-    // submenu item / the grid context-menu Ungroup action -- all wired to ClearWorksheetOutline())
-    // is scoped to the current selection, mirroring the WPF host's Ungroup fix
-    // (MainWindow.OutlineCommands.cs): it decrements the deepest existing outline level in the
-    // selected row/column range by one, leaving unrelated groups elsewhere on the sheet untouched
-    // (R37-commands-outline-subtotal-2-1). The separate "Clear Outline" menu item shares this same
-    // entry point but is invoked without a deliberate multi-row/column selection (a bare active
-    // cell), so a trivial single-cell selection still falls back to the legacy whole-sheet clear
-    // that command requires. Routed through the generic review-command executor so both get
-    // undo/redo. Kept in the Avalonia shell (no WorkbookSession change) to avoid churn with the
-    // concurrently-active FreeW/macOS sessions.
+    // level in the range + 1), not always a hardcoded 1.
+    //
+    // Ungroup (data.ungroup / the "Ungroup" submenu item / the grid context-menu Ungroup action)
+    // is ALWAYS scoped to the current selection via UngroupSelection(), mirroring the WPF host's
+    // Ungroup fix (MainWindow.OutlineCommands.cs): it decrements the deepest existing outline
+    // level in the selected row/column range by one, leaving unrelated groups elsewhere on the
+    // sheet untouched (R37-commands-outline-subtotal-2-1). This must NOT be gated on selection
+    // shape -- a single grouped row is a single-cell-tall selection, and routing that through the
+    // whole-sheet clear would wipe every group on the sheet instead of just ungrouping that one
+    // row (R38-meta-2). The separate "Clear Outline" menu item is a distinct command that always
+    // clears the whole worksheet's outline via ClearWorksheetOutline(), regardless of the current
+    // selection, exactly like the WPF host's separate ClearWorksheetOutlineCommand handler. Both
+    // routed through the generic review-command executor so both get undo/redo. Kept in the
+    // Avalonia shell (no WorkbookSession change) to avoid churn with the concurrently-active
+    // FreeW/macOS sessions.
 
     private void GroupSelectedRows()
     {
@@ -75,41 +79,47 @@ public sealed partial class MainWindow
             : result.ErrorMessage ?? "Could not group rows.");
     }
 
-    private void ClearWorksheetOutline()
+    /// <summary>
+    /// Data ▸ Outline ▸ Ungroup (and the "Ungroup" submenu / grid context-menu action): always
+    /// scoped to the current selection, regardless of its shape. A single-cell selection inside a
+    /// grouped row/column still only decrements that row/column's own outline level by one -- it
+    /// must never fall back to clearing the whole sheet's outline (R38-meta-2).
+    /// </summary>
+    private void UngroupSelection()
     {
         var range = _session.SelectedRange;
         var sheet = _session.ActiveSheet;
 
-        if (!IsSingleCellSelection(range))
+        if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
         {
-            if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
-            {
-                var newColLevel = GetUngroupedOutlineLevel(sheet.ColOutlineLevels, range.Start.Col, range.End.Col);
-                var colResult = _session.ExecuteReviewCommand(
-                    new GroupColumnsCommand(sheet.Id, range.Start.Col, range.End.Col, newColLevel));
-                RefreshShell(colResult.Success
-                    ? $"Ungrouped columns {range.Start.Col}–{range.End.Col}"
-                    : colResult.ErrorMessage ?? "Could not ungroup columns.");
-                return;
-            }
-
-            var newRowLevel = GetUngroupedOutlineLevel(sheet.RowOutlineLevels, range.Start.Row, range.End.Row);
-            var rowResult = _session.ExecuteReviewCommand(
-                new GroupRowsCommand(sheet.Id, range.Start.Row, range.End.Row, newRowLevel));
-            RefreshShell(rowResult.Success
-                ? $"Ungrouped rows {range.Start.Row}–{range.End.Row}"
-                : rowResult.ErrorMessage ?? "Could not ungroup rows.");
+            var newColLevel = GetUngroupedOutlineLevel(sheet.ColOutlineLevels, range.Start.Col, range.End.Col);
+            var colResult = _session.ExecuteReviewCommand(
+                new GroupColumnsCommand(sheet.Id, range.Start.Col, range.End.Col, newColLevel));
+            RefreshShell(colResult.Success
+                ? $"Ungrouped columns {range.Start.Col}–{range.End.Col}"
+                : colResult.ErrorMessage ?? "Could not ungroup columns.");
             return;
         }
 
+        var newRowLevel = GetUngroupedOutlineLevel(sheet.RowOutlineLevels, range.Start.Row, range.End.Row);
+        var rowResult = _session.ExecuteReviewCommand(
+            new GroupRowsCommand(sheet.Id, range.Start.Row, range.End.Row, newRowLevel));
+        RefreshShell(rowResult.Success
+            ? $"Ungrouped rows {range.Start.Row}–{range.End.Row}"
+            : rowResult.ErrorMessage ?? "Could not ungroup rows.");
+    }
+
+    /// <summary>
+    /// Data ▸ Outline ▸ Clear Outline: always clears the whole worksheet's outline (group
+    /// structure on every row and column), regardless of the current selection.
+    /// </summary>
+    private void ClearWorksheetOutline()
+    {
         var result = _session.ExecuteReviewCommand(new ClearWorksheetOutlineCommand(_session.ActiveSheet.Id));
         RefreshShell(result.Success
             ? "Cleared the worksheet outline."
             : result.ErrorMessage ?? "Could not clear the outline.");
     }
-
-    private static bool IsSingleCellSelection(GridRange range) =>
-        range.Start.Row == range.End.Row && range.Start.Col == range.End.Col;
 
     /// <summary>
     /// Excel's Ungroup decrements the deepest outline level found across the given row/column

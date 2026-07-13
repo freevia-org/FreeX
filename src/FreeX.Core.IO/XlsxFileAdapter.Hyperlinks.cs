@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Text;
 using ClosedXML.Excel;
 using FreeX.Core.Model;
 
@@ -21,6 +23,9 @@ public sealed partial class XlsxFileAdapter
             return address;
 
         var bangIndex = address.IndexOf('!');
+        if (bangIndex < 0)
+            return address;
+
         if (bangIndex > 2 && address[0] == '\'' && address[bangIndex - 1] == '\'')
         {
             // O27: Excel escapes an embedded apostrophe in a quoted sheet name by doubling it
@@ -30,10 +35,56 @@ public sealed partial class XlsxFileAdapter
             // TryNavigateToWorkbookReference, WorkbookReferenceNavigator.UnquoteSheetName) fail
             // to match the real sheet name.
             var sheetName = address[1..(bangIndex - 1)].Replace("''", "'", StringComparison.Ordinal);
-            return sheetName + address[bangIndex..];
+            address = sheetName + address[bangIndex..];
+            bangIndex = sheetName.Length;
         }
 
-        return address;
+        // R38-io-hyperlink-2-1: ClosedXML's XLHyperlink.InternalAddress *getter* unconditionally
+        // prepends "<CurrentSheet>!" to a bang-less internal address the moment it is read (both
+        // when we read it here on load, and again when ClosedXML's own writer reads it to
+        // serialize the "location" attribute). A hyperlink that targets a workbook-scoped DEFINED
+        // NAME is stored bang-less (Excel writes e.g. location="MyDefinedName", never sheet
+        // qualified), so reading that raw property turns it into "Sheet1!MyDefinedName" -- a
+        // fabricated sheet-qualified reference that silently changes the hyperlink's target
+        // instead of jumping to the name. Detect this by checking whether the part after the
+        // bang actually parses as a cell/range reference; a defined name never can (Excel
+        // forbids naming a defined name like a cell address), so if it doesn't parse, the bang
+        // was bogus -- strip it and hand back the bare name instead of resolving/rewriting it
+        // into a cell reference.
+        var reference = address[(bangIndex + 1)..];
+        return LooksLikeCellOrRangeReference(reference) ? address : reference;
+    }
+
+    private static bool LooksLikeCellOrRangeReference(string reference)
+    {
+        if (reference.Length == 0)
+            return false;
+
+        var sheet = SheetId.New();
+        var parts = reference.Split(':');
+        if (parts.Length == 1)
+            return CellAddress.TryParse(parts[0], sheet, out _);
+
+        if (parts.Length != 2)
+            return false;
+
+        if (CellAddress.TryParse(parts[0], sheet, out _) && CellAddress.TryParse(parts[1], sheet, out _))
+            return true;
+
+        // Whole-column (A:A) / whole-row (3:3) refs are valid range forms CellAddress.TryParse
+        // can't represent on its own.
+        return IsWholeColumnOrRowReference(parts[0], parts[1]);
+    }
+
+    private static bool IsWholeColumnOrRowReference(string left, string right)
+    {
+        if (left.Length == 0 || right.Length == 0)
+            return false;
+
+        if (left.All(char.IsAsciiLetter) && right.All(char.IsAsciiLetter))
+            return true;
+
+        return left.All(char.IsAsciiDigit) && right.All(char.IsAsciiDigit);
     }
 
     /// <summary>
@@ -95,7 +146,7 @@ public sealed partial class XlsxFileAdapter
             // UriKind.RelativeOrAbsolute accepts both forms; ClosedXML emits a proper relationship
             // entry for any non-null ExternalAddress, whether the Uri is absolute or relative.
             hyperlink.IsExternal = true;
-            hyperlink.ExternalAddress = new Uri(linkTarget, UriKind.RelativeOrAbsolute);
+            hyperlink.ExternalAddress = new Uri(EscapeExternalHyperlinkTarget(linkTarget), UriKind.RelativeOrAbsolute);
         }
 
         if (!string.IsNullOrWhiteSpace(metadata.ScreenTip))
@@ -103,4 +154,57 @@ public sealed partial class XlsxFileAdapter
 
         return hyperlink;
     }
+
+    // RFC 3986 unreserved characters plus reserved (gen-delims + sub-delims) plus '%' itself, so
+    // an already percent-encoded triplet (e.g. "%20") is left alone rather than re-escaped into
+    // "%2520".
+    private const string SafeExternalHyperlinkUriCharacters = "-._~:/?#[]@!$&'()*+,;=%";
+
+    /// <summary>
+    /// R38-io-hyperlink-2-3: percent-encode characters that are not valid literally inside a URI
+    /// (most commonly a space) before handing the external target to <see cref="Uri"/>. ClosedXML
+    /// writes the hyperlink relationship's Target verbatim from the Uri it was given, so an
+    /// un-escaped space (or other reserved/unsafe character) in the model's target string ends up
+    /// written raw into the .rels part -- an invalid Target per the OPC/URI rules real Excel
+    /// always honours (Excel itself percent-encodes such characters when it writes a hyperlink
+    /// Target). Reserved/unreserved RFC 3986 characters, and anything already part of a
+    /// percent-encoded escape, are left untouched so a plain "http://…" URL -- or a target that
+    /// was already escaped -- round-trips unchanged.
+    /// </summary>
+    private static string EscapeExternalHyperlinkTarget(string target)
+    {
+        var needsEscaping = false;
+        foreach (var c in target)
+        {
+            if (!IsSafeExternalHyperlinkUriChar(c))
+            {
+                needsEscaping = true;
+                break;
+            }
+        }
+
+        if (!needsEscaping)
+            return target;
+
+        var builder = new StringBuilder(target.Length + 8);
+        Span<byte> bytes = stackalloc byte[4];
+        foreach (var rune in target.EnumerateRunes())
+        {
+            if (rune.Value <= 0x7F && IsSafeExternalHyperlinkUriChar((char)rune.Value))
+            {
+                builder.Append((char)rune.Value);
+                continue;
+            }
+
+            var byteCount = rune.EncodeToUtf8(bytes);
+            foreach (var b in bytes[..byteCount])
+                builder.Append('%').Append(b.ToString("X2"));
+        }
+
+        return builder.ToString();
+    }
+
+    private static bool IsSafeExternalHyperlinkUriChar(char c) =>
+        (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+        SafeExternalHyperlinkUriCharacters.IndexOf(c, StringComparison.Ordinal) >= 0;
 }

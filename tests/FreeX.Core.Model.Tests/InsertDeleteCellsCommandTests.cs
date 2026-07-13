@@ -1231,15 +1231,18 @@ public sealed class InsertDeleteCellsCommandTests
     // ── AdditionalRanges delete gap regression tests ──────────────────────────
 
     [Fact]
-    public void DeleteCellsShiftUp_DvAdditionalRangeInDeletedBand_RemovedEvenWhenPrimaryUnchanged()
+    public void DeleteCellsShiftUp_DvAdditionalRangeInDeletedBand_RemovedEvenWhenPrimaryUnaffectedByAdditionalLogic()
     {
         // Regression: AdjustRulesDeleteShiftUp only called AdjustAdditionalRanges when the primary
-        // AppliesTo was translated.  If primary had partial overlap (→ unchanged), additional ranges
-        // fully inside the deleted band were silently left dangling.
+        // AppliesTo was translated.  If primary had partial overlap, additional ranges fully inside
+        // the deleted band were silently left dangling. AdjustAdditionalRangesDeleteUp is now called
+        // unconditionally in the non-Remove branch, independently of what happens to the primary
+        // range — this test still exercises that independence.
         //
-        // Setup: primary AppliesTo spans rows 2..8 in col A (partial overlap with delete band rows 4..5)
-        //        → primary left unchanged.  AdditionalRange covers rows 4..5 in col A (fully deleted).
-        //        Expected: additional range removed; primary unchanged.
+        // Setup: primary AppliesTo spans rows 2..8 in col A (partial overlap with delete band rows 4..5).
+        //        R38-commands-insert-delete-shift-2-1: a straddling primary now SHRINKS (to A2:A6,
+        //        rows 4..5 removed and row 8 shifted up by 2) instead of being left stale at A2:A8.
+        //        AdditionalRange covers rows 4..5 in col A (fully deleted) → still removed regardless.
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var ctx = new TestCommandContext(wb);
@@ -1254,18 +1257,19 @@ public sealed class InsertDeleteCellsCommandTests
             new GridRange(new CellAddress(sheet.Id, 4, 1), new CellAddress(sheet.Id, 5, 1)));
         sheet.DataValidations.Add(dvRule);
 
-        // Delete rows 4..5 in col A band.  Primary A2:A8 has partial overlap → unchanged.
+        // Delete rows 4..5 in col A band.  Primary A2:A8 straddles the deleted band → shrinks.
         var deleteRange = new GridRange(new CellAddress(sheet.Id, 4, 1), new CellAddress(sheet.Id, 5, 1));
         var cmd = new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Up);
         cmd.Apply(ctx).Success.Should().BeTrue();
 
-        // Primary was partially overlapping → left unchanged
-        dvRule.AppliesTo.Start.Row.Should().Be(2, "primary partial-overlap range unchanged");
-        dvRule.AppliesTo.End.Row.Should().Be(8);
+        // Primary straddled the deleted band → shrinks to the surviving portion (rows 2..8 minus
+        // deleted 4..5, with row 8 shifted up by 2 to row 6).
+        dvRule.AppliesTo.Start.Row.Should().Be(2, "surviving Start.Row stays put");
+        dvRule.AppliesTo.End.Row.Should().Be(6, "End.Row shrinks: former row 8 shifted up by 2 into row 6");
 
-        // AdditionalRange fully inside deleted band → must be removed
+        // AdditionalRange fully inside deleted band → must be removed regardless of the primary outcome
         dvRule.AdditionalRanges.Should().BeEmpty(
-            "additional range fully inside deleted band must be removed even when primary is unchanged");
+            "additional range fully inside deleted band must be removed independently of the primary range");
 
         // Undo restores both
         cmd.Revert(ctx);
@@ -1277,10 +1281,10 @@ public sealed class InsertDeleteCellsCommandTests
     }
 
     [Fact]
-    public void DeleteCellsShiftLeft_DvAdditionalRangeRightOfDeleted_TranslatedEvenWhenPrimaryUnchanged()
+    public void DeleteCellsShiftLeft_DvAdditionalRangeRightOfDeleted_TranslatedIndependentlyOfPrimary()
     {
         // Symmetric left-direction test: additional range fully to the right of deleted cols
-        // must translate left even when primary has partial col overlap (→ unchanged).
+        // must translate left independently of what happens to the primary range.
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var ctx = new TestCommandContext(wb);
@@ -1296,14 +1300,15 @@ public sealed class InsertDeleteCellsCommandTests
             new GridRange(new CellAddress(sheet.Id, 2, 5), new CellAddress(sheet.Id, 2, 6)));
         sheet.DataValidations.Add(dvRule);
 
-        // Delete cols 3..4 in row 2 band.  Primary B2:F2 partial overlap (cols 3..4 inside, col 1..2 and 5..6 outside).
+        // Delete cols 3..4 in row 2 band.  Primary B2:F2 straddles cols 3..4 (cols 1..2 and 5..6 outside).
         var deleteRange = new GridRange(new CellAddress(sheet.Id, 2, 3), new CellAddress(sheet.Id, 2, 4));
         var cmd = new DeleteCellsCommand(sheet.Id, deleteRange, DeleteCellsShiftDirection.Left);
         cmd.Apply(ctx).Success.Should().BeTrue();
 
-        // Primary partial overlap → unchanged
-        dvRule.AppliesTo.Start.Col.Should().Be(1, "primary partial-overlap range col start unchanged");
-        dvRule.AppliesTo.End.Col.Should().Be(6, "primary partial-overlap range col end unchanged");
+        // R38-commands-insert-delete-shift-2-1: primary straddles the deleted cols → shrinks to the
+        // surviving portion (cols 1..6 minus deleted 3..4, with col 6 shifted left by 2 to col 4).
+        dvRule.AppliesTo.Start.Col.Should().Be(1, "surviving Start.Col stays put");
+        dvRule.AppliesTo.End.Col.Should().Be(4, "End.Col shrinks: former col 6 shifted left by 2 into col 4");
 
         // Additional range E2:F2 (cols 5..6) is fully to the right of deleted cols 3..4 → shifts left by 2
         dvRule.AdditionalRanges.Should().ContainSingle("additional range should still exist (translated)");
@@ -1312,6 +1317,8 @@ public sealed class InsertDeleteCellsCommandTests
 
         // Undo restores
         cmd.Revert(ctx);
+        dvRule.AppliesTo.Start.Col.Should().Be(1, "primary restored after undo");
+        dvRule.AppliesTo.End.Col.Should().Be(6);
         dvRule.AdditionalRanges.Should().ContainSingle("additional range restored after undo");
         dvRule.AdditionalRanges[0].Start.Col.Should().Be(5, "additional range start col restored after undo");
         dvRule.AdditionalRanges[0].End.Col.Should().Be(6, "additional range end col restored after undo");

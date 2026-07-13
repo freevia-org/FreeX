@@ -430,6 +430,12 @@ internal static partial class ViewportConditionalFormatEvaluator
     private static CellStyle GetColorScaleStyle(CfEvaluationContext cfContext, CellColor fillColor) =>
         cfContext.ColorScaleStyles?.Get(fillColor) ?? new CellStyle { FillColor = fillColor };
 
+    /// <summary>
+    /// Excel's automatic negative data-bar fill color (solid red) applied when a data-bar rule has
+    /// no explicit <c>negativeFillColor</c>.
+    /// </summary>
+    private static readonly RgbColor ExcelAutomaticNegativeDataBarColor = new(0xFF, 0x00, 0x00);
+
     internal static ConditionalFormatDataBar? EvaluateDataBar(
         Sheet sheet,
         CellAddress addr,
@@ -565,7 +571,10 @@ internal static partial class ViewportConditionalFormatEvaluator
                         return null;
                     }
 
-                    var negColor = cf.DataBarNegativeFillColor ?? cf.DataBarColor;
+                    // Excel's "automatic" negative data-bar fill (no explicit negativeFillColor set
+                    // on the rule) is a solid red, not the positive-bar color -- only an explicit
+                    // negativeFillColor overrides it.
+                    var negColor = cf.DataBarNegativeFillColor ?? ExcelAutomaticNegativeDataBarColor;
                     // For negative bars use the negative border color when available, otherwise fall
                     // back to the positive border color.
                     var negBorderColor = cf.DataBarNegativeBorderColor ?? cf.DataBarBorderColor;

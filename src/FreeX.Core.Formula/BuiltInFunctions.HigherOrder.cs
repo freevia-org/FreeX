@@ -13,6 +13,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue MapFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (args.Count < 2) return ErrorValue.Value;
+        if (args[^1] is ErrorValue lambdaErr) return lambdaErr;
         if (args[^1] is not LambdaValue lambda) return ErrorValue.Value;
 
         var arrays = new List<RangeValue>(args.Count - 1);
@@ -67,6 +68,7 @@ public static partial class BuiltInFunctions
         var lambdaArg = args[hasInitialValue ? 2 : 1];
         if (arrayArg is ErrorValue e) return e;
         var rv = arrayArg is RangeValue range ? range : SingleCellArray(arrayArg);
+        if (lambdaArg is ErrorValue lambdaErr) return lambdaErr;
         if (lambdaArg is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 2) return ErrorValue.Value;
 
@@ -104,6 +106,7 @@ public static partial class BuiltInFunctions
         var lambdaArg = args[hasInitialValue ? 2 : 1];
         if (arrayArg is ErrorValue e) return e;
         var rv = arrayArg is RangeValue range ? range : SingleCellArray(arrayArg);
+        if (lambdaArg is ErrorValue lambdaErr) return lambdaErr;
         if (lambdaArg is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 2) return ErrorValue.Value;
 
@@ -137,6 +140,7 @@ public static partial class BuiltInFunctions
         if (args.Count != 2) return ErrorValue.Value;
         if (args[0] is ErrorValue e) return e;
         var rv = args[0] is RangeValue range ? range : SingleCellArray(args[0]);
+        if (args[1] is ErrorValue lambdaErr) return lambdaErr;
         if (args[1] is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 1) return ErrorValue.Value;
 
@@ -159,6 +163,7 @@ public static partial class BuiltInFunctions
         if (args.Count != 2) return ErrorValue.Value;
         if (args[0] is ErrorValue e) return e;
         var rv = args[0] is RangeValue range ? range : SingleCellArray(args[0]);
+        if (args[1] is ErrorValue lambdaErr) return lambdaErr;
         if (args[1] is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 1) return ErrorValue.Value;
 
@@ -181,6 +186,7 @@ public static partial class BuiltInFunctions
         if (args.Count != 3) return ErrorValue.Value;
         if (!TryGetScalarControlArgument(args[0], out var rowsArg, out var rowsError)) return rowsError;
         if (!TryGetScalarControlArgument(args[1], out var colsArg, out var colsError)) return colsError;
+        if (args[2] is ErrorValue lambdaErr) return lambdaErr;
         if (args[2] is not LambdaValue lambda) return ErrorValue.Value;
         if (lambda.Parameters.Count != 2) return ErrorValue.Value;
         double rawRows;

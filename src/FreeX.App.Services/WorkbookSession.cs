@@ -4944,7 +4944,10 @@ public sealed class WorkbookSession
                     "Cut and Paste",
                     [
                         command,
-                        new ClearContentsCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange)
+                        // R38-commands-cut-move-2-3: mark this as the tail end of a Cut so a
+                        // merged source cell gets unmerged (not just cleared) when the cut can't
+                        // be routed through MoveRangeCommand (e.g. a cross-sheet destination).
+                        new ClearContentsCommand(clipboard.SourceRange.Start.Sheet, clipboard.SourceRange, isCutSource: true)
                     ]);
             }
         }
@@ -5224,13 +5227,22 @@ public sealed class WorkbookSession
             return false;
         }
 
-        // MoveRangeCommand only supports a same-sheet move; grouped multi-sheet editing or a
-        // cross-sheet paste destination cannot be expressed as a single move, so fall back.
+        // Grouped multi-sheet editing can't be expressed as a single move, so fall back regardless
+        // of destination sheet.
         var targetSheetIds = CurrentGroupedEditSheetIds();
         if (targetSheetIds.Count != 1 || !targetSheetIds[0].Equals(clipboard.SourceRange.Start.Sheet))
             return false;
 
-        if (!destination.Sheet.Equals(clipboard.SourceRange.Start.Sheet))
+        // R38-commands-cut-move-2-1: MoveRangeCommand now supports a cross-sheet destination for
+        // the plain-paste case (isPlainPaste below) -- a real Excel Cut+Paste across sheets is
+        // still a MOVE, not a copy-and-clear, so routing it through MoveRangeCommand is what keeps
+        // the moved formula's own references pointing at exactly what they pointed at before (with
+        // an explicit sheet qualifier added only where the reference stays behind on the source
+        // sheet) and fixes up any OTHER formula in the workbook that referenced a moved cell.
+        // The Paste Special variants below (Values / Formulas / Formulas-and-Number-Formats) go
+        // through CutPasteMoveCommand, which still only supports a same-sheet move, so those still
+        // fall back to the legacy copy+clear path when the destination is on a different sheet.
+        if (!isPlainPaste && !destination.Sheet.Equals(clipboard.SourceRange.Start.Sheet))
             return false;
 
         if (isPlainPaste)

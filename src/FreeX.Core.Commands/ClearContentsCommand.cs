@@ -6,17 +6,27 @@ public sealed class ClearContentsCommand : IWorkbookCommand
 {
     private readonly SheetId _sheetId;
     private readonly GridRange _range;
+    // R38-commands-cut-move-2-3: true only when this ClearContentsCommand is the tail end of a
+    // CUT (move) -- e.g. the cross-sheet Cut+Paste fallback in WorkbookSession clears the source
+    // range after the destination has already been populated. A plain user-invoked "Clear
+    // Contents" (Delete key / ribbon Clear > Clear Contents) on a merged cell leaves the merge in
+    // place in real Excel (only the value clears), so merges must NOT be torn down for that case
+    // -- only a genuine Cut needs the source's merge removed, matching Excel's "cut unmerges the
+    // vacated source, paste re-merges at the destination" move semantics.
+    private readonly bool _isCutSource;
     private List<(CellAddress Address, Cell? OldCell, StyleId? OldStyleOnly)>? _snapshot;
     private Dictionary<CellAddress, string>? _hyperlinkSnapshot;
     private Dictionary<CellAddress, HyperlinkMetadata>? _hyperlinkMetadataSnapshot;
     private Dictionary<CellAddress, IReadOnlyList<CellTextRun>>? _richTextRunsSnapshot;
+    private List<GridRange>? _mergedRegionsSnapshot;
 
     public string Label => "Clear Contents";
 
-    public ClearContentsCommand(SheetId sheetId, GridRange range)
+    public ClearContentsCommand(SheetId sheetId, GridRange range, bool isCutSource = false)
     {
         _sheetId = sheetId;
         _range = range;
+        _isCutSource = isCutSource;
     }
 
     public CommandOutcome Apply(ICommandContext ctx)
@@ -60,6 +70,21 @@ public sealed class ClearContentsCommand : IWorkbookCommand
         _richTextRunsSnapshot = sheet.RichTextRuns
             .Where(pair => _range.Contains(pair.Key))
             .ToDictionary(pair => pair.Key, pair => pair.Value);
+
+        if (_isCutSource)
+        {
+            // A merge fully contained in the cut range moved with the cut selection (it was
+            // already recreated at the destination by the paste half of the composite command),
+            // so remove it here at the source -- otherwise Sheet1 keeps rendering a merged (now
+            // blank) block that real Excel would have unmerged.
+            var vacatedMerges = sheet.MergedRegions.Where(range => _range.Contains(range)).ToList();
+            if (vacatedMerges.Count > 0)
+            {
+                _mergedRegionsSnapshot = sheet.MergedRegions.ToList();
+                sheet.ReplaceMergedRegions(sheet.MergedRegions.Where(range => !vacatedMerges.Contains(range)));
+            }
+        }
+
         var affected = new List<CellAddress>();
         foreach (var address in _range.AllCells())
         {
@@ -100,6 +125,9 @@ public sealed class ClearContentsCommand : IWorkbookCommand
             return;
 
         var sheet = ctx.GetSheet(_sheetId);
+        if (_mergedRegionsSnapshot is not null)
+            sheet.ReplaceMergedRegions(_mergedRegionsSnapshot);
+
         foreach (var (address, oldCell, oldStyleOnly) in _snapshot)
         {
             if (oldCell is null)
