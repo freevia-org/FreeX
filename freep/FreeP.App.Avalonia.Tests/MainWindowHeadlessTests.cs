@@ -511,26 +511,32 @@ public sealed class MainWindowHeadlessTests
         var before = -1;
         var after = -1;
         var paneItemsAfter = -1;
+        var currentSlideIndex = -1;
         var clicked = false;
         var visible = false;
         string? buttonText = null;
+        string? automationName = null;
 
         var ran = await OnUiThread(() =>
         {
             var window = new MainWindow(Array.Empty<string>());
             before = window.SlideCount;
             buttonText = window.SlidePaneNewSlideButtonText;
+            automationName = window.SlidePaneNewSlideButtonAutomationName;
             visible = window.IsSlidePaneNewSlideButtonVisible;
             clicked = window.ClickSlidePaneNewSlideAffordanceForTests();
             after = window.SlideCount;
             paneItemsAfter = window.SlidePaneSlideItemCount;
+            currentSlideIndex = window.CurrentSlideIndex;
         });
 
         if (!ran) return;
         buttonText.Should().Be(SlidePanePlanner.NewSlideButtonText);
+        automationName.Should().Be("New Slide");
         visible.Should().BeTrue("the Avalonia slide pane should expose the bottom PowerPoint-style add affordance");
         clicked.Should().BeTrue("the affordance should route to the same slide insertion workflow as the ribbon command");
         after.Should().Be(before + 1);
+        currentSlideIndex.Should().Be(1, "the shared bottom affordance action inserts after and selects the current slide");
         paneItemsAfter.Should().Be(after, "the slide pane should refresh to include the newly inserted slide");
     }
 

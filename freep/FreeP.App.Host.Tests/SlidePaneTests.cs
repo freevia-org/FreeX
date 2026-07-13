@@ -47,6 +47,12 @@ public sealed class SlidePaneTests
         return (Border)stack.Children[index];
     }
 
+    private static Button GetNewSlideButton(SlidePane pane)
+    {
+        var stack = GetStack(pane);
+        return stack.Children[^1].Should().BeOfType<Button>().Subject;
+    }
+
     private static ScrollViewer GetScrollViewer(SlidePane pane)
     {
         var overlay = (Grid)pane.Child!;
@@ -95,9 +101,26 @@ public sealed class SlidePaneTests
     public void SlidePane_HasNewSlideButtonAtBottom()
     {
         var (pane, _) = MakePaneWithSlides(2);
-        var stack = GetStack(pane);
-        // Last child must be the "New Slide" button.
-        stack.Children[^1].Should().BeOfType<Button>();
+        var button = GetNewSlideButton(pane);
+
+        button.Content.Should().Be(SlidePanePlanner.NewSlideButtonText);
+        button.ToolTip.Should().Be("Insert a new slide after the current slide");
+        button.IsEnabled.Should().BeTrue();
+        AutomationProperties.GetName(button).Should().Be("New Slide");
+    }
+
+    [StaFact]
+    public void SlidePane_NewSlideButton_UsesSharedBottomAffordanceAction()
+    {
+        var (pane, editor) = MakePaneWithSlides(2);
+        editor.SelectSlide(0);
+        var button = GetNewSlideButton(pane);
+
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+
+        editor.Presentation.Slides.Should().HaveCount(3);
+        editor.CurrentSlideIndex.Should().Be(1);
+        CountThumbnailItems(pane).Should().Be(3);
     }
 
     // ── Selection ─────────────────────────────────────────────────────────────────

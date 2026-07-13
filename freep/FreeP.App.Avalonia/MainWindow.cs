@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -252,6 +253,7 @@ public sealed class MainWindow : Window
     internal bool IsSlidePaneInsertionIndicatorVisible => _slidePaneInsertionIndicator.IsVisible;
     internal bool IsSlidePaneNewSlideButtonVisible => _slidePaneNewSlideButton.IsVisible;
     internal string? SlidePaneNewSlideButtonText => _slidePaneNewSlideButton.Content?.ToString();
+    internal string? SlidePaneNewSlideButtonAutomationName => AutomationProperties.GetName(_slidePaneNewSlideButton);
     internal IReadOnlyList<SlidePaneThumbnailVisualPlan> SlidePaneRenderedThumbnailPlans => _slidePaneRenderedThumbnailPlans;
     internal IReadOnlyList<SlidePaneSectionHeaderVisualPlan> SlidePaneRenderedSectionHeaderPlans => _slidePaneRenderedSectionHeaderPlans;
 
@@ -6057,15 +6059,18 @@ public sealed class MainWindow : Window
     internal bool ClickSlidePaneNewSlideAffordanceForTests()
     {
         var before = _presentation.Slides.Count;
-        InsertSlideFromSlidePaneAffordance();
-        return _presentation.Slides.Count == before + 1;
+        var applied = InsertSlideFromSlidePaneAffordance();
+        return applied && _presentation.Slides.Count == before + 1;
     }
 
     private Button BuildSlidePaneNewSlideButton()
     {
+        var plan = SlidePanePlanner.BuildBottomNewSlideAffordance(
+            _presentation.Slides.Count,
+            Editor.CurrentSlideIndex);
         var button = new Button
         {
-            Content                    = SlidePanePlanner.NewSlideButtonText,
+            Content                    = plan.Text,
             Margin                     = new Thickness(8, 6, 8, 8),
             Padding                    = new Thickness(0, 6),
             HorizontalAlignment        = HorizontalAlignment.Stretch,
@@ -6076,13 +6081,17 @@ public sealed class MainWindow : Window
             CornerRadius               = new CornerRadius(3),
             FontSize                   = 12,
             FontWeight                 = FontWeight.SemiBold,
+            IsVisible                  = plan.IsVisible,
+            IsEnabled                  = plan.Action.IsEnabled,
         };
+        AutomationProperties.SetName(button, plan.AccessibleName);
+        ToolTip.SetTip(button, plan.ToolTipText);
         button.Click += (_, _) => InsertSlideFromSlidePaneAffordance();
         return button;
     }
 
-    private void InsertSlideFromSlidePaneAffordance() =>
-        Editor.InsertSlide();
+    private bool InsertSlideFromSlidePaneAffordance() =>
+        SlidePanePlanner.TryApplyBottomNewSlideAffordance(Editor);
 
     private void ShowSlidePaneInsertionIndicator(SlidePaneDropVisualPlan plan)
     {

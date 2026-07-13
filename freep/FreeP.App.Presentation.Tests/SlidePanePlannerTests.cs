@@ -388,6 +388,37 @@ public sealed class SlidePanePlannerTests
         invalidActions.Should().OnlyContain(a => !a.IsEnabled);
     }
 
+    [Fact]
+    public void BuildBottomNewSlideAffordance_ProjectsVisibleSharedInsertAction()
+    {
+        var plan = SlidePanePlanner.BuildBottomNewSlideAffordance(
+            slideCount: 3,
+            currentSlideIndex: 1);
+
+        plan.Text.Should().Be(SlidePanePlanner.NewSlideButtonText);
+        plan.ToolTipText.Should().Be("Insert a new slide after the current slide");
+        plan.AccessibleName.Should().Be("New Slide");
+        plan.IsVisible.Should().BeTrue();
+        plan.Action.Should().Be(new SlidePaneActionPlan(
+            SlidePaneActionKind.InsertAfterSlide,
+            SlidePanePlanner.NewSlideButtonText,
+            1,
+            2,
+            true));
+    }
+
+    [Fact]
+    public void TryApplyBottomNewSlideAffordance_UsesSharedActionRouting()
+    {
+        var editor = CreateEditingSession(2);
+        editor.SelectSlide(0);
+
+        SlidePanePlanner.TryApplyBottomNewSlideAffordance(editor).Should().BeTrue();
+
+        editor.Presentation.Slides.Should().HaveCount(3);
+        editor.CurrentSlideIndex.Should().Be(1);
+    }
+
     [Theory]
     [InlineData(0, 0, false)]
     [InlineData(0, 1, false)]
