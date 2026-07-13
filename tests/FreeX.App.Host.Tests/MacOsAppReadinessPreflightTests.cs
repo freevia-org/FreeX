@@ -362,7 +362,7 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("NativeMenuItemId.FlashFill => _flashFillMenuItem,");
         script.Should().Contain("_flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();");
         script.Should().Contain("NativeMenuCatalog.PlanMenuAvailability(");
-        script.Should().Contain("e.Key == Key.E && HasOnlyControlModifier(e.KeyModifiers)");
+        script.Should().Contain("case WorkbookShortcutRoute.FlashFill:");
         script.Should().Contain("private void FlashFillSelectedRange()");
         script.Should().Contain("_session.FlashFillSelectedRange()");
         script.Should().Contain("HasNativeFlashFillMenuItem: HasNativeMenuItem(_flashFillMenuItem, NativeMenuItemId.FlashFill)");
@@ -481,8 +481,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("new(NativeMenuTopLevelId.Window, `\"Window`\")");
         script.Should().Contain("new(NativeMenuTopLevelId.Help, `\"Help`\")");
         script.Should().Contain("FileItem(NativeFileMenuItemId.WorkbookStatistics)");
-        script.Should().Contain("NativeMenuGestureModifiers.Control | NativeMenuGestureModifiers.Shift");
-        script.Should().Contain("e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)");
+        script.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.WorkbookStatistics)");
+        script.Should().Contain("case WorkbookShortcutRoute.WorkbookStatistics:");
         script.Should().Contain("private async Task ShowWorkbookStatisticsDialogAsync()");
         script.Should().Contain("WorkbookStatisticsService.GetStatistics(_session.Workbook)");
         script.Should().Contain("AutomationProperties.SetAutomationId(dialog, `\"WorkbookStatisticsDialog`\");");
@@ -761,8 +761,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("DrawingObjectRenderPlanner.Plan(viewport)");
         script.Should().Contain("CreateSelectableDrawingObjectVisual(renderPlan, width, height)");
         script.Should().Contain("AutomationProperties.SetItemStatus(container, selected ? `\"Selected`\" : `\"Not selected`\")");
-        script.Should().Contain("CreateDrawingObjectVisual(renderPlan, width, height)");
-        script.Should().Contain("CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height)");
+        script.Should().Contain("CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme)");
+        script.Should().Contain("CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme)");
         script.Should().Contain("CreateDrawingImageSourceRect(crop)");
         script.Should().Contain("TryCreateDrawingBitmap(imageBytes, out var bitmap)");
         script.Should().Contain("private static bool HasVisibleCellBorder(CellStyle? style)");
@@ -2176,7 +2176,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     _bordersButton.IsEnabled = isIdle;
                     _bordersMenuItem.IsEnabled = _bordersButton.IsEnabled;
                     CreateNativePasteSpecialMenu();
-                    PasteSpecialClipboardAtActiveCell(text, mode, options);
+                    PasteSpecialClipboardAtActiveCell(text, mode, options, clipboardReadFailed: clipboardReadFailed);
+                    _session.PasteClipboardTextAtActiveCell(text, preserveText: true, clipboardReadFailed: clipboardReadFailed);
                     /*
                     CreatePasteCommentsMenuItem("Comments and Notes")
                     CreatePasteDataValidationMenuItem("Validation")
@@ -2240,7 +2241,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     HasNativePasteSpecialUnicodeTextMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Unicode Text");
                     HasNativePasteSpecialPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Picture");
                     HasNativePasteSpecialLinkedPictureMenuItem: HasNativeSubmenuItem(_pasteSpecialMenuItem.Menu, "Linked Picture");
-                    CellColorPalettePlanner.BuildDefaultSwatches();
+                    CellColorPalettePlanner.BuildDefaultSwatches(_session.Workbook.Theme);
                     DrawingObjectRenderPlanner.Plan(viewport);
                     CreateSelectableDrawingObjectVisual(renderPlan, width, height);
                     AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
@@ -2250,8 +2251,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     if (args.Key is Key.Enter or Key.Space) { }
                     CreateSelectedDrawingObjectAdorner();
                     ClearSelectedDrawingObject();
-                    CreateDrawingObjectVisual(renderPlan, width, height);
-                    CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height);
+                    CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme);
+                    CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme);
                     CreateDrawingImageSourceRect(crop);
                     TryCreateDrawingBitmap(imageBytes, out var bitmap);
                     AddStyledCellBorderOverlay(content, style);
@@ -2282,7 +2283,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     dialog.Opened += (_, _) => cancelButton.Focus();
                     AutomationProperties.SetAutomationId(replaceButton, "PdfExportOverwriteReplaceButton");
                     AutomationProperties.SetAutomationId(cancelButton, "PdfExportOverwriteCancelButton");
-                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, exportPlan, pdfBuffer);
+                    var outcome = Pdf.AvaloniaPdfDocumentExporter.Save(_session.Workbook, effectiveExportPlan, pdfBuffer, options: null, workbookDirectory: ResolveWorkbookDirectoryForHeaderFooter());
                     await File.WriteAllBytesAsync(path, pdfBuffer.ToArray());
                     ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);
                     _workbookStatisticsMenuItem.Click += async (_, _) => await ShowWorkbookStatisticsDialogAsync();
@@ -2314,7 +2315,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     ConfigureNativeFileMenuItem(_printPreviewMenuItem, NativeFileMenuItemId.PrintPreview);
                     _printPreviewMenuItem.Click += async (_, _) => await ShowPrintPreviewDialogAsync();
                     HasNativeWorkbookStatisticsMenuItem: HasNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics)
-                    e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift)
+                    case WorkbookShortcutRoute.WorkbookStatistics:
                     private async Task ShowWorkbookStatisticsDialogAsync()
                     WorkbookStatisticsService.GetStatistics(_session.Workbook)
                     AutomationProperties.SetAutomationId(dialog, "WorkbookStatisticsDialog");
@@ -2404,7 +2405,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     _sortAscendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
                     _sortDescendingMenuItem.IsEnabled = isIdle && _session.CanSortSelectedRange;
                     _flashFillMenuItem.IsEnabled = isIdle;
-                    e.Key == Key.E && HasOnlyControlModifier(e.KeyModifiers)
+                    case WorkbookShortcutRoute.FlashFill:
                     private void SortSelectedRange(bool ascending)
                     _session.SortSelectedRange(ascending)
                     private void FlashFillSelectedRange()
@@ -2587,14 +2588,14 @@ public sealed class MacOsAppReadinessPreflightTests
                     e.Key == Key.F5;
                     args.Key == Key.Oem1 && args.KeyModifiers == KeyModifiers.Alt;
                     SelectGoToSpecial(GoToSpecialKind.VisibleCellsOnly);
-                    e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers);
+                    case WorkbookShortcutRoute.Find:
                     e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta;
-                    e.Key == Key.H && HasOnlyControlModifier(e.KeyModifiers);
-                    e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers);
+                    case WorkbookShortcutRoute.Replace:
+                    case WorkbookShortcutRoute.GoTo:
                     e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U;
                     else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)) { }
-                    else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers)) { }
-                    else if (e.Key == Key.R && HasOnlyControlModifier(e.KeyModifiers)) { }
+                    case WorkbookShortcutRoute.FillDown:
+                    case WorkbookShortcutRoute.FillRight:
                     Header = "(No Recent Workbooks)";
                     OpenRecentWorkbookMenuPlanner.Create(
                     _recentFiles.Snapshot()
@@ -2806,10 +2807,15 @@ public sealed class MacOsAppReadinessPreflightTests
                     if (IsShellFocusCycleKey(e)) { }
                     CycleShellFocus(reverse: e.KeyModifiers == KeyModifiers.Shift);
                     args.Key == Key.F6 && args.KeyModifiers == KeyModifiers.None;
-                    if (e.Key == Key.PageUp && HasCommandAndShiftModifiers(e.KeyModifiers)) { SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true); }
-                    if (e.Key == Key.PageDown && HasCommandAndShiftModifiers(e.KeyModifiers)) { SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true); }
-                    if (e.Key == Key.PageUp && HasOnlyCommandModifier(e.KeyModifiers)) { SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false); }
-                    if (e.Key == Key.PageDown && HasOnlyCommandModifier(e.KeyModifiers)) { SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false); }
+                    if (IsPivotFieldPaneFocused())
+                    case WorkbookShortcutRoute.SelectPreviousSheetGroup:
+                        SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true);
+                    case WorkbookShortcutRoute.SelectNextSheetGroup:
+                        SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true);
+                    case WorkbookShortcutRoute.ActivatePreviousSheet:
+                        SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false);
+                    case WorkbookShortcutRoute.ActivateNextSheet:
+                        SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false);
                     _helpOnlineMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.HelpUrl, "Help Online");
                     _sendFeedbackMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.FeedbackUrl, "Send Feedback");
                     _checkForUpdatesMenuItem.Click += async (_, _) => await OpenExternalHelpLinkAsync(AppHelpInfo.LatestReleaseUrl, "Check for Updates");
@@ -3164,9 +3170,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     "AvaloniaNativeMenu_OpenRecent",
                     "AvaloniaNativeMenu_ExportPdf",
                     "AvaloniaNativeMenu_WorkbookStatistics",
-                    new NativeMenuGesturePlan(
-                        NativeMenuGestureKey.G,
-                        NativeMenuGestureModifiers.Control | NativeMenuGestureModifiers.Shift),
+                    NativeMenuGesture(WorkbookShortcutRoute.WorkbookStatistics),
                     new(NativeFileMenuItemId.WorkbookStatistics, context.IsIdle),
                     new(NativeFileMenuItemId.ExportPdf, context.IsIdle && context.CanSaveThroughStorageProvider),
                     "public static IReadOnlyList<NativeMenuEntryPlan> HomeMenuEntries",
@@ -3858,8 +3862,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 public bool CaptureFormatPainterSource(bool persistent = false)
                 public void CancelFormatPainter()
                 public WorkbookCellEditResult ApplyFormatPainterToSelectedRange()
-                CreateFormatPainterCommand(sourceSheet, sourceRange, targetRange)
-                private IWorkbookCommand CreateFormatPainterCommand(Sheet sourceSheet, GridRange sourceRange, GridRange targetRange)
+                CreateFormatPainterCommand(sourceSheet, sourceRange, targetRanges)
+                IReadOnlyList<GridRange> targetRanges
+                SelectionStyleCommandPlanner.CreateRangeCommand(
                 FormatPainterCommandFactory.Create(
                 public WorkbookCellEditResult ClearSelectedRangeAll()
                 public WorkbookCellEditResult ClearSelectedRangeFormats()
@@ -3961,7 +3966,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 public bool ShouldPreferExternalClipboardImage(string? text)
                 public WorkbookCellEditResult PasteClipboardImageAtActiveCell(
                 ClipboardPictureService.CreateInsertCommand(
-                private static string FormatPictureCellText(ScalarValue value)
+                private string FormatPictureCellText(ScalarValue value, string numberFormat)
                 new PasteColumnWidthsCommand(
                 private IWorkbookCommand CreatePasteLinkCommand(
                 var sheetDestination = RemapAddressToSheet(destination, sheetId)
@@ -3995,7 +4000,9 @@ public sealed class MacOsAppReadinessPreflightTests
                 return WorkbookReplaceResult.Replaced(1, replacedRange, index + 1, matches.Count);
                 public WorkbookNavigationResult GoToReference(string reference)
                 public WorkbookGoToSpecialResult GoToSpecial(GoToSpecialKind kind, GoToSpecialOptions? options = null)
-                GoToSpecialService.Find(Workbook, ActiveSheet, SelectedRange, kind, ActiveCell, options)
+                var searchRange = kind is GoToSpecialKind.CurrentRegion or GoToSpecialKind.Precedents or GoToSpecialKind.Dependents
+                ResolveGoToSpecialSearchRange()
+                GoToSpecialService.Find(Workbook, ActiveSheet, searchRange, kind, ActiveCell, options)
                 SelectionRangeService.CompressAddresses(matches)
                 SelectRanges(selectedRange, ranges);
                 WorkbookReferenceNavigator.TryParseReferenceRange(
@@ -4551,7 +4558,7 @@ public sealed class MacOsAppReadinessPreflightTests
                 {
                     try
                     {
-                        var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options);
+                        var result = SkiaPdfDocumentExporter.Save(workbook, exportPlan, stream, options, workbookDirectory);
                         return result;
                     }
                     catch (Exception ex) when (IsSkiaUnavailable(ex))
