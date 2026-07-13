@@ -1652,6 +1652,16 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 "backstagePipeline",
                 expectedPipeline);
         }
+
+        var expectedCaptureRoute = ExpectedBackstageCaptureRoute(row.ScenarioId);
+        if (expectedCaptureRoute is not null)
+        {
+            ValidateBackstageArtifactMetadata(
+                row,
+                rowFailures,
+                "backstageCaptureRoute",
+                expectedCaptureRoute);
+        }
     }
 
     private static string? ExpectedBackstageWorkflow(string scenarioId) =>
@@ -1675,6 +1685,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             "backstage-print-preview-fidelity" => "print-preview-fixed-layout-artifact",
             "backstage-pdf-export-fidelity" => "pdf-export-rasterized-artifact",
+            _ => null
+        };
+
+    private static string? ExpectedBackstageCaptureRoute(string scenarioId) =>
+        scenarioId switch
+        {
+            "backstage-print-preview-fidelity" => "backstage-print-preview-fixed-layout-capture",
+            "backstage-pdf-export-fidelity" => "backstage-pdf-export-raster-capture",
             _ => null
         };
 

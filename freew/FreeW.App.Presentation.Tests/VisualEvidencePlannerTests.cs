@@ -3711,6 +3711,63 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void BuildNormalizedSummaryFromFiles_RejectsGenericBackstageCaptureRouteMetadata()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                "backstage-pdf-export-fidelity",
+                pageNumber: 1,
+                pageCount: 1);
+            var genericCaptureRoute = row with
+            {
+                HostMetadata = new Dictionary<string, string>
+                {
+                    ["renderer"] = "FreeW.PageLayoutShot",
+                    ["captureSource"] = "avalonia-render-target",
+                    ["backstageWorkflow"] = "pdf-export",
+                    ["backstageArtifactKind"] = "pdf-export-rasterized",
+                    ["backstagePipeline"] = "pdf-export-rasterized-artifact",
+                    ["backstageCaptureRoute"] = "workflow-only"
+                }
+            };
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [genericCaptureRoute],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        "backstage-pdf-export-fidelity",
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Evidence.Single().Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("cannot use generic or fallback backstageCaptureRoute 'workflow-only'", StringComparison.Ordinal));
+            summary.BackstagePrintEvidenceReadiness.Should().ContainSingle(row =>
+                row.ScenarioId == "backstage-pdf-export-fidelity" &&
+                row.HostId == FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId &&
+                row.PageNumber == 1 &&
+                row.Status == "failed" &&
+                row.Notes.Contains("backstageCaptureRoute", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_RejectsCrossWiredBackstageWorkflowMetadata()
     {
         var root = CreateTempRoot();
@@ -5453,6 +5510,12 @@ public sealed class VisualEvidencePlannerTests
         {
             "backstage-print-preview-fidelity" => "print-preview-fixed-layout-artifact",
             "backstage-pdf-export-fidelity" => "pdf-export-rasterized-artifact",
+            _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
+        };
+        metadata["backstageCaptureRoute"] = scenarioId switch
+        {
+            "backstage-print-preview-fidelity" => "backstage-print-preview-fixed-layout-capture",
+            "backstage-pdf-export-fidelity" => "backstage-pdf-export-raster-capture",
             _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
         };
         return metadata;

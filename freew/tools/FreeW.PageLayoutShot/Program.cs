@@ -888,6 +888,14 @@ static string BackstagePipelineForScenario(string scenarioId) =>
         _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
     };
 
+static string BackstageCaptureRouteForScenario(string scenarioId) =>
+    scenarioId switch
+    {
+        "backstage-print-preview-fidelity" => "backstage-print-preview-fixed-layout-capture",
+        "backstage-pdf-export-fidelity" => "backstage-pdf-export-raster-capture",
+        _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
+    };
+
 static void AddAvaloniaEvidence(
     List<FreeWVisualEvidenceRow> evidence,
     string scenarioId,
@@ -941,6 +949,7 @@ static void AddAvaloniaEvidence(
         metadata["backstageWorkflow"] = BackstageWorkflowForScenario(scenarioId);
         metadata["backstageArtifactKind"] = BackstageArtifactKindForScenario(scenarioId);
         metadata["backstagePipeline"] = BackstagePipelineForScenario(scenarioId);
+        metadata["backstageCaptureRoute"] = BackstageCaptureRouteForScenario(scenarioId);
     }
 
     if (sectionGeometrySurfacePlan is not null)

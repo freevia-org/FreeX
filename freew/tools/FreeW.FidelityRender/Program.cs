@@ -1943,6 +1943,7 @@ static Dictionary<string, string> BuildHostMetadata(
         metadata["backstageWorkflow"] = backstageWorkflow;
         metadata["backstageArtifactKind"] = BackstageArtifactKindForScenario(documentName);
         metadata["backstagePipeline"] = BackstagePipelineForScenario(documentName);
+        metadata["backstageCaptureRoute"] = BackstageCaptureRouteForScenario(documentName);
     }
 
     if (extra is not null)
@@ -1975,6 +1976,14 @@ static string BackstagePipelineForScenario(string scenarioId) =>
     {
         "backstage-print-preview-fidelity" => "print-preview-fixed-layout-artifact",
         "backstage-pdf-export-fidelity" => "pdf-export-rasterized-artifact",
+        _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
+    };
+
+static string BackstageCaptureRouteForScenario(string scenarioId) =>
+    scenarioId switch
+    {
+        "backstage-print-preview-fidelity" => "backstage-print-preview-fixed-layout-capture",
+        "backstage-pdf-export-fidelity" => "backstage-pdf-export-raster-capture",
         _ => throw new InvalidOperationException($"Unsupported backstage visual evidence scenario: {scenarioId}")
     };
 
