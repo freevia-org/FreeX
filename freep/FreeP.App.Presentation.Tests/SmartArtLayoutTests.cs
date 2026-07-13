@@ -663,6 +663,27 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BendingProcess_ReturnsLiveProcessBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("bendingProcess is admitted as a bounded shared process-family approximation");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(3, "one live box should be emitted per bending-process node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "adjacent bending-process nodes need shared connectors");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("A", "B", "C");
+        boxes.Select(s => s.OffsetXEmu)
+            .Should().BeInAscendingOrder("bendingProcess should reuse the shared process-family geometry");
+    }
+
+    [Fact]
     public void BasicBlockList_ReturnsLiveVerticalListBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.List, "A", "B", "C");
@@ -786,7 +807,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedKnownProcessSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -1304,7 +1325,7 @@ public sealed class SmartArtLayoutTests
     public void Compositor_FallsBackToCachedDrawing_WhenKnownFamilyLayoutIsUnsupported()
     {
         var data = MakeData(SmartArtFamily.Process, "Live A", "Live B");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/bendingProcess";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess";
         data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };
