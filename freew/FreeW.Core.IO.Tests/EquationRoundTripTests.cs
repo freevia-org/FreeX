@@ -734,6 +734,110 @@ public class EquationRoundTripTests
     }
 
     [Fact]
+    public void NestedDecoratorBaseSlots_SurviveRoundTripAndEmitDirectSlotChildren()
+    {
+        var nestedBase = new Equation([
+            MathRun.PlainText("a+"),
+            MathRun.Superscript("x", "2")
+        ]);
+        var equation = new Equation([
+            MathRun.AccentOf(nestedBase, "hat"),
+            MathRun.BarOf(nestedBase, top: false),
+            MathRun.GroupCharOf(nestedBase, "\u23DF", "bot")
+        ]);
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromEquation(equation));
+        doc.Blocks.Add(paragraph);
+
+        var read = RoundTrip(doc);
+        var xml = WriteDocumentXml(doc);
+
+        var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Equation is not null).Equation!;
+        roundTripped.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Accent, MathRunKind.Bar, MathRunKind.GroupChar);
+        roundTripped.Runs.Should().OnlyContain(run => run.DecoratorBaseEquation != null);
+        roundTripped.Runs[0].DecoratorBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        roundTripped.Runs[1].DecoratorBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        roundTripped.Runs[2].DecoratorBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        roundTripped.LinearText.Should().Be("a+x^2hat_a+x^2_a+x^2\u23DF");
+
+        var accBase = xml.Descendants(M + "acc").Single().Element(M + "e")!;
+        var barBase = xml.Descendants(M + "bar").Single().Element(M + "e")!;
+        var groupCharBase = xml.Descendants(M + "groupChr").Single().Element(M + "e")!;
+        foreach (var slot in new[] { accBase, barBase, groupCharBase })
+        {
+            slot.Elements(M + "oMath").Should().BeEmpty();
+            slot.Elements(M + "r").Should().ContainSingle();
+            slot.Elements(M + "sSup").Should().ContainSingle();
+        }
+    }
+
+    [Fact]
+    public void RawNestedDecoratorBaseSlots_ReadAsNestedEquations()
+    {
+        var documentXml = $$"""
+            <w:document xmlns:w="{{W.NamespaceName}}" xmlns:m="{{M.NamespaceName}}">
+              <w:body>
+                <w:p>
+                  <m:oMath>
+                    <m:acc>
+                      <m:accPr><m:chr m:val="hat" /></m:accPr>
+                      <m:e>
+                        <m:r><m:t>a+</m:t></m:r>
+                        <m:sSup>
+                          <m:e><m:r><m:t>x</m:t></m:r></m:e>
+                          <m:sup><m:r><m:t>2</m:t></m:r></m:sup>
+                        </m:sSup>
+                      </m:e>
+                    </m:acc>
+                    <m:bar>
+                      <m:barPr><m:pos m:val="bot" /></m:barPr>
+                      <m:e>
+                        <m:r><m:t>b+</m:t></m:r>
+                        <m:sSub>
+                          <m:e><m:r><m:t>y</m:t></m:r></m:e>
+                          <m:sub><m:r><m:t>1</m:t></m:r></m:sub>
+                        </m:sSub>
+                      </m:e>
+                    </m:bar>
+                    <m:groupChr>
+                      <m:groupChrPr>
+                        <m:chr m:val="&#x23DF;" />
+                        <m:pos m:val="bot" />
+                      </m:groupChrPr>
+                      <m:e>
+                        <m:r><m:t>c+</m:t></m:r>
+                        <m:f>
+                          <m:num><m:r><m:t>1</m:t></m:r></m:num>
+                          <m:den><m:r><m:t>z</m:t></m:r></m:den>
+                        </m:f>
+                      </m:e>
+                    </m:groupChr>
+                  </m:oMath>
+                </w:p>
+              </w:body>
+            </w:document>
+            """;
+
+        var read = ReadDocumentXml(documentXml);
+
+        var equation = read.Paragraphs.Single().Runs.Single(run => run.Equation is not null).Equation!;
+        equation.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Accent, MathRunKind.Bar, MathRunKind.GroupChar);
+        equation.Runs[0].DecoratorBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Superscript);
+        equation.Runs[1].DecoratorBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Subscript);
+        equation.Runs[2].DecoratorBaseEquation!.Runs.Select(run => run.Kind)
+            .Should().Equal(MathRunKind.Text, MathRunKind.Fraction);
+        equation.LinearText.Should().Be("a+x^2hat_b+y_1_c+1/z\u23DF");
+    }
+
+    [Fact]
     public void DelimiterEquation_SurvivesRoundTrip()
     {
         var read = RoundTripEquation(new Equation([MathRun.Delimiter("a, b", "[", "]")]));

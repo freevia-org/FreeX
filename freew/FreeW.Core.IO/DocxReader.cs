@@ -1881,7 +1881,17 @@ public static class DocxReader
     private static MathRun ReadAccent(XElement acc)
     {
         var chr = acc.Element(M + "accPr")?.Element(M + "chr")?.Attribute(M + "val")?.Value;
-        return MathRun.AccentOf(MathTextOf(acc.Element(M + "e")), string.IsNullOrEmpty(chr) ? "̂" : chr);
+        var baseSlot = acc.Element(M + "e");
+        var baseText = MathTextOf(baseSlot);
+        return HasStructuredMathSlot(baseSlot)
+            ? new MathRun
+            {
+                Kind = MathRunKind.Accent,
+                Base = baseText,
+                Accent = string.IsNullOrEmpty(chr) ? "̂" : chr,
+                DecoratorBaseEquation = ReadMathSlot(baseSlot)
+            }
+            : MathRun.AccentOf(baseText, string.IsNullOrEmpty(chr) ? "̂" : chr);
     }
 
     /// <summary>
@@ -1892,7 +1902,17 @@ public static class DocxReader
     private static MathRun ReadBar(XElement bar)
     {
         var pos = bar.Element(M + "barPr")?.Element(M + "pos")?.Attribute(M + "val")?.Value;
-        return MathRun.BarOf(MathTextOf(bar.Element(M + "e")), top: pos != "bot");
+        var baseSlot = bar.Element(M + "e");
+        var baseText = MathTextOf(baseSlot);
+        return HasStructuredMathSlot(baseSlot)
+            ? new MathRun
+            {
+                Kind = MathRunKind.Bar,
+                Base = baseText,
+                BarTop = pos != "bot",
+                DecoratorBaseEquation = ReadMathSlot(baseSlot)
+            }
+            : MathRun.BarOf(baseText, top: pos != "bot");
     }
 
     /// <summary>
@@ -1963,10 +1983,21 @@ public static class DocxReader
         var pr = groupChr.Element(M + "groupChrPr");
         var chr = pr?.Element(M + "chr")?.Attribute(M + "val")?.Value;
         var pos = pr?.Element(M + "pos")?.Attribute(M + "val")?.Value;
-        return MathRun.GroupCharOf(
-            MathTextOf(groupChr.Element(M + "e")),
-            string.IsNullOrEmpty(chr) ? "⏞" : chr,
-            string.IsNullOrEmpty(pos) ? "top" : pos);
+        var baseSlot = groupChr.Element(M + "e");
+        var baseText = MathTextOf(baseSlot);
+        return HasStructuredMathSlot(baseSlot)
+            ? new MathRun
+            {
+                Kind = MathRunKind.GroupChar,
+                Base = baseText,
+                GroupChr = string.IsNullOrEmpty(chr) ? "⏞" : chr,
+                GroupChrPos = string.IsNullOrEmpty(pos) ? "top" : pos,
+                DecoratorBaseEquation = ReadMathSlot(baseSlot)
+            }
+            : MathRun.GroupCharOf(
+                baseText,
+                string.IsNullOrEmpty(chr) ? "⏞" : chr,
+                string.IsNullOrEmpty(pos) ? "top" : pos);
     }
 
     /// <summary>The concatenated text of all descendant m:t runs under <paramref name="element"/> (empty if null).</summary>

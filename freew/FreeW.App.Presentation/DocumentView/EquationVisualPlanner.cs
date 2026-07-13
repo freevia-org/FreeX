@@ -114,6 +114,9 @@ public sealed record EquationVisualElement(
     public EquationVisualPlan? NAryLowerLimitPlan { get; init; }
     public EquationVisualPlan? NAryUpperLimitPlan { get; init; }
     public EquationVisualPlan? NAryOperandPlan { get; init; }
+    public EquationVisualPlan? AccentBasePlan { get; init; }
+    public EquationVisualPlan? BarBasePlan { get; init; }
+    public EquationVisualPlan? GroupCharBasePlan { get; init; }
 
     public int MatrixRowCount => MatrixRows.Count;
 
@@ -226,7 +229,8 @@ public sealed record EquationVisualElement(
         string linearText,
         string baseText,
         string accent,
-        IReadOnlyList<EquationVisualSegment> segments) =>
+        IReadOnlyList<EquationVisualSegment> segments,
+        EquationVisualPlan? basePlan = null) =>
         new(
             EquationVisualElementKind.Accent,
             linearText,
@@ -237,14 +241,16 @@ public sealed record EquationVisualElement(
             string.Empty)
         {
             BaseText = baseText,
-            Accent = accent
+            Accent = accent,
+            AccentBasePlan = basePlan
         };
 
     public static EquationVisualElement Bar(
         string linearText,
         string baseText,
         bool barTop,
-        IReadOnlyList<EquationVisualSegment> segments) =>
+        IReadOnlyList<EquationVisualSegment> segments,
+        EquationVisualPlan? basePlan = null) =>
         new(
             EquationVisualElementKind.Bar,
             linearText,
@@ -255,7 +261,8 @@ public sealed record EquationVisualElement(
             string.Empty)
         {
             BaseText = baseText,
-            BarTop = barTop
+            BarTop = barTop,
+            BarBasePlan = basePlan
         };
 
     public static EquationVisualElement Delimiter(
@@ -285,7 +292,8 @@ public sealed record EquationVisualElement(
         string baseText,
         string groupCharacter,
         string groupCharacterPosition,
-        IReadOnlyList<EquationVisualSegment> segments) =>
+        IReadOnlyList<EquationVisualSegment> segments,
+        EquationVisualPlan? basePlan = null) =>
         new(
             EquationVisualElementKind.GroupChar,
             linearText,
@@ -297,7 +305,8 @@ public sealed record EquationVisualElement(
         {
             BaseText = baseText,
             GroupCharacter = groupCharacter,
-            GroupCharacterPosition = groupCharacterPosition
+            GroupCharacterPosition = groupCharacterPosition,
+            GroupCharBasePlan = basePlan
         };
 
     public static EquationVisualElement FunctionApply(
@@ -503,11 +512,11 @@ public static class EquationVisualPlanner
                 break;
 
             case MathRunKind.Accent:
-                AddAccentElement(run, segments, elements);
+                AddAccentElement(run, segments, elements, depth);
                 break;
 
             case MathRunKind.Bar:
-                AddBarElement(run, segments, elements);
+                AddBarElement(run, segments, elements, depth);
                 break;
 
             case MathRunKind.Delimiter:
@@ -515,7 +524,7 @@ public static class EquationVisualPlanner
                 break;
 
             case MathRunKind.GroupChar:
-                AddGroupCharElement(run, segments, elements);
+                AddGroupCharElement(run, segments, elements, depth);
                 break;
 
             case MathRunKind.FunctionApply:
@@ -757,11 +766,15 @@ public static class EquationVisualPlanner
     private static void AddAccentElement(
         MathRun run,
         List<EquationVisualSegment> segments,
-        List<EquationVisualElement> elements)
+        List<EquationVisualElement> elements,
+        int depth)
     {
+        var basePlan = BuildSlotPlan(run.DecoratorBaseEquation, depth);
+        var baseText = basePlan?.LinearText ?? run.Base;
+
         var runSegments = new List<EquationVisualSegment>();
         AddIfAny(runSegments, AccentCueText(run.Accent), EquationVisualSegmentRole.AccentMark, DecoratorStyle);
-        AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.AccentBase, StructureStyle);
+        AddIfAny(runSegments, baseText, EquationVisualSegmentRole.AccentBase, StructureStyle);
 
         if (runSegments.Count == 0)
             return;
@@ -769,26 +782,31 @@ public static class EquationVisualPlanner
         segments.AddRange(runSegments);
         elements.Add(EquationVisualElement.AccentElement(
             run.LinearText,
-            run.Base,
+            baseText,
             run.Accent,
-            runSegments));
+            runSegments,
+            basePlan));
     }
 
     private static void AddBarElement(
         MathRun run,
         List<EquationVisualSegment> segments,
-        List<EquationVisualElement> elements)
+        List<EquationVisualElement> elements,
+        int depth)
     {
+        var basePlan = BuildSlotPlan(run.DecoratorBaseEquation, depth);
+        var baseText = basePlan?.LinearText ?? run.Base;
+
         var runSegments = new List<EquationVisualSegment>();
         var markText = run.BarTop ? OverbarCueText : UnderbarCueText;
         if (run.BarTop)
         {
             AddIfAny(runSegments, markText, EquationVisualSegmentRole.BarMark, DecoratorStyle);
-            AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.BarBase, StructureStyle);
+            AddIfAny(runSegments, baseText, EquationVisualSegmentRole.BarBase, StructureStyle);
         }
         else
         {
-            AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.BarBase, StructureStyle);
+            AddIfAny(runSegments, baseText, EquationVisualSegmentRole.BarBase, StructureStyle);
             AddIfAny(runSegments, markText, EquationVisualSegmentRole.BarMark, DecoratorStyle);
         }
 
@@ -798,9 +816,10 @@ public static class EquationVisualPlanner
         segments.AddRange(runSegments);
         elements.Add(EquationVisualElement.Bar(
             run.LinearText,
-            run.Base,
+            baseText,
             run.BarTop,
-            runSegments));
+            runSegments,
+            basePlan));
     }
 
     private static void AddDelimiterElement(
@@ -833,18 +852,21 @@ public static class EquationVisualPlanner
     private static void AddGroupCharElement(
         MathRun run,
         List<EquationVisualSegment> segments,
-        List<EquationVisualElement> elements)
+        List<EquationVisualElement> elements,
+        int depth)
     {
+        var basePlan = BuildSlotPlan(run.DecoratorBaseEquation, depth);
+        var baseText = basePlan?.LinearText ?? run.Base;
         var groupOnTop = !string.Equals(run.GroupChrPos, "bot", StringComparison.OrdinalIgnoreCase);
         var runSegments = new List<EquationVisualSegment>();
         if (groupOnTop)
         {
             AddIfAny(runSegments, run.GroupChr, EquationVisualSegmentRole.GroupCharMark, DecoratorStyle);
-            AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.GroupCharBase, StructureStyle);
+            AddIfAny(runSegments, baseText, EquationVisualSegmentRole.GroupCharBase, StructureStyle);
         }
         else
         {
-            AddIfAny(runSegments, run.Base, EquationVisualSegmentRole.GroupCharBase, StructureStyle);
+            AddIfAny(runSegments, baseText, EquationVisualSegmentRole.GroupCharBase, StructureStyle);
             AddIfAny(runSegments, run.GroupChr, EquationVisualSegmentRole.GroupCharMark, DecoratorStyle);
         }
 
@@ -854,10 +876,11 @@ public static class EquationVisualPlanner
         segments.AddRange(runSegments);
         elements.Add(EquationVisualElement.GroupChar(
             run.LinearText,
-            run.Base,
+            baseText,
             run.GroupChr,
             run.GroupChrPos,
-            runSegments));
+            runSegments,
+            basePlan));
     }
 
     private static void AddFunctionApplyElement(
