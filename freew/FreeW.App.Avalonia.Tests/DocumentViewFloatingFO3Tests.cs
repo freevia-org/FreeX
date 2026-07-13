@@ -10,6 +10,7 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using SkiaSharp;
 
@@ -113,7 +114,8 @@ public sealed class DocumentViewFloatingFO3Tests
         double hOffsetPt,
         double vOffsetPt,
         int zOrder = 0,
-        string text = "Hello WordArt")
+        string text = "Hello WordArt",
+        WordArtWarp warp = WordArtWarp.None)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
@@ -131,6 +133,7 @@ public sealed class DocumentViewFloatingFO3Tests
                 VerticalAnchor     = VerticalAnchor.Paragraph,
                 ZOrderIndex        = zOrder,
             },
+            Warp = warp,
         };
         para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { WordArt = wa });
         doc.Blocks.Add(para);
@@ -468,6 +471,34 @@ public sealed class DocumentViewFloatingFO3Tests
 
         if (!ran) return;
         zOrder.Should().Be(99, "ZOrderIndex must be preserved for WordArt");
+    }
+
+    [Fact]
+    public async Task Floating_wordart_visual_summary_matches_shared_plan()
+    {
+        string[] summaries = [];
+        var expected = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(
+            new WordArt("Hello", WordArtStyle.GlowBlue, fontSizePt: 36)
+            {
+                Warp = WordArtWarp.ArchDown
+            }).Summary;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingWordArt(
+                WordArtStyle.GlowBlue,
+                ImageWrapping.Square,
+                0,
+                0,
+                text: "Hello",
+                warp: WordArtWarp.ArchDown);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            summaries = view.FloatingWordArtVisualSummaries.ToArray();
+        });
+
+        if (!ran) return;
+        summaries.Should().ContainSingle().Which.Should().Be(expected);
     }
 
     // ── SmartArt collection tests ─────────────────────────────────────────────────────────────────

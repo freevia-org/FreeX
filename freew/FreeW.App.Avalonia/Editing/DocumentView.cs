@@ -2448,6 +2448,16 @@ public sealed class DocumentView : Control
         }
     }
 
+    /// <summary>Shared visual-plan summaries consumed by floating WordArt rendering.</summary>
+    public IReadOnlyList<string> FloatingWordArtVisualSummaries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _floatingWordArts.Select(w => w.StyleSummary + ";effects:" + w.Effects.Summary).ToList();
+        }
+    }
+
     /// <summary>Number of floating SmartArt diagrams collected during the last layout pass.</summary>
     public int FloatingSmartArtCount
     {
@@ -2565,6 +2575,16 @@ public sealed class DocumentView : Control
                 .Where(w => w.Effects.HasAny)
                 .Select(w => w.Effects.Summary)
                 .ToList();
+        }
+    }
+
+    /// <summary>Shared visual-plan summaries consumed by inline WordArt rendering.</summary>
+    public IReadOnlyList<string> InlineWordArtVisualSummaries
+    {
+        get
+        {
+            if (_laidOutWidth < 0) Relayout(FallbackWidth);
+            return _inlineWordArts.Select(w => w.StyleSummary + ";effects:" + w.Effects.Summary).ToList();
         }
     }
 
@@ -14373,6 +14393,11 @@ public sealed class DocumentView : Control
         public WordArtStyle Style;
         public double       FontSizePt  = 36;
         public WordArtWarp  Warp;
+        public DrawingObjectFillPlan Fill = DrawingObjectFillPlan.None;
+        public DrawingObjectOutlinePlan Outline = new(false, null, 0, null);
+        public bool         Bold = true;
+        public string       WarpHint = "none";
+        public string       StyleSummary = string.Empty;
         public DrawingObjectEffectsPlan Effects = DrawingObjectEffectsPlan.None;
     }
 
@@ -14440,6 +14465,11 @@ public sealed class DocumentView : Control
             Style = plan.WordArt?.Style ?? WordArtStyle.FillBlue,
             FontSizePt = (plan.WordArt?.FontSizeDip ?? 48) / PxPerPoint,
             Warp = plan.WordArt?.Warp ?? WordArtWarp.None,
+            Fill = plan.WordArt?.Fill ?? DrawingObjectFillPlan.None,
+            Outline = plan.WordArt?.Outline ?? new DrawingObjectOutlinePlan(false, null, 0, null),
+            Bold = plan.WordArt?.Bold ?? true,
+            WarpHint = plan.WordArt?.WarpHint ?? "none",
+            StyleSummary = plan.WordArt?.StyleSummary ?? string.Empty,
             Effects = plan.Effects,
         };
 
@@ -14461,6 +14491,11 @@ public sealed class DocumentView : Control
             Style = plan.WordArt.Style,
             FontSizePt = plan.WordArt.FontSizeDip / PxPerPoint,
             Warp = plan.WordArt.Warp,
+            Fill = plan.WordArt.Fill,
+            Outline = plan.WordArt.Outline,
+            Bold = plan.WordArt.Bold,
+            WarpHint = plan.WordArt.WarpHint,
+            StyleSummary = plan.WordArt.StyleSummary,
             Effects = plan.Effects,
         };
     }
@@ -15306,28 +15341,6 @@ public sealed class DocumentView : Control
         }
     }
 
-    // WordArt style → (fill colour, outline colour, glow/shadow hint) lookup.
-    private static (string FillHex, string? OutlineHex, bool Bold) WordArtStyleToColors(WordArtStyle style) =>
-        style switch
-        {
-            WordArtStyle.FillBlue      => ("#4472C4", null, true),
-            WordArtStyle.GradientFill  => ("#4472C4", null, true),
-            WordArtStyle.GradFillMulti => ("#ED7D31", null, true),
-            WordArtStyle.Outline       => ("#FFFFFF", "#4472C4", true),
-            WordArtStyle.ChromeOne     => ("#FFFFFF", "#000000", true),
-            WordArtStyle.ChromeTwo     => ("#4472C4", "#FFFFFF", true),
-            WordArtStyle.Shadow        => ("#4472C4", null, true),
-            WordArtStyle.ShadowOrange  => ("#ED7D31", null, true),
-            WordArtStyle.FillGold      => ("#FFC000", null, true),
-            WordArtStyle.FillWhite     => ("#FFFFFF", "#AAAAAA", true),
-            WordArtStyle.GlowBlue      => ("#4472C4", null, true),
-            WordArtStyle.GlowGold      => ("#FFC000", null, true),
-            WordArtStyle.Reflection    => ("#4472C4", null, true),
-            WordArtStyle.Bevel         => ("#4472C4", null, true),
-            WordArtStyle.PatternFill   => ("#4472C4", "#4472C4", true),
-            _                          => ("#4472C4", null, true),
-        };
-
     /// <summary>
     /// Renders a floating WordArt at its page-space rect.
     /// Fully rendered: styled text with fill colour (and outline when preset uses one) at correct size,
@@ -15339,7 +15352,6 @@ public sealed class DocumentView : Control
         if (string.IsNullOrEmpty(wd.Text)) return;
 
         var rect = wd.Rect;
-        var (fillHex, outlineHex, bold) = WordArtStyleToColors(wd.Style);
         DrawFloatingWordArtEffects(context, wd, rect);
 
         // Draw a light background frame so the WordArt region is visible even without warp geometry.
@@ -15348,26 +15360,15 @@ public sealed class DocumentView : Control
                 new DashStyle([3, 3], 0)),
             rect);
 
-        // If the style has a fill background (e.g. gradient styles) draw a subtle bg gradient.
-        if (wd.Style is WordArtStyle.GradientFill or WordArtStyle.GradFillMulti)
-        {
-            var gb = new LinearGradientBrush
-            {
-                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
-                EndPoint   = new RelativePoint(1, 1, RelativeUnit.Relative),
-            };
-            if (TryParseAvaloniaColor(fillHex, out var c1))
-                gb.GradientStops.Add(new global::Avalonia.Media.GradientStop(c1, 0));
-            gb.GradientStops.Add(new global::Avalonia.Media.GradientStop(Colors.White, 1));
-            context.FillRectangle(gb, rect);
-        }
+        if (BuildWordArtFillBrush(wd.Fill) is { } fillBrush)
+            context.FillRectangle(fillBrush, rect);
 
         // Render the text centred in the rect at the WordArt font size.
         var textFmt = new RunFormatting
         {
             FontSizePt = Math.Max(8, wd.FontSizePt),
-            Bold       = bold,
-            ColorHex   = fillHex,
+            Bold       = wd.Bold,
+            ColorHex   = PrimaryWordArtColorHex(wd.Fill),
         };
 
         // Warp hint: for non-None warps add a "(warp)" note since path-deform is not supported in
@@ -15382,9 +15383,9 @@ public sealed class DocumentView : Control
 
         // For styles with an outline, draw the text a second time with a contrasting colour offset by 1px
         // to simulate an outline effect (poor-man's outline — Avalonia has no DrawTextOutline API).
-        if (!string.IsNullOrEmpty(outlineHex))
+        if (wd.Outline.IsVisible && !string.IsNullOrEmpty(wd.Outline.ColorHex))
         {
-            var outlineFmt = textFmt with { ColorHex = outlineHex };
+            var outlineFmt = textFmt with { ColorHex = wd.Outline.ColorHex };
             var outlineFt  = Build(displayText, outlineFmt);
             using (context.PushClip(rect))
                 context.DrawText(outlineFt, new Point(tx + 1, ty + 1));
@@ -15398,6 +15399,51 @@ public sealed class DocumentView : Control
             context.DrawText(warpFt, new Point(rect.X + 2, rect.Bottom - warpFt.Height));
         }
     }
+
+    private static IBrush? BuildWordArtFillBrush(DrawingObjectFillPlan fill)
+    {
+        return fill.Kind switch
+        {
+            DrawingObjectFillKind.Gradient => BuildWordArtGradientBrush(fill),
+            DrawingObjectFillKind.Pattern => BuildWordArtPatternBrush(fill),
+            _ => null
+        };
+    }
+
+    private static IBrush BuildWordArtGradientBrush(DrawingObjectFillPlan fill)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+        };
+
+        foreach (var stop in fill.GradientStops)
+        {
+            var offset = Math.Clamp(stop.Position / 100000.0, 0, 1);
+            if (TryParseAvaloniaColor(stop.ColorHex, out var color))
+                brush.GradientStops.Add(new global::Avalonia.Media.GradientStop(color, offset));
+        }
+
+        if (brush.GradientStops.Count == 0)
+            brush.GradientStops.Add(new global::Avalonia.Media.GradientStop(Color.FromRgb(0x1F, 0x4E, 0x79), 0));
+
+        return brush;
+    }
+
+    private static IBrush BuildWordArtPatternBrush(DrawingObjectFillPlan fill)
+    {
+        var foreground = TryParseAvaloniaColor(fill.PatternForegroundColorHex, out var fg)
+            ? fg
+            : Color.FromRgb(0x1F, 0x4E, 0x79);
+        return new SolidColorBrush(Color.FromArgb(0x22, foreground.R, foreground.G, foreground.B));
+    }
+
+    private static string PrimaryWordArtColorHex(DrawingObjectFillPlan fill) =>
+        fill.ColorHex
+        ?? fill.GradientStops.FirstOrDefault()?.ColorHex
+        ?? fill.PatternForegroundColorHex
+        ?? "#1F4E79";
 
     private static string? BuildFloatingGroupChildEffectSummary(FloatingGroupChildData child)
     {

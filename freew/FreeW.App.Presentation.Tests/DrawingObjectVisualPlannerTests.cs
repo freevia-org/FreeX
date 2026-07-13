@@ -131,11 +131,60 @@ public sealed class DrawingObjectVisualPlannerTests
         plan.WordArt.Style.Should().Be(WordArtStyle.GlowBlue);
         plan.WordArt.Warp.Should().Be(WordArtWarp.Wave1);
         plan.WordArt.FontSizeDip.Should().BeApproximately(40, 0.01);
-        plan.WordArt.FillColorHex.Should().Be("#4472C4");
+        plan.WordArt.Fill.Kind.Should().Be(DrawingObjectFillKind.Solid);
+        plan.WordArt.FillColorHex.Should().Be("#242424");
+        plan.WordArt.WarpHint.Should().Be("wave");
         plan.Effects.HasGlow.Should().BeTrue();
+        plan.Effects.GlowColorHex.Should().Be("#2E75B6");
         plan.Effects.Summary.Should().Be("glow");
         plan.Wrapping.Should().Be(ImageWrapping.InFront);
         plan.ZOrderIndex.Should().Be(9);
+    }
+
+    [Theory]
+    [InlineData(WordArtStyle.GradientFill, DrawingObjectFillKind.Gradient, "none", "none")]
+    [InlineData(WordArtStyle.Outline, DrawingObjectFillKind.Solid, "#2E2E2E", "none")]
+    [InlineData(WordArtStyle.Shadow, DrawingObjectFillKind.Solid, "none", "shadow")]
+    [InlineData(WordArtStyle.GlowGold, DrawingObjectFillKind.Solid, "none", "glow")]
+    [InlineData(WordArtStyle.Reflection, DrawingObjectFillKind.Solid, "none", "reflection")]
+    [InlineData(WordArtStyle.Bevel, DrawingObjectFillKind.Solid, "none", "bevel")]
+    [InlineData(WordArtStyle.PatternFill, DrawingObjectFillKind.Pattern, "#1F4E79", "none")]
+    public void WordArtPlan_ResolvesPresetStyleFactsInSharedPresentation(
+        WordArtStyle style,
+        DrawingObjectFillKind expectedFill,
+        string expectedOutline,
+        string expectedEffects)
+    {
+        var plan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(
+            new WordArt("Preset", style, fontSizePt: 24)
+            {
+                Warp = WordArtWarp.SlantDown
+            });
+
+        plan.WordArt.Fill.Kind.Should().Be(expectedFill);
+        (plan.WordArt.OutlineColorHex ?? "none").Should().Be(expectedOutline);
+        plan.WordArt.Bold.Should().BeTrue();
+        plan.WordArt.WarpHint.Should().Be("slant");
+        plan.Effects.Summary.Should().Be(expectedEffects);
+        plan.Summary.Should().Contain("style:" + style);
+    }
+
+    [Fact]
+    public void WordArtPlan_ExposesGradientStopsAndPatternFillWithoutRendererMapping()
+    {
+        var gradient = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(
+            new WordArt("Gradient", WordArtStyle.GradFillMulti, fontSizePt: 24));
+        var pattern = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(
+            new WordArt("Pattern", WordArtStyle.PatternFill, fontSizePt: 24));
+
+        gradient.WordArt.Fill.Kind.Should().Be(DrawingObjectFillKind.Gradient);
+        gradient.WordArt.Fill.GradientAngle.Should().Be(5400000);
+        gradient.WordArt.Fill.GradientStops.Select(stop => stop.ColorHex)
+            .Should().Equal("#FF6000", "#C00000", "#7030A0");
+        pattern.WordArt.HasPatternFill.Should().BeTrue();
+        pattern.WordArt.Fill.PatternPreset.Should().Be("diagCross");
+        pattern.WordArt.Fill.PatternForegroundColorHex.Should().Be("#1F4E79");
+        pattern.WordArt.Fill.PatternBackgroundColorHex.Should().Be("#FFFFFF");
     }
 
     [Fact]
@@ -152,8 +201,10 @@ public sealed class DrawingObjectVisualPlannerTests
         plan.WordArt.Style.Should().Be(WordArtStyle.GlowGold);
         plan.WordArt.Warp.Should().Be(WordArtWarp.ArchUp);
         plan.WordArt.FontSizeDip.Should().BeApproximately(32, 0.01);
+        plan.WordArt.Fill.Kind.Should().Be(DrawingObjectFillKind.Solid);
+        plan.WordArt.FillColorHex.Should().Be("#242424");
         plan.Effects.HasGlow.Should().BeTrue();
-        plan.Effects.GlowColorHex.Should().Be("#FFC000");
+        plan.Effects.GlowColorHex.Should().Be("#C09000");
         plan.Effects.Summary.Should().Be("glow");
     }
 
@@ -249,7 +300,7 @@ public sealed class DrawingObjectVisualPlannerTests
         plan.GroupChildren[3].OffsetXDip.Should().BeApproximately(96, 0.01);
         plan.GroupChildren[3].Visual.WordArt!.Text.Should().Be("Group");
         plan.GroupChildren[3].Visual.Effects.HasGlow.Should().BeTrue();
-        plan.GroupChildren[3].Visual.Effects.GlowColorHex.Should().Be("#FFC000");
+        plan.GroupChildren[3].Visual.Effects.GlowColorHex.Should().Be("#C09000");
         var smartArtPlan = plan.GroupChildren[4].Visual.SmartArt;
         smartArtPlan.Should().NotBeNull();
         smartArtPlan!.Kind.Should().Be(SmartArtKind.List);

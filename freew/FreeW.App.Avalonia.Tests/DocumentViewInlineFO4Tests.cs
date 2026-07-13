@@ -74,14 +74,15 @@ public sealed class DocumentViewInlineFO4Tests
     private static TextDocument DocWithInlineWordArt(
         WordArtStyle style = WordArtStyle.FillBlue,
         string text = "Hello WordArt",
-        double fontSizePt = 28)
+        double fontSizePt = 28,
+        WordArtWarp warp = WordArtWarp.None)
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
         var para = new Paragraph();
         para.Runs.Add(new Run("Before ", RunFormatting.Default));
 
-        var wa = new WordArt(text, style, fontSizePt); // No Placement → inline.
+        var wa = new WordArt(text, style, fontSizePt) { Warp = warp }; // No Placement -> inline.
         para.Runs.Add(new Run(string.Empty, RunFormatting.Default) { WordArt = wa });
 
         para.Runs.Add(new Run(" after.", RunFormatting.Default));
@@ -401,6 +402,28 @@ public sealed class DocumentViewInlineFO4Tests
 
         if (!ran) return;
         summaries.Should().ContainSingle().Which.Should().Be("glow");
+    }
+
+    [Fact]
+    public async Task Inline_wordart_visual_summary_matches_shared_plan()
+    {
+        string[] summaries = [];
+        var expected = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(
+            new WordArt("FreeW!", WordArtStyle.PatternFill, fontSizePt: 24)
+            {
+                Warp = WordArtWarp.Wave1
+            }).Summary;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithInlineWordArt(WordArtStyle.PatternFill, text: "FreeW!", fontSizePt: 24, warp: WordArtWarp.Wave1);
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 2000));
+            summaries = view.InlineWordArtVisualSummaries.ToArray();
+        });
+
+        if (!ran) return;
+        summaries.Should().ContainSingle().Which.Should().Be(expected);
     }
 
     [Fact]

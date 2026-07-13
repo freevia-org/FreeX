@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 
@@ -223,6 +224,51 @@ public sealed class FloatingObjectRenderTests
         effect.Color.Should().Be(Color.FromRgb(0x44, 0x72, 0xC4));
         effect.ShadowDepth.Should().Be(0);
         effect.BlurRadius.Should().BeApproximately(63500 / 12700.0 * 96.0 / 72.0, 0.01);
+    }
+
+    [StaFact]
+    public void FloatingOverlay_RendersWordArtEffectFromSharedPlan()
+    {
+        var wordArt = new WordArt("Floating FX", WordArtStyle.ShadowOrange, 28)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 4
+            }
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+        var sharedPlan = DrawingObjectVisualPlanner.BuildVisualPlan(
+            wordArt,
+            new DocumentFloatingObjectSnapshot(
+                DocumentFloatingObjectKind.WordArt,
+                BlockIndex: 0,
+                RunIndex: 0,
+                new DocumentFloatRect(48, 24, 180, 64),
+                BehindText: false,
+                ZOrderIndex: 4,
+                ImageWrapping.InFront));
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Border>().Single();
+        root.Tag.Should().BeSameAs(wordArt);
+        var textBlock = LogicalDescendants<TextBlock>(root).Single();
+        textBlock.Foreground.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromRgb(0xED, 0x7D, 0x31));
+        var effect = textBlock.Effect.Should().BeOfType<DropShadowEffect>().Subject;
+        effect.Color.Should().Be(Color.FromRgb(0xED, 0x7D, 0x31));
+        effect.BlurRadius.Should().BeApproximately(sharedPlan.Effects.ShadowBlurDip, 0.01);
+        effect.ShadowDepth.Should().BeApproximately(sharedPlan.Effects.ShadowDistanceDip, 0.01);
+        sharedPlan.Effects.Summary.Should().Be("shadow");
     }
 
     [StaFact]

@@ -3,6 +3,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Effects;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 using ModelRun = FreeW.Core.Model.Run;
@@ -66,12 +67,34 @@ public sealed class DocumentEffectRenderingTests
     [StaFact]
     public void OfficeEffectSet_RendersInlineWordArtPresetGlow()
     {
+        var wordArtModel = new WordArt("Glow", WordArtStyle.GlowGold, fontSizePt: 24);
+        var sharedPlan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(wordArtModel);
         var view = RenderWithEffectSet(
             "Office",
-            ModelRun.FromWordArt(new WordArt("Glow", WordArtStyle.GlowGold, fontSizePt: 24)));
+            ModelRun.FromWordArt(wordArtModel));
 
         var wordArt = SingleTagged<TextBlock, WordArt>(view);
-        wordArt.Effect.Should().BeOfType<DropShadowEffect>();
+        var effect = wordArt.Effect.Should().BeOfType<DropShadowEffect>().Subject;
+        effect.Color.Should().Be(System.Windows.Media.Color.FromRgb(0xC0, 0x90, 0x00));
+        effect.BlurRadius.Should().BeApproximately(sharedPlan.Effects.GlowRadiusDip, 0.01);
+        effect.ShadowDepth.Should().Be(0);
+        wordArt.Foreground.Should().BeOfType<System.Windows.Media.SolidColorBrush>()
+            .Which.Color.Should().Be(System.Windows.Media.Color.FromRgb(0x24, 0x24, 0x24));
+    }
+
+    [StaFact]
+    public void OfficeEffectSet_RendersInlineWordArtGradientFromSharedPlan()
+    {
+        var wordArtModel = new WordArt("Gradient", WordArtStyle.GradientFill, fontSizePt: 24);
+        var sharedPlan = DrawingObjectVisualPlanner.BuildInlineWordArtPlan(wordArtModel);
+        var view = RenderWithEffectSet("Office", ModelRun.FromWordArt(wordArtModel));
+
+        var wordArt = SingleTagged<TextBlock, WordArt>(view);
+        var brush = wordArt.Foreground.Should().BeOfType<System.Windows.Media.LinearGradientBrush>().Subject;
+        brush.GradientStops.Select(stop => stop.Color)
+            .Should()
+            .Equal(sharedPlan.WordArt.Fill.GradientStops.Select(stop => ParseColor(stop.ColorHex)));
+        wordArt.Effect.Should().BeNull();
     }
 
     private static DocumentView RenderWithEffectSet(string effectSetName, params ModelRun[] runs)
@@ -105,4 +128,7 @@ public sealed class DocumentEffectRenderingTests
             }
         return result;
     }
+
+    private static System.Windows.Media.Color ParseColor(string hex) =>
+        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex)!;
 }

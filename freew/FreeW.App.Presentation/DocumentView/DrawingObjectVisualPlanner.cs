@@ -48,6 +48,29 @@ public sealed record DrawingObjectFillPlan(
         PatternPreset: null,
         PatternForegroundColorHex: null,
         PatternBackgroundColorHex: null);
+
+    public string Summary
+    {
+        get
+        {
+            return Kind switch
+            {
+                DrawingObjectFillKind.Solid => "solid:" + (ColorHex ?? "none"),
+                DrawingObjectFillKind.Gradient => "gradient:"
+                    + GradientAngle.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                    + ":"
+                    + string.Join("/", GradientStops.Select(stop =>
+                        stop.Position.ToString(System.Globalization.CultureInfo.InvariantCulture) + "=" + stop.ColorHex)),
+                DrawingObjectFillKind.Pattern => "pattern:"
+                    + (PatternPreset ?? "none")
+                    + ":"
+                    + (PatternForegroundColorHex ?? "none")
+                    + "/"
+                    + (PatternBackgroundColorHex ?? "none"),
+                _ => "none"
+            };
+        }
+    }
 }
 
 public sealed record DrawingObjectOutlinePlan(
@@ -114,13 +137,35 @@ public sealed record DrawingObjectWordArtPlan(
     WordArtStyle Style,
     WordArtWarp Warp,
     double FontSizeDip,
-    string FillColorHex,
-    string? OutlineColorHex,
-    bool Bold);
+    DrawingObjectFillPlan Fill,
+    DrawingObjectOutlinePlan Outline,
+    bool Bold,
+    string WarpHint)
+{
+    public string FillColorHex =>
+        Fill.ColorHex
+        ?? Fill.GradientStops.FirstOrDefault()?.ColorHex
+        ?? Fill.PatternForegroundColorHex
+        ?? "#1F4E79";
+
+    public string? OutlineColorHex => Outline.IsVisible ? Outline.ColorHex : null;
+
+    public bool HasPatternFill => Fill.Kind == DrawingObjectFillKind.Pattern;
+
+    public string StyleSummary =>
+        "style:" + Style
+        + ";fill:" + Fill.Summary
+        + ";outline:" + (Outline.IsVisible ? Outline.ColorHex ?? "visible" : "none")
+        + ";bold:" + (Bold ? "true" : "false")
+        + ";warp:" + WarpHint;
+}
 
 public sealed record DrawingObjectInlineWordArtPlan(
     DrawingObjectWordArtPlan WordArt,
-    DrawingObjectEffectsPlan Effects);
+    DrawingObjectEffectsPlan Effects)
+{
+    public string Summary => WordArt.StyleSummary + ";effects:" + Effects.Summary;
+}
 
 public sealed record DrawingObjectImagePlan(
     ImageFormat Format,
@@ -161,6 +206,7 @@ public sealed record DrawingObjectVisualPlan(
 public static class DrawingObjectVisualPlanner
 {
     private const double DipPerPoint = 96.0 / 72.0;
+    private const double WordArtOutlineWidthDip = DipPerPoint * 0.75;
 
     public static DrawingObjectVisualPlan BuildVisualPlan(
         Shape shape,
@@ -531,7 +577,7 @@ public static class DrawingObjectVisualPlanner
 
     private static DrawingObjectWordArtPlan BuildWordArtPlan(WordArt wordArt)
     {
-        var (fill, outline, bold) = WordArtStyleToColors(wordArt.Style);
+        var (fill, outline, bold) = BuildWordArtStylePlan(wordArt.Style);
         return new DrawingObjectWordArtPlan(
             wordArt.Text,
             wordArt.Style,
@@ -539,7 +585,8 @@ public static class DrawingObjectVisualPlanner
             Math.Max(1, wordArt.FontSizePt * DipPerPoint),
             fill,
             outline,
-            bold);
+            bold,
+            BuildWordArtWarpHint(wordArt.Warp));
     }
 
     private static DrawingObjectImagePlan BuildImagePlan(InlineImage image) =>
@@ -555,21 +602,9 @@ public static class DrawingObjectVisualPlanner
     private static DrawingObjectEffectsPlan BuildWordArtEffectsPlan(WordArtStyle style) =>
         style switch
         {
-            WordArtStyle.Shadow or WordArtStyle.ShadowOrange => new DrawingObjectEffectsPlan(
-                HasShadow: true,
-                ShadowColorHex: "#000000",
-                ShadowBlurDip: 4,
-                ShadowDistanceDip: 3,
-                ShadowDirectionDegrees: 45,
-                ShadowOpacity: 0.35,
-                HasGlow: false,
-                GlowColorHex: "#4472C4",
-                GlowRadiusDip: 0,
-                GlowOpacity: 0,
-                HasSoftEdge: false,
-                SoftEdgeRadiusDip: 0,
-                HasReflection: false,
-                HasBevel: false),
+            WordArtStyle.Shadow => WordArtShadow("#2E2E2E", 50800, 38100, 0.4),
+            WordArtStyle.ChromeTwo => WordArtShadow("#1F4E79", 38100, 25400, 0.3),
+            WordArtStyle.ShadowOrange => WordArtShadow("#ED7D31", 50800, 38100, 0.5),
             WordArtStyle.GlowBlue or WordArtStyle.GlowGold => new DrawingObjectEffectsPlan(
                 HasShadow: false,
                 ShadowColorHex: "#000000",
@@ -578,8 +613,8 @@ public static class DrawingObjectVisualPlanner
                 ShadowDirectionDegrees: 0,
                 ShadowOpacity: 0,
                 HasGlow: true,
-                GlowColorHex: style == WordArtStyle.GlowGold ? "#FFC000" : "#4472C4",
-                GlowRadiusDip: 6,
+                GlowColorHex: style == WordArtStyle.GlowGold ? "#C09000" : "#2E75B6",
+                GlowRadiusDip: EmuToDip(101600),
                 GlowOpacity: 0.6,
                 HasSoftEdge: false,
                 SoftEdgeRadiusDip: 0,
@@ -590,25 +625,103 @@ public static class DrawingObjectVisualPlanner
             _ => DrawingObjectEffectsPlan.None
         };
 
-    private static (string FillHex, string? OutlineHex, bool Bold) WordArtStyleToColors(WordArtStyle style) =>
+    private static DrawingObjectEffectsPlan WordArtShadow(
+        string colorHex,
+        int blurRad,
+        int dist,
+        double opacity) =>
+        new(
+            HasShadow: true,
+            ShadowColorHex: colorHex,
+            ShadowBlurDip: EmuToDip(blurRad),
+            ShadowDistanceDip: EmuToDip(dist),
+            ShadowDirectionDegrees: 45,
+            ShadowOpacity: opacity,
+            HasGlow: false,
+            GlowColorHex: "#4472C4",
+            GlowRadiusDip: 0,
+            GlowOpacity: 0,
+            HasSoftEdge: false,
+            SoftEdgeRadiusDip: 0,
+            HasReflection: false,
+            HasBevel: false);
+
+    private static (DrawingObjectFillPlan Fill, DrawingObjectOutlinePlan Outline, bool Bold) BuildWordArtStylePlan(WordArtStyle style) =>
         style switch
         {
-            WordArtStyle.FillBlue => ("#4472C4", null, true),
-            WordArtStyle.GradientFill => ("#4472C4", null, true),
-            WordArtStyle.GradFillMulti => ("#ED7D31", null, true),
-            WordArtStyle.Outline => ("#FFFFFF", "#4472C4", true),
-            WordArtStyle.ChromeOne => ("#FFFFFF", "#000000", true),
-            WordArtStyle.ChromeTwo => ("#4472C4", "#FFFFFF", true),
-            WordArtStyle.Shadow => ("#4472C4", null, true),
-            WordArtStyle.ShadowOrange => ("#ED7D31", null, true),
-            WordArtStyle.FillGold => ("#FFC000", null, true),
-            WordArtStyle.FillWhite => ("#FFFFFF", "#AAAAAA", true),
-            WordArtStyle.GlowBlue => ("#4472C4", null, true),
-            WordArtStyle.GlowGold => ("#FFC000", null, true),
-            WordArtStyle.Reflection => ("#4472C4", null, true),
-            WordArtStyle.Bevel => ("#4472C4", null, true),
-            WordArtStyle.PatternFill => ("#4472C4", "#4472C4", true),
-            _ => ("#4472C4", null, true)
+            WordArtStyle.GradientFill => (
+                GradientFill(5400000, (0, "#4472C4"), (100000, "#ED7D31")),
+                NoWordArtOutline(),
+                true),
+            WordArtStyle.GradFillMulti => (
+                GradientFill(5400000, (0, "#FF6000"), (50000, "#C00000"), (100000, "#7030A0")),
+                NoWordArtOutline(),
+                true),
+            WordArtStyle.FillGold => (
+                GradientFill(5400000, (0, "#C09000"), (100000, "#8B6200")),
+                NoWordArtOutline(),
+                true),
+            WordArtStyle.ChromeOne => (
+                GradientFill(5400000, (0, "#C0C0C0"), (35000, "#FFFFFF"), (65000, "#A0A8B0"), (100000, "#E8E8E8")),
+                WordArtOutline("#242424", WordArtOutlineWidthDip * 2),
+                true),
+            WordArtStyle.PatternFill => (
+                new DrawingObjectFillPlan(
+                    DrawingObjectFillKind.Pattern,
+                    ColorHex: null,
+                    GradientAngle: 0,
+                    GradientStops: [],
+                    PatternPreset: "diagCross",
+                    PatternForegroundColorHex: "#1F4E79",
+                    PatternBackgroundColorHex: "#FFFFFF"),
+                WordArtOutline("#1F4E79"),
+                true),
+            WordArtStyle.Outline => (SolidFill("#1F4E79"), WordArtOutline("#2E2E2E"), true),
+            WordArtStyle.ChromeTwo => (SolidFill("#FFFFFF"), WordArtOutline("#1F4E79", DipPerPoint), true),
+            WordArtStyle.FillWhite => (SolidFill("#FFFFFF"), WordArtOutline("#242424"), true),
+            WordArtStyle.ShadowOrange or WordArtStyle.Bevel => (SolidFill("#ED7D31"), NoWordArtOutline(), true),
+            WordArtStyle.GlowBlue or WordArtStyle.GlowGold => (SolidFill("#242424"), NoWordArtOutline(), true),
+            WordArtStyle.FillBlue or WordArtStyle.Shadow or WordArtStyle.Reflection => (SolidFill("#1F4E79"), NoWordArtOutline(), true),
+            _ => (SolidFill("#1F4E79"), NoWordArtOutline(), true)
+        };
+
+    private static DrawingObjectFillPlan SolidFill(string colorHex) =>
+        new(
+            DrawingObjectFillKind.Solid,
+            colorHex,
+            GradientAngle: 0,
+            GradientStops: [],
+            PatternPreset: null,
+            PatternForegroundColorHex: null,
+            PatternBackgroundColorHex: null);
+
+    private static DrawingObjectFillPlan GradientFill(int angle, params (int Position, string ColorHex)[] stops) =>
+        new(
+            DrawingObjectFillKind.Gradient,
+            ColorHex: null,
+            angle,
+            stops.Select(stop => new DrawingObjectGradientStopPlan(stop.Position, stop.ColorHex)).ToList(),
+            PatternPreset: null,
+            PatternForegroundColorHex: null,
+            PatternBackgroundColorHex: null);
+
+    private static DrawingObjectOutlinePlan NoWordArtOutline() =>
+        new(false, null, 0, null);
+
+    private static DrawingObjectOutlinePlan WordArtOutline(string colorHex, double widthDip = WordArtOutlineWidthDip) =>
+        new(true, colorHex, widthDip, null);
+
+    private static string BuildWordArtWarpHint(WordArtWarp warp) =>
+        warp switch
+        {
+            WordArtWarp.None => "none",
+            WordArtWarp.ArchUp or WordArtWarp.ArchDown or WordArtWarp.Circle or WordArtWarp.Button => "arc",
+            WordArtWarp.Wave1 or WordArtWarp.Wave2 => "wave",
+            WordArtWarp.Inflate or WordArtWarp.Deflate or WordArtWarp.InflateBottom => "inflate",
+            WordArtWarp.ChevronUp or WordArtWarp.ChevronDown => "chevron",
+            WordArtWarp.FadeRight or WordArtWarp.FadeLeft => "fade",
+            WordArtWarp.SlantUp or WordArtWarp.SlantDown => "slant",
+            _ => "custom"
         };
 
     private static double EmuToDip(int emu) =>
