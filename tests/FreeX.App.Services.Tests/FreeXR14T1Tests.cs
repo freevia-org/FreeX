@@ -29,6 +29,9 @@ public sealed class FreeXR14T1Tests
         var a1 = new CellAddress(sheet.Id, 1, 1);
         var d5 = new CellAddress(sheet.Id, 5, 4);
         sheet.SetCell(a1, new NumberValue(1234.5));
+        // Widen the source column so the "$1,234.50" currency text fits; at the default width it now
+        // correctly renders as the ### width indicator, which this test is not exercising.
+        sheet.ColumnWidths[1] = 30;
 
         var session = CreateSession(new StartupWorkbookLoadResult(
             workbook,

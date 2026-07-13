@@ -338,20 +338,18 @@ public partial class MainWindow
         var matches = DataValidationCirclePlanner.FindInvalidDataCells(_workbook, sheet);
         if (matches.Count == 0)
         {
+            SheetGrid.ValidationCircleCells = null;
             _messageService.ShowInfo(
                 UiText.Get("MainWindowMessage_CircleInvalidDataNoInvalidData"),
                 UiText.Get("MainWindowMessage_CircleInvalidDataTitle"));
             return;
         }
 
-        var ranges = SelectionRangeService.CompressAddresses(matches);
-        _selectionAnchor = matches[0];
-        _selectionCursor = matches[0];
-        SheetGrid.SelectedRange = ranges[0];
-        SheetGrid.SelectedRanges = ranges;
-        CellAddressBox.Text = ranges.Count == 1
-            ? FormatRangeReference(ranges[0].Start, ranges[0].End)
-            : $"{matches.Count} cells";
+        // Match Excel: Circle Invalid Data draws a persistent overlay of red ovals around every
+        // cell that currently fails its validation rule. It does not change the current selection --
+        // the previous implementation only reused the (transient) multi-range selection as a stand-in
+        // for the circles, which vanished the instant the user clicked elsewhere or pressed an arrow key.
+        SheetGrid.ValidationCircleCells = matches;
         EnsureCellVisible(matches[0]);
         UpdateViewport();
         RefreshStatusBar();
@@ -359,7 +357,7 @@ public partial class MainWindow
 
     private void ClearValidationCirclesMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        SheetGrid.SelectedRanges = null;
+        SheetGrid.ValidationCircleCells = null;
         UpdateViewport();
         RefreshStatusBar();
     }

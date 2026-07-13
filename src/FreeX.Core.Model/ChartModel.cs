@@ -339,6 +339,30 @@ public sealed class ChartModel
     public string? ErrorBarMinusRangeCacheXml { get; set; }
     public double ErrorBarThickness { get; set; } = 1;
     public ChartLineDashStyle ErrorBarDashStyle { get; set; } = ChartLineDashStyle.Solid;
+
+    /// <summary>
+    /// R41-io-chart-errorbars-trendline-3-2 passthrough: Excel writes TWO sibling
+    /// <c>&lt;c:errBars&gt;</c> elements on the same series when both horizontal (X) and vertical
+    /// (Y) error bars are configured (common for scatter/statistical charts), but only one set is
+    /// modeled by the scalar <c>ErrorBar*</c> properties above. Every <c>&lt;c:errBars&gt;</c>
+    /// beyond the first one captured chart-wide — whether a second set on the SAME series or the
+    /// first set on a LATER series — is preserved here verbatim, keyed by the 0-based series index
+    /// it belongs to, so it survives an open/save round-trip instead of being silently dropped.
+    /// This is a stop-gap round-trip fix, not a full per-series error-bar model: FreeX cannot yet
+    /// render or edit these extra error bars; that remains a follow-up.
+    /// </summary>
+    public List<ChartSeriesRawXmlEntry> AdditionalSeriesErrorBarsXml { get; set; } = [];
+
+    /// <summary>
+    /// R41-io-chart-errorbars-trendline-3-3 passthrough: only the FIRST series (in document order)
+    /// carrying a <c>&lt;c:trendline&gt;</c> is modeled by the scalar <c>Trendline*</c> properties
+    /// above. Every additional <c>&lt;c:trendline&gt;</c> — a second trendline on that same series,
+    /// or any trendline on a LATER series — is preserved here verbatim, keyed by the 0-based series
+    /// index it belongs to, so it survives an open/save round-trip instead of being silently and
+    /// permanently dropped. This is a stop-gap round-trip fix, not a full per-series trendline
+    /// model: FreeX cannot yet render or edit these extra trendlines; that remains a follow-up.
+    /// </summary>
+    public List<ChartSeriesRawXmlEntry> AdditionalSeriesTrendlinesXml { get; set; } = [];
     public bool ShowDropLines { get; set; }
     public CellColor? DropLineColor { get; set; }
     public WorkbookThemeColorReference? DropLineThemeColor { get; set; }
@@ -516,3 +540,11 @@ public sealed record ChartPointExplosion(int SeriesIndex, int PointIndex, double
 /// See <see cref="ChartModel.AdditionalPlotGroupDataLabels"/> for the round-trip rationale.
 /// </summary>
 public sealed record ChartPlotGroupDataLabelsXml(int GroupIndex, string RawXml);
+
+/// <summary>
+/// Verbatim per-series chart XML (e.g. an extra <c>&lt;c:errBars&gt;</c> or <c>&lt;c:trendline&gt;</c>)
+/// preserved for a series beyond the one the scalar chart-wide properties model. See
+/// <see cref="ChartModel.AdditionalSeriesErrorBarsXml"/> and
+/// <see cref="ChartModel.AdditionalSeriesTrendlinesXml"/> for the round-trip rationale.
+/// </summary>
+public sealed record ChartSeriesRawXmlEntry(int SeriesIndex, string RawXml);

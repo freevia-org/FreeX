@@ -22,6 +22,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FreeX.Core.Model\FreeX.Core.Model.csproj" />
     <ProjectReference Include="..\..\src\FreeX.Core.Formula\FreeX.Core.Formula.csproj" />
+    <!-- Needed only for R41_NumberOverflowHashTests' ViewportService merged-cell-width coverage
+         (round-41 finding R41-render-number-overflow-hash-3-3). -->
+    <ProjectReference Include="..\..\src\FreeX.Core.Calc\FreeX.Core.Calc.csproj" />
   </ItemGroup>
 
 </Project>

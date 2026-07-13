@@ -24,6 +24,44 @@ internal static partial class XlsxChartXmlWriter
                 : null);
     }
 
+    /// <summary>
+    /// R41-io-hyperlink-drawing-rels-3-2: <see cref="ToChartTitleXml"/> rebuilds the main chart title
+    /// purely from <see cref="ChartModel"/> scalar fields, which have no concept of a hyperlink on the
+    /// title run -- unlike axis titles (see <see cref="TryParseVerbatimAxisTitleXml"/>), the main title
+    /// has no verbatim-XML fallback. Rather than adding a modeled Hyperlink property, this grafts a
+    /// caller-supplied <c>a:hlinkClick</c> (already resolved to a package relationship id by the caller,
+    /// which captured it from the chart part's OWN pre-rebuild bytes) onto the first title run's
+    /// <c>a:rPr</c> as a native passthrough. No-op if the rebuilt document has no title run (e.g. the
+    /// title text itself was cleared) or already declares the "r" namespace differently.
+    /// </summary>
+    internal static void ApplyVerbatimTitleHyperlink(
+        XDocument chartXml,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        XNamespace relNs,
+        string hyperlinkRelationshipId)
+    {
+        var titleRunProperties = chartXml.Root?
+            .Element(chartNs + "chart")?
+            .Element(chartNs + "title")?
+            .Element(chartNs + "tx")?
+            .Element(chartNs + "rich")?
+            .Element(drawingNs + "p")?
+            .Element(drawingNs + "r")?
+            .Element(drawingNs + "rPr");
+        if (titleRunProperties is null)
+            return;
+
+        // CT_TextCharacterProperties element order: ..., (fill group)?, effectLst|effectDag?,
+        // highlight?, (uLnTx|uLn)?, (uFillTx|uFill)?, latin?, ea?, cs?, sym?, hlinkClick?, ... --
+        // ToTextRunProperties only ever emits an optional solidFill before this point, so appending
+        // hlinkClick as the last child keeps the run properties schema-valid.
+        titleRunProperties.Add(new XElement(drawingNs + "hlinkClick", new XAttribute(relNs + "id", hyperlinkRelationshipId)));
+
+        if (chartXml.Root?.Attribute(XNamespace.Xmlns + "r") is null)
+            chartXml.Root?.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
+    }
+
     private static XElement? ToAxisTitleXml(
         string? title,
         ChartManualLayoutModel? layout,

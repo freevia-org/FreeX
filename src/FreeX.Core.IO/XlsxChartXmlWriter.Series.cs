@@ -50,6 +50,32 @@ internal static partial class XlsxChartXmlWriter
     }
 
     /// <summary>
+    /// R41-io-chart-errorbars-trendline-3-2: re-emits any extra &lt;c:errBars&gt; captured for this
+    /// series beyond the one modeled by the scalar ErrorBar* properties (e.g. the paired X/Y set
+    /// Excel writes when both horizontal and vertical error bars are configured), so they survive
+    /// an open/save round-trip verbatim. See <see cref="ChartModel.AdditionalSeriesErrorBarsXml"/>.
+    /// </summary>
+    private static IEnumerable<XElement> ToAdditionalErrorBarsXml(ChartModel chart, int seriesIndex) =>
+        chart.AdditionalSeriesErrorBarsXml
+            .Where(entry => entry.SeriesIndex == seriesIndex)
+            .Select(entry => TryParseChartXml(entry.RawXml))
+            .OfType<XElement>();
+
+    /// <summary>
+    /// R41-io-chart-errorbars-trendline-3-3: re-emits any extra &lt;c:trendline&gt; captured for
+    /// this series beyond the one modeled by the scalar Trendline* properties (a second trendline
+    /// on this series, or the first trendline on any series other than
+    /// <see cref="ChartModel.TrendlineSeriesIndex"/>), so it survives an open/save round-trip
+    /// verbatim instead of being silently dropped. See
+    /// <see cref="ChartModel.AdditionalSeriesTrendlinesXml"/>.
+    /// </summary>
+    private static IEnumerable<XElement> ToAdditionalTrendlinesXml(ChartModel chart, int seriesIndex) =>
+        chart.AdditionalSeriesTrendlinesXml
+            .Where(entry => entry.SeriesIndex == seriesIndex)
+            .Select(entry => TryParseChartXml(entry.RawXml))
+            .OfType<XElement>();
+
+    /// <summary>
     /// Orientation-aware geometry for positional series-range computation. A "strip" is one series
     /// line of <see cref="ChartModel.DataRange"/> — a column by default, a row when
     /// <see cref="ChartModel.SeriesInRows"/> (Excel's "Switch Row/Column") — and the point axis runs
@@ -153,7 +179,9 @@ internal static partial class XlsxChartXmlWriter
                 ToSeriesInvertIfNegativeXml(chart, seriesIndex, chartNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
+                ToAdditionalTrendlinesXml(chart, seriesIndex),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToAdditionalErrorBarsXml(chart, seriesIndex),
                 ToCategoryRangeXml(effectiveCategoryRange, effectiveCategoryIsNumeric, chartNs),
                 new XElement(chartNs + "val",
                     new XElement(chartNs + "numRef",
@@ -308,7 +336,9 @@ internal static partial class XlsxChartXmlWriter
                 ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
+                ToAdditionalTrendlinesXml(chart, seriesIndex),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToAdditionalErrorBarsXml(chart, seriesIndex),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", effectiveXValueRange))),
@@ -410,7 +440,9 @@ internal static partial class XlsxChartXmlWriter
                 ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
+                ToAdditionalTrendlinesXml(chart, seriesIndex),
                 ToErrorBarsXml(chart, seriesIndex, chartNs, drawingNs),
+                ToAdditionalErrorBarsXml(chart, seriesIndex),
                 new XElement(chartNs + "xVal",
                     new XElement(chartNs + "numRef",
                         new XElement(chartNs + "f", effectiveXValueRange))),

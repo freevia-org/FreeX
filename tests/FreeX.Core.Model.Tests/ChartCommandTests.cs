@@ -82,7 +82,9 @@ public sealed partial class ChartCommandTests
     [Fact]
     public void ChartTypeSupport_IdentifiesSecondaryAxisChartTypes()
     {
-        var supportedTypes = new[] { ChartType.Column, ChartType.Line, ChartType.ThreeDLine, ChartType.Area, ChartType.ThreeDArea, ChartType.Scatter };
+        // Excel supports a secondary axis on horizontal Bar charts just as on Column charts, so the
+        // Bar family belongs with Column in the supported set (R41 twin fix).
+        var supportedTypes = new[] { ChartType.Column, ChartType.Bar, ChartType.StackedBar, ChartType.PercentStackedBar, ChartType.Line, ChartType.ThreeDLine, ChartType.Area, ChartType.ThreeDArea, ChartType.Scatter };
         var unsupportedTypes = Enum.GetValues<ChartType>().Except(supportedTypes);
 
         supportedTypes.Should().OnlyContain(type => ChartTypeSupport.SupportsSecondaryAxis(type));

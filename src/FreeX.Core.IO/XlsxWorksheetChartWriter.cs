@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Linq;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -13,6 +14,7 @@ internal static class XlsxWorksheetChartWriter
     private const string ChartExColorStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartColorStyle";
     private const string ChartExStyleRelationshipType = "http://schemas.microsoft.com/office/2011/relationships/chartStyle";
     private const string ChartExChoiceNamespace = "http://schemas.microsoft.com/office/drawing/2015/9/8/chartex";
+    private const string HyperlinkRelationshipType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
 
     public static bool HasSupportedCharts(Workbook workbook, Func<ChartModel, bool> isSupportedChart)
     {
@@ -164,6 +166,16 @@ internal static class XlsxWorksheetChartWriter
         XNamespace markupCompatNs = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
         var drawingRelsPath = XlsxPackagePath.GetRelationshipPartPath(drawingPath);
+
+        // R41-io-hyperlink-drawing-rels-3-1: capture each existing chart graphicFrame's object-level
+        // hyperlink BEFORE the drawing part is deleted and every chart's anchor is rebuilt from
+        // ChartModel (which has no Hyperlink property to carry this across). Matched positionally: the
+        // Nth chart graphicFrame found in the OLD drawing (document order) corresponds to the Nth chart
+        // written by this same pass -- consistent with how this file already numbers chart parts/anchors
+        // positionally elsewhere (e.g. chartIndex).
+        var oldChartHyperlinks = ReadOldChartGraphicFrameHyperlinks(
+            archive, drawingPath, drawingRelsPath, spreadsheetDrawingNs, drawingNs, relNs, packageRelNs);
+
         archive.GetEntry(drawingPath)?.Delete();
         archive.GetEntry(drawingRelsPath)?.Delete();
 
@@ -171,22 +183,36 @@ internal static class XlsxWorksheetChartWriter
         var anchors = new List<XElement>();
         var chartContentTypes = new Dictionary<int, string>();
         var chartExStyleParts = new Dictionary<int, ChartExStylePackageParts>();
+        var chartPosition = 0;
         foreach (var chart in charts)
         {
             var currentChartIndex = chartIndex++;
             chartContentTypes[currentChartIndex] = getChartContentType(chart);
             var chartPath = $"xl/charts/chart{currentChartIndex}.xml";
+
+            // R41-io-hyperlink-drawing-rels-3-2: capture the OLD chart part's main-title hyperlink (if
+            // any) BEFORE it is deleted/overwritten below, so it can be grafted onto the rebuilt title.
+            var titleHyperlink = ReadOldChartTitleHyperlink(archive, chartPath, packageRelNs, chartNs, drawingNs, relNs);
+
             archive.GetEntry(chartPath)?.Delete();
+            var chartXml = createChartXml(chart, sheet);
+            string? titleHyperlinkRelId = null;
+            if (titleHyperlink is not null)
+            {
+                titleHyperlinkRelId = "rIdFreeXChartTitleHyperlink";
+                XlsxChartXmlWriter.ApplyVerbatimTitleHyperlink(chartXml, chartNs, drawingNs, relNs, titleHyperlinkRelId);
+            }
+
             var chartEntry = archive.CreateEntry(chartPath);
             using (var chartStream = chartEntry.Open())
-                createChartXml(chart, sheet).Save(chartStream);
+                chartXml.Save(chartStream);
 
             var styleParts = ChartTypeSupport.IsChartExFamily(chart.Type)
                 ? WriteChartExStyleParts(archive, currentChartIndex, chart.Type)
                 : (ChartExStylePackageParts?)null;
             if (styleParts is { } chartExParts)
                 chartExStyleParts[currentChartIndex] = chartExParts;
-            WriteChartRelationships(archive, chartPath, chart, styleParts, packageRelNs);
+            WriteChartRelationships(archive, chartPath, chart, styleParts, packageRelNs, titleHyperlink, titleHyperlinkRelId);
 
             var chartRelId = $"rIdFreeXChart{currentChartIndex}";
             var chartRelationshipType = getChartRelationshipType(chart);
@@ -196,7 +222,20 @@ internal static class XlsxWorksheetChartWriter
                 new XAttribute("Type", chartRelationshipType),
                 new XAttribute("Target", XlsxPackagePath.GetRelationshipTarget(drawingPath, chartPath))));
 
-            anchors.Add(ToChartAnchor(chart, sheet, currentChartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs));
+            string? objectHyperlinkRelId = null;
+            if (chartPosition < oldChartHyperlinks.Count && oldChartHyperlinks[chartPosition] is { } objectHyperlink)
+            {
+                objectHyperlinkRelId = "rIdFreeXChartHyperlink" + currentChartIndex;
+                drawingRelsXml.Root!.Add(new XElement(
+                    packageRelNs + "Relationship",
+                    new XAttribute("Id", objectHyperlinkRelId),
+                    new XAttribute("Type", HyperlinkRelationshipType),
+                    new XAttribute("Target", objectHyperlink.Target),
+                    string.IsNullOrWhiteSpace(objectHyperlink.TargetMode) ? null : new XAttribute("TargetMode", objectHyperlink.TargetMode)));
+            }
+
+            anchors.Add(ToChartAnchor(chart, sheet, currentChartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs));
+            chartPosition++;
         }
 
         XlsxPackageXmlEditor.ReplaceXml(archive, drawingPath, new XDocument(
@@ -269,10 +308,26 @@ internal static class XlsxWorksheetChartWriter
         string chartPath,
         ChartModel chart,
         ChartExStylePackageParts? chartExStyleParts,
-        XNamespace packageRelNs)
+        XNamespace packageRelNs,
+        (string Target, string? TargetMode)? titleHyperlink = null,
+        string? titleHyperlinkRelId = null)
     {
         var relsXml = new XDocument(new XElement(packageRelNs + "Relationships"));
         var relationships = relsXml.Root!;
+        if (titleHyperlink is { } titleHyperlinkTarget && titleHyperlinkRelId is not null)
+        {
+            // R41-io-hyperlink-drawing-rels-3-2: re-attach the main chart title's hyperlink relationship
+            // captured from the pre-rebuild chart part (see ReadOldChartTitleHyperlink).
+            relationships.Add(new XElement(
+                packageRelNs + "Relationship",
+                new XAttribute("Id", titleHyperlinkRelId),
+                new XAttribute("Type", HyperlinkRelationshipType),
+                new XAttribute("Target", titleHyperlinkTarget.Target),
+                string.IsNullOrWhiteSpace(titleHyperlinkTarget.TargetMode)
+                    ? null
+                    : new XAttribute("TargetMode", titleHyperlinkTarget.TargetMode)));
+        }
+
         if (chart.ExternalData is { } externalData &&
             !string.IsNullOrWhiteSpace(externalData.RelationshipId) &&
             !string.IsNullOrWhiteSpace(externalData.RelationshipType) &&
@@ -324,6 +379,139 @@ internal static class XlsxWorksheetChartWriter
 
         var relsPath = XlsxPackagePath.GetRelationshipPartPath(chartPath);
         XlsxPackageXmlEditor.ReplaceXml(archive, relsPath, relsXml);
+    }
+
+    /// <summary>
+    /// R41-io-hyperlink-drawing-rels-3-1: reads the CURRENT (pre-rebuild) drawing part's chart
+    /// graphicFrames, in document order, and resolves each one's object-level hyperlink (an
+    /// <c>a:hlinkClick</c> on its <c>xdr:cNvPr</c>) via the drawing's OWN current relationships part.
+    /// Returns one entry per chart graphicFrame found (null where that chart has no hyperlink), so the
+    /// caller can re-attach each hyperlink to the rebuilt chart at the same position. Returns an empty
+    /// list if the drawing part doesn't exist or can't be parsed (nothing to preserve).
+    /// </summary>
+    private static List<(string Target, string? TargetMode)?> ReadOldChartGraphicFrameHyperlinks(
+        ZipArchive archive,
+        string drawingPath,
+        string drawingRelsPath,
+        XNamespace spreadsheetDrawingNs,
+        XNamespace drawingNs,
+        XNamespace relNs,
+        XNamespace packageRelNs)
+    {
+        var result = new List<(string, string?)?>();
+        if (archive.GetEntry(drawingPath) is not { } oldDrawingEntry)
+            return result;
+
+        XDocument oldDrawingXml;
+        try
+        {
+            oldDrawingXml = XlsxPackageXmlEditor.LoadXml(oldDrawingEntry);
+        }
+        catch
+        {
+            return result;
+        }
+
+        var oldRelTargets = new Dictionary<string, (string Target, string? TargetMode)>(StringComparer.OrdinalIgnoreCase);
+        if (archive.GetEntry(drawingRelsPath) is { } oldRelsEntry)
+        {
+            try
+            {
+                var oldRelsXml = XlsxPackageXmlEditor.LoadXml(oldRelsEntry);
+                foreach (var rel in oldRelsXml.Root?.Elements(packageRelNs + "Relationship") ?? [])
+                {
+                    var id = rel.Attribute("Id")?.Value;
+                    var target = rel.Attribute("Target")?.Value;
+                    if (string.IsNullOrEmpty(id) || target is null)
+                        continue;
+                    oldRelTargets[id] = (target, rel.Attribute("TargetMode")?.Value);
+                }
+            }
+            catch
+            {
+                // Malformed rels part: fall through with no resolvable relationships, so every
+                // hyperlink below resolves to null (nothing preserved for this sheet).
+            }
+        }
+
+        foreach (var graphicFrame in oldDrawingXml.Descendants(spreadsheetDrawingNs + "graphicFrame"))
+        {
+            // Only graphicFrame elements that host a chart (as opposed to some other graphic type)
+            // carry the object-level hyperlink this finding is about.
+            var isChart = graphicFrame.Descendants(drawingNs + "graphicData")
+                .Any(graphicData => (graphicData.Attribute("uri")?.Value ?? "").Contains("chart", StringComparison.OrdinalIgnoreCase));
+            if (!isChart)
+                continue;
+
+            var hlinkClick = graphicFrame
+                .Element(spreadsheetDrawingNs + "nvGraphicFramePr")?
+                .Element(spreadsheetDrawingNs + "cNvPr")?
+                .Element(drawingNs + "hlinkClick");
+            var relId = hlinkClick?.Attribute(relNs + "id")?.Value;
+            result.Add(relId is not null && oldRelTargets.TryGetValue(relId, out var resolved) ? resolved : null);
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// R41-io-hyperlink-drawing-rels-3-2: reads the CURRENT (pre-rebuild) chart part at
+    /// <paramref name="chartPath"/> and resolves its main title's hyperlink (an <c>a:hlinkClick</c> on
+    /// the first title run's <c>a:rPr</c>) via the chart part's OWN current relationships. Returns null
+    /// if the chart part doesn't exist, has no title hyperlink, or the hyperlink's relationship can't be
+    /// resolved.
+    /// </summary>
+    private static (string Target, string? TargetMode)? ReadOldChartTitleHyperlink(
+        ZipArchive archive,
+        string chartPath,
+        XNamespace packageRelNs,
+        XNamespace chartNs,
+        XNamespace drawingNs,
+        XNamespace relNs)
+    {
+        if (archive.GetEntry(chartPath) is not { } oldChartEntry)
+            return null;
+
+        XDocument oldChartXml;
+        try
+        {
+            oldChartXml = XlsxPackageXmlEditor.LoadXml(oldChartEntry);
+        }
+        catch
+        {
+            return null;
+        }
+
+        var hlinkClick = oldChartXml.Root?
+            .Element(chartNs + "chart")?
+            .Element(chartNs + "title")?
+            .Element(chartNs + "tx")?
+            .Element(chartNs + "rich")?
+            .Element(drawingNs + "p")?
+            .Element(drawingNs + "r")?
+            .Element(drawingNs + "rPr")?
+            .Element(drawingNs + "hlinkClick");
+        var relId = hlinkClick?.Attribute(relNs + "id")?.Value;
+        if (relId is null)
+            return null;
+
+        var chartRelsPath = XlsxPackagePath.GetRelationshipPartPath(chartPath);
+        if (archive.GetEntry(chartRelsPath) is not { } oldChartRelsEntry)
+            return null;
+
+        try
+        {
+            var oldChartRelsXml = XlsxPackageXmlEditor.LoadXml(oldChartRelsEntry);
+            var relationship = oldChartRelsXml.Root?
+                .Elements(packageRelNs + "Relationship")
+                .FirstOrDefault(e => string.Equals(e.Attribute("Id")?.Value, relId, StringComparison.OrdinalIgnoreCase));
+            var target = relationship?.Attribute("Target")?.Value;
+            return target is null ? null : (target, relationship?.Attribute("TargetMode")?.Value);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static ChartExStylePackageParts WriteChartExStyleParts(ZipArchive archive, int chartIndex, ChartType chartType)
@@ -394,6 +582,7 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
+        string? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -402,13 +591,13 @@ internal static class XlsxWorksheetChartWriter
         XNamespace markupCompatNs)
     {
         if (IsChartExRelationshipType(chartRelationshipType))
-            return ToTwoCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs);
+            return ToTwoCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs);
 
         return chart.DrawingAnchorKind switch
         {
-            ChartDrawingAnchorKind.OneCell => ToOneCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
-            ChartDrawingAnchorKind.TwoCell => ToTwoCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
-            _ => ToAbsoluteChartAnchor(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs)
+            ChartDrawingAnchorKind.OneCell => ToOneCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
+            ChartDrawingAnchorKind.TwoCell => ToTwoCellChartAnchor(chart, sheet, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
+            _ => ToAbsoluteChartAnchor(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs)
         };
     }
 
@@ -417,6 +606,7 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
+        string? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -430,7 +620,7 @@ internal static class XlsxWorksheetChartWriter
             new XElement(spreadsheetDrawingNs + "ext",
                 new XAttribute("cx", DrawingMlUnits.PixelsToEmu(chart.Width)),
                 new XAttribute("cy", DrawingMlUnits.PixelsToEmu(chart.Height))),
-            ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
+            ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
 
     private static XElement ToOneCellChartAnchor(
@@ -439,6 +629,7 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
+        string? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -452,7 +643,7 @@ internal static class XlsxWorksheetChartWriter
             new XElement(spreadsheetDrawingNs + "ext",
                 new XAttribute("cx", DrawingMlUnits.PixelsToEmu(chart.Width)),
                 new XAttribute("cy", DrawingMlUnits.PixelsToEmu(chart.Height))),
-            ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
+            ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
     }
 
@@ -462,6 +653,7 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
+        string? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -474,7 +666,7 @@ internal static class XlsxWorksheetChartWriter
         return new XElement(spreadsheetDrawingNs + "twoCellAnchor",
             ToAnchorMarkerXml("from", from, spreadsheetDrawingNs),
             ToAnchorMarkerXml("to", to, spreadsheetDrawingNs),
-            ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
+            ToChartFrameOrAlternateContent(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs, markupCompatNs),
             new XElement(spreadsheetDrawingNs + "clientData"));
     }
 
@@ -483,6 +675,7 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
+        string? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -490,7 +683,7 @@ internal static class XlsxWorksheetChartWriter
         XNamespace relNs,
         XNamespace markupCompatNs)
     {
-        var graphicFrame = ToChartGraphicFrame(chart, chartIndex, chartRelId, chartRelationshipType, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs);
+        var graphicFrame = ToChartGraphicFrame(chart, chartIndex, chartRelId, chartRelationshipType, objectHyperlinkRelId, spreadsheetDrawingNs, drawingNs, chartNs, chartExNs, relNs);
         if (!IsChartExRelationshipType(chartRelationshipType))
             return graphicFrame;
 
@@ -509,6 +702,7 @@ internal static class XlsxWorksheetChartWriter
         int chartIndex,
         string chartRelId,
         string chartRelationshipType,
+        string? objectHyperlinkRelId,
         XNamespace spreadsheetDrawingNs,
         XNamespace drawingNs,
         XNamespace chartNs,
@@ -521,7 +715,12 @@ internal static class XlsxWorksheetChartWriter
             new XElement(spreadsheetDrawingNs + "nvGraphicFramePr",
                 new XElement(spreadsheetDrawingNs + "cNvPr",
                     new XAttribute("id", chartIndex + 1),
-                    new XAttribute("name", DrawingName(chart.Name, $"Chart {chartIndex}"))),
+                    new XAttribute("name", DrawingName(chart.Name, $"Chart {chartIndex}")),
+                    // R41-io-hyperlink-drawing-rels-3-1: re-attach the chart-object hyperlink captured
+                    // from the pre-rebuild drawing part (see ReadOldChartGraphicFrameHyperlinks).
+                    objectHyperlinkRelId is null
+                        ? null
+                        : new XElement(drawingNs + "hlinkClick", new XAttribute(relNs + "id", objectHyperlinkRelId))),
                 new XElement(spreadsheetDrawingNs + "cNvGraphicFramePr")),
             new XElement(spreadsheetDrawingNs + "xfrm",
                 isChartEx

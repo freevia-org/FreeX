@@ -1121,8 +1121,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             nativeAttributes["defaultGridColor"] = "0";
         if (window.HeaderColor != 64)
             nativeAttributes["colorId"] = window.HeaderColor.ToString(CultureInfo.InvariantCulture);
-        if (TryCreateSelectionMetadata(sourceSheet, sheet.Id, out var selectionMetadata))
-            nativeChildren.Add(selectionMetadata);
+        nativeChildren.AddRange(CreateSelectionMetadata(sourceSheet, sheet.Id));
         if (nativeAttributes.Count == 0 && nativeChildren.Count == 0)
             return;
 
@@ -1134,15 +1133,35 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         sheet.PrimaryViewMetadata.Set("sheetView", serializedMetadata);
     }
 
-    private static bool TryCreateSelectionMetadata(
-        ISheet sourceSheet,
+    // BIFF writes one SELECTION record per pane when the sheet has frozen/split panes (each
+    // carrying its own Pane byte identifying which of the 4 possible panes it belongs to).
+    // Building metadata from only the first record found (regardless of which pane it actually
+    // came from) silently discards every other pane's selection extent/activeCellId and can
+    // mislabel a non-topLeft pane's data as topLeft's own. Iterate every SelectionRecord and emit
+    // one <selection> per pane, tagging each with its real pane name whenever more than one
+    // pane's worth of selection state exists so downstream pane-matching attributes each fragment
+    // to the correct pane instead of assuming "topLeft" for all of them.
+    private static List<string> CreateSelectionMetadata(ISheet sourceSheet, SheetId sheetId)
+    {
+        var result = new List<string>();
+        var selections = GetSelectionRecords(sourceSheet);
+        var includePaneAttribute = selections.Count > 1;
+        foreach (var selection in selections)
+        {
+            if (TryCreateSelectionElement(selection, sheetId, includePaneAttribute, out var metadata))
+                result.Add(metadata);
+        }
+
+        return result;
+    }
+
+    private static bool TryCreateSelectionElement(
+        SelectionRecord selection,
         SheetId sheetId,
+        bool includePaneAttribute,
         [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? metadata)
     {
         metadata = null;
-        if (TryGetSelectionRecord(sourceSheet) is not { } selection)
-            return false;
-
         var activeCell = ToA1(sheetId, selection.ActiveCellRow, selection.ActiveCellCol);
         var selectedRange = ToSqref(sheetId, selection.CellReferences);
         var hasSelectedRange = !string.IsNullOrWhiteSpace(selectedRange) &&
@@ -1153,6 +1172,7 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
 
         var element = new XElement(
             XName.Get("selection", "http://schemas.openxmlformats.org/spreadsheetml/2006/main"),
+            includePaneAttribute ? new XAttribute("pane", ToPaneName(selection.Pane)) : null,
             new XAttribute("activeCell", activeCell),
             new XAttribute("sqref", hasSelectedRange ? selectedRange : activeCell));
         if (hasActiveCellId)
@@ -1161,6 +1181,17 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
         metadata = element.ToString(SaveOptions.DisableFormatting);
         return true;
     }
+
+    // Mirrors NPOI.SS.Util.PaneInformation's PANE_LOWER_RIGHT/PANE_UPPER_RIGHT/PANE_LOWER_LEFT/
+    // PANE_UPPER_LEFT constants (0/1/2/3), which is also how NPOI.HSSF.Record.SelectionRecord.Pane
+    // is populated -- matching ECMA-376's CT_Selection/@pane ST_Pane enum names.
+    private static string ToPaneName(byte pane) => pane switch
+    {
+        0 => "bottomRight",
+        1 => "topRight",
+        2 => "bottomLeft",
+        _ => "topLeft"
+    };
 
     private static string ToSqref(SheetId sheetId, IEnumerable<CellRangeAddress8Bit> ranges) =>
         string.Join(" ", ranges.Select(range => ToA1Range(sheetId, range)));
@@ -1180,10 +1211,14 @@ public sealed class LegacyXlsFileAdapter : IFileAdapter
             ? hssfSheet.Sheet.FindFirstRecordBySid(WindowTwoRecord.sid) as WindowTwoRecord
             : null;
 
-    private static SelectionRecord? TryGetSelectionRecord(ISheet sourceSheet) =>
+    // FindFirstRecordBySid only ever returns the first SELECTION record in the BIFF stream, which
+    // silently drops every other pane's selection when the sheet has frozen/split panes (BIFF
+    // writes one SelectionRecord per pane). Read the full underlying record list instead so every
+    // pane's selection state can be preserved (see CreateSelectionMetadata above).
+    private static List<SelectionRecord> GetSelectionRecords(ISheet sourceSheet) =>
         sourceSheet is HSSFSheet hssfSheet
-            ? hssfSheet.Sheet.FindFirstRecordBySid(SelectionRecord.sid) as SelectionRecord
-            : null;
+            ? hssfSheet.Sheet.Records.OfType<SelectionRecord>().ToList()
+            : [];
 
     private static bool TryGetTabColor(ISheet sourceSheet, HSSFPalette palette, out CellColor tabColor)
     {

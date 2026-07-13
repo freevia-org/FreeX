@@ -6035,6 +6035,10 @@ public sealed class WorkbookSessionTests
         const string commaStyleFormat = "_(* #,##0.00_);_(* (#,##0.00);_(* \"-\"??_);_(@_)";
         sheet.SetCell(a1, new NumberValue(1234.5));
         sheet.GetCell(a1)!.StyleId = workbook.RegisterStyle(new CellStyle { NumberFormat = commaStyleFormat });
+        // Widen the column so the accounting-formatted value fits: at the default width (8.43) the
+        // 3-decimal accounting value overflows and correctly renders as the ### width indicator, which
+        // would hide the comma-style text this test verifies via DisplayText.
+        sheet.ColumnWidths[1] = 30;
         var session = CreateSession(new StartupWorkbookLoadResult(
             workbook,
             "Book.fxl",

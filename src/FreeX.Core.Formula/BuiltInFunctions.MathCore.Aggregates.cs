@@ -33,7 +33,11 @@ public static partial class BuiltInFunctions
             {
                 var v = arrays[k][i];
                 if (v is ErrorValue ev) return ev;
-                product *= TryCellNumber(v, out double value) ? value : 0;
+                // SUMPRODUCT multiplies booleans as 1/0 (unlike SUM, which ignores booleans
+                // encountered inside a range); non-numeric text still coerces to 0.
+                double term = v is BoolValue bv ? (bv.Value ? 1.0 : 0.0)
+                    : TryCellNumber(v, out double value) ? value : 0;
+                product *= term;
                 if (!double.IsFinite(product)) return ErrorValue.Num;
             }
             total += product;

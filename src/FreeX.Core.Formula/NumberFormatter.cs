@@ -100,12 +100,12 @@ public static partial class NumberFormatter
             ShouldAttemptSimpleDateTimeFormat(formatString) &&
             TryFormatSimpleDateTime(dateTimeValue.Value, formatString, targetWidthCharacters, uses1904DateSystem, out var simpleDateTime))
         {
-            return simpleDateTime;
+            return ApplyWidthOverflowIndicator(simpleDateTime, targetWidthCharacters);
         }
 
         var sections = SplitSections(formatString);
 
-        return value switch
+        var formatted = value switch
         {
             NumberValue n   => FormatNumber(n.Value, sections, targetWidthCharacters, indexedColors, theme, uses1904DateSystem),
             DateTimeValue d => ShouldFormatDateTimeValue(sections)
@@ -117,6 +117,30 @@ public static partial class NumberFormatter
             BlankValue      => new FormatResult(""),
             _               => new FormatResult("")
         };
+
+        // Excel shows a width-based '#' overflow indicator for ANY explicit (non-General)
+        // number/date/currency format whose formatted text is wider than the target column --
+        // not just the specific invalid-value/accounting-fill cases already handled inside
+        // FormatNumber/FormatDateTimeWithColor. Scope this strictly to numeric/date-time values
+        // (never text/bool/error/blank, which always overflow into neighboring cells instead).
+        return value is NumberValue or DateTimeValue
+            ? ApplyWidthOverflowIndicator(formatted, targetWidthCharacters)
+            : formatted;
+    }
+
+    /// <summary>
+    /// Replaces an over-wide formatted numeric/date result with Excel's "value doesn't fit"
+    /// indicator (a run of '#' characters sized to the target column) once the formatted text
+    /// exceeds the available character budget. A value that already fits is returned unchanged.
+    /// With no column-width context (targetWidthCharacters is null -- e.g. TEXT()/formula-bar
+    /// evaluation with no target cell), the result is never truncated to '#'.
+    /// </summary>
+    private static FormatResult ApplyWidthOverflowIndicator(FormatResult result, int? targetWidthCharacters)
+    {
+        if (targetWidthCharacters is not > 0 || result.Text.Length <= targetWidthCharacters.Value)
+            return result;
+
+        return new FormatResult(new string('#', targetWidthCharacters.Value), result.ColorHex);
     }
 
     // ── General format ────────────────────────────────────────────────────────

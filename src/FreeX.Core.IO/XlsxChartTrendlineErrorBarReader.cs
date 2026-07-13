@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Xml.Linq;
 using FreeX.Core.Model;
 
@@ -11,65 +12,92 @@ internal static class XlsxChartTrendlineErrorBarReader
 
     public static void ApplyTrendline(XElement series, ChartModel chart)
     {
-        if (chart.ShowLinearTrendline)
+        var trendlineElements = series.Elements(ChartNs + "trendline").ToList();
+        if (trendlineElements.Count == 0)
             return;
 
-        var trendline = series.Element(ChartNs + "trendline");
-        if (trendline is null)
-            return;
+        var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, 0);
+        foreach (var trendline in trendlineElements)
+        {
+            if (chart.ShowLinearTrendline)
+            {
+                // R41-io-chart-errorbars-trendline-3-3: only the FIRST <c:trendline> encountered
+                // chart-wide is modeled by the scalar Trendline* properties below. Every additional
+                // one — a second trendline on this same series, or any trendline on a later series
+                // — would otherwise be silently and permanently dropped. Preserve it verbatim
+                // (keyed by the series it belongs to) so it survives an open/save round-trip.
+                chart.AdditionalSeriesTrendlinesXml.Add(
+                    new ChartSeriesRawXmlEntry(seriesIndex, trendline.ToString(SaveOptions.DisableFormatting)));
+                continue;
+            }
 
-        chart.ShowLinearTrendline = true;
-        // R30-io-chart-series-cache-deep-1: this is a chart-global capture (only the first series in
-        // document order that carries a <c:trendline> is kept), so remember WHICH series it came from —
-        // every <c:ser> is required by the OOXML schema to carry its own <c:idx>, so this is always
-        // available — otherwise the writer has no way to reattach it to anything but series 0.
-        chart.TrendlineSeriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, 0);
-        chart.TrendlineName = trendline.Element(ChartNs + "name")?.Value;
-        chart.TrendlineType = FromXlsxTrendlineType(trendline.Element(ChartNs + "trendlineType")?.Attribute("val")?.Value);
-        if (int.TryParse(trendline.Element(ChartNs + "period")?.Attribute("val")?.Value, out var period))
-            chart.TrendlinePeriod = Math.Max(2, period);
-        if (int.TryParse(trendline.Element(ChartNs + "order")?.Attribute("val")?.Value, out var order))
-            chart.TrendlineOrder = Math.Clamp(order, 2, 6);
-        chart.TrendlineForward = ReadOptionalDouble(trendline.Element(ChartNs + "forward")?.Attribute("val")?.Value);
-        chart.TrendlineBackward = ReadOptionalDouble(trendline.Element(ChartNs + "backward")?.Attribute("val")?.Value);
-        chart.TrendlineIntercept = ReadOptionalDouble(trendline.Element(ChartNs + "intercept")?.Attribute("val")?.Value);
+            chart.ShowLinearTrendline = true;
+            // R30-io-chart-series-cache-deep-1: this is a chart-global capture (only the first series in
+            // document order that carries a <c:trendline> is kept), so remember WHICH series it came from —
+            // every <c:ser> is required by the OOXML schema to carry its own <c:idx>, so this is always
+            // available — otherwise the writer has no way to reattach it to anything but series 0.
+            chart.TrendlineSeriesIndex = seriesIndex;
+            chart.TrendlineName = trendline.Element(ChartNs + "name")?.Value;
+            chart.TrendlineType = FromXlsxTrendlineType(trendline.Element(ChartNs + "trendlineType")?.Attribute("val")?.Value);
+            if (int.TryParse(trendline.Element(ChartNs + "period")?.Attribute("val")?.Value, out var period))
+                chart.TrendlinePeriod = Math.Max(2, period);
+            if (int.TryParse(trendline.Element(ChartNs + "order")?.Attribute("val")?.Value, out var order))
+                chart.TrendlineOrder = Math.Clamp(order, 2, 6);
+            chart.TrendlineForward = ReadOptionalDouble(trendline.Element(ChartNs + "forward")?.Attribute("val")?.Value);
+            chart.TrendlineBackward = ReadOptionalDouble(trendline.Element(ChartNs + "backward")?.Attribute("val")?.Value);
+            chart.TrendlineIntercept = ReadOptionalDouble(trendline.Element(ChartNs + "intercept")?.Attribute("val")?.Value);
 
-        chart.ShowTrendlineEquation = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispEq")?.Attribute("val")?.Value);
-        chart.ShowTrendlineRSquared = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispRSqr")?.Attribute("val")?.Value);
-        var trendlineLabel = trendline.Element(ChartNs + "trendlineLbl");
-        var trendlineLabelNumberFormat = trendlineLabel?.Element(ChartNs + "numFmt");
-        chart.TrendlineLabelNumberFormatCode = trendlineLabelNumberFormat?.Attribute("formatCode")?.Value;
-        chart.TrendlineLabelNumberFormatSourceLinked = ReadNullableBool(trendlineLabelNumberFormat?.Attribute("sourceLinked")?.Value);
-        ApplyTrendlineLabelMetadata(trendlineLabel, chart);
-        ApplyTrendlineShapeProperties(trendline.Element(ChartNs + "spPr"), chart);
+            chart.ShowTrendlineEquation = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispEq")?.Attribute("val")?.Value);
+            chart.ShowTrendlineRSquared = XlsxChartScalarReader.IsTrue(trendline.Element(ChartNs + "dispRSqr")?.Attribute("val")?.Value);
+            var trendlineLabel = trendline.Element(ChartNs + "trendlineLbl");
+            var trendlineLabelNumberFormat = trendlineLabel?.Element(ChartNs + "numFmt");
+            chart.TrendlineLabelNumberFormatCode = trendlineLabelNumberFormat?.Attribute("formatCode")?.Value;
+            chart.TrendlineLabelNumberFormatSourceLinked = ReadNullableBool(trendlineLabelNumberFormat?.Attribute("sourceLinked")?.Value);
+            ApplyTrendlineLabelMetadata(trendlineLabel, chart);
+            ApplyTrendlineShapeProperties(trendline.Element(ChartNs + "spPr"), chart);
+        }
     }
 
     public static void ApplyErrorBars(XElement series, ChartModel chart)
     {
-        if (chart.ShowErrorBars)
+        var errorBarsElements = series.Elements(ChartNs + "errBars").ToList();
+        if (errorBarsElements.Count == 0)
             return;
 
-        var errorBars = series.Element(ChartNs + "errBars");
-        if (errorBars is null)
-            return;
+        var seriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, 0);
+        foreach (var errorBars in errorBarsElements)
+        {
+            if (chart.ShowErrorBars)
+            {
+                // R41-io-chart-errorbars-trendline-3-2: Excel writes TWO sibling <c:errBars>
+                // elements on the same series when both horizontal (X) and vertical (Y) error bars
+                // are configured, but only the first one encountered chart-wide is modeled by the
+                // scalar ErrorBar* properties below. Preserve every additional one verbatim (keyed
+                // by the series it belongs to) so it survives an open/save round-trip instead of
+                // being silently dropped.
+                chart.AdditionalSeriesErrorBarsXml.Add(
+                    new ChartSeriesRawXmlEntry(seriesIndex, errorBars.ToString(SaveOptions.DisableFormatting)));
+                continue;
+            }
 
-        chart.ShowErrorBars = true;
-        // R30-io-chart-series-cache-deep-1: see the matching comment in ApplyTrendline above — track
-        // which series this chart-global capture actually came from.
-        chart.ErrorBarSeriesIndex = XlsxChartSeriesRangeReader.ReadSeriesIndex(series, 0);
-        chart.ErrorBarKind = FromXlsxErrorBarKind(errorBars.Element(ChartNs + "errValType")?.Attribute("val")?.Value);
-        chart.ErrorBarAxisDirection = FromXlsxErrorBarAxisDirection(errorBars.Element(ChartNs + "errDir")?.Attribute("val")?.Value);
-        chart.ErrorBarDirection = FromXlsxErrorBarDirection(errorBars.Element(ChartNs + "errBarType")?.Attribute("val")?.Value);
-        chart.ErrorBarEndCaps = !XlsxChartScalarReader.IsTrue(errorBars.Element(ChartNs + "noEndCap")?.Attribute("val")?.Value);
-        chart.ErrorBarPlusRangeFormula = ReadErrorBarRangeFormula(errorBars.Element(ChartNs + "plus"));
-        chart.ErrorBarMinusRangeFormula = ReadErrorBarRangeFormula(errorBars.Element(ChartNs + "minus"));
-        chart.ErrorBarPlusRangeCacheXml = ReadErrorBarRangeCacheXml(errorBars.Element(ChartNs + "plus"));
-        chart.ErrorBarMinusRangeCacheXml = ReadErrorBarRangeCacheXml(errorBars.Element(ChartNs + "minus"));
+            chart.ShowErrorBars = true;
+            // R30-io-chart-series-cache-deep-1: see the matching comment in ApplyTrendline above — track
+            // which series this chart-global capture actually came from.
+            chart.ErrorBarSeriesIndex = seriesIndex;
+            chart.ErrorBarKind = FromXlsxErrorBarKind(errorBars.Element(ChartNs + "errValType")?.Attribute("val")?.Value);
+            chart.ErrorBarAxisDirection = FromXlsxErrorBarAxisDirection(errorBars.Element(ChartNs + "errDir")?.Attribute("val")?.Value);
+            chart.ErrorBarDirection = FromXlsxErrorBarDirection(errorBars.Element(ChartNs + "errBarType")?.Attribute("val")?.Value);
+            chart.ErrorBarEndCaps = !XlsxChartScalarReader.IsTrue(errorBars.Element(ChartNs + "noEndCap")?.Attribute("val")?.Value);
+            chart.ErrorBarPlusRangeFormula = ReadErrorBarRangeFormula(errorBars.Element(ChartNs + "plus"));
+            chart.ErrorBarMinusRangeFormula = ReadErrorBarRangeFormula(errorBars.Element(ChartNs + "minus"));
+            chart.ErrorBarPlusRangeCacheXml = ReadErrorBarRangeCacheXml(errorBars.Element(ChartNs + "plus"));
+            chart.ErrorBarMinusRangeCacheXml = ReadErrorBarRangeCacheXml(errorBars.Element(ChartNs + "minus"));
 
-        if (double.TryParse(errorBars.Element(ChartNs + "val")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-            chart.ErrorBarValue = Math.Clamp(value, 0, 1000);
+            if (double.TryParse(errorBars.Element(ChartNs + "val")?.Attribute("val")?.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
+                chart.ErrorBarValue = Math.Clamp(value, 0, 1000);
 
-        ApplyErrorBarShapeProperties(errorBars.Element(ChartNs + "spPr"), chart);
+            ApplyErrorBarShapeProperties(errorBars.Element(ChartNs + "spPr"), chart);
+        }
     }
 
     public static void ApplyChartGuideLineMetadata(XElement plotChart, ChartModel chart)
@@ -369,6 +397,11 @@ internal static class XlsxChartTrendlineErrorBarReader
             "percentage" => ChartErrorBarKind.Percentage,
             "fixedVal" => ChartErrorBarKind.FixedValue,
             "cust" => ChartErrorBarKind.Custom,
+            // R41-io-chart-errorbars-trendline-3-1: "stdDev" (Standard Deviation, with a
+            // user-configurable multiplier) is a distinct Excel error-amount kind from "stdErr"
+            // (Standard Error, no multiplier) — folding it into StandardError silently retypes the
+            // error bars and drops the multiplier value on the next save.
+            "stdDev" => ChartErrorBarKind.StdDev,
             _ => ChartErrorBarKind.StandardError
         };
 

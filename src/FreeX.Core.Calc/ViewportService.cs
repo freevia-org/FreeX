@@ -335,7 +335,7 @@ public sealed partial class ViewportService : IViewportService
         {
             if (!IsWithinVisibleColumnRange(colMetrics, col) ||
                 !IsWithinVisibleRowRange(rowMetrics, row) ||
-                !TryGetVisibleColumnTargetWidth(colMetrics, col, out var targetWidthCharacters))
+                !TryGetVisibleColumnTargetWidth(sheet, sheetId, row, colMetrics, col, out var targetWidthCharacters))
             {
                 continue;
             }
@@ -408,6 +408,9 @@ public sealed partial class ViewportService : IViewportService
     }
 
     private static bool TryGetVisibleColumnTargetWidth(
+        Sheet sheet,
+        SheetId sheetId,
+        uint row,
         IReadOnlyList<ColMetric> colMetrics,
         uint col,
         out int targetWidthCharacters)
@@ -424,7 +427,7 @@ public sealed partial class ViewportService : IViewportService
             var metric = colMetrics[mid];
             if (metric.Col == col)
             {
-                targetWidthCharacters = EstimateCharacterWidth(metric.Width);
+                targetWidthCharacters = EstimateCharacterWidth(GetMergeAwareTargetWidthPixels(sheet, sheetId, row, col, metric.Width));
                 return true;
             }
 
@@ -435,6 +438,29 @@ public sealed partial class ViewportService : IViewportService
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Excel sizes a merged cell's displayed value against the merged range's COMBINED pixel
+    /// width, not just the anchor column alone -- so a number that would overflow a single narrow
+    /// column can still fit (or fall back to fewer significant digits / ### less aggressively)
+    /// once merged across several columns. Only the merge's top-left (anchor) cell ever carries a
+    /// displayed value (see Sheet.Merges.cs), so non-anchor cells and unmerged cells keep using
+    /// the single column's own width unchanged.
+    /// </summary>
+    private static double GetMergeAwareTargetWidthPixels(Sheet sheet, SheetId sheetId, uint row, uint col, double anchorColumnWidthPixels)
+    {
+        if (sheet.GetMergeRegion(new CellAddress(sheetId, row, col)) is not { } merge ||
+            merge.Start.Row != row || merge.Start.Col != col ||
+            merge.Start.Col == merge.End.Col)
+        {
+            return anchorColumnWidthPixels;
+        }
+
+        double total = 0;
+        for (var c = merge.Start.Col; c <= merge.End.Col; c++)
+            total += GetColumnWidthPixels(sheet, c);
+        return total;
     }
 
     private static void AddCellDisplayCell(

@@ -30,48 +30,21 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue Concatenate(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
-        var rangeIndex = -1;
-        for (int i = 0; i < args.Count; i++)
+        if (FirstError(args) is { } e) return e;
+
+        // Excel's dynamic-array CONCATENATE broadcasts range/array arguments element-wise
+        // (equally-shaped ranges pair up cell-by-cell; a scalar broadcasts across every cell;
+        // mismatched non-1x1 shapes yield #VALUE!) via the shared MapScalarArgs helper. With no
+        // range arguments at all, this collapses to a single ordinary scalar concatenation.
+        return MapScalarArgs(args, scalarArgs =>
         {
-            if (args[i] is ErrorValue e) return e;
-            if (args[i] is RangeValue)
-            {
-                if (rangeIndex >= 0) return ErrorValue.Value;
-                rangeIndex = i;
-            }
-        }
+            if (FirstError(scalarArgs) is { } cellError) return cellError;
 
-        if (rangeIndex >= 0)
-            return MapConcatenateRange((RangeValue)args[rangeIndex], args, rangeIndex);
-
-        var sb = new System.Text.StringBuilder();
-        foreach (var a in args)
-        {
-            sb.Append(ToText(a));
-        }
-        return TextResult(sb.ToString());
-    }
-
-    private static RangeValue MapConcatenateRange(RangeValue range, IReadOnlyList<ScalarValue> args, int rangeIndex)
-    {
-        var cells = new ScalarValue[range.RowCount, range.ColCount];
-        for (int r = 0; r < range.RowCount; r++)
-            for (int c = 0; c < range.ColCount; c++)
-            {
-                var value = range.Cells[r, c];
-                if (value is ErrorValue e)
-                {
-                    cells[r, c] = e;
-                    continue;
-                }
-
-                var sb = new System.Text.StringBuilder();
-                for (int i = 0; i < args.Count; i++)
-                    sb.Append(i == rangeIndex ? ToText(value) : ToText(args[i]));
-                cells[r, c] = TextResult(sb.ToString());
-            }
-
-        return new RangeValue(cells);
+            var sb = new System.Text.StringBuilder();
+            foreach (var value in scalarArgs)
+                sb.Append(ToText(value));
+            return TextResult(sb.ToString());
+        });
     }
 
     private static ScalarValue TFunc(IReadOnlyList<ScalarValue> args, IEvalContext ctx)

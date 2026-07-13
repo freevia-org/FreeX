@@ -88,15 +88,17 @@ public static partial class NumberFormatter
         // fitting so the real default-width path reproduces Excel's digit budget instead of the
         // generic (and too-narrow) text-sizing estimate.
         var digitBudget = width + GeneralFormatDigitBudgetBonus;
-        var narrowest = "";
         for (var precision = 15; precision >= 1; precision--)
         {
             var candidate = value.ToString("G" + precision, CultureInfo.InvariantCulture);
             if (candidate.Length <= digitBudget)
                 return candidate;
-            narrowest = candidate;
         }
 
-        return narrowest;
+        // Not even the narrowest representation (G1, e.g. scientific notation "1E+14") fits the
+        // available column width -- match Excel's "value doesn't fit" indicator (a run of '#'
+        // characters sized to the column) instead of silently returning the still-too-wide text,
+        // which would otherwise just get clipped by the grid's cell clip geometry.
+        return new string('#', Math.Max(width, 1));
     }
 }

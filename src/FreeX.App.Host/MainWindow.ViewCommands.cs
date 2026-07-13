@@ -325,6 +325,20 @@ public partial class MainWindow
 
     private void SetFreezePanes(uint frozenRows, uint frozenCols)
     {
+        var sheet = _workbook.GetSheet(_currentSheetId);
+
+        // Freezing/unfreezing panes must not relocate the viewport (Excel keeps the same
+        // rows/columns on screen, modulo the newly-pinned band). The scrollbar Values are
+        // interpreted relative to FrozenRows/FrozenCols (WorkbookViewportScrollPlanner.
+        // ScrollbarValueToWorksheetIndex), so capture the absolute top-left row/col currently
+        // in view under the OLD frozen counts before the command changes them, then re-derive
+        // fresh scrollbar Values for the NEW frozen counts that resolve back to that same
+        // absolute row/col (WorksheetIndexToScrollbarValue naturally clamps to just below the
+        // new frozen band when the old top-left now falls inside it). When unscrolled (Value
+        // == 1, absolute row/col == 1) this maps back to 1 either way, so freeze-at-A1 is
+        // unaffected.
+        var (preTopRow, preLeftCol) = CalculateViewportOrigin(sheet, VerticalScroll.Value, HorizontalScroll.Value);
+
         var outcome = _commandBus.Execute(
             _workbook.Id,
             new SetFreezePanesCommand(_currentSheetId, frozenRows, frozenCols));
@@ -333,6 +347,20 @@ public partial class MainWindow
             ShowCommandError(outcome, "Freeze Panes");
             return;
         }
+
+        var newVerticalValue = WorksheetIndexToScrollbarValue(preTopRow, frozenRows);
+        var newHorizontalValue = WorksheetIndexToScrollbarValue(preLeftCol, frozenCols);
+
+        // Bump Maximum first if needed so assigning Value below isn't silently clamped by a
+        // range still sized for the old frozen counts; UpdateViewport() (called next)
+        // recalculates the real Maximum for the new frozen counts right after.
+        if (newVerticalValue > VerticalScroll.Maximum)
+            VerticalScroll.Maximum = newVerticalValue;
+        if (newHorizontalValue > HorizontalScroll.Maximum)
+            HorizontalScroll.Maximum = newHorizontalValue;
+
+        VerticalScroll.Value = newVerticalValue;
+        HorizontalScroll.Value = newHorizontalValue;
 
         UpdateViewport();
     }

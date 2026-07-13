@@ -365,7 +365,10 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "errBarType", new XAttribute("val", ToXlsxErrorBarDirection(chart.ErrorBarDirection))),
             new XElement(chartNs + "errValType", new XAttribute("val", ToXlsxErrorBarKind(chart.ErrorBarKind))),
             chart.ErrorBarEndCaps ? null : new XElement(chartNs + "noEndCap", new XAttribute("val", "1")),
-            chart.ErrorBarKind is ChartErrorBarKind.Percentage or ChartErrorBarKind.FixedValue
+            // R41-io-chart-errorbars-trendline-3-1: StdDev also carries a user-set multiplier
+            // (like Percentage/FixedValue) — StandardError and Custom are the only kinds with no
+            // <c:val> (StandardError has no user-configurable value; Custom uses plus/minus ranges).
+            chart.ErrorBarKind is ChartErrorBarKind.Percentage or ChartErrorBarKind.FixedValue or ChartErrorBarKind.StdDev
                 ? new XElement(chartNs + "val", new XAttribute("val", Math.Clamp(chart.ErrorBarValue, 0, 1000).ToString(CultureInfo.InvariantCulture)))
                 : null,
             chart.ErrorBarKind == ChartErrorBarKind.Custom
@@ -425,6 +428,10 @@ internal static partial class XlsxChartXmlWriter
             ChartErrorBarKind.Percentage => "percentage",
             ChartErrorBarKind.FixedValue => "fixedVal",
             ChartErrorBarKind.Custom => "cust",
+            // R41-io-chart-errorbars-trendline-3-1: StdDev must round-trip to "stdDev", not fall
+            // through to the StandardError default ("stdErr") — they are different Excel
+            // error-amount kinds with visually different bar lengths.
+            ChartErrorBarKind.StdDev => "stdDev",
             _ => "stdErr"
         };
 

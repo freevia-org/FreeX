@@ -84,12 +84,13 @@ public sealed class R25_NumberFormatterGeneralDefaultWidthTests
     }
 
     [Fact]
-    public void General_VeryNarrowColumn_StillFallsBackToScientificNotationForALargeInteger()
+    public void General_VeryNarrowColumn_FallsBackToHashOverflowIndicatorWhenNothingFits()
     {
-        // Sibling case: a much narrower-than-default column must still be narrower than the
-        // default-width digit budget, not wider -- the calibration bonus is a fixed offset, so
-        // relative ordering between column widths is preserved.
+        // Sibling case: at width 1 (digitBudget = 1 + 3 = 4), even the narrowest General
+        // representation of 1e14 ("1E+14", 5 chars) still exceeds the budget -- real Excel shows
+        // '#' filling the column (sized to its character width) rather than the still-too-wide
+        // scientific-notation text (which would otherwise just get clipped by the grid).
         NumberFormatter.Format(new NumberValue(1e14), "General", 1)
-            .Should().Be("1E+14");
+            .Should().Be("#");
     }
 }

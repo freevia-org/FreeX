@@ -8634,7 +8634,14 @@ public sealed partial class XlsxFileAdapter
             }
 
             if (maxRow == 0 || maxCol == 0)
+            {
+                // No cells remain in the sheet (e.g. the last cell(s) were just cleared by this
+                // patch). Real Excel recomputes the used range on save and writes dimension
+                // ref="A1" for a sheet with no cells, rather than leaving a stale far-from-A1
+                // reference pointing at now-empty cells.
+                dimension.SetAttributeValue("ref", "A1");
                 return;
+            }
 
             var start = ToReference(minRow, minCol);
             var end = ToReference(maxRow, maxCol);

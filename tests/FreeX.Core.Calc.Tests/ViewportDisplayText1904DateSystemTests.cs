@@ -21,6 +21,11 @@ public class ViewportDisplayText1904DateSystemTests
         var style = new CellStyle { NumberFormat = "yyyy-mm-dd" };
         var styleId = workbook.RegisterStyle(style);
 
+        // Wide enough that "1904-01-01" (10 chars) fits -- this test is about 1904/1900 epoch
+        // selection, not the round-41 width-overflow-to-'#' behavior (the sheet's default column
+        // width is too narrow to hold a 10-character date and would otherwise show "#" fill).
+        sheet.ColumnWidths[1] = 20;
+
         // Serial 0 under the 1904 date system is 1904-01-01.
         var cell = Cell.FromValue(new DateTimeValue(0));
         cell.StyleId = styleId;
@@ -40,6 +45,11 @@ public class ViewportDisplayText1904DateSystemTests
         var sheet = workbook.AddSheet("Sheet1");
         var style = new CellStyle { NumberFormat = "yyyy-mm-dd" };
         var styleId = workbook.RegisterStyle(style);
+
+        // Wide enough that "1900-01-01" (10 chars) fits -- this test is about 1904/1900 epoch
+        // selection, not the round-41 width-overflow-to-'#' behavior (the sheet's default column
+        // width is too narrow to hold a 10-character date and would otherwise show "#" fill).
+        sheet.ColumnWidths[1] = 20;
 
         // Serial 1 under the default 1900 date system is 1900-01-01.
         var cell = Cell.FromValue(new DateTimeValue(1));

@@ -521,6 +521,11 @@ public class ViewportLayoutTests
         var valueCell = Cell.FromValue(new NumberValue(1234.5));
         valueCell.StyleId = styleId;
         sheet.SetCell(new CellAddress(sheet.Id, 1, 1), valueCell);
+        // Wide enough that "$1,234.50" (9 chars) fits -- this test is about chart data cells
+        // carrying raw values, not the round-41 width-overflow-to-'#' behavior (the sheet's
+        // default column width is too narrow to hold 9 characters and would otherwise show
+        // "#" fill).
+        sheet.ColumnWidths[1] = 20;
         sheet.Charts.Add(new ChartModel
         {
             DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 1, 1))

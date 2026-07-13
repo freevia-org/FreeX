@@ -52,7 +52,7 @@ public static partial class BuiltInFunctions
         var (pivotSheet, pivotTable) = locatedPivot.Value;
 
         var headers = ReadPivotSourceHeaders(ctx.CurrentWorkbook, pivotTable);
-        var dataFieldIndex = FindPivotDataFieldIndex(pivotTable, dataFieldCaption);
+        var dataFieldIndex = FindPivotDataFieldIndex(pivotTable, headers, dataFieldCaption);
         if (dataFieldIndex < 0)
             return ErrorValue.Ref;
         if (!GetPivotDataFilterFieldsAreVisible(pivotTable, headers, filters))
@@ -157,12 +157,25 @@ public static partial class BuiltInFunctions
         return null;
     }
 
-    private static int FindPivotDataFieldIndex(PivotTableModel pivotTable, string caption)
+    private static int FindPivotDataFieldIndex(PivotTableModel pivotTable, IReadOnlyList<string> headers, string caption)
     {
+        // Excel's GETPIVOTDATA data_field argument accepts either the data field's full
+        // displayed caption (e.g. "Sum of Sales") or the bare underlying source-field name
+        // (e.g. "Sales") -- both must resolve to the same data field.
         for (var i = 0; i < pivotTable.DataFields.Count; i++)
         {
             if (string.Equals(pivotTable.DataFields[i].Name, caption, StringComparison.OrdinalIgnoreCase))
                 return i;
+        }
+
+        for (var i = 0; i < pivotTable.DataFields.Count; i++)
+        {
+            var sourceFieldName = PivotHeader(headers, pivotTable.DataFields[i].SourceFieldIndex);
+            if (!string.IsNullOrWhiteSpace(sourceFieldName) &&
+                string.Equals(sourceFieldName, caption, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
         }
 
         return -1;

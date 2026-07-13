@@ -23,8 +23,19 @@ internal static class PasteCommandValidator
 
         var rowCount = transpose ? sourceRange.ColCount : sourceRange.RowCount;
         var colCount = transpose ? sourceRange.RowCount : sourceRange.ColCount;
-        if (!WorksheetBounds.TryGetRectangleEnd(destination, rowCount, colCount, out _))
+        if (!WorksheetBounds.TryGetRectangleEnd(destination, rowCount, colCount, out var destinationEnd))
             return "Paste destination range is outside the worksheet bounds.";
+
+        if (transpose)
+        {
+            var destinationRange = new GridRange(destination, destinationEnd);
+            if (destinationRange.Overlaps(sourceRange))
+            {
+                return "You cannot paste this data because the Copy area and paste area cannot overlap, " +
+                    "when you use the Transpose option. Select a different location for pasting the data, " +
+                    "and then try transposing it again.";
+            }
+        }
 
         var seenSources = new HashSet<CellAddress>();
         foreach (var sourceAddress in sourceAddresses)

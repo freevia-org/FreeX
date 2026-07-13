@@ -126,7 +126,10 @@ public enum ChartDrawingAnchorKind { Absolute, OneCell, TwoCell }
 
 public enum ChartMarkerStyle { None, Circle, Square, Diamond, Triangle }
 
-public enum ChartErrorBarKind { StandardError, Percentage, FixedValue, Custom }
+// R41-io-chart-errorbars-trendline-3-1: StdDev (Standard Deviation, with a user-configurable
+// multiplier) added at the end so it round-trips distinctly from StandardError (Standard Error,
+// no multiplier) instead of the two being conflated.
+public enum ChartErrorBarKind { StandardError, Percentage, FixedValue, Custom, StdDev }
 
 public enum ChartErrorBarAxisDirection { Y, X }
 

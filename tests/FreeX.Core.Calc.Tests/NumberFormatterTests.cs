@@ -49,7 +49,10 @@ public class NumberFormatterTests
     [InlineData(1234.5, 14, "$     1,234.50")]
     [InlineData(-1234.5, 14, "$   (1,234.50)")]
     [InlineData(0, 14, "$          -  ")]
-    [InlineData(123456789, 8, "$ 123,456,789.00")]
+    // Round-41 fix (R41-render-number-overflow-hash-3-1): "$ 123,456,789.00" (17 chars) no longer
+    // fits an 8-character-wide column, so NumberFormatter now shows Excel's width-overflow
+    // indicator ("#" x 8) instead of the un-clipped (and column-overflowing) formatted text.
+    [InlineData(123456789, 8, "########")]
     public void AccountingSubset_ExpandsFillSpaceToRequestedCharacterWidth(
         double value,
         int targetWidthCharacters,
