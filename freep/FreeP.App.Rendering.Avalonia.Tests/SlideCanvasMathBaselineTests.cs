@@ -731,4 +731,42 @@ public sealed class SlideCanvasMathBaselineTests
 
         thrown.Should().BeNull("Avalonia must consume one-sided delimiter brackets from the shared MathBox plan without host-specific layout branching");
     }
+
+    [Fact]
+    public async Task RenderParaWithMath_MathAlphabetStyleVariants_UseSharedUnicodeGlyphPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:r><m:rPr><m:scr m:val=\"script\"/><m:sty m:val=\"b\"/></m:rPr><m:t>Aa</m:t></m:r>" +
+                    "<m:r><m:rPr><m:scr m:val=\"sans-serif\"/><m:sty m:val=\"bi\"/></m:rPr><m:t>Zz</m:t></m:r>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+
+                MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Select(g => g.Text)
+                    .Should().Equal(new[] { "\U0001D4D0\U0001D4EA", "\U0001D655\U0001D66F" },
+                        "styled m:scr variants must be resolved in the shared MathBox plan before Avalonia draws them");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "S = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 100));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render styled math alphabet glyphs from the shared MathBox plan without host-specific layout branching");
+    }
 }

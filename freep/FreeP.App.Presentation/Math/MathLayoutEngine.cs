@@ -22,23 +22,28 @@ public static class MathLayoutEngine
 {
     // ── Public entry ──────────────────────────────────────────────────────
 
-    private static string ApplyMathAlphabet(string text, MathNode.MathAlphabet alphabet)
+    private static string ApplyMathAlphabet(string text, MathNode.MathAlphabet alphabet, bool isItalic, bool isBold)
     {
         if (string.IsNullOrEmpty(text) || alphabet is MathNode.MathAlphabet.Default or MathNode.MathAlphabet.Roman)
             return text;
 
         var mapped = new System.Text.StringBuilder(text.Length);
         foreach (var ch in text)
-            mapped.Append(MapMathAlphabetChar(ch, alphabet));
+            mapped.Append(MapMathAlphabetChar(ch, alphabet, isItalic, isBold));
         return mapped.ToString();
     }
 
-    private static string MapMathAlphabetChar(char ch, MathNode.MathAlphabet alphabet) =>
+    private static string MapMathAlphabetChar(char ch, MathNode.MathAlphabet alphabet, bool isItalic, bool isBold) =>
         alphabet switch
         {
+            MathNode.MathAlphabet.Script when isBold => MapConsecutiveAlphabet(ch, upperStart: 0x1D4D0, lowerStart: 0x1D4EA),
             MathNode.MathAlphabet.Script => MapScript(ch),
+            MathNode.MathAlphabet.Fraktur when isBold => MapConsecutiveAlphabet(ch, upperStart: 0x1D56C, lowerStart: 0x1D586),
             MathNode.MathAlphabet.Fraktur => MapFraktur(ch),
             MathNode.MathAlphabet.DoubleStruck => MapDoubleStruck(ch),
+            MathNode.MathAlphabet.SansSerif when isBold && isItalic => MapConsecutiveAlphabet(ch, upperStart: 0x1D63C, lowerStart: 0x1D656),
+            MathNode.MathAlphabet.SansSerif when isBold => MapConsecutiveAlphabet(ch, upperStart: 0x1D5D4, lowerStart: 0x1D5EE, digitStart: 0x1D7EC),
+            MathNode.MathAlphabet.SansSerif when isItalic => MapConsecutiveAlphabet(ch, upperStart: 0x1D608, lowerStart: 0x1D622),
             MathNode.MathAlphabet.SansSerif => MapConsecutiveAlphabet(ch, upperStart: 0x1D5A0, lowerStart: 0x1D5BA, digitStart: 0x1D7E2),
             MathNode.MathAlphabet.Monospace => MapConsecutiveAlphabet(ch, upperStart: 0x1D670, lowerStart: 0x1D68A, digitStart: 0x1D7F6),
             _ => ch.ToString()
@@ -111,12 +116,12 @@ public static class MathLayoutEngine
             _ => ch.ToString()
         };
 
-    private static string MapConsecutiveAlphabet(char ch, int upperStart, int lowerStart, int digitStart) =>
+    private static string MapConsecutiveAlphabet(char ch, int upperStart, int lowerStart, int? digitStart = null) =>
         ch switch
         {
             >= 'A' and <= 'Z' => FromCodePoint(upperStart + (ch - 'A')),
             >= 'a' and <= 'z' => FromCodePoint(lowerStart + (ch - 'a')),
-            >= '0' and <= '9' => FromCodePoint(digitStart + (ch - '0')),
+            >= '0' and <= '9' when digitStart.HasValue => FromCodePoint(digitStart.Value + (ch - '0')),
             _ => ch.ToString()
         };
 
@@ -192,7 +197,7 @@ public static class MathLayoutEngine
 
     private static MathBox LayoutRun(MathNode.Run run, string fontFamily, double fontSizePt)
     {
-        var text = ApplyMathAlphabet(run.Text, run.Alphabet);
+        var text = ApplyMathAlphabet(run.Text, run.Alphabet, run.IsItalic, run.IsBold);
         var alphabetOverridesStyle = run.Alphabet is not MathNode.MathAlphabet.Default and not MathNode.MathAlphabet.Roman;
         return MakeGlyph(
             text,

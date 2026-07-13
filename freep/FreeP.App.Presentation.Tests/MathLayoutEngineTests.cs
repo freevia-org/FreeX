@@ -285,7 +285,7 @@ public sealed class MathLayoutEngineTests
     public void Run_WithMathAlphabet_MapsAsciiGlyphsInSharedDrawPlan(MathNode.MathAlphabet alphabet, string expectedText)
     {
         var layout = MathLayoutEngine.Layout(
-            Run("Aa-1", isItalic: true, isBold: true, alphabet),
+            Run("Aa-1", isItalic: false, isBold: false, alphabet),
             "Cambria Math",
             FontSizePt);
 
@@ -296,6 +296,26 @@ public sealed class MathLayoutEngineTests
         op.Text.Should().Be(expectedText);
         op.IsItalic.Should().BeFalse("explicit mathematical alphabet glyphs replace renderer font-style policy");
         op.IsBold.Should().BeFalse("explicit mathematical alphabet glyphs replace renderer font-weight policy");
+    }
+
+    [Theory]
+    [InlineData("<m:scr m:val=\"script\"/><m:sty m:val=\"b\"/>", "\U0001D4D0\U0001D4EA1")]
+    [InlineData("<m:scr m:val=\"fraktur\"/><m:sty m:val=\"b\"/>", "\U0001D56C\U0001D5861")]
+    [InlineData("<m:scr m:val=\"sans-serif\"/><m:sty m:val=\"i\"/>", "\U0001D608\U0001D6221")]
+    [InlineData("<m:scr m:val=\"sans-serif\"/><m:sty m:val=\"b\"/>", "\U0001D5D4\U0001D5EE\U0001D7ED")]
+    [InlineData("<m:scr m:val=\"sans-serif\"/><m:sty m:val=\"bi\"/>", "\U0001D63C\U0001D6561")]
+    public void OmmlScrWithStyVariant_RenderPlanUsesStyledUnicodeMathGlyphs(string rPrInner, string expectedText)
+    {
+        var node = ParseOmml($"<m:r><m:rPr>{rPrInner}</m:rPr><m:t>Aa1</m:t></m:r>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var op = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        op.Text.Should().Be(expectedText);
+        op.IsItalic.Should().BeFalse("styled mathematical alphabet glyphs carry style in Unicode, not renderer metadata");
+        op.IsBold.Should().BeFalse("styled mathematical alphabet glyphs carry weight in Unicode, not renderer metadata");
     }
 
     [Fact]
