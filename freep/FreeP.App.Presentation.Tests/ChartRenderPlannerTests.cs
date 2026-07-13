@@ -1607,6 +1607,51 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildLineSeriesPrimitives_ClassicThreeDLineCarriesSharedDepthPlan()
+    {
+        var series = new ChartSeries { Name = "Line" };
+        series.Values.AddRange(new double?[] { 10, 20, 30 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            ThreeDStyle = ChartThreeDStyle.Line
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            withMarkers: true).Single();
+
+        primitive.Depth.Should().Be(new ChartClassicThreeDDepthPlan(
+            OffsetX: 4.5,
+            OffsetY: -4.5,
+            StrokeAlpha: 120,
+            FillAlpha: 70));
+        primitive.LineSegments.Should().HaveCount(2);
+        primitive.LineSegments[0].Start.Should().Be(new ChartPlanPoint(0, 75));
+        primitive.LineSegments[0].End.Should().Be(new ChartPlanPoint(100, 50));
+    }
+
+    [Fact]
+    public void BuildLineSeriesPrimitives_TwoDimensionalLineDoesNotCarryDepthPlan()
+    {
+        var series = new ChartSeries { Name = "Line" };
+        series.Values.AddRange(new double?[] { 10, 20 });
+        var chart = new ChartShape { ChartType = ChartType.LineMarkers };
+        chart.Categories.AddRange(new[] { "Q1", "Q2" });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            withMarkers: true).Single();
+
+        primitive.Depth.Should().BeNull();
+    }
+
+    [Fact]
     public void BuildAreaSeriesPrimitives_PlansBackToFrontFilledPolygons()
     {
         var chart = new ChartShape { ChartType = ChartType.Area };
@@ -1706,6 +1751,36 @@ public sealed class ChartRenderPlannerTests
             new ChartPlanPoint(0, 100),
             new ChartPlanPoint(0, 75),
             new ChartPlanPoint(100, 100),
+            new ChartPlanPoint(200, 25),
+            new ChartPlanPoint(200, 100));
+    }
+
+    [Fact]
+    public void BuildAreaSeriesPrimitives_ClassicThreeDAreaCarriesSharedDepthPlan()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Area,
+            ThreeDStyle = ChartThreeDStyle.Area
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 20, 30 });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildAreaSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100)).Single();
+
+        primitive.Depth.Should().Be(new ChartClassicThreeDDepthPlan(
+            OffsetX: 4.5,
+            OffsetY: -4.5,
+            StrokeAlpha: 120,
+            FillAlpha: 70));
+        primitive.AreaPath.Points.Should().Equal(
+            new ChartPlanPoint(0, 100),
+            new ChartPlanPoint(0, 75),
+            new ChartPlanPoint(100, 50),
             new ChartPlanPoint(200, 25),
             new ChartPlanPoint(200, 100));
     }

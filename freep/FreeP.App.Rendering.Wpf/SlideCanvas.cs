@@ -967,6 +967,18 @@ public sealed class SlideCanvas : FrameworkElement
         DrawingContext dc,
         ChartLineSeriesPrimitive primitive)
     {
+        if (primitive.Depth is { } depth)
+        {
+            foreach (var segment in primitive.LineSegments)
+            {
+                var depthStroke = segment.Stroke with { Alpha = depth.StrokeAlpha };
+                dc.DrawLine(
+                    ToPen(depthStroke),
+                    ToPoint(OffsetPoint(segment.Start, depth)),
+                    ToPoint(OffsetPoint(segment.End, depth)));
+            }
+        }
+
         foreach (var segment in primitive.LineSegments)
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
 
@@ -1027,20 +1039,14 @@ public sealed class SlideCanvas : FrameworkElement
             if (primitive.AreaPath.Fill is not { } fill)
                 continue;
 
-            var brush = ToBrush(fill);
-            var geo = new StreamGeometry();
-            using (var ctx = geo.Open())
+            if (primitive.Depth is { } depth)
             {
-                for (int pointIndex = 0; pointIndex < primitive.AreaPath.Points.Count; pointIndex++)
-                {
-                    var point = ToPoint(primitive.AreaPath.Points[pointIndex]);
-                    if (pointIndex == 0)
-                        ctx.BeginFigure(point, isFilled: true, isClosed: primitive.AreaPath.IsClosed);
-                    else
-                        ctx.LineTo(point, isStroked: true, isSmoothJoin: false);
-                }
+                var depthFill = fill.WithAlpha(depth.FillAlpha);
+                dc.DrawGeometry(ToBrush(depthFill), null, ToAreaGeometry(OffsetPath(primitive.AreaPath, depth)));
             }
-            if (geo.CanFreeze) geo.Freeze();
+
+            var brush = ToBrush(fill);
+            var geo = ToAreaGeometry(primitive.AreaPath);
 
             dc.DrawGeometry(brush, null, geo);
         }
@@ -2600,6 +2606,21 @@ public sealed class SlideCanvas : FrameworkElement
     private static Point ToPoint(ChartPlanPoint point) =>
         new(point.X, point.Y);
 
+    private static ChartPlanPoint OffsetPoint(
+        ChartPlanPoint point,
+        ChartClassicThreeDDepthPlan depth) =>
+        new(point.X + depth.OffsetX, point.Y + depth.OffsetY);
+
+    private static ChartPathPrimitive OffsetPath(
+        ChartPathPrimitive path,
+        ChartClassicThreeDDepthPlan depth) =>
+        path with
+        {
+            Points = path.Points
+                .Select(point => OffsetPoint(point, depth))
+                .ToArray()
+        };
+
     private static Brush ToBrush(ChartFillPlan fill) =>
         fill.Fill switch
         {
@@ -2714,6 +2735,25 @@ public sealed class SlideCanvas : FrameworkElement
                     ctx.BeginFigure(point, path.Fill.HasValue, path.IsClosed);
                 else
                     ctx.LineTo(point, isStroked: true, isSmoothJoin: true);
+            }
+        }
+
+        if (geometry.CanFreeze) geometry.Freeze();
+        return geometry;
+    }
+
+    private static StreamGeometry ToAreaGeometry(ChartPathPrimitive path)
+    {
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            for (int pointIndex = 0; pointIndex < path.Points.Count; pointIndex++)
+            {
+                var point = ToPoint(path.Points[pointIndex]);
+                if (pointIndex == 0)
+                    ctx.BeginFigure(point, path.Fill.HasValue, path.IsClosed);
+                else
+                    ctx.LineTo(point, isStroked: true, isSmoothJoin: false);
             }
         }
 

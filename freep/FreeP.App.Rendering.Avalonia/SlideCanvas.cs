@@ -402,6 +402,21 @@ public sealed class SlideCanvas : Control
     private static Point ToPoint(ChartPlanPoint point) =>
         new(point.X, point.Y);
 
+    private static ChartPlanPoint OffsetPoint(
+        ChartPlanPoint point,
+        ChartClassicThreeDDepthPlan depth) =>
+        new(point.X + depth.OffsetX, point.Y + depth.OffsetY);
+
+    private static ChartPathPrimitive OffsetPath(
+        ChartPathPrimitive path,
+        ChartClassicThreeDDepthPlan depth) =>
+        path with
+        {
+            Points = path.Points
+                .Select(point => OffsetPoint(point, depth))
+                .ToArray()
+        };
+
     private static IBrush ToBrush(ChartFillPlan fill) =>
         fill.Fill switch
         {
@@ -1093,6 +1108,18 @@ public sealed class SlideCanvas : Control
         DrawingContext dc,
         ChartLineSeriesPrimitive primitive)
     {
+        if (primitive.Depth is { } depth)
+        {
+            foreach (var segment in primitive.LineSegments)
+            {
+                var depthStroke = segment.Stroke with { Alpha = depth.StrokeAlpha };
+                dc.DrawLine(
+                    ToPen(depthStroke),
+                    ToPoint(OffsetPoint(segment.Start, depth)),
+                    ToPoint(OffsetPoint(segment.End, depth)));
+            }
+        }
+
         foreach (var segment in primitive.LineSegments)
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
 
@@ -1144,20 +1171,14 @@ public sealed class SlideCanvas : Control
             if (primitive.AreaPath.Fill is not { } fill)
                 continue;
 
-            var brush = ToBrush(fill);
-            var geo = new StreamGeometry();
-            using (var ctx = geo.Open())
+            if (primitive.Depth is { } depth)
             {
-                for (int pointIndex = 0; pointIndex < primitive.AreaPath.Points.Count; pointIndex++)
-                {
-                    var point = ToPoint(primitive.AreaPath.Points[pointIndex]);
-                    if (pointIndex == 0)
-                        ctx.BeginFigure(point, isFilled: true);
-                    else
-                        ctx.LineTo(point);
-                }
-                ctx.EndFigure(isClosed: primitive.AreaPath.IsClosed);
+                var depthFill = fill.WithAlpha(depth.FillAlpha);
+                dc.DrawGeometry(ToBrush(depthFill), null, ToGeometry(OffsetPath(primitive.AreaPath, depth)));
             }
+
+            var brush = ToBrush(fill);
+            var geo = ToGeometry(primitive.AreaPath);
             dc.DrawGeometry(brush, null, geo);
         }
     }

@@ -272,7 +272,10 @@ public readonly record struct ChartLineSeriesPrimitive(
     ChartStrokePlan? MarkerStroke,
     double MarkerRadius,
     IReadOnlyList<ChartLineSegmentPrimitive> LineSegments,
-    IReadOnlyList<ChartCirclePrimitive> Markers);
+    IReadOnlyList<ChartCirclePrimitive> Markers)
+{
+    public ChartClassicThreeDDepthPlan? Depth { get; init; }
+}
 
 public readonly record struct ChartAreaSeriesPrimitive(
     int SeriesIndex,
@@ -280,7 +283,16 @@ public readonly record struct ChartAreaSeriesPrimitive(
     ChartPlanPoint BaselineEnd,
     IReadOnlyList<ChartPlanPoint> Points,
     ChartPathPrimitive AreaPath,
-    ChartFillPlan Fill);
+    ChartFillPlan Fill)
+{
+    public ChartClassicThreeDDepthPlan? Depth { get; init; }
+}
+
+public readonly record struct ChartClassicThreeDDepthPlan(
+    double OffsetX,
+    double OffsetY,
+    byte StrokeAlpha,
+    byte FillAlpha);
 
 public readonly record struct ChartScatterSeriesPrimitive(
     int SeriesIndex,
@@ -422,6 +434,7 @@ public static partial class ChartRenderPlanner
     public const double RadarSeriesStrokeThickness = 1.5;
     public const double RadarMarkerRadius = 3.0;
     public const double ThreeDPieVerticalScale = 0.72;
+    public const double ClassicThreeDDepthScale = 0.045;
     public const double StockTickWidthFraction = 0.32;
     public const double SurfaceCellStrokeThickness = 0.4;
     private const double DipPerPoint = 96.0 / 72.0;
@@ -1889,6 +1902,7 @@ public static partial class ChartRenderPlanner
         var (secondaryMin, secondaryMax, _) = ComputeSecondaryValueAxisRange(chart);
         double secondaryRange = secondaryMax - secondaryMin;
         double stepX = plot.Width / Math.Max(1, categoryCount - 1);
+        var depth = BuildClassicThreeDDepthPlan(chart, plot);
         var primitives = new List<ChartLineSeriesPrimitive>();
 
         for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
@@ -1922,7 +1936,7 @@ public static partial class ChartRenderPlanner
                 chart.Series[seriesIndex],
                 seriesColors,
                 fillPlans,
-                ShouldSpanBlankSegments(chart)));
+                ShouldSpanBlankSegments(chart)) with { Depth = depth });
         }
 
         return primitives;
@@ -2093,6 +2107,7 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartAreaSeriesPrimitive>();
 
         double stepX = plot.Width / Math.Max(1, categoryCount - 1);
+        var depth = BuildClassicThreeDDepthPlan(chart, plot);
         var primitives = new List<ChartAreaSeriesPrimitive>();
 
         for (int seriesIndex = chart.Series.Count - 1; seriesIndex >= 0; seriesIndex--)
@@ -2124,7 +2139,8 @@ public static partial class ChartRenderPlanner
                 pointSlots,
                 plot.Bottom,
                 fill,
-                ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Gap);
+                ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Gap,
+                depth);
         }
 
         return primitives;
@@ -2136,7 +2152,8 @@ public static partial class ChartRenderPlanner
         IReadOnlyList<ChartPlanPoint?> pointSlots,
         double baselineY,
         ChartFillPlan fill,
-        bool splitAtBlankSlots)
+        bool splitAtBlankSlots,
+        ChartClassicThreeDDepthPlan? depth)
     {
         var segment = new List<ChartPlanPoint>();
         for (int pointIndex = 0; pointIndex < pointSlots.Count; pointIndex++)
@@ -2149,10 +2166,10 @@ public static partial class ChartRenderPlanner
             }
 
             if (splitAtBlankSlots)
-                AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineY, fill);
+                AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineY, fill, depth);
         }
 
-        AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineY, fill);
+        AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineY, fill, depth);
     }
 
     private static void AddAreaSegmentPrimitive(
@@ -2160,7 +2177,8 @@ public static partial class ChartRenderPlanner
         int seriesIndex,
         List<ChartPlanPoint> segment,
         double baselineY,
-        ChartFillPlan fill)
+        ChartFillPlan fill,
+        ChartClassicThreeDDepthPlan? depth)
     {
         if (segment.Count == 0)
             return;
@@ -2182,7 +2200,10 @@ public static partial class ChartRenderPlanner
                 pathPoints,
                 IsClosed: true,
                 Fill: fill),
-            fill));
+            fill)
+        {
+            Depth = depth
+        });
 
         segment.Clear();
     }
@@ -3495,6 +3516,33 @@ public static partial class ChartRenderPlanner
         chart.ChartType == ChartType.Pie && chart.ThreeDStyle == ChartThreeDStyle.Pie
             ? Math.Round(Math.Clamp(outerRadius * 0.22, 2.0, 14.0), 4)
             : 0;
+
+    public static ChartClassicThreeDDepthPlan? BuildClassicThreeDDepthPlan(
+        ChartShape chart,
+        ChartPlanRect plot)
+    {
+        if (!plot.HasPositiveArea)
+            return null;
+
+        bool isThreeDLine =
+            chart.ThreeDStyle == ChartThreeDStyle.Line &&
+            chart.ChartType is ChartType.Line or ChartType.LineMarkers;
+        bool isThreeDArea =
+            chart.ThreeDStyle == ChartThreeDStyle.Area &&
+            chart.ChartType == ChartType.Area;
+        if (!isThreeDLine && !isThreeDArea)
+            return null;
+
+        double offset = Math.Round(
+            Math.Clamp(Math.Min(plot.Width, plot.Height) * ClassicThreeDDepthScale, 2.0, 8.0),
+            4);
+
+        return new ChartClassicThreeDDepthPlan(
+            OffsetX: offset,
+            OffsetY: -offset,
+            StrokeAlpha: 120,
+            FillAlpha: 70);
+    }
 
     private static double DegreesToRadians(double degrees) =>
         degrees * Math.PI / 180.0;
