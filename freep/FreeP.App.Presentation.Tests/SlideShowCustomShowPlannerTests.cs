@@ -338,6 +338,109 @@ public sealed class SlideShowCustomShowPlannerTests
         presentation.CustomShows.Should().BeEmpty();
     }
 
+    [Fact]
+    public void MoveCustomShowSlide_MovesSelectedOccurrenceAndPreservesDuplicates()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
+        var customShow = new PresentationCustomShow { Id = 4, Name = "Executive review" };
+        customShow.SlideIds.Add(presentation.Slides[2].Id);
+        customShow.SlideIds.Add(presentation.Slides[0].Id);
+        customShow.SlideIds.Add(presentation.Slides[2].Id);
+        presentation.CustomShows.Add(customShow);
+
+        var result = SlideShowCustomShowPlanner.MoveCustomShowSlide(
+            presentation,
+            customShowIndex: 0,
+            sourceSlideIndex: 0,
+            sourceSlideId: presentation.Slides[2].Id,
+            targetSlideIndex: 2);
+
+        result.Succeeded.Should().BeTrue();
+        result.CustomShowIndex.Should().Be(0);
+        result.CustomShow.Should().BeSameAs(customShow);
+        result.SelectedSlideIndex.Should().Be(2);
+        customShow.SlideIds.Should().Equal(
+            presentation.Slides[0].Id,
+            presentation.Slides[2].Id,
+            presentation.Slides[2].Id);
+    }
+
+    [Fact]
+    public void MoveCustomShowSlide_ClampsTargetIndexAndReturnsSelection()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
+        var customShow = new PresentationCustomShow { Id = 5, Name = "Training" };
+        customShow.SlideIds.Add(presentation.Slides[0].Id);
+        customShow.SlideIds.Add(presentation.Slides[1].Id);
+        customShow.SlideIds.Add(presentation.Slides[2].Id);
+        presentation.CustomShows.Add(customShow);
+
+        var movePastEnd = SlideShowCustomShowPlanner.MoveCustomShowSlide(
+            presentation,
+            customShowIndex: 0,
+            sourceSlideIndex: 0,
+            sourceSlideId: presentation.Slides[0].Id,
+            targetSlideIndex: 99);
+
+        movePastEnd.Succeeded.Should().BeTrue();
+        movePastEnd.SelectedSlideIndex.Should().Be(2);
+        customShow.SlideIds.Should().Equal(
+            presentation.Slides[1].Id,
+            presentation.Slides[2].Id,
+            presentation.Slides[0].Id);
+
+        var moveBeforeStart = SlideShowCustomShowPlanner.MoveCustomShowSlide(
+            presentation,
+            customShowIndex: 0,
+            sourceSlideIndex: 2,
+            sourceSlideId: presentation.Slides[0].Id,
+            targetSlideIndex: -12);
+
+        moveBeforeStart.Succeeded.Should().BeTrue();
+        moveBeforeStart.SelectedSlideIndex.Should().Be(0);
+        customShow.SlideIds.Should().Equal(
+            presentation.Slides[0].Id,
+            presentation.Slides[1].Id,
+            presentation.Slides[2].Id);
+    }
+
+    [Fact]
+    public void MoveCustomShowSlide_RejectsMissingShowAndStaleSlideSelection()
+    {
+        var presentation = MakePresentation("Intro", "Deep dive", "Appendix");
+        var customShow = new PresentationCustomShow { Id = 6, Name = "Training" };
+        customShow.SlideIds.Add(presentation.Slides[0].Id);
+        customShow.SlideIds.Add(presentation.Slides[1].Id);
+        presentation.CustomShows.Add(customShow);
+
+        var missingShow = SlideShowCustomShowPlanner.MoveCustomShowSlide(
+            presentation,
+            customShowIndex: 8,
+            sourceSlideIndex: 0,
+            sourceSlideId: presentation.Slides[0].Id,
+            targetSlideIndex: 1);
+        var staleSelection = SlideShowCustomShowPlanner.MoveCustomShowSlide(
+            presentation,
+            customShowIndex: 0,
+            sourceSlideIndex: 0,
+            sourceSlideId: presentation.Slides[2].Id,
+            targetSlideIndex: 1);
+        var missingIndex = SlideShowCustomShowPlanner.MoveCustomShowSlide(
+            presentation,
+            customShowIndex: 0,
+            sourceSlideIndex: 3,
+            sourceSlideId: presentation.Slides[0].Id,
+            targetSlideIndex: 1);
+
+        missingShow.Succeeded.Should().BeFalse();
+        missingShow.ErrorMessage.Should().Be(SlideShowCustomShowPlanner.MissingCustomShowMessage);
+        staleSelection.Succeeded.Should().BeFalse();
+        staleSelection.ErrorMessage.Should().Be(SlideShowCustomShowPlanner.MissingCustomShowSlideMessage);
+        missingIndex.Succeeded.Should().BeFalse();
+        missingIndex.ErrorMessage.Should().Be(SlideShowCustomShowPlanner.MissingCustomShowSlideMessage);
+        customShow.SlideIds.Should().Equal(presentation.Slides[0].Id, presentation.Slides[1].Id);
+    }
+
     private static Presentation MakePresentation(params string[] titles)
     {
         var presentation = Presentation.CreateEmpty();

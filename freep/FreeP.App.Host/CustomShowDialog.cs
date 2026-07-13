@@ -10,13 +10,17 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly MainWindow _host;
     private readonly ListBox _showList = new();
     private readonly TextBox _nameBox = new();
+    private readonly ListBox _customShowSlideList = new();
     private readonly StackPanel _slidePanel = new();
     private readonly TextBlock _validationText = new();
     private readonly Button _renameButton;
     private readonly Button _updateButton;
     private readonly Button _deleteButton;
     private readonly Button _startButton;
+    private readonly Button _moveUpButton;
+    private readonly Button _moveDownButton;
     private readonly List<CheckBox> _slideCheckBoxes = new();
+    private IReadOnlyList<SlideShowCustomShowSlideOption> _availableSlides = Array.Empty<SlideShowCustomShowSlideOption>();
 
     public CustomShowDialog(MainWindow host)
     {
@@ -36,6 +40,9 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _nameBox.MinWidth = 260;
         _nameBox.Margin = new Thickness(0, 0, 0, 8);
 
+        _customShowSlideList.MinHeight = 92;
+        _customShowSlideList.SelectionChanged += (_, _) => UpdateMoveButtons();
+
         _validationText.Foreground = new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A));
         _validationText.TextWrapping = TextWrapping.Wrap;
         _validationText.Margin = new Thickness(0, 4, 0, 8);
@@ -44,6 +51,8 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         _updateButton = MakeButton("Update Slides", OnUpdateSlides);
         _deleteButton = MakeButton("Delete", OnDelete);
         _startButton = MakeButton("Start Show", OnStartShow);
+        _moveUpButton = MakeButton("Move Up", () => OnMoveSelectedSlide(-1));
+        _moveDownButton = MakeButton("Move Down", () => OnMoveSelectedSlide(1));
 
         Content = BuildContent();
         Refresh(selectCustomShowIndex: 0);
@@ -53,7 +62,18 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     public int RenderedSlideOptionCount => _slideCheckBoxes.Count;
 
+    public int RenderedCustomShowSlideCount => _customShowSlideList.Items.Count;
+
+    public int SelectedCustomShowSlideIndex => _customShowSlideList.SelectedIndex;
+
     public string ValidationMessage => _validationText.Text;
+
+    public void SelectCustomShowSlideForTests(int index) =>
+        _customShowSlideList.SelectedIndex = index;
+
+    public void MoveSelectedCustomShowSlideUpForTests() => OnMoveSelectedSlide(-1);
+
+    public void MoveSelectedCustomShowSlideDownForTests() => OnMoveSelectedSlide(1);
 
     private UIElement BuildContent()
     {
@@ -70,6 +90,8 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var editor = new Grid();
         editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        editor.RowDefinitions.Add(new RowDefinition { Height = new GridLength(118) });
+        editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         editor.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         editor.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
@@ -84,22 +106,48 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         Grid.SetRow(namePanel, 0);
         editor.Children.Add(namePanel);
 
+        var orderHeader = new DockPanel { Margin = new Thickness(0, 2, 0, 4), LastChildFill = true };
+        var moveButtons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
+        moveButtons.Children.Add(_moveUpButton);
+        moveButtons.Children.Add(_moveDownButton);
+        DockPanel.SetDock(moveButtons, Dock.Right);
+        orderHeader.Children.Add(moveButtons);
+        orderHeader.Children.Add(new TextBlock
+        {
+            Text = "Custom show order",
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        editor.Children.Add(Position(orderHeader, row: 1));
+
+        var customShowSlideScroller = new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = _customShowSlideList,
+        };
+        Grid.SetRow(customShowSlideScroller, 2);
+        editor.Children.Add(customShowSlideScroller);
+
         editor.Children.Add(Position(new TextBlock
         {
-            Text = "Slides",
+            Text = "Deck slides",
             FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(0, 4, 0, 4),
-        }, row: 1));
+            Margin = new Thickness(0, 8, 0, 4),
+        }, row: 3));
 
         var scroller = new ScrollViewer
         {
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = _slidePanel,
         };
-        Grid.SetRow(scroller, 2);
+        Grid.SetRow(scroller, 4);
         editor.Children.Add(scroller);
 
-        Grid.SetRow(_validationText, 3);
+        Grid.SetRow(_validationText, 5);
         editor.Children.Add(_validationText);
 
         Grid.SetRow(editor, 0);
@@ -125,9 +173,10 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return root;
     }
 
-    private void Refresh(int selectCustomShowIndex)
+    private void Refresh(int selectCustomShowIndex, int selectedCustomShowSlideIndex = -1)
     {
         var plan = _host.BuildCustomShowAuthoringPlan();
+        _availableSlides = plan.AvailableSlides;
         _showList.ItemsSource = plan.CustomShows
             .Select(show => new CustomShowListItem(
                 show.Index,
@@ -143,6 +192,13 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             .FirstOrDefault(item => item.Index == selectCustomShowIndex);
         _showList.SelectedItem = selected ?? _showList.Items.OfType<CustomShowListItem>().FirstOrDefault();
         ApplySelectedShowToFields();
+        if (selectedCustomShowSlideIndex >= 0 && _customShowSlideList.Items.Count > 0)
+        {
+            _customShowSlideList.SelectedIndex = Math.Clamp(
+                selectedCustomShowSlideIndex,
+                0,
+                _customShowSlideList.Items.Count - 1);
+        }
     }
 
     private void RebuildSlides(IReadOnlyList<SlideShowCustomShowSlideOption> slides)
@@ -175,17 +231,25 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 .FirstOrDefault(show => show.Index == selected.Index)
                 ?.SlideIds
                 .ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>(StringComparer.Ordinal);
+        var selectedSummary = selected is null
+            ? null
+            : _host.BuildCustomShowAuthoringPlan()
+                .CustomShows
+                .FirstOrDefault(show => show.Index == selected.Index);
 
         foreach (var checkBox in _slideCheckBoxes)
         {
             checkBox.IsChecked = checkBox.Tag is string slideId && selectedSlideIds.Contains(slideId);
         }
 
+        RebuildCustomShowSlides(selectedSummary);
+
         var hasSelection = selected is not null;
         _renameButton.IsEnabled = hasSelection;
         _updateButton.IsEnabled = hasSelection;
         _deleteButton.IsEnabled = hasSelection;
         _startButton.IsEnabled = selected?.SlideCount > 0;
+        UpdateMoveButtons();
         SetValidation(null);
     }
 
@@ -215,6 +279,27 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         }
 
         ApplyMutationResult(_host.UpdateCustomShowSlides(SelectedShow.Index, SelectedSlideIds()));
+    }
+
+    private void OnMoveSelectedSlide(int offset)
+    {
+        if (SelectedShow is null)
+        {
+            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
+            return;
+        }
+
+        if (_customShowSlideList.SelectedItem is not CustomShowSlideListItem selectedSlide)
+        {
+            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowSlideMessage);
+            return;
+        }
+
+        ApplyMutationResult(_host.MoveCustomShowSlide(
+            SelectedShow.Index,
+            selectedSlide.Index,
+            selectedSlide.SlideId,
+            selectedSlide.Index + offset));
     }
 
     private void OnDelete()
@@ -261,7 +346,34 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             return;
         }
 
-        Refresh(result.CustomShowIndex);
+        Refresh(result.CustomShowIndex, result.SelectedSlideIndex);
+    }
+
+    private void RebuildCustomShowSlides(SlideShowCustomShowSummary? show)
+    {
+        var titleBySlideId = _availableSlides.ToDictionary(
+            slide => slide.SlideId,
+            slide => $"Slide {slide.Index + 1}: {slide.Title}",
+            StringComparer.Ordinal);
+        _customShowSlideList.ItemsSource = show?.SlideIds
+            .Select((slideId, index) => new CustomShowSlideListItem(
+                index,
+                slideId,
+                titleBySlideId.TryGetValue(slideId, out var title)
+                    ? title
+                    : $"Missing slide: {slideId}"))
+            .ToArray() ?? Array.Empty<CustomShowSlideListItem>();
+        if (_customShowSlideList.Items.Count > 0 && _customShowSlideList.SelectedIndex < 0)
+            _customShowSlideList.SelectedIndex = 0;
+        UpdateMoveButtons();
+    }
+
+    private void UpdateMoveButtons()
+    {
+        var selectedIndex = _customShowSlideList.SelectedIndex;
+        var hasCustomShowSlide = selectedIndex >= 0 && selectedIndex < _customShowSlideList.Items.Count;
+        _moveUpButton.IsEnabled = hasCustomShowSlide && selectedIndex > 0;
+        _moveDownButton.IsEnabled = hasCustomShowSlide && selectedIndex < _customShowSlideList.Items.Count - 1;
     }
 
     private IEnumerable<string?> SelectedSlideIds() =>
@@ -309,6 +421,11 @@ public sealed class CustomShowDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     }
 
     private sealed record CustomShowListItem(int Index, string Name, int SlideCount, string DisplayText)
+    {
+        public override string ToString() => DisplayText;
+    }
+
+    private sealed record CustomShowSlideListItem(int Index, string SlideId, string DisplayText)
     {
         public override string ToString() => DisplayText;
     }

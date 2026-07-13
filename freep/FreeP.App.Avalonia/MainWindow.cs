@@ -5923,6 +5923,18 @@ public sealed class MainWindow : Window
         IEnumerable<string?> slideIds) =>
         SlideShowCustomShowPlanner.UpdateCustomShowSlides(_presentation, customShowIndex, slideIds);
 
+    internal SlideShowCustomShowMutationResult MoveCustomShowSlide(
+        int customShowIndex,
+        int sourceSlideIndex,
+        string? sourceSlideId,
+        int targetSlideIndex) =>
+        SlideShowCustomShowPlanner.MoveCustomShowSlide(
+            _presentation,
+            customShowIndex,
+            sourceSlideIndex,
+            sourceSlideId,
+            targetSlideIndex);
+
     internal bool TryStartCustomSlideShow(string? customShowName, int startIndex = 0)
     {
         if (!TryBuildCustomSlideShowRoute(customShowName, startIndex, out var route) ||

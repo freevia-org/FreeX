@@ -1323,14 +1323,21 @@ public sealed partial class SlideShowMainWindowCustomShowTests
             var updateSlides = window.UpdateCustomShowSlides(
                 create.CustomShowIndex,
                 new[] { presentation.Slides[1].Id, presentation.Slides[2].Id });
+            var moveSlide = window.MoveCustomShowSlide(
+                create.CustomShowIndex,
+                sourceSlideIndex: 0,
+                sourceSlideId: presentation.Slides[1].Id,
+                targetSlideIndex: 1);
             var plan = window.BuildCustomShowAuthoringPlan();
 
             create.Succeeded.Should().BeTrue();
             rename.Succeeded.Should().BeTrue();
             updateSlides.Succeeded.Should().BeTrue();
+            moveSlide.Succeeded.Should().BeTrue();
+            moveSlide.SelectedSlideIndex.Should().Be(1);
             presentation.CustomShows.Should().ContainSingle();
             presentation.CustomShows[0].Name.Should().Be("Board review");
-            presentation.CustomShows[0].SlideIds.Should().Equal(presentation.Slides[1].Id, presentation.Slides[2].Id);
+            presentation.CustomShows[0].SlideIds.Should().Equal(presentation.Slides[2].Id, presentation.Slides[1].Id);
             plan.CustomShows.Should().ContainSingle().Which.Name.Should().Be("Board review");
             plan.AvailableSlides.Select(slide => slide.Title).Should().Equal("Intro", "Deep dive", "Appendix");
 
@@ -1366,6 +1373,14 @@ public sealed partial class SlideShowMainWindowCustomShowTests
 
             dialog.RenderedCustomShowCount.Should().Be(1);
             dialog.RenderedSlideOptionCount.Should().Be(2);
+            dialog.RenderedCustomShowSlideCount.Should().Be(2);
+            dialog.SelectedCustomShowSlideIndex.Should().Be(0);
+            dialog.ValidationMessage.Should().BeEmpty();
+
+            dialog.MoveSelectedCustomShowSlideDownForTests();
+
+            presentation.CustomShows[0].SlideIds.Should().Equal(presentation.Slides[1].Id, presentation.Slides[0].Id);
+            dialog.SelectedCustomShowSlideIndex.Should().Be(1);
             dialog.ValidationMessage.Should().BeEmpty();
         }
         finally

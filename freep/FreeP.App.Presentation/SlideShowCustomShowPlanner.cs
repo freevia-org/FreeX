@@ -51,12 +51,14 @@ public sealed record SlideShowCustomShowMutationResult(
     bool Succeeded,
     string? ErrorMessage,
     int CustomShowIndex,
-    PresentationCustomShow? CustomShow)
+    PresentationCustomShow? CustomShow,
+    int SelectedSlideIndex = -1)
 {
     public static SlideShowCustomShowMutationResult Success(
         int customShowIndex,
-        PresentationCustomShow? customShow) =>
-        new(true, null, customShowIndex, customShow);
+        PresentationCustomShow? customShow,
+        int selectedSlideIndex = -1) =>
+        new(true, null, customShowIndex, customShow, selectedSlideIndex);
 
     public static SlideShowCustomShowMutationResult Failure(string errorMessage) =>
         new(false, errorMessage, -1, null);
@@ -116,6 +118,7 @@ public static class SlideShowCustomShowPlanner
     public const string EmptyCustomShowNameMessage = "Custom show name is required.";
     public const string DuplicateCustomShowNameMessage = "Custom show name must be unique.";
     public const string MissingCustomShowMessage = "Custom show was not found.";
+    public const string MissingCustomShowSlideMessage = "Custom show slide was not found.";
 
     public static SlideShowCustomShowAuthoringPlan BuildAuthoringPlan(Presentation presentation)
     {
@@ -218,6 +221,49 @@ public static class SlideShowCustomShowPlanner
         customShow.SlideIds.Clear();
         customShow.SlideIds.AddRange(NormalizeSlideIds(presentation, slideIds));
         return SlideShowCustomShowMutationResult.Success(customShowIndex, customShow);
+    }
+
+    public static SlideShowCustomShowMutationResult MoveCustomShowSlide(
+        Presentation presentation,
+        int customShowIndex,
+        int sourceSlideIndex,
+        string? sourceSlideId,
+        int targetSlideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(presentation);
+
+        if (!TryGetCustomShow(presentation, customShowIndex, out var customShow))
+        {
+            return SlideShowCustomShowMutationResult.Failure(MissingCustomShowMessage);
+        }
+
+        var normalizedSourceSlideId = string.IsNullOrWhiteSpace(sourceSlideId)
+            ? string.Empty
+            : sourceSlideId.Trim();
+        if (string.IsNullOrEmpty(normalizedSourceSlideId) ||
+            sourceSlideIndex < 0 ||
+            sourceSlideIndex >= customShow.SlideIds.Count ||
+            !string.Equals(customShow.SlideIds[sourceSlideIndex], normalizedSourceSlideId, StringComparison.Ordinal))
+        {
+            return SlideShowCustomShowMutationResult.Failure(MissingCustomShowSlideMessage);
+        }
+
+        var clampedTargetIndex = Math.Clamp(targetSlideIndex, 0, customShow.SlideIds.Count - 1);
+        if (sourceSlideIndex == clampedTargetIndex)
+        {
+            return SlideShowCustomShowMutationResult.Success(
+                customShowIndex,
+                customShow,
+                selectedSlideIndex: sourceSlideIndex);
+        }
+
+        customShow.SlideIds.RemoveAt(sourceSlideIndex);
+        customShow.SlideIds.Insert(clampedTargetIndex, normalizedSourceSlideId);
+
+        return SlideShowCustomShowMutationResult.Success(
+            customShowIndex,
+            customShow,
+            selectedSlideIndex: clampedTargetIndex);
     }
 
     public static SlideShowLaunchPlan BuildLaunchPlan(
