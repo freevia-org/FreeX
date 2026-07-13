@@ -838,10 +838,14 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.review.accessibility.proofing-depth",
             "freep.animation-pane.workflow-depth",
             "freep.export.backstage.package-handoff",
+            "freep.export.pdf-ellipse-fixed-layout",
+            "freep.export.pdf-picture-frame-clips",
             "freep.table.inline-text.workflow-depth",
             "freep.header-footer.placeholder-creation",
             "freep.chart.number-format-rendering",
             "freep.chart.edge-manual-layout",
+            "freep.chart.bar-gap-overlap",
+            "freep.chart.bubble-sizing-semantics",
             "freep.chart.pie-first-slice-angle",
             "freep.omml.transparent-phantom-spacing",
             "freep.smartart.continuous-block-process",
@@ -855,6 +859,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.basic-cycle",
             "freep.smartart.radial-cycle",
             "freep.smartart.gear-cycle",
+            "freep.smartart.text-cycle",
             "freep.smartart.vertical-bullet-list",
             "freep.smartart.basic-hierarchy",
             "freep.smartart.org-chart",
@@ -917,7 +922,10 @@ public sealed class FreePRibbonDefinitionProfileTests
             .Select(path => path.GetString())
             .ToArray();
         animationPaneVerification.Should().Contain("freep/FreeP.App.Presentation.Tests/AnimationPanePlannerTests.cs");
+        animationPaneVerification.Should().Contain("freep/FreeP.App.Presentation.Tests/SlideShowPlaybackPlannerTests.cs");
         animationPaneVerification.Should().Contain("freep/FreeP.App.Host.Tests/AnimationPaneTests.cs");
+        animationPaneVerification.Should().Contain("freep/FreeP.App.Host.Tests/SlideShowHostPolicySourceTests.cs");
+        animationPaneVerification.Should().Contain("freep/FreeP.App.Avalonia.Tests/SlideShowHostPolicySourceTests.cs");
         animationPaneVerification.Should().Contain("freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs");
     }
 

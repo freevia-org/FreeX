@@ -708,4 +708,146 @@ public sealed class SlideShowPlaybackPlannerTests
             new ShapeAnimation { Kind = AnimationKind.Entrance },
             startDelayMs: 0).Should().BeNull();
     }
+
+    [Fact]
+    public void PlanFrame_ProjectsTranslateAndMotionPathEvidenceInSlideCoordinates()
+    {
+        var flyInPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 41,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.FlyIn,
+                Direction = AnimationDirection.FromRight,
+                DurationMs = 400
+            },
+            startDelayMs: 0);
+
+        var flyInFrame = SlideShowPlaybackFramePlanner.PlanFrame(
+            flyInPlan,
+            elapsedMs: 200,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        flyInFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Translate);
+        flyInFrame.Progress.Should().Be(0.5);
+        flyInFrame.TranslateXFactor.Should().Be(0.5);
+        flyInFrame.TranslateXDip.Should().Be(480);
+        flyInFrame.TranslateYDip.Should().Be(0);
+        flyInFrame.EvidenceSummary.Should().Contain("FlyIn Translate");
+
+        var path = new MotionPath();
+        path.Segments.Add(MotionPathSegment.MoveTo(0, 0));
+        path.Segments.Add(MotionPathSegment.LineTo(0.5, 0.25));
+        var motionPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 42,
+                Kind = AnimationKind.Motion,
+                Motion = path,
+                DurationMs = 1000
+            },
+            startDelayMs: 0);
+
+        var motionFrame = SlideShowPlaybackFramePlanner.PlanFrame(
+            motionPlan,
+            elapsedMs: 500,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        motionFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.MotionPath);
+        motionFrame.TranslateXFactor.Should().BeApproximately(0.25, 0.0001);
+        motionFrame.TranslateYFactor.Should().BeApproximately(0.125, 0.0001);
+        motionFrame.TranslateXDip.Should().BeApproximately(240, 0.0001);
+        motionFrame.TranslateYDip.Should().BeApproximately(67.5, 0.0001);
+    }
+
+    [Fact]
+    public void PlanFrame_ProjectsAdvancedClipAndScaleVisualEvidence()
+    {
+        var wheelPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 51,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Wheel,
+                Direction = AnimationDirection.In,
+                WheelSpokeCount = 8,
+                DurationMs = 300
+            },
+            startDelayMs: 0);
+
+        var wheelFrame = SlideShowPlaybackFramePlanner.PlanFrame(
+            wheelPlan,
+            elapsedMs: 150,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        wheelFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Clip);
+        wheelFrame.ClipKind.Should().Be(SlideShowAnimationClipKind.Wheel);
+        wheelFrame.ClipProgress.Should().Be(0.5);
+        wheelFrame.ClipSpokeCount.Should().Be(8);
+        wheelFrame.EvidenceSummary.Should().Contain("clip Wheel 0.5");
+
+        var growPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 52,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Grow,
+                DurationMs = 400
+            },
+            startDelayMs: 0);
+
+        var growFrame = SlideShowPlaybackFramePlanner.PlanFrame(
+            growPlan,
+            elapsedMs: 200,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        growFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Scale);
+        growFrame.Scale.Should().Be(growPlan.PeakScale);
+        growFrame.Opacity.Should().Be(1);
+        growFrame.EvidenceSummary.Should().Contain("GrowShrink Scale");
+    }
+
+    [Fact]
+    public void PlanAnimationStepFrames_UsesControllerDelaysForSharedHostEvidence()
+    {
+        var step = new AnimationStep(
+        [
+            new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = 61,
+                    Kind = AnimationKind.Entrance,
+                    Preset = AnimationPreset.Appear,
+                    DurationMs = 100
+                },
+                StartDelayMs: 0),
+            new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = 62,
+                    Kind = AnimationKind.Entrance,
+                    Preset = AnimationPreset.Fade,
+                    DurationMs = 200
+                },
+                StartDelayMs: 150)
+        ]);
+
+        var frames = SlideShowPlaybackFramePlanner.PlanAnimationStepFrames(
+            step,
+            elapsedMs: 100,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        frames.Should().HaveCount(2);
+        frames[0].ShapeId.Should().Be(61);
+        frames[0].IsComplete.Should().BeTrue();
+        frames[1].ShapeId.Should().Be(62);
+        frames[1].IsBeforeStart.Should().BeTrue();
+        frames[1].Progress.Should().Be(0);
+        frames[1].Opacity.Should().Be(0);
+    }
 }

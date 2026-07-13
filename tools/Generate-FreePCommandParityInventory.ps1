@@ -260,15 +260,19 @@ internal static class FreePCommandInventory
             [
                 "docs/parity/freep-animation-pane-workflow-depth-2026-07-06.md",
                 "docs/parity/freep-animation-pane-advanced-effect-options-2026-07-05.md",
-                "docs/parity/freep-remaining-imported-animation-playback-2026-07-13.md"
+                "docs/parity/freep-remaining-imported-animation-playback-2026-07-13.md",
+                "docs/parity/freep-animation-playback-frame-evidence-2026-07-13.md"
             ],
             Verification:
             [
                 "freep/FreeP.App.Presentation.Tests/AnimationPanePlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/SlideShowPlaybackPlannerTests.cs",
                 "freep/FreeP.App.Host.Tests/AnimationPaneTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideShowHostPolicySourceTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/SlideShowHostPolicySourceTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared animation-pane row evidence now covers selected-row state, timing editors, effect-option rows, reorder availability, playback control readiness, and deterministic playback plans for remaining imported Dissolve/Flash/Spiral/Swivel/Bounce/Float/Swoop/Boomerang families across WPF/Avalonia. PowerPoint-authoritative animation-pane UI baselines and exact advanced effect playback visuals remain deferred."),
+            RemainingWork: "Shared animation-pane row evidence now covers selected-row state, timing editors, effect-option rows, reorder availability, playback control readiness, deterministic playback plans for remaining imported Dissolve/Flash/Spiral/Swivel/Bounce/Float/Swoop/Boomerang families, and renderer-neutral playback frame descriptors consumed by WPF/Avalonia slideshow hosts. PowerPoint-authoritative animation-pane UI baselines and exact advanced effect playback visuals remain deferred."),
         new(
             EvidenceId: "freep.export.backstage.package-handoff",
             Area: "Backstage export and print package-handoff depth beyond notes-page PDF",

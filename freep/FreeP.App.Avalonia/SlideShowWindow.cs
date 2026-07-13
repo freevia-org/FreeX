@@ -64,6 +64,7 @@ public sealed class SlideShowWindow : Window
     private SlideShowTimingRecorderState _timingRecorderState;
     private SlideShowRecordingExecutionState _recordingExecutionState;
     private SlideShowInkExecutionState _inkExecutionState;
+    private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
     private bool _isTornDown;
 
     // DA2 + DA3: all per-frame DispatcherTimers created by animation/transition helpers
@@ -287,6 +288,7 @@ public sealed class SlideShowWindow : Window
         SlideShowRecordingReviewPlanner.BuildPlan(_presentation, _recordingExecutionState);
 
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
+    internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
     internal SlideShowPlaybackRoute PlaybackRoute => _playbackRoute;
     internal int CurrentPresentationSlideIndex => _playbackRoute.GetSourceSlideIndex(_controller.CurrentSlideIndex);
 
@@ -1088,6 +1090,8 @@ public sealed class SlideShowWindow : Window
     /// </param>
     private void PlayShapeAnimation(Control element, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
     {
+        _lastAnimationFramePlan = SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, _slideDipW, _slideDipH);
+
         if (plan.EffectKind == SlideShowShapeAnimationEffectKind.MotionPath)
         {
             MotionPathEffect(element, plan, onReveal);

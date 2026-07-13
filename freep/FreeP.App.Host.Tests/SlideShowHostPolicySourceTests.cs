@@ -39,6 +39,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowPlaybackPlanner.PlanTransition(");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanAnimationStep(");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackAnimation(");
+        source.Should().Contain("SlideShowPlaybackFramePlanner.PlanFrame(");
+        source.Should().Contain("LastAnimationFramePlanForTest");
 
         source.Should().NotContain("case Key.Right");
         source.Should().NotContain("case Key.Left");
@@ -69,6 +71,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayAnimationStep(command.Step);");
         source.Should().Contain("private void PlayAnimationStep(AnimationStep step)");
         source.Should().Contain("foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))");
+        source.Should().Contain("_lastAnimationFramePlan = SlideShowPlaybackFramePlanner.PlanFrame(plan, 0, _slideDipW, _slideDipH);");
         source.Should().Contain("PlayShapeAnimation(element, plan);");
         source.Should().Contain("PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));");
 
