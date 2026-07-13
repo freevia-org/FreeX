@@ -467,10 +467,11 @@ public static class OmmlParser
     private static MathNode ParseGroupChr(XElement el)
     {
         var grpPr = el.Element(M + "groupChrPr");
-        string grpChar = grpPr?.Element(M + "chr")?.Attribute(M + "val")?.Value
-                      ?? grpPr?.Element(M + "chr")?.Value
-                      ?? "?"; // ? over-brace
-        bool isAbove = grpPr?.Element(M + "pos")?.Attribute(M + "val")?.Value is not "bot";
+        var pos = ReadVal(grpPr?.Element(M + "pos"));
+        bool isAbove = pos is not "bot";
+
+        string grpChar = ReadVal(grpPr?.Element(M + "chr"))
+                      ?? (isAbove ? "\u23DE" : "\u23DF");
         var eEl = el.Element(M + "e") ?? el;
         return new MathNode.GroupChr(grpChar, ParseRow(eEl), isAbove);
     }

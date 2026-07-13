@@ -1155,6 +1155,43 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void GroupChr_Above_PlacesBraceAboveBaseAndGrowsAscent()
+    {
+        var node = new MathNode.GroupChr("\u23DE", Run("x"), isAbove: true);
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var container = Assert.IsType<MathBox.Container>(layout.Children[0]);
+        var groupGlyph = Assert.IsType<MathBox.Glyph>(container.Children[0]);
+        var baseGlyph = Assert.IsType<MathBox.Glyph>(container.Children[1]);
+
+        groupGlyph.Text.Should().Be("\u23DE");
+        groupGlyph.Y.Should().BeLessThan(baseGlyph.Y,
+            "top group characters must sit above the grouped expression");
+        layout.Metrics.Ascent.Should().BeGreaterThan(baseGlyph.Metrics.Ascent,
+            "the reported baseline must include the raised group character");
+
+        var ops = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Contain(new[] { "\u23DE", "x" });
+    }
+
+    [Fact]
+    public void GroupChr_Below_PlacesBraceBelowBaseAndKeepsBaseBaseline()
+    {
+        var node = new MathNode.GroupChr("\u23DF", Run("x"), isAbove: false);
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var container = Assert.IsType<MathBox.Container>(layout.Children[0]);
+        var groupGlyph = Assert.IsType<MathBox.Glyph>(container.Children[0]);
+        var baseGlyph = Assert.IsType<MathBox.Glyph>(container.Children[1]);
+
+        groupGlyph.Text.Should().Be("\u23DF");
+        groupGlyph.Y.Should().BeGreaterThan(baseGlyph.Y,
+            "bottom group characters must sit below the grouped expression");
+        layout.Metrics.Ascent.Should().BeApproximately(baseGlyph.Metrics.Ascent, 0.01,
+            "bottom group characters grow descent while preserving the base baseline");
+    }
+
+    [Fact]
     public void LimitLow_CentersLimitBelowBase_AndGrowsDescent()
     {
         var node = new MathNode.Limit(Run("lim"), Run("0"), isUpper: false);

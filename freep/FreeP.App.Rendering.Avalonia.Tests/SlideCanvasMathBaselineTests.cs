@@ -380,4 +380,41 @@ public sealed class SlideCanvasMathBaselineTests
 
         thrown.Should().BeNull("Avalonia must render hidden-degree radical math from the shared MathBox plan without host-specific layout branching");
     }
+
+    [Fact]
+    public async Task RenderParaWithMath_GroupChr_UsesSharedGlyphPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:groupChr>" +
+                    "<m:groupChrPr><m:pos m:val=\"bot\"/></m:groupChrPr>" +
+                    "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+                    "</m:groupChr>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+                ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Contain("\u23DF",
+                    "missing bottom m:groupChrPr/m:chr should resolve to a shared underbrace glyph before Avalonia draws");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "G = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render group-character math from the shared MathBox plan without host-specific layout branching");
+    }
 }

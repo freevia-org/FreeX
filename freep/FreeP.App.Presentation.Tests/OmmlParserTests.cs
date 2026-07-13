@@ -190,6 +190,37 @@ public sealed class OmmlParserTests
         Assert.False(bar.IsOver);
     }
 
+    [Fact]
+    public void GroupChr_WithNoChrAndNoPos_DefaultsToTopCurlyBrace()
+    {
+        var node = Parse("<m:groupChr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:groupChr>");
+
+        var groupChr = Assert.IsType<MathNode.GroupChr>(node);
+        Assert.True(groupChr.IsAbove);
+        Assert.Equal("\u23DE", groupChr.GrpChar);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(groupChr.Base).Text);
+    }
+
+    [Fact]
+    public void GroupChr_WithBottomPosAndNoChr_DefaultsToBottomCurlyBrace()
+    {
+        var node = Parse("<m:groupChr><m:groupChrPr><m:pos m:val=\"bot\"/></m:groupChrPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:groupChr>");
+
+        var groupChr = Assert.IsType<MathNode.GroupChr>(node);
+        Assert.False(groupChr.IsAbove);
+        Assert.Equal("\u23DF", groupChr.GrpChar);
+    }
+
+    [Fact]
+    public void GroupChr_WithExplicitChr_PreservesRequestedGlyph()
+    {
+        var node = Parse("<m:groupChr><m:groupChrPr><m:chr m:val=\"\u23B4\"/><m:pos m:val=\"bot\"/></m:groupChrPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:groupChr>");
+
+        var groupChr = Assert.IsType<MathNode.GroupChr>(node);
+        Assert.False(groupChr.IsAbove);
+        Assert.Equal("\u23B4", groupChr.GrpChar);
+    }
+
     // m:d begChr explicit-empty vs absent.
 
     [Fact]
