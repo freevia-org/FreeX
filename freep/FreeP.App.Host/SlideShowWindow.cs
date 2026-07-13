@@ -1162,6 +1162,38 @@ public sealed class SlideShowWindow : Window
                 GeometricMaskEffect(sb, element, plan);
                 break;
 
+            case SlideShowShapeAnimationEffectKind.Dissolve:
+                FadeEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Flash:
+                FadeEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Spiral:
+                SpinEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Swivel:
+                SpinEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Bounce:
+                FlyInEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Float:
+                FlyInEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Swoop:
+                FlyInEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Boomerang:
+                FlyInEffect(sb, element, plan);
+                break;
+
             case SlideShowShapeAnimationEffectKind.Peek:
                 PeekEffect(sb, element, plan);
                 break;

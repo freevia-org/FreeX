@@ -464,10 +464,123 @@ public sealed class SlideShowPlaybackPlannerTests
         wheelOut.GeometricMaskSpokeCount.Should().Be(SlideShowPlaybackPlanner.WheelSpokeCount);
         wheelOut.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
 
-        var peekFromLeft = SlideShowPlaybackPlanner.PlanShapeAnimation(
+        var dissolve = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
                 ShapeId = 23,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Dissolve,
+                DurationMs = 240
+            },
+            startDelayMs: 5);
+
+        dissolve.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Dissolve);
+        dissolve.DurationMs.Should().Be(240);
+        dissolve.DelayMs.Should().Be(5);
+        dissolve.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var flashExit = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 24,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Flash
+            },
+            startDelayMs: 0);
+
+        flashExit.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Flash);
+        flashExit.FromOpacity.Should().Be(1);
+        flashExit.ToOpacity.Should().Be(0);
+        flashExit.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var spiral = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 25,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Spiral,
+                DurationMs = 300
+            },
+            startDelayMs: 15);
+
+        spiral.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Spiral);
+        spiral.RotationDegrees.Should().Be(360);
+        spiral.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var swivelExit = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 26,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Swivel
+            },
+            startDelayMs: 0);
+
+        swivelExit.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Swivel);
+        swivelExit.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var bounce = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 27,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Bounce,
+                Direction = AnimationDirection.FromBottom
+            },
+            startDelayMs: 0);
+
+        bounce.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Bounce);
+        bounce.OffsetXFactor.Should().Be(0);
+        bounce.OffsetYFactor.Should().Be(1);
+        bounce.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.OnComplete);
+
+        var floatIn = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 28,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Float,
+                Direction = AnimationDirection.FromTop
+            },
+            startDelayMs: 0);
+
+        floatIn.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Float);
+        floatIn.OffsetYFactor.Should().Be(-1);
+
+        var swoop = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 29,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Swoop,
+                Direction = AnimationDirection.FromBottomRight
+            },
+            startDelayMs: 0);
+
+        swoop.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Swoop);
+        swoop.OffsetXFactor.Should().Be(1);
+        swoop.OffsetYFactor.Should().Be(1);
+
+        var boomerangExit = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 30,
+                Kind = AnimationKind.Exit,
+                Preset = AnimationPreset.Boomerang,
+                Direction = AnimationDirection.FromLeft
+            },
+            startDelayMs: 0);
+
+        boomerangExit.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Boomerang);
+        boomerangExit.OffsetXFactor.Should().Be(-1);
+        boomerangExit.FromOpacity.Should().Be(1);
+        boomerangExit.ToOpacity.Should().Be(0);
+        boomerangExit.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+
+        var peekFromLeft = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 31,
                 Kind = AnimationKind.Entrance,
                 Preset = AnimationPreset.Peek,
                 Direction = AnimationDirection.FromLeft,
@@ -485,7 +598,7 @@ public sealed class SlideShowPlaybackPlannerTests
         var peekExitFromBottom = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 24,
+                ShapeId = 32,
                 Kind = AnimationKind.Exit,
                 Preset = AnimationPreset.Peek,
                 Direction = AnimationDirection.FromBottom
@@ -500,7 +613,7 @@ public sealed class SlideShowPlaybackPlannerTests
         var crawlFromRight = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 25,
+                ShapeId = 33,
                 Kind = AnimationKind.Entrance,
                 Preset = AnimationPreset.Crawl,
                 Direction = AnimationDirection.FromRight,
@@ -518,7 +631,7 @@ public sealed class SlideShowPlaybackPlannerTests
         var crawlExitFromTop = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 26,
+                ShapeId = 34,
                 Kind = AnimationKind.Exit,
                 Preset = AnimationPreset.Crawl,
                 Direction = AnimationDirection.FromTop
@@ -533,7 +646,7 @@ public sealed class SlideShowPlaybackPlannerTests
         var growShrink = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {
-                ShapeId = 27,
+                ShapeId = 35,
                 Kind = AnimationKind.Emphasis,
                 Preset = AnimationPreset.Grow,
                 DurationMs = 450
