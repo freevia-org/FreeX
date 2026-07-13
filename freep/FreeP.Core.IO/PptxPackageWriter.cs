@@ -4042,6 +4042,7 @@ public static class PptxPackageWriter
     {
         var result = new List<(uint shapeId, MediaCaptionTrackRelationship relationship, string target, bool isExternal)>();
         var captionIndex = 1;
+        var writtenCaptionPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var shape in AllShapes(slide.Shapes))
         {
@@ -4056,7 +4057,7 @@ public static class PptxPackageWriter
                     if (string.IsNullOrWhiteSpace(track.Source))
                         continue;
 
-                    var externalRelId = NextCaptionRelationshipId(usedRelIds, captionIndex++);
+                    var externalRelId = ReserveCaptionRelationshipId(track, usedRelIds, captionIndex++);
                     var relationship = new MediaCaptionTrackRelationship(
                         externalRelId,
                         track.Language,
@@ -4070,8 +4071,12 @@ public static class PptxPackageWriter
                     continue;
 
                 var extension = GetCaptionTrackExtension(track);
-                var captionPath = $"ppt/media/slide{slideIndex}_caption{captionIndex}.{extension}";
-                var relId = NextCaptionRelationshipId(usedRelIds, captionIndex++);
+                var relId = ReserveCaptionRelationshipId(track, usedRelIds, captionIndex);
+                var captionPath = TryGetPreservedCaptionPackagePath(track, packageSnapshot, bytes, writtenCaptionPaths, out var preservedPath)
+                    ? preservedPath
+                    : $"ppt/media/slide{slideIndex}_caption{captionIndex}.{extension}";
+                captionIndex++;
+                writtenCaptionPaths.Add(captionPath);
                 WriteRawEntry(archive, captionPath, bytes);
 
                 var internalRelationship = new MediaCaptionTrackRelationship(
@@ -4079,11 +4084,25 @@ public static class PptxPackageWriter
                     track.Language,
                     track.Label,
                     IsExternal: false);
-                result.Add((shape.Id, internalRelationship, $"../media/{captionPath.Split('/').Last()}", isExternal: false));
+                result.Add((shape.Id, internalRelationship, MakeRelativePath($"ppt/slides/slide{slideIndex}.xml", captionPath), isExternal: false));
             }
         }
 
         return result;
+    }
+
+    private static string ReserveCaptionRelationshipId(
+        MediaCaptionTrackInfo track,
+        HashSet<string> usedRelIds,
+        int preferredIndex)
+    {
+        if (!string.IsNullOrWhiteSpace(track.RelationshipId)
+            && usedRelIds.Add(track.RelationshipId))
+        {
+            return track.RelationshipId;
+        }
+
+        return NextCaptionRelationshipId(usedRelIds, preferredIndex);
     }
 
     private static string NextCaptionRelationshipId(HashSet<string> usedRelIds, int preferredIndex)
@@ -4096,6 +4115,51 @@ public static class PptxPackageWriter
         }
 
         return relId;
+    }
+
+    private static bool TryGetPreservedCaptionPackagePath(
+        MediaCaptionTrackInfo track,
+        PptxPackageSnapshot? packageSnapshot,
+        byte[] bytes,
+        HashSet<string> writtenCaptionPaths,
+        out string captionPath)
+    {
+        captionPath = string.Empty;
+        if (packageSnapshot is null
+            || !TryNormalizeInternalCaptionPackagePath(track.Source, out var normalizedPath)
+            || writtenCaptionPaths.Contains(normalizedPath)
+            || !packageSnapshot.TryGetEntry(normalizedPath, out var preservedBytes)
+            || preservedBytes.Length == 0)
+        {
+            return false;
+        }
+
+        if (bytes.Length > 0 && !bytes.SequenceEqual(preservedBytes))
+        {
+            return false;
+        }
+
+        captionPath = normalizedPath;
+        return true;
+    }
+
+    private static bool TryNormalizeInternalCaptionPackagePath(string? source, out string captionPath)
+    {
+        captionPath = string.Empty;
+        if (string.IsNullOrWhiteSpace(source) || IsExternalCaptionTrackSource(source))
+            return false;
+
+        var normalized = ToZipEntryPath(source);
+        if (string.IsNullOrWhiteSpace(normalized)
+            || normalized.Split('/').Any(part => part is "." or "..")
+            || !normalized.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase)
+            || GetCaptionTrackExtension(normalized) is not ("vtt" or "ttml" or "dfxp" or "srt"))
+        {
+            return false;
+        }
+
+        captionPath = normalized;
+        return true;
     }
 
     private static bool TryGetCaptionTrackBytes(
@@ -4123,9 +4187,12 @@ public static class PptxPackageWriter
 
     private static bool IsExternalCaptionTrack(MediaCaptionTrackInfo track)
         => track.IsExternal
-            || (!string.IsNullOrWhiteSpace(track.Source)
-                && Uri.TryCreate(track.Source, UriKind.Absolute, out var uri)
-                && !string.IsNullOrWhiteSpace(uri.Scheme));
+            || IsExternalCaptionTrackSource(track.Source);
+
+    private static bool IsExternalCaptionTrackSource(string? source)
+        => !string.IsNullOrWhiteSpace(source)
+            && Uri.TryCreate(source, UriKind.Absolute, out var uri)
+            && !string.IsNullOrWhiteSpace(uri.Scheme);
 
     private static string GetCaptionTrackExtension(MediaCaptionTrackInfo track)
     {

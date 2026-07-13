@@ -118,6 +118,8 @@ public static class SlideCloner
             CategoryAxis = CloneChartAxis(src.CategoryAxis),
             ValueAxis    = CloneChartAxis(src.ValueAxis),
             DataTable    = src.DataTable is null ? null : CloneChartDataTableSettings(src.DataTable),
+            DisplayBlanksAs = src.DisplayBlanksAs,
+            ShowDataLabelsOverMaximum = src.ShowDataLabelsOverMaximum,
             BarGapWidthPercent = src.BarGapWidthPercent,
             BarOverlapPercent = src.BarOverlapPercent,
             BarGapDepthPercent = src.BarGapDepthPercent,

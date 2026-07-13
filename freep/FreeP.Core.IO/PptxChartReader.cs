@@ -49,6 +49,10 @@ internal static class PptxChartReader
 
         // Title
         shape.Title = ReadTitle(chartEl.Element(C + "title"));
+        shape.DisplayBlanksAs = ReadDisplayBlanksAs(
+            chartEl.Element(C + "dispBlanksAs")?.Attribute("val")?.Value);
+        shape.ShowDataLabelsOverMaximum = ParseNullableBoolElement(
+            chartEl.Element(C + "showDLblsOverMax"));
 
         // plotArea
         var plotArea = chartEl.Element(C + "plotArea");
@@ -907,6 +911,15 @@ internal static class PptxChartReader
         return value.HasValue ? Math.Clamp(value.Value, 0, 500) : null;
     }
 
+    private static ChartDisplayBlanksAs? ReadDisplayBlanksAs(string? value) =>
+        value switch
+        {
+            "span" => ChartDisplayBlanksAs.Span,
+            "gap" => ChartDisplayBlanksAs.Gap,
+            "zero" => ChartDisplayBlanksAs.Zero,
+            _ => null
+        };
+
     private static ChartMarkerSymbol? ReadMarkerSymbol(string? value) =>
         value switch
         {
@@ -1194,6 +1207,12 @@ internal static class PptxChartReader
             "0" or "false" => false,
             _ => null
         };
+
+    private static bool? ParseNullableBoolElement(XElement? el)
+    {
+        if (el is null) return null;
+        return ParseNullableBoolAttr(el.Attribute("val")?.Value) ?? true;
+    }
 
     private static bool ParseBoolAttr(XElement? el)
     {

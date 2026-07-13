@@ -166,6 +166,7 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-presenter-recording-execution-2026-07-04.md",
                 "docs/parity/freep-presenter-recording-media-artifact-manifest-2026-07-05.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-05.md",
+                "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-13.md",
                 "docs/parity/freep-presenter-recording-review-2026-07-04.md"
             ],
             Verification:
@@ -176,7 +177,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, and focused single-track, external-link, plus multi-track PowerPoint-native media caption relationship/package baselines are covered. Real OS microphone/camera capture implementations, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
+            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, and original-path/relationship-id PowerPoint-native media caption relationship/package baselines are covered. Real OS microphone/camera capture implementations, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
         new(
             EvidenceId: "freep.presenter.ink.execution",
             Area: "Presenter ink, laser, and persistence execution",
