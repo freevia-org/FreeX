@@ -318,13 +318,16 @@ internal static class PptxChartWriter
             _ => "clustered"
         };
 
-        return new XElement(C + "barChart",
+        var chartElementName = chart.BarGapDepthPercent.HasValue ? "bar3DChart" : "barChart";
+
+        return new XElement(C + chartElementName,
             new XElement(C + "barDir", new XAttribute("val", isBar ? "bar" : "col")),
             new XElement(C + "grouping", new XAttribute("val", grouping)),
             BuildVaryColorsEl(chart),
             seriesEls,
             BuildBarGapWidthEl(chart),
-            BuildBarOverlapEl(chart),
+            chart.BarGapDepthPercent.HasValue ? null : BuildBarOverlapEl(chart),
+            BuildBarGapDepthEl(chart),
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
     }
@@ -337,6 +340,11 @@ internal static class PptxChartWriter
     private static XElement? BuildBarOverlapEl(ChartShape chart) =>
         chart.BarOverlapPercent is { } value
             ? new XElement(C + "overlap", new XAttribute("val", Math.Clamp(value, -100, 100)))
+            : null;
+
+    private static XElement? BuildBarGapDepthEl(ChartShape chart) =>
+        chart.BarGapDepthPercent is { } value
+            ? new XElement(C + "gapDepth", new XAttribute("val", Math.Clamp(value, 0, 500)))
             : null;
 
     private static XElement BuildLineChartEl(ChartShape chart, List<XElement> seriesEls,

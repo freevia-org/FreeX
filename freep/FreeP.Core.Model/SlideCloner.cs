@@ -120,6 +120,7 @@ public static class SlideCloner
             DataTable    = src.DataTable is null ? null : CloneChartDataTableSettings(src.DataTable),
             BarGapWidthPercent = src.BarGapWidthPercent,
             BarOverlapPercent = src.BarOverlapPercent,
+            BarGapDepthPercent = src.BarGapDepthPercent,
             DoughnutHolePercent = src.DoughnutHolePercent,
             FirstSliceAngleDegrees = src.FirstSliceAngleDegrees,
             ScatterStyle = src.ScatterStyle,
