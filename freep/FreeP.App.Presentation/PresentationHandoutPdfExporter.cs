@@ -127,14 +127,26 @@ public static class PresentationHandoutPdfExporter
                 case PdfFillRect fill:
                     yield return MapRect(fill.X, fill.Y, fill.Width, fill.Height, fill.Color, null);
                     break;
+                case PdfFillRectLinearGradient fill:
+                    yield return MapRectLinearGradient(fill.X, fill.Y, fill.Width, fill.Height, fill.Gradient, fill.FallbackColor, null);
+                    break;
                 case PdfStrokeRect stroke:
                     yield return MapRect(stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth);
+                    break;
+                case PdfStrokeRectLinearGradient stroke:
+                    yield return MapRectLinearGradient(stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Gradient, stroke.FallbackColor, stroke.LineWidth);
                     break;
                 case PdfFillEllipse fill:
                     yield return MapEllipse(fill.X, fill.Y, fill.Width, fill.Height, fill.Color, null);
                     break;
+                case PdfFillEllipseLinearGradient fill:
+                    yield return MapEllipseLinearGradient(fill.X, fill.Y, fill.Width, fill.Height, fill.Gradient, fill.FallbackColor, null);
+                    break;
                 case PdfStrokeEllipse stroke:
                     yield return MapEllipse(stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Color, stroke.LineWidth);
+                    break;
+                case PdfStrokeEllipseLinearGradient stroke:
+                    yield return MapEllipseLinearGradient(stroke.X, stroke.Y, stroke.Width, stroke.Height, stroke.Gradient, stroke.FallbackColor, stroke.LineWidth);
                     break;
                 case PdfText text:
                     yield return new PdfText(
@@ -154,6 +166,16 @@ public static class PresentationHandoutPdfExporter
                         line.Color,
                         line.LineWidth * scale);
                     break;
+                case PdfLineLinearGradient line:
+                    yield return new PdfLineLinearGradient(
+                        MapX(line.X1),
+                        MapY(line.Y1),
+                        MapX(line.X2),
+                        MapY(line.Y2),
+                        MapGradient(line.Gradient),
+                        line.FallbackColor,
+                        line.LineWidth * scale);
+                    break;
                 case PdfFilledTriangle triangle:
                     yield return new PdfFilledTriangle(
                         MapX(triangle.X1),
@@ -166,6 +188,9 @@ public static class PresentationHandoutPdfExporter
                     break;
                 case PdfPath path:
                     yield return MapPath(path);
+                    break;
+                case PdfPathLinearGradient path:
+                    yield return MapPathLinearGradient(path);
                     break;
                 case PdfRotationGroup group:
                 {
@@ -218,6 +243,27 @@ public static class PresentationHandoutPdfExporter
                 : new PdfStrokeRect(mapped.X, pdfY, mapped.Width, mapped.Height, color, lineWidth.Value * scale);
         }
 
+        PdfDrawOp MapRectLinearGradient(
+            double x,
+            double y,
+            double width,
+            double height,
+            PdfLinearGradient gradient,
+            PdfColor fallbackColor,
+            double? lineWidth)
+        {
+            var mapped = new LayoutRect(
+                MapX(x),
+                MapTopFromPdfBottom(y + height),
+                width * scale,
+                height * scale);
+            var pdfY = pageHeight - mapped.Bottom;
+            var mappedGradient = MapGradient(gradient);
+            return lineWidth is null
+                ? new PdfFillRectLinearGradient(mapped.X, pdfY, mapped.Width, mapped.Height, mappedGradient, fallbackColor)
+                : new PdfStrokeRectLinearGradient(mapped.X, pdfY, mapped.Width, mapped.Height, mappedGradient, fallbackColor, lineWidth.Value * scale);
+        }
+
         PdfDrawOp MapEllipse(double x, double y, double width, double height, PdfColor color, double? lineWidth)
         {
             var mapped = new LayoutRect(
@@ -229,6 +275,27 @@ public static class PresentationHandoutPdfExporter
             return lineWidth is null
                 ? new PdfFillEllipse(mapped.X, pdfY, mapped.Width, mapped.Height, color)
                 : new PdfStrokeEllipse(mapped.X, pdfY, mapped.Width, mapped.Height, color, lineWidth.Value * scale);
+        }
+
+        PdfDrawOp MapEllipseLinearGradient(
+            double x,
+            double y,
+            double width,
+            double height,
+            PdfLinearGradient gradient,
+            PdfColor fallbackColor,
+            double? lineWidth)
+        {
+            var mapped = new LayoutRect(
+                MapX(x),
+                MapTopFromPdfBottom(y + height),
+                width * scale,
+                height * scale);
+            var pdfY = pageHeight - mapped.Bottom;
+            var mappedGradient = MapGradient(gradient);
+            return lineWidth is null
+                ? new PdfFillEllipseLinearGradient(mapped.X, pdfY, mapped.Width, mapped.Height, mappedGradient, fallbackColor)
+                : new PdfStrokeEllipseLinearGradient(mapped.X, pdfY, mapped.Width, mapped.Height, mappedGradient, fallbackColor, lineWidth.Value * scale);
         }
 
         PdfPath MapPath(PdfPath path) =>
@@ -243,6 +310,20 @@ public static class PresentationHandoutPdfExporter
                 path.StrokeColor,
                 path.StrokeWidth * scale);
 
+        PdfPathLinearGradient MapPathLinearGradient(PdfPathLinearGradient path) =>
+            new(
+                path.Contours
+                    .Select(contour => new PdfPathContour(
+                        MapPoint(contour.Start),
+                        contour.Segments.Select(MapSegment).ToArray(),
+                        contour.Closed))
+                    .ToArray(),
+                path.FillGradient is { } fillGradient ? MapGradient(fillGradient) : null,
+                path.FillFallbackColor,
+                path.StrokeGradient is { } strokeGradient ? MapGradient(strokeGradient) : null,
+                path.StrokeFallbackColor,
+                path.StrokeWidth * scale);
+
         PdfPathSegment MapSegment(PdfPathSegment segment) =>
             segment.Kind switch
             {
@@ -251,6 +332,15 @@ public static class PresentationHandoutPdfExporter
                     MapPoint(segment.Control2),
                     MapPoint(segment.End)),
                 _ => PdfPathSegment.LineTo(MapPoint(segment.End)),
+            };
+
+        PdfLinearGradient MapGradient(PdfLinearGradient gradient) =>
+            gradient with
+            {
+                StartX = MapX(gradient.StartX),
+                StartY = MapY(gradient.StartY),
+                EndX = MapX(gradient.EndX),
+                EndY = MapY(gradient.EndY),
             };
 
         PdfPathPoint MapPoint(PdfPathPoint point) => new(MapX(point.X), MapY(point.Y));

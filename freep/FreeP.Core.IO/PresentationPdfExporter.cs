@@ -84,7 +84,26 @@ public static class PresentationPdfExporter
 
         var ops = new List<PdfDrawOp>();
 
-        if (TryMapFill(slide.Background, out var background, out var backgroundOpacity))
+        if (TryMapFillLinearGradient(
+                slide.Background,
+                0,
+                0,
+                slideWidthPoints,
+                slideHeightPoints,
+                out var backgroundGradient,
+                out var backgroundFallback,
+                out var backgroundGradientOpacity))
+            AddWithOpacity(
+                ops,
+                new PdfFillRectLinearGradient(
+                    0,
+                    0,
+                    slideWidthPoints,
+                    slideHeightPoints,
+                    backgroundGradient,
+                    backgroundFallback),
+                backgroundGradientOpacity);
+        else if (TryMapFill(slide.Background, out var background, out var backgroundOpacity))
             AddWithOpacity(ops, new PdfFillRect(0, 0, slideWidthPoints, slideHeightPoints, background), backgroundOpacity);
 
         // PDF user space has its origin at the bottom-left with y increasing upward, so we lay out from the

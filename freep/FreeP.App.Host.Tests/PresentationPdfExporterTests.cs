@@ -219,6 +219,44 @@ public class PresentationPdfExporterTests
     }
 
     [Fact]
+    public void BuildDocument_MapsLinearGradientSlideBackgroundToPdfGradientOp()
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+
+        var slide = new Slide
+        {
+            Background = new ShapeFill.Gradient(
+                [
+                    new GradientStop(0.0, new ThemeAwareColor(SrgbColor.FromRgb(0x102030))),
+                    new GradientStop(0.5, new ThemeAwareColor(SrgbColor.FromRgb(0x406080))),
+                    new GradientStop(1.0, new ThemeAwareColor(SrgbColor.FromRgb(0xDDEEFF))),
+                ],
+                GradientKind.Linear,
+                angleDegrees: 0),
+        };
+        deck.Slides.Add(slide);
+
+        var ops = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops;
+        var background = ops.OfType<PdfFillRectLinearGradient>().Should().ContainSingle().Subject;
+
+        background.X.Should().Be(0);
+        background.Y.Should().Be(0);
+        background.Width.Should().Be(960);
+        background.Height.Should().Be(540);
+        background.FallbackColor.Should().Be(new PdfColor(0x10, 0x20, 0x30));
+        background.Gradient.StartX.Should().Be(0);
+        background.Gradient.StartY.Should().Be(270);
+        background.Gradient.EndX.Should().Be(960);
+        background.Gradient.EndY.Should().Be(270);
+        background.Gradient.Stops.Select(stop => (stop.Position, stop.Color)).Should().Equal(
+            (0.0, new PdfColor(0x10, 0x20, 0x30)),
+            (0.5, new PdfColor(0x40, 0x60, 0x80)),
+            (1.0, new PdfColor(0xDD, 0xEE, 0xFF)));
+        ops.OfType<PdfFillRect>().Should().BeEmpty("linear slide backgrounds should not flatten to solid PDF fills");
+    }
+
+    [Fact]
     public void BuildDocument_KeepsSolidFallbackForRadialGradientFillAndOutline()
     {
         var deck = Presentation.CreateEmpty();

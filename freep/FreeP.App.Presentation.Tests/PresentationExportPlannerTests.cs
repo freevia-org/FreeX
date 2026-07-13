@@ -146,6 +146,42 @@ public sealed class PresentationExportPlannerTests
         return presentation;
     }
 
+    private static Presentation BuildGradientDeck()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var slide = new Slide
+        {
+            Title = "Gradient evidence",
+            Background = new ShapeFill.Gradient(
+                [
+                    new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0x10, 0x20, 0x30))),
+                    new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0xD0, 0xE0, 0xF0))),
+                ],
+                GradientKind.Linear,
+                angleDegrees: 0),
+        };
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Gradient(
+                [
+                    new GradientStop(0.0, new ThemeAwareColor(new SrgbColor(0x44, 0x72, 0xC4))),
+                    new GradientStop(1.0, new ThemeAwareColor(new SrgbColor(0x70, 0xAD, 0x47))),
+                ],
+                GradientKind.Linear,
+                angleDegrees: 90),
+            Text = "Gradient shape",
+        });
+        slide.Notes = MakeTextBody("Gradient notes evidence.");
+        presentation.Slides.Add(slide);
+        return presentation;
+    }
+
     [Fact]
     public void PrintLayouts_CoverSlidesNotesAndPowerPointHandoutOptions()
     {
@@ -508,6 +544,35 @@ public sealed class PresentationExportPlannerTests
             fill.Color == new PdfColor(0x22, 0x22, 0x22) &&
             fill.Width > 0 &&
             fill.Height > 0);
+    }
+
+    [Fact]
+    public void NotesAndHandoutPdfRenderPlans_PreserveLinearGradientSlideOps()
+    {
+        var deck = BuildGradientDeck();
+
+        var notesPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(deck);
+        var handoutPlan = PresentationHandoutPdfExporter.BuildRenderPlan(
+            deck,
+            new PresentationHandoutPdfExportRequest(
+                new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts, HandoutSlidesPerPage: 1)));
+
+        var notesGradients = notesPlan.Pages[0].Ops.OfType<PdfFillRectLinearGradient>().ToArray();
+        var handoutGradients = handoutPlan.Pages[0].Ops.OfType<PdfFillRectLinearGradient>().ToArray();
+
+        notesGradients.Should().HaveCount(2);
+        handoutGradients.Should().HaveCount(2);
+        notesGradients[0].Gradient.Stops.Select(stop => stop.Color).Should().Equal(
+            new PdfColor(0x10, 0x20, 0x30),
+            new PdfColor(0xD0, 0xE0, 0xF0));
+        notesGradients[0].Gradient.StartX.Should().BeLessThan(notesGradients[0].Gradient.EndX);
+        notesGradients[0].Gradient.StartY.Should().BeApproximately(notesGradients[0].Gradient.EndY, 0.001);
+        notesGradients[1].Gradient.StartX.Should().BeApproximately(notesGradients[1].Gradient.EndX, 0.001);
+        notesGradients[1].Gradient.StartY.Should().BeGreaterThan(notesGradients[1].Gradient.EndY);
+        handoutGradients.Select(op => op.FallbackColor).Should().Contain([
+            new PdfColor(0x10, 0x20, 0x30),
+            new PdfColor(0x44, 0x72, 0xC4),
+        ]);
     }
 
     [Fact]
