@@ -56,11 +56,11 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         var firstBodyStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId);
-        firstBodyStyle.FillColor.Should().Be(new CellColor(232, 239, 242));
+        firstBodyStyle.FillColor.Should().Be(new CellColor(224, 242, 250));
         var secondBodyStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "E4"))!.StyleId);
         secondBodyStyle.FillColor.Should().BeNull();
         var stripedValueStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F4"))!.StyleId);
-        stripedValueStyle.FillColor.Should().Be(new CellColor(232, 239, 242));
+        stripedValueStyle.FillColor.Should().Be(new CellColor(224, 242, 250));
         var totalStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId);
         totalStyle.FillColor.Should().BeNull();
     }
@@ -145,10 +145,10 @@ public sealed partial class PivotTableRefreshServiceTests
 
         Text(sheet, "E5").Should().Be("East Total");
         sheet.GetCell(Addr(sheet, "F5"))!.Value.Should().Be(BlankValue.Instance);
-        AssertPivotTotalStyle(workbook, sheet, "E5", new CellColor(208, 223, 230));
-        AssertPivotTotalStyle(workbook, sheet, "F5", new CellColor(208, 223, 230));
-        AssertPivotTotalStyle(workbook, sheet, "G5", new CellColor(208, 223, 230));
-        AssertPivotTotalStyle(workbook, sheet, "H5", new CellColor(208, 223, 230));
+        AssertPivotTotalStyle(workbook, sheet, "E5", new CellColor(193, 229, 245));
+        AssertPivotTotalStyle(workbook, sheet, "F5", new CellColor(193, 229, 245));
+        AssertPivotTotalStyle(workbook, sheet, "G5", new CellColor(193, 229, 245));
+        AssertPivotTotalStyle(workbook, sheet, "H5", new CellColor(193, 229, 245));
     }
 
     [Fact]
@@ -419,19 +419,19 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.Refresh(workbook, sheet, pivot);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId).FillColor.Should().Be(new CellColor(19, 80, 27));
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "G5"))!.StyleId).FillColor.Should().Be(new CellColor(209, 225, 211));
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "G9"))!.StyleId).FillColor.Should().Be(new CellColor(209, 225, 211));
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).FillColor.Should().Be(new CellColor(232, 240, 233));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "G5"))!.StyleId).FillColor.Should().Be(new CellColor(194, 241, 200));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "G9"))!.StyleId).FillColor.Should().Be(new CellColor(194, 241, 200));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).FillColor.Should().Be(new CellColor(224, 248, 228));
     }
 
     [Theory]
-    [InlineData("PivotStyleMedium2", 21, 96, 130, 232, 239, 242)]
-    [InlineData("PivotStyleLight16", 207, 236, 247, 243, 250, 253)]
-    [InlineData("PivotStyleMedium10", 233, 113, 50, 253, 241, 234)]
+    [InlineData("PivotStyleMedium2", 21, 96, 130, 224, 242, 250)]
+    [InlineData("PivotStyleLight16", 202, 238, 251, 242, 251, 254)]
+    [InlineData("PivotStyleMedium10", 233, 113, 50, 253, 241, 235)]
     [InlineData("PivotStyleMedium17", 112, 48, 160, 243, 235, 250)]
     [InlineData("PivotStyleDark7", 31, 78, 121, 232, 240, 248)]
-    [InlineData("PivotStyleLight9", 208, 223, 230, 243, 247, 249)]
-    [InlineData("PivotStyleLight14", 220, 237, 213, 246, 251, 245)]
+    [InlineData("PivotStyleLight9", 193, 229, 245, 240, 248, 253)]
+    [InlineData("PivotStyleLight14", 217, 242, 208, 246, 252, 243)]
     public void Refresh_MapsAdditionalBuiltInPivotStyleFamilies(string styleName, byte headerR, byte headerG, byte headerB, byte stripeR, byte stripeG, byte stripeB)
     {
         var workbook = new Workbook("PivotStyleFamilyExpansionTest");
@@ -485,9 +485,9 @@ public sealed partial class PivotTableRefreshServiceTests
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E2"))!.StyleId)
             .FillColor.Should().Be(new CellColor(10, 80, 120));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "E3"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(230, 238, 242));
+            .FillColor.Should().Be(new CellColor(220, 240, 252));
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(182, 202, 214));
+            .FillColor.Should().Be(new CellColor(150, 211, 246));
     }
 
     [Fact]
@@ -748,7 +748,7 @@ public sealed partial class PivotTableRefreshServiceTests
         AssertLoadedPivotFontIdentity(headerStyle);
 
         var valueStyle = workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId);
-        valueStyle.FillColor.Should().Be(new CellColor(232, 239, 242));
+        valueStyle.FillColor.Should().Be(new CellColor(224, 242, 250));
         valueStyle.NumberFormat.Should().Be("$#,##0.00");
         AssertLoadedPivotFontIdentity(valueStyle);
     }
@@ -909,7 +909,7 @@ public sealed partial class PivotTableRefreshServiceTests
         PivotTableRefreshService.ApplyLoadedPivotStyles(workbook);
 
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A4"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(208, 223, 230));
+            .FillColor.Should().Be(new CellColor(193, 229, 245));
         // A5 is a label column (col < firstDataColumn); Medium9 has BodyFill=null so the
         // col-gate prevents stripe from bleeding onto label cells — label stays un-filled.
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "A5"))!.StyleId)
@@ -957,7 +957,7 @@ public sealed partial class PivotTableRefreshServiceTests
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "B5"))!.StyleId)
             .FillColor.Should().Be(CellColor.White, "native firstDataCol keeps row-label columns out of column striping while the loaded body layer still hides sheet gridlines");
         workbook.GetStyle(sheet.GetCell(Addr(sheet, "C5"))!.StyleId)
-            .FillColor.Should().Be(new CellColor(232, 239, 242));
+            .FillColor.Should().Be(new CellColor(224, 242, 250));
     }
 
     [Fact]

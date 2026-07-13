@@ -91,10 +91,14 @@ public sealed class XlsxDrawingColorTintSourceGuardTests
             .Should()
             .Contain("WorkbookThemeTint.Apply(color, tint)");
 
+        // Positive theme tint must resolve through HSL luminance modulation (lumMod/lumOff),
+        // mirroring the DrawingML lumMod/lumOff XlsxDrawingColorTint writes — never the DrawingML
+        // <a:tint> linear-RGB-toward-white blend (DrawingMlColorTransform.ApplyTint), which
+        // desaturates and does not match Excel's styles.xml tint attribute (ECMA-376 §18.8.19).
         TestWorkspaceFiles.ReadCoreModelRepoSource("WorkbookThemeTint.cs")
             .Should()
-            .Contain("DrawingMlColorTransform.ApplyTint")
-            .And.Contain("DrawingMlColorTransform.ApplyLuminance");
+            .Contain("DrawingMlColorTransform.ApplyLuminance")
+            .And.NotContain("DrawingMlColorTransform.ApplyTint");
     }
 
     private static string ExtractMethod(string source, string signature)

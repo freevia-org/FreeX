@@ -129,7 +129,7 @@ public class ViewportStyleTests
 
         var displayCell = vp.Cells.Single(c => c.Row == 1 && c.Col == 1);
         displayCell.DisplayText.Should().Be("12.5");
-        displayCell.Style!.FontColor.Should().Be(CellColor.FromArgb(0x90, 0xA0, 0xB0));
+        displayCell.Style!.FontColor.Should().Be(CellColor.FromArgb(0x70, 0x9F, 0xCF));
     }
 
     [Fact]

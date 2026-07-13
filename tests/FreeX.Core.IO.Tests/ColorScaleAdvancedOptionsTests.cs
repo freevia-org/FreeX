@@ -147,7 +147,7 @@ public sealed class ColorScaleAdvancedOptionsTests
         rule.RuleType.Should().Be(CfRuleType.ColorScale);
         rule.MinColor.Should().Be(new RgbColor(19, 120, 221));
         rule.MidColor.Should().Be(new RgbColor(10, 20, 30));
-        rule.MaxColor.Should().Be(new RgbColor(91, 131, 171));
+        rule.MaxColor.Should().Be(new RgbColor(69, 131, 193));
     }
 
     [Fact]

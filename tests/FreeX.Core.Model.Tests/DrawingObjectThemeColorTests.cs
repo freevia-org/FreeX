@@ -17,7 +17,7 @@ public sealed class DrawingObjectThemeColorTests
             OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent2, -0.5)
         };
 
-        shape.GetEffectiveFillColor(theme, new CellColor(1, 1, 1)).Should().Be(new CellColor(178, 202, 228));
+        shape.GetEffectiveFillColor(theme, new CellColor(1, 1, 1)).Should().Be(new CellColor(178, 202, 227));
         shape.GetEffectiveOutlineColor(theme, new CellColor(1, 1, 1)).Should().Be(new CellColor(5, 10, 15));
     }
 
@@ -48,7 +48,7 @@ public sealed class DrawingObjectThemeColorTests
             OutlineThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent4, -0.5)
         };
 
-        textBox.GetEffectiveFillColor(theme, new CellColor(1, 1, 1)).Should().Be(new CellColor(178, 202, 228));
+        textBox.GetEffectiveFillColor(theme, new CellColor(1, 1, 1)).Should().Be(new CellColor(178, 202, 227));
         textBox.GetEffectiveOutlineColor(theme, new CellColor(1, 1, 1)).Should().Be(new CellColor(5, 10, 15));
     }
 }

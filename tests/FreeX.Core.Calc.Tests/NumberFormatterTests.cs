@@ -369,9 +369,9 @@ public class NumberFormatterTests
     }
 
     [Theory]
-    [InlineData("[ThemeAccent1Tint40]0.0", "#71859A")]
-    [InlineData("[Theme Accent1 Tint 40]0.0", "#71859A")]
-    [InlineData("[ThemeAccent1Tint40%]0.0", "#71859A")]
+    [InlineData("[ThemeAccent1Tint40]0.0", "#3685D5")]
+    [InlineData("[Theme Accent1 Tint 40]0.0", "#3685D5")]
+    [InlineData("[ThemeAccent1Tint40%]0.0", "#3685D5")]
     [InlineData("[ThemeAccent1Tint-25]0.0", "#0D2741")]
     public void CustomNumberSubset_ResolvesTintedThemeColorDirectivesWithWorkbookTheme(
         string numberFormat,

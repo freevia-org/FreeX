@@ -367,7 +367,7 @@ public sealed class WorkbookThemeTests
 
     [Theory]
     [InlineData(100, 150, 200, 0.0, 100, 150, 200)]
-    [InlineData(100, 150, 200, 0.5, 178, 202, 228)]
+    [InlineData(100, 150, 200, 0.5, 178, 202, 227)]
     [InlineData(100, 150, 200, -0.25, 59, 112, 166)]
     [InlineData(100, 150, 200, 2.0, 255, 255, 255)]
     [InlineData(100, 150, 200, -2.0, 0, 0, 0)]
@@ -389,13 +389,17 @@ public sealed class WorkbookThemeTests
     }
 
     [Fact]
-    public void WorkbookTheme_ResolveColor_AdaptsExcelTintToSharedRgbTransform()
+    public void WorkbookTheme_ResolveColor_AdaptsExcelTintToSharedLuminanceTransform()
     {
         var theme = WorkbookTheme.Office.WithColor(
             WorkbookThemeColorSlot.Accent1,
             new CellColor(100, 150, 200));
 
-        var positiveTint = DrawingMlColorTransform.ApplyTint(new DrawingMlRgbColor(100, 150, 200), 0.5);
+        // Excel resolves the styles.xml `tint` attribute via HSL luminance modulation
+        // (ECMA-376 §18.8.19): positive tint -> lumMod=1-tint, lumOff=tint; negative tint ->
+        // lumMod=1+tint. This mirrors the lumMod/lumOff values XlsxDrawingColorTint writes and is
+        // distinct from the DrawingML <a:tint> linear-RGB-toward-white blend.
+        var positiveTint = DrawingMlColorTransform.ApplyLuminance(new DrawingMlRgbColor(100, 150, 200), 0.5, 0.5);
         var negativeTint = DrawingMlColorTransform.ApplyLuminance(new DrawingMlRgbColor(100, 150, 200), 0.75, 0.0);
 
         theme.ResolveColor(WorkbookThemeColorSlot.Accent1, 0.5)
@@ -421,9 +425,9 @@ public sealed class WorkbookThemeTests
             FillPatternThemeColor = new WorkbookThemeColorReference(WorkbookThemeColorSlot.Accent3, 0.25)
         };
 
-        style.ResolveFontColor(theme).Should().Be(new CellColor(178, 202, 228));
+        style.ResolveFontColor(theme).Should().Be(new CellColor(178, 202, 227));
         style.ResolveFillColor(theme).Should().Be(new CellColor(60, 90, 120));
-        style.ResolveFillPatternColor(theme).Should().Be(new CellColor(94, 124, 154));
+        style.ResolveFillPatternColor(theme).Should().Be(new CellColor(62, 124, 186));
     }
 
     private const string NativeFormatSchemeWithOuterShadow = """

@@ -22,7 +22,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         var colors = GridView.ResolveDrawingShapeColors(shape, theme);
 
-        colors.Fill.Should().Be(new CellColor(178, 202, 228));
+        colors.Fill.Should().Be(new CellColor(178, 202, 227));
         colors.Outline.Should().Be(new CellColor(5, 10, 15));
     }
 
@@ -59,7 +59,7 @@ public sealed partial class GridViewDrawingObjectThemeTests
 
         var colors = GridView.ResolveTextBoxColors(textBox, theme);
 
-        colors.Fill.Should().Be(new CellColor(178, 202, 228));
+        colors.Fill.Should().Be(new CellColor(178, 202, 227));
         colors.Outline.Should().Be(new CellColor(5, 10, 15));
     }
 

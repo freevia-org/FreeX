@@ -72,7 +72,7 @@ public sealed partial class PivotTableRefreshServiceTests
         Number(sheet, "G8").Should().Be(70);
         Number(sheet, "H8").Should().Be(80);
         Number(sheet, "I8").Should().Be(150);
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().Be(new CellColor(208, 223, 230));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F5"))!.StyleId).FillColor.Should().Be(new CellColor(193, 229, 245));
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public sealed partial class PivotTableRefreshServiceTests
         Number(sheet, "H6").Should().Be(80);
         Number(sheet, "I6").Should().Be(150);
         Text(sheet, "F7").Should().Be("West Q1");
-        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).FillColor.Should().Be(new CellColor(208, 223, 230));
+        workbook.GetStyle(sheet.GetCell(Addr(sheet, "F3"))!.StyleId).FillColor.Should().Be(new CellColor(193, 229, 245));
     }
 
     [Fact]
