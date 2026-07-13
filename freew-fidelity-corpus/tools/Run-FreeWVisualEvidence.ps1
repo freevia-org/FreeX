@@ -167,6 +167,10 @@ $namedScenarioSets = @{
         'review-compare-visual-proof',
         'review-combine-visual-proof'
     )
+    ReviewProofingVisualProof = @(
+        'review-proofing-visual-depth',
+        'review-protection-proofing-comments-only'
+    )
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ScenarioSet) -and -not $namedScenarioSets.ContainsKey($ScenarioSet)) {
@@ -1287,6 +1291,192 @@ function Assert-ReviewCompareCombineVisualProofReadiness {
     }
 }
 
+function Assert-ReviewProofingVisualProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $requiredScenarioIds = @(
+        'review-proofing-visual-depth',
+        'review-protection-proofing-comments-only'
+    )
+    $selectedScenarioIds = @($requiredScenarioIds | Where-Object { $ScenarioIds -contains $_ })
+    if ($selectedScenarioIds.Count -eq 0) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Review proofing visual proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 34) {
+        throw "Review proofing visual proof readiness requires FreeW visual evidence summary schema v34 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $readinessRows = @($summary.reviewProofingProofReadiness)
+    $scenarios = @($summary.scenarios)
+    $evidenceRows = @($summary.evidence)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $remainingBlockers = @($summary.remainingEvidenceBlockers)
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedSemanticRows = 0
+    $verifiedBaselineRows = 0
+    $verifiedUnavailableBlockers = 0
+
+    foreach ($scenarioId in $selectedScenarioIds) {
+        $proofRows = @($readinessRows | Where-Object { $_.scenarioId -eq $scenarioId })
+        if ($proofRows.Count -eq 0) {
+            $failures.Add("${scenarioId}: missing review proofing visual proof readiness row")
+        }
+        foreach ($proofRow in $proofRows) {
+            if ($proofRow.trust.passed -ne $true -or $proofRow.status -ne 'paired-renderer-proof-ready') {
+                $notes = @($proofRow.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$proofRow.baselineReadiness
+                }
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): readiness status '$($proofRow.status)' failed ($notes)")
+            }
+
+            if ([string]::IsNullOrWhiteSpace([string]$proofRow.semanticEvidence) -or [string]$proofRow.semanticEvidence -eq '-') {
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing proofing visual semantic readiness summary")
+            }
+        }
+
+        foreach ($hostId in $requiredHosts) {
+            $scenarioRows = @($scenarios | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId
+            })
+            if ($scenarioRows.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing normalized scenario row")
+                continue
+            }
+
+            $scenarioRow = $scenarioRows[0]
+            if ($scenarioRow.trust.passed -ne $true) {
+                $notes = @($scenarioRow.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = 'no notes'
+                }
+                $failures.Add("${hostId}/${scenarioId}: scenario trust failed ($notes)")
+                continue
+            }
+
+            if ([int]$scenarioRow.trustedOutputs -lt 1) {
+                $failures.Add("${hostId}/${scenarioId}: expected at least 1 trusted output, found $($scenarioRow.trustedOutputs)")
+                continue
+            }
+
+            $trustedScenarioRows++
+
+            $hostEvidenceRows = @($evidenceRows | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.trust.passed -eq $true
+            })
+            if ($hostEvidenceRows.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing trusted normalized evidence row for proofing adornment semantics")
+            }
+            foreach ($row in $hostEvidenceRows) {
+                $proofing = $row.proofingDiagnostics
+                if ([int]$proofing.diagnosticCount -lt 1 -or
+                    [int]$proofing.spellingCount -lt 1 -or
+                    [int]$proofing.grammarCount -lt 1 -or
+                    [int]$proofing.adornmentCount -lt 1 -or
+                    [int]$proofing.adornmentCount -ne [int]$proofing.diagnosticCount -or
+                    $proofing.hasSpellingUnderline -ne $true -or
+                    $proofing.hasGrammarUnderline -ne $true) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing proofing visual adornment metadata")
+                    continue
+                }
+
+                $adornmentSignatures = @($proofing.adornmentStableSignatures)
+                if (@($adornmentSignatures | Where-Object { ([string]$_).IndexOf('adornment=spelling-squiggle', [StringComparison]::Ordinal) -ge 0 }).Count -eq 0) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing stable spelling-squiggle signature")
+                    continue
+                }
+                if (@($adornmentSignatures | Where-Object { ([string]$_).IndexOf('adornment=grammar-squiggle', [StringComparison]::Ordinal) -ge 0 }).Count -eq 0) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing stable grammar-squiggle signature")
+                    continue
+                }
+
+                $verifiedSemanticRows++
+            }
+
+            $comparisonRows = @($baselineComparisons | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.baselineScenarioId -eq $scenarioId
+            })
+            if ($baselineComparisons.Count -gt 0 -and $comparisonRows.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+                continue
+            }
+
+            foreach ($comparison in $comparisonRows) {
+                if ($comparison.trust.passed -ne $true) {
+                    $notes = @($comparison.trust.failures) -join '; '
+                    if ([string]::IsNullOrWhiteSpace($notes)) {
+                        $notes = [string]$comparison.skipReason
+                    }
+                    $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                    continue
+                }
+
+                $baselineId = [string]$comparison.baselineId
+                if (-not $baselineId.StartsWith($scenarioId + '/', [StringComparison]::OrdinalIgnoreCase)) {
+                    $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baselineId '$baselineId' expected scenario '$scenarioId'")
+                    continue
+                }
+
+                $verifiedBaselineRows++
+            }
+        }
+
+        $unavailableComparisons = @($baselineComparisons | Where-Object {
+            $_.scenarioId -eq $scenarioId -and
+            $_.status -eq 'word-baseline-unavailable'
+        })
+        if ($unavailableComparisons.Count -gt 0) {
+            $blocker = @($remainingBlockers | Where-Object {
+                $_.blockerId -eq "${scenarioId}-word-baseline-fidelity" -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.status -eq 'word-baseline-unavailable' -and
+                $_.requiresWordBaseline -eq $true
+            }) | Select-Object -First 1
+            if (-not $blocker) {
+                $failures.Add("${scenarioId}: missing honest word-baseline-unavailable proofing visual blocker")
+            }
+            else {
+                $verifiedUnavailableBlockers++
+            }
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Review proofing visual proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Review proofing visual proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "Review proofing visual semantic rows: verified rows=$verifiedSemanticRows"
+    if ($baselineComparisons.Count -gt 0) {
+        Write-Host "Review proofing Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    }
+    else {
+        Write-Host "Review proofing Word-baseline policy rows: no Word baseline mode requested"
+    }
+    if ($verifiedUnavailableBlockers -gt 0) {
+        Write-Host "Review proofing Word-baseline unavailable blockers: verified rows=$verifiedUnavailableBlockers"
+    }
+}
+
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
 New-Item -ItemType Directory -Force $wpfDir | Out-Null
 New-Item -ItemType Directory -Force $avaloniaDir | Out-Null
@@ -1391,6 +1581,7 @@ Assert-FloatingWrappingProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-ReviewCompareCombineVisualProofReadiness $summaryJson $effectiveScenarioIds
+Assert-ReviewProofingVisualProofReadiness $summaryJson $effectiveScenarioIds
 
 Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green

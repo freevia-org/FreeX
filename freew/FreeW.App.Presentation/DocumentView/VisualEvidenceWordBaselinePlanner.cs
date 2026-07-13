@@ -52,6 +52,7 @@ public static class FreeWWordBaselineEvidencePlanner
         "f2-tracked-changes",
         "f2-comments",
         "review-proofing-visual-depth",
+        "review-protection-proofing-comments-only",
         "review-compare-visual-proof",
         "review-combine-visual-proof",
         "backstage-print-preview-fidelity",

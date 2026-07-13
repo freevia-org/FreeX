@@ -67,6 +67,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualFloatingWrappingProofReadiness> FloatingWrappingProofReadiness,
     IReadOnlyList<FreeWVisualDrawingObjectProofReadiness> DrawingObjectProofReadiness,
     IReadOnlyList<FreeWVisualReviewCompareCombineProofReadiness> ReviewCompareCombineProofReadiness,
+    IReadOnlyList<FreeWVisualReviewProofingProofReadiness> ReviewProofingProofReadiness,
     IReadOnlyList<FreeWVisualBaselineComparison> BaselineComparisons,
     IReadOnlyList<FreeWVisualBaselineTriageItem> WordBaselineTriage,
     IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> RemainingEvidenceBlockers,
@@ -115,6 +116,17 @@ public sealed record FreeWVisualReviewCompareCombineProofReadiness(
     string SemanticEvidence,
     FreeWVisualEvidenceTrust Trust);
 
+public sealed record FreeWVisualReviewProofingProofReadiness(
+    string ScenarioId,
+    int PageNumber,
+    string Status,
+    string WpfOutputSummary,
+    string AvaloniaOutputSummary,
+    string WordBaselineStatus,
+    string BaselineReadiness,
+    string SemanticEvidence,
+    FreeWVisualEvidenceTrust Trust);
+
 public sealed record FreeWVisualBaselineTriageItem(
     string HostId,
     string ScenarioId,
@@ -148,7 +160,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 33;
+    public const int SummarySchemaVersion = 34;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -242,6 +254,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "review-compare-visual-proof",
         "review-combine-visual-proof"
+    ];
+    public static IReadOnlyList<string> ReviewProofingVisualProofScenarioIds { get; } =
+    [
+        "review-proofing-visual-depth",
+        "review-protection-proofing-comments-only"
     ];
 
     private static readonly string[] ReferencesHeavyRequiredComplexFieldKeywords =
@@ -372,6 +389,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var floatingWrappingProofReadiness = BuildFloatingWrappingProofReadinessRows(expected, orderedRows, []);
         var drawingObjectProofReadiness = BuildDrawingObjectProofReadinessRows(expected, orderedRows, []);
         var reviewCompareCombineProofReadiness = BuildReviewCompareCombineProofReadinessRows(expected, orderedRows, []);
+        var reviewProofingProofReadiness = BuildReviewProofingProofReadinessRows(expected, orderedRows, []);
         var summary = new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
             SummarySchemaVersion,
@@ -385,6 +403,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             floatingWrappingProofReadiness,
             drawingObjectProofReadiness,
             reviewCompareCombineProofReadiness,
+            reviewProofingProofReadiness,
             [],
             [],
             [],
@@ -441,6 +460,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         AppendFloatingWrappingProofReadiness(sb, summary);
         AppendDrawingObjectProofReadiness(sb, summary);
         AppendReviewCompareCombineProofReadiness(sb, summary);
+        AppendReviewProofingProofReadiness(sb, summary);
         AppendEquationGeometryEvidence(sb, summary);
 
         sb.AppendLine();
@@ -599,6 +619,29 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
         sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
         foreach (var row in summary.ReviewCompareCombineProofReadiness)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.ScenarioId)} | {row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(row.Status)} | {EscapeMarkdown(row.WpfOutputSummary)} | " +
+                $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | {EscapeMarkdown(row.WordBaselineStatus)} | " +
+                $"{EscapeMarkdown(row.BaselineReadiness)} | {EscapeMarkdown(row.SemanticEvidence)} | " +
+                $"{(row.Trust.Passed ? "passed" : "failed")} |");
+        }
+    }
+
+    private static void AppendReviewProofingProofReadiness(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.ReviewProofingProofReadiness.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## Review Proofing Visual Proof Readiness");
+        sb.AppendLine();
+        sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
+        sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var row in summary.ReviewProofingProofReadiness)
         {
             sb.AppendLine(
                 $"| {EscapeMarkdown(row.ScenarioId)} | {row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
@@ -960,6 +1003,68 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return rows;
     }
 
+    private static IReadOnlyList<FreeWVisualReviewProofingProofReadiness> BuildReviewProofingProofReadinessRows(
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var rows = new List<FreeWVisualReviewProofingProofReadiness>();
+        foreach (var scenarioId in ReviewProofingVisualProofScenarioIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            var expected = expectedScenarios
+                .Any(e => string.Equals(e.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            var hasEvidence = evidence
+                .Any(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            if (!expected && !hasEvidence)
+                continue;
+
+            foreach (var pageNumber in RequiredScenarioPages(scenarioId))
+            {
+                var wpfRows = RowsForHostScenarioPage(evidence, WpfHostId, scenarioId, pageNumber);
+                var avaloniaRows = RowsForHostScenarioPage(evidence, AvaloniaHostId, scenarioId, pageNumber);
+                var trustedWpf = wpfRows.FirstOrDefault(row => row.Trust.Passed);
+                var trustedAvalonia = avaloniaRows.FirstOrDefault(row => row.Trust.Passed);
+                var relatedBaseline = baselineComparisons
+                    .Where(comparison =>
+                        string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase)
+                        && comparison.PageNumber == pageNumber)
+                    .ToList();
+
+                if (trustedWpf is null || trustedAvalonia is null)
+                {
+                    rows.Add(new FreeWVisualReviewProofingProofReadiness(
+                        scenarioId,
+                        pageNumber,
+                        "missing-paired-renderer-evidence",
+                        FormatOutputSummary(wpfRows),
+                        FormatOutputSummary(avaloniaRows),
+                        FormatWordBaselineStatus(relatedBaseline),
+                        "paired WPF/Avalonia proofing visual adornment evidence is required before Word baseline comparison readiness",
+                        FormatReviewProofingProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                        new FreeWVisualEvidenceTrust(false, BuildMissingReviewProofingPairFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia))));
+                    continue;
+                }
+
+                var failures = BuildReviewProofingSemanticFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia);
+                var baselineTrust = EvaluateDrawingObjectProofReadiness(relatedBaseline);
+                failures.AddRange(baselineTrust.Failures);
+                var trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+                rows.Add(new FreeWVisualReviewProofingProofReadiness(
+                    scenarioId,
+                    pageNumber,
+                    trust.Passed ? "paired-renderer-proof-ready" : "review-proofing-proof-failed",
+                    FormatOutputSummary(wpfRows),
+                    FormatOutputSummary(avaloniaRows),
+                    FormatWordBaselineStatus(relatedBaseline),
+                    FormatReviewProofingBaselineReadiness(relatedBaseline, scenarioId),
+                    FormatReviewProofingProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                    trust));
+            }
+        }
+
+        return rows;
+    }
+
     public static FreeWVisualEvidenceNormalizedSummary WithBaselineComparisons(
         FreeWVisualEvidenceNormalizedSummary summary,
         IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
@@ -994,6 +1099,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 summary.Evidence,
                 ordered),
             ReviewCompareCombineProofReadiness = BuildReviewCompareCombineProofReadinessRows(
+                summary.ExpectedScenarios,
+                summary.Evidence,
+                ordered),
+            ReviewProofingProofReadiness = BuildReviewProofingProofReadinessRows(
                 summary.ExpectedScenarios,
                 summary.Evidence,
                 ordered),
@@ -1055,6 +1164,64 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (trustedAvalonia is null)
             failures.Add($"review compare/combine proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
         return failures;
+    }
+
+    private static IReadOnlyList<string> BuildMissingReviewProofingPairFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow? trustedWpf,
+        FreeWVisualEvidenceNormalizedRow? trustedAvalonia)
+    {
+        var failures = new List<string>();
+        if (trustedWpf is null)
+            failures.Add($"review proofing visual proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted WPF visual evidence");
+        if (trustedAvalonia is null)
+            failures.Add($"review proofing visual proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
+        return failures;
+    }
+
+    private static List<string> BuildReviewProofingSemanticFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia)
+    {
+        var failures = new List<string>();
+        var pairName = $"review proofing visual proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        ValidateReviewProofingSemanticRow(pairName + " WPF", wpf.ProofingDiagnostics, failures);
+        ValidateReviewProofingSemanticRow(pairName + " Avalonia", avalonia.ProofingDiagnostics, failures);
+        ValidateReviewProofingPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+        ValidateReviewProtectionPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+        return failures;
+    }
+
+    private static void ValidateReviewProofingSemanticRow(
+        string rowName,
+        FreeWVisualProofingDiagnosticExpectation proofing,
+        List<string> failures)
+    {
+        if (proofing.DiagnosticCount <= 0)
+            failures.Add($"{rowName} expected proofing diagnostic evidence");
+        if (proofing.SpellingCount <= 0)
+            failures.Add($"{rowName} expected spelling diagnostic evidence");
+        if (proofing.GrammarCount <= 0)
+            failures.Add($"{rowName} expected grammar diagnostic evidence");
+        if (proofing.AdornmentCount <= 0)
+            failures.Add($"{rowName} expected proofing visual adornment evidence");
+        if (!proofing.HasSpellingUnderline)
+            failures.Add($"{rowName} expected spelling underline adornment evidence");
+        if (!proofing.HasGrammarUnderline)
+            failures.Add($"{rowName} expected grammar underline adornment evidence");
+        if (proofing.AdornmentCount != proofing.DiagnosticCount)
+            failures.Add($"{rowName} proofing adornment count must match diagnostic count");
+        if (proofing.SpellingAdornmentCount != proofing.SpellingCount)
+            failures.Add($"{rowName} spelling adornment count must match spelling diagnostic count");
+        if (proofing.GrammarAdornmentCount != proofing.GrammarCount)
+            failures.Add($"{rowName} grammar adornment count must match grammar diagnostic count");
+        if (!proofing.AdornmentStableSignatures.Any(signature => signature.Contains("adornment=spelling-squiggle", StringComparison.Ordinal)))
+            failures.Add($"{rowName} expected stable spelling-squiggle visual signature");
+        if (!proofing.AdornmentStableSignatures.Any(signature => signature.Contains("adornment=grammar-squiggle", StringComparison.Ordinal)))
+            failures.Add($"{rowName} expected stable grammar-squiggle visual signature");
     }
 
     private static List<string> BuildReviewCompareCombineSemanticFailures(
@@ -1234,6 +1401,35 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return "Word baseline policy rows are present and trusted";
     }
 
+    private static string FormatReviewProofingBaselineReadiness(
+        IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline,
+        string scenarioId)
+    {
+        if (relatedBaseline.Count == 0)
+            return "paired renderer evidence is present; run Word PNG baseline comparison for " + scenarioId;
+
+        if (relatedBaseline.All(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Word COM or baseline generation unavailable; paired WPF/Avalonia proofing adornment evidence is retained without authoritative Word parity";
+        }
+
+        if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
+            return "one or more Word baseline comparison rows failed trust; inspect baseline triage";
+
+        if (relatedBaseline.Any(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.PassedStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "real Word PNG baseline compared within configured tolerance";
+        }
+
+        return "Word baseline policy rows are present and trusted";
+    }
+
     private static string FormatWordBaselineStatus(IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline)
     {
         if (relatedBaseline.Count == 0)
@@ -1290,6 +1486,39 @@ public static class FreeWVisualEvidenceManifestNormalizer
             expectation.DeletionCount.ToString(CultureInfo.InvariantCulture),
             " formatting=",
             expectation.FormattingCount.ToString(CultureInfo.InvariantCulture));
+
+    private static string FormatReviewProofingProofSemanticEvidence(
+        FreeWVisualEvidenceNormalizedRow? wpf,
+        FreeWVisualEvidenceNormalizedRow? avalonia)
+    {
+        var parts = new List<string>();
+        if (wpf is not null)
+            parts.Add("WPF " + FormatReviewProofingSemanticEvidence(wpf.ProofingDiagnostics));
+        if (avalonia is not null)
+            parts.Add("Avalonia " + FormatReviewProofingSemanticEvidence(avalonia.ProofingDiagnostics));
+        return parts.Count == 0 ? "-" : string.Join("; ", parts);
+    }
+
+    private static string FormatReviewProofingSemanticEvidence(
+        FreeWVisualProofingDiagnosticExpectation proofing)
+    {
+        var adornmentSummaries = proofing.Adornments
+            .Select(adornment => $"{adornment.AdornmentKind} {adornment.UnderlineStyle} {adornment.ColorHex}")
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(summary => summary, StringComparer.Ordinal)
+            .ToList();
+        return string.Concat(
+            "diagnostics=",
+            proofing.DiagnosticCount.ToString(CultureInfo.InvariantCulture),
+            " spelling=",
+            proofing.SpellingCount.ToString(CultureInfo.InvariantCulture),
+            " grammar=",
+            proofing.GrammarCount.ToString(CultureInfo.InvariantCulture),
+            " adornments=",
+            proofing.AdornmentCount.ToString(CultureInfo.InvariantCulture),
+            " squiggles=",
+            adornmentSummaries.Count == 0 ? "-" : string.Join("/", adornmentSummaries));
+    }
 
     private static string FormatFloatingWrappingSemanticEvidence(
         FreeWVisualEvidenceNormalizedRow? wpf,
@@ -1584,6 +1813,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
     {
         var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
         blockers.AddRange(BuildBackstageRealCaptureBlockers(summary));
+        blockers.AddRange(BuildReviewProofingWordBaselineBlockers(summary, baselineComparisons));
 
         var rows = summary.Evidence
             .Where(row => string.Equals(row.ScenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
@@ -1696,6 +1926,167 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 requiresWordBaseline: false));
         return blockers;
     }
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildReviewProofingWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
+        foreach (var scenarioId in ReviewProofingVisualProofScenarioIds)
+        {
+            var rows = summary.Evidence
+                .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .Where(row => row.Trust.Passed)
+                .ToList();
+            if (rows.Count == 0)
+                continue;
+
+            var semanticEvidence = BuildReviewProofingSemanticEvidence(rows);
+            if (semanticEvidence.Count == 0)
+            {
+                blockers.Add(BuildReviewProofingVisualBlocker(
+                    scenarioId,
+                    "semantic-proofing-adornments-missing",
+                    "trusted WPF and Avalonia proofing visual adornment metadata",
+                    "trusted proofing evidence did not record stable squiggle adornment metadata; regenerate current-schema evidence or fix shared proofing adornment planning before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false));
+                continue;
+            }
+
+            var related = baselineComparisons
+                .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (related.Count == 0)
+            {
+                blockers.Add(BuildReviewProofingVisualBlocker(
+                    scenarioId,
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for review proofing visual adornments",
+                    "trusted FreeW proofing adornment evidence is present; run a Word-baseline comparison for " + scenarioId + " to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            var statuses = related
+                .Select(comparison => comparison.Status)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var candidates = related
+                .SelectMany(comparison => comparison.CandidateBaselinePaths)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                var reasons = related
+                    .Where(comparison => string.Equals(
+                        comparison.Status,
+                        FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                        StringComparison.OrdinalIgnoreCase))
+                    .Select(FormatComparisonNotes)
+                    .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var reason = reasons.Count == 0
+                    ? "MS Word baseline PNG generation was unavailable for " + scenarioId
+                    : string.Join("; ", reasons);
+                blockers.Add(BuildReviewProofingVisualBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for review proofing visual adornments",
+                    reason,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                blockers.Add(BuildReviewProofingVisualBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for review proofing visual adornments",
+                    "trusted proofing adornment evidence is present, but mapped Word baseline PNGs are missing for " + scenarioId,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.All(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            blockers.Add(BuildReviewProofingVisualBlocker(
+                scenarioId,
+                "needs-render-review",
+                "render-review resolution for failed review proofing Word PNG comparisons",
+                scenarioId + " Word baseline comparison did not fully pass; inspect proofing adornment rendering differences",
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false));
+        }
+
+        return blockers;
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildReviewProofingVisualBlocker(
+        string scenarioId,
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline) =>
+        new(
+            scenarioId + "-word-baseline-fidelity",
+            scenarioId,
+            "Review proofing visual adornment fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
+
+    private static IReadOnlyList<string> BuildReviewProofingSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
+        rows
+            .Where(row => row.ProofingDiagnostics.AdornmentCount > 0)
+            .Select(row => string.Concat(
+                row.HostId,
+                "/p",
+                row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                ": diagnostics=",
+                row.ProofingDiagnostics.DiagnosticCount.ToString(CultureInfo.InvariantCulture),
+                "; adornments=",
+                row.ProofingDiagnostics.AdornmentCount.ToString(CultureInfo.InvariantCulture),
+                "; signatures=",
+                FormatSummaries(row.ProofingDiagnostics.AdornmentStableSignatures)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
     private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildBackstageRealCaptureBlockers(
         FreeWVisualEvidenceNormalizedSummary summary)

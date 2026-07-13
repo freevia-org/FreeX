@@ -44,6 +44,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("DrawingObjectVisualProof = @(");
         source.Should().Contain("ShapeObjectVisualProof = @(");
         source.Should().Contain("ReviewCompareCombineVisualProof = @(");
+        source.Should().Contain("ReviewProofingVisualProof = @(");
         source.Should().Contain("'field-page-number-variants'");
         source.Should().Contain("'references-heavy-fields'");
         source.Should().Contain("'legal-reference-section-page-numbers'");
@@ -67,6 +68,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("freew-fidelity-corpus/runs/shape-object-proof");
         source.Should().Contain("'review-compare-visual-proof'");
         source.Should().Contain("'review-combine-visual-proof'");
+        source.Should().Contain("'review-proofing-visual-depth'");
         source.Should().Contain("Unknown ScenarioSet '$ScenarioSet'");
         source.Should().Contain("$effectiveScenarioIds = @($effectiveScenarioIds | Select-Object -Unique)");
         source.Should().Contain("Render-WordBaseline.ps1");
@@ -175,6 +177,17 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Review compare/combine visual semantic rows: verified rows=");
         source.Should().Contain("Review compare/combine Word-baseline policy rows: verified rows=");
         source.Should().Contain("Review compare/combine Word-baseline policy rows: no Word baseline mode requested");
+        source.Should().Contain("Assert-ReviewProofingVisualProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Review proofing visual proof readiness requires FreeW visual evidence summary schema v34 or newer");
+        source.Should().Contain("$readinessRows = @($summary.reviewProofingProofReadiness)");
+        source.Should().Contain("missing proofing visual adornment metadata");
+        source.Should().Contain("missing stable spelling-squiggle signature");
+        source.Should().Contain("missing stable grammar-squiggle signature");
+        source.Should().Contain("missing honest word-baseline-unavailable proofing visual blocker");
+        source.Should().Contain("Review proofing visual proof readiness: trusted scenario rows=");
+        source.Should().Contain("Review proofing visual semantic rows: verified rows=");
+        source.Should().Contain("Review proofing Word-baseline policy rows: verified rows=");
+        source.Should().Contain("Review proofing Word-baseline unavailable blockers: verified rows=");
         source.Should().Contain("Word baseline mode: word-png-comparison");
         source.Should().Contain("Word baseline mode: word-baseline-unavailable");
         source.Should().Contain("Word baseline mode: visual-evidence-only");

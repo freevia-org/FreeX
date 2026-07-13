@@ -261,6 +261,7 @@ public sealed class BackstagePrintPanePlannerTests
             [],
             [],
             [],
+            [],
             new FreeWVisualEvidenceTrust(trusted, failures));
 
     private static FreeWVisualEvidenceNormalizedScenario BuildScenario(

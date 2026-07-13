@@ -1415,8 +1415,8 @@ public sealed class VisualEvidencePlannerTests
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
             plan.MaxPagesPerDocument.Should().Be(3);
-            plan.ExpectedFixtureCount.Should().Be(29);
-            plan.ExpectedBaselinePngCount.Should().Be(87);
+            plan.ExpectedFixtureCount.Should().Be(30);
+            plan.ExpectedBaselinePngCount.Should().Be(90);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "f2-hf-images.docx",
@@ -1426,6 +1426,7 @@ public sealed class VisualEvidencePlannerTests
                 "legal-reference-section-page-numbers.docx",
                 "equation-structures.docx",
                 "review-proofing-visual-depth.docx",
+                "review-protection-proofing-comments-only.docx",
                 "review-compare-visual-proof.docx",
                 "review-combine-visual-proof.docx",
                 "table-layout-complex.docx",
@@ -1460,6 +1461,8 @@ public sealed class VisualEvidencePlannerTests
                 .ExpectedBaselinePaths.Should().Contain("f2-01-float-wrap/f2-01-float-wrap_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "review-proofing-visual-depth")
                 .ExpectedBaselinePaths.Should().Contain("review-proofing-visual-depth/review-proofing-visual-depth_p1.png");
+            plan.Fixtures.Single(f => f.ScenarioId == "review-protection-proofing-comments-only")
+                .ExpectedBaselinePaths.Should().Contain("review-protection-proofing-comments-only/review-protection-proofing-comments-only_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "review-compare-visual-proof")
                 .ExpectedBaselinePaths.Should().Contain("review-compare-visual-proof/review-compare-visual-proof_p1.png");
             plan.Fixtures.Single(f => f.ScenarioId == "review-combine-visual-proof")
@@ -4878,6 +4881,119 @@ public sealed class VisualEvidencePlannerTests
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
             markdown.Should().Contain("4 proofing visual adornment(s)");
             markdown.Should().Contain("grammar-squiggle wavy #2B579A");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ReviewProofingNoWordSummary_ReportsBaselineReadinessAndUnavailableBlockers()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarios = FreeWVisualEvidenceManifestNormalizer.ReviewProofingVisualProofScenarioIds;
+            var wpfRows = scenarios
+                .Select(scenarioId => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1))
+                .ToList();
+            var avaloniaRows = scenarios
+                .Select(scenarioId => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1))
+                .ToList();
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var expected = scenarios
+                .SelectMany(scenarioId => new[]
+                {
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                })
+                .ToList();
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                expected);
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.ReviewProofingProofReadiness.Should().HaveCount(scenarios.Count);
+            withBaseline.ReviewProofingProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready" &&
+                row.WordBaselineStatus == "word-baseline-unavailable=2" &&
+                row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal) &&
+                row.SemanticEvidence.Contains("spelling-squiggle wavy #D13438", StringComparison.Ordinal) &&
+                row.SemanticEvidence.Contains("grammar-squiggle wavy #2B579A", StringComparison.Ordinal) &&
+                row.Trust.Passed);
+            withBaseline.RemainingEvidenceBlockers
+                .Where(blocker => blocker.Area == "Review proofing visual adornment fidelity")
+                .Should().HaveCount(scenarios.Count)
+                .And.OnlyContain(blocker =>
+                    blocker.Status == FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus &&
+                    blocker.RequiresWordBaseline &&
+                    blocker.Reason.Contains("Word.Application", StringComparison.Ordinal) &&
+                    blocker.SemanticEvidence.Any(evidence =>
+                        evidence.Contains("adornment=spelling-squiggle", StringComparison.Ordinal)) &&
+                    blocker.CandidateBaselinePaths.Any(path =>
+                        path.EndsWith("_p1.png", StringComparison.Ordinal)));
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            var readiness = doc.RootElement.GetProperty("reviewProofingProofReadiness");
+            readiness.GetArrayLength().Should().Be(scenarios.Count);
+            readiness.EnumerateArray()
+                .Should().OnlyContain(row =>
+                    row.GetProperty("trust").GetProperty("passed").GetBoolean()
+                    && row.GetProperty("wordBaselineStatus").GetString() == "word-baseline-unavailable=2");
+            var blockers = doc.RootElement.GetProperty("remainingEvidenceBlockers").EnumerateArray().ToArray();
+            blockers.Should().Contain(row =>
+                row.GetProperty("blockerId").GetString() == "review-proofing-visual-depth-word-baseline-fidelity"
+                && row.GetProperty("status").GetString() == "word-baseline-unavailable"
+                && row.GetProperty("requiresWordBaseline").GetBoolean());
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Review Proofing Visual Proof Readiness");
+            markdown.Should().Contain("| review-proofing-visual-depth | 1 | paired-renderer-proof-ready |");
+            markdown.Should().Contain("review-proofing-visual-depth-word-baseline-fidelity");
+            markdown.Should().Contain("Word COM or baseline generation unavailable; paired WPF/Avalonia proofing adornment evidence is retained without authoritative Word parity");
         }
         finally
         {
