@@ -338,6 +338,8 @@ internal static class PptxChartReader
         Dictionary<int, ChartSeries> idxMap)
     {
         ReadVaryColors(el, shape);
+        if (el.Name.LocalName == "line3DChart")
+            shape.ThreeDStyle = ChartThreeDStyle.Line;
 
         // A line chart "has markers" when any series has an explicit marker that is not "none",
         // or has no marker element at all (OOXML default for lineChart is to show markers).
@@ -356,6 +358,8 @@ internal static class PptxChartReader
     {
         ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Pie;
+        if (el.Name.LocalName == "pie3DChart")
+            shape.ThreeDStyle = ChartThreeDStyle.Pie;
         shape.FirstSliceAngleDegrees = ReadFirstSliceAngle(el);
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
@@ -367,6 +371,8 @@ internal static class PptxChartReader
 
         var grouping = el.Element(C + "grouping")?.Attribute("val")?.Value ?? "standard";
         shape.ChartType = grouping == "stacked" ? ChartType.AreaStacked : ChartType.Area;
+        if (el.Name.LocalName == "area3DChart")
+            shape.ThreeDStyle = ChartThreeDStyle.Area;
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 

@@ -351,7 +351,7 @@ internal static class PptxChartWriter
 
     private static XElement BuildLineChartEl(ChartShape chart, List<XElement> seriesEls,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
-        new XElement(C + "lineChart",
+        new XElement(C + (chart.ThreeDStyle == ChartThreeDStyle.Line ? "line3DChart" : "lineChart"),
             new XElement(C + "grouping", new XAttribute("val", "standard")),
             BuildVaryColorsEl(chart),
             seriesEls,
@@ -359,14 +359,14 @@ internal static class PptxChartWriter
             new XElement(C + "axId", new XAttribute("val", valAxId)));
 
     private static XElement BuildPieChartEl(ChartShape chart, List<XElement> seriesEls) =>
-        new XElement(C + "pieChart",
+        new XElement(C + (chart.ThreeDStyle == ChartThreeDStyle.Pie ? "pie3DChart" : "pieChart"),
             BuildVaryColorsEl(chart),
             seriesEls,
             BuildFirstSliceAngleEl(chart));
 
     private static XElement BuildAreaChartEl(ChartShape chart, List<XElement> seriesEls,
         int catAxId = PrimaryCatAxId, int valAxId = PrimaryValAxId) =>
-        new XElement(C + "areaChart",
+        new XElement(C + (chart.ThreeDStyle == ChartThreeDStyle.Area ? "area3DChart" : "areaChart"),
             new XElement(C + "grouping",
                 new XAttribute("val", chart.ChartType == ChartType.AreaStacked ? "stacked" : "standard")),
             BuildVaryColorsEl(chart),

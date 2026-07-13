@@ -61,6 +61,9 @@ public enum ChartManualLayoutMode { Factor, Edge, Unsupported }
 /// <summary>How blank cells are displayed in a chart.</summary>
 public enum ChartDisplayBlanksAs { Span, Gap, Zero }
 
+/// <summary>Authored classic 3-D chart family read from OOXML chart-type elements.</summary>
+public enum ChartThreeDStyle { None, Pie, Line, Area }
+
 /// <summary>Small modeled subset of OOXML chart <c>c:manualLayout</c>.</summary>
 public sealed class ChartManualLayout
 {
@@ -438,6 +441,13 @@ public sealed class ChartShape
     /// Null preserves the planner default.
     /// </summary>
     public int? BarGapDepthPercent { get; set; }
+
+    /// <summary>
+    /// Authored classic 3-D chart group kind for families whose visible chart type still maps to
+    /// the existing 2-D model family. This preserves <c>pie3DChart</c>, <c>line3DChart</c>, and
+    /// <c>area3DChart</c> without introducing renderer-specific policy.
+    /// </summary>
+    public ChartThreeDStyle ThreeDStyle { get; set; } = ChartThreeDStyle.None;
 
     // ── Type-specific auxiliary fields ───────────────────────────────────────────
 

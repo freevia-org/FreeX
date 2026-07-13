@@ -325,13 +325,19 @@ public readonly record struct ChartPieSlicePrimitive(
 {
     public double SweepAngle => EndAngle - StartAngle;
     public bool IsLargeArc => SweepAngle > Math.PI;
+    public double VerticalScale { get; init; }
+    public double DepthOffsetY { get; init; }
+    public double EffectiveVerticalScale => VerticalScale > 0 ? VerticalScale : 1.0;
+    public bool HasThreeDDepth => DepthOffsetY > 0 || Math.Abs(EffectiveVerticalScale - 1.0) > 1e-9;
+    public double InnerRadiusY => InnerRadius * EffectiveVerticalScale;
+    public double OuterRadiusY => OuterRadius * EffectiveVerticalScale;
     public ChartPlanPoint OuterStart => PointOnCircle(OuterRadius, StartAngle);
     public ChartPlanPoint OuterEnd => PointOnCircle(OuterRadius, EndAngle);
     public ChartPlanPoint InnerEnd => PointOnCircle(InnerRadius, EndAngle);
     public ChartPlanPoint InnerStart => PointOnCircle(InnerRadius, StartAngle);
 
     private ChartPlanPoint PointOnCircle(double radius, double angle) =>
-        new(Center.X + radius * Math.Cos(angle), Center.Y + radius * Math.Sin(angle));
+        new(Center.X + radius * Math.Cos(angle), Center.Y + radius * EffectiveVerticalScale * Math.Sin(angle));
 }
 
 public readonly record struct ChartDataLabelPlan(
@@ -389,6 +395,7 @@ public static partial class ChartRenderPlanner
     public const byte RadarFillAlpha = 80;
     public const double RadarSeriesStrokeThickness = 1.5;
     public const double RadarMarkerRadius = 3.0;
+    public const double ThreeDPieVerticalScale = 0.72;
     private const double DipPerPoint = 96.0 / 72.0;
     private const double DefaultBarGapWidthPercent = 150.0;
 
@@ -2363,16 +2370,19 @@ public static partial class ChartRenderPlanner
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return Array.Empty<ChartPieSlicePrimitive>();
 
+        double outerRadius = Math.Min(plot.Width, plot.Height) / 2 * 0.85;
         return BuildSlicePrimitivesForSeries(
             chart.Series[0],
             seriesIndex: 0,
             plot,
             innerRadius: 0,
-            outerRadius: Math.Min(plot.Width, plot.Height) / 2 * 0.85,
+            outerRadius,
             ResolvePieStartAngle(chart),
             seriesColors,
             fillPlans,
-            ShouldVaryPointColors(chart));
+            ShouldVaryPointColors(chart),
+            ResolvePieVerticalScale(chart),
+            ResolvePieDepthOffset(chart, outerRadius));
     }
 
     public static IReadOnlyList<ChartPieSlicePrimitive> BuildDoughnutSlicePrimitives(
@@ -2409,7 +2419,9 @@ public static partial class ChartRenderPlanner
                 ResolvePieStartAngle(chart),
                 seriesColors,
                 fillPlans,
-                ShouldVaryPointColors(chart)));
+                ShouldVaryPointColors(chart),
+                verticalScale: 1.0,
+                depthOffsetY: 0));
         }
 
         return primitives;
@@ -3121,7 +3133,9 @@ public static partial class ChartRenderPlanner
         double initialStartAngle,
         IReadOnlyList<SrgbColor>? seriesColors,
         ChartFillPlanSet? fillPlans,
-        bool varyByPoint)
+        bool varyByPoint,
+        double verticalScale,
+        double depthOffsetY)
     {
         var values = GetVisiblePieValues(series);
         if (values.Count == 0)
@@ -3155,7 +3169,11 @@ public static partial class ChartRenderPlanner
                     seriesColors,
                     RectSeriesFillAlpha,
                     fillPlans,
-                    varyByPoint)));
+                    varyByPoint))
+            {
+                VerticalScale = verticalScale,
+                DepthOffsetY = depthOffsetY
+            });
             startAngle = endAngle;
         }
 
@@ -3177,6 +3195,16 @@ public static partial class ChartRenderPlanner
 
     private static double ResolvePieStartAngle(ChartShape chart) =>
         DegreesToRadians(Math.Clamp(chart.FirstSliceAngleDegrees ?? 0, 0, 360) - 90);
+
+    public static double ResolvePieVerticalScale(ChartShape chart) =>
+        chart.ChartType == ChartType.Pie && chart.ThreeDStyle == ChartThreeDStyle.Pie
+            ? ThreeDPieVerticalScale
+            : 1.0;
+
+    public static double ResolvePieDepthOffset(ChartShape chart, double outerRadius) =>
+        chart.ChartType == ChartType.Pie && chart.ThreeDStyle == ChartThreeDStyle.Pie
+            ? Math.Round(Math.Clamp(outerRadius * 0.22, 2.0, 14.0), 4)
+            : 0;
 
     private static double DegreesToRadians(double degrees) =>
         degrees * Math.PI / 180.0;

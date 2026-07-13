@@ -2161,6 +2161,31 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildPieSlicePrimitives_ThreeDPiePlansBoundedCompressedTopFace()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 1, 3 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            ThreeDStyle = ChartThreeDStyle.Pie
+        };
+        chart.Series.Add(series);
+
+        var slices = ChartRenderPlanner.BuildPieSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var first = slices[0];
+        first.HasThreeDDepth.Should().BeTrue();
+        first.EffectiveVerticalScale.Should().Be(ChartRenderPlanner.ThreeDPieVerticalScale);
+        first.DepthOffsetY.Should().BeApproximately(9.35, 0.0001);
+        first.OuterRadiusY.Should().BeApproximately(30.6, 0.0001);
+        first.OuterStart.Y.Should().BeApproximately(19.4, 0.0001);
+        first.OuterEnd.Y.Should().BeApproximately(50, 0.0001);
+    }
+
+    [Fact]
     public void BuildPieSlicePrimitives_VaryColorsUsesPointFallbackPalette()
     {
         var series = new ChartSeries { Name = "Share" };

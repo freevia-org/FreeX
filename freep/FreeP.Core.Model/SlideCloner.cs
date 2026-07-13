@@ -123,6 +123,7 @@ public static class SlideCloner
             BarGapWidthPercent = src.BarGapWidthPercent,
             BarOverlapPercent = src.BarOverlapPercent,
             BarGapDepthPercent = src.BarGapDepthPercent,
+            ThreeDStyle = src.ThreeDStyle,
             DoughnutHolePercent = src.DoughnutHolePercent,
             FirstSliceAngleDegrees = src.FirstSliceAngleDegrees,
             ScatterStyle = src.ScatterStyle,

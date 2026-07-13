@@ -48,6 +48,7 @@ public sealed class ChartTests : IDisposable
         chart.BarGapWidthPercent.Should().BeNull();
         chart.BarOverlapPercent.Should().BeNull();
         chart.BarGapDepthPercent.Should().BeNull();
+        chart.ThreeDStyle.Should().Be(ChartThreeDStyle.None);
         chart.FirstSliceAngleDegrees.Should().BeNull();
         chart.BubbleScalePercent.Should().Be(100);
         chart.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Area);
@@ -63,6 +64,7 @@ public sealed class ChartTests : IDisposable
         chart.BarGapWidthPercent = 25;
         chart.BarOverlapPercent = -40;
         chart.BarGapDepthPercent = 125;
+        chart.ThreeDStyle = ChartThreeDStyle.Pie;
         chart.DisplayBlanksAs = ChartDisplayBlanksAs.Span;
         chart.ShowDataLabelsOverMaximum = true;
         slide.Shapes.Add(new SlideShape
@@ -82,6 +84,7 @@ public sealed class ChartTests : IDisposable
         clonedChart.BarGapWidthPercent.Should().Be(25);
         clonedChart.BarOverlapPercent.Should().Be(-40);
         clonedChart.BarGapDepthPercent.Should().Be(125);
+        clonedChart.ThreeDStyle.Should().Be(ChartThreeDStyle.Pie);
         clonedChart.DisplayBlanksAs.Should().Be(ChartDisplayBlanksAs.Span);
         clonedChart.ShowDataLabelsOverMaximum.Should().BeTrue();
     }
@@ -450,6 +453,38 @@ public sealed class ChartTests : IDisposable
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.ChartType.Should().Be(ChartType.Pie);
         rt.FirstSliceAngleDegrees.Should().Be(270);
+    }
+
+    [Theory]
+    [InlineData(ChartThreeDStyle.Pie, "pie3DChart")]
+    [InlineData(ChartThreeDStyle.Line, "line3DChart")]
+    [InlineData(ChartThreeDStyle.Area, "area3DChart")]
+    public void RoundTrip_Classic3DChartGroup_PreservedInPackageAndModel(
+        ChartThreeDStyle threeDStyle,
+        string expectedElementName)
+    {
+        var chart = threeDStyle switch
+        {
+            ChartThreeDStyle.Pie => BuildPieChart(),
+            ChartThreeDStyle.Line => BuildLineChart(),
+            ChartThreeDStyle.Area => BuildAreaChart(),
+            _ => BuildColumnChart()
+        };
+        chart.ThreeDStyle = threeDStyle;
+
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            chartDoc.Descendants(ChartNs + expectedElementName)
+                .Should()
+                .ContainSingle($"{expectedElementName} should survive writer selection");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.ThreeDStyle.Should().Be(threeDStyle);
     }
 
     [Fact]
@@ -1531,6 +1566,18 @@ public sealed class ChartTests : IDisposable
     private static ChartShape BuildLineChart()
     {
         var chart = new ChartShape { ChartType = ChartType.Line };
+        chart.Categories.AddRange(new[] { "Jan", "Feb", "Mar" });
+
+        var s = new ChartSeries { Name = "Trend" };
+        s.Values.AddRange(new double?[] { 10, 20, 15 });
+        chart.Series.Add(s);
+
+        return chart;
+    }
+
+    private static ChartShape BuildAreaChart()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Area };
         chart.Categories.AddRange(new[] { "Jan", "Feb", "Mar" });
 
         var s = new ChartSeries { Name = "Trend" };

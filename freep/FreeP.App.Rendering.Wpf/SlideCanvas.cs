@@ -995,7 +995,7 @@ public sealed class SlideCanvas : FrameworkElement
 
                 ctx.BeginFigure(ToPoint(primitive.Center), isFilled: true, isClosed: true);
                 ctx.LineTo(start, isStroked: false, isSmoothJoin: false);
-                ctx.ArcTo(end, new Size(primitive.OuterRadius, primitive.OuterRadius), 0, primitive.IsLargeArc,
+                ctx.ArcTo(end, new Size(primitive.OuterRadius, primitive.OuterRadiusY), 0, primitive.IsLargeArc,
                     SweepDirection.Clockwise, isStroked: false, isSmoothJoin: false);
             }
             if (geo.CanFreeze) geo.Freeze();
@@ -1066,7 +1066,7 @@ public sealed class SlideCanvas : FrameworkElement
                 ctx.BeginFigure(ToPoint(primitive.OuterStart), isFilled: true, isClosed: true);
                 ctx.ArcTo(
                     ToPoint(primitive.OuterEnd),
-                    new Size(primitive.OuterRadius, primitive.OuterRadius),
+                    new Size(primitive.OuterRadius, primitive.OuterRadiusY),
                     0,
                     primitive.IsLargeArc,
                     SweepDirection.Clockwise,
@@ -1075,7 +1075,7 @@ public sealed class SlideCanvas : FrameworkElement
                 ctx.LineTo(ToPoint(primitive.InnerEnd), isStroked: false, isSmoothJoin: false);
                 ctx.ArcTo(
                     ToPoint(primitive.InnerStart),
-                    new Size(primitive.InnerRadius, primitive.InnerRadius),
+                    new Size(primitive.InnerRadius, primitive.InnerRadiusY),
                     0,
                     primitive.IsLargeArc,
                     SweepDirection.Counterclockwise,

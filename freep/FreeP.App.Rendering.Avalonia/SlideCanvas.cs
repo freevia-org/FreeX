@@ -1087,7 +1087,7 @@ public sealed class SlideCanvas : Control
                 ctx.LineTo(startPt);
                 ctx.ArcTo(
                     endPt,
-                    new Size(primitive.OuterRadius, primitive.OuterRadius),
+                    new Size(primitive.OuterRadius, primitive.OuterRadiusY),
                     0,
                     primitive.IsLargeArc,
                     SweepDirection.Clockwise);
@@ -1148,14 +1148,14 @@ public sealed class SlideCanvas : Control
                 ctx.BeginFigure(ToPoint(primitive.OuterStart), isFilled: true);
                 ctx.ArcTo(
                     ToPoint(primitive.OuterEnd),
-                    new Size(primitive.OuterRadius, primitive.OuterRadius),
+                    new Size(primitive.OuterRadius, primitive.OuterRadiusY),
                     0,
                     primitive.IsLargeArc,
                     SweepDirection.Clockwise);
                 ctx.LineTo(ToPoint(primitive.InnerEnd));
                 ctx.ArcTo(
                     ToPoint(primitive.InnerStart),
-                    new Size(primitive.InnerRadius, primitive.InnerRadius),
+                    new Size(primitive.InnerRadius, primitive.InnerRadiusY),
                     0,
                     primitive.IsLargeArc,
                     SweepDirection.CounterClockwise);
