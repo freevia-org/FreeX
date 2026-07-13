@@ -85,7 +85,7 @@ public static class SmartArtLayoutEngine
             SmartArtFamily.Process   => LayoutProcess  (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
             SmartArtFamily.List      => LayoutList      (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
             SmartArtFamily.Cycle     => LayoutCycle     (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
-            SmartArtFamily.Hierarchy => LayoutHierarchy (data,  frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
+            SmartArtFamily.Hierarchy => LayoutHierarchy (data,  frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan, IsOrgChartLayout(data.LayoutUniqueId)),
             _                        => null
         };
     }
@@ -453,7 +453,8 @@ public static class SmartArtLayoutEngine
     private static IReadOnlyList<SlideShape> LayoutHierarchy(
         SmartArtData data,
         long fx, long fy, long fcx, long fcy,
-        SmartArtStylePlan stylePlan)
+        SmartArtStylePlan stylePlan,
+        bool useOrgChartAssistantLayout)
     {
         var shapes = new List<SlideShape>();
         if (data.Nodes.Count == 0) return shapes;
@@ -465,8 +466,12 @@ public static class SmartArtLayoutEngine
         long availH = fcy - 2 * padY;
 
         // BI4: Measure across ALL roots so sizing accounts for the whole forest.
-        int treeDepth    = data.Nodes.Max(GetTreeDepth);
-        int treeMaxWidth = data.Nodes.Sum(GetTreeWidth);  // total leaf columns across all roots
+        int treeDepth = useOrgChartAssistantLayout
+            ? data.Nodes.Max(GetOrgChartTreeDepth)
+            : data.Nodes.Max(GetTreeDepth);
+        int treeMaxWidth = useOrgChartAssistantLayout
+            ? data.Nodes.Sum(GetOrgChartTreeWidth)
+            : data.Nodes.Sum(GetTreeWidth);
 
         treeDepth    = Math.Max(treeDepth, 1);
         treeMaxWidth = Math.Max(treeMaxWidth, 1);
@@ -491,11 +496,11 @@ public static class SmartArtLayoutEngine
         long curX = startX;
         foreach (var root in data.Nodes)
         {
-            int rootWidth = GetTreeWidth(root);
+            int rootWidth = useOrgChartAssistantLayout ? GetOrgChartTreeWidth(root) : GetTreeWidth(root);
             long rootSlotW = (long)((double)rootWidth / treeMaxWidth * availW);
 
             RenderNode(root, 0, 0, rootWidth, curX, startY, rootSlotW, boxW, boxH, gapX, gapY,
-                shapes, stylePlan, ref idCounter, parentCenterX: -1, parentBottomY: -1);
+                shapes, stylePlan, ref idCounter, useOrgChartAssistantLayout, parentCenterX: -1, parentBottomY: -1);
 
             curX += rootSlotW;
         }
@@ -519,6 +524,7 @@ public static class SmartArtLayoutEngine
         List<SlideShape> shapes,
         SmartArtStylePlan stylePlan,
         ref uint idCounter,
+        bool useOrgChartAssistantLayout,
         long parentCenterX, long parentBottomY)
     {
         // BI1: The slot for this node is exactly availW (already pre-allocated by the caller).
@@ -547,29 +553,74 @@ public static class SmartArtLayoutEngine
         if (node.Children.Count > 0)
         {
             long childLevelY = boxBottomY + gapY;
+            List<SmartArtNode> assistantChildren = useOrgChartAssistantLayout
+                ? node.Children.Where(child => child.IsAssistant).ToList()
+                : new List<SmartArtNode>();
+            List<SmartArtNode> regularChildren = useOrgChartAssistantLayout
+                ? node.Children.Where(child => !child.IsAssistant).ToList()
+                : node.Children;
+
+            if (assistantChildren.Count > 0)
+            {
+                long assistantSlotW = Math.Min(availW, Math.Max(availW / 3, boxW + gapX));
+                long maxAssistantStartX = Math.Max(startX, startX + availW - assistantSlotW);
+                long preferredAssistantStartX = boxCenterX + gapX;
+                long assistantStartX = Math.Clamp(preferredAssistantStartX, startX, maxAssistantStartX);
+                long assistantBoxW = Math.Max(Math.Min(boxW * 4 / 5, assistantSlotW - gapX), 1L);
+
+                foreach (var assistant in assistantChildren)
+                {
+                    var assistantDepth = GetOrgChartTreeDepth(assistant);
+                    RenderNode(assistant,
+                        node.Level + 1,
+                        0,
+                        GetOrgChartTreeWidth(assistant),
+                        assistantStartX,
+                        childLevelY,
+                        assistantSlotW,
+                        assistantBoxW,
+                        boxH,
+                        gapX,
+                        gapY,
+                        shapes,
+                        stylePlan,
+                        ref idCounter,
+                        useOrgChartAssistantLayout,
+                        parentCenterX: boxCenterX,
+                        parentBottomY: boxBottomY);
+
+                    childLevelY += assistantDepth * (boxH + gapY);
+                }
+            }
 
             // BI1: Distribute children's horizontal slots PROPORTIONALLY by each child's
             // GetTreeWidth (subtree leaf count), not evenly by sibling count.
             // This prevents unbalanced trees from assigning slots narrower than boxW.
-            int totalChildWidth = node.Children.Sum(GetTreeWidth);
-            totalChildWidth = Math.Max(totalChildWidth, 1);
-
-            long childCurX = startX;
-            foreach (var child in node.Children)
+            if (regularChildren.Count > 0)
             {
-                int childWidth  = GetTreeWidth(child);
-                long childSlotW = (long)((double)childWidth / totalChildWidth * availW);
+                int totalChildWidth = useOrgChartAssistantLayout
+                    ? regularChildren.Sum(GetOrgChartTreeWidth)
+                    : regularChildren.Sum(GetTreeWidth);
+                totalChildWidth = Math.Max(totalChildWidth, 1);
 
-                RenderNode(child,
-                    node.Level + 1,
-                    0, childWidth,
-                    childCurX, childLevelY, childSlotW,
-                    boxW, boxH, gapX, gapY,
-                    shapes, stylePlan, ref idCounter,
-                    parentCenterX: boxCenterX,
-                    parentBottomY: boxBottomY);
+                long childCurX = startX;
+                foreach (var child in regularChildren)
+                {
+                    int childWidth = useOrgChartAssistantLayout ? GetOrgChartTreeWidth(child) : GetTreeWidth(child);
+                    long childSlotW = (long)((double)childWidth / totalChildWidth * availW);
 
-                childCurX += childSlotW;
+                    RenderNode(child,
+                        node.Level + 1,
+                        0, childWidth,
+                        childCurX, childLevelY, childSlotW,
+                        boxW, boxH, gapX, gapY,
+                        shapes, stylePlan, ref idCounter,
+                        useOrgChartAssistantLayout,
+                        parentCenterX: boxCenterX,
+                        parentBottomY: boxBottomY);
+
+                    childCurX += childSlotW;
+                }
             }
         }
     }
@@ -586,6 +637,40 @@ public static class SmartArtLayoutEngine
     {
         if (node.Children.Count == 0) return 1;
         return node.Children.Sum(GetTreeWidth);
+    }
+
+    private static int GetOrgChartTreeDepth(SmartArtNode node)
+    {
+        if (node.Children.Count == 0) return 1;
+
+        var assistants = node.Children.Where(child => child.IsAssistant).ToList();
+        var regular = node.Children.Where(child => !child.IsAssistant).ToList();
+        if (assistants.Count == 0)
+            return 1 + node.Children.Max(GetOrgChartTreeDepth);
+
+        int assistantRows = assistants.Sum(GetOrgChartTreeDepth);
+        int regularRows = regular.Count == 0 ? 0 : regular.Max(GetOrgChartTreeDepth);
+        return 1 + assistantRows + regularRows;
+    }
+
+    private static int GetOrgChartTreeWidth(SmartArtNode node)
+    {
+        if (node.Children.Count == 0) return 1;
+
+        var regular = node.Children.Where(child => !child.IsAssistant).ToList();
+        if (regular.Count == 0)
+            return Math.Max(1, node.Children.Sum(GetOrgChartTreeWidth));
+
+        return regular.Sum(GetOrgChartTreeWidth);
+    }
+
+    private static bool IsOrgChartLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "orgchart", StringComparison.Ordinal);
     }
 
     private static bool IsPictureCaptionListLayout(string uniqueId)

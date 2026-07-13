@@ -778,7 +778,8 @@ public sealed class SmartArtTests : IDisposable
         (string id, string text)[] nodes,
         (string srcId, string destId)[] parOfConnections,
         XDocument? quickStyleXml = null,
-        XDocument? colorsXml = null)
+        XDocument? colorsXml = null,
+        string[]? assistantNodeIds = null)
     {
         var path = Path.Combine(_tempDir, $"smartart_tree_{Guid.NewGuid():N}.pptx");
 
@@ -801,11 +802,13 @@ public sealed class SmartArtTests : IDisposable
         const string csRelType      = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors";
         const string dgmDrawRelType = "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing";
 
+        var assistantIds = new HashSet<string>(assistantNodeIds ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+
         // Build data1.xml with ptLst + cxnLst
         var ptElems = nodes.Select(n =>
             new XElement(dgmNs + "pt",
                 new XAttribute("modelId", n.id),
-                new XAttribute("type", "node"),
+                new XAttribute("type", assistantIds.Contains(n.id) ? "asst" : "node"),
                 new XElement(dgmNs + "t",
                     new XElement(aNs + "p",
                         new XElement(aNs + "r",
@@ -1719,6 +1722,45 @@ public sealed class SmartArtTests : IDisposable
         renderedText.Should().Contain("Engineering");
         liveShapes.Where(op => op.Text is null)
             .Should().HaveCount(2, "WPF and Avalonia hosts consume shared orgChart connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_OrgChartAssistantSmartArt_RendersAssistantSideSlotFromReaderData()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/orgChart",
+            nodes: [("R", "CEO"), ("A", "Executive Assistant"), ("C1", "Sales"), ("C2", "Engineering")],
+            parOfConnections: [("R", "A"), ("R", "C1"), ("R", "C2")],
+            assistantNodeIds: ["A"]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+        var root = sa.Data.Nodes.Should().ContainSingle().Subject;
+        root.Children.Single(child => child.Text == "Executive Assistant").IsAssistant
+            .Should().BeTrue("dgm:pt type=\"asst\" must survive import into the shared SmartArt model");
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(7, "four org-chart boxes plus three connectors should render from shared live data");
+        var boxesByText = liveShapes
+            .Where(op => op.Text is not null)
+            .ToDictionary(
+                op => op.Text!.Paragraphs.First().Runs.First().Text,
+                StringComparer.Ordinal);
+
+        boxesByText.Keys.Should().BeEquivalentTo("CEO", "Executive Assistant", "Sales", "Engineering");
+        boxesByText["Executive Assistant"].BoundsDip.Y.Should().BeGreaterThan(boxesByText["CEO"].BoundsDip.Y);
+        boxesByText["Sales"].BoundsDip.Y.Should().BeGreaterThan(boxesByText["Executive Assistant"].BoundsDip.Y);
+        boxesByText["Executive Assistant"].BoundsDip.X.Should().BeGreaterThan(
+            boxesByText["CEO"].BoundsDip.X + boxesByText["CEO"].BoundsDip.Width / 2,
+            "WPF/Avalonia consume the shared assistant side-slot geometry rather than host-local SmartArt policy");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(3, "assistant and reports use shared connector DrawOps");
     }
 
     [Fact]
