@@ -92,6 +92,16 @@ public sealed record PdfRotationGroup(
     IReadOnlyList<PdfDrawOp> Ops) : PdfDrawOp;
 
 /// <summary>
+/// Optional clipping geometry applied to an image before it is painted.
+/// </summary>
+public enum PdfImageClipKind
+{
+    None,
+    Ellipse,
+    RoundedRectangle,
+}
+
+/// <summary>
 /// Draws an encoded bitmap image into a rectangular PDF user-space bounds. Supported portable
 /// content types are PNG and JPEG; unsupported content types are skipped by the dependency-free
 /// writer instead of emitting a corrupt image stream.
@@ -103,4 +113,5 @@ public sealed record PdfImage(
     double Height,
     byte[] ImageBytes,
     string ContentType,
-    double RotationDegrees = 0) : PdfDrawOp;
+    double RotationDegrees = 0,
+    PdfImageClipKind ClipKind = PdfImageClipKind.None) : PdfDrawOp;

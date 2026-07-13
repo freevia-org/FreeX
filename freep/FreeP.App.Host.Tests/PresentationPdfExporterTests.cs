@@ -464,6 +464,35 @@ public class PresentationPdfExporterTests
             .Should().NotContain("[Picture]", "exported picture images should not retain the placeholder fallback label");
     }
 
+    [Theory]
+    [InlineData("ellipse", PdfImageClipKind.Ellipse)]
+    [InlineData("roundRect", PdfImageClipKind.RoundedRectangle)]
+    [InlineData("rect", PdfImageClipKind.None)]
+    public void BuildDocument_CarriesPictureFrameGeometryToPdfImageClip(string frameGeometry, PdfImageClipKind expectedClip)
+    {
+        var deck = Presentation.CreateEmpty();
+        deck.Slides.Clear();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.Picture,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            PictureFrameGeometry = frameGeometry,
+            Picture = new ImagePart { Bytes = MinimalPngBytes(), ContentType = "image/png" },
+        });
+        deck.Slides.Add(slide);
+
+        var image = PresentationPdfExporter.BuildDocument(deck).Pages[0].Ops
+            .OfType<PdfImage>()
+            .Should().ContainSingle()
+            .Subject;
+
+        image.ClipKind.Should().Be(expectedClip);
+    }
+
     [Fact]
     public void ExportToBytes_EmbedsPictureImageXObject()
     {
