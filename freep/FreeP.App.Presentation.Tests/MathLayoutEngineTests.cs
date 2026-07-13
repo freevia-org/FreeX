@@ -1622,6 +1622,38 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlLimitUpperAndLower_RenderPlanCarriesCenteredReducedLimitGlyphs()
+    {
+        var lowerLayout = MathLayoutEngine.Layout(
+            ParseOmml("<m:limLow><m:e><m:r><m:t>lim</m:t></m:r></m:e><m:lim><m:r><m:t>x->0</m:t></m:r></m:lim></m:limLow>"),
+            "Cambria Math",
+            FontSizePt);
+        var upperLayout = MathLayoutEngine.Layout(
+            ParseOmml("<m:limUpp><m:e><m:r><m:t>max</m:t></m:r></m:e><m:lim><m:r><m:t>S</m:t></m:r></m:lim></m:limUpp>"),
+            "Cambria Math",
+            FontSizePt);
+
+        var lowerGlyphs = MathBoxRenderPlanner.Plan(lowerLayout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+        var upperGlyphs = MathBoxRenderPlanner.Plan(upperLayout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        lowerGlyphs.Select(g => g.Text).Should().Equal(new[] { "lim", "x->0" });
+        lowerGlyphs[1].Y.Should().BeGreaterThan(lowerGlyphs[0].Y,
+            "m:limLow draws the reduced limit below the base in the shared plan");
+        lowerGlyphs[1].FontSizePt.Should().BeLessThan(lowerGlyphs[0].FontSizePt,
+            "limit text is reduced before WPF or Avalonia consumes the plan");
+
+        upperGlyphs.Select(g => g.Text).Should().Equal(new[] { "S", "max" });
+        upperGlyphs[0].Y.Should().BeLessThan(upperGlyphs[1].Y,
+            "m:limUpp draws the reduced limit above the base in the shared plan");
+        upperGlyphs[0].FontSizePt.Should().BeLessThan(upperGlyphs[1].FontSizePt,
+            "upper limit text is reduced before renderer-specific drawing");
+    }
+
+    [Fact]
     public void Func_FunctionName_RenderPlanIsUprightAndArgumentStaysItalic()
     {
         var node = ParseOmml(

@@ -769,4 +769,51 @@ public sealed class SlideCanvasMathBaselineTests
 
         thrown.Should().BeNull("Avalonia must render styled math alphabet glyphs from the shared MathBox plan without host-specific layout branching");
     }
+
+    [Fact]
+    public async Task RenderParaWithMath_LimitUpperAndLower_UseSharedCenteredLimitPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var lowerNode = ParseOmml(
+                    "<m:limLow><m:e><m:r><m:t>lim</m:t></m:r></m:e><m:lim><m:r><m:t>x->0</m:t></m:r></m:lim></m:limLow>");
+                var upperNode = ParseOmml(
+                    "<m:limUpp><m:e><m:r><m:t>max</m:t></m:r></m:e><m:lim><m:r><m:t>S</m:t></m:r></m:lim></m:limUpp>");
+                var lowerBox = MathLayoutEngine.Layout(lowerNode, "Cambria Math", 18.0);
+                var upperBox = MathLayoutEngine.Layout(upperNode, "Cambria Math", 18.0);
+
+                MathBoxRenderPlanner.Plan(lowerBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Select(g => g.Text)
+                    .Should().Equal(new[] { "lim", "x->0" },
+                        "m:limLow base and limit ordering must be resolved in the shared MathBox plan before Avalonia draws it");
+                MathBoxRenderPlanner.Plan(upperBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Select(g => g.Text)
+                    .Should().Equal(new[] { "S", "max" },
+                        "m:limUpp limit and base ordering must be resolved in the shared MathBox plan before Avalonia draws it");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "L = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = lowerBox },
+                        new ResolvedRun { Text = " U = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = upperBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(320, 120));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render centered OMML limit math from the shared MathBox plan without host-specific layout branching");
+    }
 }

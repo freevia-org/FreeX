@@ -642,4 +642,46 @@ public sealed class SlideCanvasMathBaselineTests
 
         act.Should().NotThrow();
     }
+
+    [StaFact]
+    public void RenderParaWithMath_LimitUpperAndLower_UseSharedCenteredLimitPlan_DoesNotThrow()
+    {
+        var lowerNode = ParseOmml(
+            "<m:limLow><m:e><m:r><m:t>lim</m:t></m:r></m:e><m:lim><m:r><m:t>x->0</m:t></m:r></m:lim></m:limLow>");
+        var upperNode = ParseOmml(
+            "<m:limUpp><m:e><m:r><m:t>max</m:t></m:r></m:e><m:lim><m:r><m:t>S</m:t></m:r></m:lim></m:limUpp>");
+        var lowerBox = MathLayoutEngine.Layout(lowerNode, "Cambria Math", 18.0);
+        var upperBox = MathLayoutEngine.Layout(upperNode, "Cambria Math", 18.0);
+
+        MathBoxRenderPlanner.Plan(lowerBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should().Equal(new[] { "lim", "x->0" },
+                "m:limLow base and limit ordering must be resolved in the shared MathBox plan before WPF draws it");
+        MathBoxRenderPlanner.Plan(upperBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should().Equal(new[] { "S", "max" },
+                "m:limUpp limit and base ordering must be resolved in the shared MathBox plan before WPF draws it");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "L = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = lowerBox },
+                new ResolvedRun { Text = " U = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = upperBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
 }
