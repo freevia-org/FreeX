@@ -340,6 +340,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("ChartRenderPlanner.BuildBarPrimitives(chart, plot, seriesColors, fillPlans)");
             source.Should().Contain("ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers, seriesColors, fillPlans)");
             source.Should().Contain("ChartRenderPlanner.BuildComboOverrideLineSeriesPrimitives(chart, plot, seriesColors, fillPlans)");
+            source.Should().Contain("ToRect(primitive.Bounds)");
             source.Should().Contain("primitive.Fill");
             source.Should().Contain("primitive.Stroke");
             source.Should().Contain("primitive.LineSegments");

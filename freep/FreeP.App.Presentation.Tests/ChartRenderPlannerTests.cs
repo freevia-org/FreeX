@@ -1061,6 +1061,58 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildColumnPrimitives_UsesAuthoredGapDepthAsRendererNeutralDepthOffset()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.BarGapDepthPercent = 250;
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        var second = primitives.Single(p => p.SeriesIndex == 1 && p.CategoryIndex == 0);
+        first.Depth.Should().Be(new ChartBarDepthPlan(
+            GapDepthPercent: 250,
+            OffsetX: 1.25,
+            OffsetY: -1.25,
+            IsHorizontalBar: false,
+            IsStacked: false));
+        second.Depth.Should().Be(new ChartBarDepthPlan(
+            GapDepthPercent: 250,
+            OffsetX: 3.75,
+            OffsetY: -3.75,
+            IsHorizontalBar: false,
+            IsStacked: false));
+        first.Bounds.X.Should().BeApproximately(31.25, 0.0001);
+        first.Bounds.Y.Should().BeApproximately(78.75, 0.0001);
+        second.Bounds.X.Should().BeApproximately(53.75, 0.0001);
+        second.Bounds.Y.Should().BeApproximately(36.25, 0.0001);
+    }
+
+    [Fact]
+    public void BuildBarGapDepthPlan_ClampsAuthoredDepthAndPreservesOrientationContract()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.BarClustered);
+        chart.BarGapDepthPercent = 650;
+
+        var plan = ChartRenderPlanner.BuildBarGapDepthPlan(
+            chart,
+            categorySize: 100,
+            seriesIndex: 1,
+            seriesCount: 2,
+            isHorizontalBar: true,
+            stacked: false);
+
+        plan.Should().Be(new ChartBarDepthPlan(
+            GapDepthPercent: 500,
+            OffsetX: 7.5,
+            OffsetY: -7.5,
+            IsHorizontalBar: true,
+            IsStacked: false));
+    }
+
+    [Fact]
     public void BuildColumnPrimitives_HundredPercentStackedNormalizesEachCategory()
     {
         var chart = new ChartShape { ChartType = ChartType.ColumnStacked100 };
@@ -1216,6 +1268,36 @@ public sealed class ChartRenderPlannerTests
         second.Bounds.Y.Should().BeApproximately(68.75, 0.0001);
         second.Bounds.Height.Should().BeApproximately(3.1667, 0.0001);
         second.Bounds.Bottom.Should().BeLessThan(first.Bounds.Y, "negative overlap leaves a visible gap between series bars");
+    }
+
+    [Fact]
+    public void BuildBarPrimitives_UsesAuthoredGapDepthAsRendererNeutralDepthOffset()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.BarClustered);
+        chart.BarGapDepthPercent = 250;
+
+        var primitives = ChartRenderPlanner.BuildBarPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        var second = primitives.Single(p => p.SeriesIndex == 1 && p.CategoryIndex == 0);
+        first.Depth.Should().Be(new ChartBarDepthPlan(
+            GapDepthPercent: 250,
+            OffsetX: 1.125,
+            OffsetY: -1.125,
+            IsHorizontalBar: true,
+            IsStacked: false));
+        second.Depth.Should().Be(new ChartBarDepthPlan(
+            GapDepthPercent: 250,
+            OffsetX: 3.375,
+            OffsetY: -3.375,
+            IsHorizontalBar: true,
+            IsStacked: false));
+        first.Bounds.X.Should().BeApproximately(1.125, 0.0001);
+        first.Bounds.Y.Should().BeApproximately(73.875, 0.0001);
+        second.Bounds.X.Should().BeApproximately(3.375, 0.0001);
+        second.Bounds.Y.Should().BeApproximately(61.625, 0.0001);
     }
 
     [Fact]

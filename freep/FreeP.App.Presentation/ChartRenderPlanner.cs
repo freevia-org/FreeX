@@ -212,12 +212,22 @@ public readonly record struct ChartTextPlan(
     ChartPlanTextAlignment Alignment,
     ChartAxisLabelFormatPlan? AxisLabelFormat = null);
 
+public readonly record struct ChartBarDepthPlan(
+    int GapDepthPercent,
+    double OffsetX,
+    double OffsetY,
+    bool IsHorizontalBar,
+    bool IsStacked);
+
 public readonly record struct ChartRectPrimitive(
     int SeriesIndex,
     int CategoryIndex,
     ChartPlanRect Bounds,
     ChartFillPlan Fill,
-    ChartStrokePlan? Stroke);
+    ChartStrokePlan? Stroke)
+{
+    public ChartBarDepthPlan? Depth { get; init; }
+}
 
 public readonly record struct ChartBarClusterSlot(
     double CategoryStart,
@@ -1421,24 +1431,48 @@ public static partial class ChartRenderPlanner
                             plot.Height,
                             Math.Abs(rawValue.Value / effectiveRange) * plot.Height,
                             percentStacked));
+                    var depth = BuildBarGapDepthPlan(
+                        chart,
+                        categoryWidth,
+                        seriesIndex,
+                        seriesCount,
+                        isHorizontalBar: false,
+                        stacked);
+                    var bounds = ApplyBarGapDepthOffset(
+                        new ChartPlanRect(x, stackedY - height, drawWidth, height),
+                        depth);
                     primitives.Add(new ChartRectPrimitive(
                         seriesIndex,
                         categoryIndex,
-                        new ChartPlanRect(x, stackedY - height, drawWidth, height),
+                        bounds,
                         ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
-                        Stroke: null));
+                        Stroke: null)
+                    {
+                        Depth = depth
+                    });
                     stackedY -= height;
                 }
                 else
                 {
                     double height = Math.Max(0.5, Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Height));
                     double y = plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
+                    var depth = BuildBarGapDepthPlan(
+                        chart,
+                        categoryWidth,
+                        seriesIndex,
+                        seriesCount,
+                        isHorizontalBar: false,
+                        stacked);
+                    var bounds = ApplyBarGapDepthOffset(new ChartPlanRect(x, y, drawWidth, height), depth);
                     primitives.Add(new ChartRectPrimitive(
                         seriesIndex,
                         categoryIndex,
-                        new ChartPlanRect(x, y, drawWidth, height),
+                        bounds,
                         ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
-                        Stroke: null));
+                        Stroke: null)
+                    {
+                        Depth = depth
+                    });
                 }
             }
         }
@@ -1512,12 +1546,24 @@ public static partial class ChartRenderPlanner
                 double x = stacked ? stackedX : plot.X;
                 double height = Math.Max(1, slot.SeriesSize - (stacked ? 0 : 1));
 
+                var depth = BuildBarGapDepthPlan(
+                    chart,
+                    categoryHeight,
+                    seriesIndex,
+                    seriesCount,
+                    isHorizontalBar: true,
+                    stacked);
+                var bounds = ApplyBarGapDepthOffset(new ChartPlanRect(x, y, width, height), depth);
+
                 primitives.Add(new ChartRectPrimitive(
                     seriesIndex,
                     categoryIndex,
-                    new ChartPlanRect(x, y, width, height),
+                    bounds,
                     ResolvePointFill(series, seriesIndex, categoryIndex, seriesColors, RectSeriesFillAlpha, fillPlans, varyByPoint),
-                    Stroke: null));
+                    Stroke: null)
+                {
+                    Depth = depth
+                });
 
                 if (stacked)
                     stackedX += width;
@@ -4005,6 +4051,55 @@ public static partial class ChartRenderPlanner
             clusterSize,
             seriesSize,
             seriesStep);
+    }
+
+    public static ChartBarDepthPlan? BuildBarGapDepthPlan(
+        ChartShape chart,
+        double categorySize,
+        int seriesIndex,
+        int seriesCount,
+        bool isHorizontalBar,
+        bool stacked)
+    {
+        if (chart.BarGapDepthPercent is not { } rawDepth)
+            return null;
+
+        int gapDepth = Math.Clamp(rawDepth, 0, 500);
+        if (gapDepth == 0 || categorySize <= 0)
+        {
+            return new ChartBarDepthPlan(
+                gapDepth,
+                OffsetX: 0,
+                OffsetY: 0,
+                isHorizontalBar,
+                stacked);
+        }
+
+        double maxOffset = Math.Min(categorySize * 0.18, 10.0) * gapDepth / 500.0;
+        double seriesRatio = stacked || seriesCount <= 1
+            ? 0.5
+            : (Math.Clamp(seriesIndex, 0, seriesCount - 1) + 0.5) / seriesCount;
+        double offset = Math.Round(maxOffset * seriesRatio, 4);
+        return new ChartBarDepthPlan(
+            gapDepth,
+            OffsetX: offset,
+            OffsetY: -offset,
+            isHorizontalBar,
+            stacked);
+    }
+
+    public static ChartPlanRect ApplyBarGapDepthOffset(
+        ChartPlanRect bounds,
+        ChartBarDepthPlan? depth)
+    {
+        if (!depth.HasValue)
+            return bounds;
+
+        return new ChartPlanRect(
+            bounds.X + depth.Value.OffsetX,
+            bounds.Y + depth.Value.OffsetY,
+            bounds.Width,
+            bounds.Height);
     }
 
     private static ChartBarClusterSlot ResolveBarClusterSlot(
