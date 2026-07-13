@@ -123,6 +123,11 @@ $namedScenarioSets = @{
         'page-composition-columns',
         'page-composition-border-watermark'
     )
+    TableLayoutProof = @(
+        'table-layout-complex',
+        'table-pagination-repeat-header',
+        'table-page-composition-stress'
+    )
 }
 
 if (-not [string]::IsNullOrWhiteSpace($ScenarioSet) -and -not $namedScenarioSets.ContainsKey($ScenarioSet)) {
@@ -497,6 +502,114 @@ function Assert-PageCompositionProofReadiness {
     Write-Host "Page composition Word-baseline policy rows: verified rows=$verifiedBaselineRows"
 }
 
+function Assert-TableLayoutProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $requiredScenarioIds = @(
+        'table-layout-complex',
+        'table-pagination-repeat-header',
+        'table-page-composition-stress'
+    )
+    if (@($ScenarioIds).Count -eq 0 -or @($requiredScenarioIds | Where-Object { $ScenarioIds -notcontains $_ }).Count -gt 0) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Table layout proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 25) {
+        throw "Table layout proof readiness requires FreeW visual evidence summary schema v25 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $scenarios = @($summary.scenarios)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $minimumTrustedOutputsByScenario = @{
+        'table-layout-complex' = 1
+        'table-pagination-repeat-header' = 2
+        'table-page-composition-stress' = 2
+    }
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedBaselineRows = 0
+
+    foreach ($scenarioId in $requiredScenarioIds) {
+        foreach ($hostId in $requiredHosts) {
+            $match = @($scenarios | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId
+            })
+
+            if ($match.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing normalized scenario row")
+                continue
+            }
+
+            $row = $match[0]
+            if ($row.trust.passed -ne $true) {
+                $notes = @($row.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = 'no notes'
+                }
+                $failures.Add("${hostId}/${scenarioId}: scenario trust failed ($notes)")
+                continue
+            }
+
+            $minimumTrustedOutputs = [int]$minimumTrustedOutputsByScenario[$scenarioId]
+            if ([int]$row.trustedOutputs -lt $minimumTrustedOutputs) {
+                $failures.Add("${hostId}/${scenarioId}: expected at least $minimumTrustedOutputs trusted output(s), found $($row.trustedOutputs)")
+                continue
+            }
+
+            $trustedScenarioRows++
+
+            $comparisonRows = @($baselineComparisons | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.baselineScenarioId -eq $scenarioId
+            })
+            if ($comparisonRows.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+                continue
+            }
+
+            foreach ($comparison in $comparisonRows) {
+                if ($comparison.trust.passed -ne $true) {
+                    $notes = @($comparison.trust.failures) -join '; '
+                    if ([string]::IsNullOrWhiteSpace($notes)) {
+                        $notes = [string]$comparison.skipReason
+                    }
+                    $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                    continue
+                }
+
+                $baselineId = [string]$comparison.baselineId
+                if (-not $baselineId.StartsWith($scenarioId + '/', [StringComparison]::OrdinalIgnoreCase)) {
+                    $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baselineId '$baselineId' expected scenario '$scenarioId'")
+                    continue
+                }
+
+                $verifiedBaselineRows++
+            }
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Table layout proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Table layout proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "Table layout Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+}
+
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
 New-Item -ItemType Directory -Force $wpfDir | Out-Null
 New-Item -ItemType Directory -Force $avaloniaDir | Out-Null
@@ -586,6 +699,7 @@ else {
 }
 Assert-CoreLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds
+Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
 
 Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green
