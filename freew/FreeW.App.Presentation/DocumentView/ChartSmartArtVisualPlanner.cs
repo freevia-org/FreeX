@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json.Serialization;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Presentation.DocumentView;
@@ -100,23 +101,41 @@ public sealed record SmartArtLayoutPoint(
     double X,
     double Y);
 
-public sealed record SmartArtLayoutNodeGeometry(
-    int NodeIndex,
-    double X,
-    double Y,
-    double Width,
-    double Height,
-    IReadOnlyList<SmartArtLayoutPoint> PolygonPoints)
+public sealed record SmartArtLayoutNodeGeometry
 {
+    [JsonConstructor]
     public SmartArtLayoutNodeGeometry(
-        int NodeIndex,
-        double X,
-        double Y,
-        double Width,
-        double Height)
-        : this(NodeIndex, X, Y, Width, Height, [])
+        int nodeIndex,
+        double x,
+        double y,
+        double width,
+        double height,
+        IReadOnlyList<SmartArtLayoutPoint>? polygonPoints)
+    {
+        NodeIndex = nodeIndex;
+        X = x;
+        Y = y;
+        Width = width;
+        Height = height;
+        PolygonPoints = polygonPoints ?? [];
+    }
+
+    public SmartArtLayoutNodeGeometry(
+        int nodeIndex,
+        double x,
+        double y,
+        double width,
+        double height)
+        : this(nodeIndex, x, y, width, height, [])
     {
     }
+
+    public int NodeIndex { get; init; }
+    public double X { get; init; }
+    public double Y { get; init; }
+    public double Width { get; init; }
+    public double Height { get; init; }
+    public IReadOnlyList<SmartArtLayoutPoint> PolygonPoints { get; init; }
 
     public bool HasPolygon => PolygonPoints.Count > 0;
 }

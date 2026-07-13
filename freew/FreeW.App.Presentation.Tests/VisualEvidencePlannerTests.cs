@@ -2155,6 +2155,53 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void ReadManifest_DeserializesSmartArtLayoutPolygonGeometry()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var document = TextDocument.CreateEmpty();
+            var smartArt = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+            smartArt.LayoutId = "pyramid1";
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(Run.FromSmartArt(smartArt));
+            document.Blocks.Add(paragraph);
+            var row = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                "chart-smartart-complex",
+                pageNumber: 1,
+                pageCount: 1,
+                documentOverride: document);
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [row],
+                new DateTimeOffset(2026, 7, 13, 12, 0, 0, TimeSpan.Zero));
+
+            var manifest = FreeWVisualEvidenceManifestNormalizer.ReadManifest(
+                Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName));
+
+            var geometry = manifest.Evidence.Single()
+                .PageExpectation.ChartSmartArt.SmartArts.Single()
+                .LayoutGeometry;
+            geometry.Should().NotBeNull();
+            geometry!.Kind.Should().Be(SmartArtLayoutGeometryKind.Pyramid);
+            geometry.Nodes.Should().HaveCount(4);
+            geometry.Nodes.Should().OnlyContain(node => node.HasPolygon);
+            geometry.Nodes[0].PolygonPoints.Select(point => (point.X, point.Y)).Should().ContainInOrder(
+                (61, 8),
+                (115, 8),
+                (128.25, 38),
+                (47.75, 38));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildPageExpectation_RecordsSharedWordArtWatermarkStress()
     {
         var document = FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument();
@@ -7351,7 +7398,8 @@ public sealed class VisualEvidencePlannerTests
         int pageNumber,
         int pageCount,
         int pixelWidth = 20,
-        int pixelHeight = 20)
+        int pixelHeight = 20,
+        TextDocument? documentOverride = null)
     {
         var scenario = FreeWVisualEvidencePlanner.ResolveScenario(scenarioId);
         var outputName = FreeWVisualEvidencePlanner.ExpectedOutputName(scenarioId, pageNumber);
@@ -7364,7 +7412,7 @@ public sealed class VisualEvidencePlannerTests
         File.WriteAllBytes(outputPath, bytes);
 
         var stats = BuildTrustedStats(pixelWidth, pixelHeight);
-        var document = DocumentForScenario(scenarioId);
+        var document = documentOverride ?? DocumentForScenario(scenarioId);
         var sectionPage = document is not null
             ? FreeWVisualEvidencePlanner
                 .BuildSectionGeometryPagePlans(document, pageCount)
