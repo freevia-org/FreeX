@@ -56,6 +56,7 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlideSectionPlanner.BuildSlideContextActions(");
         source.Should().Contain("SlideSectionPlanner.BuildSectionHeaderActions(");
         source.Should().Contain("SlideSectionPlanner.BuildExecutionPlan(action)");
+        source.Should().Contain("var execution = SlideSectionPlanner.BuildExecutionPlan(action)");
         source.Should().Contain("SlideSectionPlanner.TryApplyAction(Editor, execution, promptedName)");
         source.Should().Contain("PointerPressed += OnSlidePaneItemPointerPressed");
         source.Should().Contain("PointerMoved += OnSlidePaneItemPointerMoved");

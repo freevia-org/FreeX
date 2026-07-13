@@ -5956,6 +5956,31 @@ public sealed class MainWindow : Window
         return true;
     }
 
+    internal bool TryApplySlideSectionActionForTests(
+        SlideSectionActionKind kind,
+        int slideIndex = -1,
+        int sectionIndex = -1,
+        string? promptedName = null)
+    {
+        var action = kind == SlideSectionActionKind.AddSection
+            ? SlideSectionPlanner.BuildSlideContextActions(
+                    _presentation.Slides,
+                    _presentation.Sections,
+                    slideIndex)
+                .SingleOrDefault(candidate => candidate.Kind == kind)
+            : SlideSectionPlanner.BuildSectionHeaderActions(
+                    _presentation.Sections,
+                    sectionIndex,
+                    slideIndex)
+                .SingleOrDefault(candidate => candidate.Kind == kind);
+
+        if (action is null)
+            return false;
+
+        var execution = SlideSectionPlanner.BuildExecutionPlan(action);
+        return SlideSectionPlanner.TryApplyAction(Editor, execution, promptedName);
+    }
+
     private async Task<string?> PromptSectionNameAsync(string title, string initialName)
     {
         var textBox = new TextBox

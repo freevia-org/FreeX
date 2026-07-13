@@ -309,6 +309,41 @@ public sealed class SlidePaneTests
     }
 
     [StaFact]
+    public void SectionContextActions_RouteThroughSharedExecutionPlanner()
+    {
+        var (pane, editor) = MakePaneWithSlides(3);
+
+        pane.TryApplySlideSectionActionForTests(
+                SlideSectionActionKind.AddSection,
+                slideIndex: 1,
+                promptedName: "  Agenda  ")
+            .Should().BeTrue();
+
+        editor.Presentation.Sections.Should().ContainSingle();
+        editor.Presentation.Sections[0].Name.Should().Be("Agenda");
+        pane.SlidePaneSectionHeaderCount.Should().Be(1);
+
+        pane.TryApplySlideSectionActionForTests(
+                SlideSectionActionKind.RenameSection,
+                slideIndex: 1,
+                sectionIndex: 0,
+                promptedName: "  Renamed Agenda  ")
+            .Should().BeTrue();
+
+        editor.Presentation.Sections[0].Name.Should().Be("Renamed Agenda");
+
+        pane.TryApplySlideSectionActionForTests(
+                SlideSectionActionKind.RemoveSection,
+                slideIndex: 1,
+                sectionIndex: 0)
+            .Should().BeTrue();
+
+        editor.Presentation.Sections.Should().BeEmpty();
+        editor.Presentation.Slides.Should().HaveCount(3);
+        pane.SlidePaneSectionHeaderCount.Should().Be(0);
+    }
+
+    [StaFact]
     public void SectionHeader_ChromeUsesSharedVisualPlanTokens()
     {
         var presentation = new Presentation();

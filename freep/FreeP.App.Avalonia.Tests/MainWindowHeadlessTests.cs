@@ -640,6 +640,63 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SlidePane_section_context_actions_route_through_shared_execution_planner()
+    {
+        var added = false;
+        var renamed = false;
+        var removed = false;
+        var sectionNameAfterAdd = string.Empty;
+        var sectionNameAfterRename = string.Empty;
+        var sectionCountAfterRemove = -1;
+        var slideCountAfterRemove = -1;
+        var headerCountAfterAdd = -1;
+        var headerCountAfterRemove = -1;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.Editor.CurrentSlide!.Title = "Intro";
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Agenda";
+            window.Editor.InsertSlide();
+            window.Editor.CurrentSlide!.Title = "Close";
+
+            added = window.TryApplySlideSectionActionForTests(
+                SlideSectionActionKind.AddSection,
+                slideIndex: 1,
+                promptedName: "  Agenda Section  ");
+            sectionNameAfterAdd = window.Editor.Presentation.Sections.Single().Name;
+            headerCountAfterAdd = window.SlidePaneSectionHeaderCount;
+
+            renamed = window.TryApplySlideSectionActionForTests(
+                SlideSectionActionKind.RenameSection,
+                slideIndex: 1,
+                sectionIndex: 0,
+                promptedName: "  Renamed Agenda  ");
+            sectionNameAfterRename = window.Editor.Presentation.Sections.Single().Name;
+
+            removed = window.TryApplySlideSectionActionForTests(
+                SlideSectionActionKind.RemoveSection,
+                slideIndex: 1,
+                sectionIndex: 0);
+            sectionCountAfterRemove = window.Editor.Presentation.Sections.Count;
+            slideCountAfterRemove = window.Editor.Presentation.Slides.Count;
+            headerCountAfterRemove = window.SlidePaneSectionHeaderCount;
+        });
+
+        if (!ran) return;
+        added.Should().BeTrue("the Avalonia slide-pane Add Section action should use the shared execution planner");
+        sectionNameAfterAdd.Should().Be("Agenda Section");
+        headerCountAfterAdd.Should().Be(1);
+        renamed.Should().BeTrue("the Avalonia slide-pane Rename Section action should use the shared execution planner");
+        sectionNameAfterRename.Should().Be("Renamed Agenda");
+        removed.Should().BeTrue("the Avalonia slide-pane Remove Section action should use the shared execution planner");
+        sectionCountAfterRemove.Should().Be(0);
+        slideCountAfterRemove.Should().Be(3, "PowerPoint-style section removal keeps slides in the deck");
+        headerCountAfterRemove.Should().Be(0);
+    }
+
+    [Fact]
     public async Task SlidePane_context_duplicate_routes_through_shared_planner()
     {
         var duplicated = false;

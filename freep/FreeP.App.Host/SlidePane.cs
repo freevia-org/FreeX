@@ -435,6 +435,31 @@ public sealed class SlidePane : Border
         return true;
     }
 
+    internal bool TryApplySlideSectionActionForTests(
+        SlideSectionActionKind kind,
+        int slideIndex = -1,
+        int sectionIndex = -1,
+        string? promptedName = null)
+    {
+        var action = kind == SlideSectionActionKind.AddSection
+            ? SlideSectionPlanner.BuildSlideContextActions(
+                    _editor.Presentation.Slides,
+                    _editor.Presentation.Sections,
+                    slideIndex)
+                .SingleOrDefault(candidate => candidate.Kind == kind)
+            : SlideSectionPlanner.BuildSectionHeaderActions(
+                    _editor.Presentation.Sections,
+                    sectionIndex,
+                    slideIndex)
+                .SingleOrDefault(candidate => candidate.Kind == kind);
+
+        if (action is null)
+            return false;
+
+        var execution = SlideSectionPlanner.BuildExecutionPlan(action);
+        return SlideSectionPlanner.TryApplyAction(_editor, execution, promptedName);
+    }
+
     internal bool TryApplySlidePaneKeyboardAction(SlidePaneKeyboardIntentKind intent)
     {
         var action = SlidePanePlanner.BuildKeyboardAction(

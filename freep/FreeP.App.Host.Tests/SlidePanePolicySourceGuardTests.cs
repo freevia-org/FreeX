@@ -41,6 +41,7 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().Contain("SlideSectionPlanner.BuildSlideContextActions(");
         source.Should().Contain("SlideSectionPlanner.BuildSectionHeaderActions(");
         source.Should().Contain("SlideSectionPlanner.BuildExecutionPlan(action)");
+        source.Should().Contain("var execution = SlideSectionPlanner.BuildExecutionPlan(action)");
         source.Should().Contain("SlideSectionPlanner.TryApplyAction(_editor, execution, promptedName)");
         source.Should().NotContain("private const double ThumbWidth");
         source.Should().NotContain("private const double ThumbHeight");
