@@ -74,6 +74,8 @@ internal static class SmartArtGallery
         {
             "process1" => HStack(
                 Bar("#4E81BD", 10, 8), Arrow(), Bar("#C0504D", 10, 8), Arrow(), Bar("#9BBB59", 10, 8)),
+            "continuousBlockProcess" => HStack(
+                Bar("#4E81BD", 12, 12), Bar("#C0504D", 12, 12), Bar("#9BBB59", 12, 12)),
             "stepup1" => StepSketch(ascending: true),
             "stepdown1" => StepSketch(ascending: false),
             "cycle1" => CycleSketch(),

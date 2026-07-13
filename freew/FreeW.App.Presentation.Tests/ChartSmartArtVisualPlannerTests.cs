@@ -223,6 +223,7 @@ public sealed class ChartSmartArtVisualPlannerTests
     [InlineData("radial1", "Radial", 4, 3, 220, 180)]
     [InlineData("matrix1", "Matrix", 4, 0, 182, 94)]
     [InlineData("horizbullet1", "HorizontalList", 4, 0, 320, 46)]
+    [InlineData("continuousBlockProcess", "ContinuousBlockProcess", 4, 3, 332, 50)]
     [InlineData("stepup1", "StepUp", 4, 3, 266, 130)]
     [InlineData("stepdown1", "StepDown", 4, 3, 266, 130)]
     public void SmartArtPlan_ProvidesReusableLayoutGeometryForBreadthLayouts(
@@ -277,6 +278,17 @@ public sealed class ChartSmartArtVisualPlannerTests
         var matrixGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(matrix).LayoutGeometry!;
         matrixGeometry.Nodes[2].X.Should().BeApproximately(8, 0.01);
         matrixGeometry.Nodes[2].Y.Should().BeApproximately(52, 0.01);
+
+        var continuous = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        continuous.LayoutId = "continuousBlockProcess";
+        var continuousGeometry = ChartSmartArtVisualPlanner.BuildSmartArtPlan(continuous).LayoutGeometry!;
+        continuousGeometry.Kind.Should().Be(SmartArtLayoutGeometryKind.ContinuousBlockProcess);
+        continuousGeometry.Nodes.Select(n => n.Y).Should().OnlyContain(y => Math.Abs(y - 8) < 0.01);
+        continuousGeometry.Nodes[1].X.Should().BeApproximately(88, 0.01);
+        continuousGeometry.Connectors.Select(c => (c.SourceNodeIndex, c.TargetNodeIndex, c.Kind))
+            .Should().ContainInOrder(
+                (0, 1, SmartArtLayoutConnectorKind.Arrow),
+                (1, 2, SmartArtLayoutConnectorKind.Arrow));
     }
 
     [Fact]

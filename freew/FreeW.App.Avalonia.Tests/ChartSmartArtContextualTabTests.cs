@@ -516,6 +516,50 @@ public sealed class ChartSmartArtContextualTabTests
     }
 
     [Fact]
+    public async Task SetSmartArtContinuousBlockProcess_command_sets_layout_and_reverts_on_undo()
+    {
+        SmartArtKind? kindAfter = null, kindUndone = null;
+        string? layoutBefore = null, layoutAfter = null, layoutUndone = null, geometryKind = null;
+        int nodeCount = 0, connectorCount = 0;
+        var ran = await OnUi(() =>
+        {
+            var (doc, bi, ri) = DocWithFloatingSmartArt(); // List
+            var smartArt = ((Paragraph)doc.Blocks[0]).Runs[ri].SmartArt!;
+            smartArt.LayoutId = "horizbullet1";
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(800, 2000));
+            view.SelectFloating(bi, ri);
+            layoutBefore = smartArt.LayoutId;
+
+            var registry = FreeWAvaloniaRibbonCommands.Build(view, NoopCallbacks());
+            registry.TryGet(new RibbonCommandId("freew.smartart-layout-continuous-block-process"), out var cmd)
+                .Should().BeTrue();
+            cmd!.Execute(RibbonCommandContext.Empty);
+            kindAfter = smartArt.Kind;
+            layoutAfter = smartArt.LayoutId;
+            view.Measure(new Size(800, 2000));
+            var geometry = view.FloatingSmartArtLayoutGeometries.Single();
+            geometryKind = geometry.GeometryKind;
+            nodeCount = geometry.GeometryNodeCount;
+            connectorCount = geometry.GeometryConnectorCount;
+
+            view.Undo();
+            kindUndone = smartArt.Kind;
+            layoutUndone = smartArt.LayoutId;
+        });
+        if (!ran) return;
+        layoutBefore.Should().Be("horizbullet1");
+        kindAfter.Should().Be(SmartArtKind.Process);
+        layoutAfter.Should().Be("continuousBlockProcess");
+        geometryKind.Should().Be("ContinuousBlockProcess");
+        nodeCount.Should().Be(3);
+        connectorCount.Should().Be(2);
+        kindUndone.Should().Be(SmartArtKind.List);
+        layoutUndone.Should().Be("horizbullet1");
+    }
+
+    [Fact]
     public async Task SetSmartArtColor_command_changes_scheme()
     {
         string? after = null;

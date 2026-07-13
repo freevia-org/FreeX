@@ -3272,9 +3272,14 @@ public sealed class ReplaceChartDataCommand(int paragraphIndex, int runIndex, Ch
 /// Set the <see cref="SmartArt.Kind"/> (layout family) of the SmartArt carried by the run at
 /// (paragraphIndex, runIndex). Snaps the prior kind for undo. No-op when the run carries no SmartArt.
 /// </summary>
-public sealed class SetSmartArtLayoutCommand(int paragraphIndex, int runIndex, SmartArtKind kind) : IDocumentCommand
+public sealed class SetSmartArtLayoutCommand(
+    int paragraphIndex,
+    int runIndex,
+    SmartArtKind kind,
+    string? layoutId = null) : IDocumentCommand
 {
     private SmartArtKind _previous;
+    private string? _previousLayoutId;
     private bool _applied;
 
     public string Label => "Change SmartArt Layout";
@@ -3283,7 +3288,10 @@ public sealed class SetSmartArtLayoutCommand(int paragraphIndex, int runIndex, S
     {
         if (ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } sa) return;
         _previous = sa.Kind;
+        _previousLayoutId = sa.LayoutId;
         sa.Kind = kind;
+        if (layoutId is not null)
+            sa.LayoutId = layoutId;
         _applied = true;
     }
 
@@ -3291,6 +3299,7 @@ public sealed class SetSmartArtLayoutCommand(int paragraphIndex, int runIndex, S
     {
         if (!_applied || ChartSmartArtCommandHelpers.SmartArtAt(context, paragraphIndex, runIndex) is not { } sa) return;
         sa.Kind = _previous;
+        sa.LayoutId = _previousLayoutId;
         _applied = false;
     }
 }

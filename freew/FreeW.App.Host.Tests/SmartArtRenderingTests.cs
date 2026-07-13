@@ -247,6 +247,28 @@ public sealed class SmartArtRenderingTests
     }
 
     [StaFact]
+    public void ContinuousBlockProcessLayout_RendersSharedProcessGeometry()
+    {
+        var sa = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        sa.LayoutId = "continuousBlockProcess";
+        var view = ViewWithSmartArt(sa);
+
+        var plan = NodeBorder(view, "Plan");
+        var build = NodeBorder(view, "Build");
+        var verify = NodeBorder(view, "Verify");
+
+        Assert.InRange(Canvas.GetLeft(plan), 7, 9);
+        Assert.InRange(Canvas.GetLeft(build), 87, 89);
+        Assert.InRange(Canvas.GetLeft(verify), 167, 169);
+        Assert.Equal(Canvas.GetTop(plan), Canvas.GetTop(build));
+        Assert.Equal(Canvas.GetTop(build), Canvas.GetTop(verify));
+
+        var connectorLines = LogicalDescendants<Line>(view.Document);
+        Assert.True(connectorLines.Count >= 2,
+            $"expected shared continuous process geometry to render connector lines; got {connectorLines.Count}");
+    }
+
+    [StaFact]
     public void ProcessDiagram_ArrowFillDiffersFromAdjacentBoxFill()
     {
         var sa = SmartArt.Create(SmartArtKind.Process, ["Idea", "Prototype", "Launch"]);

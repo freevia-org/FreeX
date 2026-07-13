@@ -1650,6 +1650,7 @@ internal static class FreeWAvaloniaRibbonCommands
         r.Register("freew.smartart-layout-process",   new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
         r.Register("freew.smartart-layout-cycle",     new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Process)));
         r.Register("freew.smartart-layout-hierarchy", new ActionRibbonCommand(() => editor.SetSmartArtLayout(SmartArtKind.Hierarchy)));
+        RegisterSmartArtLayoutPreset(r, editor, "freew.smartart-layout-continuous-block-process", "continuousBlockProcess");
 
         // Change Colors — reuse the chart colour-scheme catalog ids.
         r.Register("freew.smartart-colors", new ActionRibbonCommand(() => { /* dropdown opener */ }));
@@ -1684,6 +1685,18 @@ internal static class FreeWAvaloniaRibbonCommands
         };
 
         return chart is not null;
+    }
+
+    private static void RegisterSmartArtLayoutPreset(
+        RibbonCommandRegistry registry,
+        DocumentView editor,
+        string commandId,
+        string layoutId)
+    {
+        if (SmartArtLayoutPreset.FindById(layoutId) is { } preset)
+            registry.Register(commandId, new ActionRibbonCommand(() => editor.SetSmartArtLayout(preset)));
+        else
+            registry.Register(commandId, EmptyRibbonCommand.Instance);
     }
 
     private static bool TryParseChartSize(string? value, out double widthPt, out double heightPt)

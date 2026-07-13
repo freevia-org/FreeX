@@ -78,6 +78,7 @@ public sealed record SmartArtHierarchyGeometryPlan(
 public enum SmartArtLayoutGeometryKind
 {
     HorizontalList,
+    ContinuousBlockProcess,
     StepUp,
     StepDown,
     Cycle,
@@ -422,6 +423,7 @@ public static class ChartSmartArtVisualPlanner
         layoutId switch
         {
             "horizbullet1" => BuildHorizontalListGeometry(nodeCount),
+            "continuousBlockProcess" => BuildContinuousBlockProcessGeometry(nodeCount),
             "stepup1" => BuildStepGeometry(nodeCount, ascending: true),
             "stepdown1" => BuildStepGeometry(nodeCount, ascending: false),
             "cycle1" => BuildCycleGeometry(nodeCount),
@@ -456,6 +458,51 @@ public static class ChartSmartArtVisualPlanner
             SmartArtLayoutGeometryKind.HorizontalList,
             nodes,
             [],
+            naturalWidth,
+            naturalHeight);
+    }
+
+    private static SmartArtLayoutGeometryPlan BuildContinuousBlockProcessGeometry(int nodeCount)
+    {
+        const double margin = 8;
+        const double boxWidth = 76;
+        const double boxHeight = 34;
+        const double gap = 4;
+
+        var nodes = new List<SmartArtLayoutNodeGeometry>(nodeCount);
+        for (var i = 0; i < nodeCount; i++)
+        {
+            nodes.Add(new SmartArtLayoutNodeGeometry(
+                i,
+                margin + i * (boxWidth + gap),
+                margin,
+                boxWidth,
+                boxHeight));
+        }
+
+        var connectors = new List<SmartArtLayoutConnectorGeometry>(Math.Max(0, nodeCount - 1));
+        for (var i = 0; i < nodeCount - 1; i++)
+        {
+            var current = nodes[i];
+            var next = nodes[i + 1];
+            connectors.Add(new SmartArtLayoutConnectorGeometry(
+                i,
+                i + 1,
+                SmartArtLayoutConnectorKind.Arrow,
+                current.X + current.Width,
+                current.Y + current.Height / 2,
+                next.X,
+                next.Y + next.Height / 2));
+        }
+
+        var naturalWidth = nodeCount == 0
+            ? 0
+            : margin * 2 + nodeCount * boxWidth + Math.Max(0, nodeCount - 1) * gap;
+        var naturalHeight = nodeCount == 0 ? 0 : margin * 2 + boxHeight;
+        return new SmartArtLayoutGeometryPlan(
+            SmartArtLayoutGeometryKind.ContinuousBlockProcess,
+            nodes,
+            connectors,
             naturalWidth,
             naturalHeight);
     }

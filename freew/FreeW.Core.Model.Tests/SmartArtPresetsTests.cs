@@ -48,6 +48,16 @@ public class SmartArtPresetsTests
     }
 
     [Fact]
+    public void LayoutCatalog_ContainsContinuousBlockProcessPreset()
+    {
+        var found = SmartArtLayoutPreset.FindById("continuousBlockProcess");
+
+        found.Should().NotBeNull();
+        found!.Name.Should().Be("Continuous Block Process");
+        found.Kind.Should().Be(SmartArtKind.Process);
+    }
+
+    [Fact]
     public void LayoutPreset_FindById_ReturnsNullForUnknownId()
     {
         SmartArtLayoutPreset.FindById("nonexistent-xyz").Should().BeNull();

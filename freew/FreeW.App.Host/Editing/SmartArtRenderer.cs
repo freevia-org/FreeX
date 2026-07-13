@@ -39,6 +39,7 @@ internal static class SmartArtRenderer
 
             // ── Process layouts ─────────────────────────────────────────────────────────────────────
             "process1"               => BuildProcess(plan.Nodes, strokeThickness),
+            "continuousBlockProcess" => BuildPlannedLayout(plan, strokeThickness),
             "stepup1"                => BuildPlannedLayout(plan, strokeThickness),
             "stepdown1"              => BuildPlannedLayout(plan, strokeThickness),
 

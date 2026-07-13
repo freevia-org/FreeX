@@ -7993,6 +7993,18 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
+    /// AV-CHARTTAB: Apply a specific SmartArt layout preset to the selected floating SmartArt.
+    /// Undoable + re-renders. No-op when the float is not SmartArt.
+    /// </summary>
+    public void SetSmartArtLayout(SmartArtLayoutPreset preset)
+    {
+        if (_selectedFloating is not { Kind: "SmartArt" } sel) return;
+        _bus.Execute(new SetSmartArtLayoutCommand(sel.BlockIndex, sel.RunIndex, preset.Kind, preset.Id));
+        InvalidateLayoutAndVisual();
+        RefreshSelectedFloatingRect(sel.BlockIndex, sel.RunIndex, sel.Kind);
+    }
+
+    /// <summary>
     /// AV-CHARTTAB: Apply a SmartArt colour scheme (catalog id) to the selected floating SmartArt.
     /// Undoable + re-renders. No-op when the selected float is not SmartArt.
     /// </summary>

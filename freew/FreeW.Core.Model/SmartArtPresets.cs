@@ -21,6 +21,7 @@ public sealed record SmartArtLayoutPreset(string Name, string Id, SmartArtKind K
 
         // ── Process ─────────────────────────────────────────────────────────────────────────────────
         new("Basic Process",           "process1",       SmartArtKind.Process,   "Left-to-right flow with chevron arrows"),
+        new("Continuous Block Process", "continuousBlockProcess", SmartArtKind.Process, "Left-to-right connected process blocks"),
         new("Step Up Process",         "stepup1",        SmartArtKind.Process,   "Ascending staircase flow"),
         new("Step Down Process",       "stepdown1",      SmartArtKind.Process,   "Descending staircase flow"),
 
