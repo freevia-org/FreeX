@@ -1339,6 +1339,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesFunnelProcessAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess",
+            nodes: [("id1", "Stage 1"), ("id2", "Stage 2"), ("id3", "Stage 3")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process,
+            "funnelProcess stays in the process-family model while using layout-specific geometry");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "funnelProcess is now in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2", "Stage 3");
+    }
+
+    [Fact]
     public void Reader_ParsesBasicBlockListAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1959,6 +1978,40 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_FunnelProcessSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess",
+            nodes: [("n1", "Discover"), ("n2", "Qualify"), ("n3", "Convert"), ("n4", "Retain")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(7, "four funnel-process stages plus three connectors should render from shared live data");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Discover", "Qualify", "Convert", "Retain");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared top-to-bottom funnel DrawOps");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.BoundsDip.Width)
+            .Should().BeInDescendingOrder("WPF and Avalonia hosts consume shared narrowing funnel DrawOps");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(3, "WPF and Avalonia hosts consume shared funnel-process connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_VerticalBoxListSmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2378,7 +2431,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Process,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess",
             IsLiveLayoutSupported = false
         };
         data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });

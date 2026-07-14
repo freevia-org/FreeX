@@ -4329,6 +4329,45 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_funnel_process_shape_composes_shared_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Process,
+                "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess",
+                ["Discover", "Qualify", "Convert", "Retain"]);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 190 and < 210)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(7, "Avalonia host consumes the shared four-stage funnel plus three connector DrawOps");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Discover", "Qualify", "Convert", "Retain");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("Avalonia host should consume shared top-to-bottom funnel geometry");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.BoundsDip.Width)
+            .Should().BeInDescendingOrder("Avalonia host should consume shared narrowing funnel geometry");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(3, "Avalonia host should consume shared funnel connector ops");
+    }
+
+    [Fact]
     public async Task Review_alt_text_apply_routes_through_shared_mutation_plan()
     {
         string? altTextTitle = null;
@@ -4810,16 +4849,28 @@ public sealed class MainWindowHeadlessTests
         return body;
     }
 
-    private static SlideShape MakeSmartArtShape()
+    private static SlideShape MakeSmartArtShape() =>
+        MakeSmartArtShape(
+            SmartArtFamily.List,
+            "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList",
+            ["Plan", "Build"]);
+
+    private static SlideShape MakeSmartArtShape(
+        SmartArtFamily family,
+        string layoutUniqueId,
+        IReadOnlyList<string> nodeTexts)
     {
         var data = new SmartArtData
         {
-            Family = SmartArtFamily.List,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList",
+            Family = family,
+            LayoutUniqueId = layoutUniqueId,
             IsLiveLayoutSupported = true
         };
-        data.Nodes.Add(new SmartArtNode { ModelId = "n1", Text = "Plan", Level = 0 });
-        data.Nodes.Add(new SmartArtNode { ModelId = "n2", Text = "Build", Level = 0 });
+
+        for (int i = 0; i < nodeTexts.Count; i++)
+        {
+            data.Nodes.Add(new SmartArtNode { ModelId = $"n{i + 1}", Text = nodeTexts[i], Level = 0 });
+        }
 
         var smartArt = new SmartArtShape
         {
