@@ -371,7 +371,43 @@ public sealed class OmmlParserTests
         var run = Assert.IsType<MathNode.Run>(node);
         Assert.True(run.IsItalic);
         Assert.False(run.IsBold);
+        Assert.False(run.IsLiteral);
         Assert.Equal(MathNode.MathAlphabet.Default, run.Alphabet);
+    }
+
+    [Fact]
+    public void Run_WithLiteralNoVal_IsLiteralAndUpright()
+    {
+        var node = Parse("<m:r><m:rPr><m:lit/></m:rPr><m:t>x</m:t></m:r>");
+
+        var run = Assert.IsType<MathNode.Run>(node);
+        Assert.Equal("x", run.Text);
+        Assert.True(run.IsLiteral);
+        Assert.False(run.IsItalic);
+        Assert.False(run.IsBold);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("off")]
+    [InlineData("false")]
+    public void Run_WithLiteralExplicitlyOff_KeepsDefaultMathVariableStyle(string val)
+    {
+        var node = Parse($"<m:r><m:rPr><m:lit m:val=\"{val}\"/></m:rPr><m:t>x</m:t></m:r>");
+
+        var run = Assert.IsType<MathNode.Run>(node);
+        Assert.False(run.IsLiteral);
+        Assert.True(run.IsItalic);
+    }
+
+    [Fact]
+    public void Run_WithLiteralAndExplicitItalicStyle_PreservesAuthoredVisualStyle()
+    {
+        var node = Parse("<m:r><m:rPr><m:lit/><m:sty m:val=\"i\"/></m:rPr><m:t>x</m:t></m:r>");
+
+        var run = Assert.IsType<MathNode.Run>(node);
+        Assert.True(run.IsLiteral);
+        Assert.True(run.IsItalic);
     }
 
     [Fact]

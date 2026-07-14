@@ -355,6 +355,42 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_LiteralRun_UsesSharedUprightGlyphPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml("<m:r><m:rPr><m:lit/></m:rPr><m:t>x</m:t></m:r>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var op = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Single();
+
+                op.Text.Should().Be("x");
+                op.IsItalic.Should().BeFalse("m:lit literal style must be resolved in the shared draw plan before Avalonia draws");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "L = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(220, 100));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render m:lit math from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_AccentAndBar_UseSharedMathBoxPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

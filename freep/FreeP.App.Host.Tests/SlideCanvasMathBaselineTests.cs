@@ -313,6 +313,37 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_LiteralRun_UsesSharedUprightGlyphPlan_DoesNotThrow()
+    {
+        var mathNode = ParseOmml("<m:r><m:rPr><m:lit/></m:rPr><m:t>x</m:t></m:r>");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+        var op = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        op.Text.Should().Be("x");
+        op.IsItalic.Should().BeFalse("m:lit literal style must be resolved in the shared draw plan before WPF draws");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "L = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_BorderBoxNestedMath_UsesSharedLinePlan_DoesNotThrow()
     {
         var mathNode = new MathNode.BorderBox(

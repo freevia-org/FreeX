@@ -189,14 +189,18 @@ public static class OmmlParser
                ?? rPr?.Element(M + "sty")?.Attribute("val")?.Value
                ?? rPr?.Element(M + "sty")?.Value
                ?? rPr?.Attribute(M + "sty")?.Value;
+        var hasExplicitStyle = sty is not null;
         var isBold = false;
         if (sty is "p" or "b") isItalic = false;
         else if (sty is "i" or "bi") isItalic = true;
         if (sty is "b" or "bi") isBold = true;
 
         var alphabet = ParseMathAlphabet(ReadVal(rPr?.Element(M + "scr")));
+        var isLiteral = IsOnOffOn(rPr?.Element(M + "lit"));
+        if (isLiteral && !hasExplicitStyle && alphabet is MathNode.MathAlphabet.Default or MathNode.MathAlphabet.Roman)
+            isItalic = false;
 
-        return new MathNode.Run(text, isItalic, isBold, alphabet);
+        return new MathNode.Run(text, isItalic, isBold, alphabet, isLiteral);
     }
 
     private static MathNode.MathAlphabet ParseMathAlphabet(string? value)
@@ -369,7 +373,8 @@ public static class OmmlParser
                 run.Text,
                 isItalic: false,
                 isBold: run.IsBold,
-                alphabet: run.Alphabet),
+                alphabet: run.Alphabet,
+                isLiteral: run.IsLiteral),
             MathNode.Row row => new MathNode.Row(row.Children.Select(NormalizeFunctionName).ToArray()),
             _ => node
         };

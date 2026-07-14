@@ -276,6 +276,22 @@ public sealed class MathLayoutEngineTests
             "PowerPoint-authored OMML can split one math run across multiple m:t nodes, and both hosts consume this shared draw plan");
     }
 
+    [Fact]
+    public void OmmlLiteralRun_RenderPlanCarriesUprightLiteralGlyph()
+    {
+        var node = ParseOmml("<m:r><m:rPr><m:lit/></m:rPr><m:t>x</m:t></m:r>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var op = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        op.Text.Should().Be("x");
+        op.IsItalic.Should().BeFalse(
+            "m:rPr/m:lit marks the run as literal math text before WPF or Avalonia consumes the shared draw plan");
+        op.IsBold.Should().BeFalse();
+    }
+
     [Theory]
     [InlineData(MathNode.MathAlphabet.Script, "\U0001D49C\U0001D4B6-1")]
     [InlineData(MathNode.MathAlphabet.Fraktur, "\U0001D504\U0001D51E-1")]

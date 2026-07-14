@@ -832,6 +832,7 @@ public sealed class FreePRibbonDefinitionProfileTests
         var expectedWorkflowEvidenceIds = new[]
         {
             "freep.presenter.recording.execution",
+            "freep.media-caption.native-sidecar-depth",
             "freep.presenter.ink.execution",
             "freep.presenter.session.summary",
             "freep.review.comments.thread-depth",
@@ -840,6 +841,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.export.backstage.package-handoff",
             "freep.export.pdf-ellipse-fixed-layout",
             "freep.export.pdf-picture-frame-clips",
+            "freep.export.pdf-shape-opacity",
             "freep.table.inline-text.workflow-depth",
             "freep.header-footer.placeholder-creation",
             "freep.chart.number-format-rendering",
@@ -849,7 +851,12 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.chart.pie-first-slice-angle",
             "freep.chart.stacked-area-bands",
             "freep.chart.surface-grid-rendering",
+            "freep.chart.powerpoint-baseline-readiness",
             "freep.omml.transparent-phantom-spacing",
+            "freep.omml.box-alignment-points",
+            "freep.omml.pre-subsup-layout",
+            "freep.omml.matrix-placeholder",
+            "freep.omml.literal-run-style",
             "freep.smartart.continuous-block-process",
             "freep.smartart.basic-process",
             "freep.smartart.segmented-process",
@@ -866,6 +873,8 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.vertical-bullet-list",
             "freep.smartart.basic-hierarchy",
             "freep.smartart.org-chart",
+            "freep.smartart.outline-editing",
+            "freep.smartart.data-part-authoring",
         };
 
         workflowEvidence.Should().HaveCount(expectedWorkflowEvidenceIds.Length);
