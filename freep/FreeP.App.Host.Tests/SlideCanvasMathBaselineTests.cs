@@ -901,6 +901,58 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_DelimiterSeparator_UsesSharedSeparatorPlan_DoesNotThrow()
+    {
+        var customSeparator = MathLayoutEngine.Layout(
+            ParseOmml(
+                "<m:d>" +
+                "<m:dPr><m:sepChr m:val=\"|\"/></m:dPr>" +
+                "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                "<m:e><m:r><m:t>y</m:t></m:r></m:e>" +
+                "</m:d>"),
+            "Cambria Math",
+            18.0);
+        var emptySeparator = MathLayoutEngine.Layout(
+            ParseOmml(
+                "<m:d>" +
+                "<m:dPr><m:sepChr m:val=\"\"/></m:dPr>" +
+                "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                "<m:e><m:r><m:t>y</m:t></m:r></m:e>" +
+                "</m:d>"),
+            "Cambria Math",
+            18.0);
+
+        MathBoxRenderPlanner.Plan(customSeparator, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should().Equal(new[] { "x", "|", "y" },
+                "m:dPr/m:sepChr custom separator glyphs must be resolved in the shared plan before WPF draws");
+        MathBoxRenderPlanner.Plan(emptySeparator, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should().Equal(new[] { "x", "y" },
+                "explicit empty m:sepChr suppresses the visible separator before WPF draws");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "D = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = customSeparator },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_CenteredDelimiterShape_UsesSharedOrdinaryBracketPlan_DoesNotThrow()
     {
         var matchBox = MathLayoutEngine.Layout(
