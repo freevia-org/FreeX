@@ -274,7 +274,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 48;
+    public const int SummarySchemaVersion = 49;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -3293,10 +3293,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
             tables.TableCount.ToString(CultureInfo.InvariantCulture),
             " table(s); estimatedPages=",
             tables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture),
+            "; rowCells=",
+            tables.TotalRows.ToString(CultureInfo.InvariantCulture),
+            "/",
+            tables.TotalCells.ToString(CultureInfo.InvariantCulture),
             "; repeatedHeaderPages=",
             repeatedHeaderPages.ToString(CultureInfo.InvariantCulture),
             "; keepRows=",
             BoolFlag(tables.HasKeepTogetherRows),
+            "; tableSig=",
+            BuildTablePaginationTableFingerprint(tables),
+            "; paginationSig=",
+            BuildTablePaginationPlanFingerprint(tables),
             "; cellFeatures=",
             FormatSummaries(cellFeatures),
             "; pageFeatures=",
@@ -5744,6 +5752,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 row.HostId,
                 "/p",
                 row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                "/",
+                row.Tables.TotalRows.ToString(CultureInfo.InvariantCulture),
+                "r",
+                row.Tables.TotalCells.ToString(CultureInfo.InvariantCulture),
+                "c",
                 ": estimatedPages=",
                 row.Tables.EstimatedPageCount.ToString(CultureInfo.InvariantCulture),
                 "; repeatedHeaderPages=",
@@ -5753,6 +5766,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                     .ToString(CultureInfo.InvariantCulture),
                 "; keepRows=",
                 BoolFlag(row.Tables.HasKeepTogetherRows),
+                "; tableSig=",
+                BuildTablePaginationTableFingerprint(row.Tables),
+                "; paginationSig=",
+                BuildTablePaginationPlanFingerprint(row.Tables),
                 "; pageFeatures=",
                 FormatTablePaginationBlockerPageFeatures(row)))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -8909,6 +8926,22 @@ public static class FreeWVisualEvidenceManifestNormalizer
             BoolFlag(row.StartsPlannedPage),
             FormatDouble(row.PageOffsetYDip),
             FormatDouble(row.EstimatedHeightDip));
+
+    private static string BuildTablePaginationTableFingerprint(FreeWVisualTableExpectation tables) =>
+        BuildStableEvidenceFingerprint(BuildTablePlanSignatures(tables.Tables));
+
+    private static string BuildTablePaginationPlanFingerprint(FreeWVisualTableExpectation tables) =>
+        BuildStableEvidenceFingerprint(BuildTablePaginationSignatures(tables.PaginationPlans));
+
+    private static string BuildStableEvidenceFingerprint(IEnumerable<string> signatures)
+    {
+        var value = string.Join("\n", signatures.OrderBy(signature => signature, StringComparer.Ordinal));
+        if (string.IsNullOrEmpty(value))
+            return "-";
+
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+        return Convert.ToHexString(hash).ToLowerInvariant()[..12];
+    }
 
     private static string BuildWordArtWatermarkFeatureSignature(FreeWVisualPageFeatureExpectation features)
     {

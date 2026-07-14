@@ -1379,8 +1379,8 @@ function Assert-TablePaginationPageCompositionProofReadiness {
     }
 
     $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
-    if ([int]$summary.schemaVersion -lt 40) {
-        throw "Table pagination/page composition proof readiness requires FreeW visual evidence summary schema v40 or newer, found v$($summary.schemaVersion)"
+    if ([int]$summary.schemaVersion -lt 49) {
+        throw "Table pagination/page composition proof readiness requires FreeW visual evidence summary schema v49 or newer, found v$($summary.schemaVersion)"
     }
 
     $readinessRows = @($summary.tablePaginationProofReadiness)
@@ -1419,6 +1419,12 @@ function Assert-TablePaginationPageCompositionProofReadiness {
 
             if ([string]$proofRow.semanticEvidence -notmatch 'keepRows=1') {
                 $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing keep-together row semantic evidence")
+            }
+
+            if ([string]$proofRow.semanticEvidence -notmatch 'rowCells=' -or
+                [string]$proofRow.semanticEvidence -notmatch 'tableSig=' -or
+                [string]$proofRow.semanticEvidence -notmatch 'paginationSig=') {
+                $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing deterministic table semantic evidence fingerprints")
             }
 
             if ($scenarioId -eq 'table-page-composition-stress') {

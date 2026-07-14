@@ -7806,8 +7806,11 @@ public sealed class VisualEvidencePlannerTests
                 row.Status == "paired-renderer-proof-ready"
                 && row.WordBaselineStatus == "word-baseline-unavailable=2"
                 && row.BaselineReadiness.Contains("without authoritative Word table parity", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("rowCells=", StringComparison.Ordinal)
                 && row.SemanticEvidence.Contains("repeatedHeaderPages=", StringComparison.Ordinal)
                 && row.SemanticEvidence.Contains("keepRows=1", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("tableSig=", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("paginationSig=", StringComparison.Ordinal)
                 && row.Trust.Passed);
             withBaseline.RemainingEvidenceBlockers.Should().HaveCount(2);
             withBaseline.RemainingEvidenceBlockers.Should().OnlyContain(blocker =>
@@ -7819,7 +7822,9 @@ public sealed class VisualEvidencePlannerTests
                 blocker.ScenarioId == "table-page-composition-stress"
                 && blocker.SemanticEvidence.Any(evidence =>
                     evidence.Contains("page-border", StringComparison.Ordinal)
-                    && evidence.Contains("watermark", StringComparison.Ordinal)));
+                    && evidence.Contains("watermark", StringComparison.Ordinal)
+                    && evidence.Contains("tableSig=", StringComparison.Ordinal)
+                    && evidence.Contains("paginationSig=", StringComparison.Ordinal)));
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
@@ -7833,6 +7838,8 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("## Table Pagination/Page Composition Proof Readiness");
             markdown.Should().Contain("table-page-composition-stress");
             markdown.Should().Contain("word-baseline-unavailable=2");
+            markdown.Should().Contain("tableSig=");
+            markdown.Should().Contain("paginationSig=");
             markdown.Should().Contain("without authoritative Word table parity");
         }
         finally

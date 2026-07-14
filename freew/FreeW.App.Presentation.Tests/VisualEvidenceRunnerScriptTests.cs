@@ -195,9 +195,10 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Table layout proof readiness: trusted scenario rows=");
         source.Should().Contain("Table layout Word-baseline policy rows: verified rows=");
         source.Should().Contain("Assert-TablePaginationPageCompositionProofReadiness $summaryJson $effectiveScenarioIds");
-        source.Should().Contain("Table pagination/page composition proof readiness requires FreeW visual evidence summary schema v40 or newer");
+        source.Should().Contain("Table pagination/page composition proof readiness requires FreeW visual evidence summary schema v49 or newer");
         source.Should().Contain("$readinessRows = @($summary.tablePaginationProofReadiness)");
         source.Should().Contain("missing repeated-header pagination semantic evidence");
+        source.Should().Contain("missing deterministic table semantic evidence fingerprints");
         source.Should().Contain("missing honest word-baseline-unavailable table pagination blocker");
         source.Should().Contain("Table pagination/page composition proof readiness: trusted scenario rows=");
         source.Should().Contain("Table pagination/page composition semantic rows: verified rows=");
