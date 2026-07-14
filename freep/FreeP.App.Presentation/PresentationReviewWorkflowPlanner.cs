@@ -448,6 +448,14 @@ public sealed record PresentationAccessibilityCheckerPanePlan(
             : null;
 }
 
+public sealed record PresentationAccessibilityCheckerNavigationPlan(
+    bool ShouldNavigate,
+    int SelectedRowIndex,
+    int TargetSlideIndex,
+    uint? TargetShapeId,
+    bool ShouldSelectShape,
+    string? ValidationMessage);
+
 public sealed record PresentationReadingOrderItemPlan(
     int ReadingOrderIndex,
     int NestingDepth,
@@ -1917,6 +1925,66 @@ public static class PresentationReviewWorkflowPlanner
             selected,
             rows,
             summaryPlan.Actions);
+    }
+
+    public static int NormalizeAccessibilityCheckerRowSelection(
+        PresentationAccessibilityCheckerPanePlan panePlan,
+        int? requestedRowIndex)
+    {
+        ArgumentNullException.ThrowIfNull(panePlan);
+
+        if (panePlan.Rows.Count == 0)
+        {
+            return -1;
+        }
+
+        if (requestedRowIndex is { } requested &&
+            panePlan.Rows.Any(row => row.RowIndex == requested))
+        {
+            return requested;
+        }
+
+        return panePlan.SelectedRowIndex >= 0 ? panePlan.SelectedRowIndex : 0;
+    }
+
+    public static PresentationAccessibilityCheckerNavigationPlan BuildAccessibilityCheckerNavigationPlan(
+        PresentationAccessibilityCheckerPanePlan panePlan,
+        int? requestedRowIndex)
+    {
+        ArgumentNullException.ThrowIfNull(panePlan);
+
+        var selectedRowIndex = NormalizeAccessibilityCheckerRowSelection(panePlan, requestedRowIndex);
+        if (selectedRowIndex < 0)
+        {
+            return new PresentationAccessibilityCheckerNavigationPlan(
+                false,
+                -1,
+                -1,
+                null,
+                false,
+                "No accessibility issues found.");
+        }
+
+        var row = panePlan.Rows.FirstOrDefault(row => row.RowIndex == selectedRowIndex)
+            ?? panePlan.SelectedRow;
+        if (row is null)
+        {
+            return new PresentationAccessibilityCheckerNavigationPlan(
+                false,
+                selectedRowIndex,
+                -1,
+                null,
+                false,
+                "Selected accessibility issue is no longer available.");
+        }
+
+        return new PresentationAccessibilityCheckerNavigationPlan(
+            row.ShouldNavigateToSlide,
+            row.RowIndex,
+            row.SlideIndex,
+            row.ShapeId,
+            row.ShouldSelectShape,
+            null);
     }
 
     public static PresentationReadingOrderPlan BuildReadingOrderPlan(

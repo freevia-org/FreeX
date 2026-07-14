@@ -2688,6 +2688,64 @@ public sealed class PresentationReviewWorkflowPlannerTests
     }
 
     [Fact]
+    public void BuildAccessibilityCheckerNavigationPlan_NormalizesRequestedRowsForHostAdapters()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var first = presentation.Slides[0];
+        first.Title = "Intro";
+        first.Shapes.Add(new SlideShape
+        {
+            Id = 42,
+            Name = "Product image",
+            Kind = SlideShapeKind.Picture,
+            Picture = new ImagePart()
+        });
+        presentation.Slides.Add(new Slide { Title = string.Empty });
+
+        var summary = PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(presentation);
+        var pane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+            presentation,
+            summary,
+            selectedRowIndex: 1);
+
+        PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(pane, 99)
+            .Should().Be(1);
+        PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(pane, 99)
+            .Should().Be(new PresentationAccessibilityCheckerNavigationPlan(
+                true,
+                1,
+                1,
+                null,
+                false,
+                null));
+        PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(pane, 0)
+            .Should().Be(new PresentationAccessibilityCheckerNavigationPlan(
+                true,
+                0,
+                0,
+                42,
+                true,
+                null));
+
+        var clean = Presentation.CreateEmpty();
+        clean.Slides[0].Title = "Intro";
+        var cleanPane = PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
+            clean,
+            PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(clean));
+
+        PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(cleanPane, 0)
+            .Should().Be(-1);
+        PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(cleanPane, 0)
+            .Should().Be(new PresentationAccessibilityCheckerNavigationPlan(
+                false,
+                -1,
+                -1,
+                null,
+                false,
+                "No accessibility issues found."));
+    }
+
+    [Fact]
     public void BuildReadingOrderPlan_DescribesCurrentSlideShapesAndSelectedItem()
     {
         var slide = new Slide();

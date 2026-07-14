@@ -300,6 +300,15 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public void MainWindow_sources_route_accessibility_checker_navigation_through_shared_planner()
+    {
+        var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
+
+        source.Should().Contain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
+        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
+    }
+
+    [Fact]
     public void MainWindow_sources_route_animation_commands_through_shared_planner()
     {
         var source = File.ReadAllText(FindRepoFile("freep", "FreeP.App.Avalonia", "MainWindow.cs"));
@@ -3054,6 +3063,7 @@ public sealed class MainWindowHeadlessTests
         PresentationAccessibilityCheckerPanePlan? opened = null;
         PresentationAccessibilityCheckerPanePlan? selectedChart = null;
         PresentationAccessibilityCheckerPanePlan? selectedTitle = null;
+        PresentationAccessibilityCheckerPanePlan? invalidSelection = null;
         PresentationAccessibilityCheckerPanePlan? actionedTitle = null;
         PresentationAccessibilityCheckerPanePlan? actionedAltText = null;
         PresentationSlideTitleMutationPlan? titleMutation = null;
@@ -3123,6 +3133,10 @@ public sealed class MainWindowHeadlessTests
             titleSlideIndex = window.Editor.CurrentSlideIndex;
             titleSelectionCount = window.Editor.SelectedShapeIds.Count;
 
+            invalidSelection = window.SelectAccessibilityCheckerRow(99);
+            titleSlideIndex = window.Editor.CurrentSlideIndex;
+            titleSelectionCount = window.Editor.SelectedShapeIds.Count;
+
             actionedTitle = window.ApplyAccessibilityCheckerRowAction(3);
             titleAfterAction = window.Editor.CurrentSlide?.Title ?? string.Empty;
             titleMutation = window.LastSlideTitleMutationPlan;
@@ -3175,6 +3189,9 @@ public sealed class MainWindowHeadlessTests
         selectedTitle!.SelectedRow!.Title.Should().Be("Missing slide title");
         titleSlideIndex.Should().Be(1);
         titleSelectionCount.Should().Be(0);
+        invalidSelection.Should().NotBeNull();
+        invalidSelection!.SelectedRowIndex.Should().Be(3);
+        invalidSelection.SelectedRow!.Title.Should().Be("Missing slide title");
         actionedTitle.Should().NotBeNull();
         actionedTitle!.Rows.Select(row => row.Title).Should().Equal(
             "Alt text missing",

@@ -493,6 +493,13 @@ public sealed class ReviewWorkflowAdapterTests
             selectedTitle.SelectedRow.Should().NotBeNull();
             selectedTitle.SelectedRow!.Title.Should().Be("Missing slide title");
 
+            var invalidSelection = window.SelectAccessibilityCheckerRow(99);
+
+            invalidSelection.SelectedRowIndex.Should().Be(3);
+            invalidSelection.SelectedRow!.Title.Should().Be("Missing slide title");
+            window.Editor.CurrentSlideIndex.Should().Be(1);
+            window.Editor.SelectedShapeIds.Should().BeEmpty();
+
             var actionedTitle = window.ApplyAccessibilityCheckerRowAction(3);
 
             window.Editor.CurrentSlideIndex.Should().Be(1);
@@ -1973,6 +1980,8 @@ public sealed class ReviewWorkflowAdapterTests
 
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildCommentPanePlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation)");
+        source.Should().Contain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
+        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(");

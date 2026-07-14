@@ -1950,17 +1950,19 @@ public sealed class MainWindow : Window
     internal PresentationAccessibilityCheckerPanePlan SelectAccessibilityCheckerRow(int rowIndex)
     {
         RefreshAccessibilitySummaryPlan();
-        var normalized = LastAccessibilityCheckerPanePlan!.Rows.Any(row => row.RowIndex == rowIndex)
-            ? rowIndex
-            : LastAccessibilityCheckerPanePlan.SelectedRowIndex;
+        var normalized = PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(
+            LastAccessibilityCheckerPanePlan!,
+            rowIndex);
         _selectedAccessibilityCheckerRowIndex = normalized >= 0 ? normalized : null;
         LastAccessibilityCheckerPanePlan =
             PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerPanePlan(
                 _presentation,
                 LastAccessibilitySummaryPlan!,
                 _selectedAccessibilityCheckerRowIndex);
-        if (LastAccessibilityCheckerPanePlan.SelectedRow is { } row)
-            NavigateToAccessibilityCheckerRow(row);
+        NavigateToAccessibilityCheckerRow(
+            PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(
+                LastAccessibilityCheckerPanePlan,
+                _selectedAccessibilityCheckerRowIndex));
         if (LastAccessibilityCheckerPanePlan.SelectedRow?.CommandHint != PresentationReviewWorkflowPlanner.ReviewTableStructureCommandId)
             ClearTableStructureReviewDisplay();
         RenderAccessibilityCheckerPane(LastAccessibilityCheckerPanePlan);
@@ -2025,11 +2027,13 @@ public sealed class MainWindow : Window
         return reviewPlan;
     }
 
-    private void NavigateToAccessibilityCheckerRow(PresentationAccessibilityCheckerRowPlan row)
+    private void NavigateToAccessibilityCheckerRow(PresentationAccessibilityCheckerNavigationPlan plan)
     {
-        if (row.ShouldNavigateToSlide)
-            Editor.SelectSlide(row.SlideIndex);
-        if (row.ShouldSelectShape && row.ShapeId is { } shapeId)
+        if (!plan.ShouldNavigate)
+            return;
+
+        Editor.SelectSlide(plan.TargetSlideIndex);
+        if (plan.ShouldSelectShape && plan.TargetShapeId is { } shapeId)
             Editor.Select(shapeId);
     }
 
