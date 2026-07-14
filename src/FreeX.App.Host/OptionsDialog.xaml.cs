@@ -97,6 +97,8 @@ public partial class OptionsDialog : Window
         _initialSection = initialSection;
         Result = opts;
         InitializeComponent();
+        Width = OptionsDialogPlanner.WindowWidth;
+        Height = OptionsDialogPlanner.WindowHeight;
         TabList.SelectedIndex = _initialSection == OptionsDialogInitialSection.FormulaErrorChecking ? 1 : 0;
         Loaded += (_, _) =>
         {

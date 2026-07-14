@@ -42,10 +42,10 @@ public sealed partial class MainWindow
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
             return;
 
-        const double optionsDialogWidth = 760;
-        const double optionsDialogHeight = 560;
-        const double optionsFormulasDialogWidth = 744;
-        const double optionsFormulasDialogHeight = 776.5;
+        const double optionsDialogWidth = OptionsDialogPlanner.CaptureWidth;
+        const double optionsDialogHeight = OptionsDialogPlanner.CaptureHeight;
+        const double optionsFormulasDialogWidth = OptionsDialogPlanner.CaptureWidth;
+        const double optionsFormulasDialogHeight = OptionsDialogPlanner.FormulasCaptureHeight;
 
         // Edit a snapshot loaded from the shared store so unmanaged fields round-trip untouched.
         var current = AppOptionsStore.Load();

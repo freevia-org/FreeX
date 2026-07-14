@@ -18,6 +18,24 @@ namespace FreeX.App.Services;
 /// </summary>
 public static class OptionsDialogPlanner
 {
+    /// <summary>The fixed outer window width used by the WPF Options dialog.</summary>
+    public const double WindowWidth = 760;
+
+    /// <summary>The fixed outer window height used by the WPF Options dialog.</summary>
+    public const double WindowHeight = 560;
+
+    /// <summary>
+    /// The fixed client-frame width captured for non-Formulas Options pages in WPF parity evidence.
+    /// Avalonia renders this content frame directly so both shells produce the same PNG dimensions.
+    /// </summary>
+    public const double CaptureWidth = 744;
+
+    /// <summary>The fixed client-frame height captured for non-Formulas Options pages in WPF parity evidence.</summary>
+    public const double CaptureHeight = 520.5;
+
+    /// <summary>The fixed client-frame height captured for the taller Formulas Options page.</summary>
+    public const double FormulasCaptureHeight = 776.5;
+
     /// <summary>Why a numeric Options field could not be parsed.</summary>
     public enum OptionsInputError
     {

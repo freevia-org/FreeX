@@ -4,6 +4,16 @@ namespace FreeX.App.Services.Tests;
 
 public sealed class OptionsDialogPlannerTests
 {
+    [Fact]
+    public void OptionsDialogFrameConstants_PinSharedWpfAndAvaloniaCaptureContract()
+    {
+        OptionsDialogPlanner.WindowWidth.Should().Be(760);
+        OptionsDialogPlanner.WindowHeight.Should().Be(560);
+        OptionsDialogPlanner.CaptureWidth.Should().Be(744);
+        OptionsDialogPlanner.CaptureHeight.Should().Be(520.5);
+        OptionsDialogPlanner.FormulasCaptureHeight.Should().Be(776.5);
+    }
+
     [Theory]
     [InlineData("11", true, 11)]
     [InlineData(" 8 ", true, 8)]

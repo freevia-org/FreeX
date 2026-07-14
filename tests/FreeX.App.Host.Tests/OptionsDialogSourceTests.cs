@@ -4,12 +4,33 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Xml.Linq;
 using FreeX.App.Host;
+using FreeX.App.Services;
 using FluentAssertions;
 
 namespace FreeX.App.Host.Tests;
 
 public sealed partial class OptionsDialogSourceTests
 {
+    [Fact]
+    public void OptionsDialog_UsesSharedFrameSizingContract()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new OptionsDialog(new FreeXOptions());
+            try
+            {
+                dialog.Width.Should().Be(OptionsDialogPlanner.WindowWidth);
+                dialog.Height.Should().Be(OptionsDialogPlanner.WindowHeight);
+                OptionsDialogPlanner.CaptureWidth.Should().Be(744);
+                OptionsDialogPlanner.CaptureHeight.Should().Be(520.5);
+            }
+            finally
+            {
+                dialog.Close();
+            }
+        });
+    }
+
     private static T GetControl<T>(OptionsDialog dialog, string name)
 
         where T : class

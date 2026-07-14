@@ -508,6 +508,10 @@ public sealed class AvaloniaShellSourceTests
         optionsSource.Should().Contain("var projected = OptionsDialogPlanner.Project(current, input);");
         optionsSource.Should().Contain("AppOptionsStore.Save(projected)");
         optionsSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"OptionsDialog\");");
+        optionsSource.Should().Contain("const double optionsDialogWidth = OptionsDialogPlanner.CaptureWidth;");
+        optionsSource.Should().Contain("const double optionsDialogHeight = OptionsDialogPlanner.CaptureHeight;");
+        optionsSource.Should().Contain("const double optionsFormulasDialogWidth = OptionsDialogPlanner.CaptureWidth;");
+        optionsSource.Should().Contain("const double optionsFormulasDialogHeight = OptionsDialogPlanner.FormulasCaptureHeight;");
 
         // Advanced ▸ Editing options: the "After pressing Enter, move selection" toggle and its
         // direction picker are now live-bound to the persisted AppOptions (previously shipped
