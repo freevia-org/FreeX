@@ -8,8 +8,8 @@ namespace FreeW.Core.Model;
 /// How an image relates to the surrounding text. <see cref="Inline"/> (the default) keeps the image in
 /// the text flow, serialised as <c>wp:inline</c> exactly as before. The remaining modes make the image
 /// <em>floating</em> (serialised as <c>wp:anchor</c>) with the matching OOXML wrap element:
-/// <see cref="Square"/> → <c>wp:wrapSquare</c>; <see cref="Tight"/> → <c>wp:wrapTight</c> (no wrap polygon —
-/// a deliberate simplification); <see cref="TopAndBottom"/> → <c>wp:wrapTopAndBottom</c>;
+/// <see cref="Square"/> -> <c>wp:wrapSquare</c>; <see cref="Tight"/> -> <c>wp:wrapTight</c> with a
+/// rectangular <c>wp:wrapPolygon</c>; <see cref="TopAndBottom"/> -> <c>wp:wrapTopAndBottom</c>;
 /// <see cref="Behind"/> → <c>wp:wrapNone</c> with <c>behindDoc="1"</c> (behind the text);
 /// <see cref="InFront"/> → <c>wp:wrapNone</c> with <c>behindDoc="0"</c> (in front of the text).
 /// </summary>

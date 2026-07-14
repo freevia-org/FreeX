@@ -146,7 +146,9 @@ public class ImageWrappingRoundTripTests
             .Descendants(Wp + "anchor").Single()
             .Element(Wp + "wrapTight");
         wrapTight.Should().NotBeNull();
-        wrapTight!.Element(Wp + "wrapPolygon").Should().BeNull();
+        var polygon = wrapTight!.Element(Wp + "wrapPolygon");
+        polygon.Should().NotBeNull("wp:wrapTight requires a wrapPolygon for Word to open the document without repair");
+        polygon!.Elements(Wp + "lineTo").Should().HaveCount(4);
     }
 
     [Fact]

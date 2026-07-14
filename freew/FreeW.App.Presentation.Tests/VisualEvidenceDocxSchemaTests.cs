@@ -12,6 +12,7 @@ public class VisualEvidenceDocxSchemaTests
     public static IEnumerable<object[]> WordComparableDrawingFixtures()
     {
         yield return ["drawing-objects-complex", FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument()];
+        yield return ["f2-01-float-wrap", FreeWVisualEvidenceDocumentFactory.BuildFloatingWrapEvidenceDocument()];
         yield return ["object-format-position-size-style", FreeWVisualEvidenceDocumentFactory.BuildObjectFormatPositionSizeStyleDocument()];
         yield return ["wordart-watermark-stress", FreeWVisualEvidenceDocumentFactory.BuildWordArtWatermarkStressDocument()];
         yield return ["wordart-picture-watermark-layout", FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument()];

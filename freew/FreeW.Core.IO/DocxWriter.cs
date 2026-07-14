@@ -2844,7 +2844,7 @@ public static class DocxWriter
     /// Builds a floating picture: w:drawing/wp:anchor with @behindDoc, wp:simplePos, wp:positionH/V
     /// (relativeFrom + posOffset), wp:extent, the single wrap element matching
     /// <see cref="InlineImage.Wrapping"/>, then the same wp:docPr + a:graphic/pic:pic payload as the inline
-    /// path. wp:wrapTight is emitted without a wrapPolygon (a deliberate simplification — Word fills one in).
+    /// path. wp:wrapTight includes the wrapPolygon Word requires to open the document without repair.
     /// </summary>
     private static XElement BuildAnchorDrawing(ImagePart part)
     {
@@ -2937,16 +2937,29 @@ public static class DocxWriter
     };
 
     /// <summary>
-    /// The single wrap element for a floating wrapping mode: wp:wrapSquare (square), wp:wrapTight (tight,
-    /// no wrapPolygon — a simplification), wp:wrapTopAndBottom, or wp:wrapNone for the front/behind modes.
+    /// The single wrap element for a floating wrapping mode: wp:wrapSquare (square), wp:wrapTight (tight
+    /// with a rectangular wrap polygon), wp:wrapTopAndBottom, or wp:wrapNone for the front/behind modes.
     /// </summary>
     private static XElement BuildWrap(ImageWrapping wrapping) => wrapping switch
     {
         ImageWrapping.Square => new XElement(Wp + "wrapSquare", new XAttribute("wrapText", "bothSides")),
-        ImageWrapping.Tight => new XElement(Wp + "wrapTight", new XAttribute("wrapText", "bothSides")),
+        ImageWrapping.Tight => new XElement(
+            Wp + "wrapTight",
+            new XAttribute("wrapText", "bothSides"),
+            BuildRectangularWrapPolygon()),
         ImageWrapping.TopAndBottom => new XElement(Wp + "wrapTopAndBottom"),
         _ => new XElement(Wp + "wrapNone"), // Behind / InFront both wrap none (distinguished by @behindDoc).
     };
+
+    private static XElement BuildRectangularWrapPolygon() =>
+        new(
+            Wp + "wrapPolygon",
+            new XAttribute("edited", "0"),
+            new XElement(Wp + "start", new XAttribute("x", "0"), new XAttribute("y", "0")),
+            new XElement(Wp + "lineTo", new XAttribute("x", "0"), new XAttribute("y", "21600")),
+            new XElement(Wp + "lineTo", new XAttribute("x", "21600"), new XAttribute("y", "21600")),
+            new XElement(Wp + "lineTo", new XAttribute("x", "21600"), new XAttribute("y", "0")),
+            new XElement(Wp + "lineTo", new XAttribute("x", "0"), new XAttribute("y", "0")));
 
     /// <summary>
     /// Builds the wp:docPr for an image, carrying accessibility alt text on @descr when set (omitted
