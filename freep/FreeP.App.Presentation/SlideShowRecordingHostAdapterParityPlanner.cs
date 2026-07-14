@@ -137,6 +137,55 @@ public sealed record SlideShowRecordingCameraEncodingReadinessEvidence(
         hostName.Contains("Avalonia", StringComparison.OrdinalIgnoreCase);
 }
 
+public sealed record SlideShowRecordingUnavailableHardwareRow(
+    string HostName,
+    string AdapterName,
+    bool RequiresUserPermission,
+    IReadOnlyList<SlideShowRecordingCaptureStreamKind> ReadyStreams,
+    IReadOnlyList<SlideShowRecordingCaptureStreamKind> MissingStreams,
+    bool HasDeviceDescriptors,
+    string StatusText)
+{
+    public bool IsUnavailableHardwareEvidence =>
+        RequiresUserPermission &&
+        !HasDeviceDescriptors &&
+        ReadyStreams.Count == 0 &&
+        MissingStreams.Contains(SlideShowRecordingCaptureStreamKind.NarrationAudio) &&
+        MissingStreams.Contains(SlideShowRecordingCaptureStreamKind.CameraVideo);
+}
+
+public sealed record SlideShowRecordingUnavailableHardwareEvidence(
+    IReadOnlyList<SlideShowRecordingUnavailableHardwareRow> HostRows)
+{
+    public bool HasWpfUnavailableHardware =>
+        HostRows.Any(row => IsWpf(row.HostName) && row.IsUnavailableHardwareEvidence);
+
+    public bool HasAvaloniaUnavailableHardware =>
+        HostRows.Any(row => IsAvalonia(row.HostName) && row.IsUnavailableHardwareEvidence);
+
+    public bool HasPairedUnavailableHardware =>
+        HasWpfUnavailableHardware && HasAvaloniaUnavailableHardware;
+
+    public bool ClaimsCapture =>
+        HostRows.Any(row => row.ReadyStreams.Count > 0 || row.HasDeviceDescriptors);
+
+    public bool ClaimsPowerPointComBaseline => false;
+
+    public string SummaryText =>
+        HasPairedUnavailableHardware
+            ? "WPF and Avalonia both report OS-backed recording adapters with no available microphone or camera hardware; no capture, encoded payload, or PowerPoint COM baseline is claimed."
+            : "Unavailable-hardware recording evidence is not paired across WPF and Avalonia.";
+
+    public string RemainingWork =>
+        "Live capture on real microphone/camera hardware, local default camera mp4 encoding, PowerPoint COM recording baselines, and broader real-deck media/caption baselines remain deferred.";
+
+    private static bool IsWpf(string hostName) =>
+        hostName.Contains("WPF", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAvalonia(string hostName) =>
+        hostName.Contains("Avalonia", StringComparison.OrdinalIgnoreCase);
+}
+
 public static class SlideShowRecordingHostAdapterParityPlanner
 {
     public static SlideShowRecordingHostAdapterParityEvidence BuildEvidence(
@@ -162,6 +211,18 @@ public static class SlideShowRecordingHostAdapterParityPlanner
                 .ToArray());
     }
 
+    public static SlideShowRecordingUnavailableHardwareEvidence BuildUnavailableHardwareEvidence(
+        IEnumerable<SlideShowRecordingCaptureAdapterReadiness> hostReadiness)
+    {
+        ArgumentNullException.ThrowIfNull(hostReadiness);
+
+        return new SlideShowRecordingUnavailableHardwareEvidence(
+            hostReadiness
+                .Select(BuildUnavailableHardwareRow)
+                .OrderBy(row => row.HostName, StringComparer.Ordinal)
+                .ToArray());
+    }
+
     private static SlideShowRecordingHostAdapterParityRow BuildRow(
         SlideShowRecordingCaptureAdapterReadiness readiness)
     {
@@ -175,6 +236,21 @@ public static class SlideShowRecordingHostAdapterParityPlanner
             readiness.RequiresUserPermission,
             readiness.ReadyStreams,
             readiness.MissingStreams,
+            readiness.StatusText);
+    }
+
+    private static SlideShowRecordingUnavailableHardwareRow BuildUnavailableHardwareRow(
+        SlideShowRecordingCaptureAdapterReadiness readiness)
+    {
+        ArgumentNullException.ThrowIfNull(readiness);
+
+        return new SlideShowRecordingUnavailableHardwareRow(
+            readiness.HostName,
+            readiness.AdapterName,
+            readiness.RequiresUserPermission,
+            readiness.ReadyStreams,
+            readiness.MissingStreams,
+            readiness.Devices.Count > 0,
             readiness.StatusText);
     }
 }

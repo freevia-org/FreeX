@@ -100,6 +100,53 @@ public sealed class SlideShowRecordingHostAdapterParityPlannerTests
         evidence.RemainingWork.Should().Contain("PowerPoint COM recording baselines");
     }
 
+    [Fact]
+    public void BuildUnavailableHardwareEvidence_WithNoDeviceRows_ProjectsPairedNoCaptureEvidence()
+    {
+        var evidence = SlideShowRecordingHostAdapterParityPlanner.BuildUnavailableHardwareEvidence(
+            new[]
+            {
+                NoDeviceReadiness("WPF slideshow", "WPF Windows recording capture adapter"),
+                NoDeviceReadiness("Avalonia slideshow", "Avalonia Windows recording capture adapter")
+            });
+
+        evidence.HostRows.Should().HaveCount(2);
+        evidence.HasWpfUnavailableHardware.Should().BeTrue();
+        evidence.HasAvaloniaUnavailableHardware.Should().BeTrue();
+        evidence.HasPairedUnavailableHardware.Should().BeTrue();
+        evidence.ClaimsCapture.Should().BeFalse();
+        evidence.ClaimsPowerPointComBaseline.Should().BeFalse();
+        evidence.HostRows.Should().OnlyContain(row =>
+            row.IsUnavailableHardwareEvidence &&
+            row.ReadyStreams.Count == 0 &&
+            row.MissingStreams.SequenceEqual(new[]
+            {
+                SlideShowRecordingCaptureStreamKind.NarrationAudio,
+                SlideShowRecordingCaptureStreamKind.CameraVideo
+            }));
+        evidence.SummaryText.Should().Contain("no available microphone or camera hardware");
+        evidence.RemainingWork.Should().Contain("Live capture on real microphone/camera hardware");
+    }
+
+    [Fact]
+    public void BuildUnavailableHardwareEvidence_WithDeferredAdapter_DoesNotTreatMissingAdapterAsHardwareEvidence()
+    {
+        var evidence = SlideShowRecordingHostAdapterParityPlanner.BuildUnavailableHardwareEvidence(
+            new[]
+            {
+                NoDeviceReadiness("WPF slideshow", "WPF Windows recording capture adapter"),
+                SlideShowRecordingCaptureAdapterReadiness.Deferred(
+                    "Avalonia slideshow",
+                    "Avalonia Windows recording capture adapter")
+            });
+
+        evidence.HasWpfUnavailableHardware.Should().BeTrue();
+        evidence.HasAvaloniaUnavailableHardware.Should().BeFalse();
+        evidence.HasPairedUnavailableHardware.Should().BeFalse();
+        evidence.ClaimsCapture.Should().BeFalse();
+        evidence.SummaryText.Should().Contain("not paired");
+    }
+
     private static SlideShowRecordingCaptureAdapterReadiness MicrophoneReadiness(
         string hostName,
         string adapterName) =>
@@ -159,4 +206,14 @@ public sealed class SlideShowRecordingHostAdapterParityPlannerTests
             PayloadLengthBytes: 0,
             RequiresPowerPointCom: false,
             $"{adapterName}: camera device handoff reached, but local video encoding is not implemented in this no-COM adapter.");
+
+    private static SlideShowRecordingCaptureAdapterReadiness NoDeviceReadiness(
+        string hostName,
+        string adapterName) =>
+        SlideShowRecordingCaptureAdapterReadiness.FromDevices(
+            hostName,
+            adapterName,
+            Array.Empty<SlideShowRecordingCaptureDeviceDescriptor>(),
+            requiresUserPermission: true,
+            unavailableReason: "No Windows microphone or camera devices were reported by the host adapter.");
 }

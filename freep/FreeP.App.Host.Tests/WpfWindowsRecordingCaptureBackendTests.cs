@@ -46,6 +46,12 @@ public sealed class WpfWindowsRecordingCaptureBackendTests
             SlideShowRecordingCaptureStreamKind.CameraVideo);
         backend.AdapterReadiness.StatusText.Should().Contain("No Windows microphone or camera devices");
         backend.AdapterReadiness.StatusText.Should().NotContain("not registered");
+
+        var evidence = SlideShowRecordingHostAdapterParityPlanner.BuildUnavailableHardwareEvidence(
+            new[] { backend.AdapterReadiness });
+        evidence.HasWpfUnavailableHardware.Should().BeTrue();
+        evidence.ClaimsCapture.Should().BeFalse();
+        evidence.ClaimsPowerPointComBaseline.Should().BeFalse();
     }
 
     [Fact]
