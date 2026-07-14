@@ -2642,10 +2642,12 @@ public sealed class ChartRenderPlannerTests
         var first = slices[0];
         first.HasThreeDDepth.Should().BeTrue();
         first.EffectiveVerticalScale.Should().Be(ChartRenderPlanner.ThreeDPieVerticalScale);
+        ChartRenderPlanner.ThreeDPieDepthFillAlpha.Should().Be(140);
         first.DepthOffsetY.Should().BeApproximately(9.35, 0.0001);
         first.OuterRadiusY.Should().BeApproximately(30.6, 0.0001);
         first.OuterStart.Y.Should().BeApproximately(19.4, 0.0001);
         first.OuterEnd.Y.Should().BeApproximately(50, 0.0001);
+        slices.Should().OnlyContain(slice => slice.HasThreeDDepth);
     }
 
     [Fact]

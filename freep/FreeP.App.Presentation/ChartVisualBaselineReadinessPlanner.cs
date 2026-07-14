@@ -150,6 +150,8 @@ public static partial class ChartRenderPlanner
                 "100% stacked normalized axis and series extent plan",
             ChartType.ColumnClustered or ChartType.ColumnStacked or ChartType.BarClustered or ChartType.BarStacked =>
                 "bar/column gap, overlap, and depth plan",
+            ChartType.Pie when chart.ThreeDStyle == ChartThreeDStyle.Pie =>
+                "3-D pie compressed top face and lower depth pass plan",
             ChartType.Pie => "pie first-slice and visible-point sweep plan",
             ChartType.Doughnut => "doughnut ring and first-slice plan",
             ChartType.Radar => chart.RadarStyle switch

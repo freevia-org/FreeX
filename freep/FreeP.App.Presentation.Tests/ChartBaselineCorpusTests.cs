@@ -245,6 +245,47 @@ public sealed class ChartBaselineCorpusTests
             .BeTrue();
     }
 
+    [Fact]
+    public void ThreeDPieBaselineReadiness_ProjectsDepthPassDecisionsWithoutPowerPointCom()
+    {
+        var pie = BuildThreeDPieChart();
+        var slices = ChartRenderPlanner.BuildPieSlicePrimitives(
+            pie,
+            new ChartPlanRect(0, 0, 240, 180));
+
+        slices.Should().HaveCount(3);
+        slices.Should().OnlyContain(slice => slice.HasThreeDDepth);
+        slices[0].EffectiveVerticalScale.Should().Be(ChartRenderPlanner.ThreeDPieVerticalScale);
+        slices[0].DepthOffsetY.Should().BeApproximately(14, 0.0001);
+
+        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+            [pie],
+            slideIndex: 4,
+            scenarioId: "Pie 3D Depth Decisions");
+
+        readiness.ChartCount.Should().Be(1);
+        readiness.CaptureRequests.Should().HaveCount(3);
+        readiness.PowerPointRequestCount.Should().Be(1);
+        readiness.SharedHostRequestCount.Should().Be(2);
+        readiness.CaptureRequests
+            .Where(request => request.Host is ChartVisualBaselineCaptureHost.Wpf or ChartVisualBaselineCaptureHost.Avalonia)
+            .Should()
+            .OnlyContain(request => !request.RequiresPowerPointCom);
+
+        var wpf = readiness.CaptureRequests.Single(request =>
+            request.Host == ChartVisualBaselineCaptureHost.Wpf);
+        wpf.CaptureId.Should().Be("freep.pie-3d-depth-decisions.slide-5.chart-1.pie.wpf");
+        wpf.EvidenceSummary.Should()
+            .Contain("3-D pie compressed top face")
+            .And.Contain("1 series; 3 categories");
+
+        readiness.CaptureRequests.Single(request =>
+                request.Host == ChartVisualBaselineCaptureHost.PowerPoint)
+            .RequiresPowerPointCom
+            .Should()
+            .BeTrue();
+    }
+
     private static string FindCorpusDirectory()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -285,6 +326,20 @@ public sealed class ChartBaselineCorpusTests
         chart.Series[0].Values.AddRange([3, 2, 1]);
         chart.Series.Add(new ChartSeries { Name = "Outer" });
         chart.Series[1].Values.AddRange([1, 2, 3]);
+        return chart;
+    }
+
+    private static ChartShape BuildThreeDPieChart()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            ThreeDStyle = ChartThreeDStyle.Pie,
+            FirstSliceAngleDegrees = 45
+        };
+        chart.Categories.AddRange(["North", "East", "West"]);
+        chart.Series.Add(new ChartSeries { Name = "Share" });
+        chart.Series[0].Values.AddRange([2, 3, 5]);
         return chart;
     }
 }
