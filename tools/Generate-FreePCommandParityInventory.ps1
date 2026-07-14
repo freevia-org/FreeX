@@ -1469,6 +1469,22 @@ internal static class FreePCommandInventory
             RemainingWork: "basicMatrix and matrix1 now use the bounded shared matrix-family live-layout path for up to four parsed nodes as renderer-neutral quadrant rectangles. Unsupported matrix siblings and matrix diagrams with more than four parsed nodes remain on cached drawing fallback. PowerPoint-authoritative visual baselines and SmartArt authoring/editing remain deferred.")
         ,
         new(
+            EvidenceId: "freep.smartart.titled-matrix",
+            Area: "SmartArt titled matrix live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape ops emitted by the SmartArt matrix-family layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-titled-matrix-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "titledMatrix now uses the bounded shared matrix-family live-layout path for up to four parsed nodes as renderer-neutral quadrant rectangles. Unsupported matrix siblings and matrix diagrams with more than four parsed nodes remain on cached drawing fallback. PowerPoint-authoritative titled-matrix visual baselines, exact title-band geometry, richer variant styling, and SmartArt authoring/editing remain deferred.")
+        ,
+        new(
             EvidenceId: "freep.smartart.basic-venn",
             Area: "SmartArt basic Venn live layout",
             Status: "shared-render-planner-evidence",

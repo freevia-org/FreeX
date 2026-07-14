@@ -904,6 +904,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.text-cycle",
             "freep.smartart.block-cycle",
             "freep.smartart.basic-matrix",
+            "freep.smartart.titled-matrix",
             "freep.smartart.basic-venn",
             "freep.smartart.radial-venn",
             "freep.smartart.target-list",

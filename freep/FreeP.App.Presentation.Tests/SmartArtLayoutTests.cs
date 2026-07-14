@@ -1043,6 +1043,31 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void TitledMatrix_ReturnsLiveQuadrantBoxesWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Matrix, "Title", "North", "East", "South");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("titledMatrix is a bounded shared matrix-family layout");
+        shapes!.Should().HaveCount(4, "one shared quadrant shape should be emitted per titled matrix node");
+        shapes.Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Rectangle,
+            "the matrix-family planner emits quadrant boxes without connector ops");
+
+        var boxes = shapes.ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Title", "North", "East", "South");
+
+        boxes[1].OffsetXEmu.Should().BeGreaterThan(boxes[0].OffsetXEmu,
+            "the second quadrant should be to the right of the first");
+        boxes[2].OffsetYEmu.Should().BeGreaterThan(boxes[0].OffsetYEmu,
+            "the third quadrant should start the lower row");
+        boxes[3].OffsetXEmu.Should().BeGreaterThan(boxes[2].OffsetXEmu,
+            "the fourth quadrant should be to the right of the third");
+    }
+
+    [Fact]
     public void Matrix_MoreThanFourNodes_ReturnsNullForCachedFallback()
     {
         var data = MakeData(SmartArtFamily.Matrix, "A", "B", "C", "D", "E");
@@ -1300,7 +1325,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedMatrixSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Matrix, "A", "B", "C", "D");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -2893,6 +2918,61 @@ public sealed class SmartArtLayoutTests
             .Should().NotContain("Cached matrix fallback");
         shapeOps.Where(op => op.Text is null)
             .Should().BeEmpty("matrix SmartArt emits quadrant boxes only, with no connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_TitledMatrix_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Matrix, "Title", "North", "East", "South");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 23,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached titled matrix fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 75,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(4, "titledMatrix should render four shared live matrix ops");
+        shapeOps.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(["Title", "North", "East", "South"]);
+        shapeOps.Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().NotContain("Cached titled matrix fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().BeEmpty("matrix-family SmartArt emits quadrant boxes only, with no connector DrawOps");
     }
 
     [Fact]

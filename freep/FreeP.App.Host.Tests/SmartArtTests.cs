@@ -1668,6 +1668,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesTitledMatrixAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix",
+            nodes: [("id1", "Title"), ("id2", "North"), ("id3", "East"), ("id4", "South")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Matrix,
+            "titledMatrix is a matrix-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "titledMatrix is in the bounded shared matrix-family live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Title", "North", "East", "South");
+    }
+
+    [Fact]
     public void Reader_ParsesKnownListFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1809,7 +1828,7 @@ public sealed class SmartArtTests : IDisposable
     public void Reader_ParsesKnownMatrixFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/titledMatrix",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/gridMatrix",
             nodes: [("id1", "A"), ("id2", "B"), ("id3", "C"), ("id4", "D")],
             parOfConnections: []);
 
