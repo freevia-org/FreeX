@@ -1028,6 +1028,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing now preserves m:rPr/m:lit as literal run metadata and resolves the bounded no-style literal case to an upright renderer-neutral glyph plan consumed by WPF and Avalonia. PowerPoint-authoritative math visual baselines, full OfficeMath linear-build-up semantics, and exact Cambria Math typography remain deferred."),
         new(
+            EvidenceId: "freep.omml.math-alphabet-style",
+            Area: "OMML styled math alphabet glyphs",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.Run alphabet/style metadata and MathBoxRenderPlanner Unicode glyph ops with no renderer-local math alphabet policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-math-alphabet-style-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout now preserve m:rPr/m:scr alphabet metadata plus m:rPr/m:sty bold/italic requests, resolving supported styled alphabet combinations to renderer-neutral mathematical Unicode glyphs consumed by WPF and Avalonia. PowerPoint-authoritative math visual baselines, exact Cambria Math metrics, complete mathematical alphabet coverage, and broader OfficeMath typography remain deferred."),
+        new(
             EvidenceId: "freep.omml.nary-limit-location",
             Area: "OMML n-ary limit-location semantics",
             Status: "shared-layout-evidence",
