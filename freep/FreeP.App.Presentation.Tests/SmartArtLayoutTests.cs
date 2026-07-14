@@ -1288,7 +1288,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedHierarchySibling_ReturnsNull()
     {
         var data = MakeHierarchyData("Root", "Child");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -3012,6 +3012,64 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Compositor_LabeledHierarchy_UsesSharedLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeHierarchyData("Initiative", "Owner", "Outcome");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 22,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached labeled hierarchy fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 73,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(5, "labeledHierarchy uses the bounded shared hierarchy approximation: three live boxes plus two connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Initiative");
+        renderedText.Should().Contain("Owner");
+        renderedText.Should().Contain("Outcome");
+        renderedText.Should().NotContain("Cached labeled hierarchy fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume the same shared connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_OrgChart_UsesLiveLayoutOverCachedDrawing()
     {
         var data = MakeHierarchyData("CEO", "Sales", "Engineering");
@@ -3240,7 +3298,7 @@ public sealed class SmartArtLayoutTests
     public void Compositor_FallsBackToCachedDrawing_WhenHierarchyFamilyLayoutIsUnsupported()
     {
         var data = MakeHierarchyData("Root", "Child");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy";
         data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };

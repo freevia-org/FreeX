@@ -910,6 +910,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.vertical-bullet-list",
             "freep.smartart.basic-hierarchy",
             "freep.smartart.horizontal-hierarchy",
+            "freep.smartart.labeled-hierarchy",
             "freep.smartart.org-chart",
             "freep.smartart.outline-editing",
             "freep.smartart.data-part-authoring",

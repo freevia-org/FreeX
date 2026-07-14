@@ -1564,6 +1564,23 @@ internal static class FreePCommandInventory
             RemainingWork: "horizontalHierarchy now uses a bounded shared hierarchy-family live-layout path with root/parent nodes on the left, child/report nodes in right-hand depth columns, and shared connector ops, while unsupported hierarchy siblings remain on cached drawing fallback. Exact PowerPoint geometry/effects, authoring regeneration for layout/style/color parts, and authoritative PNG baselines remain deferred.")
         ,
         new(
+            EvidenceId: "freep.smartart.labeled-hierarchy",
+            Area: "SmartArt labeled hierarchy live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt hierarchy-family layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-labeled-hierarchy-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "labeledHierarchy now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes and shared connector ops, while other unsupported hierarchy siblings remain on cached drawing fallback. This is a shared hierarchy approximation, not true PowerPoint label geometry; exact label placement/effects, authoring regeneration for layout/style/color parts, and authoritative PNG baselines remain deferred.")
+        ,
+        new(
             EvidenceId: "freep.smartart.org-chart",
             Area: "SmartArt orgChart live layout",
             Status: "shared-render-planner-evidence",
