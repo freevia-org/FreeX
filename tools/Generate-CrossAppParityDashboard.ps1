@@ -231,7 +231,7 @@ try {
             actionableGaps = [int]$freew.summary.actionableGaps
             classifiedRows = $true
         }
-        nextSlice = "Backstage print/export now has strict paired WPF/Avalonia renderer contracts plus a July 13 no-Word real-capture smoke run for print-preview and PDF-export fidelity. Next FreeW evidence slices are the same run with real Word PNG baselines on a Word-capable host, cleanup of unrelated all-up visual runner drift, and broader visual proof beyond Backstage print/export."
+        nextSlice = "Backstage print/export and WordArt/watermark visual proof now have strict paired WPF/Avalonia renderer contracts plus no-Word real-capture smoke runs. Next FreeW evidence slices are the same runs with real Word PNG baselines on a Word-capable host, cleanup of unrelated all-up visual runner drift, and broader visual proof for drawing/object/chart/table surfaces."
     }
 
     $freeP = [ordered]@{
