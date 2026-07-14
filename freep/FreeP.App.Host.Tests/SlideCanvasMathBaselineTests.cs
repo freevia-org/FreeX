@@ -133,6 +133,51 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_MatrixPlaceholder_UsesSharedPlcHidePlan_DoesNotThrow()
+    {
+        var visibleNode = ParseOmml(
+            "<m:m>" +
+            "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e><m:e/></m:mr>" +
+            "</m:m>");
+        var hiddenNode = ParseOmml(
+            "<m:m>" +
+            "<m:mPr><m:plcHide/></m:mPr>" +
+            "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e><m:e/></m:mr>" +
+            "</m:m>");
+        var visibleBox = MathLayoutEngine.Layout(visibleNode, "Cambria Math", 18.0);
+        var hiddenBox = MathLayoutEngine.Layout(hiddenNode, "Cambria Math", 18.0);
+
+        MathBoxRenderPlanner.Plan(visibleBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should().Equal(new[] { "a", "\u25A1" },
+                "visible empty matrix cells must be resolved in the shared MathBox plan before WPF draws them");
+        MathBoxRenderPlanner.Plan(hiddenBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should().Equal(new[] { "a" },
+                "m:plcHide must suppress placeholders in shared math layout, not in WPF renderer code");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "M = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = visibleBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_EqArrayAlignment_UsesSharedMathBoxPlan_DoesNotThrow()
     {
         var mathNode = new MathNode.EqArray(

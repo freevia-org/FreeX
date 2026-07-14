@@ -998,6 +998,42 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Matrix_EmptyAuthoredCell_DefaultsToSharedPlaceholderGlyph()
+    {
+        var node = ParseOmml(
+            "<m:m>" +
+            "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e><m:e/></m:mr>" +
+            "</m:m>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var glyphs = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "a", "\u25A1" },
+            "an authored empty matrix cell should become a shared placeholder glyph before WPF or Avalonia draws it");
+        glyphs[1].X.Should().BeGreaterThan(glyphs[0].X,
+            "the placeholder must occupy its own matrix column in the renderer-neutral plan");
+    }
+
+    [Fact]
+    public void Matrix_WithPlcHide_SuppressesSharedPlaceholderGlyph()
+    {
+        var node = ParseOmml(
+            "<m:m>" +
+            "<m:mPr><m:plcHide/></m:mPr>" +
+            "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e><m:e/></m:mr>" +
+            "</m:m>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should().Equal(new[] { "a" },
+                "m:mPr/m:plcHide must remove empty-cell placeholders in the shared plan before either renderer consumes it");
+    }
+
+    [Fact]
     public void Matrix_AppliesPerColumnAlignmentWithinColumnWidths()
     {
         var matrix = new MathNode.Matrix(

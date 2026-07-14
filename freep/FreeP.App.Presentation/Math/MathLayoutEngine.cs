@@ -20,6 +20,8 @@ namespace FreeP.App.Compositor.MathLayout;
 
 public static class MathLayoutEngine
 {
+    private const string MatrixPlaceholderGlyph = "\u25A1";
+
     // ── Public entry ──────────────────────────────────────────────────────
 
     private static string ApplyMathAlphabet(string text, MathNode.MathAlphabet alphabet, bool isItalic, bool isBold)
@@ -1367,7 +1369,7 @@ public static class MathLayoutEngine
         {
             cells[r] = new MathBox[colCount];
             for (int c = 0; c < colCount && c < matrix.Rows[r].Count; c++)
-                cells[r][c] = LayoutNode(matrix.Rows[r][c], fontFamily, fontSizePt);
+                cells[r][c] = LayoutMatrixCell(matrix.Rows[r][c], matrix.HidePlaceholders, fontFamily, fontSizePt);
         }
 
         // Per-column width
@@ -1532,6 +1534,27 @@ public static class MathLayoutEngine
 
     private static double TwipsToDip(int? twips) =>
         twips.HasValue ? PointsToDip(twips.Value) / 20.0 : 0;
+
+    private static MathBox LayoutMatrixCell(
+        MathNode cell,
+        bool hidePlaceholders,
+        string fontFamily,
+        double fontSizePt)
+    {
+        if (!hidePlaceholders && IsEmptyMatrixCell(cell))
+            return MakeGlyph(MatrixPlaceholderGlyph, fontFamily, fontSizePt * 0.85, isItalic: false);
+
+        return LayoutNode(cell, fontFamily, fontSizePt);
+    }
+
+    private static bool IsEmptyMatrixCell(MathNode cell) =>
+        cell switch
+        {
+            MathNode.Row row => row.Children.Count == 0,
+            MathNode.Unknown unknown => string.IsNullOrEmpty(unknown.FallbackText),
+            MathNode.Run run => string.IsNullOrEmpty(run.Text),
+            _ => false
+        };
 
     private static MathNode.Matrix.MatrixColumnAlignment GetMatrixColumnAlignment(MathNode.Matrix matrix, int column) =>
         column >= 0 && column < matrix.ColumnAlignments.Count

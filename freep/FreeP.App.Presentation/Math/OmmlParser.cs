@@ -547,7 +547,8 @@ public static class OmmlParser
             ParseMatrixIntValue(mPr, "rSp"),
             ParseMatrixSpacingRule(mPr, "cGpRule"),
             ParseMatrixIntValue(mPr, "cGp"),
-            ParseMatrixIntValue(mPr, "cSp"));
+            ParseMatrixIntValue(mPr, "cSp"),
+            hidePlaceholders: IsOnOffOn(mPr?.Element(M + "plcHide")));
     }
 
     private static IReadOnlyList<MathNode.Matrix.MatrixColumnAlignment> ParseMatrixColumnAlignments(XElement? mPr)

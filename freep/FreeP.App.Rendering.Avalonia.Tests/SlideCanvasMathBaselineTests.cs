@@ -150,6 +150,56 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_MatrixPlaceholder_UsesSharedPlcHidePlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var visibleNode = ParseOmml(
+                    "<m:m>" +
+                    "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e><m:e/></m:mr>" +
+                    "</m:m>");
+                var hiddenNode = ParseOmml(
+                    "<m:m>" +
+                    "<m:mPr><m:plcHide/></m:mPr>" +
+                    "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e><m:e/></m:mr>" +
+                    "</m:m>");
+                var visibleBox = MathLayoutEngine.Layout(visibleNode, "Cambria Math", 18.0);
+                var hiddenBox = MathLayoutEngine.Layout(hiddenNode, "Cambria Math", 18.0);
+
+                MathBoxRenderPlanner.Plan(visibleBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Select(g => g.Text)
+                    .Should().Equal(new[] { "a", "\u25A1" },
+                        "visible empty matrix cells must be resolved in the shared MathBox plan before Avalonia draws them");
+                MathBoxRenderPlanner.Plan(hiddenBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Select(g => g.Text)
+                    .Should().Equal(new[] { "a" },
+                        "m:plcHide must suppress placeholders in shared math layout, not in Avalonia renderer code");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "M = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = visibleBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(240, 120));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render matrix placeholders from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_EqArrayAlignment_UsesSharedMathBoxPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

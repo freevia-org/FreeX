@@ -757,6 +757,35 @@ public sealed class OmmlParserTests
         Assert.Null(matrix.ColumnGapRule);
         Assert.Null(matrix.ColumnGap);
         Assert.Null(matrix.ColumnSpacingTwips);
+        Assert.False(matrix.HidePlaceholders);
+    }
+
+    [Fact]
+    public void Parse_MatrixPlcHide_PreservesHiddenPlaceholderFlag()
+    {
+        var node = Parse(
+            "<m:m>" +
+            "<m:mPr><m:plcHide/></m:mPr>" +
+            "<m:mr><m:e/></m:mr>" +
+            "</m:m>");
+
+        var matrix = Assert.IsType<MathNode.Matrix>(node);
+        Assert.True(matrix.HidePlaceholders);
+        Assert.Single(matrix.Rows);
+        Assert.Single(matrix.Rows[0]);
+        Assert.Empty(Assert.IsType<MathNode.Row>(matrix.Rows[0][0]).Children);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("off")]
+    [InlineData("false")]
+    public void Parse_MatrixPlcHideExplicitlyOff_ShowsPlaceholders(string val)
+    {
+        var node = Parse(
+            $"<m:m><m:mPr><m:plcHide m:val=\"{val}\"/></m:mPr><m:mr><m:e/></m:mr></m:m>");
+
+        Assert.False(Assert.IsType<MathNode.Matrix>(node).HidePlaceholders);
     }
 
     [Fact]

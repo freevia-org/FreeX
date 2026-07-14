@@ -458,6 +458,9 @@ public abstract class MathNode
         /// <summary>Optional minimum column width from m:mPr/m:cSp, in twips.</summary>
         public int? ColumnSpacingTwips { get; }
 
+        /// <summary>True when m:mPr/m:plcHide hides visible placeholders for empty matrix cells.</summary>
+        public bool HidePlaceholders { get; }
+
         public Matrix(
             IReadOnlyList<IReadOnlyList<MathNode>> rows,
             IReadOnlyList<MatrixColumnAlignment>? columnAlignments = null,
@@ -466,7 +469,8 @@ public abstract class MathNode
             int? rowSpacing = null,
             MatrixSpacingRule? columnGapRule = null,
             int? columnGap = null,
-            int? columnSpacingTwips = null)
+            int? columnSpacingTwips = null,
+            bool hidePlaceholders = false)
         {
             Rows = rows;
             ColumnAlignments = columnAlignments ?? System.Array.Empty<MatrixColumnAlignment>();
@@ -476,6 +480,7 @@ public abstract class MathNode
             ColumnGapRule = columnGapRule;
             ColumnGap = columnGap;
             ColumnSpacingTwips = columnSpacingTwips;
+            HidePlaceholders = hidePlaceholders;
         }
     }
 

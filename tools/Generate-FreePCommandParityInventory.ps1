@@ -575,6 +575,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing and layout now preserve m:sPre base, pre-subscript, and pre-superscript children, place the reduced script stack to the left of the base, and carry parsed draw-plan coordinates to both hosts. PowerPoint-authoritative math visual baselines and exact OfficeMath script metrics remain deferred."),
         new(
+            EvidenceId: "freep.omml.matrix-placeholder",
+            Area: "OMML matrix empty-cell placeholder handling",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.Matrix HidePlaceholders state and MathBoxRenderPlanner glyph ops with no renderer-local matrix placeholder policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-matrix-placeholder-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout now preserve m:mPr/m:plcHide, emit renderer-neutral placeholders for authored empty matrix cells by default, and suppress those placeholders when plcHide is set. PowerPoint-authoritative math visual baselines, exact OfficeMath placeholder chrome, full spacing-table typography, additional equation constructs, and remaining alignment semantics remain deferred."),
+        new(
             EvidenceId: "freep.smartart.continuous-block-process",
             Area: "SmartArt continuous block process live layout",
             Status: "shared-render-planner-evidence",
