@@ -855,6 +855,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.chart.powerpoint-baseline-readiness",
             "freep.chart.doughnut-ring-baseline-readiness",
             "freep.omml.transparent-phantom-spacing",
+            "freep.omml.manual-break-alignment",
             "freep.omml.box-alignment-points",
             "freep.omml.delimiter-shape",
             "freep.omml.groupchr-vertical-justification",

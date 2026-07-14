@@ -599,6 +599,25 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared row layout now consumes m:phantPr/m:transp for bounded single-token binary, relation, large-operator, and punctuation spacing classes while ambiguous multi-character and structured phantom bases stay packed. PowerPoint-authoritative visual baselines and full OfficeMath spacing-table typography remain deferred."),
         new(
+            EvidenceId: "freep.omml.manual-break-alignment",
+            Area: "OMML manual line-break alignment",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.EqArray rows created from m:brk and m:alnAt draw coordinates with no renderer-local line-break policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-manual-breaks-2026-07-06.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing maps direct m:brk plus run and box break properties into equation-array rows, preserves m:alnAt alignment indices, and now proves the aligned draw coordinates through paired WPF/Avalonia host smoke tests. PowerPoint-authoritative math visual baselines, richer break-distribution heuristics, and full OfficeMath paragraph alignment remain deferred."),
+        new(
             EvidenceId: "freep.omml.box-alignment-points",
             Area: "OMML boxed equation-array alignment points",
             Status: "shared-layout-evidence",
