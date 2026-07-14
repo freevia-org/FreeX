@@ -3033,14 +3033,16 @@ public static class DocxReader
                 }
             }
 
-            // Color temperature extension attribute.
-            var tempAttr = blip.Attribute(FreeWExt + "colorTemp");
-            if (tempAttr is not null && long.TryParse(tempAttr.Value, out var tempVal))
+            // FreeW private image extensions. Older packages used direct freew:* attributes on a:blip;
+            // current packages use a:extLst so Word's schema validator accepts the document.
+            var tempRaw = blip.Attribute(FreeWExt + "colorTemp")?.Value
+                ?? ReadFreeWBlipExtensionValue(blip, "colorTemp");
+            if (tempRaw is not null && long.TryParse(tempRaw, out var tempVal))
                 image.ColorTemperature = tempVal / 1000.0;
 
-            // Artistic effect extension attribute: freew:artisticEffect = integer enum id.
-            var artisticAttr = blip.Attribute(FreeWExt + "artisticEffect");
-            if (artisticAttr is not null && int.TryParse(artisticAttr.Value, out var artisticId)
+            var artisticRaw = blip.Attribute(FreeWExt + "artisticEffect")?.Value
+                ?? ReadFreeWBlipExtensionValue(blip, "artisticEffect");
+            if (artisticRaw is not null && int.TryParse(artisticRaw, out var artisticId)
                 && Enum.IsDefined(typeof(ImageArtisticEffect), artisticId))
                 image.ArtisticEffect = (ImageArtisticEffect)artisticId;
 
@@ -3142,6 +3144,17 @@ public static class DocxReader
         }
     }
 
+    private static string? ReadFreeWBlipExtensionValue(XElement blip, string localName)
+    {
+        XNamespace freeWExt = "http://schemas.freew.app/2024/ext";
+        return blip.Element(A + "extLst")
+            ?.Elements(A + "ext")
+            .Elements(freeWExt + localName)
+            .FirstOrDefault()
+            ?.Attribute("val")
+            ?.Value;
+    }
+
     /// <summary>Maps a wp:anchor's wrap element back to an <see cref="ImageWrapping"/> mode.</summary>
     private static ImageWrapping ReadWrapping(XElement anchor)
     {
@@ -3194,16 +3207,24 @@ public static class DocxReader
         if (txbxContent is null)
             return null;
 
-        // The WordArt run's properties: the first w:r/w:rPr inside the text box. WordArt is identified by a
-        // DrawingML text effect sitting directly under that w:rPr.
+        // Older FreeW-authored packages used illegal DrawingML effect children under the text run's w:rPr.
+        // Current packages put those effects on wps:spPr, which is where Word's schema allows them.
         var rPr = txbxContent.Descendants(W + "r").FirstOrDefault()?.Element(W + "rPr");
-        if (rPr is null || InferWordArtStyle(rPr) is not { } style)
+        var docPrName = container!.Element(Wp + "docPr")?.Attribute("name")?.Value
+            ?? wsp!.Element(Wps + "cNvPr")?.Attribute("name")?.Value
+            ?? string.Empty;
+        var hasWordArtMarker = docPrName.StartsWith("WordArt", StringComparison.Ordinal)
+            || docPrName.StartsWith("GroupChild:WordArt:", StringComparison.Ordinal);
+        var style = rPr is null ? null : InferWordArtStyle(rPr);
+        if (style is null && hasWordArtMarker && wsp!.Element(Wps + "spPr") is { } spPr)
+            style = InferWordArtStyle(spPr);
+        if (rPr is null || style is null)
             return null;
 
         var text = string.Concat(txbxContent.Descendants(W + "t").Select(t => t.Value));
         var fontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value) ?? 36;
 
-        var wordArt = new WordArt(text, style, fontSizePt);
+        var wordArt = new WordArt(text, style.Value, fontSizePt);
 
         // Alt text: wp:docPr/@descr on the inline or anchor drawing.
         var waDocPrDescr = container!.Element(Wp + "docPr")?.Attribute("descr")?.Value;
@@ -3730,7 +3751,7 @@ public static class DocxReader
         // c:style — chart style id (persisted by BuildChartSpace; default 0 = unset).
         // chartXml is non-null here because chartElement (derived from chartXml.Root) passed the null guard above.
         var chartSpace = chartXml!.Root!;
-        if (int.TryParse(chartSpace.Element(C + "style")?.Attribute(C + "val")?.Value, out var styleId) && styleId > 0)
+        if (int.TryParse(chartSpace.Element(C + "style")?.Attribute("val")?.Value, out var styleId) && styleId > 0)
             chart.StyleId = styleId;
 
         // freew:ext — FreeW extension: color scheme id and quick layout id (written as c:extLst / c:ext).
@@ -3893,7 +3914,7 @@ public static class DocxReader
     {
         if (plotArea.Element(C + "barChart") is { } bar)
         {
-            var dir = bar.Element(C + "barDir")?.Attribute(C + "val")?.Value;
+            var dir = bar.Element(C + "barDir")?.Attribute("val")?.Value;
             return (bar, dir == "bar" ? ChartKind.Bar : ChartKind.Column);
         }
         if (plotArea.Element(C + "lineChart") is { } line)
@@ -3921,7 +3942,7 @@ public static class DocxReader
         string? value = null;
         foreach (var axis in plotArea.Elements().Where(e => e.Name == C + "catAx" || e.Name == C + "valAx"))
         {
-            var position = axis.Element(C + "axPos")?.Attribute(C + "val")?.Value;
+            var position = axis.Element(C + "axPos")?.Attribute("val")?.Value;
             var title = string.Concat(axis.Element(C + "title")?.Descendants(A + "t").Select(t => t.Value) ?? []);
             if (title.Length == 0)
                 continue;
@@ -4146,7 +4167,7 @@ public static class DocxReader
             return [];
         return cache.Elements(C + "pt")
             .Select(pt => (
-                Idx: int.TryParse(pt.Attribute(C + "idx")?.Value, out var idx) ? idx : 0,
+                Idx: int.TryParse(pt.Attribute("idx")?.Value, out var idx) ? idx : 0,
                 Value: pt.Element(C + "v")?.Value ?? string.Empty))
             .OrderBy(p => p.Idx);
     }
@@ -4988,7 +5009,7 @@ public static class DocxReader
         // Reconstruct children from wps:wsp elements inside wpg:wgp.
         foreach (var wsp in wgp.Elements(Wps + "wsp"))
         {
-            var childDocPr = wsp.Element(Wp + "docPr");
+            var childDocPr = wsp.Element(Wps + "cNvPr") ?? wsp.Element(Wp + "docPr");
             var name = childDocPr?.Attribute("name")?.Value ?? string.Empty;
 
             // Reconstruct offset from a:xfrm inside the child's wps:spPr.
@@ -5060,7 +5081,8 @@ public static class DocxReader
                     new XElement(Wp + "extent",
                         new XAttribute("cx", PointsToEmu(widthPt)),
                         new XAttribute("cy", PointsToEmu(heightPt))),
-                    childDocPr is null ? null : new XElement(childDocPr),
+                    childDocPr is null ? null : new XElement(Wp + "docPr",
+                        childDocPr.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration)),
                     new XElement(A + "graphic",
                         new XElement(A + "graphicData",
                             new XAttribute("uri", Wps.NamespaceName),

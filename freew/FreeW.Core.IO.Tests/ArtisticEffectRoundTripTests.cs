@@ -6,7 +6,7 @@ namespace FreeW.Core.IO.Tests;
 
 /// <summary>
 /// Round-trip tests for <see cref="ImageArtisticEffect"/>:
-/// - The freew:artisticEffect extension attribute on a:blip is written by DocxWriter and read back by DocxReader.
+/// - The freew:artisticEffect extension payload on a:blip is written by DocxWriter and read back by DocxReader.
 /// - Original bytes are never modified (non-destructive).
 /// - Every distinct effect value round-trips and is distinguishable from None.
 /// </summary>
@@ -67,8 +67,8 @@ public class ArtisticEffectRoundTripTests
         var image = new InlineImage(MinimalPng(), 100, 80) { ArtisticEffect = ImageArtisticEffect.None };
         var blip = ReadBlip(image);
         blip.Should().NotBeNull();
-        blip!.Attribute(FreeWExt + "artisticEffect").Should().BeNull(
-            "None effect must not emit the freew:artisticEffect attribute");
+        blip!.Descendants(FreeWExt + "artisticEffect").Should().BeEmpty(
+            "None effect must not emit the freew:artisticEffect extension");
     }
 
     [Fact]
@@ -124,9 +124,9 @@ public class ArtisticEffectRoundTripTests
         var image = new InlineImage(MinimalPng(), 100, 80) { ArtisticEffect = effect };
         var blip = ReadBlip(image);
         blip.Should().NotBeNull();
-        var attr = blip!.Attribute(FreeWExt + "artisticEffect");
-        attr.Should().NotBeNull("freew:artisticEffect attribute must be present for non-None effects");
-        attr!.Value.Should().Be(((int)effect).ToString());
+        var extension = blip!.Descendants(FreeWExt + "artisticEffect").SingleOrDefault();
+        extension.Should().NotBeNull("freew:artisticEffect extension must be present for non-None effects");
+        extension!.Attribute("val")!.Value.Should().Be(((int)effect).ToString());
     }
 
     // ── HasArtisticEffect property ─────────────────────────────────────────────

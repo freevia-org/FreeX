@@ -180,7 +180,7 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
-    public void Diagram_RenderedDrawingPart_ContentTypeAndDataRelAndDataModelExt_ArePresent()
+    public void Diagram_RenderedDrawingPart_ContentTypeAndDataRel_ArePresent()
     {
         // F2: a fifth part (word/diagrams/drawing1.xml — dsp:drawing) carries pre-laid-out shapes, referenced
         // from the data part via a diagramDrawing relationship + a dgm:dataModelExt inside the data model.
@@ -202,11 +202,9 @@ public class SmartArtRoundTripTests
             .Single(r => r.Attribute("Type")!.Value == DrawingRelType);
         drawingRel.Attribute("Target")!.Value.Should().Be("drawing1.xml");
 
-        // The data part carries a dgm:dataModelExt whose relId matches that relationship.
+        // The data part remains schema-valid and no longer carries the old dgm:dataModelExt marker.
         var dataXml = EntryXml(docx, "word/diagrams/data1.xml");
-        var ext = dataXml.Descendants(Dgm + "dataModelExt").Single();
-        ext.Attribute("relId")!.Value.Should().Be(drawingRel.Attribute("Id")!.Value);
-        ext.Attribute("minVer").Should().NotBeNull();
+        dataXml.Descendants(Dgm + "dataModelExt").Should().BeEmpty();
     }
 
     [Fact]
@@ -405,19 +403,16 @@ public class SmartArtRoundTripTests
 
         var bytes = WriteBytes(SingleDiagramDocument(smartArt));
 
-        // Layout part: uniqueId ends with layout id; freewLayoutId attribute is set.
+        // Gallery ids are persisted in schema-valid uniqueId suffixes.
         var layoutXml = EntryXml(bytes, "word/diagrams/layout1.xml");
         var layoutRoot = layoutXml.Root!;
         layoutRoot.Attribute("uniqueId")!.Value.Should().EndWith("radial1");
-        layoutRoot.Attribute("freewLayoutId")!.Value.Should().Be("radial1");
 
-        // Colors part: freewColorId is set.
         var colorsXml = EntryXml(bytes, "word/diagrams/colors1.xml");
-        colorsXml.Root!.Attribute("freewColorId")!.Value.Should().Be("mono1");
+        colorsXml.Root!.Attribute("uniqueId")!.Value.Should().EndWith("mono1");
 
-        // QuickStyle part: freewStyleId is set.
         var qsXml = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
-        qsXml.Root!.Attribute("freewStyleId")!.Value.Should().Be("flat1");
+        qsXml.Root!.Attribute("uniqueId")!.Value.Should().EndWith("flat1");
     }
 
     [Fact]

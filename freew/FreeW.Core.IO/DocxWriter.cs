@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.IO.Compression;
 using System.Xml.Linq;
 using Free.Shared.Opc;
@@ -3021,14 +3021,12 @@ public static class DocxWriter
                 break;
         }
 
-        // Color temperature extension attribute (only when non-zero and not washed out by recolor mode).
-        if (image.ColorTemperature != 0 && image.RecolorMode == ImageRecolorMode.None)
-            blip.Add(new XAttribute(FreeWExt + "colorTemp", (long)Math.Round(image.ColorTemperature * 1000)));
-
-        // Artistic effect extension attribute: freew:artisticEffect = integer enum id.
-        // Emitted as a FreeW extension so it round-trips losslessly. When the effect is None it is omitted.
-        if (image.ArtisticEffect != ImageArtisticEffect.None)
-            blip.Add(new XAttribute(FreeWExt + "artisticEffect", (int)image.ArtisticEffect));
+        var colorTemperature = image.ColorTemperature != 0 && image.RecolorMode == ImageRecolorMode.None
+            ? (long?)Math.Round(image.ColorTemperature * 1000)
+            : null;
+        var artisticEffect = image.ArtisticEffect != ImageArtisticEffect.None
+            ? (int?)image.ArtisticEffect
+            : null;
 
         // Standard blip adjustments — omitted when Washout/BlackWhite recolor has already emitted lum.
         if (image.RecolorMode is not (ImageRecolorMode.Washout or ImageRecolorMode.BlackWhite))
@@ -3052,6 +3050,7 @@ public static class DocxWriter
             blip.Add(new XElement(A + "alphaModFix",
                 new XAttribute("amt", opacityPermille)));
         }
+        AddFreeWBlipExtensions(blip, colorTemperature, artisticEffect);
         var blipFill = new XElement(Pic + "blipFill",
             blip,
             new XElement(A + "stretch", new XElement(A + "fillRect")));
@@ -3176,6 +3175,7 @@ public static class DocxWriter
                         new XElement(A + "alpha", new XAttribute("val", 40000)))));
             }
 
+            SortEffectList(effectLst);
             spPr.Add(effectLst);
         }
 
@@ -3190,6 +3190,21 @@ public static class DocxWriter
                         new XElement(Pic + "cNvPicPr")),
                     blipFill,
                     spPr)));
+    }
+
+    private static void AddFreeWBlipExtensions(XElement blip, long? colorTemperature, int? artisticEffect)
+    {
+        if (colorTemperature is null && artisticEffect is null)
+            return;
+
+        var ext = new XElement(A + "ext",
+            new XAttribute("uri", "{FREEW-BLIP-EXT-2024}"));
+        XNamespace freeWExt = "http://schemas.freew.app/2024/ext";
+        if (colorTemperature is { } temp)
+            ext.Add(new XElement(freeWExt + "colorTemp", new XAttribute("val", temp)));
+        if (artisticEffect is { } effect)
+            ext.Add(new XElement(freeWExt + "artisticEffect", new XAttribute("val", effect)));
+        blip.Add(new XElement(A + "extLst", ext));
     }
 
     /// <summary>The DrawingML preset-geometry token (a:prstGeom/@prst) for a shape kind.</summary>
@@ -3400,21 +3415,10 @@ public static class DocxWriter
     {
         var effectLst = new XElement(A + "effectLst");
 
-        if (fx.HasReflection)
-            effectLst.Add(new XElement(A + "reflection",
-                new XAttribute("blurRad", fx.ReflectionBlurRad),
-                new XAttribute("alpha", fx.ReflectionAlpha),
-                new XAttribute("dir", fx.ReflectionDir),
-                new XAttribute("dist", fx.ReflectionDist),
-                new XAttribute("rotWithShape", 0)));
-
         if (fx.HasGlow)
             effectLst.Add(new XElement(A + "glow", new XAttribute("rad", fx.GlowRad),
                 new XElement(A + "srgbClr", new XAttribute("val", fx.GlowColorHex.TrimStart('#')),
                     new XElement(A + "alpha", new XAttribute("val", fx.GlowAlpha)))));
-
-        if (fx.HasSoftEdge)
-            effectLst.Add(new XElement(A + "softEdge", new XAttribute("rad", fx.SoftEdgeRad)));
 
         if (fx.HasShadow)
             effectLst.Add(new XElement(A + "outerShdw",
@@ -3424,8 +3428,22 @@ public static class DocxWriter
                 new XElement(A + "srgbClr", new XAttribute("val", fx.ShadowColorHex.TrimStart('#')),
                     new XElement(A + "alpha", new XAttribute("val", fx.ShadowAlpha)))));
 
+        if (fx.HasReflection)
+            effectLst.Add(new XElement(A + "reflection",
+                new XAttribute("blurRad", fx.ReflectionBlurRad),
+                new XAttribute("alpha", fx.ReflectionAlpha),
+                new XAttribute("dir", fx.ReflectionDir),
+                new XAttribute("dist", fx.ReflectionDist),
+                new XAttribute("rotWithShape", 0)));
+
+        if (fx.HasSoftEdge)
+            effectLst.Add(new XElement(A + "softEdge", new XAttribute("rad", fx.SoftEdgeRad)));
+
         if (effectLst.HasElements)
+        {
+            SortEffectList(effectLst);
             yield return effectLst;
+        }
 
         if (fx.HasBevel)
             yield return new XElement(A + "sp3d",
@@ -3471,6 +3489,8 @@ public static class DocxWriter
                 new XElement(A + "ext", new XAttribute("cx", cx), new XAttribute("cy", cy))),
             new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
                 new XElement(A + "avLst")));
+        foreach (var effect in WordArtShapeProperties(wordArt.Style))
+            spPr.Add(effect);
 
         // wps:bodyPr: required; carries the optional a:prstTxWarp warp preset (W24).
         var wordArtBodyPr = new XElement(Wps + "bodyPr");
@@ -3517,17 +3537,14 @@ public static class DocxWriter
     /// Builds the single w:p inside a WordArt text box
     /// <summary>
     /// Builds the single w:p inside a WordArt text box: a w:r whose w:rPr carries the font size (w:sz, in
-    /// half-points) plus the DrawingML text effects (a:solidFill/a:gradFill/a:ln/a:effectLst) selected by the
-    /// style preset, followed by the w:t text. The DrawingML effect elements sit directly under w:rPr exactly
-    /// as Word emits WordArt text properties.
+    /// half-points), followed by the w:t text. The visual WordArt effects live on the surrounding wps:spPr;
+    /// w:rPr cannot legally contain DrawingML fill/line/effect children in a DOCX Word can open.
     /// </summary>
     private static XElement BuildWordArtParagraph(WordArt wordArt)
     {
         var rPr = new XElement(W + "rPr",
             new XElement(W + "sz", new XAttribute(W + "val", PointsToHalfPoints(wordArt.FontSizePt))),
             new XElement(W + "szCs", new XAttribute(W + "val", PointsToHalfPoints(wordArt.FontSizePt))));
-        foreach (var effect in WordArtEffects(wordArt.Style))
-            rPr.Add(effect);
 
         var run = new XElement(W + "r",
             rPr,
@@ -3692,6 +3709,45 @@ public static class DocxWriter
                 yield return SolidFill(WordArtFillColor);
                 break;
         }
+    }
+
+    private static IEnumerable<XElement> WordArtShapeProperties(WordArtStyle style)
+    {
+        foreach (var effect in WordArtEffects(style))
+        {
+            if (effect.Name == A + "latin")
+                continue;
+            if (effect.Name == A + "effectLst")
+            {
+                if (!effect.HasElements)
+                    continue;
+                SortEffectList(effect);
+            }
+            yield return effect;
+        }
+    }
+
+    private static void SortEffectList(XElement effectLst)
+    {
+        var ordered = effectLst.Elements()
+            .OrderBy(EffectListOrder)
+            .Select(element => new XElement(element))
+            .ToList();
+        effectLst.RemoveNodes();
+        effectLst.Add(ordered);
+    }
+
+    private static int EffectListOrder(XElement element)
+    {
+        if (element.Name == A + "blur") return 0;
+        if (element.Name == A + "fillOverlay") return 1;
+        if (element.Name == A + "glow") return 2;
+        if (element.Name == A + "innerShdw") return 3;
+        if (element.Name == A + "outerShdw") return 4;
+        if (element.Name == A + "prstShdw") return 5;
+        if (element.Name == A + "reflection") return 6;
+        if (element.Name == A + "softEdge") return 7;
+        return 100;
     }
 
     private static XElement OuterShadow(string colorHex, int blurRad, int dist, int dir, int alpha) =>
@@ -3965,6 +4021,10 @@ public static class DocxWriter
         var wgp = new XElement(Wpg + "wgp",
             new XAttribute(XNamespace.Xmlns + "wpg", Wpg.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "wps", Wps.NamespaceName),
+            new XElement(Wpg + "cNvPr",
+                new XAttribute("id", groupDocPrId),
+                new XAttribute("name", "Group " + groupDocPrId)),
+            new XElement(Wpg + "cNvGrpSpPr"),
             grpSpPr);
         foreach (var child in children) wgp.Add(child);
 
@@ -4004,6 +4064,7 @@ public static class DocxWriter
     {
         var wsp = new XElement(drawing.Descendants(Wps + "wsp").First());
         var childDocPr = new XElement(drawing.Descendants(Wp + "docPr").First());
+        childDocPr.Name = Wps + "cNvPr";
         childDocPr.SetAttributeValue("name", childName);
 
         ReplaceChildTransform(wsp, xfrm);
@@ -4024,11 +4085,13 @@ public static class DocxWriter
 
         return new XElement(Wps + "wsp",
             new XAttribute(XNamespace.Xmlns + "wps", Wps.NamespaceName),
-            childDocPr,
+            new XElement(Wps + "cNvPr",
+                childDocPr.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration)),
             new XElement(Wps + "cNvSpPr",
                 new XElement(A + "spLocks",
                     new XAttribute("noChangeArrowheads", 1))),
-            spPr);
+            spPr,
+            new XElement(Wps + "bodyPr"));
     }
 
     private static void ReplaceChildTransform(XElement wsp, XElement xfrm)
@@ -4057,7 +4120,7 @@ public static class DocxWriter
     /// </summary>
     private static XDocument BuildDiagramData(SmartArt smartArt, string drawingRelId)
     {
-        const string docId = "doc0";
+        var docId = SmartArtModelId(0);
         var ptLst = new XElement(Dgm + "ptLst",
             new XElement(Dgm + "pt",
                 new XAttribute("modelId", docId),
@@ -4069,7 +4132,7 @@ public static class DocxWriter
         // Pre-order walk: emit a node point + a parOf connection from its parent, then recurse children.
         void Emit(SmartArtNode node, string parentId)
         {
-            var id = $"node{nextId++}";
+            var id = SmartArtModelId(++nextId);
             ptLst.Add(new XElement(Dgm + "pt",
                 new XAttribute("modelId", id),
                 new XElement(Dgm + "t",
@@ -4079,10 +4142,12 @@ public static class DocxWriter
                         new XElement(A + "r",
                             new XElement(A + "t", node.Text))))));
             cxnLst.Add(new XElement(Dgm + "cxn",
-                new XAttribute("modelId", $"cxn{nextCxn++}"),
+                new XAttribute("modelId", SmartArtModelId(1000 + nextCxn++)),
                 new XAttribute("type", "parOf"),
                 new XAttribute("srcId", parentId),
-                new XAttribute("destId", id)));
+                new XAttribute("destId", id),
+                new XAttribute("srcOrd", 0),
+                new XAttribute("destOrd", 0)));
             foreach (var child in node.Children)
                 Emit(child, id);
         }
@@ -4098,13 +4163,11 @@ public static class DocxWriter
                 ptLst,
                 cxnLst,
                 new XElement(Dgm + "bg"),
-                new XElement(Dgm + "whole"),
-                // F2: point the data model at the rendered-geometry drawing part. The reader reads only
-                // ptLst/cxnLst, so this trailing ext is ignored gracefully on round-trip.
-                new XElement(Dgm + "dataModelExt",
-                    new XAttribute("relId", drawingRelId),
-                    new XAttribute("minVer", "http://schemas.openxmlformats.org/drawingml/2006/diagram"))));
+                new XElement(Dgm + "whole")));
     }
+
+    private static string SmartArtModelId(int index) =>
+        "{00000000-0000-0000-0000-" + index.ToString("D12", System.Globalization.CultureInfo.InvariantCulture) + "}";
 
     /// <summary>
     /// Builds the SmartArt DATA part's relationships (word/diagrams/_rels/dataN.xml.rels). F2: a single
@@ -4144,7 +4207,18 @@ public static class DocxWriter
         const long boxH = 685800;   // 0.75 in
         const long gap = 228600;    // 0.25 in
 
-        var spTree = new XElement(Dsp + "spTree");
+        var spTree = new XElement(Dsp + "spTree",
+            new XElement(Dsp + "nvGrpSpPr",
+                new XElement(Dsp + "cNvPr",
+                    new XAttribute("id", 0),
+                    new XAttribute("name", "Diagram")),
+                new XElement(Dsp + "cNvGrpSpPr")),
+            new XElement(Dsp + "grpSpPr",
+                new XElement(A + "xfrm",
+                    new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
+                    new XElement(A + "ext", new XAttribute("cx", 0), new XAttribute("cy", 0)),
+                    new XElement(A + "chOff", new XAttribute("x", 0), new XAttribute("y", 0)),
+                    new XElement(A + "chExt", new XAttribute("cx", 0), new XAttribute("cy", 0)))));
 
         for (var i = 0; i < nodes.Count; i++)
         {
@@ -4170,12 +4244,12 @@ public static class DocxWriter
             }
 
             spTree.Add(new XElement(Dsp + "sp",
+                new XAttribute("modelId", SmartArtModelId(i + 1)),
                 new XElement(Dsp + "nvSpPr",
                     new XElement(Dsp + "cNvPr",
                         new XAttribute("id", i),
                         new XAttribute("name", $"Node {i}")),
-                    new XElement(Dsp + "cNvSpPr"),
-                    new XElement(Dsp + "nvPr")),
+                    new XElement(Dsp + "cNvSpPr")),
                 new XElement(Dsp + "spPr",
                     new XElement(A + "xfrm",
                         new XElement(A + "off", new XAttribute("x", x), new XAttribute("y", y)),
@@ -4229,9 +4303,6 @@ public static class DocxWriter
             new XElement(Dgm + "clrData"),
             new XElement(Dgm + "layoutNode",
                 new XAttribute("name", "diagram")));
-        // FreeW extension: persist LayoutId for lossless round-trip when the catalog id differs from the stock suffix.
-        if (smartArt.LayoutId is not null)
-            elem.SetAttributeValue("freewLayoutId", smartArt.LayoutId);
         return new XDocument(elem);
     }
 
@@ -4254,9 +4325,7 @@ public static class DocxWriter
             new XElement(Dgm + "scene3d",
                 new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
                 new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
-            new XElement(Dgm + "style"));
-        if (smartArt.StyleId is not null)
-            elem.SetAttributeValue("freewStyleId", smartArt.StyleId);
+            new XElement(Dgm + "styleLbl", new XAttribute("name", "node0")));
         return new XDocument(elem);
     }
 
@@ -4282,11 +4351,7 @@ public static class DocxWriter
                 new XElement(Dgm + "linClrLst", new XAttribute("meth", "repeat"),
                     new XElement(A + "schemeClr", new XAttribute("val", "accent1"))),
                 new XElement(Dgm + "txFillClrLst", new XAttribute("meth", "repeat"),
-                    new XElement(A + "schemeClr", new XAttribute("val", "lt1"))),
-                new XElement(Dgm + "txLinClrLst", new XAttribute("meth", "repeat"),
                     new XElement(A + "schemeClr", new XAttribute("val", "lt1")))));
-        if (smartArt.ColorSchemeId is not null)
-            elem.SetAttributeValue("freewColorId", smartArt.ColorSchemeId);
         return new XDocument(elem);
     }
 
@@ -4333,23 +4398,23 @@ public static class DocxWriter
         if (chart.Title is { Length: > 0 } title)
         {
             chartElement.Add(BuildChartTitle(title));
-            chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute(C + "val", "0")));
+            chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute("val", "0")));
         }
         else
         {
-            chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute(C + "val", "1")));
+            chartElement.Add(new XElement(C + "autoTitleDeleted", new XAttribute("val", "1")));
         }
         chartElement.Add(plotArea);
         if (chart.ShowLegend)
             chartElement.Add(new XElement(C + "legend",
-                new XElement(C + "legendPos", new XAttribute(C + "val", "b")),
-                new XElement(C + "overlay", new XAttribute(C + "val", "0"))));
-        chartElement.Add(new XElement(C + "plotVisOnly", new XAttribute(C + "val", "1")));
+                new XElement(C + "legendPos", new XAttribute("val", "b")),
+                new XElement(C + "overlay", new XAttribute("val", "0"))));
+        chartElement.Add(new XElement(C + "plotVisOnly", new XAttribute("val", "1")));
 
         // c:style — persists the selected ChartStyle id so Word and the reader can recover it.
         // Omitted when StyleId == 0 (default — no explicit style chosen).
         XElement? styleElement = chart.StyleId > 0
-            ? new XElement(C + "style", new XAttribute(C + "val", chart.StyleId))
+            ? new XElement(C + "style", new XAttribute("val", chart.StyleId))
             : null;
 
         // freew:ext — FreeW-private extension persisting ColorSchemeId and QuickLayoutId losslessly.
@@ -4377,7 +4442,7 @@ public static class DocxWriter
                 // part's own _rels). autoUpdate=0 keeps the literal caches authoritative for display.
                 new XElement(C + "externalData",
                     new XAttribute(R + "id", part.ExternalDataRelId),
-                    new XElement(C + "autoUpdate", new XAttribute(C + "val", "0"))),
+                    new XElement(C + "autoUpdate", new XAttribute("val", "0"))),
                 extLst));
     }
 
@@ -4502,7 +4567,7 @@ public static class DocxWriter
                     new XElement(A + "p",
                         new XElement(A + "r",
                             new XElement(A + "t", title))))),
-            new XElement(C + "overlay", new XAttribute(C + "val", "0")));
+            new XElement(C + "overlay", new XAttribute("val", "0")));
 
     /// <summary>
     /// Builds the c:barChart (column or bar), c:lineChart or c:areaChart element holding the chart's series and
@@ -4514,25 +4579,25 @@ public static class DocxWriter
         if (chart.Kind == ChartKind.Line)
         {
             root = new XElement(C + "lineChart",
-                new XElement(C + "grouping", new XAttribute(C + "val", "standard")));
+                new XElement(C + "grouping", new XAttribute("val", "standard")));
         }
         else if (chart.Kind == ChartKind.Area)
         {
             root = new XElement(C + "areaChart",
-                new XElement(C + "grouping", new XAttribute(C + "val", "standard")));
+                new XElement(C + "grouping", new XAttribute("val", "standard")));
         }
         else
         {
             root = new XElement(C + "barChart",
-                new XElement(C + "barDir", new XAttribute(C + "val", chart.Kind == ChartKind.Bar ? "bar" : "col")),
-                new XElement(C + "grouping", new XAttribute(C + "val", "clustered")));
+                new XElement(C + "barDir", new XAttribute("val", chart.Kind == ChartKind.Bar ? "bar" : "col")),
+                new XElement(C + "grouping", new XAttribute("val", "clustered")));
         }
 
         for (var i = 0; i < chart.Series.Count; i++)
             root.Add(BuildSeries(chart, chart.Series[i], i));
 
-        root.Add(new XElement(C + "axId", new XAttribute(C + "val", catAxisId)));
-        root.Add(new XElement(C + "axId", new XAttribute(C + "val", valAxisId)));
+        root.Add(new XElement(C + "axId", new XAttribute("val", catAxisId)));
+        root.Add(new XElement(C + "axId", new XAttribute("val", valAxisId)));
         return root;
     }
 
@@ -4544,11 +4609,11 @@ public static class DocxWriter
     private static XElement BuildScatterChart(Chart chart, long xAxisId, long yAxisId)
     {
         var root = new XElement(C + "scatterChart",
-            new XElement(C + "scatterStyle", new XAttribute(C + "val", "lineMarker")));
+            new XElement(C + "scatterStyle", new XAttribute("val", "lineMarker")));
         for (var i = 0; i < chart.Series.Count; i++)
             root.Add(BuildScatterSeries(chart, chart.Series[i], i));
-        root.Add(new XElement(C + "axId", new XAttribute(C + "val", xAxisId)));
-        root.Add(new XElement(C + "axId", new XAttribute(C + "val", yAxisId)));
+        root.Add(new XElement(C + "axId", new XAttribute("val", xAxisId)));
+        root.Add(new XElement(C + "axId", new XAttribute("val", yAxisId)));
         return root;
     }
 
@@ -4556,11 +4621,11 @@ public static class DocxWriter
     private static XElement BuildPieChart(Chart chart, bool doughnut)
     {
         var pie = new XElement(C + (doughnut ? "doughnutChart" : "pieChart"),
-            new XElement(C + "varyColors", new XAttribute(C + "val", "1")));
+            new XElement(C + "varyColors", new XAttribute("val", "1")));
         if (chart.Series.Count > 0)
             pie.Add(BuildSeries(chart, chart.Series[0], 0));
         if (doughnut)
-            pie.Add(new XElement(C + "holeSize", new XAttribute(C + "val", "50")));
+            pie.Add(new XElement(C + "holeSize", new XAttribute("val", "50")));
         return pie;
     }
 
@@ -4574,8 +4639,8 @@ public static class DocxWriter
     private static XElement BuildSeries(Chart chart, ChartSeries series, int index)
     {
         var ser = new XElement(C + "ser",
-            new XElement(C + "idx", new XAttribute(C + "val", index)),
-            new XElement(C + "order", new XAttribute(C + "val", index)));
+            new XElement(C + "idx", new XAttribute("val", index)),
+            new XElement(C + "order", new XAttribute("val", index)));
 
         ser.Add(BuildSeriesName(series, index));
         ser.Add(BuildCategoryCache(chart.Categories));
@@ -4591,8 +4656,8 @@ public static class DocxWriter
     private static XElement BuildScatterSeries(Chart chart, ChartSeries series, int index)
     {
         var ser = new XElement(C + "ser",
-            new XElement(C + "idx", new XAttribute(C + "val", index)),
-            new XElement(C + "order", new XAttribute(C + "val", index)));
+            new XElement(C + "idx", new XAttribute("val", index)),
+            new XElement(C + "order", new XAttribute("val", index)));
 
         ser.Add(BuildSeriesName(series, index));
 
@@ -4621,8 +4686,8 @@ public static class DocxWriter
             new XElement(C + "strRef",
                 new XElement(C + "f", $"Sheet1!${ColumnLetter(index + 1)}$1"),
                 new XElement(C + "strCache",
-                    new XElement(C + "ptCount", new XAttribute(C + "val", 1)),
-                    new XElement(C + "pt", new XAttribute(C + "idx", 0),
+                    new XElement(C + "ptCount", new XAttribute("val", 1)),
+                    new XElement(C + "pt", new XAttribute("idx", 0),
                         new XElement(C + "v", name)))));
     }
 
@@ -4630,9 +4695,9 @@ public static class DocxWriter
     private static XElement BuildCategoryCache(IReadOnlyList<string> categories)
     {
         var cache = new XElement(C + "strCache",
-            new XElement(C + "ptCount", new XAttribute(C + "val", categories.Count)));
+            new XElement(C + "ptCount", new XAttribute("val", categories.Count)));
         for (var i = 0; i < categories.Count; i++)
-            cache.Add(new XElement(C + "pt", new XAttribute(C + "idx", i),
+            cache.Add(new XElement(C + "pt", new XAttribute("idx", i),
                 new XElement(C + "v", categories[i])));
 
         return new XElement(C + "cat",
@@ -4656,9 +4721,9 @@ public static class DocxWriter
     {
         var cache = new XElement(C + "numCache",
             new XElement(C + "formatCode", "General"),
-            new XElement(C + "ptCount", new XAttribute(C + "val", values.Count)));
+            new XElement(C + "ptCount", new XAttribute("val", values.Count)));
         for (var i = 0; i < values.Count; i++)
-            cache.Add(new XElement(C + "pt", new XAttribute(C + "idx", i),
+            cache.Add(new XElement(C + "pt", new XAttribute("idx", i),
                 new XElement(C + "v", values[i].ToString(System.Globalization.CultureInfo.InvariantCulture))));
         return cache;
     }
@@ -4679,13 +4744,13 @@ public static class DocxWriter
     private static XElement BuildCategoryAxis(long axisId, long crossAxisId, string? title)
     {
         var ax = new XElement(C + "catAx",
-            new XElement(C + "axId", new XAttribute(C + "val", axisId)),
-            new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute(C + "val", "minMax"))),
-            new XElement(C + "delete", new XAttribute(C + "val", "0")),
-            new XElement(C + "axPos", new XAttribute(C + "val", "b")));
+            new XElement(C + "axId", new XAttribute("val", axisId)),
+            new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute("val", "minMax"))),
+            new XElement(C + "delete", new XAttribute("val", "0")),
+            new XElement(C + "axPos", new XAttribute("val", "b")));
         if (title is { Length: > 0 } t)
             ax.Add(BuildChartTitle(t));
-        ax.Add(new XElement(C + "crossAx", new XAttribute(C + "val", crossAxisId)));
+        ax.Add(new XElement(C + "crossAx", new XAttribute("val", crossAxisId)));
         return ax;
     }
 
@@ -4697,13 +4762,13 @@ public static class DocxWriter
     private static XElement BuildValueAxis(long axisId, long crossAxisId, string position, string? title)
     {
         var ax = new XElement(C + "valAx",
-            new XElement(C + "axId", new XAttribute(C + "val", axisId)),
-            new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute(C + "val", "minMax"))),
-            new XElement(C + "delete", new XAttribute(C + "val", "0")),
-            new XElement(C + "axPos", new XAttribute(C + "val", position)));
+            new XElement(C + "axId", new XAttribute("val", axisId)),
+            new XElement(C + "scaling", new XElement(C + "orientation", new XAttribute("val", "minMax"))),
+            new XElement(C + "delete", new XAttribute("val", "0")),
+            new XElement(C + "axPos", new XAttribute("val", position)));
         if (title is { Length: > 0 } t)
             ax.Add(BuildChartTitle(t));
-        ax.Add(new XElement(C + "crossAx", new XAttribute(C + "val", crossAxisId)));
+        ax.Add(new XElement(C + "crossAx", new XAttribute("val", crossAxisId)));
         return ax;
     }
 

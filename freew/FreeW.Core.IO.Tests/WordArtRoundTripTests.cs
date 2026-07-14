@@ -63,35 +63,35 @@ public class WordArtRoundTripTests
     }
 
     [Fact]
-    public void FillBlue_EmitsSolidFillOnRunProperties()
+    public void FillBlue_EmitsSolidFillOnShapeProperties()
     {
         var xml = WriteDocumentXml(DocumentWith(WordArt.Create("Solid", WordArtStyle.FillBlue)));
 
         // The wps namespace is declared on the document root and the WordArt is a wps:wsp text box.
         xml.Root!.Attribute(XNamespace.Xmlns + "wps")!.Value.Should().Be(Wps.NamespaceName);
-        var rPr = xml.Descendants(Wps + "wsp").Single().Descendants(W + "rPr").Single();
-        rPr.Element(A + "solidFill").Should().NotBeNull();
-        rPr.Element(A + "gradFill").Should().BeNull();
+        var spPr = xml.Descendants(Wps + "wsp").Single().Element(Wps + "spPr")!;
+        spPr.Element(A + "solidFill").Should().NotBeNull();
+        spPr.Element(A + "gradFill").Should().BeNull();
     }
 
     [Fact]
-    public void GradientFill_EmitsGradFillOnRunProperties()
+    public void GradientFill_EmitsGradFillOnShapeProperties()
     {
         var xml = WriteDocumentXml(DocumentWith(WordArt.Create("Gradient", WordArtStyle.GradientFill)));
 
-        var rPr = xml.Descendants(W + "rPr").Single();
-        rPr.Element(A + "gradFill").Should().NotBeNull();
-        rPr.Descendants(A + "gs").Should().HaveCount(2);
+        var spPr = xml.Descendants(Wps + "spPr").Single();
+        spPr.Element(A + "gradFill").Should().NotBeNull();
+        spPr.Descendants(A + "gs").Should().HaveCount(2);
     }
 
     [Fact]
-    public void Outline_EmitsLineOnRunProperties()
+    public void Outline_EmitsLineOnShapeProperties()
     {
         var xml = WriteDocumentXml(DocumentWith(WordArt.Create("Outline", WordArtStyle.Outline)));
 
-        var rPr = xml.Descendants(W + "rPr").Single();
-        rPr.Element(A + "ln").Should().NotBeNull();
-        rPr.Element(A + "solidFill").Should().NotBeNull();
+        var spPr = xml.Descendants(Wps + "spPr").Single();
+        spPr.Element(A + "ln").Should().NotBeNull();
+        spPr.Element(A + "solidFill").Should().NotBeNull();
     }
 
     [Fact]
@@ -99,8 +99,8 @@ public class WordArtRoundTripTests
     {
         var xml = WriteDocumentXml(DocumentWith(WordArt.Create("Shadow", WordArtStyle.Shadow)));
 
-        var rPr = xml.Descendants(W + "rPr").Single();
-        rPr.Element(A + "effectLst")!.Element(A + "outerShdw").Should().NotBeNull();
+        var spPr = xml.Descendants(Wps + "spPr").Single();
+        spPr.Element(A + "effectLst")!.Element(A + "outerShdw").Should().NotBeNull();
     }
 
     [Fact]

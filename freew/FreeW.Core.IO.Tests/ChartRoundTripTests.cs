@@ -111,7 +111,7 @@ public class ChartRoundTripTests
 
         var barChart = chartXml.Descendants(C + "barChart").Should().ContainSingle().Subject;
         // Column charts use barDir "col".
-        barChart.Element(C + "barDir")!.Attribute(C + "val")!.Value.Should().Be("col");
+        barChart.Element(C + "barDir")!.Attribute("val")!.Value.Should().Be("col");
 
         var ser = barChart.Elements(C + "ser").Should().ContainSingle().Subject;
         // Category labels live in a c:cat string cache; values in a c:val number cache.
@@ -389,7 +389,7 @@ public class ChartRoundTripTests
         // The chart part must carry a c:style element with val="3".
         var chartXml = EntryXml(docx, "word/charts/chart1.xml");
         var styleElem = chartXml.Descendants(C + "style").Should().ContainSingle().Subject;
-        styleElem.Attribute(C + "val")!.Value.Should().Be("3");
+        styleElem.Attribute("val")!.Value.Should().Be("3");
 
         // And the reader must recover it.
         var read = RoundTrip(doc);
