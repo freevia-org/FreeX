@@ -2555,6 +2555,8 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("await ShowWithSelectedParityShapeAsync(OpenShapeGradientDialogAsync);");
         parityCaptureSource.Should().Contain("private Task ShowTextToColumnsParityDialogAsync()");
         parityCaptureSource.Should().Contain("private Task ShowSparklineParityDialogAsync()");
+        parityCaptureSource.Should().Contain("initialDataRangeText: \"Sheet1!$D$2:$D$5\"");
+        parityCaptureSource.Should().Contain("initialLocationText: \"Sheet1!$H$2:$H$5\"");
         parityCaptureSource.Should().Contain("private async Task ShowSelectionPaneParityDialogAsync()");
         parityCaptureSource.Should().Contain("chart.Name = SelectionPaneParityFixture.ChartName;");
         parityCaptureSource.Should().Contain("shape.Name = SelectionPaneParityFixture.ShapeName;");

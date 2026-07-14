@@ -59,6 +59,9 @@ public enum SparklinePointToggle
 /// </summary>
 public static class SparklinePlanner
 {
+    public const double InsertDialogCaptureWidth = 380;
+    public const double InsertDialogCaptureHeight = 280;
+
     /// <summary>The sparkline kinds offered by the dialog, in display order.</summary>
     public static IReadOnlyList<SparklineKind> Kinds { get; } =
     [

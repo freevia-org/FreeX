@@ -23,7 +23,9 @@ using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
+using FreeX.App.Presentation.Protection;
 using FreeX.App.Presentation.SlicerTimeline;
+using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -870,10 +872,10 @@ public sealed partial class MainWindow
             async () => { await ShowSubtotalInputDialogAsync(); });
 
     private Task ShowSparklineParityDialogAsync() =>
-        ShowWithParitySelectionAsync(
-            new CellAddress(_session.ActiveSheet.Id, 2, 5),
-            new CellAddress(_session.ActiveSheet.Id, 7, 5),
-            async () => { await ShowInsertSparklineDialogAsync(SparklineKind.Line); });
+        ShowInsertSparklineDialogAsync(
+            SparklineKind.Line,
+            initialDataRangeText: "Sheet1!$D$2:$D$5",
+            initialLocationText: "Sheet1!$H$2:$H$5");
 
     private Task ShowInsertHyperlinkParityDialogAsync() =>
         ShowWithParitySelectionAsync(
@@ -1657,8 +1659,24 @@ public sealed partial class MainWindow
         ParitySurfaceResult result;
         try
         {
-            var width = (int)Math.Ceiling(dialog.Bounds.Width > 0 ? dialog.Bounds.Width : dialog.Width);
-            var height = (int)Math.Ceiling(dialog.Bounds.Height > 0 ? dialog.Bounds.Height : dialog.Height);
+            if (TryGetFixedModalCaptureSize(surfaceId, out var fixedWidth, out var fixedHeight))
+            {
+                dialog.SizeToContent = SizeToContent.Manual;
+                dialog.Width = fixedWidth;
+                dialog.Height = fixedHeight;
+                dialog.MinWidth = fixedWidth;
+                dialog.MinHeight = fixedHeight;
+                try { dialog.UpdateLayout(); } catch { /* best-effort */ }
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+            }
+
+            var width = fixedWidth > 0
+                ? (int)Math.Ceiling(fixedWidth)
+                : (int)Math.Ceiling(dialog.Bounds.Width > 0 ? dialog.Bounds.Width : dialog.Width);
+            var height = fixedHeight > 0
+                ? (int)Math.Ceiling(fixedHeight)
+                : (int)Math.Ceiling(dialog.Bounds.Height > 0 ? dialog.Bounds.Height : dialog.Height);
             RenderVisualToPng(dialog, width, height, Path.Combine(outputDirectory, pngName));
             result = ParityCaptureOutputGuard.ResultForPng(surfaceId, kind, outputDirectory, pngName);
         }
@@ -1673,6 +1691,19 @@ public sealed partial class MainWindow
         }
 
         return result;
+    }
+
+    private static bool TryGetFixedModalCaptureSize(string surfaceId, out double width, out double height)
+    {
+        (width, height) = surfaceId switch
+        {
+            "dialog.ExportOptions" => (ExportOptionsDialogSurfacePlanner.CaptureWidth, ExportOptionsDialogSurfacePlanner.CaptureHeight),
+            "dialog.ProtectWorkbook" => (ProtectionDialogPlanner.ProtectWorkbookCaptureWidth, ProtectionDialogPlanner.ProtectWorkbookCaptureHeight),
+            "dialog.Sparkline" => (SparklinePlanner.InsertDialogCaptureWidth, SparklinePlanner.InsertDialogCaptureHeight),
+            _ => (0, 0)
+        };
+
+        return width > 0 && height > 0;
     }
 
     /// <summary>

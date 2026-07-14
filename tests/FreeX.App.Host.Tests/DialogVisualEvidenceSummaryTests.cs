@@ -202,7 +202,7 @@ public sealed class DialogVisualEvidenceSummaryTests
               "rows": [
                 { "routeId": "dialog.AutoFilter" },
                 { "routeId": "dialog.GoalSeekStatus" },
-                { "routeId": "dialog.ExportOptions" },
+                { "routeId": "dialog.Options" },
                 { "routeId": "dialog.ScenarioManager" }
               ]
             }
@@ -217,7 +217,7 @@ public sealed class DialogVisualEvidenceSummaryTests
               "surfaces": [
                 { "id": "dialog.AutoFilter", "kind": "dialog", "png": "dialog.AutoFilter.png", "captured": true, "note": "" },
                 { "id": "dialog.GoalSeekStatus", "kind": "dialog", "png": "dialog.GoalSeekStatus.png", "captured": true, "note": "" },
-                { "id": "dialog.ExportOptions", "kind": "dialog", "png": "dialog.ExportOptions.png", "captured": true, "note": "" },
+                { "id": "dialog.Options", "kind": "dialog", "png": "dialog.Options.png", "captured": true, "note": "" },
                 { "id": "dialog.ScenarioManager", "kind": "dialog", "png": "dialog.ScenarioManager.png", "captured": true, "note": "" }
               ]
             }
@@ -232,7 +232,7 @@ public sealed class DialogVisualEvidenceSummaryTests
               "surfaces": [
                 { "id": "dialog.AutoFilter", "kind": "dialog", "png": "dialog.AutoFilter.png", "captured": true, "note": "" },
                 { "id": "dialog.GoalSeekStatus", "kind": "dialog", "png": "dialog.GoalSeekStatus.png", "captured": true, "note": "" },
-                { "id": "dialog.ExportOptions", "kind": "dialog", "png": "dialog.ExportOptions.png", "captured": true, "note": "" },
+                { "id": "dialog.Options", "kind": "dialog", "png": "dialog.Options.png", "captured": true, "note": "" },
                 { "id": "dialog.ScenarioManager", "kind": "dialog", "png": "dialog.ScenarioManager.png", "captured": true, "note": "" }
               ]
             }
@@ -242,8 +242,8 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.AutoFilter.png"), width: 5, height: 4, nonBlank: true);
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.GoalSeekStatus.png"), width: 3, height: 2, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.GoalSeekStatus.png"), width: 3, height: 4, nonBlank: true);
-        WritePng(Path.Combine(wpfManifestDirectory, "dialog.ExportOptions.png"), width: 4, height: 4, nonBlank: true);
-        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ExportOptions.png"), width: 4, height: 5, nonBlank: true);
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.Options.png"), width: 4, height: 4, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.Options.png"), width: 4, height: 5, nonBlank: true);
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.ScenarioManager.png"), width: 3, height: 2, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ScenarioManager.png"), width: 5, height: 2, nonBlank: true);
 
@@ -262,14 +262,14 @@ public sealed class DialogVisualEvidenceSummaryTests
         var markdown = File.ReadAllText(markdownPath);
         markdown.Should().Contain("| content/visual mismatch | 1 | False | dialog.AutoFilter |");
         markdown.Should().Contain("| evidence limitation | 1 | False | dialog.GoalSeekStatus |");
-        markdown.Should().Contain("| expected platform/native difference | 1 | True | dialog.ExportOptions |");
+        markdown.Should().Contain("| expected platform/native difference | 1 | True | dialog.Options |");
         markdown.Should().Contain("| real logical-size mismatch | 1 | False | dialog.ScenarioManager |");
         markdown.Should().Contain("## Policy-Accepted Native/Control Differences");
-        markdown.Should().Contain("| Export options native spacing | 1 | dialog.ExportOptions |");
+        markdown.Should().Contain("| Options host frame | 1 | dialog.Options |");
         markdown.Should().Contain("| dialog.AutoFilter | content/visual mismatch |");
         markdown.Should().Contain("| dialog.ScenarioManager | real logical-size mismatch |");
         markdown.Should().Contain("| dialog.GoalSeekStatus | evidence limitation |");
-        markdown.Should().Contain("| dialog.ExportOptions | expected platform/native difference | Export options native spacing |");
+        markdown.Should().Contain("| dialog.Options | expected platform/native difference | Options host frame |");
 
         using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
         var buckets = json.RootElement.GetProperty("summary").GetProperty("dimensionMismatchBuckets");
@@ -282,14 +282,14 @@ public sealed class DialogVisualEvidenceSummaryTests
         json.RootElement.GetProperty("dimensionMismatchClassification").GetArrayLength().Should().Be(4);
         json.RootElement.GetProperty("dimensionMismatchDetails").GetArrayLength().Should().Be(4);
         var policyFamily = json.RootElement.GetProperty("policyAcceptedNativeDifferenceFamilies")[0];
-        policyFamily.GetProperty("family").GetString().Should().Be("Export options native spacing");
+        policyFamily.GetProperty("family").GetString().Should().Be("Options host frame");
         policyFamily.GetProperty("count").GetInt32().Should().Be(1);
-        var exportOptionsComparison = json.RootElement.GetProperty("pairedSurfaces")
+        var optionsComparison = json.RootElement.GetProperty("pairedSurfaces")
             .EnumerateArray()
-            .Single(row => row.GetProperty("id").GetString() == "dialog.ExportOptions")
+            .Single(row => row.GetProperty("id").GetString() == "dialog.Options")
             .GetProperty("comparison");
-        exportOptionsComparison.GetProperty("policyAcceptance").GetProperty("status").GetString().Should().Be("policy-accepted");
-        exportOptionsComparison.GetProperty("policyAcceptance").GetProperty("family").GetString().Should().Be("Export options native spacing");
+        optionsComparison.GetProperty("policyAcceptance").GetProperty("status").GetString().Should().Be("policy-accepted");
+        optionsComparison.GetProperty("policyAcceptance").GetProperty("family").GetString().Should().Be("Options host frame");
     }
 
     [Fact]
@@ -1206,11 +1206,11 @@ public sealed class DialogVisualEvidenceSummaryTests
             """
             {
               "summary": {
-                "totalRoutes": 7,
-                "wpfCaptures": 7,
-                "avaloniaCaptures": 7,
-                "avaloniaHarnessRoutes": 7,
-                "sharedOrPresentationBacked": 7
+                "totalRoutes": 10,
+                "wpfCaptures": 10,
+                "avaloniaCaptures": 10,
+                "avaloniaHarnessRoutes": 10,
+                "sharedOrPresentationBacked": 10
               },
               "rows": [
                 { "routeId": "dialog.FindReplace" },
@@ -1218,6 +1218,9 @@ public sealed class DialogVisualEvidenceSummaryTests
                 { "routeId": "dialog.FindReplace.Replace" },
                 { "routeId": "dialog.ConditionalFormatNewRule" },
                 { "routeId": "dialog.Consolidate" },
+                { "routeId": "dialog.ExportOptions" },
+                { "routeId": "dialog.ProtectWorkbook" },
+                { "routeId": "dialog.Sparkline" },
                 { "routeId": "dialog.PivotTableOptions" },
                 { "routeId": "dialog.PivotTableOptions.LayoutAndFormat" }
               ]
@@ -1263,6 +1266,27 @@ public sealed class DialogVisualEvidenceSummaryTests
                   "id": "dialog.Consolidate",
                   "kind": "dialog",
                   "png": "dialog.Consolidate.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.ExportOptions",
+                  "kind": "dialog",
+                  "png": "dialog.ExportOptions.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.ProtectWorkbook",
+                  "kind": "dialog",
+                  "png": "dialog.ProtectWorkbook.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.Sparkline",
+                  "kind": "dialog",
+                  "png": "dialog.Sparkline.png",
                   "captured": true,
                   "note": ""
                 },
@@ -1327,6 +1351,27 @@ public sealed class DialogVisualEvidenceSummaryTests
                   "note": ""
                 },
                 {
+                  "id": "dialog.ExportOptions",
+                  "kind": "dialog",
+                  "png": "dialog.ExportOptions.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.ProtectWorkbook",
+                  "kind": "dialog",
+                  "png": "dialog.ProtectWorkbook.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.Sparkline",
+                  "kind": "dialog",
+                  "png": "dialog.Sparkline.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
                   "id": "dialog.PivotTableOptions",
                   "kind": "dialog",
                   "png": "dialog.PivotTableOptions.png",
@@ -1351,6 +1396,9 @@ public sealed class DialogVisualEvidenceSummaryTests
             ["dialog.FindReplace.Replace"] = (720, 430, "FindReplaceDialogPlanner.Width/Height"),
             ["dialog.ConditionalFormatNewRule"] = (634, 334, "ConditionalFormatDialogCatalog.RuleEditorCaptureWidth/Height"),
             ["dialog.Consolidate"] = (380, 420, "ConsolidateDialogPlanner.CaptureWidth/Height"),
+            ["dialog.ExportOptions"] = (430, 552, "ExportOptionsDialogSurfacePlanner.CaptureWidth/CaptureHeight"),
+            ["dialog.ProtectWorkbook"] = (380, 250, "ProtectionDialogPlanner.ProtectWorkbookCaptureWidth/CaptureHeight"),
+            ["dialog.Sparkline"] = (380, 280, "SparklinePlanner.InsertDialogCaptureWidth/CaptureHeight"),
             ["dialog.PivotTableOptions"] = (520, 676, "PivotOptionsPlanner.DialogWidth/LayoutAndFormatCaptureHeight"),
             ["dialog.PivotTableOptions.LayoutAndFormat"] = (520, 676, "PivotOptionsPlanner.DialogWidth/LayoutAndFormatCaptureHeight"),
         };

@@ -6,6 +6,13 @@ namespace FreeX.App.Services.Tests;
 public sealed class ExportOptionsDialogSurfacePlannerTests
 {
     [Fact]
+    public void CaptureSize_MatchesSharedDialogVisualEvidenceContract()
+    {
+        ExportOptionsDialogSurfacePlanner.CaptureWidth.Should().Be(430);
+        ExportOptionsDialogSurfacePlanner.CaptureHeight.Should().Be(552);
+    }
+
+    [Fact]
     public void CreateFormatAvailability_EnablesPdfOnlyControlsForPdf()
     {
         ExportOptionsDialogSurfacePlanner.CreateFormatAvailability(ExportFileFormat.Pdf)

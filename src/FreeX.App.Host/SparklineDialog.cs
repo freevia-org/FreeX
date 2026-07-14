@@ -31,8 +31,8 @@ public sealed class SparklineDialog : Window
         _requestRangeSelection = requestRangeSelection;
         Result = CreateResult(dataRangeText, locationText, kind);
         Title = UiText.Get("Sparkline_InsertSparkline");
-        Width = 380;
-        MinHeight = 280;
+        Width = SparklinePlanner.InsertDialogCaptureWidth;
+        MinHeight = SparklinePlanner.InsertDialogCaptureHeight;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;

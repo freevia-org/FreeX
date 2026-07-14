@@ -253,8 +253,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = state.IsStructureProtected ? UiText.Get("ShellLoc_UnprotectWorkbookTitle") : UiText.Get("ShellLoc_ProtectWorkbookTitle"),
-            Width = 380,
-            Height = state.IsStructureProtected ? 240 : 320,
+            Width = ProtectionDialogPlanner.ProtectWorkbookCaptureWidth,
+            Height = state.IsStructureProtected ? ProtectionDialogPlanner.ProtectWorkbookCaptureHeight : 320,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };

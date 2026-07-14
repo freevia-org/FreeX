@@ -13,6 +13,13 @@ public sealed class ProtectionDialogPlannerTests
     }
 
     [Fact]
+    public void ProtectWorkbookCaptureSize_MatchesSharedVisualEvidenceContract()
+    {
+        ProtectionDialogPlanner.ProtectWorkbookCaptureWidth.Should().Be(380);
+        ProtectionDialogPlanner.ProtectWorkbookCaptureHeight.Should().Be(250);
+    }
+
+    [Fact]
     public void CreateSheetResult_ForProtectedSheetRequestsUnprotect()
     {
         var result = ProtectionDialogPlanner.CreateSheetResult(

@@ -23,6 +23,8 @@ public static class ExportOptionsDialogSurfacePlanner
     public const string TitleResourceKey = "ExportOptions_ExportOptions";
     public const string DialogAutomationId = "ExportOptionsDialog";
     public const double Width = 430;
+    public const double CaptureWidth = Width;
+    public const double CaptureHeight = 552;
     public const double MaxHeight = 560;
 
     public static ExportOptionsDialogFormatAvailability CreateFormatAvailability(ExportFileFormat format) =>

@@ -56,7 +56,10 @@ public sealed partial class MainWindow
             s.Location.Row == active.Row && s.Location.Col == active.Col);
     }
 
-    private async Task ShowInsertSparklineDialogAsync(SparklineKind kind)
+    private async Task ShowInsertSparklineDialogAsync(
+        SparklineKind kind,
+        string? initialDataRangeText = null,
+        string? initialLocationText = null)
     {
         if (_isOpening || _isSaving)
             return;
@@ -67,7 +70,7 @@ public sealed partial class MainWindow
         var dataRangeBox = new TextBox
         {
             MinWidth = 220,
-            Text = selection.CellCount > 1 ? FormatRangeReference(selection) : string.Empty,
+            Text = initialDataRangeText ?? (selection.CellCount > 1 ? FormatRangeReference(selection) : string.Empty),
         };
         ApplySparklineTextBoxChrome(dataRangeBox);
         AutomationProperties.SetAutomationId(dataRangeBox, "SparklineDataRangeBox");
@@ -87,7 +90,7 @@ public sealed partial class MainWindow
         var locationBox = new TextBox
         {
             MinWidth = 220,
-            Text = FormatCellReference(_session.ActiveCell),
+            Text = initialLocationText ?? FormatCellReference(_session.ActiveCell),
         };
         ApplySparklineTextBoxChrome(locationBox);
         AutomationProperties.SetAutomationId(locationBox, "SparklineLocationRangeBox");
@@ -111,8 +114,8 @@ public sealed partial class MainWindow
         var dialog = new Window
         {
             Title = UiText.Get("Sparkline_InsertTitle"),
-            Width = 372,
-            Height = 230,
+            Width = SparklinePlanner.InsertDialogCaptureWidth,
+            Height = SparklinePlanner.InsertDialogCaptureHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,

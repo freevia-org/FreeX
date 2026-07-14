@@ -17,6 +17,8 @@ public static class ProtectionDialogPlanner
     public const double ProtectSheetHeight = 540;
     public const double UnprotectSheetWidth = 380;
     public const double UnprotectSheetHeight = 240;
+    public const double ProtectWorkbookCaptureWidth = 380;
+    public const double ProtectWorkbookCaptureHeight = 250;
 
     public static ProtectionDialogResult CreateSheetResult(
         bool isProtected,

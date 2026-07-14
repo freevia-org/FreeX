@@ -469,7 +469,7 @@ public sealed partial class PivotWorkflowDialogTests
         source.Should().Contain("targetSurfaceId.StartsWith(\"dialog.PivotTableOptions.\", StringComparison.Ordinal)");
         source.Should().Contain("CaptureDialogTabs(results, \"dialog.PivotTableOptions\", outDir");
         source.Should().Contain("[\"LayoutAndFormat\", \"TotalsAndFilters\", \"Display\", \"Printing\", \"Data\", \"AltText\"]");
-        source.Should().Contain("Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, and dialog.PivotTableOptions");
+        source.Should().Contain("Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, and dialog.PivotTableOptions");
     }
 
     [Fact]

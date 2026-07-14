@@ -30,6 +30,10 @@ public sealed class SparklinePlannerTests
             .Should()
             .Contain("SparklinePlanner.CreateDialogResult")
             .And
+            .Contain("SparklinePlanner.InsertDialogCaptureWidth")
+            .And
+            .Contain("SparklinePlanner.InsertDialogCaptureHeight")
+            .And
             .Contain("SparklinePlanner.CreateRangeSelectionRequest")
             .And
             .Contain("SparklinePlanner.ValidateInsertGroup")
@@ -37,6 +41,13 @@ public sealed class SparklinePlannerTests
             .NotContain("public sealed record SparklineDialogResult")
             .And
             .NotContain("public enum SparklineRangeSelectionTarget");
+    }
+
+    [Fact]
+    public void InsertDialogCaptureSize_MatchesSharedVisualEvidenceContract()
+    {
+        SparklinePlanner.InsertDialogCaptureWidth.Should().Be(380);
+        SparklinePlanner.InsertDialogCaptureHeight.Should().Be(280);
     }
 
     [Fact]

@@ -62,8 +62,8 @@ public sealed class PasswordProtectionDialog : Window
         Content = root;
         DialogSizing.ApplyContentHeight(
             this,
-            width: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetWidth : ProtectionDialogPlanner.UnprotectSheetWidth,
-            minHeight: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetHeight : 280);
+            width: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetWidth : ProtectionDialogPlanner.ProtectWorkbookCaptureWidth,
+            minHeight: isProtectSheet ? ProtectionDialogPlanner.ProtectSheetHeight : ProtectionDialogPlanner.ProtectWorkbookCaptureHeight);
         Loaded += (_, _) => FocusInitialKeyboardTarget();
     }
 

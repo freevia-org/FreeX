@@ -14,6 +14,8 @@ using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Protection;
+using FreeX.App.Presentation.SparklineUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -520,6 +522,21 @@ internal static class ParityCapture
             {
                 CaptureDialog(results, "dialog.GoalSeek", outDir, () => CreateGoalSeekParityDialog(sheet.Id));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.Sparkline", StringComparison.Ordinal))
+            {
+                CaptureDialog(results, "dialog.Sparkline", outDir, () =>
+                    new SparklineDialog("Sheet1!$D$2:$D$5", "Sheet1!$H$2:$H$5", SparklineKind.Line, sheetId: sheet.Id));
+            }
+            else if (string.Equals(targetSurfaceId, "dialog.ExportOptions", StringComparison.Ordinal))
+            {
+                CaptureDialog(results, "dialog.ExportOptions", outDir, () =>
+                    new ExportOptionsDialog(hasSelection: true, initialPdfLanguage: ExportPlanner.DefaultPdfLanguage, ExportFormat.Pdf));
+            }
+            else if (string.Equals(targetSurfaceId, "dialog.ProtectWorkbook", StringComparison.Ordinal))
+            {
+                CaptureDialog(results, "dialog.ProtectWorkbook", outDir, () =>
+                    new PasswordProtectionDialog(UiText.Get("Protection_ProtectWorkbookTitle"), UiText.Get("Protection_PasswordToUnprotectWorkbook")));
+            }
             else if (string.Equals(targetSurfaceId, "dialog.FindReplace", StringComparison.Ordinal) ||
                 targetSurfaceId.StartsWith("dialog.FindReplace.", StringComparison.Ordinal))
             {
@@ -543,7 +560,7 @@ internal static class ParityCapture
             }
             else
             {
-                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, and dialog.PivotTableOptions in this lane.");
+                AddMissing(results, targetSurfaceId, "dialog", "Targeted WPF parity capture only supports dialog.FormatCells, dialog.AccessibilityChecker, dialog.GoalSeek, dialog.Sparkline, dialog.ExportOptions, dialog.ProtectWorkbook, and dialog.PivotTableOptions in this lane.");
             }
 
             return;
@@ -1130,8 +1147,20 @@ internal static class ParityCapture
                 dialog.UpdateLayout();
                 PumpDispatcher();
 
-                var width = dialog.ActualWidth > 0 ? dialog.ActualWidth : dialog.Width;
-                var height = dialog.ActualHeight > 0 ? dialog.ActualHeight : dialog.Height;
+                if (TryGetFixedDialogCaptureSize(surfaceId, out var fixedWidth, out var fixedHeight))
+                {
+                    dialog.SizeToContent = SizeToContent.Manual;
+                    dialog.Width = fixedWidth;
+                    dialog.Height = fixedHeight;
+                    dialog.MinWidth = fixedWidth;
+                    dialog.MinHeight = fixedHeight;
+                    PumpDispatcher();
+                    dialog.UpdateLayout();
+                    PumpDispatcher();
+                }
+
+                var width = fixedWidth > 0 ? fixedWidth : dialog.ActualWidth > 0 ? dialog.ActualWidth : dialog.Width;
+                var height = fixedHeight > 0 ? fixedHeight : dialog.ActualHeight > 0 ? dialog.ActualHeight : dialog.Height;
                 if (double.IsNaN(width) || width <= 0) width = 480;
                 if (double.IsNaN(height) || height <= 0) height = 360;
                 return RenderDialog(dialog, width, height);
@@ -1142,6 +1171,19 @@ internal static class ParityCapture
                 PumpDispatcher();
             }
         });
+    }
+
+    private static bool TryGetFixedDialogCaptureSize(string surfaceId, out double width, out double height)
+    {
+        (width, height) = surfaceId switch
+        {
+            "dialog.ExportOptions" => (ExportOptionsDialogSurfacePlanner.CaptureWidth, ExportOptionsDialogSurfacePlanner.CaptureHeight),
+            "dialog.ProtectWorkbook" => (ProtectionDialogPlanner.ProtectWorkbookCaptureWidth, ProtectionDialogPlanner.ProtectWorkbookCaptureHeight),
+            "dialog.Sparkline" => (SparklinePlanner.InsertDialogCaptureWidth, SparklinePlanner.InsertDialogCaptureHeight),
+            _ => (0, 0)
+        };
+
+        return width > 0 && height > 0;
     }
 
     private static void CaptureWorkbookFileDialogSurface(

@@ -547,6 +547,27 @@ function Get-ExpectedEvidenceSize {
                     source = "WorkbookStatisticsDialogPlanner.Width/Height"
                 }
             }
+            "dialog.ExportOptions" {
+                return [pscustomobject]@{
+                    width = 430
+                    height = 552
+                    source = "ExportOptionsDialogSurfacePlanner.CaptureWidth/CaptureHeight"
+                }
+            }
+            "dialog.ProtectWorkbook" {
+                return [pscustomobject]@{
+                    width = 380
+                    height = 250
+                    source = "ProtectionDialogPlanner.ProtectWorkbookCaptureWidth/CaptureHeight"
+                }
+            }
+            "dialog.Sparkline" {
+                return [pscustomobject]@{
+                    width = 380
+                    height = 280
+                    source = "SparklinePlanner.InsertDialogCaptureWidth/CaptureHeight"
+                }
+            }
             "dialog.FormatChartArea" {
                 return [pscustomobject]@{
                     width = 420
@@ -641,21 +662,6 @@ function Get-NativeDifferencePolicyAcceptance {
             return New-NativeDifferencePolicyAcceptance `
                 -Family "Chart type picker controls" `
                 -Rationale "The paired screenshots show the same chart-type list and preview state; the remaining delta is default list, preview, and dialog chrome metrics."
-        }
-        "dialog.ExportOptions" {
-            return New-NativeDifferencePolicyAcceptance `
-                -Family "Export options native spacing" `
-                -Rationale "The paired screenshots show the same export-option choices; the remaining height delta is platform label/control spacing."
-        }
-        "dialog.ProtectWorkbook" {
-            return New-NativeDifferencePolicyAcceptance `
-                -Family "Protection password prompt" `
-                -Rationale "The paired screenshots show the same password/confirmation workflow; the residual size delta is native password-box and button-row metrics."
-        }
-        "dialog.Sparkline" {
-            return New-NativeDifferencePolicyAcceptance `
-                -Family "Sparkline range picker controls" `
-                -Rationale "The paired screenshots show the same Sparkline range/location inputs and type selection; the residual delta is native text input, combo, and button spacing."
         }
     }
 
