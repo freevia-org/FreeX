@@ -1280,4 +1280,61 @@ public sealed class SlideCanvasMathBaselineTests
 
         thrown.Should().BeNull("Avalonia must render m:eqArrPr row spacing and base justification from the shared MathBox plan without host-specific layout branching");
     }
+
+    [Fact]
+    public async Task RenderParaWithMath_MatrixSpacingAndBaseJustification_UsesSharedCellPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var defaultBox = MathLayoutEngine.Layout(ParseOmml(MatrixOmml()), "Cambria Math", 18.0);
+                var centeredBox = MathLayoutEngine.Layout(ParseOmml(MatrixOmml("<m:baseJc m:val=\"ctr\"/>")), "Cambria Math", 18.0);
+                var spacedBox = MathLayoutEngine.Layout(ParseOmml(MatrixOmml(
+                    "<m:baseJc m:val=\"bot\"/><m:rSpRule m:val=\"2\"/><m:cGpRule m:val=\"3\"/><m:cGp m:val=\"24\"/><m:cSp m:val=\"240\"/>")),
+                    "Cambria Math",
+                    18.0);
+
+                var defaultGlyphs = MathBoxRenderPlanner.Plan(defaultBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .ToList();
+                var spacedGlyphs = MathBoxRenderPlanner.Plan(spacedBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .ToList();
+
+                spacedGlyphs.Select(g => g.Text).Should().Equal(new[] { "a", "bb", "ccc", "d" },
+                    "matrix spacing and base justification must be resolved in the shared MathBox plan before Avalonia draws them");
+                spacedGlyphs.Single(g => g.Text == "ccc").Y.Should().BeGreaterThan(defaultGlyphs.Single(g => g.Text == "ccc").Y,
+                    "m:mPr row spacing should reach Avalonia as shared draw-plan Y offsets");
+                spacedGlyphs.Single(g => g.Text == "d").X.Should().BeGreaterThan(defaultGlyphs.Single(g => g.Text == "d").X,
+                    "m:mPr column gap and minimum column width should reach Avalonia as shared draw-plan X offsets");
+                spacedBox.Metrics.Ascent.Should().BeGreaterThan(centeredBox.Metrics.Ascent,
+                    "m:mPr/m:baseJc=bot should report a bottom-row baseline contract through shared MathBox metrics");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "M = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = spacedBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(300, 170));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render m:mPr matrix spacing and base justification from the shared MathBox plan without host-specific layout branching");
+    }
+
+    private static string MatrixOmml(string matrixProperties = "") =>
+        "<m:m>" +
+        (string.IsNullOrEmpty(matrixProperties) ? "" : $"<m:mPr>{matrixProperties}</m:mPr>") +
+        "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e><m:e><m:r><m:t>bb</m:t></m:r></m:e></m:mr>" +
+        "<m:mr><m:e><m:r><m:t>ccc</m:t></m:r></m:e><m:e><m:r><m:t>d</m:t></m:r></m:e></m:mr>" +
+        "</m:m>";
 }
