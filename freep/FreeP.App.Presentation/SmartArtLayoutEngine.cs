@@ -99,6 +99,9 @@ public static class SmartArtLayoutEngine
         if (IsBasicPyramidLayout(data.LayoutUniqueId))
             return LayoutBasicPyramid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (data.Family == SmartArtFamily.Hierarchy && IsHorizontalHierarchyLayout(data.LayoutUniqueId))
+            return LayoutHorizontalHierarchy(data, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         return data.Family switch
         {
             SmartArtFamily.Process   => LayoutProcess  (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
@@ -1062,6 +1065,119 @@ public static class SmartArtLayoutEngine
     // ── Hierarchy layout ───────────────────────────────────────────────────────────────────────
 
     /// <summary>
+    /// Horizontal hierarchy layout: roots/parents on the left, child/report nodes
+    /// in depth columns to the right, with shared connector line shapes.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutHorizontalHierarchy(
+        SmartArtData data,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        var shapes = new List<SlideShape>();
+        if (data.Nodes.Count == 0) return shapes;
+
+        long padX = (long)(fcx * OuterPaddingFrac);
+        long padY = (long)(fcy * OuterPaddingFrac);
+        long availW = Math.Max(fcx - 2 * padX, 1L);
+        long availH = Math.Max(fcy - 2 * padY, 1L);
+
+        int treeDepth = Math.Max(data.Nodes.Max(GetTreeDepth), 1);
+        int leafRows = Math.Max(data.Nodes.Sum(GetTreeWidth), 1);
+
+        long gapX = treeDepth > 1 ? (long)(fcx * GapFrac) : 0;
+        long gapY = leafRows > 1 ? (long)(fcy * GapFrac) : 0;
+
+        long boxW = Math.Max((availW - (treeDepth - 1) * gapX) / treeDepth, 1L);
+        long boxH = Math.Max((availH - (leafRows - 1) * gapY) / leafRows, 1L);
+
+        long totalH = leafRows * boxH + (leafRows - 1) * gapY;
+        long startX = fx + padX;
+        long startY = fy + padY + Math.Max((availH - totalH) / 2, 0L);
+
+        uint idCounter = 450;
+        long curY = startY;
+        foreach (var root in data.Nodes)
+        {
+            int rootRows = Math.Max(GetTreeWidth(root), 1);
+            RenderHorizontalNode(
+                root,
+                levelIndex: 0,
+                slotY: curY,
+                leafRows: rootRows,
+                startX,
+                boxW,
+                boxH,
+                gapX,
+                gapY,
+                shapes,
+                stylePlan,
+                ref idCounter,
+                parentRightX: -1,
+                parentCenterY: -1);
+
+            curY += rootRows * boxH + (rootRows - 1) * gapY + gapY;
+        }
+
+        return shapes;
+    }
+
+    private static void RenderHorizontalNode(
+        SmartArtNode node,
+        int levelIndex,
+        long slotY,
+        int leafRows,
+        long startX,
+        long boxW,
+        long boxH,
+        long gapX,
+        long gapY,
+        List<SlideShape> shapes,
+        SmartArtStylePlan stylePlan,
+        ref uint idCounter,
+        long parentRightX,
+        long parentCenterY)
+    {
+        long slotH = leafRows * boxH + (leafRows - 1) * gapY;
+        long boxX = startX + levelIndex * (boxW + gapX);
+        long boxY = slotY + Math.Max((slotH - boxH) / 2, 0L);
+
+        var nodeStyle = stylePlan.GetNodeStyle(0, node.Level, SmartArtFamily.Hierarchy);
+        shapes.Add(MakeBox(idCounter++, node.Text, nodeStyle, boxX, boxY, boxW, boxH,
+            node.Level == 0 ? NodeFontSizeLargePt : NodeFontSizePt));
+
+        long boxRightX = boxX + boxW;
+        long boxCenterY = boxY + boxH / 2;
+        if (parentRightX >= 0 && parentCenterY >= 0)
+            shapes.Add(MakeConnector(idCounter++, parentRightX, parentCenterY, boxX, boxCenterY, stylePlan.Connector));
+
+        if (node.Children.Count == 0)
+            return;
+
+        long childCurY = slotY;
+        foreach (var child in node.Children)
+        {
+            int childRows = Math.Max(GetTreeWidth(child), 1);
+            RenderHorizontalNode(
+                child,
+                levelIndex + 1,
+                childCurY,
+                childRows,
+                startX,
+                boxW,
+                boxH,
+                gapX,
+                gapY,
+                shapes,
+                stylePlan,
+                ref idCounter,
+                parentRightX: boxRightX,
+                parentCenterY: boxCenterY);
+
+            childCurY += childRows * boxH + (childRows - 1) * gapY + gapY;
+        }
+    }
+
+    /// <summary>
     /// Tree layout: root at top, children spread below, connector lines joining parent to children.
     /// Handles arbitrary depth; widths computed bottom-up.
     /// </summary>
@@ -1286,6 +1402,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "orgchart", StringComparison.Ordinal);
+    }
+
+    private static bool IsHorizontalHierarchyLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "horizontalhierarchy", StringComparison.Ordinal);
     }
 
     private static bool IsPictureCaptionListLayout(string uniqueId)

@@ -1725,10 +1725,31 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownHierarchyFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    public void Reader_ParsesHorizontalHierarchyAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy",
+            nodes: [("R", "Portfolio"), ("C1", "Product"), ("C2", "Operations")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy,
+            "horizontalHierarchy is a hierarchy-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "horizontalHierarchy is now in the bounded shared live-layout planner");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Text.Should().Be("Portfolio");
+        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Product", "Operations" });
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownHierarchyFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy",
             nodes: [("R", "Root"), ("C", "Child")],
             parOfConnections: [("R", "C")]);
 
@@ -2517,6 +2538,40 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_HorizontalHierarchySmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy",
+            nodes: [("R", "Portfolio"), ("C1", "Product"), ("C2", "Operations")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(5, "three horizontal-hierarchy boxes plus two connectors should render from shared live data");
+        var boxesByText = liveShapes
+            .Where(op => op.Text is not null)
+            .ToDictionary(
+                op => op.Text!.Paragraphs.First().Runs.First().Text,
+                StringComparer.Ordinal);
+
+        boxesByText.Keys.Should().BeEquivalentTo("Portfolio", "Product", "Operations");
+        boxesByText["Product"].BoundsDip.X.Should().BeGreaterThan(boxesByText["Portfolio"].BoundsDip.X,
+            "WPF/Avalonia consume shared left-to-right horizontal hierarchy geometry");
+        boxesByText["Operations"].BoundsDip.X.Should().Be(boxesByText["Product"].BoundsDip.X,
+            "sibling report boxes share the same depth column");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "horizontalHierarchy uses shared connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_OrgChartSmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2729,7 +2784,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Hierarchy,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy",
             IsLiveLayoutSupported = false
         };
         var root = new SmartArtNode { Text = "Root", Level = 0 };
