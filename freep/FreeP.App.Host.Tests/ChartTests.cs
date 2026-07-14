@@ -1366,6 +1366,7 @@ public sealed class ChartTests : IDisposable
     [InlineData("06-charts.pptx")]
     [InlineData("18-chart-types.pptx")]
     [InlineData("19-chart-labels.pptx")]
+    [InlineData("22-chart-baseline-depth.pptx")]
     public void RenderCompareChartCorpus_ImportsWorkbookFormulaReferences(string deckName)
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), deckName);
@@ -1401,6 +1402,7 @@ public sealed class ChartTests : IDisposable
     [InlineData("06-charts.pptx")]
     [InlineData("18-chart-types.pptx")]
     [InlineData("19-chart-labels.pptx")]
+    [InlineData("22-chart-baseline-depth.pptx")]
     public void RenderCompareChartCorpus_ImportsVaryColorsDecision(string deckName)
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), deckName);

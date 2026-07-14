@@ -60,6 +60,100 @@ static TextBody MakeTextBody(params string[] paragraphs)
     return body;
 }
 
+static SlideShape MakeChartShape(uint id, string name, ChartShape chart, long x, long y, long cx, long cy) =>
+    new()
+    {
+        Id          = id,
+        Name        = name,
+        Kind        = SlideShapeKind.Chart,
+        OffsetXEmu  = x,
+        OffsetYEmu  = y,
+        ExtentCxEmu = cx,
+        ExtentCyEmu = cy,
+        Chart       = chart,
+    };
+
+static ChartSeries MakeSeries(string name, params double?[] values)
+{
+    var series = new ChartSeries { Name = name };
+    series.Values.AddRange(values);
+    return series;
+}
+
+static ChartShape MakeStockChart()
+{
+    var chart = new ChartShape
+    {
+        ChartType                = ChartType.Stock,
+        Title                    = "Stock: rising, falling, unchanged",
+        RegenerateWorkbookOnSave = true,
+    };
+    chart.Categories.AddRange(new[] { "Day 1", "Day 2", "Day 3" });
+    chart.Series.Add(MakeSeries("Open", 10, 14, 12));
+    chart.Series.Add(MakeSeries("High", 15, 16, 14));
+    chart.Series.Add(MakeSeries("Low", 8, 11, 10));
+    chart.Series.Add(MakeSeries("Close", 14, 12, 12));
+    return chart;
+}
+
+static ChartShape MakeSurfaceChart()
+{
+    var chart = new ChartShape
+    {
+        ChartType                = ChartType.Surface3D,
+        Title                    = "Surface: blank cell grid retention",
+        RegenerateWorkbookOnSave = true,
+        VaryColors               = true,
+    };
+    chart.Categories.AddRange(new[] { "North", "East", "South" });
+    chart.Series.Add(MakeSeries("Low band", 10, null, 18));
+    chart.Series.Add(MakeSeries("High band", 28, 24, 35));
+    return chart;
+}
+
+static ChartShape MakeSmoothScatterChart()
+{
+    var chart = new ChartShape
+    {
+        ChartType                = ChartType.Scatter,
+        ScatterStyle             = ScatterStyle.SmoothMarker,
+        Title                    = "Scatter: smooth and straight series",
+        RegenerateWorkbookOnSave = true,
+    };
+
+    var smooth = MakeSeries("Smoothed", 12, 32, 22, 44);
+    smooth.XValues.AddRange(new double?[] { 0, 30, 70, 100 });
+    smooth.SmoothLine = true;
+    chart.Series.Add(smooth);
+
+    var straight = MakeSeries("Straight override", 18, 16, 34, 28);
+    straight.XValues.AddRange(new double?[] { 0, 30, 70, 100 });
+    straight.SmoothLine = false;
+    chart.Series.Add(straight);
+
+    return chart;
+}
+
+static ChartShape MakeHundredPercentStackedChart()
+{
+    var chart = new ChartShape
+    {
+        ChartType                = ChartType.ColumnStacked100,
+        Title                    = "100% stacked: normalized bands",
+        RegenerateWorkbookOnSave = true,
+        DataLabels               = new ChartDataLabels
+        {
+            ShowValue   = true,
+            ShowPercent = true,
+            Position    = DataLabelPosition.Center,
+        },
+    };
+    chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+    chart.Series.Add(MakeSeries("Actual", 20, 30, 40));
+    chart.Series.Add(MakeSeries("Forecast", 30, 20, 10));
+    return chart;
+}
+
 // ── 10-motionpath.pptx ──────────────────────────────────────────────────────────
 // A slide with:
 //   Shape 2 "Mover"   — line motion path (moves right 40% of slide width)
@@ -187,6 +281,36 @@ static TextBody MakeTextBody(params string[] paragraphs)
     pres.Slides.Add(slide2);
 
     var outPath = Path.Combine(outDir, "21-comments-notes.pptx");
+    using var fs = File.Create(outPath);
+    PptxPackageWriter.Write(pres, fs);
+    Console.WriteLine($"Generated: {outPath}");
+}
+
+// 22-chart-baseline-depth.pptx
+// A deterministic FreeP-authored deck for no-COM chart visual baseline depth.
+// It exercises stock ticks, surface grid retention, smooth scatter paths, and 100% stacks.
+{
+    var pres = Presentation.CreateEmpty();
+    var slide = pres.Slides[0];
+    slide.Title = "Chart baseline depth";
+    slide.Shapes.Clear();
+
+    const long left = 457200;
+    const long top = 457200;
+    const long chartWidth = 4572000;
+    const long chartHeight = 2743200;
+    const long gap = 228600;
+
+    slide.Shapes.Add(MakeChartShape(2, "Stock baseline", MakeStockChart(),
+        left, top, chartWidth, chartHeight));
+    slide.Shapes.Add(MakeChartShape(3, "Surface baseline", MakeSurfaceChart(),
+        left + chartWidth + gap, top, chartWidth, chartHeight));
+    slide.Shapes.Add(MakeChartShape(4, "Smooth scatter baseline", MakeSmoothScatterChart(),
+        left, top + chartHeight + gap, chartWidth, chartHeight));
+    slide.Shapes.Add(MakeChartShape(5, "Stacked 100 baseline", MakeHundredPercentStackedChart(),
+        left + chartWidth + gap, top + chartHeight + gap, chartWidth, chartHeight));
+
+    var outPath = Path.Combine(outDir, "22-chart-baseline-depth.pptx");
     using var fs = File.Create(outPath);
     PptxPackageWriter.Write(pres, fs);
     Console.WriteLine($"Generated: {outPath}");
