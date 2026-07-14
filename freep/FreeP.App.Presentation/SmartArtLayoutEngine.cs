@@ -84,6 +84,9 @@ public static class SmartArtLayoutEngine
         if (IsAlternatingProcessLayout(data.LayoutUniqueId))
             return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsDescendingBlockListLayout(data.LayoutUniqueId))
+            return LayoutDescendingBlockList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsBasicPyramidLayout(data.LayoutUniqueId))
             return LayoutBasicPyramid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -377,6 +380,46 @@ public static class SmartArtLayoutEngine
     // ── Cycle layout ───────────────────────────────────────────────────────────────────────────
 
     // Matrix layout.
+
+    /// <summary>
+    /// Descending block list geometry: top-to-bottom list blocks narrow toward
+    /// the bottom while keeping their right edge aligned.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutDescendingBlockList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = (long)(fcy * GapFrac);
+
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availH = Math.Max(fcy - 2 * outerPadY - (n - 1) * gapY, 1L);
+        long boxH = n > 0 ? Math.Max(availH / n, 1L) : 1L;
+        long rightX = fx + outerPadX + innerW;
+        double minWidthFrac = n == 1 ? 1.0 : 0.58;
+
+        uint idCounter = 280;
+        long curY = fy + outerPadY;
+
+        for (int i = 0; i < n; i++)
+        {
+            double t = n == 1 ? 0.0 : (double)i / (n - 1);
+            double widthFrac = 1.0 - ((1.0 - minWidthFrac) * t);
+            long boxW = Math.Max((long)(innerW * widthFrac), 1L);
+            long x = rightX - boxW;
+
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
+            shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, x, curY, boxW, boxH));
+            curY += boxH + gapY;
+        }
+
+        return shapes;
+    }
 
     /// <summary>
     /// Bounded two-by-two quadrant grid for PowerPoint matrix layouts.
@@ -972,6 +1015,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "basicpyramid", StringComparison.Ordinal);
+    }
+
+    private static bool IsDescendingBlockListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "descendingblocklist", StringComparison.Ordinal);
     }
 
     private static bool IsBasicVennLayout(string uniqueId)

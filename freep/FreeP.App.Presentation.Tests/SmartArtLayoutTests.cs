@@ -782,14 +782,14 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
-    public void DescendingBlockList_ReturnsLiveVerticalListBoxesWithoutConnectors()
+    public void DescendingBlockList_ReturnsRightAlignedDescendingBlocksWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.List, "A", "B", "C");
         data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/descendingBlockList";
 
         var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
-        shapes.Should().NotBeNull("descendingBlockList is admitted as a bounded shared list-family approximation");
+        shapes.Should().NotBeNull("descendingBlockList has bounded shared descending-block geometry");
         shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
             .Should().HaveCount(3, "one live box should be emitted per descending-block-list node");
         shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
@@ -799,7 +799,20 @@ public sealed class SmartArtLayoutTests
         boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
             .Should().Equal("A", "B", "C");
         boxes.Select(s => s.OffsetYEmu)
-            .Should().BeInAscendingOrder("descendingBlockList should reuse the shared vertical list-family geometry");
+            .Should().BeInAscendingOrder("descendingBlockList blocks stack top-to-bottom");
+        boxes.Select(s => s.ExtentCxEmu)
+            .Should().BeInDescendingOrder("descendingBlockList blocks should narrow toward the bottom");
+
+        var rightEdge = boxes[0].OffsetXEmu + boxes[0].ExtentCxEmu;
+        foreach (var box in boxes)
+        {
+            (box.OffsetXEmu + box.ExtentCxEmu).Should().Be(rightEdge,
+                "descendingBlockList should keep the right edge aligned in shared geometry");
+            box.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            box.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (box.OffsetXEmu + box.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (box.OffsetYEmu + box.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
     }
 
     [Fact]
@@ -1837,6 +1850,15 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().NotContain("Cached descending block list fallback");
         shapeOps.Select(op => op.BoundsDip.Y)
             .Should().BeInAscendingOrder("hosts consume the shared descending-block-list DrawOp geometry");
+        shapeOps.Select(op => op.BoundsDip.Width)
+            .Should().BeInDescendingOrder("hosts consume shared descending-block width geometry");
+
+        var rightEdge = shapeOps[0].BoundsDip.X + shapeOps[0].BoundsDip.Width;
+        foreach (var op in shapeOps)
+        {
+            (op.BoundsDip.X + op.BoundsDip.Width).Should().BeApproximately(rightEdge, 0.01,
+                "shared descending-block DrawOps should keep a common right edge");
+        }
     }
 
     [Fact]
