@@ -900,6 +900,22 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "funnelProcess now uses a bounded shared process live-layout path for parsed ordered-stage nodes as top-to-bottom trapezoid segments that narrow toward the bottom with centered connector ops. Exact PowerPoint funnel contours, effects, segment overlap, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
+            EvidenceId: "freep.smartart.circle-process",
+            Area: "SmartArt circle process live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared circular stage and connector ops emitted by the SmartArt process-family planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-circle-process-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "circleProcess now uses a bounded shared process live-layout path for parsed ordered-stage nodes as clockwise rounded boxes around an ellipse with loop-closing connector ops. Exact PowerPoint circular-arrow artwork, segment contours, effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+        new(
             EvidenceId: "freep.smartart.basic-block-list",
             Area: "SmartArt basic block list live layout",
             Status: "shared-render-planner-evidence",
