@@ -1006,26 +1006,43 @@ public sealed class SlideCanvas : FrameworkElement
                 ? seriesColors[primitive.PointIndex]
                 : new SrgbColor(0x4F, 0x81, 0xBD);
 
-            var brush = ToBrush(primitive.Fill ?? new ChartFillPlan(sc, Alpha: 255));
-
-            var geo = new StreamGeometry();
-            using (var ctx = geo.Open())
+            var fill = primitive.Fill ?? new ChartFillPlan(sc, Alpha: 255);
+            if (primitive.HasThreeDDepth)
             {
-                var start = ToPoint(primitive.OuterStart);
-                var end = ToPoint(primitive.OuterEnd);
-
-                ctx.BeginFigure(ToPoint(primitive.Center), isFilled: true, isClosed: true);
-                ctx.LineTo(start, isStroked: false, isSmoothJoin: false);
-                ctx.ArcTo(end, new Size(primitive.OuterRadius, primitive.OuterRadiusY), 0, primitive.IsLargeArc,
-                    SweepDirection.Clockwise, isStroked: false, isSmoothJoin: false);
+                var depthFill = fill.WithAlpha(ChartRenderPlanner.ThreeDPieDepthFillAlpha);
+                dc.DrawGeometry(
+                    ToBrush(depthFill),
+                    null,
+                    ToPieSliceGeometry(primitive, primitive.DepthOffsetY));
             }
-            if (geo.CanFreeze) geo.Freeze();
+
+            var brush = ToBrush(fill);
+            var geo = ToPieSliceGeometry(primitive);
 
             var borderPen = new Pen(FreezeBrush(new SolidColorBrush(Colors.White)), 0.8);
             if (borderPen.CanFreeze) borderPen.Freeze();
 
             dc.DrawGeometry(brush, borderPen, geo);
         }
+    }
+
+    private static StreamGeometry ToPieSliceGeometry(ChartPieSlicePrimitive primitive, double offsetY = 0)
+    {
+        var geo = new StreamGeometry();
+        using (var ctx = geo.Open())
+        {
+            var center = new ChartPlanPoint(primitive.Center.X, primitive.Center.Y + offsetY);
+            var start = new ChartPlanPoint(primitive.OuterStart.X, primitive.OuterStart.Y + offsetY);
+            var end = new ChartPlanPoint(primitive.OuterEnd.X, primitive.OuterEnd.Y + offsetY);
+
+            ctx.BeginFigure(ToPoint(center), isFilled: true, isClosed: true);
+            ctx.LineTo(ToPoint(start), isStroked: false, isSmoothJoin: false);
+            ctx.ArcTo(ToPoint(end), new Size(primitive.OuterRadius, primitive.OuterRadiusY), 0, primitive.IsLargeArc,
+                SweepDirection.Clockwise, isStroked: false, isSmoothJoin: false);
+        }
+        if (geo.CanFreeze) geo.Freeze();
+
+        return geo;
     }
 
     // ── Area chart ────────────────────────────────────────────────────────────

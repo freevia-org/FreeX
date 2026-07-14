@@ -478,6 +478,7 @@ public static partial class ChartRenderPlanner
     public const double RadarSeriesStrokeThickness = 1.5;
     public const double RadarMarkerRadius = 3.0;
     public const double ThreeDPieVerticalScale = 0.72;
+    public const byte ThreeDPieDepthFillAlpha = 140;
     public const double ClassicThreeDDepthScale = 0.045;
     public const double StockTickWidthFraction = 0.32;
     public const double SurfaceCellStrokeThickness = 0.4;

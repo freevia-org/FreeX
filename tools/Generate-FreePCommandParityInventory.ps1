@@ -539,7 +539,7 @@ internal static class FreePCommandInventory
             EvidenceId: "freep.chart.pie-first-slice-angle",
             Area: "Chart pie and doughnut first-slice angle preservation",
             Status: "shared-render-planner-evidence",
-            HostCoverage: "WPF/Avalonia consume shared ChartPieSlicePrimitive angles from ChartRenderPlanner with no renderer-local pie or doughnut angle policy",
+            HostCoverage: "WPF/Avalonia consume shared ChartPieSlicePrimitive angles from ChartRenderPlanner with no renderer-local pie, doughnut, or 3-D pie angle policy",
             EvidenceDocs:
             [
                 "docs/parity/freep-chart-pie-first-slice-angle-2026-07-07.md"
@@ -554,7 +554,26 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs",
                 "freep/FreeP.App.Host.Tests/ChartTests.cs"
             ],
-            RemainingWork: "Pie and doughnut c:firstSliceAng now round-trips through the model and PPTX package and drives shared slice primitive planning. PowerPoint-authoritative visual baselines, pie3D behavior, and broader chart visual fidelity remain deferred."),
+            RemainingWork: "Pie and doughnut c:firstSliceAng now round-trips through the model and PPTX package and drives shared slice primitive planning. PowerPoint-authoritative visual baselines and broader chart visual fidelity remain deferred."),
+        new(
+            EvidenceId: "freep.chart.pie3d-depth-rendering",
+            Area: "Chart 3-D pie compressed top-face and depth-pass rendering",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume shared ChartPieSlicePrimitive vertical scale, depth offset, and depth-fill alpha with no renderer-local 3-D pie policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-pie3d-depth-rendering-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
+                "freep/FreeP.App.Rendering.Wpf/SlideCanvas.cs",
+                "freep/FreeP.App.Rendering.Avalonia/SlideCanvas.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartBaselineCorpusTests.cs",
+                "freep/FreeP.App.Presentation.Tests/RendererNeutralDedupPlannerTests.cs"
+            ],
+            RemainingWork: "Shared 3-D pie planning now gives WPF and Avalonia the same compressed top face plus lower depth pass before either renderer draws the top slice. PowerPoint-authoritative 3-D pie visual baselines, side-wall lighting/camera fidelity, and pixel-diff thresholds remain deferred to a COM-capable baseline host."),
         new(
             EvidenceId: "freep.chart.blank-point-rendering",
             Area: "Chart blank-point rendering decisions",

@@ -282,6 +282,10 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("ChartRenderPlanner.BuildDoughnutSlicePrimitives");
             source.Should().Contain("primitive.OuterRadiusY");
             source.Should().Contain("primitive.InnerRadiusY");
+            source.Should().Contain("primitive.HasThreeDDepth");
+            source.Should().Contain("primitive.DepthOffsetY");
+            source.Should().Contain("ChartRenderPlanner.ThreeDPieDepthFillAlpha");
+            source.Should().Contain("ToPieSliceGeometry(primitive, primitive.DepthOffsetY)");
             source.Should().NotContain("chart.DoughnutHolePercent, 0, 90");
             source.Should().NotContain("ringGap =");
         }
