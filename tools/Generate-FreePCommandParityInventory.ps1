@@ -980,6 +980,22 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "chevronProcess now uses the bounded shared process live-layout path for parsed ordered-stage nodes. The shared planner intentionally represents this as renderer-neutral rounded boxes plus connector ops, not exact PowerPoint chevron polygon geometry; other unsupported process variants remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
+            EvidenceId: "freep.smartart.alternating-process",
+            Area: "SmartArt alternatingProcess live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared upper/lower-track shape and connector ops emitted by the SmartArt process-family planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-alternating-process-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "alternatingProcess now uses a bounded shared process live-layout path for parsed ordered-stage nodes as alternating upper/lower process tracks with shared connector ops. Exact PowerPoint process contours, effects, spacing, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+        new(
             EvidenceId: "freep.smartart.funnel-process",
             Area: "SmartArt funnel process live layout",
             Status: "shared-render-planner-evidence",
