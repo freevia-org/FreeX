@@ -168,6 +168,7 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-media-caption-shared-sidecar-retention-2026-07-14.md",
                 "docs/parity/freep-presenter-recording-microphone-handoff-2026-07-14.md",
                 "docs/parity/freep-presenter-recording-camera-handoff-2026-07-14.md",
+                "docs/parity/freep-presenter-recording-camera-payload-2026-07-14.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-05.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-13.md",
                 "docs/parity/freep-presenter-recording-review-2026-07-04.md"
@@ -183,7 +184,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, paired real Windows microphone narration handoff evidence, paired Windows camera handoff readiness, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Encoded real camera media payload capture, unavailable-hardware live capture, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
+            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, paired real Windows microphone narration handoff evidence, paired Windows camera handoff readiness, deterministic encoded camera media payload artifacts through host-specific PPTX package paths, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Unavailable-hardware live capture, local default no-COM real camera encoding, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
         new(
             EvidenceId: "freep.media-caption.native-sidecar-depth",
             Area: "PowerPoint-native media and caption sidecar package depth",
