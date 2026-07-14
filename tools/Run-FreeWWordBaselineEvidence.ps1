@@ -4,6 +4,7 @@ param(
     [int]$MaxPagesPerDocument = 3,
     [string]$WordApplicationProgId = "Word.Application",
     [switch]$AllowMissingWord,
+    [switch]$NoWord,
     [switch]$SkipEvidenceRender
 )
 
@@ -52,6 +53,7 @@ function Write-WordBaselineUnavailableSummary([string]$Reason) {
         authoritativeWordPngParity = $false
         reason = $Reason
         allowMissingWord = [bool]$AllowMissingWord
+        forcedNoWord = [bool]$NoWord
         trust = [ordered]@{
             passed = $true
             failures = @()
@@ -60,7 +62,7 @@ function Write-WordBaselineUnavailableSummary([string]$Reason) {
         createdUtc = [DateTimeOffset]::UtcNow.ToString("O")
     } | ConvertTo-Json | Set-Content -Encoding UTF8 $skipPath
 
-    if (-not $AllowMissingWord) {
+    if (-not $AllowMissingWord -and -not $NoWord) {
         Write-Error "Word baseline is unavailable: $Reason. Re-run with -AllowMissingWord to verify the no-Word summary path."
         exit 3
     }
@@ -112,6 +114,10 @@ $wpfManifest = Join-Path $wpfDir "freew_visual_evidence_manifest.json"
 $avaloniaManifest = Join-Path $avaloniaDir "freew_visual_evidence_manifest.json"
 if (-not (Test-Path $wpfManifest) -or -not (Test-Path $avaloniaManifest)) {
     throw "expected visual evidence manifests were not found under '$wpfDir' and '$avaloniaDir'"
+}
+
+if ($NoWord) {
+    Write-WordBaselineUnavailableSummary "Word baseline skipped by -NoWord; no COM probe or Word process launch attempted"
 }
 
 $wordAvailable = Test-ComProgIdAvailable $WordApplicationProgId
