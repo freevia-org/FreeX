@@ -617,6 +617,29 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void VerticalProcess_ReturnsTopToBottomLiveBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "A", "B", "C", "D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("verticalProcess is a bounded shared process-family layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "one live box should be emitted per vertical-process node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "adjacent vertical-process nodes need shared connector ops");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("A", "B", "C", "D");
+        boxes.Select(s => s.OffsetYEmu)
+            .Should().BeInAscendingOrder("verticalProcess should lay process boxes out top-to-bottom");
+        boxes.Select(s => s.OffsetXEmu)
+            .Should().OnlyContain(x => x == boxes[0].OffsetXEmu, "verticalProcess uses a single centered process column");
+    }
+
+    [Fact]
     public void SegmentedProcess_ReturnsLiveProcessBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C");
