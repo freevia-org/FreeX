@@ -107,6 +107,7 @@ static ChartShape MakeSurfaceChart()
     };
     chart.Categories.AddRange(new[] { "North", "East", "South" });
     chart.Series.Add(MakeSeries("Low band", 10, null, 18));
+    chart.Series.Add(MakeSeries("Mid band", 18, 22, 26));
     chart.Series.Add(MakeSeries("High band", 28, 24, 35));
     return chart;
 }
@@ -288,7 +289,7 @@ static ChartShape MakeHundredPercentStackedChart()
 
 // 22-chart-baseline-depth.pptx
 // A deterministic FreeP-authored deck for no-COM chart visual baseline depth.
-// It exercises stock ticks, surface grid retention, smooth scatter paths, and 100% stacks.
+// It exercises stock ticks, surface grid retention/mesh contours, smooth scatter paths, and 100% stacks.
 {
     var pres = Presentation.CreateEmpty();
     var slide = pres.Slides[0];

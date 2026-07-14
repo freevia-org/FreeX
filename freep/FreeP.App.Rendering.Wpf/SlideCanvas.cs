@@ -1067,13 +1067,34 @@ public sealed class SlideCanvas : FrameworkElement
         double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildSurfaceCellPrimitives(chart, plot, seriesColors))
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, plot, seriesColors);
+
+        if (plan.Facets.Count > 0)
         {
-            dc.DrawRectangle(
-                ToBrush(primitive.Fill),
-                ToPen(primitive.Stroke),
-                ToRect(primitive.Bounds));
+            foreach (var facet in plan.Facets)
+            {
+                dc.DrawGeometry(
+                    ToBrush(facet.Fill),
+                    ToPen(facet.Stroke),
+                    ToSurfaceFacetGeometry(facet));
+            }
         }
+        else
+        {
+            foreach (var primitive in plan.Cells)
+            {
+                dc.DrawRectangle(
+                    ToBrush(primitive.Fill),
+                    ToPen(primitive.Stroke),
+                    ToRect(primitive.Bounds));
+            }
+        }
+
+        foreach (var segment in plan.ContourSegments)
+            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+
+        foreach (var segment in plan.WireframeSegments)
+            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
     }
 
     private static void RenderDoughnutChart(
@@ -2797,6 +2818,24 @@ public sealed class SlideCanvas : FrameworkElement
                     ctx.BeginFigure(point, path.Fill.HasValue, path.IsClosed);
                 else
                     ctx.LineTo(point, isStroked: true, isSmoothJoin: true);
+            }
+        }
+
+        if (geometry.CanFreeze) geometry.Freeze();
+        return geometry;
+    }
+
+    private static StreamGeometry ToSurfaceFacetGeometry(ChartSurfaceFacetPrimitive facet)
+    {
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            var points = facet.Points;
+            if (points.Count > 0)
+            {
+                ctx.BeginFigure(ToPoint(points[0]), isFilled: true, isClosed: true);
+                for (int index = 1; index < points.Count; index++)
+                    ctx.LineTo(ToPoint(points[index]), isStroked: true, isSmoothJoin: false);
             }
         }
 

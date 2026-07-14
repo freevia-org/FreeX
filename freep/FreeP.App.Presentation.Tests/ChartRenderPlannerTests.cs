@@ -435,6 +435,55 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceGeometryPlan_Surface3DPlansProjectedFacetsAndWireframe()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        plan.Cells.Should().HaveCount(6);
+        plan.Points.Should().HaveCount(6);
+        plan.Facets.Should().HaveCount(2);
+        plan.WireframeSegments.Should().HaveCount(7);
+        plan.ContourSegments.Should().NotBeEmpty();
+        plan.Facets.Should().OnlyContain(facet => facet.Points.Count == 4);
+        plan.Facets.Select(facet => facet.AverageNormalizedValue)
+            .Should()
+            .OnlyContain(value => value > 0 && value < 1);
+
+        var lowest = plan.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 0);
+        var highest = plan.Points.Single(point => point.SeriesIndex == 1 && point.CategoryIndex == 2);
+        highest.Point.Y.Should().BeLessThan(lowest.Point.Y,
+            "3-D surface projection should raise higher values instead of drawing a flat fallback grid");
+        highest.Point.X.Should().BeGreaterThan(lowest.Point.X,
+            "3-D surface projection should include depth offset across the series axis");
+    }
+
+    [Fact]
+    public void BuildSurfaceGeometryPlan_SurfacePlansContourSegmentsInPlotBounds()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface);
+
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(10, 20, 300, 120));
+
+        plan.Facets.Should().HaveCount(2);
+        plan.ContourSegments.Should().NotBeEmpty();
+        plan.ContourSegments.Should().OnlyContain(segment =>
+            segment.Start.X >= 10 &&
+            segment.Start.X <= 310 &&
+            segment.End.X >= 10 &&
+            segment.End.X <= 310 &&
+            segment.Start.Y >= 20 &&
+            segment.Start.Y <= 140 &&
+            segment.End.Y >= 20 &&
+            segment.End.Y <= 140);
+    }
+
+    [Fact]
     public void BuildFramePlan_ColumnAxisTitles_ReservesSharedTitleBands()
     {
         var chart = new ChartShape { ChartType = ChartType.ColumnClustered };

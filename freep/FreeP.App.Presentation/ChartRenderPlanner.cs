@@ -272,6 +272,29 @@ public readonly record struct ChartSurfaceCellPrimitive(
     double Value,
     double NormalizedValue);
 
+public readonly record struct ChartSurfacePointPrimitive(
+    int SeriesIndex,
+    int CategoryIndex,
+    ChartPlanPoint Point,
+    double Value,
+    double NormalizedValue);
+
+public readonly record struct ChartSurfaceFacetPrimitive(
+    int SeriesIndex,
+    int CategoryIndex,
+    IReadOnlyList<ChartPlanPoint> Points,
+    ChartFillPlan Fill,
+    ChartStrokePlan Stroke,
+    double AverageValue,
+    double AverageNormalizedValue);
+
+public readonly record struct ChartSurfaceGeometryPlan(
+    IReadOnlyList<ChartSurfaceCellPrimitive> Cells,
+    IReadOnlyList<ChartSurfacePointPrimitive> Points,
+    IReadOnlyList<ChartSurfaceFacetPrimitive> Facets,
+    IReadOnlyList<ChartLineSegmentPrimitive> WireframeSegments,
+    IReadOnlyList<ChartLineSegmentPrimitive> ContourSegments);
+
 public readonly record struct ChartBarClusterSlot(
     double CategoryStart,
     double CategorySize,
@@ -458,6 +481,9 @@ public static partial class ChartRenderPlanner
     public const double ClassicThreeDDepthScale = 0.045;
     public const double StockTickWidthFraction = 0.32;
     public const double SurfaceCellStrokeThickness = 0.4;
+    public const double SurfaceFacetStrokeThickness = 0.55;
+    public const double SurfaceWireframeStrokeThickness = 0.7;
+    public const double SurfaceContourStrokeThickness = 0.9;
     private const double DipPerPoint = 96.0 / 72.0;
     private const double DefaultBarGapWidthPercent = 150.0;
 
@@ -1783,6 +1809,330 @@ public static partial class ChartRenderPlanner
         }
 
         return primitives;
+    }
+
+    public static ChartSurfaceGeometryPlan BuildSurfaceGeometryPlan(
+        ChartShape chart,
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
+    {
+        var cells = BuildSurfaceCellPrimitives(chart, plot, seriesColors);
+        if (cells.Count == 0)
+            return EmptySurfaceGeometryPlan(cells);
+
+        int categoryCount = ResolveChartCategoryCount(chart);
+        int seriesCount = chart.Series.Count;
+        if (categoryCount < 2 || seriesCount < 2 || !plot.HasPositiveArea)
+            return EmptySurfaceGeometryPlan(cells);
+
+        var pointsByKey = new Dictionary<(int Series, int Category), ChartSurfacePointPrimitive>();
+        foreach (var cell in cells)
+        {
+            var point = new ChartSurfacePointPrimitive(
+                cell.SeriesIndex,
+                cell.CategoryIndex,
+                ProjectSurfacePoint(
+                    plot,
+                    seriesCount,
+                    categoryCount,
+                    cell.SeriesIndex,
+                    cell.CategoryIndex,
+                    cell.NormalizedValue,
+                    chart.ChartType == ChartType.Surface3D),
+                cell.Value,
+                cell.NormalizedValue);
+            pointsByKey[(cell.SeriesIndex, cell.CategoryIndex)] = point;
+        }
+
+        var points = pointsByKey.Values
+            .OrderBy(point => point.SeriesIndex)
+            .ThenBy(point => point.CategoryIndex)
+            .ToArray();
+
+        var wireframe = BuildSurfaceWireframeSegments(pointsByKey, seriesCount, categoryCount);
+        var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
+        var contours = BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
+
+        return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours);
+    }
+
+    private static ChartSurfaceGeometryPlan EmptySurfaceGeometryPlan(
+        IReadOnlyList<ChartSurfaceCellPrimitive> cells) =>
+        new(
+            cells,
+            Array.Empty<ChartSurfacePointPrimitive>(),
+            Array.Empty<ChartSurfaceFacetPrimitive>(),
+            Array.Empty<ChartLineSegmentPrimitive>(),
+            Array.Empty<ChartLineSegmentPrimitive>());
+
+    private static ChartPlanPoint ProjectSurfacePoint(
+        ChartPlanRect plot,
+        int seriesCount,
+        int categoryCount,
+        int seriesIndex,
+        int categoryIndex,
+        double normalized,
+        bool isThreeD)
+    {
+        double categoryT = categoryCount <= 1 ? 0 : categoryIndex / (double)(categoryCount - 1);
+        double seriesT = seriesCount <= 1 ? 0 : seriesIndex / (double)(seriesCount - 1);
+
+        if (!isThreeD)
+        {
+            return new ChartPlanPoint(
+                Math.Round(plot.X + categoryT * plot.Width, 4),
+                Math.Round(plot.Bottom - seriesT * plot.Height, 4));
+        }
+
+        double depthX = Math.Min(plot.Width * 0.16, 28.0);
+        double depthY = Math.Min(plot.Height * 0.12, 20.0);
+        double lift = Math.Min(plot.Height * 0.32, 48.0);
+        double drawableWidth = Math.Max(1, plot.Width - depthX);
+        double drawableHeight = Math.Max(1, plot.Height - lift);
+        double x = plot.X + categoryT * drawableWidth + seriesT * depthX;
+        double y = plot.Y + lift + (1 - seriesT) * drawableHeight - seriesT * depthY - normalized * lift;
+
+        return new ChartPlanPoint(Math.Round(x, 4), Math.Round(y, 4));
+    }
+
+    private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceWireframeSegments(
+        IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
+        int seriesCount,
+        int categoryCount)
+    {
+        var stroke = new ChartStrokePlan(
+            new SrgbColor(0x52, 0x5A, 0x63),
+            Alpha: 205,
+            SurfaceWireframeStrokeThickness);
+        var segments = new List<ChartLineSegmentPrimitive>();
+
+        for (int seriesIndex = 0; seriesIndex < seriesCount; seriesIndex++)
+        {
+            for (int categoryIndex = 0; categoryIndex < categoryCount - 1; categoryIndex++)
+                AddSurfaceWireframeSegment(points, segments, seriesIndex, categoryIndex, seriesIndex, categoryIndex + 1, stroke);
+        }
+
+        for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+        {
+            for (int seriesIndex = 0; seriesIndex < seriesCount - 1; seriesIndex++)
+                AddSurfaceWireframeSegment(points, segments, seriesIndex, categoryIndex, seriesIndex + 1, categoryIndex, stroke);
+        }
+
+        return segments;
+    }
+
+    private static void AddSurfaceWireframeSegment(
+        IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
+        List<ChartLineSegmentPrimitive> segments,
+        int startSeries,
+        int startCategory,
+        int endSeries,
+        int endCategory,
+        ChartStrokePlan stroke)
+    {
+        if (!points.TryGetValue((startSeries, startCategory), out var start) ||
+            !points.TryGetValue((endSeries, endCategory), out var end))
+        {
+            return;
+        }
+
+        segments.Add(new ChartLineSegmentPrimitive(
+            startSeries,
+            startCategory,
+            endCategory,
+            start.Point,
+            end.Point,
+            stroke));
+    }
+
+    private static IReadOnlyList<ChartSurfaceFacetPrimitive> BuildSurfaceFacetPrimitives(
+        ChartShape chart,
+        IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
+        int seriesCount,
+        int categoryCount,
+        IReadOnlyList<SrgbColor>? seriesColors)
+    {
+        var facets = new List<ChartSurfaceFacetPrimitive>();
+        var stroke = new ChartStrokePlan(
+            new SrgbColor(0xFF, 0xFF, 0xFF),
+            Alpha: 185,
+            SurfaceFacetStrokeThickness);
+
+        for (int seriesIndex = 0; seriesIndex < seriesCount - 1; seriesIndex++)
+        {
+            for (int categoryIndex = 0; categoryIndex < categoryCount - 1; categoryIndex++)
+            {
+                if (!TryGetSurfaceQuad(
+                        points,
+                        seriesIndex,
+                        categoryIndex,
+                        out var topLeft,
+                        out var topRight,
+                        out var bottomRight,
+                        out var bottomLeft))
+                {
+                    continue;
+                }
+
+                double averageValue = (topLeft.Value + topRight.Value + bottomRight.Value + bottomLeft.Value) / 4.0;
+                double averageNormalized =
+                    (topLeft.NormalizedValue + topRight.NormalizedValue + bottomRight.NormalizedValue + bottomLeft.NormalizedValue) / 4.0;
+                var color = InterpolateSurfaceColor(
+                    ResolveSeriesColor(seriesIndex, seriesColors),
+                    averageNormalized);
+
+                facets.Add(new ChartSurfaceFacetPrimitive(
+                    seriesIndex,
+                    categoryIndex,
+                    new[]
+                    {
+                        topLeft.Point,
+                        topRight.Point,
+                        bottomRight.Point,
+                        bottomLeft.Point
+                    },
+                    new ChartFillPlan(color, Alpha: chart.ChartType == ChartType.Surface3D ? (byte)220 : (byte)185),
+                    stroke,
+                    averageValue,
+                    averageNormalized));
+            }
+        }
+
+        return facets;
+    }
+
+    private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceContourSegments(
+        IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
+        int seriesCount,
+        int categoryCount)
+    {
+        double[] contourLevels = { 0.25, 0.5, 0.75 };
+        var stroke = new ChartStrokePlan(
+            new SrgbColor(0x24, 0x2B, 0x33),
+            Alpha: 210,
+            SurfaceContourStrokeThickness);
+        var segments = new List<ChartLineSegmentPrimitive>();
+
+        for (int seriesIndex = 0; seriesIndex < seriesCount - 1; seriesIndex++)
+        {
+            for (int categoryIndex = 0; categoryIndex < categoryCount - 1; categoryIndex++)
+            {
+                if (!TryGetSurfaceQuad(
+                        points,
+                        seriesIndex,
+                        categoryIndex,
+                        out var topLeft,
+                        out var topRight,
+                        out var bottomRight,
+                        out var bottomLeft))
+                {
+                    continue;
+                }
+
+                foreach (double level in contourLevels)
+                {
+                    var intersections = new List<ChartPlanPoint>(4);
+                    AddContourIntersection(intersections, topLeft, topRight, level);
+                    AddContourIntersection(intersections, topRight, bottomRight, level);
+                    AddContourIntersection(intersections, bottomRight, bottomLeft, level);
+                    AddContourIntersection(intersections, bottomLeft, topLeft, level);
+
+                    if (intersections.Count == 2)
+                    {
+                        segments.Add(new ChartLineSegmentPrimitive(
+                            seriesIndex,
+                            categoryIndex,
+                            categoryIndex,
+                            intersections[0],
+                            intersections[1],
+                            stroke));
+                    }
+                    else if (intersections.Count == 4)
+                    {
+                        segments.Add(new ChartLineSegmentPrimitive(
+                            seriesIndex,
+                            categoryIndex,
+                            categoryIndex,
+                            intersections[0],
+                            intersections[1],
+                            stroke));
+                        segments.Add(new ChartLineSegmentPrimitive(
+                            seriesIndex,
+                            categoryIndex,
+                            categoryIndex,
+                            intersections[2],
+                            intersections[3],
+                            stroke));
+                    }
+                }
+            }
+        }
+
+        return segments;
+    }
+
+    private static bool TryGetSurfaceQuad(
+        IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
+        int seriesIndex,
+        int categoryIndex,
+        out ChartSurfacePointPrimitive topLeft,
+        out ChartSurfacePointPrimitive topRight,
+        out ChartSurfacePointPrimitive bottomRight,
+        out ChartSurfacePointPrimitive bottomLeft)
+    {
+        bool hasTopLeft = points.TryGetValue((seriesIndex, categoryIndex), out topLeft);
+        bool hasTopRight = points.TryGetValue((seriesIndex, categoryIndex + 1), out topRight);
+        bool hasBottomRight = points.TryGetValue((seriesIndex + 1, categoryIndex + 1), out bottomRight);
+        bool hasBottomLeft = points.TryGetValue((seriesIndex + 1, categoryIndex), out bottomLeft);
+
+        return hasTopLeft && hasTopRight && hasBottomRight && hasBottomLeft;
+    }
+
+    private static void AddContourIntersection(
+        List<ChartPlanPoint> intersections,
+        ChartSurfacePointPrimitive start,
+        ChartSurfacePointPrimitive end,
+        double level)
+    {
+        double startDelta = start.NormalizedValue - level;
+        double endDelta = end.NormalizedValue - level;
+        const double epsilon = 1e-9;
+
+        if (Math.Abs(startDelta) <= epsilon && Math.Abs(endDelta) <= epsilon)
+            return;
+
+        if (Math.Abs(startDelta) <= epsilon)
+        {
+            AddDistinctContourPoint(intersections, start.Point);
+            return;
+        }
+
+        if (Math.Abs(endDelta) <= epsilon)
+        {
+            AddDistinctContourPoint(intersections, end.Point);
+            return;
+        }
+
+        if (Math.Sign(startDelta) == Math.Sign(endDelta))
+            return;
+
+        double t = (level - start.NormalizedValue) / (end.NormalizedValue - start.NormalizedValue);
+        var point = new ChartPlanPoint(
+            Math.Round(start.Point.X + (end.Point.X - start.Point.X) * t, 4),
+            Math.Round(start.Point.Y + (end.Point.Y - start.Point.Y) * t, 4));
+        AddDistinctContourPoint(intersections, point);
+    }
+
+    private static void AddDistinctContourPoint(List<ChartPlanPoint> points, ChartPlanPoint candidate)
+    {
+        if (points.Any(point =>
+                Math.Abs(point.X - candidate.X) < 0.0001 &&
+                Math.Abs(point.Y - candidate.Y) < 0.0001))
+        {
+            return;
+        }
+
+        points.Add(candidate);
     }
 
     private static ChartStockPrimitivePlan EmptyStockPrimitivePlan() =>

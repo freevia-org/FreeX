@@ -42,11 +42,18 @@ public sealed class ChartBaselineCorpusTests
         var surfaceCells = ChartRenderPlanner.BuildSurfaceCellPrimitives(
             surface,
             new ChartPlanRect(0, 0, 360, 220));
-        surfaceCells.Should().HaveCount(5);
+        surfaceCells.Should().HaveCount(8);
         surfaceCells.Should().NotContain(cell => cell.SeriesIndex == 0 && cell.CategoryIndex == 1);
         surfaceCells.Single(cell => cell.SeriesIndex == 0 && cell.CategoryIndex == 2).Bounds.X
             .Should()
             .BeGreaterThan(surfaceCells.Single(cell => cell.SeriesIndex == 0 && cell.CategoryIndex == 0).Bounds.X);
+        var surfaceGeometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            surface,
+            new ChartPlanRect(0, 0, 360, 220));
+        surfaceGeometry.Facets.Should().HaveCount(2);
+        surfaceGeometry.WireframeSegments.Should().HaveCountGreaterThan(surfaceGeometry.Facets.Count);
+        surfaceGeometry.ContourSegments.Should().NotBeEmpty();
+        surfaceGeometry.Facets.Should().OnlyContain(facet => facet.Points.Count == 4);
 
         var scatter = charts.Single(chart => chart.ChartType == ChartType.Scatter);
         var scatterPlan = ChartRenderPlanner.BuildScatterPrimitivePlan(
