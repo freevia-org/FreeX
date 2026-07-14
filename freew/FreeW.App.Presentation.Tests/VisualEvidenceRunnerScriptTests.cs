@@ -61,6 +61,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'page-composition-border-watermark'");
         source.Should().Contain("'f2-01-float-wrap'");
         source.Should().Contain("'page-composition-floating-image'");
+        source.Should().Contain("freew-fidelity-corpus/runs/floating-wrapping-proof");
         source.Should().Contain("$f2ObjectsProject = Join-Path $repoRoot 'freew\\tools\\_corpus_f2_objects\\_corpus_f2_objects.csproj'");
         source.Should().Contain("Generate floating/wrapping DOCX fixtures");
         source.Should().Contain("$effectiveScenarioIds -contains 'f2-01-float-wrap'");
