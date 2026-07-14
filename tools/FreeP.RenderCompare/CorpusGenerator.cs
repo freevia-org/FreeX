@@ -51,12 +51,16 @@ internal static class CorpusGenerator
 
     internal static int Generate(string outDir)
     {
-        var ownedPids = GetPowerPointProcessIds();
+        var beforePids = GetPowerPointProcessIds();
+        var ownedPids = new HashSet<int>();
 
         dynamic? app = null;
         try
         {
             app = CreatePowerPointApplication();
+            ownedPids = GetPowerPointProcessIds()
+                .Where(pid => !beforePids.Contains(pid))
+                .ToHashSet();
             Console.WriteLine("  PowerPoint started for corpus generation.");
 
             var decks = new List<(string name, Action<dynamic, string, string> generate)>
@@ -99,7 +103,7 @@ internal static class CorpusGenerator
                 }
             }
 
-            QuitApplication(ref app);
+            FinishApplication(ref app, ownedPids.Count > 0);
             WaitForPowerPointToExit(ownedPids, 15_000);
 
             Console.WriteLine($"  Corpus generation complete. {decks.Count - errors}/{decks.Count} decks succeeded.");
@@ -112,7 +116,7 @@ internal static class CorpusGenerator
         }
         finally
         {
-            QuitApplication(ref app);
+            FinishApplication(ref app, ownedPids.Count > 0);
             WaitForPowerPointToExit(ownedPids, 10_000);
             KillPowerPointProcesses(ownedPids);
         }
@@ -1692,6 +1696,22 @@ internal static class CorpusGenerator
                 try { Marshal.FinalReleaseComObject(app); } catch { }
             app = null;
         }
+    }
+
+    private static void FinishApplication(ref dynamic? app, bool ownsApplication)
+    {
+        if (ownsApplication)
+        {
+            QuitApplication(ref app);
+            return;
+        }
+
+        if (app is null)
+            return;
+
+        if (Marshal.IsComObject(app))
+            try { Marshal.FinalReleaseComObject(app); } catch { }
+        app = null;
     }
 
     private static HashSet<int> GetPowerPointProcessIds() =>

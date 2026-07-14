@@ -477,8 +477,7 @@ internal static class PptxChartWriter
             new XElement(C + "minorTickMark", new XAttribute("val", "none")),
             new XElement(C + "tickLblPos", new XAttribute("val", "nextTo")),
             new XElement(C + "crossAx", new XAttribute("val", crossAxId)),
-            new XElement(C + "crosses", new XAttribute("val", "autoZero")),
-            new XElement(C + "lblOffset", new XAttribute("val", "100")));
+            new XElement(C + "crosses", new XAttribute("val", "autoZero")));
 
     private static XElement? BuildVaryColorsEl(ChartShape chart) =>
         chart.VaryColors

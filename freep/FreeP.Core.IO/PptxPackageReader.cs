@@ -1852,9 +1852,12 @@ public static class PptxPackageReader
             var drawingTarget = dataPartRels
                 .FirstOrDefault(r => r.Type == DiagramDrawingRelType).Target;
 
-            if (!string.IsNullOrWhiteSpace(drawingTarget))
+            var drawingPath = !string.IsNullOrWhiteSpace(drawingTarget)
+                ? ResolveRelativeZipPath(GetDirectoryName(dataPartPath), drawingTarget)
+                : InferSiblingDiagramDrawingPath(archive, dataPartPath);
+
+            if (!string.IsNullOrWhiteSpace(drawingPath))
             {
-                var drawingPath = ResolveRelativeZipPath(GetDirectoryName(dataPartPath), drawingTarget);
                 smart.DrawingPartPath = drawingPath;
 
                 var drawingBytes = ReadEntryBytes(archive, drawingPath);
@@ -1907,6 +1910,23 @@ public static class PptxPackageReader
         }
 
         return smart;
+    }
+
+    private static string? InferSiblingDiagramDrawingPath(ZipArchive archive, string dataPartPath)
+    {
+        var slash = dataPartPath.LastIndexOf('/');
+        var directory = slash >= 0 ? dataPartPath[..slash] : string.Empty;
+        var fileName = slash >= 0 ? dataPartPath[(slash + 1)..] : dataPartPath;
+
+        if (!fileName.StartsWith("data", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var candidateName = "drawing" + fileName["data".Length..];
+        var candidatePath = string.IsNullOrEmpty(directory)
+            ? candidateName
+            : $"{directory}/{candidateName}";
+
+        return archive.GetEntry(candidatePath) is null ? null : candidatePath;
     }
 
     // ── OLE embedded object parsing (Theme 21) ────────────────────────────────────

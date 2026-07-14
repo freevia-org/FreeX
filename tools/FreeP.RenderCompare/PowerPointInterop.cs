@@ -71,7 +71,8 @@ internal static class PowerPointInterop
 
     internal static PowerPointExportResult ExportSlidesToPngDetailed(string pptxPath, string outDir, int width, int height)
     {
-        var ownedPids = GetPowerPointProcessIds();
+        var beforePids = GetPowerPointProcessIds();
+        var ownedPids = new HashSet<int>();
 
         dynamic? app = null;
         dynamic? presentation = null;
@@ -79,6 +80,9 @@ internal static class PowerPointInterop
         try
         {
             app = CreatePowerPointApplication();
+            ownedPids = GetPowerPointProcessIds()
+                .Where(pid => !beforePids.Contains(pid))
+                .ToHashSet();
 
             Console.WriteLine("  PowerPoint started.");
 
@@ -106,7 +110,7 @@ internal static class PowerPointInterop
             }
 
             ClosePresentation(ref presentation);
-            QuitApplication(ref app);
+            FinishApplication(ref app, ownedPids.Count > 0);
             WaitForPowerPointToExit(ownedPids, timeoutMs: 15_000);
 
             Console.WriteLine($"  Export complete. {slideCount - errors}/{slideCount} slides exported.");
@@ -130,7 +134,7 @@ internal static class PowerPointInterop
         {
             // Belt-and-suspenders cleanup: always try to close + quit in finally
             ClosePresentation(ref presentation);
-            QuitApplication(ref app);
+            FinishApplication(ref app, ownedPids.Count > 0);
             WaitForPowerPointToExit(ownedPids, timeoutMs: 10_000);
             KillPowerPointProcesses(ownedPids);
         }
@@ -231,6 +235,21 @@ internal static class PowerPointInterop
             ReleaseComObject(app);
             app = null;
         }
+    }
+
+    private static void FinishApplication(ref dynamic? app, bool ownsApplication)
+    {
+        if (ownsApplication)
+        {
+            QuitApplication(ref app);
+            return;
+        }
+
+        if (app is null)
+            return;
+
+        ReleaseComObject(app);
+        app = null;
     }
 
     // -----------------------------------------------------------------------

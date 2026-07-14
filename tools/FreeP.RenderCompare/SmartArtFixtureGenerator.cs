@@ -1,7 +1,10 @@
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Xml.Linq;
 
 namespace FreeP.RenderCompare;
@@ -51,6 +54,11 @@ internal static class SmartArtFixtureGenerator
     public static void Generate(string outputPath)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        if (UsePowerPointGenerator())
+        {
+            GenerateWithPowerPoint(outputPath);
+            return;
+        }
 
         // Define the 4 slides
         var slides = new[]
@@ -191,6 +199,178 @@ internal static class SmartArtFixtureGenerator
         }
 
         Console.WriteLine($"  Written: {outputPath}");
+    }
+
+    private static bool UsePowerPointGenerator() => true;
+
+    private static void GenerateWithPowerPoint(string outputPath)
+    {
+        var beforePids = Process.GetProcessesByName("POWERPNT").Select(process => process.Id).ToHashSet();
+        var type = Type.GetTypeFromProgID("PowerPoint.Application")
+            ?? throw new InvalidOperationException("PowerPoint.Application COM is not registered.");
+
+        dynamic? app = null;
+        dynamic? presentation = null;
+        try
+        {
+            app = Activator.CreateInstance(type)
+                ?? throw new InvalidOperationException("PowerPoint.Application COM activation returned null.");
+
+            app.DisplayAlerts = 2; // ppAlertsNone
+            presentation = RetryCom(() => app.Presentations.Add(-1)); // msoTrue: keep a window so SmartArt materializes like PowerPoint-authored files.
+
+            AddSmartArtSlide(app, presentation, 1, "SmartArt Live - Process", "Process",
+                new[] { "Plan", "Design", "Build", "Test", "Deploy" });
+            AddSmartArtSlide(app, presentation, 2, "SmartArt Live - Hierarchy", "Hierarch",
+                new[] { "CEO", "VP Sales", "VP Engineering", "VP Marketing" });
+            AddSmartArtSlide(app, presentation, 3, "SmartArt Live - Cycle", "Cycle",
+                new[] { "Idea", "Plan", "Execute", "Review", "Improve" });
+            AddSmartArtSlide(app, presentation, 4, "SmartArt Live - List", "List",
+                new[] { "Requirement 1", "Requirement 2", "Requirement 3", "Requirement 4" });
+
+            if (File.Exists(outputPath))
+                File.Delete(outputPath);
+
+            RetryCom(() => presentation.SaveAs(outputPath));
+            Console.WriteLine($"  Written: {outputPath}");
+        }
+        finally
+        {
+            ClosePresentation(ref presentation);
+
+            var afterPids = Process.GetProcessesByName("POWERPNT").Select(process => process.Id).ToHashSet();
+            var startedPowerPoint = afterPids.Any(pid => !beforePids.Contains(pid));
+            if (startedPowerPoint)
+                QuitApplication(ref app);
+            else
+                ReleaseComObject(ref app);
+        }
+    }
+
+    private static void AddSmartArtSlide(
+        dynamic app,
+        dynamic presentation,
+        int slideIndex,
+        string title,
+        string layoutKeyword,
+        string[] nodeTexts)
+    {
+        const int ppLayoutBlank = 12;
+        const int msoTextOrientationHorizontal = 1;
+        const int msoTrue = -1;
+
+        dynamic slide = RetryCom(() => presentation.Slides.Add(slideIndex, ppLayoutBlank));
+        dynamic titleBox = RetryCom(() => slide.Shapes.AddTextbox(msoTextOrientationHorizontal, 20f, 6f, 920f, 30f));
+        RetryCom(() => titleBox.TextFrame.TextRange.Text = title);
+        RetryCom(() => titleBox.TextFrame.TextRange.Font.Size = 18);
+        RetryCom(() => titleBox.TextFrame.TextRange.Font.Bold = msoTrue);
+
+        dynamic layout = FindSmartArtLayout(app, layoutKeyword);
+        dynamic smartArtShape = RetryCom(() => slide.Shapes.AddSmartArt(layout, 50f, 50f, 860f, 380f));
+        dynamic nodes = RetryCom(() => smartArtShape.SmartArt.AllNodes);
+        var count = RetryCom(() => (int)nodes.Count);
+        for (var i = 1; i <= Math.Min(count, nodeTexts.Length); i++)
+        {
+            var nodeIndex = i;
+            RetryCom(() => nodes.Item(nodeIndex).TextFrame2.TextRange.Text = nodeTexts[nodeIndex - 1]);
+        }
+    }
+
+    private static dynamic FindSmartArtLayout(dynamic app, string keyword)
+    {
+        dynamic layouts = RetryCom(() => app.SmartArtLayouts);
+        var count = RetryCom(() => (int)layouts.Count);
+        for (var i = 1; i <= count; i++)
+        {
+            var index = i;
+            dynamic layout = RetryCom(() => layouts.Item(index));
+            string name = RetryCom(() => (string)layout.Name);
+            if (name.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)
+                return layout;
+        }
+
+        return RetryCom(() => layouts.Item(1));
+    }
+
+    private static T RetryCom<T>(Func<T> action)
+    {
+        Exception? lastException = null;
+        for (var attempt = 1; attempt <= 15; attempt++)
+        {
+            try
+            {
+                return action();
+            }
+            catch (Exception ex) when (IsRpcRejected(ex) && attempt < 15)
+            {
+                lastException = ex;
+                Thread.Sleep(500);
+            }
+        }
+
+        throw lastException ?? new InvalidOperationException("PowerPoint COM operation failed.");
+    }
+
+    private static void RetryCom(Action action) =>
+        RetryCom(() =>
+        {
+            action();
+            return 0;
+        });
+
+    private static bool IsRpcRejected(Exception ex)
+    {
+        if (ex is COMException { HResult: unchecked((int)0x80010001) })
+            return true;
+
+        return ex.Message.Contains("0x80010001", StringComparison.OrdinalIgnoreCase)
+            || ex.InnerException is not null && IsRpcRejected(ex.InnerException);
+    }
+
+    private static void ClosePresentation(ref dynamic? presentation)
+    {
+        if (presentation is null)
+            return;
+
+        try { presentation.Close(); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"  Warning: presentation.Close() threw: {ex.Message}");
+        }
+        finally { ReleaseComObject(ref presentation); }
+    }
+
+    private static void QuitApplication(ref dynamic? app)
+    {
+        if (app is null)
+            return;
+
+        try { app.Quit(); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"  Warning: app.Quit() threw: {ex.Message}");
+        }
+        finally { ReleaseComObject(ref app); }
+    }
+
+    private static void ReleaseComObject(ref dynamic? instance)
+    {
+        if (instance is null)
+            return;
+
+        try
+        {
+            if (Marshal.IsComObject(instance))
+                Marshal.FinalReleaseComObject(instance);
+        }
+        catch
+        {
+            // Best-effort COM cleanup; callers still own any pre-existing PowerPoint instance.
+        }
+        finally
+        {
+            instance = null;
+        }
     }
 
     // ── Slide builder ─────────────────────────────────────────────────────────

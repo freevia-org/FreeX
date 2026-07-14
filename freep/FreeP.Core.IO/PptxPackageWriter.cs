@@ -1235,7 +1235,7 @@ public static class PptxPackageWriter
         // Slide-image placeholder (required by the notes slide schema)
         var slideImgSp = new XElement(P + "sp",
             new XElement(P + "nvSpPr",
-                new XElement(P + "cNvPr", new XAttribute("id", "1"), new XAttribute("name", "Slide Image Placeholder 1")),
+                new XElement(P + "cNvPr", new XAttribute("id", "2"), new XAttribute("name", "Slide Image Placeholder 1")),
                 new XElement(P + "cNvSpPr", new XElement(A + "spLocks", new XAttribute("noGrp", "1"), new XAttribute("noRot", "1"), new XAttribute("noChangeAspect", "1"))),
                 new XElement(P + "nvPr", new XElement(P + "ph", new XAttribute("type", "sldImg")))),
             new XElement(P + "spPr"));
@@ -1244,7 +1244,7 @@ public static class PptxPackageWriter
         var notesTxBody = BuildNotesTxBodyEl(notes);
         var notesBodySp = new XElement(P + "sp",
             new XElement(P + "nvSpPr",
-                new XElement(P + "cNvPr", new XAttribute("id", "2"), new XAttribute("name", "Content Placeholder 2")),
+                new XElement(P + "cNvPr", new XAttribute("id", "3"), new XAttribute("name", "Content Placeholder 2")),
                 new XElement(P + "cNvSpPr", new XElement(A + "spLocks", new XAttribute("noGrp", "1"))),
                 new XElement(P + "nvPr", new XElement(P + "ph", new XAttribute("type", "body"), new XAttribute("idx", "1")))),
             new XElement(P + "spPr"),
@@ -1899,15 +1899,6 @@ public static class PptxPackageWriter
                     new XElement(P + "tn", new XAttribute("val", "0")))),
             new XElement(P + "childTnLst", mainSeqEl));
 
-        var outerPar = new XElement(P + "par",
-            new XElement(P + "cTn",
-                new XAttribute("id", nodeId++),
-                new XAttribute("fill", "hold"),
-                new XElement(P + "stCondLst",
-                    new XElement(P + "cond", new XAttribute("delay", "0"))),
-                new XElement(P + "childTnLst",
-                    new XElement(P + "par", outerParCTn))));
-
         // ── Trigger sequences ─────────────────────────────────────────────────
 
         var triggerPars = new List<XElement>();
@@ -1918,12 +1909,24 @@ public static class PptxPackageWriter
             triggerPars.Add(trigSeqEl);
         }
 
-        // Combine all top-level children into tnLst.
-        var tnLstChildren = new List<XElement> { outerPar };
-        tnLstChildren.AddRange(triggerPars);
+        var rootChildTnLst = new XElement(P + "childTnLst",
+            new XElement(P + "par", outerParCTn));
+
+        // Triggered sequences must live under the single root p:par. PowerPoint
+        // repairs slides that put multiple p:par siblings directly under p:tnLst.
+        foreach (var triggerPar in triggerPars)
+            rootChildTnLst.Add(triggerPar);
+
+        var outerPar = new XElement(P + "par",
+            new XElement(P + "cTn",
+                new XAttribute("id", nodeId++),
+                new XAttribute("fill", "hold"),
+                new XElement(P + "stCondLst",
+                    new XElement(P + "cond", new XAttribute("delay", "0"))),
+                rootChildTnLst));
 
         return new XElement(P + "timing",
-            new XElement(P + "tnLst", tnLstChildren));
+            new XElement(P + "tnLst", outerPar));
     }
 
     /// <summary>
@@ -2013,19 +2016,14 @@ public static class PptxPackageWriter
             new XAttribute("presetClass", presetClass),
             new XAttribute("presetID", presetId),
             new XAttribute("presetSubtype", subtypeAttr ?? "0"),
+            new XAttribute("dur", anim.DurationMs),
             new XAttribute("fill", "hold"),
             new XAttribute("grpId", "0"),
             new XAttribute("nodeType", "withEffect"),
         };
 
-        var animCTn = new XElement(P + "cTn",
-            new XAttribute("id", nodeId++),
-            new XAttribute("dur", anim.DurationMs),
-            new XElement(P + "stCondLst",
-                new XElement(P + "cond", new XAttribute("delay", "0"))));
-
         var animEffectEl = BuildWheelSpokeAnimEffectEl(anim, ref nodeId);
-        var childTimingItems = new List<object> { animCTn };
+        var childTimingItems = new List<object>();
         if (animEffectEl is not null)
             childTimingItems.Add(animEffectEl);
 
@@ -2397,9 +2395,13 @@ public static class PptxPackageWriter
                         ColorSlot("folHlink", cs[ThemeColorSlot.FolHLink])),
                     new XElement(A + "fontScheme", new XAttribute("name", theme.Name),
                         new XElement(A + "majorFont",
-                            new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MajorLatinFont))),
+                            new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MajorLatinFont)),
+                            new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
+                            new XElement(A + "cs", new XAttribute("typeface", string.Empty))),
                         new XElement(A + "minorFont",
-                            new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MinorLatinFont)))),
+                            new XElement(A + "latin", new XAttribute("typeface", theme.FontScheme.MinorLatinFont)),
+                            new XElement(A + "ea", new XAttribute("typeface", string.Empty)),
+                            new XElement(A + "cs", new XAttribute("typeface", string.Empty)))),
                     new XElement(A + "fmtScheme", new XAttribute("name", "Office"),
                         new XElement(A + "fillStyleLst",
                             SolidPhClr(), SolidPhClr(), SolidPhClr()),
@@ -2445,7 +2447,7 @@ public static class PptxPackageWriter
     private static XDocument BuildTableStylesXml() =>
         new XDocument(
             new XDeclaration("1.0", "UTF-8", "yes"),
-            new XElement(P + "tblStyleLst", NsAttr("p", P),
+            new XElement(A + "tblStyleLst", NsAttr("a", A),
                 new XAttribute("def", "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}")));
 
     // ── Core properties ───────────────────────────────────────────────────────────
@@ -4450,11 +4452,11 @@ public static class PptxPackageWriter
     /// Writes all diagram parts (data/layout/quickStyle/colors/drawing) for SmartArt shapes
     /// verbatim from the stored raw bytes. Also writes each part's rels file (if any).
     /// Returns:
-    ///   - slideRels: (newRelId, relType, target) tuples for the slide rels file (one per dm/lo/qs/cs key).
+    ///   - slideRels: (newRelId, relType, target) tuples for the slide rels file.
     ///   - relIdRemap: per-shape (shape.Id → (key → newRelId)) so BuildSmartArtGraphicFrameEl
     ///     can emit only the r: attributes that have an actual written part (S2),
     ///     using fresh collision-free relIds (S4).
-    /// The drawing part rels are internal to the data part's rels — not in the slide rels.
+    /// PowerPoint-authored SmartArt stores the drawing cache relationship in slide rels.
     /// </summary>
     private static (
         List<(string relId, string relType, string target)> slideRels,
@@ -4556,6 +4558,19 @@ public static class PptxPackageWriter
                 }
 
                 shapeRemap[key] = newRelId;
+            }
+
+            if (!string.IsNullOrWhiteSpace(smart.DrawingPartPath)
+                && smart.Parts.ContainsKey(smart.DrawingPartPath))
+            {
+                var partPathFromPpt = smart.DrawingPartPath.StartsWith("ppt/", StringComparison.OrdinalIgnoreCase)
+                    ? smart.DrawingPartPath["ppt/".Length..]
+                    : smart.DrawingPartPath;
+                var target = $"../{partPathFromPpt}";
+                var existing = slideRels.FirstOrDefault(r => r.Item3 == target && r.Item2 == DiagramDrawingRelType);
+
+                if (existing == default)
+                    slideRels.Add((AllocDgmRelId(), DiagramDrawingRelType, target));
             }
 
             // S2: only register the shape in the remap if dm is present (required for rendering)
