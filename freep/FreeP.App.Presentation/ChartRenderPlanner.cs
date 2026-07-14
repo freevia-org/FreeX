@@ -272,7 +272,8 @@ public readonly record struct ChartLineSeriesPrimitive(
     ChartStrokePlan? MarkerStroke,
     double MarkerRadius,
     IReadOnlyList<ChartLineSegmentPrimitive> LineSegments,
-    IReadOnlyList<ChartCirclePrimitive> Markers)
+    IReadOnlyList<ChartCirclePrimitive> Markers,
+    bool IsSmoothed)
 {
     public ChartClassicThreeDDepthPlan? Depth { get; init; }
 }
@@ -2088,7 +2089,8 @@ public static partial class ChartRenderPlanner
             markerStroke,
             markerRadius,
             lineSegments,
-            markers);
+            markers,
+            IsSmoothed: series.SmoothLine == true);
     }
 
     public static IReadOnlyList<ChartAreaSeriesPrimitive> BuildAreaSeriesPrimitives(

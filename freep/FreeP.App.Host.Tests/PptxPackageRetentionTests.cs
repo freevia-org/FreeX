@@ -1405,6 +1405,41 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void ReadWriteRead_LineChartSmoothSeriesDecision_RoundTrips()
+    {
+        using var source = BuildPptxWithLineChartSmoothDecision(smooth: true);
+        var loaded = PptxPackageReader.Read(source);
+
+        var chart = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        chart.ChartType.Should().Be(ChartType.Line);
+        chart.Series.Should().ContainSingle();
+        chart.Series[0].SmoothLine.Should().BeTrue(
+            "PowerPoint-authored c:smooth should be available to the shared WPF/Avalonia render planner");
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+        var savedBytes = saved.ToArray();
+
+        using (var archive = new ZipArchive(new MemoryStream(savedBytes), ZipArchiveMode.Read))
+        {
+            var savedChartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var savedSmooth = savedChartXml.Root!
+                .Element(ChartNs + "chart")!
+                .Element(ChartNs + "plotArea")!
+                .Element(ChartNs + "lineChart")!
+                .Element(ChartNs + "ser")!
+                .Element(ChartNs + "smooth");
+            savedSmooth.Should().NotBeNull("the writer should preserve the modeled smooth-line decision");
+            savedSmooth!.Attribute("val")!.Value.Should().Be("1");
+        }
+
+        using var savedRead = new MemoryStream(savedBytes);
+        var reloaded = PptxPackageReader.Read(savedRead);
+        var reloadedChart = reloaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        reloadedChart.Series[0].SmoothLine.Should().BeTrue();
+    }
+
+    [Fact]
     public void ReadWriteRead_ChartDataTableTextStyleFontFamily_RoundTripsAndIsNotDroppedToCalibri()
     {
         // KA1: c:dTable/c:txPr/a:defRPr/a:latin typeface="Georgia" must be captured into
@@ -1469,6 +1504,55 @@ public sealed class PptxPackageRetentionTests
         reloadedDataTable.Should().NotBeNull();
         reloadedDataTable!.TextStyle.Should().NotBeNull();
         reloadedDataTable.TextStyle!.FontFamily.Should().BeNull();
+    }
+
+    private static MemoryStream BuildPptxWithLineChartSmoothDecision(bool smooth)
+    {
+        var presentation = new Presentation();
+        var slide = new Slide();
+        var chart = new ChartShape { ChartType = ChartType.Line };
+        chart.Categories.AddRange(["Q1", "Q2", "Q3"]);
+        var series = new ChartSeries
+        {
+            Name = "Smoothed trend",
+            MarkerStyle = new ChartMarkerStyle { Symbol = ChartMarkerSymbol.None }
+        };
+        series.Values.AddRange([10, 24, 18]);
+        chart.Series.Add(series);
+        slide.Shapes.Add(new SlideShape
+        {
+            Id = 101,
+            Name = "Smooth line chart",
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 914400,
+            ExtentCxEmu = 3657600,
+            ExtentCyEmu = 2743200,
+            Chart = chart,
+        });
+        presentation.Slides.Add(slide);
+
+        using var basePackage = new MemoryStream();
+        PptxPackageWriter.Write(presentation, basePackage);
+
+        var package = new MemoryStream();
+        package.Write(basePackage.ToArray());
+        package.Position = 0;
+        using (var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var chartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+            var seriesEl = chartXml.Root!
+                .Element(ChartNs + "chart")!
+                .Element(ChartNs + "plotArea")!
+                .Element(ChartNs + "lineChart")!
+                .Element(ChartNs + "ser")!;
+            seriesEl.Element(ChartNs + "smooth")?.Remove();
+            seriesEl.Add(new XElement(ChartNs + "smooth", new XAttribute("val", smooth ? "1" : "0")));
+            WriteXml(archive, "ppt/charts/chart1.xml", chartXml);
+        }
+
+        package.Position = 0;
+        return package;
     }
 
     private static MemoryStream BuildPptxWithChartDataTableFontFamily(string? fontFamily)

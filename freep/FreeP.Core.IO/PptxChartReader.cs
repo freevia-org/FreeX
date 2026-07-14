@@ -634,6 +634,7 @@ internal static class PptxChartReader
             ReadSeriesShapeProperties(spPr, scheme, series);
 
         series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
+        series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
 
         // Fall back to theme accent cycle
         if (series.FillColor is null)
@@ -682,6 +683,7 @@ internal static class PptxChartReader
                 ReadSeriesShapeProperties(spPr, scheme, series);
 
             series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
+            series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
 
             // Fall back to theme accent cycle if no explicit color
             if (series.FillColor is null)

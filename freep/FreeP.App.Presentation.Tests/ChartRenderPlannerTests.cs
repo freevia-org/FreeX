@@ -1547,6 +1547,28 @@ public sealed class ChartRenderPlannerTests
             seriesColor,
             Alpha: 255,
             Thickness: ChartRenderPlanner.LineMarkerStrokeThickness));
+        primitive.IsSmoothed.Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildLineSeriesPrimitives_CarriesAuthoredSmoothLineDecision()
+    {
+        var series = new ChartSeries
+        {
+            Name = "Smoothed",
+            SmoothLine = true
+        };
+        series.Values.AddRange(new double?[] { 10, 20, 30 });
+        var chart = new ChartShape { ChartType = ChartType.Line };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            withMarkers: false).Single();
+
+        primitive.IsSmoothed.Should().BeTrue();
     }
 
     [Fact]

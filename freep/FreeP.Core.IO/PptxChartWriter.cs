@@ -872,6 +872,10 @@ internal static class PptxChartWriter
                                 : null).Where(e => e is not null)))));
         }
 
+        var smooth = BuildSmoothLineEl(series);
+        if (smooth is not null)
+            el.Add(smooth);
+
         return el;
     }
 
@@ -952,8 +956,17 @@ internal static class PptxChartWriter
                                 : null).Where(e => e is not null)))));
         }
 
+        var smooth = BuildSmoothLineEl(series);
+        if (smooth is not null)
+            el.Add(smooth);
+
         return el;
     }
+
+    private static XElement? BuildSmoothLineEl(ChartSeries series) =>
+        series.SmoothLine.HasValue
+            ? new XElement(C + "smooth", new XAttribute("val", BoolValue(series.SmoothLine.Value)))
+            : null;
 
     private static XElement? BuildSeriesShapePropertiesEl(ChartSeries series)
     {
