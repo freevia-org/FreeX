@@ -24,7 +24,15 @@ public sealed class PortablePdfVectorDrawingTests
             Height = 180,
             ChartAreaFillColor = new CellColor(230, 242, 255),
             ChartAreaBorderColor = new CellColor(30, 90, 160),
-            ChartAreaBorderThickness = 2
+            ChartAreaBorderThickness = 2,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    FillColor: new CellColor(91, 155, 213),
+                    StrokeColor: new CellColor(47, 84, 150),
+                    StrokeThickness: 0.75)
+            ]
         });
         sheet.TextBoxes.Add(new TextBoxModel
         {
@@ -51,6 +59,45 @@ public sealed class PortablePdfVectorDrawingTests
         ops.OfType<PdfStrokeRect>().Should().Contain(rect => rect.Color == new PdfColor(160, 110, 20));
         ops.OfType<PdfText>().Should().Contain(text => text.Text == "Vector chart title");
         ops.OfType<PdfText>().Should().Contain(text => text.Text == "Vector text box");
+        ops.OfType<PdfFillRect>()
+            .Where(rect => rect.Color == new PdfColor(91, 155, 213))
+            .Should()
+            .HaveCount(3, "the simple column chart should emit one vector plot rectangle per data point");
+    }
+
+    [Fact]
+    public void BuildWithPageSetup_EmitsLineChartPlotSegmentsFromSharedChartLayout()
+    {
+        var workbook = new Workbook { Name = "VectorEvidence.xlsx" };
+        var sheet = workbook.AddSheet("Sheet1");
+        PopulateChartSource(sheet);
+        sheet.PrintArea = GridRange.Parse("A1:H20", sheet.Id);
+        sheet.Charts.Add(new ChartModel
+        {
+            Type = ChartType.Line,
+            DataRange = GridRange.Parse("A1:B4", sheet.Id),
+            Title = "Line vector chart",
+            Left = 24,
+            Top = 24,
+            Width = 260,
+            Height = 180,
+            SeriesFormats =
+            [
+                new ChartSeriesFormat(
+                    0,
+                    StrokeColor: new CellColor(192, 0, 0),
+                    StrokeThickness: 2)
+            ]
+        });
+        var exportPlan = CreatePageSetupPdfPlan(workbook);
+
+        var document = WorkbookPdfContentBuilder.BuildWithPageSetup(workbook, exportPlan);
+        var ops = document.Pages.Should().ContainSingle().Subject.Ops;
+
+        ops.OfType<PdfLine>()
+            .Where(line => line.Color == new PdfColor(192, 0, 0))
+            .Should()
+            .HaveCount(2, "three source values should produce two vector line plot segments");
     }
 
     private static PortablePdfExportPlan CreatePageSetupPdfPlan(Workbook workbook)

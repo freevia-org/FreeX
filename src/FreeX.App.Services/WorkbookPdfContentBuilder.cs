@@ -1,8 +1,10 @@
 using System.Globalization;
+using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.Text;
 using FreeX.Core.Calc;
+using FreeX.Core.Formula;
 using FreeX.Core.Model;
 using Free.Shared.Pdf;
 
@@ -154,7 +156,7 @@ public static class WorkbookPdfContentBuilder
             // The page background is already white so simply omitting the fill rect is correct.
             var bw = sheet.PrintBlackAndWhite;
             if (!bw && (fill is not null || cell.IsTitle))
-                ops.Add(new PdfFillRect(x, y, w, h, ToPdfColor(fill) ?? TitleFillColor));
+                ops.Add(new PdfFillRect(x, y, w, h, fill is { } fillColor ? ToPdfColor(fillColor) : TitleFillColor));
 
             if (!string.IsNullOrEmpty(cell.DisplayText))
             {
@@ -170,7 +172,7 @@ public static class WorkbookPdfContentBuilder
                 var fontSize  = Math.Clamp(style.FontSize, 7, 10) * textScale;
                 var fontFace  = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
                 // B&W mode: force font colour to black regardless of style.
-                var fontColor = bw ? PdfColor.Black : (ToPdfColor(style.ResolveFontColor(workbook.Theme)) ?? PdfColor.Black);
+                var fontColor = bw ? PdfColor.Black : ToPdfColor(style.ResolveFontColor(workbook.Theme));
                 // Text inset/baseline scale with the grid so text stays proportionally placed
                 // within its (now possibly shrunk) cell rect.
                 var baseline = y + (3.0 * textScale);
@@ -319,7 +321,7 @@ public static class WorkbookPdfContentBuilder
             var style = workbook.GetStyle(cell.StyleId);
             var fill = style.ResolveFillColor(workbook.Theme);
             if (fill is not null || cell.IsTitle)
-                ops.Add(new PdfFillRect(x, y, columnWidth, options.RowHeightPoints, ToPdfColor(fill) ?? TitleFillColor));
+                ops.Add(new PdfFillRect(x, y, columnWidth, options.RowHeightPoints, fill is { } fillColor ? ToPdfColor(fillColor) : TitleFillColor));
 
             ops.Add(new PdfStrokeRect(x, y, columnWidth, options.RowHeightPoints, GridStrokeColor, 0.5));
             if (string.IsNullOrEmpty(cell.DisplayText))
@@ -327,7 +329,7 @@ public static class WorkbookPdfContentBuilder
 
             var fontSize = Math.Clamp(style.FontSize, 7, 10);
             var fontFace = cell.IsTitle || style.Bold ? PdfFontFace.Bold : PdfFontFace.Regular;
-            var fontColor = ToPdfColor(style.ResolveFontColor(workbook.Theme)) ?? PdfColor.Black;
+            var fontColor = ToPdfColor(style.ResolveFontColor(workbook.Theme));
             ops.Add(new PdfText(
                 x + 4,
                 y + Math.Max(7, options.RowHeightPoints - 14),
@@ -521,6 +523,7 @@ public static class WorkbookPdfContentBuilder
         {
             AddFillRect(ops, chart.Bounds, chart.Fill, pageHeightPoints, scaleX, scaleY);
             AddStrokeRect(ops, chart.Bounds, chart.Outline, chart.OutlineThickness, pageHeightPoints, scaleX, scaleY);
+            AddChartPlotOps(workbook, sheet, chart, ops, pageHeightPoints, scaleX, scaleY);
 
             foreach (var overlay in chart.TextOverlays)
                 AddTextOverlay(ops, overlay, pageHeightPoints, scaleX, scaleY);
@@ -546,6 +549,193 @@ public static class WorkbookPdfContentBuilder
             }
         }
     }
+
+    private static void AddChartPlotOps(
+        Workbook workbook,
+        Sheet sheet,
+        PageChartBlock chartBlock,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        var chart = sheet.Charts.FirstOrDefault(candidate => candidate.Id == chartBlock.Id);
+        if (chart is null || !ChartLayoutEngine.IsSupported(chart.Type))
+            return;
+
+        var inset = Math.Min(28, Math.Min(chartBlock.Bounds.Width, chartBlock.Bounds.Height) / 4);
+        var plotArea = new PlotRect(
+            inset,
+            inset,
+            Math.Max(1, chartBlock.Bounds.Width - (2 * inset)),
+            Math.Max(1, chartBlock.Bounds.Height - (2 * inset)));
+        var request = ChartLayoutRequestBuilder.TryBuild(
+            chart,
+            plotArea,
+            BuildChartCellAccessor(workbook, sheet),
+            PortablePdfTextMeasurer.Instance);
+        if (request is null)
+            return;
+
+        ChartLayout chartLayout;
+        try
+        {
+            chartLayout = ChartLayoutEngine.Layout(request);
+        }
+        catch (NotSupportedException)
+        {
+            return;
+        }
+
+        var palette = ChartStylePlanner.BuildExcelSeriesPalette(workbook.Theme);
+        var barSeriesCount = chartLayout.Series.Count(series =>
+            series.Kind is SeriesGeometryKind.Columns or SeriesGeometryKind.Bars);
+
+        foreach (var series in chartLayout.Series)
+        {
+            switch (series.Kind)
+            {
+                case SeriesGeometryKind.Columns:
+                case SeriesGeometryKind.Bars:
+                    AddChartBarOps(workbook, chart, chartBlock.Bounds, series, barSeriesCount, palette, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
+                case SeriesGeometryKind.Line:
+                    AddChartLineOps(workbook, chart, chartBlock.Bounds, series, palette, ops, pageHeightPoints, scaleX, scaleY);
+                    break;
+            }
+        }
+    }
+
+    private static void AddChartBarOps(
+        Workbook workbook,
+        ChartModel chart,
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        int barSeriesCount,
+        IReadOnlyList<CellColor> palette,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        var paint = ChartStylePlanner.ResolveBarPaint(chart, series.SeriesIndex, workbook.Theme, palette);
+        foreach (var bar in series.Bars)
+        {
+            if (bar.Rect.Width <= 0 || bar.Rect.Height <= 0)
+                continue;
+
+            var varyColorsFill = ChartStylePlanner.ResolveVaryColorsPointFill(
+                chart,
+                series.SeriesIndex,
+                bar.PointIndex,
+                barSeriesCount,
+                workbook.Theme,
+                palette);
+            var fill = bar.FillColorOverride
+                ?? varyColorsFill
+                ?? paint.FillColor;
+
+            if (fill is { } fillColor)
+            {
+                ops.Add(new PdfFillRect(
+                    ToPdfX(chartBounds.Left + bar.Rect.Left, scaleX),
+                    ToPdfY(chartBounds.Top + bar.Rect.Bottom, pageHeightPoints, scaleY),
+                    bar.Rect.Width * scaleX,
+                    bar.Rect.Height * scaleY,
+                    ToPdfColor(fillColor)));
+            }
+
+            if (paint.StrokeColor is { } strokeColor && paint.StrokeThickness > 0)
+            {
+                ops.Add(new PdfStrokeRect(
+                    ToPdfX(chartBounds.Left + bar.Rect.Left, scaleX),
+                    ToPdfY(chartBounds.Top + bar.Rect.Bottom, pageHeightPoints, scaleY),
+                    bar.Rect.Width * scaleX,
+                    bar.Rect.Height * scaleY,
+                    ToPdfColor(strokeColor),
+                    Math.Max(0.25, paint.StrokeThickness * Math.Min(scaleX, scaleY))));
+            }
+        }
+    }
+
+    private static void AddChartLineOps(
+        Workbook workbook,
+        ChartModel chart,
+        LayoutRect chartBounds,
+        SeriesLayout series,
+        IReadOnlyList<CellColor> palette,
+        List<PdfDrawOp> ops,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        var format = ChartStylePlanner.FindSeriesFormat(chart, series.SeriesIndex);
+        if (format?.NoLine == true || series.Points.Count < 2)
+            return;
+
+        var paint = ChartStylePlanner.ResolveSeriesPaint(chart, series.SeriesIndex, workbook.Theme, palette);
+        var strokeWidth = Math.Max(0.25, (format?.StrokeThickness ?? 2.0) * Math.Min(scaleX, scaleY));
+        for (var index = 1; index < series.Points.Count; index++)
+        {
+            var previous = series.Points[index - 1].Position;
+            var current = series.Points[index].Position;
+            ops.Add(new PdfLine(
+                ToPdfX(chartBounds.Left + previous.X, scaleX),
+                ToPdfY(chartBounds.Top + previous.Y, pageHeightPoints, scaleY),
+                ToPdfX(chartBounds.Left + current.X, scaleX),
+                ToPdfY(chartBounds.Top + current.Y, pageHeightPoints, scaleY),
+                ToPdfColor(paint.StrokeColor),
+                strokeWidth));
+        }
+    }
+
+    private static ChartLayoutRequestBuilder.ChartCellAccessor BuildChartCellAccessor(
+        Workbook workbook,
+        Sheet sheet) =>
+        (uint row, uint col, out double value, out string displayText) =>
+        {
+            var cell = sheet.GetCell(row, col);
+            if (cell is null)
+            {
+                value = 0;
+                displayText = "";
+                return false;
+            }
+
+            var style = workbook.GetStyle(cell.StyleId);
+            displayText = NumberFormatter.FormatWithColor(
+                cell.Value,
+                style.NumberFormat,
+                workbook.IndexedColors,
+                workbook.Theme,
+                workbook.Uses1904DateSystem).Text;
+
+            return TryGetChartNumericValue(cell.Value, displayText, out value);
+        };
+
+    private static bool TryGetChartNumericValue(ScalarValue value, string displayText, out double result)
+    {
+        switch (value)
+        {
+            case NumberValue number:
+                result = number.Value;
+                return double.IsFinite(result);
+            case DateTimeValue dateTime:
+                result = dateTime.Value;
+                return double.IsFinite(result);
+            case BoolValue boolean:
+                result = boolean.Value ? 1 : 0;
+                return true;
+        }
+
+        return double.TryParse(displayText, NumberStyles.Any, CultureInfo.InvariantCulture, out result)
+            && double.IsFinite(result);
+    }
+
+    private static double ToPdfX(double layoutX, double scaleX) => layoutX * scaleX;
+
+    private static double ToPdfY(double layoutY, double pageHeightPoints, double scaleY) =>
+        pageHeightPoints - (layoutY * scaleY);
 
     private static PageContentLayout? BuildPageContentLayout(
         Workbook workbook,
@@ -927,6 +1117,9 @@ public static class WorkbookPdfContentBuilder
 
     private static PdfColor? ToPdfColor(CellColor? color) =>
         color is { } c ? new PdfColor(c.R, c.G, c.B) : null;
+
+    private static PdfColor ToPdfColor(CellColor color) =>
+        new(color.R, color.G, color.B);
 
     private static PdfColor ToPdfColor(PresentationRgb color) =>
         new(color.R, color.G, color.B);
