@@ -266,6 +266,7 @@ public sealed class BackstagePrintPanePlannerTests
             [],
             [],
             [],
+            [],
             new FreeWVisualEvidenceAuthoritySummary(
                 "local-visual-evidence-only",
                 false,

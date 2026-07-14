@@ -55,6 +55,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("ReviewProofingVisualProof = @(");
         source.Should().Contain("EquationStructureVisualProof = @(");
         source.Should().Contain("NotePlacementVisualProof = @(");
+        source.Should().Contain("SectionGeometryVisualProof = @(");
         source.Should().Contain("'field-page-number-variants'");
         source.Should().Contain("'references-heavy-fields'");
         source.Should().Contain("'legal-reference-section-page-numbers'");
@@ -282,6 +283,18 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Note placement semantic rows: verified rows=");
         source.Should().Contain("Note placement Word-baseline policy rows: verified rows=");
         source.Should().Contain("Note placement Word-baseline unavailable blockers: verified rows=");
+        source.Should().Contain("freew-fidelity-corpus/runs/section-geometry-proof");
+        source.Should().Contain("'f2-section-landscape'");
+        source.Should().Contain("Assert-SectionGeometryVisualProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Section geometry visual proof readiness requires FreeW visual evidence summary schema v45 or newer");
+        source.Should().Contain("$readinessRows = @($summary.sectionGeometryProofReadiness | Where-Object { $_.scenarioId -eq $scenarioId })");
+        source.Should().Contain("missing section geometry semantic readiness summary");
+        source.Should().Contain("missing honest word-baseline-unavailable section geometry blocker");
+        source.Should().Contain("f2-section-landscape-word-baseline-fidelity");
+        source.Should().Contain("Section geometry visual proof readiness: trusted scenario rows=");
+        source.Should().Contain("Section geometry semantic rows: verified rows=");
+        source.Should().Contain("Section geometry Word-baseline policy rows: verified rows=");
+        source.Should().Contain("Section geometry Word-baseline unavailable blocker: verified");
         source.Should().Contain("Word baseline mode: word-png-comparison");
         source.Should().Contain("Word baseline mode: word-baseline-unavailable");
         source.Should().Contain("Word baseline mode: visual-evidence-only");

@@ -69,6 +69,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceNormalizedRow> Evidence,
     IReadOnlyList<FreeWVisualEvidenceBackstagePrintReadiness> BackstagePrintEvidenceReadiness,
     IReadOnlyList<FreeWVisualNotePlacementProofReadiness> NotePlacementProofReadiness,
+    IReadOnlyList<FreeWVisualSectionGeometryProofReadiness> SectionGeometryProofReadiness,
     IReadOnlyList<FreeWVisualFloatingWrappingProofReadiness> FloatingWrappingProofReadiness,
     IReadOnlyList<FreeWVisualHeaderFooterImageProofReadiness> HeaderFooterImageProofReadiness,
     IReadOnlyList<FreeWVisualTablePaginationProofReadiness> TablePaginationProofReadiness,
@@ -92,6 +93,17 @@ public sealed record FreeWVisualEvidenceBackstagePrintReadiness(
     string Notes);
 
 public sealed record FreeWVisualNotePlacementProofReadiness(
+    string ScenarioId,
+    int PageNumber,
+    string Status,
+    string WpfOutputSummary,
+    string AvaloniaOutputSummary,
+    string WordBaselineStatus,
+    string BaselineReadiness,
+    string SemanticEvidence,
+    FreeWVisualEvidenceTrust Trust);
+
+public sealed record FreeWVisualSectionGeometryProofReadiness(
     string ScenarioId,
     int PageNumber,
     string Status,
@@ -238,7 +250,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 44;
+    public const int SummarySchemaVersion = 45;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -259,6 +271,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
     [
         "f2-section-landscape"
     ];
+    public static IReadOnlyList<string> SectionGeometryVisualProofScenarioIds { get; } =
+        SectionGeometryRendererScenarioIds;
     public static IReadOnlyList<string> SectionPageSurfaceRendererScenarioIds { get; } =
     [
         "f2-section-landscape",
@@ -497,6 +511,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         var backstageReadiness = BuildBackstagePrintEvidenceReadinessRows(expected, orderedRows);
         var notePlacementProofReadiness = BuildNotePlacementProofReadinessRows(expected, orderedRows, []);
+        var sectionGeometryProofReadiness = BuildSectionGeometryProofReadinessRows(expected, orderedRows, []);
         var floatingWrappingProofReadiness = BuildFloatingWrappingProofReadinessRows(expected, orderedRows, []);
         var headerFooterImageProofReadiness = BuildHeaderFooterImageProofReadinessRows(expected, orderedRows, []);
         var tablePaginationProofReadiness = BuildTablePaginationProofReadinessRows(expected, orderedRows, []);
@@ -516,6 +531,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             orderedRows,
             backstageReadiness,
             notePlacementProofReadiness,
+            sectionGeometryProofReadiness,
             floatingWrappingProofReadiness,
             headerFooterImageProofReadiness,
             tablePaginationProofReadiness,
@@ -581,6 +597,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         AppendBackstagePrintEvidenceReadiness(sb, summary);
         AppendNotePlacementProofReadiness(sb, summary);
+        AppendSectionGeometryProofReadiness(sb, summary);
         AppendFloatingWrappingProofReadiness(sb, summary);
         AppendHeaderFooterImageProofReadiness(sb, summary);
         AppendTablePaginationProofReadiness(sb, summary);
@@ -720,6 +737,33 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
         sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
         foreach (var row in summary.NotePlacementProofReadiness)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.ScenarioId)} | " +
+                $"{row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(row.Status)} | " +
+                $"{EscapeMarkdown(row.WpfOutputSummary)} | " +
+                $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | " +
+                $"{EscapeMarkdown(row.WordBaselineStatus)} | " +
+                $"{EscapeMarkdown(row.BaselineReadiness)} | " +
+                $"{EscapeMarkdown(row.SemanticEvidence)} | " +
+                $"{(row.Trust.Passed ? "passed" : "failed")} |");
+        }
+    }
+
+    private static void AppendSectionGeometryProofReadiness(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.SectionGeometryProofReadiness.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## Section Geometry Visual Proof Readiness");
+        sb.AppendLine();
+        sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
+        sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var row in summary.SectionGeometryProofReadiness)
         {
             sb.AppendLine(
                 $"| {EscapeMarkdown(row.ScenarioId)} | " +
@@ -1246,6 +1290,68 @@ public static class FreeWVisualEvidenceManifestNormalizer
             ? [1, 2, 3]
             : RequiredScenarioPages(scenarioId);
 
+    private static IReadOnlyList<FreeWVisualSectionGeometryProofReadiness> BuildSectionGeometryProofReadinessRows(
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var rows = new List<FreeWVisualSectionGeometryProofReadiness>();
+        foreach (var scenarioId in SectionGeometryVisualProofScenarioIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            var expected = expectedScenarios
+                .Any(e => string.Equals(e.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            var hasEvidence = evidence
+                .Any(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            if (!expected && !hasEvidence)
+                continue;
+
+            foreach (var pageNumber in RequiredScenarioPages(scenarioId))
+            {
+                var wpfRows = RowsForHostScenarioPage(evidence, WpfHostId, scenarioId, pageNumber);
+                var avaloniaRows = RowsForHostScenarioPage(evidence, AvaloniaHostId, scenarioId, pageNumber);
+                var trustedWpf = wpfRows.FirstOrDefault(row => row.Trust.Passed);
+                var trustedAvalonia = avaloniaRows.FirstOrDefault(row => row.Trust.Passed);
+                var relatedBaseline = baselineComparisons
+                    .Where(comparison =>
+                        string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase)
+                        && comparison.PageNumber == pageNumber)
+                    .ToList();
+
+                if (trustedWpf is null || trustedAvalonia is null)
+                {
+                    rows.Add(new FreeWVisualSectionGeometryProofReadiness(
+                        scenarioId,
+                        pageNumber,
+                        "missing-paired-renderer-evidence",
+                        FormatOutputSummary(wpfRows),
+                        FormatOutputSummary(avaloniaRows),
+                        FormatWordBaselineStatus(relatedBaseline),
+                        "paired WPF/Avalonia section geometry evidence is required before Word baseline comparison readiness",
+                        FormatSectionGeometryProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                        new FreeWVisualEvidenceTrust(false, BuildMissingSectionGeometryPairFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia))));
+                    continue;
+                }
+
+                var failures = BuildSectionGeometrySemanticFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia);
+                var baselineTrust = EvaluateDrawingObjectProofReadiness(relatedBaseline);
+                failures.AddRange(baselineTrust.Failures);
+                var trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+                rows.Add(new FreeWVisualSectionGeometryProofReadiness(
+                    scenarioId,
+                    pageNumber,
+                    trust.Passed ? "paired-renderer-proof-ready" : "section-geometry-proof-failed",
+                    FormatOutputSummary(wpfRows),
+                    FormatOutputSummary(avaloniaRows),
+                    FormatWordBaselineStatus(relatedBaseline),
+                    FormatSectionGeometryBaselineReadiness(relatedBaseline, scenarioId),
+                    FormatSectionGeometryProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                    trust));
+            }
+        }
+
+        return rows;
+    }
+
     private static IReadOnlyList<FreeWVisualDrawingObjectProofReadiness> BuildDrawingObjectProofReadinessRows(
         IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
@@ -1704,6 +1810,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 summary.ExpectedScenarios,
                 summary.Evidence,
                 ordered),
+            SectionGeometryProofReadiness = BuildSectionGeometryProofReadinessRows(
+                summary.ExpectedScenarios,
+                summary.Evidence,
+                ordered),
             FloatingWrappingProofReadiness = BuildFloatingWrappingProofReadinessRows(
                 summary.ExpectedScenarios,
                 summary.Evidence,
@@ -1808,6 +1918,20 @@ public static class FreeWVisualEvidenceManifestNormalizer
             failures.Add($"note placement proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted WPF visual evidence");
         if (trustedAvalonia is null)
             failures.Add($"note placement proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
+        return failures;
+    }
+
+    private static IReadOnlyList<string> BuildMissingSectionGeometryPairFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow? trustedWpf,
+        FreeWVisualEvidenceNormalizedRow? trustedAvalonia)
+    {
+        var failures = new List<string>();
+        if (trustedWpf is null)
+            failures.Add($"section geometry proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted WPF visual evidence");
+        if (trustedAvalonia is null)
+            failures.Add($"section geometry proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
         return failures;
     }
 
@@ -2151,6 +2275,45 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static List<string> BuildSectionGeometrySemanticFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia)
+    {
+        var failures = new List<string>();
+        var pairName = $"section geometry proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        ValidateSectionGeometrySemanticRow(pairName + " WPF", scenarioId, pageNumber, wpf, failures);
+        ValidateSectionGeometrySemanticRow(pairName + " Avalonia", scenarioId, pageNumber, avalonia, failures);
+        ValidateSectionPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+        return failures;
+    }
+
+    private static void ValidateSectionGeometrySemanticRow(
+        string rowName,
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow row,
+        List<string> failures)
+    {
+        if (!row.ExpectedFeatureTags.Contains("section-geometry", StringComparer.OrdinalIgnoreCase))
+            failures.Add($"{rowName} expected the section-geometry feature tag");
+        if (!row.ExpectedFeatureTags.Contains("portrait-landscape", StringComparer.OrdinalIgnoreCase))
+            failures.Add($"{rowName} expected the portrait-landscape feature tag");
+        if (row.PageFeatures.Section.SectionOrdinal <= 0)
+            failures.Add($"{rowName} expected positive section ordinal evidence");
+        if (row.PageFeatures.Section.SectionRelativePageNumber <= 0)
+            failures.Add($"{rowName} expected positive section-relative page evidence");
+        if (string.IsNullOrWhiteSpace(row.PageFeatures.Section.OwnerId))
+            failures.Add($"{rowName} expected a section owner id");
+        if (pageNumber == 1 && row.PageFeatures.Section.SectionOrdinal != 1)
+            failures.Add($"{rowName} expected page 1 to belong to section 1");
+        if (pageNumber == 2 && row.PageFeatures.Section.SectionOrdinal != 2)
+            failures.Add($"{rowName} expected page 2 to belong to section 2");
+        if (!string.Equals(scenarioId, "f2-section-landscape", StringComparison.OrdinalIgnoreCase))
+            failures.Add($"{rowName} expected f2-section-landscape as the focused section geometry proof scenario");
+    }
+
     private static List<string> BuildTablePaginationSemanticFailures(
         string scenarioId,
         int pageNumber,
@@ -2334,6 +2497,35 @@ public static class FreeWVisualEvidenceManifestNormalizer
             StringComparison.OrdinalIgnoreCase)))
         {
             return "Word COM or baseline generation unavailable; paired WPF/Avalonia note placement evidence is retained without authoritative Word parity";
+        }
+
+        if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
+            return "one or more Word baseline comparison rows failed trust; inspect baseline triage";
+
+        if (relatedBaseline.Any(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.PassedStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "real Word PNG baseline compared within configured tolerance";
+        }
+
+        return "Word baseline policy rows are present and trusted";
+    }
+
+    private static string FormatSectionGeometryBaselineReadiness(
+        IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline,
+        string scenarioId)
+    {
+        if (relatedBaseline.Count == 0)
+            return "paired renderer evidence is present; run Word PNG baseline comparison for " + scenarioId;
+
+        if (relatedBaseline.All(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Word COM or baseline generation unavailable; paired WPF/Avalonia section geometry evidence is retained without authoritative Word parity";
         }
 
         if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
@@ -2673,6 +2865,37 @@ public static class FreeWVisualEvidenceManifestNormalizer
             row.HasEndnotes ? "endnotes" : "no endnotes",
             row.IsSyntheticPage ? "synthetic page" : "body page",
             "tags=" + FormatSummaries(row.ExpectedFeatureTags));
+
+    private static string FormatSectionGeometryProofSemanticEvidence(
+        FreeWVisualEvidenceNormalizedRow? wpf,
+        FreeWVisualEvidenceNormalizedRow? avalonia)
+    {
+        var parts = new List<string>();
+        if (wpf is not null)
+            parts.Add("WPF " + FormatSectionGeometryRowSemanticEvidence(wpf));
+        if (avalonia is not null)
+            parts.Add("Avalonia " + FormatSectionGeometryRowSemanticEvidence(avalonia));
+        return parts.Count == 0 ? "-" : string.Join("; ", parts);
+    }
+
+    private static string FormatSectionGeometryRowSemanticEvidence(FreeWVisualEvidenceNormalizedRow row)
+    {
+        var section = row.PageFeatures.Section;
+        var orientation = section.SectionOrdinal == 2 ? "landscape" : "portrait";
+        return string.Concat(
+            "section=",
+            section.SectionOrdinal.ToString(CultureInfo.InvariantCulture),
+            " owner=",
+            string.IsNullOrWhiteSpace(section.OwnerId) ? "-" : section.OwnerId,
+            " sectionPage=",
+            section.SectionRelativePageNumber.ToString(CultureInfo.InvariantCulture),
+            " expectedOrientation=",
+            orientation,
+            " outputPixels=",
+            row.PixelWidth.ToString(CultureInfo.InvariantCulture),
+            "x",
+            row.PixelHeight.ToString(CultureInfo.InvariantCulture));
+    }
 
     private static string FormatTablePaginationProofSemanticEvidence(
         FreeWVisualEvidenceNormalizedRow? wpf,
@@ -3203,6 +3426,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
         blockers.AddRange(BuildBackstageRealCaptureBlockers(summary));
         blockers.AddRange(BuildNotePlacementWordBaselineBlockers(summary, baselineComparisons));
+        blockers.AddRange(BuildSectionGeometryWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildSmartArtPolygonWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildReviewMarkupWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildReviewCompareCombineWordBaselineBlockers(summary, baselineComparisons));
@@ -3644,6 +3868,169 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 BoolFlag(row.IsSyntheticPage),
                 "; tags=",
                 FormatSummaries(row.ExpectedFeatureTags)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildSectionGeometryWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
+        foreach (var scenarioId in SectionGeometryVisualProofScenarioIds)
+        {
+            var rows = summary.Evidence
+                .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .Where(row => row.Trust.Passed)
+                .ToList();
+            if (rows.Count == 0)
+                continue;
+
+            var semanticEvidence = BuildSectionGeometrySemanticEvidence(rows);
+            if (semanticEvidence.Count == 0)
+            {
+                blockers.Add(BuildSectionGeometryVisualBlocker(
+                    scenarioId,
+                    "semantic-section-geometry-missing",
+                    "trusted WPF and Avalonia section geometry metadata",
+                    "trusted section geometry evidence did not record portrait/landscape section-owner metadata; regenerate current-schema evidence before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false));
+                continue;
+            }
+
+            var related = baselineComparisons
+                .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (related.Count == 0)
+            {
+                blockers.Add(BuildSectionGeometryVisualBlocker(
+                    scenarioId,
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for section portrait/landscape page geometry",
+                    "trusted FreeW section geometry evidence is present; run a Word-baseline comparison for " + scenarioId + " to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            var statuses = related
+                .Select(comparison => comparison.Status)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var candidates = related
+                .SelectMany(comparison => comparison.CandidateBaselinePaths)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                var reasons = related
+                    .Where(comparison => string.Equals(
+                        comparison.Status,
+                        FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                        StringComparison.OrdinalIgnoreCase))
+                    .Select(FormatComparisonNotes)
+                    .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                blockers.Add(BuildSectionGeometryVisualBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for section portrait/landscape page geometry",
+                    reasons.Count == 0
+                        ? "MS Word baseline PNG generation was unavailable for " + scenarioId
+                        : string.Join("; ", reasons),
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                blockers.Add(BuildSectionGeometryVisualBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for section portrait/landscape page geometry",
+                    "trusted section geometry evidence is present, but Word baseline PNGs are missing for portrait/landscape comparison",
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.All(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            blockers.Add(BuildSectionGeometryVisualBlocker(
+                scenarioId,
+                "needs-render-review",
+                "render-review resolution for failed section geometry Word PNG comparisons",
+                scenarioId + " Word baseline comparison did not fully pass; inspect portrait/landscape page geometry rendering differences",
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false));
+        }
+
+        return blockers;
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildSectionGeometryVisualBlocker(
+        string scenarioId,
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline) =>
+        new(
+            scenarioId + "-word-baseline-fidelity",
+            scenarioId,
+            "Section geometry fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
+
+    private static IReadOnlyList<string> BuildSectionGeometrySemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
+        rows
+            .Select(row => string.Concat(
+                row.HostId,
+                "/p",
+                row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                ": section=",
+                row.PageFeatures.Section.SectionOrdinal.ToString(CultureInfo.InvariantCulture),
+                "; owner=",
+                row.PageFeatures.Section.OwnerId,
+                "; sectionPage=",
+                row.PageFeatures.Section.SectionRelativePageNumber.ToString(CultureInfo.InvariantCulture),
+                "; pixels=",
+                row.PixelWidth.ToString(CultureInfo.InvariantCulture),
+                "x",
+                row.PixelHeight.ToString(CultureInfo.InvariantCulture)))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
             .ToList();

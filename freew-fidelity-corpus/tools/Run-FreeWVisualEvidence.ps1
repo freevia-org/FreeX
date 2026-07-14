@@ -66,6 +66,9 @@
 
 .EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/note-placement-proof -ScenarioSet NotePlacementVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/section-geometry-proof -ScenarioSet SectionGeometryVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 #>
 [CmdletBinding()]
 param(
@@ -228,6 +231,9 @@ $namedScenarioSets = @{
     NotePlacementVisualProof = @(
         'f2-footnotes',
         'f2-endnotes'
+    )
+    SectionGeometryVisualProof = @(
+        'f2-section-landscape'
     )
 }
 
@@ -2906,6 +2912,163 @@ function Assert-NotePlacementVisualProofReadiness {
     }
 }
 
+function Assert-SectionGeometryVisualProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $scenarioId = 'f2-section-landscape'
+    if (-not @($ScenarioIds | Where-Object { $_ -eq $scenarioId }).Count) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Section geometry visual proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 45) {
+        throw "Section geometry visual proof readiness requires FreeW visual evidence summary schema v45 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $scenarios = @($summary.scenarios)
+    $readinessRows = @($summary.sectionGeometryProofReadiness | Where-Object { $_.scenarioId -eq $scenarioId })
+    $baselineComparisons = @($summary.baselineComparisons)
+    $remainingBlockers = @($summary.remainingEvidenceBlockers)
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $requiredPages = @(1, 2)
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedReadinessRows = 0
+    $verifiedBaselineRows = 0
+    $verifiedUnavailableBlockers = 0
+
+    foreach ($pageNumber in $requiredPages) {
+        $proofRow = @($readinessRows | Where-Object { [int]$_.pageNumber -eq $pageNumber }) | Select-Object -First 1
+        if (-not $proofRow) {
+            $failures.Add("${scenarioId}/p${pageNumber}: missing section geometry proof readiness row")
+            continue
+        }
+
+        if ($proofRow.trust.passed -ne $true -or $proofRow.status -ne 'paired-renderer-proof-ready') {
+            $notes = @($proofRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = [string]$proofRow.baselineReadiness
+            }
+            $failures.Add("${scenarioId}/p${pageNumber}: readiness status '$($proofRow.status)' failed ($notes)")
+        }
+
+        $semanticEvidence = [string]$proofRow.semanticEvidence
+        if ([string]::IsNullOrWhiteSpace($semanticEvidence) -or $semanticEvidence -eq '-') {
+            $failures.Add("${scenarioId}/p${pageNumber}: missing section geometry semantic readiness summary")
+        }
+        if ($pageNumber -eq 1 -and $semanticEvidence -notmatch 'section=1') {
+            $failures.Add("${scenarioId}/p1: missing section=1 semantic evidence")
+        }
+        if ($pageNumber -eq 2 -and ($semanticEvidence -notmatch 'section=2' -or $semanticEvidence -notmatch 'landscape')) {
+            $failures.Add("${scenarioId}/p2: missing landscape section=2 semantic evidence")
+        }
+
+        $verifiedReadinessRows++
+    }
+
+    foreach ($hostId in $requiredHosts) {
+        $scenarioRows = @($scenarios | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId
+        })
+        if ($scenarioRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing normalized scenario row")
+            continue
+        }
+
+        $scenarioRow = $scenarioRows[0]
+        if ($scenarioRow.trust.passed -ne $true) {
+            $notes = @($scenarioRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = 'no notes'
+            }
+            $failures.Add("${hostId}/${scenarioId}: scenario trust failed ($notes)")
+            continue
+        }
+
+        if ([int]$scenarioRow.trustedOutputs -lt 2) {
+            $failures.Add("${hostId}/${scenarioId}: expected at least 2 trusted outputs, found $($scenarioRow.trustedOutputs)")
+            continue
+        }
+
+        $trustedScenarioRows++
+
+        $comparisonRows = @($baselineComparisons | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.baselineScenarioId -eq $scenarioId
+        })
+        if ($baselineComparisons.Count -gt 0 -and $comparisonRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+            continue
+        }
+
+        foreach ($comparison in $comparisonRows) {
+            if ($comparison.trust.passed -ne $true) {
+                $notes = @($comparison.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$comparison.skipReason
+                }
+                $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                continue
+            }
+
+            $baselineId = [string]$comparison.baselineId
+            if (-not $baselineId.StartsWith($scenarioId + '/', [StringComparison]::OrdinalIgnoreCase)) {
+                $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baselineId '$baselineId' expected scenario '$scenarioId'")
+                continue
+            }
+
+            $verifiedBaselineRows++
+        }
+    }
+
+    $unavailableComparisons = @($baselineComparisons | Where-Object {
+        $_.scenarioId -eq $scenarioId -and
+        $_.status -eq 'word-baseline-unavailable'
+    })
+    if ($unavailableComparisons.Count -gt 0) {
+        $blocker = @($remainingBlockers | Where-Object {
+            $_.blockerId -eq 'f2-section-landscape-word-baseline-fidelity' -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.status -eq 'word-baseline-unavailable' -and
+            $_.requiresWordBaseline -eq $true
+        }) | Select-Object -First 1
+        if (-not $blocker) {
+            $failures.Add("${scenarioId}: missing honest word-baseline-unavailable section geometry blocker")
+        }
+        else {
+            $verifiedUnavailableBlockers++
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Section geometry visual proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Section geometry visual proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "Section geometry semantic rows: verified rows=$verifiedReadinessRows"
+    if ($baselineComparisons.Count -gt 0) {
+        Write-Host "Section geometry Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    }
+    else {
+        Write-Host "Section geometry Word-baseline policy rows: no Word baseline mode requested"
+    }
+    if ($verifiedUnavailableBlockers -gt 0) {
+        Write-Host "Section geometry Word-baseline unavailable blocker: verified"
+    }
+}
+
 New-Item -ItemType Directory -Force $fixtureDir | Out-Null
 New-Item -ItemType Directory -Force $wpfDir | Out-Null
 New-Item -ItemType Directory -Force $avaloniaDir | Out-Null
@@ -3019,6 +3182,7 @@ Assert-ReviewCompareCombineVisualProofReadiness $summaryJson $effectiveScenarioI
 Assert-ReviewProofingVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-EquationStructureVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-NotePlacementVisualProofReadiness $summaryJson $effectiveScenarioIds
+Assert-SectionGeometryVisualProofReadiness $summaryJson $effectiveScenarioIds
 
 Write-Host ""
 Write-Host "Visual evidence run complete." -ForegroundColor Green

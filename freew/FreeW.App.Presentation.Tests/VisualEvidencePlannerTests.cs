@@ -1317,6 +1317,18 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void SectionGeometryVisualProofScenarioIds_CoverFocusedNoWordProofFamily()
+    {
+        FreeWVisualEvidenceManifestNormalizer.SectionGeometryVisualProofScenarioIds.Should().Equal(
+            "f2-section-landscape");
+
+        FreeWVisualEvidenceManifestNormalizer.SectionGeometryVisualProofScenarioIds.Should().OnlyContain(
+            scenarioId => FreeWVisualEvidenceManifestNormalizer.SectionGeometryRendererScenarioIds.Contains(
+                scenarioId,
+                StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void DefaultExpectedScenarios_RequiresPairedReviewRendererEvidence()
     {
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
@@ -5915,6 +5927,114 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("section-geometry renderer pair 'f2-section-landscape' page 2", StringComparison.Ordinal)
                 && f.Contains("section ordinals differ", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void SectionGeometryNoWordSummary_ReportsBaselineReadinessAndUnavailableBlocker()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "f2-section-landscape";
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 2),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 2,
+                        pageCount: 2)
+                ],
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 2),
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        pageNumber: 2,
+                        pageCount: 2)
+                ],
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.SectionGeometryProofReadiness.Should().HaveCount(2);
+            summary.SectionGeometryProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.Trust.Passed
+                && row.SemanticEvidence.Contains("section=", StringComparison.Ordinal)
+                && row.BaselineReadiness.Contains("run Word PNG baseline comparison", StringComparison.Ordinal));
+            summary.SectionGeometryProofReadiness.Single(row => row.PageNumber == 2)
+                .SemanticEvidence.Should().Contain("landscape");
+
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(summary, comparisons);
+
+            withBaseline.SectionGeometryProofReadiness.Should().OnlyContain(row =>
+                row.WordBaselineStatus.Contains("word-baseline-unavailable=2", StringComparison.Ordinal)
+                && row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal)
+                && row.Trust.Passed);
+            withBaseline.RemainingEvidenceBlockers.Should().ContainSingle(blocker =>
+                blocker.BlockerId == "f2-section-landscape-word-baseline-fidelity"
+                && blocker.Status == FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus
+                && blocker.RequiresWordBaseline
+                && blocker.SemanticEvidence.Any(evidence => evidence.Contains("section=2", StringComparison.Ordinal)));
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(45);
+            doc.RootElement.GetProperty("sectionGeometryProofReadiness").GetArrayLength().Should().Be(2);
+            doc.RootElement.GetProperty("remainingEvidenceBlockers").EnumerateArray()
+                .Should().Contain(blocker =>
+                    blocker.GetProperty("blockerId").GetString() == "f2-section-landscape-word-baseline-fidelity");
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Section Geometry Visual Proof Readiness");
+            markdown.Should().Contain("f2-section-landscape");
+            markdown.Should().Contain("word-baseline-unavailable");
         }
         finally
         {
