@@ -954,8 +954,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("AutomationProperties.SetAutomationId(cancelButton, \"DirtyWorkbookCancelButton\");");
         source.Should().Contain("e.Key == Key.S && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
         source.Should().Contain("await SaveWorkbookAsAsync();");
-        source.Should().Contain("e.Key == Key.N");
-        source.Should().Contain("await CreateNewWorkbookAsync();");
+        AssertWorkbookShortcutRouteHandled(source, "NewWorkbook", "await CreateNewWorkbookAsync();");
         source.Should().Contain("e.Key == Key.W && HasOnlyCommandModifier(e.KeyModifiers)");
         source.Should().Contain("await CloseWorkbookAsync();");
         source.Should().Contain("TryQuitApplicationAsync()");
@@ -1618,6 +1617,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresUndoRedoThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         source.Should().Contain("private readonly Button _undoButton = new();");
         source.Should().Contain("private readonly Button _redoButton = new();");
@@ -1627,11 +1627,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_redoButton.Click += RedoButton_Click;");
         source.Should().Contain("_undoButton.IsEnabled = isIdle && _session.CanUndo;");
         source.Should().Contain("_redoButton.IsEnabled = isIdle && _session.CanRedo;");
-        source.Should().Contain("e.Key == Key.Z && e.KeyModifiers.HasFlag(KeyModifiers.Shift)");
-        source.Should().Contain("RedoLastEdit();");
-        source.Should().Contain("else if (e.Key == Key.Z)");
-        source.Should().Contain("UndoLastEdit();");
-        source.Should().Contain("else if (e.Key == Key.Y)");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Undo", "WorkbookShortcutKey.Z", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Redo", "WorkbookShortcutKey.Y", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Redo", "WorkbookShortcutKey.Z", "WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift");
+        AssertWorkbookShortcutRouteHandled(source, "Undo", "UndoLastEdit();");
+        AssertWorkbookShortcutRouteHandled(source, "Redo", "RedoLastEdit();");
         source.Should().Contain("private void UndoLastEdit()");
         source.Should().Contain("private void RedoLastEdit()");
         source.Should().Contain("if (!TryCommitPendingFormulaEdit())");
@@ -1644,6 +1644,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresClipboardCopyPasteThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         source.Should().Contain("private readonly Button _cutButton = new();");
         source.Should().Contain("private readonly Button _copyButton = new();");
@@ -1751,12 +1752,12 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var range = _session.SelectCurrentRegionOrAll();");
         source.Should().Contain("if (_formulaBox.IsFocused &&");
         source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U or Key.D4 or Key.NumPad4 or Key.D5 or Key.NumPad5)");
-        source.Should().Contain("else if (e.Key == Key.X)");
-        source.Should().Contain("await CutSelectedRangeToClipboardAsync();");
-        source.Should().Contain("else if (e.Key == Key.C)");
-        source.Should().Contain("await CopySelectedRangeToClipboardAsync();");
-        source.Should().Contain("else if (e.Key == Key.V)");
-        source.Should().Contain("await PasteClipboardTextAsync();");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Cut", "WorkbookShortcutKey.X", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Copy", "WorkbookShortcutKey.C", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Paste", "WorkbookShortcutKey.V", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutRouteHandled(source, "Cut", "await CutSelectedRangeToClipboardAsync();");
+        AssertWorkbookShortcutRouteHandled(source, "Copy", "await CopySelectedRangeToClipboardAsync();");
+        AssertWorkbookShortcutRouteHandled(source, "Paste", "await PasteClipboardTextAsync();");
         source.Should().Contain("else if (e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers))");
         source.Should().Contain("SelectCurrentRegionOrAll();");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Paste Special failed.\");");
@@ -2034,6 +2035,7 @@ public sealed class AvaloniaShellSourceTests
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "FlashFillRangePlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         sessionSource.Should().Contain("public WorkbookCellEditResult FlashFillSelectedRange()");
         sessionSource.Should().Contain("var plan = FlashFillRangePlanner.Plan(sheet, sheetRange);");
@@ -2047,7 +2049,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_flashFillMenuItem.Click += (_, _) => FlashFillSelectedRange();");
         catalogSource.Should().Contain("Item(NativeMenuItemId.FlashFill)");
         catalogSource.Should().Contain("new(NativeMenuItemId.FlashFill, context.IsIdle)");
-        source.Should().Contain("e.Key == Key.E && HasOnlyControlModifier(e.KeyModifiers)");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FlashFill", "WorkbookShortcutKey.E", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutRouteHandled(source, "FlashFill", "FlashFillSelectedRange();");
         source.Should().Contain("private void FlashFillSelectedRange()");
         source.Should().Contain("var result = _session.FlashFillSelectedRange();");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Flash Fill failed.\");");
@@ -3488,6 +3491,7 @@ public sealed class AvaloniaShellSourceTests
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         sessionSource.Should().Contain("public bool CanFillSelectedRange(FillCellsDirection direction)");
         sessionSource.Should().Contain("public WorkbookCellEditResult FillSelectedRange(FillCellsDirection direction)");
@@ -3549,10 +3553,10 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"{FormatFillCellsAction(direction)} in {rangeReference}\");");
         source.Should().Contain("private static string FormatFillCellsAction(FillCellsDirection direction)");
         source.Should().Contain("e.Key is Key.Z or Key.Y or Key.X or Key.C or Key.V or Key.A or Key.B or Key.D or Key.E or Key.I or Key.R or Key.U");
-        source.Should().Contain("else if (e.Key == Key.D && HasOnlyControlModifier(e.KeyModifiers))");
-        source.Should().Contain("FillSelectedRange(FillCellsDirection.Down);");
-        source.Should().Contain("else if (e.Key == Key.R && HasOnlyControlModifier(e.KeyModifiers))");
-        source.Should().Contain("FillSelectedRange(FillCellsDirection.Right);");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FillDown", "WorkbookShortcutKey.D", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "FillRight", "WorkbookShortcutKey.R", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutRouteHandled(source, "FillDown", "FillSelectedRange(FillCellsDirection.Down);");
+        AssertWorkbookShortcutRouteHandled(source, "FillRight", "FillSelectedRange(FillCellsDirection.Right);");
         source.Should().Contain("HasFillCellsButton: _fillCellsButton.Content?.ToString() == \"Fill Cells\"");
         source.Should().Contain("HasFillDownMenuItem: HasToolbarMenuItem(_fillDownFlyoutItem, \"Down\")");
         source.Should().Contain("HasFillRightMenuItem: HasToolbarMenuItem(_fillRightFlyoutItem, \"Right\")");
@@ -3797,6 +3801,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresBoldThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         source.Should().Contain("private readonly ToggleButton _boldButton = new();");
         source.Should().Contain("_boldButton.Content = \"B\";");
@@ -3813,14 +3818,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Bold failed.\");");
         source.Should().Contain("RefreshShell($\"{(enabled ? \"Bolded\" : \"Unbolded\")} {rangeReference}\");");
         source.Should().Contain("private static bool HasOnlyCommandModifier(KeyModifiers modifiers)");
-        source.Should().Contain("else if (e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers))");
-        source.Should().Contain("ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleBold", "WorkbookShortcutKey.B", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutRouteHandled(source, "ToggleBold", "ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: e.Key == Key.B);");
     }
 
     [Fact]
     public void MainWindow_WiresItalicThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         source.Should().Contain("private readonly ToggleButton _italicButton = new();");
         source.Should().Contain("_italicButton.Content = \"I\";");
@@ -3838,14 +3844,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("RefreshShell($\"{(enabled ? \"Italicized\" : \"Unitalicized\")} {rangeReference}\");");
         source.Should().Contain("FontStyle = fontStyle,");
         source.Should().Contain("var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;");
-        source.Should().Contain("else if (e.Key == Key.I && HasOnlyCommandModifier(e.KeyModifiers))");
-        source.Should().Contain("ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleItalic", "WorkbookShortcutKey.I", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutRouteHandled(source, "ToggleItalic", "ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: e.Key == Key.I);");
     }
 
     [Fact]
     public void MainWindow_WiresUnderlineThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         source.Should().Contain("private readonly ToggleButton _underlineButton = new();");
         source.Should().Contain("_underlineButton.Content = new TextBlock");
@@ -3864,9 +3871,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var textDecorations = BuildTextDecorations(style);");
         source.Should().Contain("if (style.Underline || style.DoubleUnderline)");
         source.Should().Contain("textBlock.TextDecorations = textDecorations;");
-        source.Should().Contain("else if (e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers))");
-        source.Should().Contain("else if (e.Key is Key.D4 or Key.NumPad4 && HasOnlyControlModifier(e.KeyModifiers))");
-        source.Should().Contain("ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleUnderline", "WorkbookShortcutKey.U", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleUnderline", "WorkbookShortcutKey.D4", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutRouteHandled(source, "ToggleUnderline", "ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: e.Key == Key.U);");
     }
 
     [Fact]
@@ -3905,6 +3912,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresStrikethroughThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         source.Should().Contain("private readonly ToggleButton _strikethroughButton = new();");
         source.Should().Contain("_strikethroughButton.Content = new TextBlock");
@@ -3923,8 +3931,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static TextDecorationCollection? BuildTextDecorations(CellStyle? style)");
         source.Should().Contain("if (style.Strikethrough)");
         source.Should().Contain("foreach (var decoration in TextDecorations.Strikethrough)");
-        source.Should().Contain("else if (e.Key is Key.D5 or Key.NumPad5 && HasOnlyControlModifier(e.KeyModifiers))");
-        source.Should().Contain("ToggleSelectedRangeStrikethrough();");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ToggleStrikethrough", "WorkbookShortcutKey.D5", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutRouteHandled(source, "ToggleStrikethrough", "ToggleSelectedRangeStrikethrough();");
     }
 
     [Fact]
@@ -4624,6 +4632,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         source.Should().Contain("private readonly Button _newSheetButton = new();");
         source.Should().Contain("private readonly NativeMenuItem _newSheetMenuItem = new();");
@@ -4852,14 +4861,14 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private bool IsAnyToolbarControlFocused()");
         source.Should().Contain("private bool IsAnySheetTabFocused()");
         source.Should().Contain("private static bool FocusControl(Control control)");
-        source.Should().Contain("e.Key == Key.PageUp && HasCommandAndShiftModifiers(e.KeyModifiers)");
-        source.Should().Contain("SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true)");
-        source.Should().Contain("e.Key == Key.PageDown && HasCommandAndShiftModifiers(e.KeyModifiers)");
-        source.Should().Contain("SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true)");
-        source.Should().Contain("e.Key == Key.PageUp && HasOnlyCommandModifier(e.KeyModifiers)");
-        source.Should().Contain("SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false)");
-        source.Should().Contain("e.Key == Key.PageDown && HasOnlyCommandModifier(e.KeyModifiers)");
-        source.Should().Contain("SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false)");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "SelectPreviousSheetGroup", "WorkbookShortcutKey.PageUp", "WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "SelectNextSheetGroup", "WorkbookShortcutKey.PageDown", "WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ActivatePreviousSheet", "WorkbookShortcutKey.PageUp", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "ActivateNextSheet", "WorkbookShortcutKey.PageDown", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutRouteHandled(source, "SelectPreviousSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true)");
+        AssertWorkbookShortcutRouteHandled(source, "SelectNextSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true)");
+        AssertWorkbookShortcutRouteHandled(source, "ActivatePreviousSheet", "SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false)");
+        AssertWorkbookShortcutRouteHandled(source, "ActivateNextSheet", "SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false)");
         source.Should().Contain("HasNewSheetButton: _newSheetButton.Content?.ToString() == \"+\"");
         source.Should().Contain("HasNativeSheetMenu: hasNativeSheetMenu");
         source.Should().Contain("HasNativeNewSheetMenuItem: HasNativeMenuItem(_newSheetMenuItem, NativeMenuItemId.NewSheet)");
@@ -5004,6 +5013,7 @@ public sealed class AvaloniaShellSourceTests
         var findReplaceSearchPlannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.Core.Commands", "FindReplaceSearchPlanner.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _findMenuItem = new();");
         source.Should().Contain("private readonly NativeMenuItem _findNextMenuItem = new();");
@@ -5127,13 +5137,16 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.GoToSpecial(kind, options);");
         source.Should().Contain("result.SelectedRanges.Count == 1");
         source.Should().Contain("FormatRangeReference(result.SelectedRange!.Value)");
-        source.Should().Contain("e.Key == Key.F5");
         source.Should().Contain("args.Key == Key.Oem1 && args.KeyModifiers == KeyModifiers.Alt;");
         source.Should().Contain("SelectGoToSpecial(GoToSpecialKind.VisibleCellsOnly);");
-        source.Should().Contain("e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers)");
         source.Should().Contain("e.Key == Key.G && e.KeyModifiers == KeyModifiers.Meta");
-        source.Should().Contain("e.Key == Key.H && HasOnlyControlModifier(e.KeyModifiers)");
-        source.Should().Contain("e.Key == Key.G && HasOnlyControlModifier(e.KeyModifiers)");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Find", "WorkbookShortcutKey.F", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "Replace", "WorkbookShortcutKey.H", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "GoTo", "WorkbookShortcutKey.G", "WorkbookShortcutModifiers.Control");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "GoTo", "WorkbookShortcutKey.F5");
+        AssertWorkbookShortcutRouteHandled(source, "Find", "await ShowFindDialogAsync();");
+        AssertWorkbookShortcutRouteHandled(source, "Replace", "await ShowReplaceDialogAsync();");
+        AssertWorkbookShortcutRouteHandled(source, "GoTo", "await ShowGoToDialogAsync();");
         source.Should().Contain("HasNativeFindMenuItem: HasNativeMenuItem(_findMenuItem, NativeMenuItemId.Find)");
         source.Should().Contain("HasNativeFindNextMenuItem: HasNativeMenuItem(_findNextMenuItem, NativeMenuItemId.FindNext)");
         source.Should().Contain("HasNativeReplaceMenuItem: HasNativeMenuItem(_replaceMenuItem, NativeMenuItemId.Replace)");
@@ -5281,6 +5294,7 @@ public sealed class AvaloniaShellSourceTests
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
         var smokeSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MacOsLaunchSmoke.cs"));
+        var shortcutCatalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "WorkbookKeyboardShortcutCatalog.cs"));
 
         source.Should().Contain("private readonly NativeMenuItem _workbookStatisticsMenuItem = new();");
         source.Should().Contain("ConfigureNativeFileMenuItem(_workbookStatisticsMenuItem, NativeFileMenuItemId.WorkbookStatistics);");
@@ -5293,8 +5307,8 @@ public sealed class AvaloniaShellSourceTests
         smokeSource.Should().Contain("bool HasNativeWorkbookStatisticsMenuItem,");
         smokeSource.Should().Contain("HasNativeWorkbookStatisticsMenuItem &&");
         smokeSource.Should().Contain("native_workbook_statistics_menu_item={FormatBool(snapshot.HasNativeWorkbookStatisticsMenuItem)}");
-        source.Should().Contain("else if (e.Key == Key.G && e.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift))");
-        source.Should().Contain("await ShowWorkbookStatisticsDialogAsync();");
+        AssertWorkbookShortcutCatalogRoute(shortcutCatalogSource, "WorkbookStatistics", "WorkbookShortcutKey.G", "WorkbookShortcutModifiers.Control | WorkbookShortcutModifiers.Shift");
+        AssertWorkbookShortcutRouteHandled(source, "WorkbookStatistics", "await ShowWorkbookStatisticsDialogAsync();");
         source.Should().Contain("private async Task ShowWorkbookStatisticsDialogAsync()");
         source.Should().Contain("WorkbookStatisticsService.GetStatistics(_session.Workbook)");
         source.Should().Contain("Title = \"Workbook Statistics\"");
@@ -5343,18 +5357,15 @@ public sealed class AvaloniaShellSourceTests
         catalogSource.Should().Contain("NativeMenuGesture(WorkbookShortcutRoute.OpenFormatCells)");
         catalogSource.Should().Contain("NativeMenuGestureKey.Q, NativeMenuGestureModifiers.Meta");
 
-        source.Should().Contain("e.Key == Key.PageUp && HasCommandAndShiftModifiers(e.KeyModifiers)");
-        source.Should().Contain("e.Key == Key.PageDown && HasCommandAndShiftModifiers(e.KeyModifiers)");
-        source.Should().Contain("e.Key == Key.PageUp && HasOnlyCommandModifier(e.KeyModifiers)");
-        source.Should().Contain("e.Key == Key.PageDown && HasOnlyCommandModifier(e.KeyModifiers)");
-        source.Should().Contain("e.Key == Key.F && HasOnlyCommandModifier(e.KeyModifiers)");
+        AssertWorkbookShortcutRouteHandled(source, "SelectPreviousSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: true)");
+        AssertWorkbookShortcutRouteHandled(source, "SelectNextSheetGroup", "SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: true)");
+        AssertWorkbookShortcutRouteHandled(source, "ActivatePreviousSheet", "SelectAdjacentVisibleSheetFromKeyboard(direction: -1, selectRange: false)");
+        AssertWorkbookShortcutRouteHandled(source, "ActivateNextSheet", "SelectAdjacentVisibleSheetFromKeyboard(direction: 1, selectRange: false)");
+        AssertWorkbookShortcutRouteHandled(source, "Find", "await ShowFindDialogAsync();");
         source.Should().Contain("e.Key == Key.A && HasOnlyCommandModifier(e.KeyModifiers)");
-        source.Should().Contain("e.Key == Key.B && HasOnlyCommandModifier(e.KeyModifiers)");
-        source.Should().Contain("e.Key == Key.I && HasOnlyCommandModifier(e.KeyModifiers)");
-        source.Should().Contain("e.Key == Key.U && HasOnlyCommandModifier(e.KeyModifiers)");
-        source.Should().Contain("ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: true);");
-        source.Should().Contain("ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: true);");
-        source.Should().Contain("ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: true);");
+        AssertWorkbookShortcutRouteHandled(source, "ToggleBold", "ToggleSelectedRangeBold(trackLaunchSmokeLiveCommandKey: e.Key == Key.B);");
+        AssertWorkbookShortcutRouteHandled(source, "ToggleItalic", "ToggleSelectedRangeItalic(trackLaunchSmokeLiveCommandKey: e.Key == Key.I);");
+        AssertWorkbookShortcutRouteHandled(source, "ToggleUnderline", "ToggleSelectedRangeUnderline(trackLaunchSmokeLiveCommandKey: e.Key == Key.U);");
         source.Should().Contain("e.Key == Key.W && HasOnlyCommandModifier(e.KeyModifiers)");
     }
 
@@ -5534,5 +5545,27 @@ public sealed class AvaloniaShellSourceTests
         var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
         end.Should().BeGreaterThanOrEqualTo(0, $"source should contain {endMarker} after {startMarker}");
         return source[start..(end + endMarker.Length)];
+    }
+
+    private static void AssertWorkbookShortcutRouteHandled(string source, string routeName, params string[] expectedMarkers)
+    {
+        source.Should().Contain("TryHandleWorkbookShortcutRouteAsync(e)");
+        source.Should().Contain("TryGetWorkbookShortcutRoute(e.Key, e.KeyModifiers, out var route)");
+
+        var routeBlock = ExtractSourceBlock(
+            source,
+            $"case WorkbookShortcutRoute.{routeName}:",
+            "return true;");
+
+        routeBlock.Should().Contain("e.Handled");
+        foreach (var marker in expectedMarkers)
+            routeBlock.Should().Contain(marker);
+    }
+
+    private static void AssertWorkbookShortcutCatalogRoute(string catalogSource, string routeName, params string[] expectedMarkers)
+    {
+        catalogSource.Should().Contain($"WorkbookShortcutRoute.{routeName}");
+        foreach (var marker in expectedMarkers)
+            catalogSource.Should().Contain(marker);
     }
 }
