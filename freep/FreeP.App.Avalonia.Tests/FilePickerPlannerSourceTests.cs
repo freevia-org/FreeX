@@ -39,7 +39,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("PresentationNotesPagePdfExporter.ExportToBytes(_presentation, request)");
         source.Should().Contain("PresentationExportPlanner.BuildVideoExportPlan(");
         source.Should().Contain("PresentationVideoFramePackageExecutor.BuildPackage(");
-        source.Should().Contain("PresentationVideoFramePackageExecutor.BuildHandoffPlan(");
+        source.Should().Contain("PresentationVideoFramePackageExecutor.BuildExecutionDescriptor(");
         source.Should().Contain("PresentationPrintOutputPackageExecutor.BuildPackage(");
         source.Should().Contain("PresentationPrintOutputPackageExecutor.BuildExecutionDescriptor(");
         source.Should().Contain("PresentationPrintBackstagePlanner.Build(");
@@ -65,6 +65,7 @@ public sealed class FilePickerPlannerSourceTests
         source.Should().Contain("LastPrintExecutionDescriptor");
         source.Should().Contain("LastVideoExportPlan");
         source.Should().Contain("LastVideoFramePackage");
+        source.Should().Contain("LastVideoExecutionDescriptor.HandoffPlan");
         source.Should().Contain("LastVideoExportHandoffPlan");
         source.Should().Contain("PresentationExportPlanner.ImageExportPickerTitle");
         source.Should().Contain("StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions");
