@@ -527,7 +527,7 @@ public sealed class SlideShowWindowTests
             var readiness = window.RecordingCaptureAdapterReadiness;
 
             readiness.HostName.Should().Be("WPF slideshow");
-            readiness.AdapterName.Should().Be("WPF Windows microphone capture adapter");
+            readiness.AdapterName.Should().Be("WPF Windows recording capture adapter");
             readiness.Devices.Should().OnlyContain(device =>
                 device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone);
             readiness.CanCaptureNarration.Should().Be(

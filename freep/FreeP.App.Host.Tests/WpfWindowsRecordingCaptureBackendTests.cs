@@ -20,7 +20,7 @@ public sealed class WpfWindowsRecordingCaptureBackendTests
             new FakeCaptureEngine());
 
         backend.Capabilities.HostName.Should().Be("WPF slideshow");
-        backend.AdapterReadiness.AdapterName.Should().Be("WPF Windows microphone capture adapter");
+        backend.AdapterReadiness.AdapterName.Should().Be("WPF Windows recording capture adapter");
         backend.AdapterReadiness.CanCaptureNarration.Should().BeTrue();
         backend.AdapterReadiness.CanCaptureCamera.Should().BeFalse();
         backend.AdapterReadiness.ReadyStreams.Should().Equal(SlideShowRecordingCaptureStreamKind.NarrationAudio);
@@ -41,8 +41,38 @@ public sealed class WpfWindowsRecordingCaptureBackendTests
         backend.AdapterReadiness.MissingStreams.Should().Equal(
             SlideShowRecordingCaptureStreamKind.NarrationAudio,
             SlideShowRecordingCaptureStreamKind.CameraVideo);
-        backend.AdapterReadiness.StatusText.Should().Contain("No Windows microphone devices");
+        backend.AdapterReadiness.StatusText.Should().Contain("No Windows microphone or camera devices");
         backend.AdapterReadiness.StatusText.Should().NotContain("not registered");
+    }
+
+    [Fact]
+    public void Readiness_WithMicrophoneAndCamera_ProjectsNarrationAndCameraHandoff()
+    {
+        var backend = new WpfWindowsRecordingCaptureBackend(
+            new FakeDeviceCatalog(
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Microphone,
+                    "mic-0",
+                    "Studio microphone",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "audio/mp4"),
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Camera,
+                    "camera-0",
+                    "Presenter camera",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "video/mp4")),
+            new FakeCaptureEngine());
+
+        backend.AdapterReadiness.CanCaptureNarration.Should().BeTrue();
+        backend.AdapterReadiness.CanCaptureCamera.Should().BeTrue();
+        backend.AdapterReadiness.ReadyStreams.Should().Equal(
+            SlideShowRecordingCaptureStreamKind.NarrationAudio,
+            SlideShowRecordingCaptureStreamKind.CameraVideo);
+        backend.AdapterReadiness.MissingStreams.Should().BeEmpty();
+        backend.Capabilities.UnavailableReason.Should().BeEmpty();
     }
 
     [Fact]
@@ -102,6 +132,97 @@ public sealed class WpfWindowsRecordingCaptureBackendTests
         camera.IsDeferred.Should().BeTrue();
     }
 
+    [Fact]
+    public void Planner_WithWpfCameraBackend_StartsAndCompletesVideoWhenEngineProvidesPayload()
+    {
+        var engine = new FakeCaptureEngine();
+        var backend = new WpfWindowsRecordingCaptureBackend(
+            new FakeDeviceCatalog(
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Microphone,
+                    "mic-0",
+                    "Studio microphone",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "audio/mp4"),
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Camera,
+                    "camera-0",
+                    "Presenter camera",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "video/mp4")),
+            engine);
+        var started = new DateTimeOffset(2026, 7, 14, 10, 0, 0, TimeSpan.Zero);
+        var plan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia);
+
+        var state = SlideShowRecordingExecutionPlanner.CreateState(
+            plan,
+            currentSlideIndex: 0,
+            started,
+            backend);
+        var moved = SlideShowRecordingExecutionPlanner.MoveToSlide(
+            state,
+            slideIndex: 1,
+            started.AddMilliseconds(2400));
+
+        engine.StartedRequests.Should().HaveCount(4);
+        engine.StartedRequests.Where(request => request.Device.Kind == SlideShowRecordingCaptureDeviceKind.Camera)
+            .Select(request => request.PackagePath)
+            .Should().Equal(
+                "ppt/media/freep-recordings/wpf/slide-001-camera.mp4",
+                "ppt/media/freep-recordings/wpf/slide-002-camera.mp4");
+        moved.LastActions.Select(action => action.Kind).Should().ContainInOrder(
+            SlideShowRecordingExecutionActionKind.StartNarrationCapture,
+            SlideShowRecordingExecutionActionKind.StartCameraCapture);
+
+        var segment = moved.Segments.Should().ContainSingle().Subject;
+        segment.CameraCaptured.Should().BeTrue();
+        var camera = segment.MediaArtifacts.Single(artifact => artifact.Kind == SlideShowRecordingMediaArtifactKind.CameraVideo);
+        camera.Should().Match<SlideShowRecordingMediaArtifact>(artifact =>
+            artifact.IsCaptured &&
+            !artifact.IsDeferred &&
+            artifact.IsPersistable &&
+            artifact.SuggestedFileName == "slide-001-camera.mp4" &&
+            artifact.ContentType == "video/mp4" &&
+            artifact.PackagePath == "ppt/media/freep-recordings/wpf/slide-001-camera.mp4" &&
+            artifact.PayloadBytes != null &&
+            artifact.PayloadBytes.Length == artifact.ContentLengthBytes &&
+            artifact.ContentSha256.Length == 64);
+    }
+
+    [Fact]
+    public void DefaultWindowsEngine_CameraCaptureDefersEncodedPayloadAfterHandoff()
+    {
+        var engine = new WpfWindowsRecordingCaptureEngine();
+        var device = new SlideShowRecordingCaptureDeviceDescriptor(
+            SlideShowRecordingCaptureDeviceKind.Camera,
+            "camera-0",
+            "Presenter camera",
+            IsDefault: true,
+            IsAvailable: true,
+            "video/mp4");
+        var started = new DateTimeOffset(2026, 7, 14, 10, 0, 0, TimeSpan.Zero);
+
+        engine.BeginCapture(new WpfWindowsRecordingCaptureStartRequest(
+            device,
+            SlideIndex: 0,
+            started,
+            "ppt/media/freep-recordings/wpf/slide-001-camera.mp4"));
+        var result = engine.CompleteCapture(new WpfWindowsRecordingCaptureRequest(
+            device,
+            SlideIndex: 0,
+            DurationMs: 1500,
+            "ppt/media/freep-recordings/wpf/slide-001-camera.mp4"));
+
+        result.IsCaptured.Should().BeFalse();
+        result.StatusText.Should().Contain("camera device handoff reached");
+        result.StatusText.Should().Contain("video encoding is not implemented");
+        result.PayloadBytes.Should().BeEmpty();
+    }
+
     private sealed class FakeDeviceCatalog : IWpfWindowsRecordingDeviceCatalog
     {
         private readonly IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> _devices;
@@ -126,10 +247,10 @@ public sealed class WpfWindowsRecordingCaptureBackendTests
         public WpfWindowsRecordingCaptureResult CompleteCapture(WpfWindowsRecordingCaptureRequest request)
         {
             var payload = System.Text.Encoding.UTF8.GetBytes(
-                $"{request.Device.DeviceId}|{request.SlideIndex}|{request.DurationMs}|{request.PackagePath}");
+                $"{request.Device.Kind}|{request.Device.DeviceId}|{request.SlideIndex}|{request.DurationMs}|{request.PackagePath}");
 
             return WpfWindowsRecordingCaptureResult.Captured(
-                $"Fake WPF microphone captured {request.PackagePath}",
+                $"Fake WPF {request.Device.Kind} captured {request.PackagePath}",
                 request.PackagePath,
                 payload);
         }

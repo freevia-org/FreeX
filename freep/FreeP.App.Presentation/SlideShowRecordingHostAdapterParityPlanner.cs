@@ -25,6 +25,15 @@ public sealed record SlideShowRecordingHostAdapterParityEvidence(
     public bool HasAnyCameraHandoff =>
         HostRows.Any(row => row.CanCaptureCamera);
 
+    public bool HasWpfCameraHandoff =>
+        HostRows.Any(row => IsWpf(row.HostName) && row.CanCaptureCamera);
+
+    public bool HasAvaloniaCameraHandoff =>
+        HostRows.Any(row => IsAvalonia(row.HostName) && row.CanCaptureCamera);
+
+    public bool HasPairedCameraHandoff =>
+        HasWpfCameraHandoff && HasAvaloniaCameraHandoff;
+
     public bool RequiresUserPermission =>
         HostRows.Any(row => row.RequiresUserPermission);
 
@@ -35,13 +44,16 @@ public sealed record SlideShowRecordingHostAdapterParityEvidence(
         BuildSharedStreams(ready: false);
 
     public string SummaryText =>
-        HasPairedNarrationHandoff
-            ? "WPF and Avalonia both expose real Windows microphone narration handoff through host recording adapters."
-            : "WPF/Avalonia microphone narration handoff is not paired across the supplied host adapters.";
+        (HasPairedNarrationHandoff, HasPairedCameraHandoff) switch
+        {
+            (true, true) => "WPF and Avalonia both expose real Windows microphone narration and camera video handoff readiness through host recording adapters.",
+            (true, false) => "WPF and Avalonia both expose real Windows microphone narration handoff through host recording adapters.",
+            _ => "WPF/Avalonia microphone narration handoff is not paired across the supplied host adapters."
+        };
 
     public string RemainingWork =>
-        HasAnyCameraHandoff
-            ? "PowerPoint COM recording baselines and broader real-deck media/caption baselines remain deferred."
+        HasPairedCameraHandoff
+            ? "Encoded real camera media payload capture, PowerPoint COM recording baselines, unavailable-hardware live capture, and broader real-deck media/caption baselines remain deferred."
             : "Real camera capture, PowerPoint COM recording baselines, and broader real-deck media/caption baselines remain deferred.";
 
     private IReadOnlyList<SlideShowRecordingCaptureStreamKind> BuildSharedStreams(bool ready)

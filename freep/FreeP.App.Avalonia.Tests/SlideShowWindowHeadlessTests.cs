@@ -474,7 +474,7 @@ public sealed class SlideShowWindowHeadlessTests
         if (!ran) return;
         readiness.Should().NotBeNull();
         readiness!.HostName.Should().Be("Avalonia slideshow");
-        readiness.AdapterName.Should().Be("Avalonia Windows microphone capture adapter");
+        readiness.AdapterName.Should().Be("Avalonia Windows recording capture adapter");
         readiness.StatusText.Should().NotContain("not registered");
         readiness.CanCaptureCamera.Should().BeFalse();
         readiness.MissingStreams.Should().Contain(SlideShowRecordingCaptureStreamKind.CameraVideo);
