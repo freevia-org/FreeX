@@ -10,10 +10,9 @@ namespace FreeP.App.Host.Recording;
 internal sealed class WpfWindowsRecordingCaptureBackend : ISlideShowRecordingCaptureBackend
 {
     internal const string HostName = "WPF slideshow";
-    internal const string AdapterName = "WPF Windows microphone capture adapter";
+    internal const string AdapterName = "WPF Windows recording capture adapter";
     private const string PackageRoot = "ppt/media/freep-recordings/wpf";
-    private const string NoDevicesReason = "No Windows microphone devices were reported by the host OS.";
-    private const string CameraDeferredReason = "WPF Windows camera capture is not implemented yet; microphone narration is available when a Windows microphone is present.";
+    private const string NoDevicesReason = "No Windows microphone or camera devices were reported by the host OS.";
 
     private readonly IWpfWindowsRecordingCaptureEngine _captureEngine;
 
@@ -42,40 +41,48 @@ internal sealed class WpfWindowsRecordingCaptureBackend : ISlideShowRecordingCap
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (request.Kind != SlideShowRecordingMediaArtifactKind.NarrationAudio ||
-            !AdapterReadiness.CanCaptureNarration)
+        var canCapture = request.Kind switch
+        {
+            SlideShowRecordingMediaArtifactKind.NarrationAudio => AdapterReadiness.CanCaptureNarration,
+            SlideShowRecordingMediaArtifactKind.CameraVideo => AdapterReadiness.CanCaptureCamera,
+            _ => false
+        };
+        if (!canCapture)
         {
             return;
         }
 
         var device = AdapterReadiness.Devices.First(device =>
-            device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone &&
+            device.Kind == DeviceKind(request.Kind) &&
             device.IsAvailable);
         _captureEngine.BeginCapture(new WpfWindowsRecordingCaptureStartRequest(
             device,
             request.SlideIndex,
             request.StartedAtUtc,
-            NormalizePackagePath(request.SuggestedFileName, ".wav")));
+            NormalizePackagePath(request.SuggestedFileName, Extension(request.Kind))));
     }
 
     public SlideShowRecordingCaptureResult CompleteCapture(SlideShowRecordingCaptureRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (request.Kind == SlideShowRecordingMediaArtifactKind.CameraVideo)
-            return SlideShowRecordingCaptureResult.Deferred(CameraDeferredReason);
-
-        if (!AdapterReadiness.CanCaptureNarration)
+        var canCapture = request.Kind switch
+        {
+            SlideShowRecordingMediaArtifactKind.NarrationAudio => AdapterReadiness.CanCaptureNarration,
+            SlideShowRecordingMediaArtifactKind.CameraVideo => AdapterReadiness.CanCaptureCamera,
+            _ => false
+        };
+        if (!canCapture)
             return SlideShowRecordingCaptureResult.Deferred($"{AdapterName}: {AdapterReadiness.UnavailableReason}");
 
         var device = AdapterReadiness.Devices.First(device =>
-            device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone &&
+            device.Kind == DeviceKind(request.Kind) &&
             device.IsAvailable);
         var capture = _captureEngine.CompleteCapture(new WpfWindowsRecordingCaptureRequest(
             device,
             request.SlideIndex,
             request.DurationMs,
-            NormalizePackagePath(request.SuggestedFileName, ".wav")));
+            NormalizePackagePath(request.SuggestedFileName, Extension(request.Kind))));
 
         if (!capture.IsCaptured)
             return SlideShowRecordingCaptureResult.Deferred(capture.StatusText);
@@ -88,7 +95,7 @@ internal sealed class WpfWindowsRecordingCaptureBackend : ISlideShowRecordingCap
             Convert.ToHexString(SHA256.HashData(capture.PayloadBytes)).ToLowerInvariant(),
             capture.PayloadBytes,
             fileName,
-            "audio/wav");
+            ContentType(request.Kind));
     }
 
     private static SlideShowRecordingCaptureAdapterReadiness BuildReadiness(
@@ -97,14 +104,15 @@ internal sealed class WpfWindowsRecordingCaptureBackend : ISlideShowRecordingCap
         try
         {
             var devices = deviceCatalog.EnumerateDevices()
-                .Where(device => device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone)
+                .Where(device => device.Kind is SlideShowRecordingCaptureDeviceKind.Microphone
+                    or SlideShowRecordingCaptureDeviceKind.Camera)
                 .ToArray();
             return SlideShowRecordingCaptureAdapterReadiness.FromDevices(
                 HostName,
                 AdapterName,
                 devices,
                 requiresUserPermission: true,
-                devices.Any(device => device.IsAvailable) ? CameraDeferredReason : NoDevicesReason);
+                devices.Any(device => device.IsAvailable) ? MissingDeviceReason(devices) : NoDevicesReason);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -113,9 +121,38 @@ internal sealed class WpfWindowsRecordingCaptureBackend : ISlideShowRecordingCap
                 AdapterName,
                 Array.Empty<SlideShowRecordingCaptureDeviceDescriptor>(),
                 requiresUserPermission: true,
-                $"Windows microphone enumeration failed: {ex.Message}");
+                $"Windows recording device enumeration failed: {ex.Message}");
         }
     }
+
+    private static string MissingDeviceReason(IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> devices)
+    {
+        var hasMicrophone = devices.Any(device =>
+            device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone &&
+            device.IsAvailable);
+        var hasCamera = devices.Any(device =>
+            device.Kind == SlideShowRecordingCaptureDeviceKind.Camera &&
+            device.IsAvailable);
+
+        return (hasMicrophone, hasCamera) switch
+        {
+            (true, true) => string.Empty,
+            (true, false) => "No Windows camera devices were reported by the host OS.",
+            (false, true) => "No Windows microphone devices were reported by the host OS.",
+            _ => NoDevicesReason
+        };
+    }
+
+    private static SlideShowRecordingCaptureDeviceKind DeviceKind(SlideShowRecordingMediaArtifactKind kind) =>
+        kind == SlideShowRecordingMediaArtifactKind.NarrationAudio
+            ? SlideShowRecordingCaptureDeviceKind.Microphone
+            : SlideShowRecordingCaptureDeviceKind.Camera;
+
+    private static string Extension(SlideShowRecordingMediaArtifactKind kind) =>
+        kind == SlideShowRecordingMediaArtifactKind.NarrationAudio ? ".wav" : ".mp4";
+
+    private static string ContentType(SlideShowRecordingMediaArtifactKind kind) =>
+        kind == SlideShowRecordingMediaArtifactKind.NarrationAudio ? "audio/wav" : "video/mp4";
 
     private static string NormalizePackagePath(string suggestedFileName, string extension)
     {
@@ -178,6 +215,17 @@ internal sealed class WpfWindowsRecordingCaptureEngine : IWpfWindowsRecordingCap
             _activeCaptures.Remove(key);
         }
 
+        if (request.Device.Kind == SlideShowRecordingCaptureDeviceKind.Camera)
+        {
+            _activeCaptures[key] = new ActiveCapture(
+                string.Empty,
+                string.Empty,
+                request.PackagePath,
+                request.StartedAtUtc,
+                request.Device.Kind);
+            return;
+        }
+
         if (!OperatingSystem.IsWindows())
             return;
 
@@ -189,7 +237,12 @@ internal sealed class WpfWindowsRecordingCaptureEngine : IWpfWindowsRecordingCap
             MciSend($"set {alias} time format milliseconds");
             MciSend($"set {alias} bitspersample 16 channels 1 samplespersec 16000");
             MciSend($"record {alias}");
-            _activeCaptures[key] = new ActiveCapture(alias, path, request.PackagePath, request.StartedAtUtc);
+            _activeCaptures[key] = new ActiveCapture(
+                alias,
+                path,
+                request.PackagePath,
+                request.StartedAtUtc,
+                request.Device.Kind);
         }
         catch
         {
@@ -211,6 +264,12 @@ internal sealed class WpfWindowsRecordingCaptureEngine : IWpfWindowsRecordingCap
 
         try
         {
+            if (capture.Kind == SlideShowRecordingCaptureDeviceKind.Camera)
+            {
+                return WpfWindowsRecordingCaptureResult.Deferred(
+                    $"{WpfWindowsRecordingCaptureBackend.AdapterName}: camera device handoff reached for {request.Device.DisplayName}, but local video encoding is not implemented in this no-COM adapter.");
+            }
+
             MciSend($"stop {capture.Alias}");
             MciSend($"save {capture.Alias} \"{capture.TempPath}\"");
             MciSend($"close {capture.Alias}");
@@ -262,6 +321,9 @@ internal sealed class WpfWindowsRecordingCaptureEngine : IWpfWindowsRecordingCap
 
     private static void TryClose(string alias)
     {
+        if (string.IsNullOrWhiteSpace(alias))
+            return;
+
         try
         {
             _ = mciSendString($"close {alias}", null, 0, IntPtr.Zero);
@@ -273,6 +335,9 @@ internal sealed class WpfWindowsRecordingCaptureEngine : IWpfWindowsRecordingCap
 
     private static void TryDelete(string path)
     {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
         try
         {
             if (File.Exists(path))
@@ -300,7 +365,8 @@ internal sealed class WpfWindowsRecordingCaptureEngine : IWpfWindowsRecordingCap
         string Alias,
         string TempPath,
         string PackagePath,
-        DateTimeOffset StartedAtUtc) : IDisposable
+        DateTimeOffset StartedAtUtc,
+        SlideShowRecordingCaptureDeviceKind Kind) : IDisposable
     {
         public void Dispose()
         {
