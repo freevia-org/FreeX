@@ -6697,6 +6697,14 @@ public sealed class VisualEvidencePlannerTests
                 ]);
 
             summary.Trust.Passed.Should().BeTrue();
+            summary.ReferencesHeavyProofReadiness.Should().HaveCount(2);
+            summary.ReferencesHeavyProofReadiness.Should().OnlyContain(row =>
+                row.ScenarioId == "references-heavy-fields"
+                && row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "not-run"
+                && row.SemanticEvidence.Contains("BIBLIOGRAPHY", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("TOA entries=", StringComparison.Ordinal)
+                && row.Trust.Passed);
             var comparisons = summary.Evidence
                 .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
                     row,
@@ -6708,6 +6716,12 @@ public sealed class VisualEvidencePlannerTests
                 comparisons);
 
             withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.ReferencesHeavyProofReadiness.Should().HaveCount(2);
+            withBaseline.ReferencesHeavyProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "word-baseline-unavailable=2"
+                && row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("Example v. FreeW", StringComparison.Ordinal));
             var blocker = withBaseline.RemainingEvidenceBlockers.Should().ContainSingle().Subject;
             blocker.BlockerId.Should().Be("references-heavy-toa-page-number-fidelity");
             blocker.ScenarioId.Should().Be("references-heavy-fields");
@@ -6729,6 +6743,12 @@ public sealed class VisualEvidencePlannerTests
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
+            var readiness = doc.RootElement.GetProperty("referencesHeavyProofReadiness");
+            readiness.GetArrayLength().Should().Be(2);
+            readiness.EnumerateArray().Should().Contain(row =>
+                row.GetProperty("scenarioId").GetString() == "references-heavy-fields" &&
+                row.GetProperty("wordBaselineStatus").GetString() == "word-baseline-unavailable=2" &&
+                row.GetProperty("trust").GetProperty("passed").GetBoolean());
             var jsonBlocker = doc.RootElement.GetProperty("remainingEvidenceBlockers")[0];
             jsonBlocker.GetProperty("blockerId").GetString()
                 .Should().Be("references-heavy-toa-page-number-fidelity");
@@ -6740,6 +6760,9 @@ public sealed class VisualEvidencePlannerTests
                 .Should().BeTrue();
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## References-Heavy Field/TOA Proof Readiness");
+            markdown.Should().Contain("| references-heavy-fields | 1 | paired-renderer-proof-ready |");
+            markdown.Should().Contain("word-baseline-unavailable=2");
             markdown.Should().Contain("## Remaining Evidence Blockers");
             markdown.Should().Contain("references-heavy-toa-page-number-fidelity");
             markdown.Should().Contain("TOA page-number fidelity");

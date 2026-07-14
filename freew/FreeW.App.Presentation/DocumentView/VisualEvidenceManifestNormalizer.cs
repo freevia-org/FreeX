@@ -77,6 +77,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualReviewMarkupProofReadiness> ReviewMarkupProofReadiness,
     IReadOnlyList<FreeWVisualReviewCompareCombineProofReadiness> ReviewCompareCombineProofReadiness,
     IReadOnlyList<FreeWVisualReviewProofingProofReadiness> ReviewProofingProofReadiness,
+    IReadOnlyList<FreeWVisualReferencesHeavyProofReadiness> ReferencesHeavyProofReadiness,
     IReadOnlyList<FreeWVisualLegalReferenceProofReadiness> LegalReferenceProofReadiness,
     IReadOnlyList<FreeWVisualBaselineComparison> BaselineComparisons,
     IReadOnlyList<FreeWVisualBaselineTriageItem> WordBaselineTriage,
@@ -193,6 +194,17 @@ public sealed record FreeWVisualReviewProofingProofReadiness(
     string SemanticEvidence,
     FreeWVisualEvidenceTrust Trust);
 
+public sealed record FreeWVisualReferencesHeavyProofReadiness(
+    string ScenarioId,
+    int PageNumber,
+    string Status,
+    string WpfOutputSummary,
+    string AvaloniaOutputSummary,
+    string WordBaselineStatus,
+    string BaselineReadiness,
+    string SemanticEvidence,
+    FreeWVisualEvidenceTrust Trust);
+
 public sealed record FreeWVisualLegalReferenceProofReadiness(
     string ScenarioId,
     int PageNumber,
@@ -250,7 +262,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 45;
+    public const int SummarySchemaVersion = 46;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -373,6 +385,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "review-proofing-visual-depth",
         "review-protection-proofing-comments-only"
     ];
+    public const string ReferencesHeavyProofScenarioId = "references-heavy-fields";
     public const string LegalReferenceSectionPageProofScenarioId = "legal-reference-section-page-numbers";
 
     private static readonly string[] ReferencesHeavyRequiredComplexFieldKeywords =
@@ -519,6 +532,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var reviewMarkupProofReadiness = BuildReviewMarkupProofReadinessRows(expected, orderedRows, []);
         var reviewCompareCombineProofReadiness = BuildReviewCompareCombineProofReadinessRows(expected, orderedRows, []);
         var reviewProofingProofReadiness = BuildReviewProofingProofReadinessRows(expected, orderedRows, []);
+        var referencesHeavyProofReadiness = BuildReferencesHeavyProofReadinessRows(expected, orderedRows, []);
         var legalReferenceProofReadiness = BuildLegalReferenceProofReadinessRows(expected, orderedRows, []);
         var summary = new FreeWVisualEvidenceNormalizedSummary(
             SummarySchemaId,
@@ -539,6 +553,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             reviewMarkupProofReadiness,
             reviewCompareCombineProofReadiness,
             reviewProofingProofReadiness,
+            referencesHeavyProofReadiness,
             legalReferenceProofReadiness,
             [],
             [],
@@ -605,6 +620,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         AppendReviewMarkupProofReadiness(sb, summary);
         AppendReviewCompareCombineProofReadiness(sb, summary);
         AppendReviewProofingProofReadiness(sb, summary);
+        AppendReferencesHeavyProofReadiness(sb, summary);
         AppendLegalReferenceProofReadiness(sb, summary);
         AppendEquationGeometryEvidence(sb, summary);
 
@@ -941,6 +957,29 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
         sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
         foreach (var row in summary.LegalReferenceProofReadiness)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.ScenarioId)} | {row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(row.Status)} | {EscapeMarkdown(row.WpfOutputSummary)} | " +
+                $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | {EscapeMarkdown(row.WordBaselineStatus)} | " +
+                $"{EscapeMarkdown(row.BaselineReadiness)} | {EscapeMarkdown(row.SemanticEvidence)} | " +
+                $"{(row.Trust.Passed ? "passed" : "failed")} |");
+        }
+    }
+
+    private static void AppendReferencesHeavyProofReadiness(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.ReferencesHeavyProofReadiness.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## References-Heavy Field/TOA Proof Readiness");
+        sb.AppendLine();
+        sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
+        sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var row in summary.ReferencesHeavyProofReadiness)
         {
             sb.AppendLine(
                 $"| {EscapeMarkdown(row.ScenarioId)} | {row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
@@ -1781,6 +1820,66 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return rows;
     }
 
+    private static IReadOnlyList<FreeWVisualReferencesHeavyProofReadiness> BuildReferencesHeavyProofReadinessRows(
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        const string scenarioId = ReferencesHeavyProofScenarioId;
+        var expected = expectedScenarios
+            .Any(e => string.Equals(e.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+        var hasEvidence = evidence
+            .Any(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+        if (!expected && !hasEvidence)
+            return [];
+
+        var rows = new List<FreeWVisualReferencesHeavyProofReadiness>();
+        foreach (var pageNumber in RequiredScenarioPages(scenarioId))
+        {
+            var wpfRows = RowsForHostScenarioPage(evidence, WpfHostId, scenarioId, pageNumber);
+            var avaloniaRows = RowsForHostScenarioPage(evidence, AvaloniaHostId, scenarioId, pageNumber);
+            var trustedWpf = wpfRows.FirstOrDefault(row => row.Trust.Passed);
+            var trustedAvalonia = avaloniaRows.FirstOrDefault(row => row.Trust.Passed);
+            var relatedBaseline = baselineComparisons
+                .Where(comparison =>
+                    string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase)
+                    && comparison.PageNumber == pageNumber)
+                .ToList();
+
+            if (trustedWpf is null || trustedAvalonia is null)
+            {
+                rows.Add(new FreeWVisualReferencesHeavyProofReadiness(
+                    scenarioId,
+                    pageNumber,
+                    "missing-paired-renderer-evidence",
+                    FormatOutputSummary(wpfRows),
+                    FormatOutputSummary(avaloniaRows),
+                    FormatWordBaselineStatus(relatedBaseline),
+                    "paired WPF/Avalonia references-heavy field and TOA evidence is required before Word baseline comparison readiness",
+                    FormatReferencesHeavyProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                    new FreeWVisualEvidenceTrust(false, BuildMissingReferencesHeavyPairFailures(pageNumber, trustedWpf, trustedAvalonia))));
+                continue;
+            }
+
+            var failures = BuildReferencesHeavySemanticFailures(pageNumber, trustedWpf, trustedAvalonia);
+            var baselineTrust = EvaluateDrawingObjectProofReadiness(relatedBaseline);
+            failures.AddRange(baselineTrust.Failures);
+            var trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+            rows.Add(new FreeWVisualReferencesHeavyProofReadiness(
+                scenarioId,
+                pageNumber,
+                trust.Passed ? "paired-renderer-proof-ready" : "references-heavy-proof-failed",
+                FormatOutputSummary(wpfRows),
+                FormatOutputSummary(avaloniaRows),
+                FormatWordBaselineStatus(relatedBaseline),
+                FormatReferencesHeavyBaselineReadiness(relatedBaseline),
+                FormatReferencesHeavyProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                trust));
+        }
+
+        return rows;
+    }
+
     public static FreeWVisualEvidenceNormalizedSummary WithBaselineComparisons(
         FreeWVisualEvidenceNormalizedSummary summary,
         IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
@@ -1839,6 +1938,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 summary.Evidence,
                 ordered),
             ReviewProofingProofReadiness = BuildReviewProofingProofReadinessRows(
+                summary.ExpectedScenarios,
+                summary.Evidence,
+                ordered),
+            ReferencesHeavyProofReadiness = BuildReferencesHeavyProofReadinessRows(
                 summary.ExpectedScenarios,
                 summary.Evidence,
                 ordered),
@@ -2002,6 +2105,66 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (trustedAvalonia is null)
             failures.Add($"legal-reference section page-number proof page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
         return failures;
+    }
+
+    private static IReadOnlyList<string> BuildMissingReferencesHeavyPairFailures(
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow? trustedWpf,
+        FreeWVisualEvidenceNormalizedRow? trustedAvalonia)
+    {
+        var failures = new List<string>();
+        if (trustedWpf is null)
+            failures.Add($"references-heavy field/TOA proof page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted WPF visual evidence");
+        if (trustedAvalonia is null)
+            failures.Add($"references-heavy field/TOA proof page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
+        return failures;
+    }
+
+    private static List<string> BuildReferencesHeavySemanticFailures(
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia)
+    {
+        var failures = new List<string>();
+        var pairName = $"references-heavy field/TOA proof page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        ValidateReferencesHeavySemanticRow(pairName + " WPF", wpf, failures);
+        ValidateReferencesHeavySemanticRow(pairName + " Avalonia", avalonia, failures);
+        ValidateToaFieldPairRow(ReferencesHeavyProofScenarioId, pageNumber, wpf, avalonia, failures);
+        return failures;
+    }
+
+    private static void ValidateReferencesHeavySemanticRow(
+        string rowName,
+        FreeWVisualEvidenceNormalizedRow row,
+        List<string> failures)
+    {
+        var fields = row.Fields;
+        var toa = row.TableOfAuthorities;
+        foreach (var keyword in ReferencesHeavyRequiredComplexFieldKeywords)
+        {
+            if (!fields.ComplexFieldKeywords.Contains(keyword, StringComparer.OrdinalIgnoreCase))
+                failures.Add($"{rowName} expected cached {keyword} complex field metadata");
+        }
+
+        if (!fields.ComplexFieldResultSignatures.Contains("BIBLIOGRAPHY=References", StringComparer.OrdinalIgnoreCase))
+            failures.Add($"{rowName} expected cached bibliography result signature");
+        if (!fields.ComplexFieldResultSignatures.Contains("TOA=Cases\\t1, 2", StringComparer.OrdinalIgnoreCase))
+            failures.Add($"{rowName} expected cached TOA page-reference sentinel");
+        if (!toa.HasGeneratedTable || toa.EntryWithPageReferenceCount < 2)
+            failures.Add($"{rowName} expected generated Table of Authorities page references");
+        if (!toa.HasExplicitPageNumbers)
+            failures.Add($"{rowName} expected explicit TOA page numbers");
+        foreach (var category in ReferencesHeavyRequiredToaCategories)
+        {
+            if (!toa.Categories.Contains(category, StringComparer.OrdinalIgnoreCase))
+                failures.Add($"{rowName} expected generated TOA category '{category}'");
+        }
+
+        foreach (var signature in ReferencesHeavyRequiredToaPageReferenceSignatures)
+        {
+            if (!toa.PageReferenceSignatures.Contains(signature, StringComparer.Ordinal))
+                failures.Add($"{rowName} missing generated page-reference signature '{signature}'");
+        }
     }
 
     private static List<string> BuildLegalReferenceSemanticFailures(
@@ -2686,6 +2849,34 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return "Word baseline policy rows are present and trusted";
     }
 
+    private static string FormatReferencesHeavyBaselineReadiness(
+        IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline)
+    {
+        if (relatedBaseline.Count == 0)
+            return "paired renderer evidence is present; run Word PNG baseline comparison for references-heavy field and TOA page-number evidence";
+
+        if (relatedBaseline.All(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Word COM or baseline generation unavailable; paired WPF/Avalonia references-heavy field and TOA evidence is retained without authoritative Word parity";
+        }
+
+        if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
+            return "one or more Word baseline comparison rows failed trust; inspect baseline triage";
+
+        if (relatedBaseline.Any(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.PassedStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "real Word PNG baseline compared within configured tolerance";
+        }
+
+        return "Word baseline policy rows are present and trusted";
+    }
+
     private static string FormatWordBaselineStatus(IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline)
     {
         if (relatedBaseline.Count == 0)
@@ -3011,6 +3202,37 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (avalonia is not null)
             parts.Add("Avalonia " + FormatLegalReferenceRowSemanticEvidence(avalonia));
         return parts.Count == 0 ? "-" : string.Join("; ", parts);
+    }
+
+    private static string FormatReferencesHeavyProofSemanticEvidence(
+        FreeWVisualEvidenceNormalizedRow? wpf,
+        FreeWVisualEvidenceNormalizedRow? avalonia)
+    {
+        var parts = new List<string>();
+        if (wpf is not null)
+            parts.Add("WPF " + FormatReferencesHeavyRowSemanticEvidence(wpf));
+        if (avalonia is not null)
+            parts.Add("Avalonia " + FormatReferencesHeavyRowSemanticEvidence(avalonia));
+        return parts.Count == 0 ? "-" : string.Join("; ", parts);
+    }
+
+    private static string FormatReferencesHeavyRowSemanticEvidence(FreeWVisualEvidenceNormalizedRow row)
+    {
+        var fields = row.Fields;
+        var toa = row.TableOfAuthorities;
+        return string.Concat(
+            "keywords=",
+            FormatSummaries(fields.ComplexFieldKeywords),
+            ", field results=",
+            FormatSummaries(fields.ComplexFieldResultSignatures),
+            ", TOA entries=",
+            toa.EntryCount.ToString(CultureInfo.InvariantCulture),
+            ", page refs=",
+            toa.EntryWithPageReferenceCount.ToString(CultureInfo.InvariantCulture),
+            ", categories=",
+            FormatSummaries(toa.Categories),
+            ", signatures=",
+            FormatSummaries(toa.PageReferenceSignatures));
     }
 
     private static string FormatLegalReferenceRowSemanticEvidence(FreeWVisualEvidenceNormalizedRow row)

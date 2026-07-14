@@ -501,8 +501,8 @@ function Assert-ReferencesHeavyWordBaselineProofReadiness {
     }
 
     $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
-    if ([int]$summary.schemaVersion -lt 33) {
-        throw "References-heavy Word baseline proof readiness requires FreeW visual evidence summary schema v33 or newer, found v$($summary.schemaVersion)"
+    if ([int]$summary.schemaVersion -lt 46) {
+        throw "References-heavy Word baseline proof readiness requires FreeW visual evidence summary schema v46 or newer, found v$($summary.schemaVersion)"
     }
 
     $requiredScenarioId = 'references-heavy-fields'
@@ -519,14 +519,38 @@ function Assert-ReferencesHeavyWordBaselineProofReadiness {
         'category=Cases|entry=Example v. FreeW, 123 F.4th 456 (2026)|kind=explicit-page-numbers|pages=1,2|text=1, 2',
         'category=Statutes|entry=Free Software Evidence Act, 42 U.S.C. 2026|kind=explicit-page-numbers|pages=1|text=1'
     )
+    $readinessRows = @($summary.referencesHeavyProofReadiness)
     $scenarios = @($summary.scenarios)
     $evidenceRows = @($summary.evidence)
     $baselineComparisons = @($summary.baselineComparisons)
     $remainingBlockers = @($summary.remainingEvidenceBlockers)
     $failures = New-Object System.Collections.Generic.List[string]
+    $verifiedReadinessRows = 0
     $trustedScenarioRows = 0
     $verifiedSemanticRows = 0
     $verifiedBaselineRows = 0
+
+    $proofRows = @($readinessRows | Where-Object { $_.scenarioId -eq $requiredScenarioId })
+    if ($proofRows.Count -eq 0) {
+        $failures.Add("${requiredScenarioId}: missing references-heavy field/TOA proof readiness row")
+    }
+    foreach ($proofRow in $proofRows) {
+        if ($proofRow.trust.passed -ne $true -or $proofRow.status -ne 'paired-renderer-proof-ready') {
+            $notes = @($proofRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = [string]$proofRow.baselineReadiness
+            }
+            $failures.Add("${requiredScenarioId}/p$($proofRow.pageNumber): readiness status '$($proofRow.status)' failed ($notes)")
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$proofRow.semanticEvidence) -or [string]$proofRow.semanticEvidence -eq '-') {
+            $failures.Add("${requiredScenarioId}/p$($proofRow.pageNumber): missing references-heavy semantic readiness summary")
+            continue
+        }
+
+        $verifiedReadinessRows++
+    }
 
     foreach ($hostId in $requiredHosts) {
         $scenarioRows = @($scenarios | Where-Object {
@@ -646,6 +670,7 @@ function Assert-ReferencesHeavyWordBaselineProofReadiness {
         throw "References-heavy Word baseline proof readiness failed:`n - $($failures -join "`n - ")"
     }
 
+    Write-Host "References-heavy field/TOA proof readiness rows: verified rows=$verifiedReadinessRows"
     Write-Host "References-heavy Word baseline proof readiness: trusted scenario rows=$trustedScenarioRows"
     Write-Host "References-heavy semantic field/TOA rows: verified rows=$verifiedSemanticRows"
     Write-Host "References-heavy Word-baseline policy rows: verified rows=$verifiedBaselineRows"
