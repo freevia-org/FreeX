@@ -2132,4 +2132,28 @@ public sealed class MathLayoutEngineTests
         ops[1].X.Should().BeGreaterThan(ops[0].X + ops[0].Text.Length,
             "the existing shared function layout keeps a visible advance between name and argument");
     }
+
+    [Fact]
+    public void OmmlScriptedFunctionName_RenderPlanKeepsBaseNameUpright()
+    {
+        var node = ParseOmml(
+            "<m:func>" +
+            "<m:fName><m:sSup><m:e><m:r><m:t>sin</m:t></m:r></m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:fName>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:func>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var ops = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        ops.Select(g => g.Text).Should().Equal(new[] { "sin", "2", "x" });
+        ops[0].IsItalic.Should().BeFalse(
+            "m:func/m:fName can contain scripted function names such as sin^2, and the base name must become an upright operator in the shared draw plan");
+        ops[2].IsItalic.Should().BeTrue("the function argument keeps ordinary math-run styling");
+        ops[1].Y.Should().BeLessThan(ops[0].Y,
+            "the existing shared superscript layout should keep the exponent raised inside the function-name object");
+        ops[2].X.Should().BeGreaterThan(ops[1].X,
+            "the applied argument must remain to the right of the complete scripted function-name object");
+    }
 }

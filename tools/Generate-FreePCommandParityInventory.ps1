@@ -1025,6 +1025,24 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing and layout preserve m:limLow and m:limUpp as centered reduced-size lower/upper limits while keeping the base expression baseline stable. WPF and Avalonia consume the same renderer-neutral glyph coordinates. PowerPoint-authoritative math visual baselines, exact Cambria Math limit metrics, and complete OfficeMath display-style heuristics remain deferred."),
         new(
+            EvidenceId: "freep.omml.scripted-function-name",
+            Area: "OMML scripted function-name semantics",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.Func names with nested script/limit wrappers and MathBoxRenderPlanner glyph style with no renderer-local function policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-scripted-function-name-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing now normalizes scripted and limited m:func/m:fName bases such as sin^2 and lim to upright function operators while preserving ordinary math styling for the applied argument. PowerPoint-authoritative math visual baselines, exact Cambria Math function spacing, and complete OfficeMath function-name typography remain deferred."),
+        new(
             EvidenceId: "freep.omml.border-box-side-strike-lines",
             Area: "OMML border-box side and strike-line semantics",
             Status: "shared-layout-evidence",

@@ -653,6 +653,42 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Func_WithScriptedFunctionName_NormalizesBaseNameToUpright()
+    {
+        var node = Parse(
+            "<m:func>" +
+            "<m:fName><m:sSup><m:e><m:r><m:t>sin</m:t></m:r></m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:fName>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:func>");
+
+        var func = Assert.IsType<MathNode.Func>(node);
+        var scriptedName = Assert.IsType<MathNode.Sup>(func.FunctionName);
+        var nameBase = Assert.IsType<MathNode.Run>(scriptedName.Base);
+        Assert.Equal("sin", nameBase.Text);
+        Assert.False(nameBase.IsItalic);
+        Assert.Equal("2", Assert.IsType<MathNode.Run>(scriptedName.Script).Text);
+        Assert.True(Assert.IsType<MathNode.Run>(func.Argument).IsItalic);
+    }
+
+    [Fact]
+    public void Func_WithLimitedFunctionName_NormalizesLimitBaseToUpright()
+    {
+        var node = Parse(
+            "<m:func>" +
+            "<m:fName><m:limLow><m:e><m:r><m:t>lim</m:t></m:r></m:e><m:lim><m:r><m:t>x-&gt;0</m:t></m:r></m:lim></m:limLow></m:fName>" +
+            "<m:e><m:r><m:t>f(x)</m:t></m:r></m:e>" +
+            "</m:func>");
+
+        var func = Assert.IsType<MathNode.Func>(node);
+        var limitedName = Assert.IsType<MathNode.Limit>(func.FunctionName);
+        var nameBase = Assert.IsType<MathNode.Run>(limitedName.Base);
+        Assert.Equal("lim", nameBase.Text);
+        Assert.False(nameBase.IsItalic);
+        Assert.Equal("x->0", Assert.IsType<MathNode.Run>(limitedName.LimitValue).Text);
+        Assert.True(Assert.IsType<MathNode.Run>(func.Argument).IsItalic);
+    }
+
+    [Fact]
     public void Parse_EqArray_ReturnsOrderedRows()
     {
         var node = Parse("<m:eqArr><m:e><m:r><m:t>x</m:t></m:r><m:r><m:t>+1</m:t></m:r></m:e><m:e><m:r><m:t>y</m:t></m:r></m:e></m:eqArr>");

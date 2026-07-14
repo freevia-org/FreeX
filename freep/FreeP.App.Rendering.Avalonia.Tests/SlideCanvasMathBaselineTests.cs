@@ -454,6 +454,48 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_ScriptedFunctionApply_UsesSharedUprightNamePlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:func>" +
+                    "<m:fName><m:sSup><m:e><m:r><m:t>sin</m:t></m:r></m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:fName>" +
+                    "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                    "</m:func>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .ToList();
+
+                ops.Select(g => g.Text).Should().Equal(new[] { "sin", "2", "x" },
+                    "scripted m:func names should be resolved in the shared draw plan before Avalonia draws");
+                ops[0].IsItalic.Should().BeFalse("the scripted function-name base is an upright operator");
+                ops[2].IsItalic.Should().BeTrue("the function argument keeps ordinary math-run styling");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "F = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(240, 110));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render scripted m:func math from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_RunWithMultipleTextChildren_UsesSharedFullTextPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

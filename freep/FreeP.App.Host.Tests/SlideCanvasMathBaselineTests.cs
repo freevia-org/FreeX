@@ -402,6 +402,43 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_ScriptedFunctionApply_UsesSharedUprightNamePlan_DoesNotThrow()
+    {
+        var mathNode = ParseOmml(
+            "<m:func>" +
+            "<m:fName><m:sSup><m:e><m:r><m:t>sin</m:t></m:r></m:e><m:sup><m:r><m:t>2</m:t></m:r></m:sup></m:sSup></m:fName>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:func>");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+        var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        ops.Select(g => g.Text).Should().Equal(new[] { "sin", "2", "x" },
+            "scripted m:func names should be resolved in the shared draw plan before WPF draws");
+        ops[0].IsItalic.Should().BeFalse("the scripted function-name base is an upright operator");
+        ops[2].IsItalic.Should().BeTrue("the function argument keeps ordinary math-run styling");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "F = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_AccentBarOverline_UsesSharedHRulePlan_DoesNotThrow()
     {
         var mathNode = ParseOmml(
