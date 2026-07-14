@@ -873,6 +873,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.omml.delimiter-separator",
             "freep.omml.groupchr-vertical-justification",
             "freep.omml.pre-subsup-layout",
+            "freep.omml.script-align-argument-size",
             "freep.omml.matrix-spacing-base-justification",
             "freep.omml.matrix-placeholder",
             "freep.omml.matrix-column-count-alignment",
