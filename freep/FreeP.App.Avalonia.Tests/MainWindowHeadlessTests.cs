@@ -4265,6 +4265,70 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_text_pane_renders_shared_outline_and_routes_keyboard()
+    {
+        var paneVisibleWithoutSelection = false;
+        var missingSelectionMessage = string.Empty;
+        IReadOnlyList<string> renderedRows = [];
+        SmartArtTextPaneApplyResult? apply = null;
+        SmartArtNodeEditResult? addSibling = null;
+        SmartArtNodeEditResult? addChild = null;
+        SmartArtDataPartRewriteResult? dataPart = null;
+        SmartArtDrawingCacheRegenerationResult? drawingCache = null;
+        var rowCountAfterKeyboard = 0;
+        var dirtyAfterApply = false;
+        SmartArtShape? smartArt = null;
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            window.ShowSmartArtTextPane();
+            paneVisibleWithoutSelection = window.IsSmartArtTextPaneVisible;
+            missingSelectionMessage = window.SmartArtTextPaneMessage;
+
+            var shape = MakeSmartArtShape();
+            smartArt = shape.SmartArt;
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            window.ShowSmartArtTextPane();
+            renderedRows = window.SmartArtTextPaneRenderedRows;
+            window.SetSmartArtTextPaneRowText(0, "Discover");
+            apply = window.ApplySmartArtTextPane();
+            dirtyAfterApply = window.IsDirty;
+            dataPart = window.LastSmartArtDataPartRewriteResult;
+            drawingCache = window.LastSmartArtDrawingCacheRegenerationResult;
+
+            addSibling = window.ApplySmartArtTextPaneKeyboardRouteForTests(
+                SmartArtTextPaneShortcutKey.Enter,
+                SmartArtTextPaneShortcutModifiers.None,
+                "n1");
+            addChild = window.ApplySmartArtTextPaneKeyboardRouteForTests(
+                SmartArtTextPaneShortcutKey.Enter,
+                SmartArtTextPaneShortcutModifiers.Control,
+                "n2");
+            rowCountAfterKeyboard = window.SmartArtTextPaneRowCount;
+        });
+
+        if (!ran) return;
+        paneVisibleWithoutSelection.Should().BeTrue();
+        missingSelectionMessage.Should().Be("Select a SmartArt graphic to edit its text outline.");
+        renderedRows.Should().Equal(
+            "n1|0|False|Plan",
+            "n2|0|False|Build");
+        apply.Should().NotBeNull();
+        apply!.Applied.Should().BeTrue();
+        smartArt!.Data!.Nodes[0].Text.Should().Be("Discover");
+        dataPart!.Applied.Should().BeTrue();
+        drawingCache!.Applied.Should().BeTrue();
+        smartArt.FallbackShapes.Should().NotBeEmpty();
+        dirtyAfterApply.Should().BeTrue();
+        addSibling!.Applied.Should().BeTrue();
+        addChild!.Applied.Should().BeTrue();
+        rowCountAfterKeyboard.Should().Be(4);
+    }
+
+    [Fact]
     public async Task Review_alt_text_apply_routes_through_shared_mutation_plan()
     {
         string? altTextTitle = null;
@@ -4744,5 +4808,47 @@ public sealed class MainWindowHeadlessTests
         paragraph.Runs.Add(new Run { Text = text, Hyperlink = hyperlink });
         body.Paragraphs.Add(paragraph);
         return body;
+    }
+
+    private static SlideShape MakeSmartArtShape()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.List,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList",
+            IsLiveLayoutSupported = true
+        };
+        data.Nodes.Add(new SmartArtNode { ModelId = "n1", Text = "Plan", Level = 0 });
+        data.Nodes.Add(new SmartArtNode { ModelId = "n2", Text = "Build", Level = 0 });
+
+        var smartArt = new SmartArtShape
+        {
+            Data = data,
+            DrawingPartPath = "ppt/diagrams/drawing1.xml"
+        };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        return new SlideShape
+        {
+            Id = 970,
+            Name = "Roadmap SmartArt",
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 4_572_000,
+            ExtentCyEmu = 2_743_200,
+            SmartArt = smartArt
+        };
     }
 }

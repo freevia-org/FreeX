@@ -1014,21 +1014,24 @@ internal static class FreePCommandInventory
             EvidenceId: "freep.smartart.text-pane-cache-authoring",
             Area: "SmartArt text-pane outline and cache authoring",
             Status: "shared-model-and-cache-evidence",
-            HostCoverage: "WPF/Avalonia can route ordered text-pane rows into shared SmartArtEditingPlanner model, data-part, and drawing-cache regeneration with no renderer-local SmartArt tree policy",
+            HostCoverage: "WPF/Avalonia expose thin SmartArt text-pane hosts that route ordered rows and bounded keyboard shortcuts into shared SmartArtEditingPlanner model, data-part, and drawing-cache regeneration with no renderer-local SmartArt tree policy",
             EvidenceDocs:
             [
                 "docs/parity/freep-smartart-text-pane-keyboard-routing-2026-07-14.md",
                 "docs/parity/freep-smartart-text-pane-cache-authoring-2026-07-14.md",
                 "docs/parity/freep-smartart-data-part-authoring-2026-07-14.md",
-                "docs/parity/freep-smartart-cache-regeneration-authoring-2026-07-14.md"
+                "docs/parity/freep-smartart-cache-regeneration-authoring-2026-07-14.md",
+                "docs/parity/freep-smartart-text-pane-hosts-2026-07-14.md"
             ],
             Verification:
             [
                 "freep/FreeP.App.Presentation/SmartArtEditingPlanner.cs",
                 "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs",
-                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Host.Tests/ReviewWorkflowAdapterTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared text-pane outline rows now rebuild the SmartArt model transactionally, preserve stable ids and bounded picture payloads, feed the existing native data-part plus drawing-cache regeneration paths, and map bounded Enter/Ctrl+Enter/Tab/Shift+Tab/Alt+Shift+Up/Down keyboard routes to shared SmartArt edit intents that WPF/Avalonia consume. PowerPoint-authored authoring baselines, real host text-pane controls, keyboard shortcut parity beyond the shared planner, richer assistant/org-chart editing nuance, broader picture/media-backed cache regeneration, exact PowerPoint layout/style/color regeneration, and PowerPoint-authoritative visual baselines remain deferred.")
+            RemainingWork: "Shared text-pane outline rows now rebuild the SmartArt model transactionally, preserve stable ids and bounded picture payloads, feed the existing native data-part plus drawing-cache regeneration paths, map bounded Enter/Ctrl+Enter/Tab/Shift+Tab/Alt+Shift+Up/Down keyboard routes to shared SmartArt edit intents, and expose matching thin WPF/Avalonia host text-pane controls. PowerPoint-authored authoring baselines, richer assistant/org-chart editing nuance, broader picture/media-backed cache regeneration, exact PowerPoint layout/style/color regeneration, and PowerPoint-authoritative visual baselines remain deferred.")
       ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)

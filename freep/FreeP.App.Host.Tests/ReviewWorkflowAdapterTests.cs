@@ -1706,6 +1706,58 @@ public sealed class ReviewWorkflowAdapterTests
     }
 
     [StaFact]
+    public void MainWindow_SmartArtTextPane_RendersSharedOutlineAndRoutesKeyboard()
+    {
+        var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
+        try
+        {
+            window.ShowSmartArtTextPane();
+            window.IsSmartArtTextPaneVisible.Should().BeTrue();
+            window.SmartArtTextPaneMessage.Should().Be("Select a SmartArt graphic to edit its text outline.");
+
+            var shape = MakeSmartArtShape();
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            var outline = window.ShowSmartArtTextPane();
+            outline.Select(row => row.Text).Should().Equal("Plan", "Build");
+            window.SmartArtTextPaneRenderedRows.Should().Equal(
+                "n1|0|False|Plan",
+                "n2|0|False|Build");
+            window.SmartArtTextPaneSelectedRowCount.Should().Be(1);
+
+            window.SetSmartArtTextPaneRowText(0, "Discover");
+            var apply = window.ApplySmartArtTextPane();
+
+            apply.Applied.Should().BeTrue();
+            shape.SmartArt!.Data!.Nodes[0].Text.Should().Be("Discover");
+            window.LastSmartArtDataPartRewriteResult!.Applied.Should().BeTrue();
+            window.LastSmartArtDrawingCacheRegenerationResult!.Applied.Should().BeTrue();
+            shape.SmartArt.FallbackShapes.Should().NotBeEmpty();
+            window.IsDirty.Should().BeTrue();
+
+            var addSibling = window.ApplySmartArtTextPaneKeyboardRouteForTests(
+                SmartArtTextPaneShortcutKey.Enter,
+                SmartArtTextPaneShortcutModifiers.None,
+                "n1");
+            addSibling!.Applied.Should().BeTrue();
+            window.LastSmartArtTextPaneKeyboardRoute!.RouteId.Should().Be("smartart.text-pane.enter.add-sibling-after");
+            window.SmartArtTextPaneRowCount.Should().Be(3);
+
+            var addChild = window.ApplySmartArtTextPaneKeyboardRouteForTests(
+                SmartArtTextPaneShortcutKey.Enter,
+                SmartArtTextPaneShortcutModifiers.Control,
+                "n2");
+            addChild!.Applied.Should().BeTrue();
+            window.SmartArtTextPaneRenderedRows.Should().Contain(row => row.Contains("|1|False|New node", StringComparison.Ordinal));
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [StaFact]
     public void MainWindow_TablePickerRequest_ShowsPickerAndAppliesChoice()
     {
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);
@@ -1967,6 +2019,48 @@ public sealed class ReviewWorkflowAdapterTests
         paragraph.Runs.Add(new Run { Text = text, Hyperlink = hyperlink });
         body.Paragraphs.Add(paragraph);
         return body;
+    }
+
+    private static SlideShape MakeSmartArtShape()
+    {
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.List,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalBoxList",
+            IsLiveLayoutSupported = true
+        };
+        data.Nodes.Add(new SmartArtNode { ModelId = "n1", Text = "Plan", Level = 0 });
+        data.Nodes.Add(new SmartArtNode { ModelId = "n2", Text = "Build", Level = 0 });
+
+        var smartArt = new SmartArtShape
+        {
+            Data = data,
+            DrawingPartPath = "ppt/diagrams/drawing1.xml"
+        };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        return new SlideShape
+        {
+            Id = 970,
+            Name = "Roadmap SmartArt",
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 4_572_000,
+            ExtentCyEmu = 2_743_200,
+            SmartArt = smartArt
+        };
     }
 
     [Fact]

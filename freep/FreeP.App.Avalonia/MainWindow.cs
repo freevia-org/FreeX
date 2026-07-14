@@ -9,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using AvaloniaRectangle = Avalonia.Controls.Shapes.Rectangle;
 using Free.Shared.AppServices;
+using Free.Shared.Drawing;
 using Free.Shared.IO;
 using Free.Shared.Pdf.Skia;
 using Free.Shared.Ribbon;
@@ -186,6 +187,14 @@ public sealed class MainWindow : Window
     private Button _mediaCaptionCloseButton = null!;
     private bool _mediaCaptionPaneRefreshing;
     private int? _selectedMediaCaptionTrackIndex;
+    private Border _smartArtTextPaneHost = null!;
+    private TextBlock _smartArtTextPaneHeading = null!;
+    private TextBlock _smartArtTextPaneMessage = null!;
+    private StackPanel _smartArtTextPaneRowsPanel = null!;
+    private Button _smartArtTextPaneApplyButton = null!;
+    private Button _smartArtTextPaneCloseButton = null!;
+    private bool _smartArtTextPaneRefreshing;
+    private string? _selectedSmartArtTextPaneModelId;
     private Border _animationPaneHost = null!;
     private TextBlock _animationPaneHeading = null!;
     private TextBlock _animationPaneMessage = null!;
@@ -292,6 +301,11 @@ public sealed class MainWindow : Window
     internal PresentationMediaCaptionAuthoringPanePlan? LastMediaCaptionAuthoringPanePlan { get; private set; }
     internal PresentationMediaCaptionAuthoringMutationPlan? LastMediaCaptionAuthoringMutationPlan { get; private set; }
     internal PresentationMediaCaptionTrackMutationResult? LastMediaCaptionTrackMutationResult { get; private set; }
+    internal SmartArtTextPaneApplyResult? LastSmartArtTextPaneApplyResult { get; private set; }
+    internal SmartArtNodeEditResult? LastSmartArtTextPaneEditResult { get; private set; }
+    internal SmartArtTextPaneKeyboardRoute? LastSmartArtTextPaneKeyboardRoute { get; private set; }
+    internal SmartArtDataPartRewriteResult? LastSmartArtDataPartRewriteResult { get; private set; }
+    internal SmartArtDrawingCacheRegenerationResult? LastSmartArtDrawingCacheRegenerationResult { get; private set; }
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
     internal AnimationPaneWorkflowEvidencePlan? LastAnimationPaneWorkflowEvidencePlan { get; private set; }
     internal AnimationPanePlaybackSessionPlan? LastAnimationPanePlaybackSessionPlan => _animationPanePlaybackSessionPlan;
@@ -380,6 +394,19 @@ public sealed class MainWindow : Window
     internal string AltTextPaneDescriptionPlaceholder => _altTextDescriptionBox?.PlaceholderText ?? string.Empty;
     internal bool IsAltTextPaneDecorativeChecked => _altTextDecorativeCheck?.IsChecked == true;
     internal string AltTextPaneMessage => _altTextPaneMessage?.Text ?? string.Empty;
+    internal bool IsSmartArtTextPaneVisible => _smartArtTextPaneHost?.IsVisible == true;
+    internal int SmartArtTextPaneRowCount => _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>().Count() ?? 0;
+    internal int SmartArtTextPaneSelectedRowCount =>
+        _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>().Count(box =>
+            box.Tag is SmartArtNodeOutlineItem item &&
+            StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId)) ?? 0;
+    internal string SmartArtTextPaneMessage => _smartArtTextPaneMessage?.Text ?? string.Empty;
+    internal IReadOnlyList<string> SmartArtTextPaneRenderedRows =>
+        _smartArtTextPaneRowsPanel?.Children.OfType<TextBox>()
+            .Select(box => box.Tag is SmartArtNodeOutlineItem item
+                ? $"{item.ModelId}|{item.Level}|{item.IsAssistant}|{box.Text}"
+                : box.Text ?? string.Empty)
+            .ToArray() ?? [];
     internal bool IsAccessibilityCheckerPaneVisible => _accessibilityCheckerPaneHost?.IsVisible == true;
     internal int AccessibilityCheckerPaneRowCount => LastAccessibilityCheckerPanePlan?.Rows.Count ?? 0;
     internal int AccessibilityCheckerPaneSelectedRowCount =>
@@ -695,6 +722,7 @@ public sealed class MainWindow : Window
         _readingOrderPaneHost = BuildReadingOrderPaneHost();
         _proofingPaneHost = BuildProofingPaneHost();
         _mediaCaptionPaneHost = BuildMediaCaptionPaneHost();
+        _smartArtTextPaneHost = BuildSmartArtTextPaneHost();
         _animationPaneHost = BuildAnimationPaneHost();
         _findReplacePaneHost = BuildFindReplacePaneHost();
         _printOptionsPaneHost = BuildPrintOptionsPaneHost();
@@ -744,6 +772,7 @@ public sealed class MainWindow : Window
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         Grid.SetColumn(slidePaneHost, 0);
         Grid.SetColumn(rightGrid,      1);
         Grid.SetColumn(_slideSizePaneHost, 2);
@@ -753,9 +782,10 @@ public sealed class MainWindow : Window
         Grid.SetColumn(_readingOrderPaneHost, 6);
         Grid.SetColumn(_proofingPaneHost, 7);
         Grid.SetColumn(_mediaCaptionPaneHost, 8);
-        Grid.SetColumn(_animationPaneHost, 9);
-        Grid.SetColumn(_findReplacePaneHost, 10);
-        Grid.SetColumn(_printOptionsPaneHost, 11);
+        Grid.SetColumn(_smartArtTextPaneHost, 9);
+        Grid.SetColumn(_animationPaneHost, 10);
+        Grid.SetColumn(_findReplacePaneHost, 11);
+        Grid.SetColumn(_printOptionsPaneHost, 12);
         body.Children.Add(slidePaneHost);
         body.Children.Add(rightGrid);
         body.Children.Add(_slideSizePaneHost);
@@ -765,6 +795,7 @@ public sealed class MainWindow : Window
         body.Children.Add(_readingOrderPaneHost);
         body.Children.Add(_proofingPaneHost);
         body.Children.Add(_mediaCaptionPaneHost);
+        body.Children.Add(_smartArtTextPaneHost);
         body.Children.Add(_animationPaneHost);
         body.Children.Add(_findReplacePaneHost);
         body.Children.Add(_printOptionsPaneHost);
@@ -1414,6 +1445,89 @@ public sealed class MainWindow : Window
             Padding = new Thickness(10, 4),
             Margin = new Thickness(0, 0, 6, 6),
         };
+
+    private Border BuildSmartArtTextPaneHost()
+    {
+        _smartArtTextPaneHeading = new TextBlock
+        {
+            Text = "SmartArt Text Pane",
+            FontSize = 15,
+            FontWeight = FontWeight.SemiBold,
+            Margin = new Thickness(12, 12, 12, 4),
+        };
+        _smartArtTextPaneMessage = new TextBlock
+        {
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55)),
+            Margin = new Thickness(12, 0, 12, 8),
+        };
+        _smartArtTextPaneRowsPanel = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+        };
+        _smartArtTextPaneApplyButton = new Button
+        {
+            Content = "Apply",
+            MinWidth = 72,
+            Padding = new Thickness(10, 4),
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        _smartArtTextPaneCloseButton = new Button
+        {
+            Content = "Close",
+            MinWidth = 72,
+            Padding = new Thickness(10, 4),
+        };
+        _smartArtTextPaneApplyButton.Click += (_, _) => ApplySmartArtTextPane();
+        _smartArtTextPaneCloseButton.Click += (_, _) => HideSmartArtTextPane();
+
+        var buttons = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            Margin = new Thickness(12, 8, 12, 12),
+            Children =
+            {
+                _smartArtTextPaneApplyButton,
+                _smartArtTextPaneCloseButton,
+            }
+        };
+        DockPanel.SetDock(buttons, Dock.Bottom);
+
+        var header = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            Children =
+            {
+                _smartArtTextPaneHeading,
+                _smartArtTextPaneMessage,
+            }
+        };
+        DockPanel.SetDock(header, Dock.Top);
+
+        return new Border
+        {
+            Width = 320,
+            IsVisible = false,
+            Background = Brushes.White,
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = new Thickness(1, 0, 0, 0),
+            Child = new DockPanel
+            {
+                Children =
+                {
+                    header,
+                    buttons,
+                    new ScrollViewer
+                    {
+                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                        Content = _smartArtTextPaneRowsPanel,
+                    },
+                }
+            },
+        };
+    }
 
     private Border BuildAccessibilityCheckerPaneHost()
     {
@@ -4907,6 +5021,233 @@ public sealed class MainWindow : Window
             RenderAltTextPane(LastAltTextPanePlan);
     }
 
+    internal IReadOnlyList<SmartArtNodeOutlineItem> ShowSmartArtTextPane()
+    {
+        var outline = RefreshSmartArtTextPane();
+        _smartArtTextPaneHost.IsVisible = true;
+        return outline;
+    }
+
+    internal void HideSmartArtTextPane()
+    {
+        if (_smartArtTextPaneHost is not null)
+            _smartArtTextPaneHost.IsVisible = false;
+    }
+
+    internal void SetSmartArtTextPaneRowText(int rowIndex, string text)
+    {
+        if (!IsSmartArtTextPaneVisible)
+            ShowSmartArtTextPane();
+
+        var row = _smartArtTextPaneRowsPanel.Children.OfType<TextBox>().ElementAt(rowIndex);
+        SetTextIfChanged(row, text);
+    }
+
+    internal SmartArtTextPaneApplyResult ApplySmartArtTextPane()
+    {
+        var smartArtShape = GetSelectedSmartArtShape();
+        var rows = _smartArtTextPaneRowsPanel.Children
+            .OfType<TextBox>()
+            .Select(box => box.Tag is SmartArtNodeOutlineItem item
+                ? new SmartArtTextPaneOutlineRow(box.Text ?? string.Empty, item.Level, item.IsAssistant, item.ModelId)
+                : new SmartArtTextPaneOutlineRow(box.Text ?? string.Empty, 0))
+            .ToArray();
+
+        LastSmartArtTextPaneApplyResult = SmartArtEditingPlanner.ApplyTextPaneOutline(
+            smartArtShape?.SmartArt?.Data,
+            rows);
+        if (LastSmartArtTextPaneApplyResult.Applied && smartArtShape is not null)
+            CommitSmartArtTextPaneMutation(smartArtShape);
+
+        RefreshSmartArtTextPane();
+        return LastSmartArtTextPaneApplyResult;
+    }
+
+    internal SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRouteForTests(
+        SmartArtTextPaneShortcutKey key,
+        SmartArtTextPaneShortcutModifiers modifiers,
+        string? modelId = null)
+    {
+        if (modelId is not null)
+            _selectedSmartArtTextPaneModelId = modelId;
+        return ApplySmartArtTextPaneKeyboardRoute(key, modifiers);
+    }
+
+    private IReadOnlyList<SmartArtNodeOutlineItem> RefreshSmartArtTextPane()
+    {
+        var shape = GetSelectedSmartArtShape();
+        var outline = SmartArtEditingPlanner.BuildOutline(shape?.SmartArt?.Data);
+        if (_selectedSmartArtTextPaneModelId is null || outline.All(item =>
+                !StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId)))
+        {
+            _selectedSmartArtTextPaneModelId = outline.FirstOrDefault()?.ModelId;
+        }
+
+        RenderSmartArtTextPane(shape, outline);
+        return outline;
+    }
+
+    private void RenderSmartArtTextPane(
+        SlideShape? shape,
+        IReadOnlyList<SmartArtNodeOutlineItem> outline)
+    {
+        _smartArtTextPaneRefreshing = true;
+        try
+        {
+            _smartArtTextPaneRowsPanel.Children.Clear();
+            _smartArtTextPaneHeading.Text = shape is null || string.IsNullOrWhiteSpace(shape.Name)
+                ? "SmartArt Text Pane"
+                : $"SmartArt Text Pane - {shape.Name}";
+            _smartArtTextPaneMessage.Text = shape is null
+                ? "Select a SmartArt graphic to edit its text outline."
+                : outline.Count == 0
+                    ? "The selected SmartArt graphic has no editable shared outline rows."
+                    : "Rows mirror the shared SmartArt outline.";
+            _smartArtTextPaneApplyButton.IsEnabled = shape is not null && outline.Count > 0;
+
+            foreach (var item in outline)
+                _smartArtTextPaneRowsPanel.Children.Add(BuildSmartArtTextPaneRow(item));
+        }
+        finally
+        {
+            _smartArtTextPaneRefreshing = false;
+        }
+    }
+
+    private TextBox BuildSmartArtTextPaneRow(SmartArtNodeOutlineItem item)
+    {
+        var selected = StringComparer.Ordinal.Equals(item.ModelId, _selectedSmartArtTextPaneModelId);
+        var box = new TextBox
+        {
+            Text = item.Text,
+            Tag = item,
+            MinHeight = 26,
+            Margin = new Thickness(12 + (item.Level * 18), 0, 12, 6),
+            Padding = new Thickness(6, 3),
+            BorderBrush = selected
+                ? new SolidColorBrush(Color.FromRgb(0xB7, 0x47, 0x2A))
+                : new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xC8)),
+            BorderThickness = new Thickness(selected ? 2 : 1),
+        };
+        ToolTip.SetTip(box, item.IsAssistant
+            ? "Assistant row"
+            : item.Level == 0
+                ? "Root row"
+                : $"Level {item.Level + 1} row");
+        box.GotFocus += (_, _) => _selectedSmartArtTextPaneModelId = item.ModelId;
+        box.KeyDown += (_, e) =>
+        {
+            if (_smartArtTextPaneRefreshing)
+                return;
+
+            if (!TryMapSmartArtTextPaneKey(e.Key, e.KeyModifiers, out var key, out var modifiers))
+                return;
+
+            _selectedSmartArtTextPaneModelId = item.ModelId;
+            var result = ApplySmartArtTextPaneKeyboardRoute(key, modifiers);
+            if (result is not null)
+                e.Handled = true;
+        };
+        return box;
+    }
+
+    private SmartArtNodeEditResult? ApplySmartArtTextPaneKeyboardRoute(
+        SmartArtTextPaneShortcutKey key,
+        SmartArtTextPaneShortcutModifiers modifiers)
+    {
+        var route = SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
+            key,
+            modifiers,
+            _selectedSmartArtTextPaneModelId);
+        LastSmartArtTextPaneKeyboardRoute = route;
+        if (route is null)
+            return null;
+
+        var smartArtShape = GetSelectedSmartArtShape();
+        LastSmartArtTextPaneEditResult = SmartArtEditingPlanner.Apply(
+            smartArtShape?.SmartArt?.Data,
+            route.Intent);
+        if (LastSmartArtTextPaneEditResult.Applied && smartArtShape is not null)
+        {
+            _selectedSmartArtTextPaneModelId = LastSmartArtTextPaneEditResult.SelectedModelId;
+            CommitSmartArtTextPaneMutation(smartArtShape);
+        }
+
+        RefreshSmartArtTextPane();
+        return LastSmartArtTextPaneEditResult;
+    }
+
+    private void CommitSmartArtTextPaneMutation(SlideShape smartArtShape)
+    {
+        LastSmartArtDataPartRewriteResult = SmartArtEditingPlanner.RewriteDataPart(smartArtShape.SmartArt);
+        LastSmartArtDrawingCacheRegenerationResult = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArtShape.SmartArt,
+            smartArtShape.OffsetXEmu,
+            smartArtShape.OffsetYEmu,
+            smartArtShape.ExtentCxEmu,
+            smartArtShape.ExtentCyEmu,
+            ResolveCurrentSlideTheme(),
+            Editor.CurrentSlide?.ColorMapOverride);
+        _fileWorkflow.MarkDirty();
+        RefreshCanvas();
+        UpdateStatus();
+    }
+
+    private SlideShape? GetSelectedSmartArtShape()
+    {
+        var selectedShapeId = GetSingleSelectedShapeId();
+        return selectedShapeId is null
+            ? null
+            : Editor.CurrentSlide?.Shapes.FirstOrDefault(shape =>
+                shape.Id == selectedShapeId.Value &&
+                shape.Kind == SlideShapeKind.SmartArt &&
+                shape.SmartArt is not null);
+    }
+
+    private PresentationTheme ResolveCurrentSlideTheme()
+    {
+        var slide = Editor.CurrentSlide;
+        var layout = slide is null
+            ? null
+            : _presentation.Layouts.FirstOrDefault(candidate =>
+                StringComparer.Ordinal.Equals(candidate.Id, slide.LayoutId));
+        var master = layout is null
+            ? null
+            : _presentation.Masters.FirstOrDefault(candidate =>
+                StringComparer.Ordinal.Equals(candidate.Id, layout.MasterId));
+        return master?.Theme ?? _presentation.Theme;
+    }
+
+    private static bool TryMapSmartArtTextPaneKey(
+        Key key,
+        KeyModifiers keyboardModifiers,
+        out SmartArtTextPaneShortcutKey shortcutKey,
+        out SmartArtTextPaneShortcutModifiers modifiers)
+    {
+        shortcutKey = key switch
+        {
+            Key.Enter => SmartArtTextPaneShortcutKey.Enter,
+            Key.Tab => SmartArtTextPaneShortcutKey.Tab,
+            Key.Up => SmartArtTextPaneShortcutKey.Up,
+            Key.Down => SmartArtTextPaneShortcutKey.Down,
+            _ => default
+        };
+        if (key is not (Key.Enter or Key.Tab or Key.Up or Key.Down))
+        {
+            modifiers = SmartArtTextPaneShortcutModifiers.None;
+            return false;
+        }
+
+        modifiers = SmartArtTextPaneShortcutModifiers.None;
+        if (keyboardModifiers.HasFlag(KeyModifiers.Shift))
+            modifiers |= SmartArtTextPaneShortcutModifiers.Shift;
+        if (keyboardModifiers.HasFlag(KeyModifiers.Control) || keyboardModifiers.HasFlag(KeyModifiers.Meta))
+            modifiers |= SmartArtTextPaneShortcutModifiers.Control;
+        if (keyboardModifiers.HasFlag(KeyModifiers.Alt))
+            modifiers |= SmartArtTextPaneShortcutModifiers.Alt;
+        return true;
+    }
+
     internal void ShowAltTextPane()
     {
         RefreshAltTextPlans(proposedDescription: null, proposedTitle: null, isDecorative: null);
@@ -6575,6 +6916,8 @@ public sealed class MainWindow : Window
         RefreshReadingOrderPlan();
         if (IsAltTextPaneVisible)
             ShowAltTextPane();
+        if (IsSmartArtTextPaneVisible)
+            ShowSmartArtTextPane();
         RefreshVisibleMediaCaptionPaneFromFields();
         RefreshVisibleAnimationPane();
     }
