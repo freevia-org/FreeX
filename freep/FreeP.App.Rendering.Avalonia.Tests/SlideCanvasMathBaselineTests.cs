@@ -819,6 +819,59 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_CenteredDelimiterShape_UsesSharedOrdinaryBracketPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var matchBox = MathLayoutEngine.Layout(
+                    ParseOmml(
+                        "<m:d>" +
+                        "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+                        "</m:d>"),
+                    "Cambria Math",
+                    18.0);
+                var centeredBox = MathLayoutEngine.Layout(
+                    ParseOmml(
+                        "<m:d>" +
+                        "<m:dPr><m:shp m:val=\"centered\"/></m:dPr>" +
+                        "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+                        "</m:d>"),
+                    "Cambria Math",
+                    18.0);
+
+                var matchBracket = MathBoxRenderPlanner.Plan(matchBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawBracket>()
+                    .First();
+                var centeredBracket = MathBoxRenderPlanner.Plan(centeredBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawBracket>()
+                    .First();
+
+                centeredBracket.ScaledHeight.Should().BeLessThan(matchBracket.ScaledHeight,
+                    "m:dPr/m:shp=centered must be resolved in the shared plan before Avalonia draws it");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "D = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = centeredBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must consume centered delimiter shape from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_MathAlphabetStyleVariants_UseSharedUnicodeGlyphPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

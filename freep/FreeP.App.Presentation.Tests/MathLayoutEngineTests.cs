@@ -791,6 +791,33 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void Delim_WithCenteredShape_UsesOrdinaryBracketHeightWithoutChangingInnerLayout()
+    {
+        var match = MathLayoutEngine.Layout(
+            new MathNode.Delim("(", ")", new MathNode[] { TallFraction() }),
+            "Cambria Math",
+            FontSizePt);
+        var centered = MathLayoutEngine.Layout(
+            new MathNode.Delim(
+                "(",
+                ")",
+                new MathNode[] { TallFraction() },
+                shape: MathNode.Delim.DelimiterShape.Centered),
+            "Cambria Math",
+            FontSizePt);
+
+        var matchBracket = AllBrackets(match).First();
+        var centeredBracket = AllBrackets(centered).First();
+        var centeredDelimiter = Assert.IsType<MathBox.Container>(centered.Children[0]);
+
+        centeredBracket.ScaledHeight.Should().BeLessThan(matchBracket.ScaledHeight,
+            "m:dPr/m:shp=centered keeps ordinary delimiter glyph height even when m:grow remains on");
+        centered.Metrics.Height.Should().BeApproximately(centeredDelimiter.Children[1].Metrics.Height, 0.01,
+            "the tall inner expression still determines the shared delimiter container height");
+        centered.Metrics.Height.Should().BeApproximately(match.Metrics.Height / 1.10, 0.01);
+    }
+
+    [Fact]
     public void EqArray_StacksRowsAndReportsFullHeight()
     {
         var eqArray = new MathNode.EqArray(new MathNode[]

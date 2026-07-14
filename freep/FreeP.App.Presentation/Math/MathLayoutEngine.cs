@@ -937,8 +937,10 @@ public static class MathLayoutEngine
         if (innerBoxes.Count > 1)
             innerW += gapWidth * (innerBoxes.Count - 1);
 
-        // Brackets scale to inner height * 1.10 unless OMML m:grow is off.
-        double bracketH = delim.Grow ? innerH * 1.10 : em;
+        // Brackets scale to inner height * 1.10 unless OMML m:grow is off or
+        // m:dPr/m:shp requests centered, ordinary-height delimiter glyphs.
+        bool shouldGrowBrackets = delim.Grow && delim.Shape == MathNode.Delim.DelimiterShape.Match;
+        double bracketH = shouldGrowBrackets ? innerH * 1.10 : em;
         double bracketW = em * 0.35; // fixed bracket width
         double openBracketW = string.IsNullOrEmpty(delim.BegChar) ? 0 : bracketW;
         double closeBracketW = string.IsNullOrEmpty(delim.EndChar) ? 0 : bracketW;

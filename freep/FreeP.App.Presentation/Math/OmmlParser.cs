@@ -413,12 +413,15 @@ public static class OmmlParser
         // delimiters keep normal glyph height instead of stretching to content.
         var growEl = dPr?.Element(M + "grow");
         bool grow = growEl is null || IsOnOffOn(growEl);
+        var shape = ReadVal(dPr?.Element(M + "shp")) == "centered"
+            ? MathNode.Delim.DelimiterShape.Centered
+            : MathNode.Delim.DelimiterShape.Match;
 
         var elements = new List<MathNode>();
         foreach (var eEl in el.Elements(M + "e"))
             elements.Add(ParseRow(eEl));
 
-        return new MathNode.Delim(begChr, endChr, elements, sepChr, grow);
+        return new MathNode.Delim(begChr, endChr, elements, sepChr, grow, shape);
     }
 
     // ── m:acc accent ──────────────────────────────────────────────────────

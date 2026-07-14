@@ -249,6 +249,12 @@ public abstract class MathNode
     /// </summary>
     public sealed class Delim : MathNode
     {
+        public enum DelimiterShape
+        {
+            Match,
+            Centered
+        }
+
         public string BegChar { get; }
         public string EndChar { get; }
 
@@ -266,16 +272,29 @@ public abstract class MathNode
         /// </summary>
         public bool Grow { get; }
 
+        /// <summary>
+        /// Delimiter shape from <c>m:dPr/m:shp</c>. Match keeps the existing
+        /// stretchy delimiter behavior; centered uses ordinary glyph height.
+        /// </summary>
+        public DelimiterShape Shape { get; }
+
         /// <summary>The inner expressions (one per m:e child).</summary>
         public IReadOnlyList<MathNode> Elements { get; }
 
-        public Delim(string begChar, string endChar, IReadOnlyList<MathNode> elements, string sepChar = ",", bool grow = true)
+        public Delim(
+            string begChar,
+            string endChar,
+            IReadOnlyList<MathNode> elements,
+            string sepChar = ",",
+            bool grow = true,
+            DelimiterShape shape = DelimiterShape.Match)
         {
             BegChar = begChar;
             EndChar = endChar;
             Elements = elements;
             SepChar = sepChar;
             Grow = grow;
+            Shape = shape;
         }
     }
 

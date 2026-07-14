@@ -687,6 +687,54 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_CenteredDelimiterShape_UsesSharedOrdinaryBracketPlan_DoesNotThrow()
+    {
+        var matchBox = MathLayoutEngine.Layout(
+            ParseOmml(
+                "<m:d>" +
+                "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+                "</m:d>"),
+            "Cambria Math",
+            18.0);
+        var centeredBox = MathLayoutEngine.Layout(
+            ParseOmml(
+                "<m:d>" +
+                "<m:dPr><m:shp m:val=\"centered\"/></m:dPr>" +
+                "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+                "</m:d>"),
+            "Cambria Math",
+            18.0);
+
+        var matchBracket = MathBoxRenderPlanner.Plan(matchBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawBracket>()
+            .First();
+        var centeredBracket = MathBoxRenderPlanner.Plan(centeredBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawBracket>()
+            .First();
+
+        centeredBracket.ScaledHeight.Should().BeLessThan(matchBracket.ScaledHeight,
+            "m:dPr/m:shp=centered must be resolved in the shared plan before WPF draws it");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "D = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = centeredBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_MathAlphabetStyleVariants_UseSharedUnicodeGlyphPlan_DoesNotThrow()
     {
         var mathNode = ParseOmml(

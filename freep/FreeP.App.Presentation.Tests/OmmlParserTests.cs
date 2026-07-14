@@ -516,6 +516,28 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Delim_WithCenteredShape_PreservesSharedDelimiterShape()
+    {
+        var node = Parse("<m:d><m:dPr><m:shp m:val=\"centered\"/></m:dPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:d>");
+
+        var delim = Assert.IsType<MathNode.Delim>(node);
+        Assert.Equal(MathNode.Delim.DelimiterShape.Centered, delim.Shape);
+        Assert.True(delim.Grow, "m:shp is independent from the m:grow on/off flag");
+    }
+
+    [Fact]
+    public void Delim_WithAbsentOrMatchShape_UsesExistingMatchedDelimiterShape()
+    {
+        var absent = Assert.IsType<MathNode.Delim>(
+            Parse("<m:d><m:e><m:r><m:t>x</m:t></m:r></m:e></m:d>"));
+        var match = Assert.IsType<MathNode.Delim>(
+            Parse("<m:d><m:dPr><m:shp m:val=\"match\"/></m:dPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:d>"));
+
+        Assert.Equal(MathNode.Delim.DelimiterShape.Match, absent.Shape);
+        Assert.Equal(MathNode.Delim.DelimiterShape.Match, match.Shape);
+    }
+
+    [Fact]
     public void Delim_WithSingleElement_SepCharIrrelevant_LayoutHasNoSeparator()
     {
         // Single m:e: even with a default (absent) sepChr, no separator should ever
