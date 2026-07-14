@@ -4442,6 +4442,45 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_alternating_process_shape_composes_shared_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Process,
+                "urn:microsoft.com/office/officeart/2005/8/layout/alternatingProcess",
+                ["Plan", "Build", "Launch", "Learn"]);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 180 and < 200)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(7, "Avalonia host consumes the shared four-stage alternating process plus three connector DrawOps");
+        var textOps = liveShapes.Where(op => op.Text is not null).ToList();
+        textOps
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Plan", "Build", "Launch", "Learn");
+        textOps[1].BoundsDip.Y.Should().BeGreaterThan(textOps[0].BoundsDip.Y,
+            "Avalonia host should consume shared lower-track placement for the second stage");
+        textOps[2].BoundsDip.Y.Should().BeApproximately(textOps[0].BoundsDip.Y, 0.01,
+            "Avalonia host should consume shared upper-track placement for the third stage");
+        textOps[3].BoundsDip.Y.Should().BeApproximately(textOps[1].BoundsDip.Y, 0.01,
+            "Avalonia host should consume shared lower-track placement for the fourth stage");
+        textOps[2].BoundsDip.X.Should().BeGreaterThan(textOps[0].BoundsDip.X,
+            "Avalonia host should consume shared next-column placement");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(3, "Avalonia host should consume shared alternating-process connector ops");
+    }
+
+    [Fact]
     public async Task SmartArt_basic_pyramid_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];
