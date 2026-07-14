@@ -457,6 +457,21 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Pie and doughnut c:firstSliceAng now round-trips through the model and PPTX package and drives shared slice primitive planning. PowerPoint-authoritative visual baselines, pie3D behavior, and broader chart visual fidelity remain deferred."),
         new(
+            EvidenceId: "freep.chart.stacked-area-bands",
+            Area: "Chart stacked area band geometry",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume shared ChartAreaSeriesPrimitive baseline polygons with no renderer-local stacked-area policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-stacked-area-render-planning-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs"
+            ],
+            RemainingWork: "Shared stacked-area planning now scales primary value axes from category totals and emits cumulative band baselines before WPF/Avalonia renderers draw the same area primitives. PowerPoint-authoritative chart visual baselines, mixed positive/negative corpus coverage, and broader type-specific chart visual fidelity remain deferred."),
+        new(
             EvidenceId: "freep.omml.transparent-phantom-spacing",
             Area: "OMML transparent phantom spacing classes",
             Status: "shared-layout-evidence",

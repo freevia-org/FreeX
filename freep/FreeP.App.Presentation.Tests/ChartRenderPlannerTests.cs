@@ -82,6 +82,24 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void ComputePrimaryValueAxisRange_StackedAreaUsesCategoryTotals()
+    {
+        var chart = new ChartShape { ChartType = ChartType.AreaStacked };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+
+        var first = new ChartSeries { Name = "Actual" };
+        first.Values.AddRange(new double?[] { 30, 50, 10 });
+        chart.Series.Add(first);
+
+        var second = new ChartSeries { Name = "Forecast" };
+        second.Values.AddRange(new double?[] { 20, 80, 15 });
+        chart.Series.Add(second);
+
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart)
+            .Should().Be((0, 150, 25));
+    }
+
+    [Fact]
     public void ComputeScatterAxisRange_UsesXValuesWhenRequested()
     {
         var series = new ChartSeries { Name = "Scatter" };
@@ -1785,6 +1803,49 @@ public sealed class ChartRenderPlannerTests
             new ChartPlanPoint(100, 80),
             new ChartPlanPoint(200, 70),
             new ChartPlanPoint(200, 100));
+    }
+
+    [Fact]
+    public void BuildAreaSeriesPrimitives_StackedAreaUsesPriorSeriesAsBaseline()
+    {
+        var chart = new ChartShape { ChartType = ChartType.AreaStacked };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+
+        var first = new ChartSeries { Name = "Actual" };
+        first.Values.AddRange(new double?[] { 20, 40, 60 });
+        chart.Series.Add(first);
+
+        var second = new ChartSeries { Name = "Forecast" };
+        second.Values.AddRange(new double?[] { 10, 20, 30 });
+        chart.Series.Add(second);
+
+        var primitives = ChartRenderPlanner.BuildAreaSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        primitives.Should().HaveCount(2);
+        primitives[0].SeriesIndex.Should().Be(1);
+        primitives[0].BaselineStart.Should().Be(new ChartPlanPoint(0, 80));
+        primitives[0].BaselineEnd.Should().Be(new ChartPlanPoint(200, 40));
+        primitives[0].Points.Should().Equal(
+            new ChartPlanPoint(0, 70),
+            new ChartPlanPoint(100, 40),
+            new ChartPlanPoint(200, 10));
+        primitives[0].AreaPath.Points.Should().Equal(
+            new ChartPlanPoint(0, 80),
+            new ChartPlanPoint(0, 70),
+            new ChartPlanPoint(100, 40),
+            new ChartPlanPoint(200, 10),
+            new ChartPlanPoint(200, 40),
+            new ChartPlanPoint(100, 60));
+
+        primitives[1].SeriesIndex.Should().Be(0);
+        primitives[1].BaselineStart.Should().Be(new ChartPlanPoint(0, 100));
+        primitives[1].BaselineEnd.Should().Be(new ChartPlanPoint(200, 100));
+        primitives[1].Points.Should().Equal(
+            new ChartPlanPoint(0, 80),
+            new ChartPlanPoint(100, 60),
+            new ChartPlanPoint(200, 40));
     }
 
     [Fact]

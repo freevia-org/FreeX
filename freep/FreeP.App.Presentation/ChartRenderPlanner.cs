@@ -2204,6 +2204,9 @@ public static partial class ChartRenderPlanner
 
         double stepX = plot.Width / Math.Max(1, categoryCount - 1);
         var depth = BuildClassicThreeDDepthPlan(chart, plot);
+        if (chart.ChartType == ChartType.AreaStacked)
+            return BuildStackedAreaSeriesPrimitives(chart, plot, categoryCount, minValue, range, stepX, depth, seriesColors, fillPlans);
+
         var primitives = new List<ChartAreaSeriesPrimitive>();
 
         for (int seriesIndex = chart.Series.Count - 1; seriesIndex >= 0; seriesIndex--)
@@ -2233,6 +2236,7 @@ public static partial class ChartRenderPlanner
                 primitives,
                 seriesIndex,
                 pointSlots,
+                baselineSlots: null,
                 plot.Bottom,
                 fill,
                 ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Gap,
@@ -2242,10 +2246,76 @@ public static partial class ChartRenderPlanner
         return primitives;
     }
 
+    private static IReadOnlyList<ChartAreaSeriesPrimitive> BuildStackedAreaSeriesPrimitives(
+        ChartShape chart,
+        ChartPlanRect plot,
+        int categoryCount,
+        double minValue,
+        double range,
+        double stepX,
+        ChartClassicThreeDDepthPlan? depth,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
+    {
+        var primitives = new List<ChartAreaSeriesPrimitive>();
+        var positiveStack = new double[categoryCount];
+        var negativeStack = new double[categoryCount];
+
+        for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            var series = chart.Series[seriesIndex];
+            if (series.Values.Count == 0)
+                continue;
+
+            var pointSlots = new ChartPlanPoint?[categoryCount];
+            var baselineSlots = new ChartPlanPoint?[categoryCount];
+            for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+            {
+                double? value = ResolveBlankSensitiveValue(
+                    chart,
+                    categoryIndex < series.Values.Count
+                        ? series.Values[categoryIndex]
+                        : null);
+                if (!value.HasValue)
+                    continue;
+
+                bool positive = value.Value >= 0;
+                double baselineValue = positive ? positiveStack[categoryIndex] : negativeStack[categoryIndex];
+                double plottedValue = baselineValue + value.Value;
+                if (positive)
+                    positiveStack[categoryIndex] = plottedValue;
+                else
+                    negativeStack[categoryIndex] = plottedValue;
+
+                double x = plot.X + categoryIndex * stepX;
+                double baselineY = plot.Bottom - (baselineValue - minValue) / range * plot.Height;
+                double y = plot.Bottom - (plottedValue - minValue) / range * plot.Height;
+                baselineSlots[categoryIndex] = new ChartPlanPoint(x, baselineY);
+                pointSlots[categoryIndex] = new ChartPlanPoint(x, y);
+            }
+
+            var fill = ResolveSeriesFill(seriesIndex, seriesColors, AreaFillAlpha, fillPlans);
+            var seriesPrimitives = new List<ChartAreaSeriesPrimitive>();
+            AddAreaSeriesPrimitives(
+                seriesPrimitives,
+                seriesIndex,
+                pointSlots,
+                baselineSlots,
+                plot.Bottom,
+                fill,
+                ResolveDisplayBlanksAs(chart) == ChartDisplayBlanksAs.Gap,
+                depth);
+            primitives.InsertRange(0, seriesPrimitives);
+        }
+
+        return primitives;
+    }
+
     private static void AddAreaSeriesPrimitives(
         List<ChartAreaSeriesPrimitive> primitives,
         int seriesIndex,
         IReadOnlyList<ChartPlanPoint?> pointSlots,
+        IReadOnlyList<ChartPlanPoint?>? baselineSlots,
         double baselineY,
         ChartFillPlan fill,
         bool splitAtBlankSlots,
@@ -2262,16 +2332,17 @@ public static partial class ChartRenderPlanner
             }
 
             if (splitAtBlankSlots)
-                AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineY, fill, depth);
+                AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineSlots, baselineY, fill, depth);
         }
 
-        AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineY, fill, depth);
+        AddAreaSegmentPrimitive(primitives, seriesIndex, segment, baselineSlots, baselineY, fill, depth);
     }
 
     private static void AddAreaSegmentPrimitive(
         List<ChartAreaSeriesPrimitive> primitives,
         int seriesIndex,
         List<ChartPlanPoint> segment,
+        IReadOnlyList<ChartPlanPoint?>? baselineSlots,
         double baselineY,
         ChartFillPlan fill,
         ChartClassicThreeDDepthPlan? depth)
@@ -2279,13 +2350,10 @@ public static partial class ChartRenderPlanner
         if (segment.Count == 0)
             return;
 
-        var baselineStart = new ChartPlanPoint(segment[0].X, baselineY);
-        var baselineEnd = new ChartPlanPoint(segment[^1].X, baselineY);
-        var pathPoints = new ChartPlanPoint[segment.Count + 2];
-        pathPoints[0] = baselineStart;
-        for (int pointIndex = 0; pointIndex < segment.Count; pointIndex++)
-            pathPoints[pointIndex + 1] = segment[pointIndex];
-        pathPoints[^1] = baselineEnd;
+        var baselinePoints = ResolveAreaBaselinePoints(segment, baselineSlots, baselineY);
+        var baselineStart = baselinePoints[0];
+        var baselineEnd = baselinePoints[^1];
+        var pathPoints = BuildAreaPathPoints(segment, baselinePoints, baselineSlots is not null);
 
         primitives.Add(new ChartAreaSeriesPrimitive(
             seriesIndex,
@@ -2302,6 +2370,53 @@ public static partial class ChartRenderPlanner
         });
 
         segment.Clear();
+    }
+
+    private static IReadOnlyList<ChartPlanPoint> ResolveAreaBaselinePoints(
+        IReadOnlyList<ChartPlanPoint> segment,
+        IReadOnlyList<ChartPlanPoint?>? baselineSlots,
+        double baselineY)
+    {
+        var baselinePoints = new ChartPlanPoint[segment.Count];
+        for (int pointIndex = 0; pointIndex < segment.Count; pointIndex++)
+        {
+            var point = segment[pointIndex];
+            baselinePoints[pointIndex] = baselineSlots is null
+                ? new ChartPlanPoint(point.X, baselineY)
+                : baselineSlots.FirstOrDefault(slot => slot.HasValue && Math.Abs(slot.Value.X - point.X) < 0.001)
+                    ?? new ChartPlanPoint(point.X, baselineY);
+        }
+
+        return baselinePoints;
+    }
+
+    private static ChartPlanPoint[] BuildAreaPathPoints(
+        IReadOnlyList<ChartPlanPoint> segment,
+        IReadOnlyList<ChartPlanPoint> baselinePoints,
+        bool preserveBaselineContour)
+    {
+        if (!preserveBaselineContour)
+        {
+            var flatPathPoints = new ChartPlanPoint[segment.Count + 2];
+            flatPathPoints[0] = baselinePoints[0];
+            for (int pointIndex = 0; pointIndex < segment.Count; pointIndex++)
+                flatPathPoints[pointIndex + 1] = segment[pointIndex];
+            flatPathPoints[^1] = baselinePoints[^1];
+            return flatPathPoints;
+        }
+
+        var pathPoints = new ChartPlanPoint[segment.Count + baselinePoints.Count];
+        pathPoints[0] = baselinePoints[0];
+        for (int pointIndex = 0; pointIndex < segment.Count; pointIndex++)
+            pathPoints[pointIndex + 1] = segment[pointIndex];
+        for (int baselineIndex = baselinePoints.Count - 1, pathIndex = segment.Count + 1;
+             baselineIndex > 0;
+             baselineIndex--, pathIndex++)
+        {
+            pathPoints[pathIndex] = baselinePoints[baselineIndex];
+        }
+
+        return pathPoints;
     }
 
     public static ChartScatterPrimitivePlan BuildScatterPrimitivePlan(
@@ -2890,12 +3005,19 @@ public static partial class ChartRenderPlanner
         double dataMin = 0;
         double dataMax = 0;
 
-        foreach (var series in chart.Series)
+        if (chart.ChartType == ChartType.AreaStacked)
         {
-            if (series.OnSecondaryAxis)
-                continue;
+            AccumulateStackedCategoryTotals(chart, onSecondaryAxis: false, ref dataMin, ref dataMax);
+        }
+        else
+        {
+            foreach (var series in chart.Series)
+            {
+                if (series.OnSecondaryAxis)
+                    continue;
 
-            AccumulateValues(series.Values, ref dataMin, ref dataMax);
+                AccumulateValues(series.Values, ref dataMin, ref dataMax);
+            }
         }
 
         double min = chart.ValueAxis.Min ?? (dataMin >= 0 ? 0 : dataMin);
@@ -2924,6 +3046,44 @@ public static partial class ChartRenderPlanner
         double min = chart.SecondaryValueAxis?.Min ?? (dataMin >= 0 ? 0 : dataMin);
         double max = chart.SecondaryValueAxis?.Max ?? dataMax;
         return ComputeNiceRange(min, max);
+    }
+
+    private static void AccumulateStackedCategoryTotals(
+        ChartShape chart,
+        bool onSecondaryAxis,
+        ref double dataMin,
+        ref double dataMax)
+    {
+        int categoryCount = Math.Max(
+            chart.Categories.Count,
+            chart.Series
+                .Where(series => series.OnSecondaryAxis == onSecondaryAxis)
+                .Select(series => series.Values.Count)
+                .DefaultIfEmpty(0)
+                .Max());
+
+        for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+        {
+            double positiveTotal = 0;
+            double negativeTotal = 0;
+            foreach (var series in chart.Series)
+            {
+                if (series.OnSecondaryAxis != onSecondaryAxis || categoryIndex >= series.Values.Count)
+                    continue;
+
+                var value = series.Values[categoryIndex];
+                if (!value.HasValue)
+                    continue;
+
+                if (value.Value >= 0)
+                    positiveTotal += value.Value;
+                else
+                    negativeTotal += value.Value;
+            }
+
+            dataMin = Math.Min(dataMin, negativeTotal);
+            dataMax = Math.Max(dataMax, positiveTotal);
+        }
     }
 
     public static (double min, double max, double majorUnit) ComputeScatterAxisRange(
