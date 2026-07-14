@@ -255,22 +255,42 @@ public sealed class WpfWindowsRecordingCaptureBackendTests
             IsAvailable: true,
             "video/mp4");
         var started = new DateTimeOffset(2026, 7, 14, 10, 0, 0, TimeSpan.Zero);
+        var packagePath = "ppt/media/freep-recordings/wpf/slide-001-camera.mp4";
 
         engine.BeginCapture(new WpfWindowsRecordingCaptureStartRequest(
             device,
             SlideIndex: 0,
             started,
-            "ppt/media/freep-recordings/wpf/slide-001-camera.mp4"));
+            packagePath));
         var result = engine.CompleteCapture(new WpfWindowsRecordingCaptureRequest(
             device,
             SlideIndex: 0,
             DurationMs: 1500,
-            "ppt/media/freep-recordings/wpf/slide-001-camera.mp4"));
+            packagePath));
 
         result.IsCaptured.Should().BeFalse();
         result.StatusText.Should().Contain("camera device handoff reached");
         result.StatusText.Should().Contain("video encoding is not implemented");
         result.PayloadBytes.Should().BeEmpty();
+
+        var evidence = SlideShowRecordingHostAdapterParityPlanner.BuildCameraEncodingReadinessEvidence(
+            new[]
+            {
+                new SlideShowRecordingCameraEncodingReadinessRow(
+                    WpfWindowsRecordingCaptureBackend.HostName,
+                    WpfWindowsRecordingCaptureBackend.AdapterName,
+                    packagePath,
+                    "video/mp4",
+                    DeviceHandoffReached: result.StatusText.Contains("camera device handoff reached", StringComparison.Ordinal),
+                    result.IsCaptured,
+                    result.PayloadBytes.Length,
+                    RequiresPowerPointCom: false,
+                    result.StatusText)
+            });
+        evidence.HasWpfNoComHandoff.Should().BeTrue();
+        evidence.HasPackageTargets.Should().BeTrue();
+        evidence.HasLocalEncodedPayload.Should().BeFalse();
+        evidence.ClaimsPowerPointComBaseline.Should().BeFalse();
     }
 
     private static (Presentation Presentation, PresentationRecordingMediaArtifact CameraArtifact)

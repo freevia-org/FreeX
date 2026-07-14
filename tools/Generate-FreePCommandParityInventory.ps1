@@ -168,6 +168,7 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-media-caption-shared-sidecar-retention-2026-07-14.md",
                 "docs/parity/freep-presenter-recording-microphone-handoff-2026-07-14.md",
                 "docs/parity/freep-presenter-recording-camera-handoff-2026-07-14.md",
+                "docs/parity/freep-presenter-recording-default-camera-encoding-readiness-2026-07-14.md",
                 "docs/parity/freep-presenter-recording-camera-payload-2026-07-14.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-05.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-13.md",
@@ -184,7 +185,26 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, paired real Windows microphone narration handoff evidence, paired Windows camera handoff readiness, deterministic encoded camera media payload artifacts through host-specific PPTX package paths, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Unavailable-hardware live capture, local default no-COM real camera encoding, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
+            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, paired real Windows microphone narration handoff evidence, paired Windows camera handoff readiness, paired default no-COM camera handoff/package-target readiness without encoded-payload or PowerPoint-baseline claims, deterministic encoded camera media payload artifacts through host-specific PPTX package paths, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Unavailable-hardware live capture, actual local default no-COM camera video encoding that produces non-empty mp4 payload bytes, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
+        new(
+            EvidenceId: "freep.presenter.recording.default-camera-encoding-readiness",
+            Area: "Local default no-COM camera encoding readiness",
+            Status: "shared-readiness-evidence",
+            HostCoverage: "WPF/Avalonia default Windows camera engines feed a shared handoff-only readiness contract with stable mp4 package targets and no PowerPoint COM claim",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-presenter-recording-default-camera-encoding-readiness-2026-07-14.md",
+                "docs/parity/freep-presenter-recording-camera-handoff-2026-07-14.md",
+                "docs/parity/freep-presenter-recording-camera-payload-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/SlideShowRecordingHostAdapterParityPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/SlideShowRecordingHostAdapterParityPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/WpfWindowsRecordingCaptureBackendTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/AvaloniaWindowsRecordingCaptureBackendTests.cs"
+            ],
+            RemainingWork: "Paired WPF/Avalonia default no-COM camera handoff readiness now records stable video/mp4 package targets while explicitly proving no local encoded payload bytes and no PowerPoint COM baseline claim. Actual local default no-COM camera video encoding that produces non-empty mp4 payloads, live unavailable-hardware/permission UX, PowerPoint COM recording baselines, and broader real-deck PowerPoint-native media/caption corpus baselines remain deferred."),
         new(
             EvidenceId: "freep.media-caption.native-sidecar-depth",
             Area: "PowerPoint-native media and caption sidecar package depth",

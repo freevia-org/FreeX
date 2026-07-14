@@ -75,6 +75,68 @@ public sealed record SlideShowRecordingHostAdapterParityEvidence(
         hostName.Contains("Avalonia", StringComparison.OrdinalIgnoreCase);
 }
 
+public sealed record SlideShowRecordingCameraEncodingReadinessRow(
+    string HostName,
+    string AdapterName,
+    string PackagePath,
+    string ContentType,
+    bool DeviceHandoffReached,
+    bool IsCaptured,
+    long PayloadLengthBytes,
+    bool RequiresPowerPointCom,
+    string StatusText)
+{
+    public bool HasPackageTarget =>
+        !string.IsNullOrWhiteSpace(PackagePath) &&
+        PackagePath.StartsWith("ppt/media/", StringComparison.Ordinal) &&
+        PackagePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase);
+
+    public bool IsNoComHandoffOnly =>
+        DeviceHandoffReached &&
+        !IsCaptured &&
+        PayloadLengthBytes == 0 &&
+        !RequiresPowerPointCom &&
+        string.Equals(ContentType, "video/mp4", StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed record SlideShowRecordingCameraEncodingReadinessEvidence(
+    IReadOnlyList<SlideShowRecordingCameraEncodingReadinessRow> HostRows)
+{
+    public bool HasWpfNoComHandoff =>
+        HostRows.Any(row => IsWpf(row.HostName) && row.IsNoComHandoffOnly);
+
+    public bool HasAvaloniaNoComHandoff =>
+        HostRows.Any(row => IsAvalonia(row.HostName) && row.IsNoComHandoffOnly);
+
+    public bool HasPairedNoComHandoff =>
+        HasWpfNoComHandoff && HasAvaloniaNoComHandoff;
+
+    public bool HasLocalEncodedPayload =>
+        HostRows.Any(row => row.IsCaptured && row.PayloadLengthBytes > 0);
+
+    public bool ClaimsPowerPointComBaseline =>
+        HostRows.Any(row => row.RequiresPowerPointCom);
+
+    public bool HasPackageTargets =>
+        HostRows.Count > 0 && HostRows.All(row => row.HasPackageTarget);
+
+    public string SummaryText =>
+        HasPairedNoComHandoff
+            ? "WPF and Avalonia both reach local default no-COM camera handoff with stable mp4 package targets while deferring video encoding honestly."
+            : "Local default no-COM camera handoff is not paired across WPF and Avalonia.";
+
+    public string RemainingWork =>
+        HasLocalEncodedPayload
+            ? "PowerPoint COM recording baselines and broader real-deck media/caption baselines remain deferred."
+            : "Local default no-COM real camera video encoding, PowerPoint COM recording baselines, and broader real-deck media/caption baselines remain deferred.";
+
+    private static bool IsWpf(string hostName) =>
+        hostName.Contains("WPF", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsAvalonia(string hostName) =>
+        hostName.Contains("Avalonia", StringComparison.OrdinalIgnoreCase);
+}
+
 public static class SlideShowRecordingHostAdapterParityPlanner
 {
     public static SlideShowRecordingHostAdapterParityEvidence BuildEvidence(
@@ -85,6 +147,17 @@ public static class SlideShowRecordingHostAdapterParityPlanner
         return new SlideShowRecordingHostAdapterParityEvidence(
             hostReadiness
                 .Select(BuildRow)
+                .OrderBy(row => row.HostName, StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    public static SlideShowRecordingCameraEncodingReadinessEvidence BuildCameraEncodingReadinessEvidence(
+        IEnumerable<SlideShowRecordingCameraEncodingReadinessRow> hostRows)
+    {
+        ArgumentNullException.ThrowIfNull(hostRows);
+
+        return new SlideShowRecordingCameraEncodingReadinessEvidence(
+            hostRows
                 .OrderBy(row => row.HostName, StringComparer.Ordinal)
                 .ToArray());
     }
