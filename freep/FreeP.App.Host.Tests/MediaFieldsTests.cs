@@ -728,6 +728,147 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_PowerPointNativeTtmlCaptionPackage_RoundTripsAsUnsupportedTranscriptMetadata()
+    {
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "PowerPoint TTML captioned video",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 },
+                ContentType = "video/mp4"
+            }
+        });
+        pres.Slides.Add(slide);
+
+        var fixture = new CaptionTrackFixture(
+            "rIdPowerPointTtmlCaption",
+            "ppt/media/ttml/native-caption.ttml",
+            "en-US",
+            "PowerPoint TTML captions",
+            "TTML caption text");
+        const string captionContentType = "application/ttml+xml";
+        const string ttmlText = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tt xmlns="http://www.w3.org/ns/ttml">
+              <body>
+                <div>
+                  <p begin="00:00:00.000" end="00:00:01.000">TTML caption text</p>
+                </div>
+              </body>
+            </tt>
+            """;
+        var ttmlBytes = Encoding.UTF8.GetBytes(ttmlText);
+
+        using var source = new MemoryStream();
+        PptxPackageWriter.Write(pres, source);
+        AddCaptionTracks(source, [fixture]);
+        AddContentTypeOverride(source, "/" + fixture.PackagePath, captionContentType);
+        source.Position = 0;
+        using (var sourceZip = new ZipArchive(source, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            WriteBytes(sourceZip, fixture.PackagePath, ttmlBytes);
+        }
+
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        loaded.RecordingMediaArtifacts.Should().BeEmpty(
+            "PowerPoint-authored TTML captions are native media metadata, not FreeP generated recording artifacts");
+        loaded.PackageSnapshot!.TryGetEntry(fixture.PackagePath, out var snapshotBytes).Should().BeTrue();
+        snapshotBytes.Should().Equal(ttmlBytes);
+
+        var loadedTrack = loaded.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        loadedTrack.RelationshipId.Should().Be(fixture.RelationshipId);
+        loadedTrack.Source.Should().Be(fixture.PackagePath);
+        loadedTrack.ContentType.Should().Be(captionContentType);
+        loadedTrack.Language.Should().Be(fixture.Language);
+        loadedTrack.Label.Should().Be(fixture.Label);
+        loadedTrack.Bytes.Should().Equal(ttmlBytes);
+
+        var loadedTranscript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(loaded);
+        loadedTranscript.Tracks.Should().ContainSingle()
+            .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
+                descriptor.Source == fixture.PackagePath &&
+                descriptor.ContentType == captionContentType &&
+                descriptor.Status == PresentationMediaTranscriptTrackStatus.UnsupportedFormat &&
+                descriptor.CueCount == 0);
+
+        loaded.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "Modeled edit",
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 3657600,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            Text = "edit"
+        });
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+
+        saved.Position = 0;
+        using (var zip = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            zip.GetEntry("ppt/media/recordingArtifacts.xml").Should().BeNull();
+            zip.Entries.Should().NotContain(entry =>
+                entry.FullName.StartsWith("ppt/media/recording-captions/", StringComparison.OrdinalIgnoreCase));
+            ReadBytes(zip, fixture.PackagePath).Should().Equal(ttmlBytes);
+            zip.GetEntry("ppt/media/slide1_caption1.ttml").Should().BeNull();
+
+            var contentTypes = ReadXml(zip, "[Content_Types].xml");
+            var ct = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+            contentTypes.Root!.Elements(ct + "Override")
+                .Where(e =>
+                    string.Equals(e.Attribute("PartName")?.Value, "/" + fixture.PackagePath, StringComparison.OrdinalIgnoreCase) &&
+                    e.Attribute("ContentType")?.Value == captionContentType)
+                .Should().ContainSingle();
+
+            var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+            var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            var captionRel = rels.Root!.Elements(relNs + "Relationship")
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption");
+            captionRel.Attribute("Id")!.Value.Should().Be(fixture.RelationshipId);
+            captionRel.Attribute("Target")!.Value.Should().Be("../media/ttml/native-caption.ttml");
+            captionRel.Attribute("TargetMode").Should().BeNull();
+
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+            var captionEl = slideXml.Descendants().Single(e => e.Name.LocalName == "caption");
+            captionEl.Attribute(r + "embed")!.Value.Should().Be(fixture.RelationshipId);
+            captionEl.Attribute("lang")!.Value.Should().Be(fixture.Language);
+            captionEl.Attribute("label")!.Value.Should().Be(fixture.Label);
+        }
+
+        saved.Position = 0;
+        var reopened = PptxPackageReader.Read(saved);
+        reopened.RecordingMediaArtifacts.Should().BeEmpty();
+        reopened.Slides[0].Shapes.Should().Contain(shape => shape.Name == "Modeled edit");
+        var reopenedTrack = reopened.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        reopenedTrack.Source.Should().Be(fixture.PackagePath);
+        reopenedTrack.ContentType.Should().Be(captionContentType);
+        reopenedTrack.Bytes.Should().Equal(ttmlBytes);
+
+        var transcript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(reopened);
+        transcript.Tracks.Should().ContainSingle()
+            .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
+                descriptor.Source == fixture.PackagePath &&
+                descriptor.Status == PresentationMediaTranscriptTrackStatus.UnsupportedFormat &&
+                descriptor.CueCount == 0);
+    }
+
+    [Fact]
     public void Media_PowerPointNativeCaptionPackage_SharedSidecarAcrossSlides_WritesOnePackagePart()
     {
         var pres = new Presentation();
