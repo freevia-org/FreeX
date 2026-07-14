@@ -849,6 +849,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.chart.bar-gap-overlap",
             "freep.chart.bubble-sizing-semantics",
             "freep.chart.pie-first-slice-angle",
+            "freep.chart.blank-point-rendering",
             "freep.chart.stacked-area-bands",
             "freep.chart.surface-grid-rendering",
             "freep.chart.powerpoint-baseline-readiness",
