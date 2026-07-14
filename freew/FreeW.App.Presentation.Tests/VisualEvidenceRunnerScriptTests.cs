@@ -286,7 +286,12 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Assert-EquationStructureVisualProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("Equation structure visual proof readiness requires FreeW visual evidence summary schema v37 or newer");
         source.Should().Contain("missing modeled equation geometry depth");
-        source.Should().Contain("missing equation spacing geometry signatures");
+        source.Should().Contain("missing equation spacing geometry signature token");
+        source.Should().Contain("'geometry=function-apply'");
+        source.Should().Contain("'spacing=equationarray'");
+        source.Should().Contain("FunctionArgument = 2");
+        source.Should().Contain("structureFamilies=");
+        source.Should().Contain("roleFamilies=");
         source.Should().Contain("missing honest word-baseline-unavailable equation visual blocker");
         source.Should().Contain("equation-structures-word-baseline-fidelity");
         source.Should().Contain("Equation structure visual proof readiness: trusted scenario rows=");

@@ -3037,13 +3037,56 @@ function Assert-EquationStructureVisualProofReadiness {
         'wpf-fidelity-render',
         'avalonia-page-layout-shot'
     )
-    $requiredElementKinds = @(
-        'Fraction',
-        'Radical',
-        'Matrix',
-        'NAry',
-        'EquationArray'
+    $requiredElementKindMinimums = @{
+        Fraction = 1
+        Radical = 1
+        NAry = 2
+        Matrix = 1
+        EquationArray = 1
+        Accent = 1
+        Bar = 2
+        Delimiter = 1
+        GroupChar = 2
+        FunctionApply = 2
+    }
+    $requiredElementGeometryTokens = @(
+        'geometry=script',
+        'geometry=fraction',
+        'geometry=radical',
+        'geometry=nary',
+        'geometry=matrix',
+        'geometry=equationarray',
+        'geometry=accent',
+        'geometry=bar',
+        'geometry=delimiter',
+        'geometry=groupchar',
+        'geometry=function-apply'
     )
+    $requiredSpacingGeometryTokens = @(
+        'spacing=script',
+        'spacing=fraction',
+        'spacing=radical',
+        'spacing=nary',
+        'spacing=matrix',
+        'spacing=equationarray'
+    )
+    $requiredSegmentRoleMinimums = @{
+        Superscript = 2
+        Subscript = 2
+        FractionNumerator = 1
+        FractionDenominator = 1
+        RadicalDegree = 1
+        RadicalRadicand = 1
+        NAryLowerLimit = 2
+        NAryUpperLimit = 2
+        NAryOperand = 2
+        MatrixCell = 6
+        AccentMark = 1
+        BarMark = 2
+        DelimiterContent = 1
+        GroupCharMark = 2
+        FunctionArgument = 2
+    }
     $failures = New-Object System.Collections.Generic.List[string]
     $trustedScenarioRows = 0
     $verifiedSemanticRows = 0
@@ -3102,20 +3145,57 @@ function Assert-EquationStructureVisualProofReadiness {
             }
 
             $elementKindCounts = @($equations.elementKindCounts)
-            foreach ($kind in $requiredElementKinds) {
-                if (@($elementKindCounts | Where-Object { ([string]$_).StartsWith($kind + '=', [StringComparison]::Ordinal) }).Count -eq 0) {
-                    $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing $kind equation element evidence")
+            foreach ($kind in $requiredElementKindMinimums.Keys) {
+                $prefix = $kind + '='
+                $match = @($elementKindCounts | Where-Object {
+                    ([string]$_).StartsWith($prefix, [StringComparison]::Ordinal)
+                }) | Select-Object -First 1
+                $count = 0
+                if ($match) {
+                    [int]::TryParse(([string]$match).Substring($prefix.Length), [ref]$count) | Out-Null
+                }
+                $minimum = [int]$requiredElementKindMinimums[$kind]
+                if ($count -lt $minimum) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing $kind equation element evidence, expected at least $minimum and found $count")
                     continue
                 }
             }
 
-            if (@($equations.elementGeometrySignatures).Count -lt [int]$equations.elementCount) {
+            $segmentRoleCounts = @($equations.segmentRoleCounts)
+            foreach ($role in $requiredSegmentRoleMinimums.Keys) {
+                $prefix = $role + '='
+                $match = @($segmentRoleCounts | Where-Object {
+                    ([string]$_).StartsWith($prefix, [StringComparison]::Ordinal)
+                }) | Select-Object -First 1
+                $count = 0
+                if ($match) {
+                    [int]::TryParse(([string]$match).Substring($prefix.Length), [ref]$count) | Out-Null
+                }
+                $minimum = [int]$requiredSegmentRoleMinimums[$role]
+                if ($count -lt $minimum) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing $role equation segment role evidence, expected at least $minimum and found $count")
+                    continue
+                }
+            }
+
+            $elementGeometrySignatures = @($equations.elementGeometrySignatures)
+            if ($elementGeometrySignatures.Count -lt [int]$equations.elementCount) {
                 $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): element geometry signatures do not cover every equation element")
                 continue
             }
-            if (@($equations.spacingGeometrySignatures).Count -eq 0) {
-                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing equation spacing geometry signatures")
-                continue
+            foreach ($token in $requiredElementGeometryTokens) {
+                if (@($elementGeometrySignatures | Where-Object { ([string]$_).IndexOf($token, [StringComparison]::Ordinal) -ge 0 }).Count -eq 0) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing equation element geometry signature token '$token'")
+                    continue
+                }
+            }
+
+            $spacingGeometrySignatures = @($equations.spacingGeometrySignatures)
+            foreach ($token in $requiredSpacingGeometryTokens) {
+                if (@($spacingGeometrySignatures | Where-Object { ([string]$_).IndexOf($token, [StringComparison]::Ordinal) -ge 0 }).Count -eq 0) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing equation spacing geometry signature token '$token'")
+                    continue
+                }
             }
 
             $verifiedSemanticRows++
@@ -3166,6 +3246,12 @@ function Assert-EquationStructureVisualProofReadiness {
             $failures.Add("${scenarioId}: missing honest word-baseline-unavailable equation visual blocker")
         }
         else {
+            $blockerSemanticEvidence = @($blocker.semanticEvidence)
+            foreach ($token in @('structureFamilies=', 'roleFamilies=', 'geometryFamilies=', 'spacingFamilies=')) {
+                if (@($blockerSemanticEvidence | Where-Object { ([string]$_).IndexOf($token, [StringComparison]::Ordinal) -ge 0 }).Count -eq 0) {
+                    $failures.Add("${scenarioId}: word-baseline-unavailable blocker missing semantic evidence token '$token'")
+                }
+            }
             $verifiedUnavailableBlockers++
         }
     }

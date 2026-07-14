@@ -6925,7 +6925,21 @@ public sealed class VisualEvidencePlannerTests
                 row.Equations.EquationCount >= 8
                 && row.Equations.ElementCount >= 8
                 && row.Equations.SpacingGeometrySignatures.Count > 0
-                && row.Equations.ElementKindCounts.Contains("EquationArray=1"));
+                && row.Equations.ElementKindCounts.Contains("EquationArray=1")
+                && row.Equations.ElementKindCounts.Contains("Fraction=1")
+                && row.Equations.ElementKindCounts.Contains("Radical=1")
+                && row.Equations.ElementKindCounts.Contains("NAry=2")
+                && row.Equations.ElementKindCounts.Contains("Accent=1")
+                && row.Equations.ElementKindCounts.Contains("Bar=2")
+                && row.Equations.ElementKindCounts.Contains("Delimiter=1")
+                && row.Equations.ElementKindCounts.Contains("GroupChar=2")
+                && row.Equations.ElementKindCounts.Contains("FunctionApply=2"));
+            summary.Evidence.Should().OnlyContain(row =>
+                row.Equations.ElementGeometrySignatures.Any(signature => signature.Contains("geometry=script", StringComparison.Ordinal))
+                && row.Equations.ElementGeometrySignatures.Any(signature => signature.Contains("geometry=function-apply", StringComparison.Ordinal))
+                && row.Equations.SpacingGeometrySignatures.Any(signature => signature.Contains("spacing=equationarray", StringComparison.Ordinal))
+                && row.Equations.SegmentRoleCounts.Contains("FunctionArgument=2")
+                && row.Equations.SegmentRoleCounts.Contains("GroupCharMark=2"));
 
             var comparisons = summary.Evidence
                 .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
@@ -6947,10 +6961,18 @@ public sealed class VisualEvidencePlannerTests
             blocker.Reason.Should().Contain("Word.Application");
             blocker.SemanticEvidence.Should().Contain(evidence =>
                 evidence.Contains("wpf-fidelity-render/p1", StringComparison.Ordinal)
-                && evidence.Contains("EquationArray=1", StringComparison.Ordinal));
+                && evidence.Contains("EquationArray=1", StringComparison.Ordinal)
+                && evidence.Contains("FunctionApply=2", StringComparison.Ordinal)
+                && evidence.Contains("structureFamilies=", StringComparison.Ordinal)
+                && evidence.Contains("roleFamilies=", StringComparison.Ordinal)
+                && evidence.Contains("geometryFamilies=", StringComparison.Ordinal)
+                && evidence.Contains("spacingFamilies=", StringComparison.Ordinal));
             blocker.SemanticEvidence.Should().Contain(evidence =>
                 evidence.Contains("avalonia-page-layout-shot/p1", StringComparison.Ordinal)
-                && evidence.Contains("elements=", StringComparison.Ordinal));
+                && evidence.Contains("elements=", StringComparison.Ordinal)
+                && evidence.Contains("geometry=function-apply", StringComparison.Ordinal)
+                && evidence.Contains("spacing=equationarray", StringComparison.Ordinal)
+                && evidence.Contains("FunctionArgument=2", StringComparison.Ordinal));
             blocker.RelatedBaselineStatuses.Should().Contain(
                 FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
             blocker.CandidateBaselinePaths.Should().Contain("equation-structures/equation-structures_p1.png");
@@ -6974,6 +6996,8 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("equation-structures-word-baseline-fidelity");
             markdown.Should().Contain("Equation structure visual fidelity");
             markdown.Should().Contain("EquationArray=1");
+            markdown.Should().Contain("FunctionApply=2");
+            markdown.Should().Contain("spacing=equationarray");
             markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
         }
         finally

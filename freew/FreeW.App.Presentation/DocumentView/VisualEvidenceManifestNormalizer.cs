@@ -425,6 +425,64 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "category=Statutes|entry=Restart Numbering Act, 7 FreeW Code 13|kind=explicit-page-numbers|pages=2|text=1"
     ];
 
+    private static readonly (string Kind, int MinimumCount)[] EquationStructureRequiredElementKinds =
+    [
+        ("Fraction", 1),
+        ("Radical", 1),
+        ("NAry", 2),
+        ("Matrix", 1),
+        ("EquationArray", 1),
+        ("Accent", 1),
+        ("Bar", 2),
+        ("Delimiter", 1),
+        ("GroupChar", 2),
+        ("FunctionApply", 2)
+    ];
+
+    private static readonly string[] EquationStructureRequiredGeometryTokens =
+    [
+        "geometry=script",
+        "geometry=fraction",
+        "geometry=radical",
+        "geometry=nary",
+        "geometry=matrix",
+        "geometry=equationarray",
+        "geometry=accent",
+        "geometry=bar",
+        "geometry=delimiter",
+        "geometry=groupchar",
+        "geometry=function-apply"
+    ];
+
+    private static readonly string[] EquationStructureRequiredSpacingTokens =
+    [
+        "spacing=script",
+        "spacing=fraction",
+        "spacing=radical",
+        "spacing=nary",
+        "spacing=matrix",
+        "spacing=equationarray"
+    ];
+
+    private static readonly (string Role, int MinimumCount)[] EquationStructureRequiredSegmentRoles =
+    [
+        ("Superscript", 2),
+        ("Subscript", 2),
+        ("FractionNumerator", 1),
+        ("FractionDenominator", 1),
+        ("RadicalDegree", 1),
+        ("RadicalRadicand", 1),
+        ("NAryLowerLimit", 2),
+        ("NAryUpperLimit", 2),
+        ("NAryOperand", 2),
+        ("MatrixCell", 6),
+        ("AccentMark", 1),
+        ("BarMark", 2),
+        ("DelimiterContent", 1),
+        ("GroupCharMark", 2),
+        ("FunctionArgument", 2)
+    ];
+
     public static IReadOnlyList<FreeWVisualEvidenceExpectedScenario> DefaultExpectedScenarios { get; } =
         BuildDefaultExpectedScenarios();
 
@@ -4566,14 +4624,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
             return [];
 
         var semanticEvidence = BuildEquationStructureSemanticEvidence(rows);
-        if (semanticEvidence.Count == 0)
+        if (semanticEvidence.Count == 0 || rows.Any(row => !HasRequiredEquationStructureEvidence(row.Equations)))
         {
             return
             [
                 BuildEquationStructureVisualBlocker(
-                    "semantic-equation-geometry-missing",
-                    "trusted WPF and Avalonia equation geometry metadata",
-                    "trusted equation evidence did not record shared equation geometry metadata; regenerate current-schema evidence or fix shared equation planning before treating this as a Word-baseline-only gap",
+                    "semantic-equation-structure-depth-missing",
+                    "trusted WPF and Avalonia equation geometry metadata for every modeled OfficeMath family",
+                    "trusted equation evidence did not record the required fraction, radical, n-ary, script, matrix, equation-array, decorator, delimiter, group-character, function-apply, segment-role, geometry, and spacing signatures; regenerate current-schema evidence or fix shared equation planning before treating this as a Word-baseline-only gap",
                     [],
                     [],
                     semanticEvidence,
@@ -4879,10 +4937,67 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 "; maxDepth=",
                 row.Equations.MaxNestedSlotDepth.ToString(CultureInfo.InvariantCulture),
                 "; kinds=",
-                string.Join("/", row.Equations.ElementKindCounts.OrderBy(value => value, StringComparer.Ordinal))))
+                string.Join("/", row.Equations.ElementKindCounts.OrderBy(value => value, StringComparer.Ordinal)),
+                "; structureFamilies=",
+                FormatRequiredEquationElementKinds(row.Equations),
+                "; roleFamilies=",
+                FormatRequiredEquationSegmentRoles(row.Equations),
+                "; geometryFamilies=",
+                FormatRequiredEquationSignatureTokens(row.Equations.ElementGeometrySignatures, EquationStructureRequiredGeometryTokens),
+                "; spacingFamilies=",
+                FormatRequiredEquationSignatureTokens(row.Equations.SpacingGeometrySignatures, EquationStructureRequiredSpacingTokens)))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
             .ToList();
+
+    private static bool HasRequiredEquationStructureEvidence(FreeWVisualEquationExpectation equations) =>
+        equations.EquationCount >= 8
+        && equations.ElementCount >= 8
+        && equations.SegmentCount >= 8
+        && EquationStructureRequiredElementKinds.All(required =>
+            ReadEquationElementKindCount(equations.ElementKindCounts, required.Kind) >= required.MinimumCount)
+        && EquationStructureRequiredSegmentRoles.All(required =>
+            ReadEquationElementKindCount(equations.SegmentRoleCounts, required.Role) >= required.MinimumCount)
+        && EquationStructureRequiredGeometryTokens.All(token =>
+            equations.ElementGeometrySignatures.Any(signature => signature.Contains(token, StringComparison.Ordinal)))
+        && EquationStructureRequiredSpacingTokens.All(token =>
+            equations.SpacingGeometrySignatures.Any(signature => signature.Contains(token, StringComparison.Ordinal)));
+
+    private static string FormatRequiredEquationElementKinds(FreeWVisualEquationExpectation equations) =>
+        string.Join(
+            "/",
+            EquationStructureRequiredElementKinds.Select(required =>
+                required.Kind + "=" + ReadEquationElementKindCount(equations.ElementKindCounts, required.Kind)
+                    .ToString(CultureInfo.InvariantCulture)));
+
+    private static string FormatRequiredEquationSegmentRoles(FreeWVisualEquationExpectation equations) =>
+        string.Join(
+            "/",
+            EquationStructureRequiredSegmentRoles.Select(required =>
+                required.Role + "=" + ReadEquationElementKindCount(equations.SegmentRoleCounts, required.Role)
+                    .ToString(CultureInfo.InvariantCulture)));
+
+    private static int ReadEquationElementKindCount(IReadOnlyList<string> elementKindCounts, string kind)
+    {
+        var prefix = kind + "=";
+        var match = elementKindCounts.FirstOrDefault(signature =>
+            signature.StartsWith(prefix, StringComparison.Ordinal));
+        if (match is null)
+            return 0;
+
+        return int.TryParse(match[prefix.Length..], NumberStyles.Integer, CultureInfo.InvariantCulture, out var count)
+            ? count
+            : 0;
+    }
+
+    private static string FormatRequiredEquationSignatureTokens(
+        IReadOnlyList<string> signatures,
+        IReadOnlyList<string> requiredTokens) =>
+        string.Join(
+            "/",
+            requiredTokens.Select(token =>
+                token + ":" + signatures.Count(signature => signature.Contains(token, StringComparison.Ordinal))
+                    .ToString(CultureInfo.InvariantCulture)));
 
     private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildReviewMarkupWordBaselineBlockers(
         FreeWVisualEvidenceNormalizedSummary summary,
