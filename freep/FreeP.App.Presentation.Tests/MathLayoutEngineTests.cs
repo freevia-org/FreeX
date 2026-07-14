@@ -535,6 +535,37 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlPreSubSup_RenderPlanCarriesLeftScriptStackBeforeBase()
+    {
+        var node = ParseOmml(
+            "<m:sPre>" +
+            "<m:e><m:r><m:t>X</m:t></m:r></m:e>" +
+            "<m:sub><m:r><m:t>wide</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>2</m:t></m:r></m:sup>" +
+            "</m:sPre>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var glyphs = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "2", "wide", "X" },
+            "m:sPre should emit the pre-superscript, pre-subscript, and base from the shared draw plan before either host draws it");
+
+        var sup = glyphs.Single(g => g.Text == "2");
+        var sub = glyphs.Single(g => g.Text == "wide");
+        var baseGlyph = glyphs.Single(g => g.Text == "X");
+
+        sup.X.Should().BeLessThan(baseGlyph.X, "pre-superscript glyphs are laid out to the left of the base");
+        sub.X.Should().BeLessThan(baseGlyph.X, "pre-subscript glyphs are laid out to the left of the base");
+        sup.Y.Should().BeLessThan(sub.Y, "the pre-superscript sits above the pre-subscript in the shared script stack");
+        sup.X.Should().BeGreaterThan(sub.X,
+            "the narrower pre-superscript is right-aligned within the shared pre-script column");
+        sup.FontSizePt.Should().BeLessThan(baseGlyph.FontSizePt);
+        sub.FontSizePt.Should().BeLessThan(baseGlyph.FontSizePt);
+    }
+
+    [Fact]
     public void Sub_OnNormalBase_DescentGrowsForDeepSubscript_AscentUnchanged()
     {
         var sub = new MathNode.Sub(Run("x"), Run("i"));

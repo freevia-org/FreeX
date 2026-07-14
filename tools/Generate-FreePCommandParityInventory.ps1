@@ -543,6 +543,23 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing now treats m:boxPr/m:aln on direct m:eqArr row boxes as invisible equation-array alignment points while preserving the boxed expression. WPF and Avalonia consume the resulting shared MathBox draw coordinates. PowerPoint-authoritative math visual baselines and broader OfficeMath alignment semantics remain deferred."),
         new(
+            EvidenceId: "freep.omml.pre-subsup-layout",
+            Area: "OMML pre-sub/superscript layout",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.PreSubSup script-stack coordinates and MathBoxRenderPlanner draw ops with no renderer-local math policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-pre-subsup-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout now preserve m:sPre base, pre-subscript, and pre-superscript children, place the reduced script stack to the left of the base, and carry parsed draw-plan coordinates to both hosts. PowerPoint-authoritative math visual baselines and exact OfficeMath script metrics remain deferred."),
+        new(
             EvidenceId: "freep.smartart.continuous-block-process",
             Area: "SmartArt continuous block process live layout",
             Status: "shared-render-planner-evidence",
