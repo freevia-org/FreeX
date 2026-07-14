@@ -1434,6 +1434,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesTargetListAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/targetList",
+            nodes: [("id1", "Market"), ("id2", "Segment"), ("id3", "Account"), ("id4", "Champion")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship,
+            "targetList is tracked as a relationship-family SmartArt layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "targetList now has bounded shared concentric-ellipse geometry");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Market", "Segment", "Account", "Champion");
+    }
+
+    [Fact]
     public void Reader_ParsesBasicCycleAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2094,6 +2113,44 @@ public sealed class SmartArtTests : IDisposable
             liveShapes[i].BoundsDip.X.Should().BeLessThan(
                 liveShapes[i - 1].BoundsDip.X + liveShapes[i - 1].BoundsDip.Width,
                 "WPF and Avalonia hosts consume shared overlapping Venn ellipse DrawOps");
+        }
+    }
+
+    [Fact]
+    public void Compositor_TargetListSmartArt_RendersSharedLiveEllipses()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/targetList",
+            nodes: [("n1", "Market"), ("n2", "Segment"), ("n3", "Account"), ("n4", "Champion")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(4, "four target-list ellipses should render from shared live data");
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("target-list live geometry emits no connectors");
+        liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(["Market", "Segment", "Account", "Champion"]);
+        liveShapes.Select(op => op.BoundsDip.Width)
+            .Should().BeInDescendingOrder("WPF and Avalonia hosts consume shared nested target ellipse DrawOps");
+
+        var centerX = liveShapes[0].BoundsDip.X + liveShapes[0].BoundsDip.Width / 2;
+        var centerY = liveShapes[0].BoundsDip.Y + liveShapes[0].BoundsDip.Height / 2;
+        foreach (var op in liveShapes)
+        {
+            (op.BoundsDip.X + op.BoundsDip.Width / 2).Should().BeApproximately(centerX, 0.01,
+                "shared target-list DrawOps should preserve a common target center");
+            (op.BoundsDip.Y + op.BoundsDip.Height / 2).Should().BeApproximately(centerY, 0.01,
+                "shared target-list DrawOps should preserve a common target center");
         }
     }
 

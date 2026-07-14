@@ -967,6 +967,22 @@ internal static class FreePCommandInventory
             RemainingWork: "basicVenn now uses the bounded shared relationship-family live-layout path for two to four parsed nodes as overlapping translucent ellipse shapes. Unsupported relationship/Venn siblings and basicVenn diagrams with more than four parsed nodes remain on cached drawing fallback. Exact PowerPoint intersection blending, effects, text offsets, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
         ,
         new(
+            EvidenceId: "freep.smartart.target-list",
+            Area: "SmartArt targetList live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared translucent ellipse shape ops emitted by the SmartArt relationship-family layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-target-list-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "targetList now uses the bounded shared relationship-family live-layout path for one to five parsed nodes as concentric translucent ellipse shapes. Unsupported relationship siblings and targetList diagrams with more than five parsed nodes remain on cached drawing fallback. Exact PowerPoint ring clipping, label offsets, effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+        ,
+        new(
             EvidenceId: "freep.smartart.vertical-bullet-list",
             Area: "SmartArt vertical bullet list live layout",
             Status: "shared-render-planner-evidence",

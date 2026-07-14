@@ -919,6 +919,55 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void TargetList_ReturnsConcentricEllipsesWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Market", "Segment", "Account", "Champion");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/targetList";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("targetList has bounded shared relationship-family geometry");
+        shapes!.Should().HaveCount(4, "one live target ellipse should be emitted per node");
+        shapes.Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Ellipse,
+            "targetList emits concentric ellipse shapes without connector ops");
+
+        var ellipses = shapes.ToList();
+        ellipses.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Market", "Segment", "Account", "Champion");
+        ellipses.Select(s => s.ExtentCxEmu)
+            .Should().BeInDescendingOrder("targetList ellipses should shrink inward toward the target center");
+        ellipses.Select(s => s.ExtentCyEmu)
+            .Should().BeInDescendingOrder("targetList ellipses should shrink inward toward the target center");
+
+        long expectedCenterX = ellipses[0].OffsetXEmu + ellipses[0].ExtentCxEmu / 2;
+        long expectedCenterY = ellipses[0].OffsetYEmu + ellipses[0].ExtentCyEmu / 2;
+        foreach (var ellipse in ellipses)
+        {
+            ((ShapeFill.Solid)ellipse.Fill!).Color.Alpha.Should().BeLessThan(255,
+                "targetList fills should remain translucent enough for nested rings to stay visible");
+            (ellipse.OffsetXEmu + ellipse.ExtentCxEmu / 2).Should().BeCloseTo(expectedCenterX, 2,
+                "targetList ellipses should share a center point");
+            (ellipse.OffsetYEmu + ellipse.ExtentCyEmu / 2).Should().BeCloseTo(expectedCenterY, 2,
+                "targetList ellipses should share a center point");
+            ellipse.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            ellipse.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (ellipse.OffsetXEmu + ellipse.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (ellipse.OffsetYEmu + ellipse.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
+    }
+
+    [Fact]
+    public void TargetList_MoreThanFiveNodes_ReturnsNullForCachedFallback()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C", "D", "E", "F");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/targetList";
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().BeNull("the bounded targetList planner owns only readable one-to-five node target diagrams");
+    }
+
+    [Fact]
     public void UnsupportedKnownProcessSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
