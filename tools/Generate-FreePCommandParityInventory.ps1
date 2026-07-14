@@ -952,6 +952,23 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing and layout now preserve m:sPre base, pre-subscript, and pre-superscript children, place the reduced script stack to the left of the base, and carry parsed draw-plan coordinates to both hosts. PowerPoint-authoritative math visual baselines and exact OfficeMath script metrics remain deferred."),
         new(
+            EvidenceId: "freep.omml.script-align-argument-size",
+            Area: "OMML script alignment and argument size",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.SubSup alignment and MathNode.ArgSize glyph plans with no renderer-local script or argument-size policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-script-align-argsize-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout now preserve PowerPoint-authored m:sSubSupPr/m:alnScr script-column alignment and m:argPr/m:argSz argument script-size adjustments, carrying renderer-neutral glyph coordinates and font-size metadata to both WPF and Avalonia. PowerPoint-authoritative math visual baselines, exact Cambria Math script metrics, and broader OfficeMath script-spacing table parity remain deferred."),
+        new(
             EvidenceId: "freep.omml.matrix-spacing-base-justification",
             Area: "OMML matrix spacing and base justification",
             Status: "shared-layout-evidence",
