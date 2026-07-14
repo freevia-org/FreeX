@@ -670,6 +670,25 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing now treats m:boxPr/m:aln on direct m:eqArr row boxes as invisible equation-array alignment points while preserving the boxed expression. WPF and Avalonia consume the resulting shared MathBox draw coordinates. PowerPoint-authoritative math visual baselines and broader OfficeMath alignment semantics remain deferred."),
         new(
+            EvidenceId: "freep.omml.eqarray-spacing-base-justification",
+            Area: "OMML equation-array row spacing and base justification",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.EqArray spacing/base metadata and MathBoxRenderPlanner draw ops with no renderer-local equation-array policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-eqarray-spacing-base-justification-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout preserve m:eqArrPr/m:rSpRule, m:rSp, and m:baseJc so row offsets and reported baseline/ascent are resolved before WPF or Avalonia draw. PowerPoint-authoritative math visual baselines, exact OfficeMath spacing metrics, and complete paragraph-level equation alignment remain deferred."),
+        new(
             EvidenceId: "freep.omml.delimiter-shape",
             Area: "OMML delimiter shape semantics",
             Status: "shared-layout-evidence",
