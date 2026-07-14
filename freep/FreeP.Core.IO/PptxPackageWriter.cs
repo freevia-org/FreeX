@@ -495,6 +495,7 @@ public static class PptxPackageWriter
         }
 
         int globalChartIndex = 1; // monotonically increasing across all slides
+        var writtenCaptionPaths = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         for (int si = 0; si < presentation.Slides.Count; si++)
         {
             var slide = presentation.Slides[si];
@@ -528,7 +529,7 @@ public static class PptxPackageWriter
             foreach (var (_, fillBlipRelId, _) in fillBlipRelIds) usedRelIds.Add(fillBlipRelId);
             foreach (var (_, chartRelId, _) in chartRelIds)       usedRelIds.Add(chartRelId);
 
-            var captionTrackRels = WriteSlideMediaCaptionTracks(archive, slide, si + 1, usedRelIds, packageSnapshot);
+            var captionTrackRels = WriteSlideMediaCaptionTracks(archive, slide, si + 1, usedRelIds, packageSnapshot, writtenCaptionPaths);
             var captionTracksByShape = captionTrackRels
                 .GroupBy(track => track.shapeId)
                 .ToDictionary(
@@ -4058,11 +4059,11 @@ public static class PptxPackageWriter
         Slide slide,
         int slideIndex,
         HashSet<string> usedRelIds,
-        PptxPackageSnapshot? packageSnapshot)
+        PptxPackageSnapshot? packageSnapshot,
+        Dictionary<string, byte[]> writtenCaptionPaths)
     {
         var result = new List<(uint shapeId, MediaCaptionTrackRelationship relationship, string target, bool isExternal)>();
         var captionIndex = 1;
-        var writtenCaptionPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var shape in AllShapes(slide.Shapes))
         {
@@ -4095,9 +4096,13 @@ public static class PptxPackageWriter
                 var captionPath = TryGetPreservedCaptionPackagePath(track, packageSnapshot, bytes, writtenCaptionPaths, out var preservedPath)
                     ? preservedPath
                     : $"ppt/media/slide{slideIndex}_caption{captionIndex}.{extension}";
+                captionPath = EnsureUniqueCaptionPackagePath(captionPath, writtenCaptionPaths, bytes);
                 captionIndex++;
-                writtenCaptionPaths.Add(captionPath);
-                WriteRawEntry(archive, captionPath, bytes);
+                if (!writtenCaptionPaths.ContainsKey(captionPath))
+                {
+                    WriteRawEntry(archive, captionPath, bytes);
+                    writtenCaptionPaths.Add(captionPath, bytes);
+                }
 
                 var internalRelationship = new MediaCaptionTrackRelationship(
                     relId,
@@ -4141,13 +4146,12 @@ public static class PptxPackageWriter
         MediaCaptionTrackInfo track,
         PptxPackageSnapshot? packageSnapshot,
         byte[] bytes,
-        HashSet<string> writtenCaptionPaths,
+        IReadOnlyDictionary<string, byte[]> writtenCaptionPaths,
         out string captionPath)
     {
         captionPath = string.Empty;
         if (packageSnapshot is null
             || !TryNormalizeInternalCaptionPackagePath(track.Source, out var normalizedPath)
-            || writtenCaptionPaths.Contains(normalizedPath)
             || !packageSnapshot.TryGetEntry(normalizedPath, out var preservedBytes)
             || preservedBytes.Length == 0)
         {
@@ -4159,8 +4163,39 @@ public static class PptxPackageWriter
             return false;
         }
 
+        if (writtenCaptionPaths.TryGetValue(normalizedPath, out var writtenBytes) &&
+            !writtenBytes.SequenceEqual(preservedBytes))
+        {
+            return false;
+        }
+
         captionPath = normalizedPath;
         return true;
+    }
+
+    private static string EnsureUniqueCaptionPackagePath(
+        string captionPath,
+        IReadOnlyDictionary<string, byte[]> writtenCaptionPaths,
+        byte[] bytes)
+    {
+        if (!writtenCaptionPaths.TryGetValue(captionPath, out var writtenBytes) ||
+            writtenBytes.SequenceEqual(bytes))
+        {
+            return captionPath;
+        }
+
+        var extension = GetCaptionTrackExtension(captionPath);
+        var directory = GetDirectoryName(captionPath);
+        var fileName = Path.GetFileNameWithoutExtension(captionPath);
+        var suffix = 1;
+        string candidate;
+        do
+        {
+            candidate = $"{directory}/{fileName}_{suffix++}.{extension}";
+        }
+        while (writtenCaptionPaths.ContainsKey(candidate));
+
+        return candidate;
     }
 
     private static bool TryNormalizeInternalCaptionPackagePath(string? source, out string captionPath)

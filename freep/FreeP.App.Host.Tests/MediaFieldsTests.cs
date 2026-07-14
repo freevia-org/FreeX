@@ -728,6 +728,86 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_PowerPointNativeCaptionPackage_SharedSidecarAcrossSlides_WritesOnePackagePart()
+    {
+        var pres = new Presentation();
+        pres.Slides.Add(CreateCaptionedMediaSlide(1, "Shared caption video 1"));
+        pres.Slides.Add(CreateCaptionedMediaSlide(2, "Shared caption video 2"));
+
+        var slide1Track = new CaptionTrackFixture(
+            "rIdSlide1SharedCaption",
+            "ppt/media/shared-captions/native-en.vtt",
+            "en-US",
+            "Shared English captions",
+            "Shared native caption");
+        var slide2Track = slide1Track with { RelationshipId = "rIdSlide2SharedCaption" };
+
+        using var source = new MemoryStream();
+        PptxPackageWriter.Write(pres, source);
+        AddCaptionTracks(source, slideIndex: 1, [slide1Track]);
+        AddCaptionTracks(source, slideIndex: 2, [slide2Track]);
+
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        loaded.Slides.Should().HaveCount(2);
+        loaded.PackageSnapshot!.TryGetEntry(slide1Track.PackagePath, out var snapshotCaptionBytes).Should().BeTrue();
+        snapshotCaptionBytes.Should().Equal(CaptionPayload(slide1Track.Text));
+        loaded.Slides.Select(slide => slide.Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject)
+            .Select(track => (track.Source, track.Label, Text: Encoding.UTF8.GetString(track.Bytes)))
+            .Should().Equal(
+                (slide1Track.PackagePath, slide1Track.Label, CaptionText(slide1Track.Text)),
+                (slide1Track.PackagePath, slide1Track.Label, CaptionText(slide1Track.Text)));
+
+        loaded.Slides[1].Shapes.Add(new SlideShape
+        {
+            Id = 99,
+            Name = "Modeled edit",
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 3657600,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            Text = "edit"
+        });
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+
+        saved.Position = 0;
+        using (var zip = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            zip.Entries.Count(entry => string.Equals(entry.FullName, slide1Track.PackagePath, StringComparison.OrdinalIgnoreCase))
+                .Should().Be(1, "a shared native caption sidecar should be materialized once in the PPTX package");
+            ReadBytes(zip, slide1Track.PackagePath).Should().Equal(CaptionPayload(slide1Track.Text));
+            zip.GetEntry("ppt/media/slide1_caption1.vtt").Should().BeNull();
+            zip.GetEntry("ppt/media/slide2_caption1.vtt").Should().BeNull();
+
+            var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels").Root!.Elements(relNs + "Relationship")
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption")
+                .Should().Match<XElement>(e =>
+                    e.Attribute("Id")!.Value == "rIdSlide1SharedCaption" &&
+                    e.Attribute("Target")!.Value == "../media/shared-captions/native-en.vtt" &&
+                    e.Attribute("TargetMode") == null);
+            ReadXml(zip, "ppt/slides/_rels/slide2.xml.rels").Root!.Elements(relNs + "Relationship")
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption")
+                .Should().Match<XElement>(e =>
+                    e.Attribute("Id")!.Value == "rIdSlide2SharedCaption" &&
+                    e.Attribute("Target")!.Value == "../media/shared-captions/native-en.vtt" &&
+                    e.Attribute("TargetMode") == null);
+        }
+
+        saved.Position = 0;
+        var reopened = PptxPackageReader.Read(saved);
+        var transcript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(reopened);
+        transcript.Tracks.Select(track => (track.SlideIndex, track.Source, track.CueCount, CueText: track.Cues[0].Text))
+            .Should().Equal(
+                (0, slide1Track.PackagePath, 1, slide1Track.Text),
+                (1, slide1Track.PackagePath, 1, slide1Track.Text));
+        reopened.Slides[1].Shapes.Should().Contain(shape => shape.Name == "Modeled edit");
+    }
+
+    [Fact]
     public void Media_SlideCloner_ClonesMedia()
     {
         var shape = new SlideShape
@@ -1211,10 +1291,15 @@ public sealed class MediaFieldsTests
     }
 
     private static void AddCaptionTracks(MemoryStream package, IReadOnlyList<CaptionTrackFixture> tracks)
+        => AddCaptionTracks(package, slideIndex: 1, tracks);
+
+    private static void AddCaptionTracks(MemoryStream package, int slideIndex, IReadOnlyList<CaptionTrackFixture> tracks)
     {
         package.Position = 0;
         using var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true);
-        var rels = ReadXml(archive, "ppt/slides/_rels/slide1.xml.rels");
+        var slidePath = $"ppt/slides/slide{slideIndex}.xml";
+        var relsPath = $"ppt/slides/_rels/slide{slideIndex}.xml.rels";
+        var rels = ReadXml(archive, relsPath);
         var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
         foreach (var track in tracks)
         {
@@ -1224,9 +1309,9 @@ public sealed class MediaFieldsTests
                 new XAttribute("Type", "http://schemas.microsoft.com/office/2011/relationships/mediaCaption"),
                 new XAttribute("Target", CaptionRelationshipTarget(track.PackagePath))));
         }
-        WriteXml(archive, "ppt/slides/_rels/slide1.xml.rels", rels);
+        WriteXml(archive, relsPath, rels);
 
-        var slide = ReadXml(archive, "ppt/slides/slide1.xml");
+        var slide = ReadXml(archive, slidePath);
         var p = XNamespace.Get("http://schemas.openxmlformats.org/presentationml/2006/main");
         var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
         var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
@@ -1247,7 +1332,7 @@ public sealed class MediaFieldsTests
                 new XAttribute("lang", track.Language),
                 new XAttribute("label", track.Label)));
         }
-        WriteXml(archive, "ppt/slides/slide1.xml", slide);
+        WriteXml(archive, slidePath, slide);
 
         foreach (var track in tracks)
         {
@@ -1299,6 +1384,30 @@ public sealed class MediaFieldsTests
         var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
         using var writer = new StreamWriter(entry.Open());
         writer.Write(text);
+    }
+
+    private static Slide CreateCaptionedMediaSlide(uint shapeId, string shapeName)
+    {
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = shapeId,
+            Name        = shapeName,
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 },
+                ContentType = "video/mp4"
+            }
+        });
+
+        return slide;
     }
 
     private static string ReadText(ZipArchive archive, string path)
