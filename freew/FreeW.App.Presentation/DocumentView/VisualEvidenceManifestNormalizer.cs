@@ -3374,6 +3374,16 @@ public static class FreeWVisualEvidenceManifestNormalizer
             "kinds=" + FormatDrawingObjectKinds(objects)
         };
 
+        if (objects.GroupChildren.ChildKindSummaries.Count > 0)
+        {
+            parts.Add("grouped child kinds=" + FormatSummaries(objects.GroupChildren.ChildKindSummaries));
+        }
+
+        if (objects.GroupChildren.ChildVisualSignatures.Count > 0)
+        {
+            parts.Add("grouped child visual signatures=" + objects.GroupChildren.ChildVisualSignatures.Count.ToString(CultureInfo.InvariantCulture));
+        }
+
         if (chartSmartArt.ChartCount > 0 || chartSmartArt.SmartArtCount > 0)
         {
             parts.Add(
@@ -3756,6 +3766,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         blockers.AddRange(BuildBackstageRealCaptureBlockers(summary));
         blockers.AddRange(BuildNotePlacementWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildSectionGeometryWordBaselineBlockers(summary, baselineComparisons));
+        blockers.AddRange(BuildGroupedDrawingObjectWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildSmartArtPolygonWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildReviewMarkupWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildReviewCompareCombineWordBaselineBlockers(summary, baselineComparisons));
@@ -3876,6 +3887,183 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 semanticEvidence,
                 requiresWordBaseline: false));
         return blockers;
+    }
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildGroupedDrawingObjectWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        const string scenarioId = "drawing-objects-complex";
+        var rows = summary.Evidence
+            .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .Where(row => row.Trust.Passed)
+            .ToList();
+        if (rows.Count == 0)
+            return [];
+
+        var semanticEvidence = BuildGroupedDrawingObjectSemanticEvidence(rows);
+        if (semanticEvidence.Count == 0)
+        {
+            return
+            [
+                BuildGroupedDrawingObjectVisualBlocker(
+                    "semantic-grouped-drawing-objects-missing",
+                    "trusted grouped child kind, visual-signature, and rendered-effect metadata",
+                    "trusted drawing-objects-complex evidence did not record grouped child visual metadata; regenerate current-schema evidence or fix shared drawing-object planning before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false)
+            ];
+        }
+
+        var related = baselineComparisons
+            .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (related.Count == 0)
+        {
+            return
+            [
+                BuildGroupedDrawingObjectVisualBlocker(
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for grouped drawing/object fidelity",
+                    "grouped child visual signatures are present in trusted FreeW evidence; run a Word-baseline comparison for drawing-objects-complex to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        var statuses = related
+            .Select(comparison => comparison.Status)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var candidates = related
+            .SelectMany(comparison => comparison.CandidateBaselinePaths)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            var reasons = related
+                .Where(comparison => string.Equals(
+                    comparison.Status,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(FormatComparisonNotes)
+                .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var reason = reasons.Count == 0
+                ? "MS Word baseline PNG generation was unavailable for drawing-objects-complex"
+                : string.Join("; ", reasons);
+            return
+            [
+                BuildGroupedDrawingObjectVisualBlocker(
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for grouped drawing/object fidelity",
+                    reason,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return
+            [
+                BuildGroupedDrawingObjectVisualBlocker(
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for grouped drawing/object fidelity",
+                    "grouped child visual signatures are present in trusted FreeW evidence, but grouped drawing Word baseline PNGs are missing",
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        if (related.All(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return [];
+        }
+
+        return
+        [
+            BuildGroupedDrawingObjectVisualBlocker(
+                "needs-render-review",
+                "render-review resolution for failed grouped drawing Word PNG comparisons",
+                "grouped drawing Word baseline comparison did not fully pass; inspect grouped child rendering differences",
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false)
+        ];
+    }
+
+    private static IReadOnlyList<string> BuildGroupedDrawingObjectSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows)
+    {
+        return rows
+            .Select(row =>
+            {
+                var groupChildren = NormalizeGroupChildren(row.DrawingObjects.GroupChildren);
+                if (groupChildren.ChildCount <= 0 || groupChildren.ChildVisualSignatures.Count == 0)
+                    return null;
+
+                var effects = row.DrawingObjects.Effects;
+                return string.Concat(
+                    row.HostId,
+                    "/p",
+                    row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                    ": children=",
+                    groupChildren.ChildCount.ToString(CultureInfo.InvariantCulture),
+                    ", kinds=",
+                    FormatSummaries(groupChildren.ChildKindSummaries),
+                    ", visualSignatures=",
+                    groupChildren.ChildVisualSignatures.Count.ToString(CultureInfo.InvariantCulture),
+                    ", renderedEffects=",
+                    effects.RenderedGroupChildEffectObjectCount.ToString(CultureInfo.InvariantCulture),
+                    ":",
+                    FormatSummaries(effects.RenderedGroupChildEffectSummaries));
+            })
+            .Where(summary => !string.IsNullOrWhiteSpace(summary))
+            .Cast<string>()
+            .OrderBy(summary => summary, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildGroupedDrawingObjectVisualBlocker(
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline)
+    {
+        return new FreeWVisualRemainingEvidenceBlocker(
+            "drawing-objects-complex-word-baseline-fidelity",
+            "drawing-objects-complex",
+            "Grouped drawing/object visual fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
     }
 
     private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildHeaderFooterImageWordBaselineBlockers(

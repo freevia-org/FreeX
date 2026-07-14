@@ -35,6 +35,9 @@
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/drawing-object-proof -ScenarioSet DrawingObjectVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/grouped-drawing-object-proof -ScenarioSet GroupedDrawingObjectVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/shape-object-proof -ScenarioSet ShapeObjectVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
@@ -201,6 +204,9 @@ $namedScenarioSets = @{
         'chart-smartart-complex',
         'wordart-watermark-stress',
         'wordart-picture-watermark-layout'
+    )
+    GroupedDrawingObjectVisualProof = @(
+        'drawing-objects-complex'
     )
     ShapeObjectVisualProof = @(
         'drawing-objects-complex',
@@ -1727,6 +1733,225 @@ function Assert-DrawingObjectVisualProofReadiness {
     }
     else {
         Write-Host "Drawing object Word-baseline policy rows: no Word baseline mode requested"
+    }
+}
+
+function Assert-GroupedDrawingObjectVisualProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $scenarioId = 'drawing-objects-complex'
+    if (-not ($ScenarioIds -contains $scenarioId)) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Grouped drawing object visual proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 28) {
+        throw "Grouped drawing object visual proof readiness requires FreeW visual evidence summary schema v28 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $failures = New-Object System.Collections.Generic.List[string]
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $forbiddenScenarioIds = @(
+        'chart-smartart-complex',
+        'wordart-watermark-stress',
+        'wordart-picture-watermark-layout',
+        'table-layout-complex',
+        'table-pagination-repeat-header',
+        'table-page-composition-stress'
+    )
+    $readinessRows = @($summary.drawingObjectProofReadiness | Where-Object { $_.scenarioId -eq $scenarioId })
+    $baselineComparisons = @($summary.baselineComparisons)
+    $remainingBlockers = @($summary.remainingEvidenceBlockers)
+    $verifiedSemanticRows = 0
+    $verifiedBaselineRows = 0
+
+    if ($ScenarioIds.Count -eq 1) {
+        $unexpectedEvidence = @($summary.evidence | Where-Object { $forbiddenScenarioIds -contains $_.scenarioId })
+        if ($unexpectedEvidence.Count -gt 0) {
+            $failures.Add("Grouped drawing object proof included unrelated evidence scenario(s): $((@($unexpectedEvidence | ForEach-Object { $_.scenarioId }) | Select-Object -Unique) -join ', ')")
+        }
+
+        $unexpectedReadiness = @($summary.drawingObjectProofReadiness | Where-Object {
+            $_.scenarioId -ne $scenarioId
+        })
+        if ($unexpectedReadiness.Count -gt 0) {
+            $failures.Add("Grouped drawing object proof included unrelated drawing readiness row(s): $((@($unexpectedReadiness | ForEach-Object { $_.scenarioId }) | Select-Object -Unique) -join ', ')")
+        }
+    }
+
+    if ($readinessRows.Count -eq 0) {
+        $failures.Add("${scenarioId}: missing grouped drawing/object readiness row")
+    }
+
+    foreach ($readinessRow in $readinessRows) {
+        if ($readinessRow.status -ne 'paired-renderer-proof-ready' -or $readinessRow.trust.passed -ne $true) {
+            $notes = @($readinessRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = [string]$readinessRow.baselineReadiness
+            }
+            $failures.Add("${scenarioId}/p$($readinessRow.pageNumber): grouped drawing readiness failed ($notes)")
+            continue
+        }
+
+        $semanticEvidence = [string]$readinessRow.semanticEvidence
+        if ($semanticEvidence -notmatch '5 grouped child object\(s\)' -or
+            $semanticEvidence -notmatch 'grouped child visual signatures=5' -or
+            $semanticEvidence -notmatch '2 rendered grouped child effect object\(s\)') {
+            $failures.Add("${scenarioId}/p$($readinessRow.pageNumber): missing grouped child semantic summary in readiness row")
+        }
+
+        if ($readinessRow.wordBaselineStatus -notmatch 'word-baseline-unavailable|passed|not-run') {
+            $failures.Add("${scenarioId}/p$($readinessRow.pageNumber): unexpected Word-baseline status '$($readinessRow.wordBaselineStatus)'")
+        }
+    }
+
+    foreach ($hostId in $requiredHosts) {
+        $scenarioRows = @($summary.scenarios | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId
+        })
+        if ($scenarioRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing normalized scenario row")
+            continue
+        }
+
+        if ($scenarioRows[0].trust.passed -ne $true) {
+            $notes = @($scenarioRows[0].trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = 'no notes'
+            }
+            $failures.Add("${hostId}/${scenarioId}: scenario trust failed ($notes)")
+            continue
+        }
+
+        $evidenceRows = @($summary.evidence | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.trust.passed -eq $true
+        })
+        if ($evidenceRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing trusted grouped drawing evidence row")
+            continue
+        }
+
+        foreach ($evidenceRow in $evidenceRows) {
+            $groupChildren = $evidenceRow.drawingObjects.groupChildren
+            $effects = $evidenceRow.drawingObjects.effects
+            $kindSummaries = @($groupChildren.childKindSummaries)
+            $visualSignatures = @($groupChildren.childVisualSignatures)
+            $renderedEffectSummaries = @($effects.renderedGroupChildEffectSummaries)
+
+            if ([int]$groupChildren.childCount -lt 5 -or
+                [int]$groupChildren.imageChildCount -lt 1 -or
+                [int]$groupChildren.shapeChildCount -lt 1 -or
+                [int]$groupChildren.chartChildCount -lt 1 -or
+                [int]$groupChildren.smartArtChildCount -lt 1 -or
+                [int]$groupChildren.wordArtChildCount -lt 1 -or
+                $groupChildren.hasMixedTypedChildren -ne $true) {
+                $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing mixed grouped child counts")
+                continue
+            }
+
+            foreach ($requiredKind in @(
+                'Group0Child0:Image',
+                'Group0Child1:Shape',
+                'Group0Child2:Chart',
+                'Group0Child3:WordArt',
+                'Group0Child4:SmartArt'
+            )) {
+                if ($kindSummaries -notcontains $requiredKind) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing grouped child kind '$requiredKind'")
+                }
+            }
+
+            foreach ($requiredSignaturePrefix in @(
+                'Group0Child0:Image:',
+                'Group0Child1:Shape:',
+                'Group0Child2:Chart:',
+                'Group0Child3:WordArt:',
+                'Group0Child4:SmartArt:'
+            )) {
+                if (@($visualSignatures | Where-Object { ([string]$_).StartsWith($requiredSignaturePrefix, [StringComparison]::Ordinal) }).Count -eq 0) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing grouped child visual signature '$requiredSignaturePrefix'")
+                }
+            }
+
+            if ([int]$effects.renderedGroupChildEffectObjectCount -lt 2 -or
+                [int]$effects.renderedGroupChildShapeEffectObjectCount -lt 1 -or
+                [int]$effects.renderedGroupChildWordArtEffectObjectCount -lt 1 -or
+                $renderedEffectSummaries -notcontains 'GroupChild1:Shape:glow' -or
+                $renderedEffectSummaries -notcontains 'GroupChild3:WordArt:glow') {
+                $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing rendered grouped child effect evidence")
+                continue
+            }
+
+            $verifiedSemanticRows++
+        }
+
+        $comparisonRows = @($baselineComparisons | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.baselineScenarioId -eq $scenarioId
+        })
+        if ($baselineComparisons.Count -gt 0 -and $comparisonRows.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+            continue
+        }
+
+        foreach ($comparison in $comparisonRows) {
+            if ($comparison.trust.passed -ne $true) {
+                $notes = @($comparison.trust.failures) -join '; '
+                if ([string]::IsNullOrWhiteSpace($notes)) {
+                    $notes = [string]$comparison.skipReason
+                }
+                $failures.Add("$hostId/$scenarioId/$($comparison.outputName): baseline policy trust failed ($notes)")
+                continue
+            }
+
+            $verifiedBaselineRows++
+        }
+    }
+
+    $unavailableComparisons = @($baselineComparisons | Where-Object {
+        $_.scenarioId -eq $scenarioId -and
+        $_.status -eq 'word-baseline-unavailable'
+    })
+    if ($unavailableComparisons.Count -gt 0) {
+        $blocker = @($remainingBlockers | Where-Object {
+            $_.blockerId -eq 'drawing-objects-complex-word-baseline-fidelity' -and
+            $_.scenarioId -eq $scenarioId -and
+            $_.status -eq 'word-baseline-unavailable' -and
+            $_.requiresWordBaseline -eq $true
+        }) | Select-Object -First 1
+        if (-not $blocker) {
+            $failures.Add("${scenarioId}: missing honest word-baseline-unavailable grouped drawing blocker")
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Grouped drawing object visual proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Grouped drawing object visual proof readiness: readiness rows=$($readinessRows.Count)"
+    Write-Host "Grouped drawing object semantic rows: verified rows=$verifiedSemanticRows"
+    if ($baselineComparisons.Count -gt 0) {
+        Write-Host "Grouped drawing object Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    }
+    else {
+        Write-Host "Grouped drawing object Word-baseline policy rows: no Word baseline mode requested"
+    }
+    if ($unavailableComparisons.Count -gt 0) {
+        Write-Host "Grouped drawing object Word-baseline unavailable blocker: verified"
     }
 }
 
@@ -3393,6 +3618,7 @@ Assert-HeaderFooterImageVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TablePaginationPageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds
+Assert-GroupedDrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-SmartArtPolygonVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-ChartVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-WordArtWatermarkVisualProofReadiness $summaryJson $effectiveScenarioIds
