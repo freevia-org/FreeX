@@ -509,6 +509,21 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Surface and 3-D surface charts now render through the shared surface-cell primitive plan on both WPF and Avalonia. PowerPoint-authoritative surface chart visual baselines, true contour/3-D surface geometry, wireframe styling, and broader real-deck corpus coverage remain deferred."),
         new(
+            EvidenceId: "freep.chart.powerpoint-baseline-readiness",
+            Area: "Chart PowerPoint baseline capture readiness",
+            Status: "shared-baseline-readiness-evidence",
+            HostCoverage: "WPF/Avalonia consume shared chart-surface capture requests from ChartRenderPlanner while PowerPoint rows are explicit COM-required baseline contracts",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-powerpoint-baseline-readiness-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/ChartVisualBaselineReadinessPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartBaselineCorpusTests.cs"
+            ],
+            RemainingWork: "The chart baseline-depth corpus now projects stable PowerPoint/WPF/Avalonia capture requests for stock high-low/open-close ticks, 3-D surface facets/wireframe/contours, smooth scatter paths, and 100% stacked normalized extents. Real Microsoft PowerPoint PNG captures, pixel-diff thresholds, and broader chart-type authoritative baselines remain deferred to a COM-capable baseline host."),
+        new(
             EvidenceId: "freep.omml.transparent-phantom-spacing",
             Area: "OMML transparent phantom spacing classes",
             Status: "shared-layout-evidence",

@@ -80,6 +80,73 @@ public sealed class ChartBaselineCorpusTests
             .BeApproximately(220, 0.0001);
     }
 
+    [Fact]
+    public void ChartBaselineDepthCorpusDeck_ProjectsPowerPointWpfAvaloniaBaselineReadiness()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var charts = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .ToArray();
+
+        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+            charts,
+            slideIndex: 0,
+            scenarioId: "Chart Baseline Depth");
+
+        readiness.ScenarioId.Should().Be("chart-baseline-depth");
+        readiness.SlideIndex.Should().Be(0);
+        readiness.ChartCount.Should().Be(4);
+        readiness.CaptureRequests.Should().HaveCount(12);
+        readiness.PowerPointRequestCount.Should().Be(4);
+        readiness.SharedHostRequestCount.Should().Be(8);
+        readiness.IsPowerPointAuthoritativeReady.Should().BeTrue();
+        readiness.CaptureRequests.Select(request => request.Host)
+            .Should()
+            .ContainInOrder(
+                ChartVisualBaselineCaptureHost.PowerPoint,
+                ChartVisualBaselineCaptureHost.Wpf,
+                ChartVisualBaselineCaptureHost.Avalonia);
+
+        var stockPowerPoint = readiness.CaptureRequests.First(request =>
+            request.Host == ChartVisualBaselineCaptureHost.PowerPoint
+            && request.ChartType == ChartType.Stock);
+        stockPowerPoint.CaptureId.Should().Be("freep.chart-baseline-depth.slide-1.chart-1.stock.powerpoint");
+        stockPowerPoint.SurfaceId.Should().Be("freep.chart-baseline-depth.slide-1.chart-1.stock");
+        stockPowerPoint.RequiresPowerPointCom.Should().BeTrue();
+        stockPowerPoint.EvidenceSummary.Should()
+            .Contain("stock high-low/open-close tick plan")
+            .And.Contain("4 series; 3 categories");
+
+        var surfaceAvalonia = readiness.CaptureRequests.Single(request =>
+            request.Host == ChartVisualBaselineCaptureHost.Avalonia
+            && request.ChartType == ChartType.Surface3D);
+        surfaceAvalonia.CaptureId.Should().Be("freep.chart-baseline-depth.slide-1.chart-2.surface3d.avalonia");
+        surfaceAvalonia.RequiresPowerPointCom.Should().BeFalse();
+        surfaceAvalonia.EvidenceSummary.Should().Contain("3-D surface projected facet");
+
+        readiness.CaptureRequests.Single(request =>
+                request.Host == ChartVisualBaselineCaptureHost.Wpf
+                && request.ChartType == ChartType.Scatter)
+            .EvidenceSummary
+            .Should()
+            .Contain("scatter smoothed Bezier path plan");
+
+        readiness.CaptureRequests.Single(request =>
+                request.Host == ChartVisualBaselineCaptureHost.PowerPoint
+                && request.ChartType == ChartType.ColumnStacked100)
+            .EvidenceSummary
+            .Should()
+            .Contain("100% stacked normalized axis");
+
+        readiness.EvidenceLines.Should().Equal(
+            "Scenario chart-baseline-depth: slide 1; charts 4",
+            "Capture requests: 12; PowerPoint 4; WPF 4; Avalonia 4",
+            "PowerPoint requests are readiness contracts and require desktop PowerPoint COM on the baseline machine");
+    }
+
     private static string FindCorpusDirectory()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
