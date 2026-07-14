@@ -1472,6 +1472,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesRadialVennAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/radialVenn",
+            nodes: [("id1", "Customer"), ("id2", "Product"), ("id3", "Market"), ("id4", "Proof")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship,
+            "radialVenn is tracked as a relationship-family SmartArt layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "radialVenn now has bounded shared radial overlapping-ellipse geometry");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Customer", "Product", "Market", "Proof");
+    }
+
+    [Fact]
     public void Reader_ParsesTargetListAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2221,6 +2240,36 @@ public sealed class SmartArtTests : IDisposable
                 liveShapes[i - 1].BoundsDip.X + liveShapes[i - 1].BoundsDip.Width,
                 "WPF and Avalonia hosts consume shared overlapping Venn ellipse DrawOps");
         }
+    }
+
+    [Fact]
+    public void Compositor_RadialVennSmartArt_RendersSharedLiveEllipses()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/radialVenn",
+            nodes: [("n1", "Customer"), ("n2", "Product"), ("n3", "Market"), ("n4", "Proof")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(4, "four radial-Venn ellipses should render from shared live data");
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("radial-Venn live geometry emits no connectors");
+        liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(["Customer", "Product", "Market", "Proof"]);
+        liveShapes.Select(op => op.BoundsDip.X).Distinct().Should().HaveCountGreaterThan(1,
+            "WPF and Avalonia hosts consume shared radial Venn X placement");
+        liveShapes.Select(op => op.BoundsDip.Y).Distinct().Should().HaveCountGreaterThan(1,
+            "WPF and Avalonia hosts consume shared radial Venn Y placement");
     }
 
     [Fact]

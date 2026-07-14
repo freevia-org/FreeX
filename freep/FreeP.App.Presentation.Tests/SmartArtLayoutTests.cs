@@ -990,6 +990,62 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void RadialVenn_ReturnsRadialOverlappingTranslucentEllipsesWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Customer", "Product", "Market", "Proof");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialVenn";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("radialVenn has bounded shared relationship-family geometry");
+        shapes!.Should().HaveCount(4, "one live ellipse should be emitted per radial Venn node");
+        shapes.Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Ellipse,
+            "radialVenn emits overlapping ellipse shapes without connector ops");
+
+        var ellipses = shapes.ToList();
+        ellipses.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Customer", "Product", "Market", "Proof");
+
+        var centerXs = ellipses.Select(s => s.OffsetXEmu + s.ExtentCxEmu / 2).ToList();
+        var centerYs = ellipses.Select(s => s.OffsetYEmu + s.ExtentCyEmu / 2).ToList();
+        centerXs.Distinct().Should().HaveCountGreaterThan(1,
+            "radialVenn should place nodes around the center, not in a single horizontal row");
+        centerYs.Distinct().Should().HaveCountGreaterThan(1,
+            "radialVenn should place nodes around the center, not in a single vertical stack");
+
+        long averageCenterX = (long)centerXs.Average();
+        long averageCenterY = (long)centerYs.Average();
+        foreach (var ellipse in ellipses)
+        {
+            ((ShapeFill.Solid)ellipse.Fill!).Color.Alpha.Should().BeLessThan(255,
+                "radial Venn fills must remain translucent so intersections are visible in shared renderers");
+            ellipse.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            ellipse.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (ellipse.OffsetXEmu + ellipse.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (ellipse.OffsetYEmu + ellipse.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+            Math.Abs(ellipse.OffsetXEmu + ellipse.ExtentCxEmu / 2 - averageCenterX)
+                .Should().BeLessThan(ellipse.ExtentCxEmu,
+                    "radial Venn ellipses should overlap near a shared center");
+            Math.Abs(ellipse.OffsetYEmu + ellipse.ExtentCyEmu / 2 - averageCenterY)
+                .Should().BeLessThan(ellipse.ExtentCyEmu,
+                    "radial Venn ellipses should overlap near a shared center");
+        }
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(6)]
+    public void RadialVenn_OutsideBoundedNodeCount_ReturnsNullForCachedFallback(int nodeCount)
+    {
+        var data = MakeData(SmartArtFamily.Relationship, Enumerable.Range(1, nodeCount).Select(i => $"N{i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialVenn";
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().BeNull("the bounded radialVenn planner owns only readable three-to-five node relationship diagrams");
+    }
+
+    [Fact]
     public void TargetList_ReturnsConcentricEllipsesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.Relationship, "Market", "Segment", "Account", "Champion");
@@ -2155,6 +2211,64 @@ public sealed class SmartArtLayoutTests
                 shapeOps[i - 1].BoundsDip.X + shapeOps[i - 1].BoundsDip.Width,
                 "WPF and Avalonia hosts consume overlapping shared Venn ellipse DrawOps");
         }
+    }
+
+    [Fact]
+    public void Compositor_RadialVenn_UsesSharedLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Customer", "Product", "Market", "Proof");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/radialVenn";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 22,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached radial Venn fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 75,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(4, "radialVenn should render four live ellipses and no connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain(["Customer", "Product", "Market", "Proof"]);
+        renderedText.Should().NotContain("Cached radial Venn fallback");
+        shapeOps.Select(op => op.BoundsDip.X).Distinct().Should().HaveCountGreaterThan(1,
+            "hosts consume shared radial placement instead of a single stacked fallback shape");
+        shapeOps.Select(op => op.BoundsDip.Y).Distinct().Should().HaveCountGreaterThan(1,
+            "hosts consume shared radial placement instead of a single row fallback shape");
     }
 
     [Fact]

@@ -4407,6 +4407,40 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_radial_venn_shape_composes_shared_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Relationship,
+                "urn:microsoft.com/office/officeart/2005/8/layout/radialVenn",
+                ["Customer", "Product", "Market", "Proof"]);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 580 and < 600)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(4, "Avalonia host consumes the shared four-circle radial Venn DrawOps");
+        liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(["Customer", "Product", "Market", "Proof"]);
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("Avalonia host should consume radial Venn ellipse ops without connectors");
+        liveShapes.Select(op => op.BoundsDip.X).Distinct().Should().HaveCountGreaterThan(1,
+            "Avalonia host should consume shared radial Venn X placement");
+        liveShapes.Select(op => op.BoundsDip.Y).Distinct().Should().HaveCountGreaterThan(1,
+            "Avalonia host should consume shared radial Venn Y placement");
+    }
+
+    [Fact]
     public async Task Review_alt_text_apply_routes_through_shared_mutation_plan()
     {
         string? altTextTitle = null;
