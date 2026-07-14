@@ -932,6 +932,22 @@ internal static class FreePCommandInventory
             RemainingWork: "basicMatrix and matrix1 now use the bounded shared matrix-family live-layout path for up to four parsed nodes as renderer-neutral quadrant rectangles. Unsupported matrix siblings and matrix diagrams with more than four parsed nodes remain on cached drawing fallback. PowerPoint-authoritative visual baselines and SmartArt authoring/editing remain deferred.")
         ,
         new(
+            EvidenceId: "freep.smartart.basic-venn",
+            Area: "SmartArt basic Venn live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared translucent ellipse shape ops emitted by the SmartArt relationship-family layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-basic-venn-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "basicVenn now uses the bounded shared relationship-family live-layout path for two to four parsed nodes as overlapping translucent ellipse shapes. Unsupported relationship/Venn siblings and basicVenn diagrams with more than four parsed nodes remain on cached drawing fallback. Exact PowerPoint intersection blending, effects, text offsets, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+        ,
+        new(
             EvidenceId: "freep.smartart.vertical-bullet-list",
             Area: "SmartArt vertical bullet list live layout",
             Status: "shared-render-planner-evidence",

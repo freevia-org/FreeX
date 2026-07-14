@@ -872,6 +872,53 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BasicVenn_ReturnsOverlappingTranslucentEllipsesWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Audience", "Need", "Offer");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicVenn";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("basicVenn has bounded shared relationship-family geometry");
+        shapes!.Should().HaveCount(3, "one live ellipse should be emitted per Venn node");
+        shapes.Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Ellipse,
+            "basicVenn emits overlapping ellipse shapes without connector ops");
+
+        var ellipses = shapes.ToList();
+        ellipses.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Audience", "Need", "Offer");
+
+        for (int i = 1; i < ellipses.Count; i++)
+        {
+            ellipses[i].OffsetXEmu.Should().BeGreaterThan(ellipses[i - 1].OffsetXEmu);
+            ellipses[i].OffsetXEmu.Should().BeLessThan(
+                ellipses[i - 1].OffsetXEmu + ellipses[i - 1].ExtentCxEmu,
+                "adjacent Venn circles should overlap horizontally");
+        }
+
+        foreach (var ellipse in ellipses)
+        {
+            ((ShapeFill.Solid)ellipse.Fill!).Color.Alpha.Should().BeLessThan(255,
+                "Venn fills must remain translucent so intersections are visible in shared renderers");
+            ellipse.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            ellipse.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (ellipse.OffsetXEmu + ellipse.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (ellipse.OffsetYEmu + ellipse.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
+    }
+
+    [Fact]
+    public void BasicVenn_MoreThanFourNodes_ReturnsNullForCachedFallback()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C", "D", "E");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicVenn";
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().BeNull("the bounded basicVenn planner owns only readable two-to-four node relationship diagrams");
+    }
+
+    [Fact]
     public void UnsupportedKnownProcessSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
@@ -917,6 +964,18 @@ public sealed class SmartArtLayoutTests
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
 
         result.Should().BeNull("matrix-family layouts outside the bounded live planner should use cached drawing");
+    }
+
+    [Fact]
+    public void UnsupportedRelationshipSibling_ReturnsNull()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn";
+        data.IsLiveLayoutSupported = false;
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().BeNull("relationship-family layouts outside the bounded live planner should use cached drawing");
     }
 
     // BI2: when nodes parse to zero, Layout returns null so compositor uses cached-drawing fallback.
@@ -1787,6 +1846,67 @@ public sealed class SmartArtLayoutTests
             .Should().BeInAscendingOrder("hosts consume shared top-to-bottom pyramid DrawOp geometry");
         shapeOps.Select(op => op.BoundsDip.Width)
             .Should().BeInAscendingOrder("hosts consume shared widening pyramid segment geometry");
+    }
+
+    [Fact]
+    public void Compositor_BasicVenn_UsesSharedLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Audience", "Need", "Offer");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicVenn";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 21,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached Venn fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 74,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(3, "basicVenn should render three live ellipses and no connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain(["Audience", "Need", "Offer"]);
+        renderedText.Should().NotContain("Cached Venn fallback");
+        for (int i = 1; i < shapeOps.Count; i++)
+        {
+            shapeOps[i].BoundsDip.X.Should().BeGreaterThan(shapeOps[i - 1].BoundsDip.X);
+            shapeOps[i].BoundsDip.X.Should().BeLessThan(
+                shapeOps[i - 1].BoundsDip.X + shapeOps[i - 1].BoundsDip.Width,
+                "WPF and Avalonia hosts consume overlapping shared Venn ellipse DrawOps");
+        }
     }
 
     [Fact]

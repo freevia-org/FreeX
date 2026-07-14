@@ -13,7 +13,8 @@ public enum SmartArtFamily
     List      = 2,   // vertical (or horizontal) stack of boxes
     Cycle     = 3,   // boxes on a circle with arrow connectors
     Hierarchy = 4,   // tree (root top, children below, connector lines)
-    Matrix    = 5    // two-by-two quadrant grid
+    Matrix    = 5,   // two-by-two quadrant grid
+    Relationship = 6 // overlapping or relationship diagrams such as Venn
 }
 
 /// <summary>
