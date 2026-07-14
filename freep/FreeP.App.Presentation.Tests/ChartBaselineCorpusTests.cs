@@ -150,9 +150,17 @@ public sealed class ChartBaselineCorpusTests
     [Fact]
     public void RadarBaselineReadiness_ProjectsStyleSpecificSharedHostDecisionsWithoutPowerPointCom()
     {
+        var standardRadar = BuildRadarChart(RadarStyle.Standard);
         var filledRadar = BuildRadarChart(RadarStyle.Filled);
         var markerRadar = BuildRadarChart(RadarStyle.Marker);
-        var charts = new[] { filledRadar, markerRadar };
+        var charts = new[] { standardRadar, filledRadar, markerRadar };
+
+        var standardPlan = ChartRenderPlanner.BuildRadarPrimitivePlan(
+            standardRadar,
+            new ChartPlanRect(0, 0, 240, 180));
+        standardPlan.Series[0].Path.Fill.Should().BeNull();
+        standardPlan.Series[0].Markers.Should().BeEmpty();
+        standardPlan.Series[0].Path.IsClosed.Should().BeTrue();
 
         var filledPlan = ChartRenderPlanner.BuildRadarPrimitivePlan(
             filledRadar,
@@ -172,25 +180,31 @@ public sealed class ChartBaselineCorpusTests
             slideIndex: 2,
             scenarioId: "Radar Type Decisions");
 
-        readiness.ChartCount.Should().Be(2);
-        readiness.CaptureRequests.Should().HaveCount(6);
-        readiness.PowerPointRequestCount.Should().Be(2);
-        readiness.SharedHostRequestCount.Should().Be(4);
+        readiness.ChartCount.Should().Be(3);
+        readiness.CaptureRequests.Should().HaveCount(9);
+        readiness.PowerPointRequestCount.Should().Be(3);
+        readiness.SharedHostRequestCount.Should().Be(6);
         readiness.CaptureRequests
             .Where(request => request.Host is ChartVisualBaselineCaptureHost.Wpf or ChartVisualBaselineCaptureHost.Avalonia)
             .Should()
             .OnlyContain(request => !request.RequiresPowerPointCom);
 
+        var standardWpf = readiness.CaptureRequests.Single(request =>
+            request.Host == ChartVisualBaselineCaptureHost.Wpf
+            && request.ChartIndex == 0);
+        standardWpf.CaptureId.Should().Be("freep.radar-type-decisions.slide-3.chart-1.radar.wpf");
+        standardWpf.EvidenceSummary.Should().Contain("standard radar spoke-ring and blank-point plan");
+
         var filledAvalonia = readiness.CaptureRequests.Single(request =>
             request.Host == ChartVisualBaselineCaptureHost.Avalonia
-            && request.ChartIndex == 0);
-        filledAvalonia.CaptureId.Should().Be("freep.radar-type-decisions.slide-3.chart-1.radar.avalonia");
+            && request.ChartIndex == 1);
+        filledAvalonia.CaptureId.Should().Be("freep.radar-type-decisions.slide-3.chart-2.radar.avalonia");
         filledAvalonia.EvidenceSummary.Should().Contain("filled radar area opacity");
 
         var markerWpf = readiness.CaptureRequests.Single(request =>
             request.Host == ChartVisualBaselineCaptureHost.Wpf
-            && request.ChartIndex == 1);
-        markerWpf.CaptureId.Should().Be("freep.radar-type-decisions.slide-3.chart-2.radar.wpf");
+            && request.ChartIndex == 2);
+        markerWpf.CaptureId.Should().Be("freep.radar-type-decisions.slide-3.chart-3.radar.wpf");
         markerWpf.EvidenceSummary.Should().Contain("radar marker");
 
         readiness.CaptureRequests.Single(request =>

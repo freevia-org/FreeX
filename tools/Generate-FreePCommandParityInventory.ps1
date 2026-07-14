@@ -624,6 +624,28 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Surface and 3-D surface charts now render through the shared surface-cell primitive plan on both WPF and Avalonia. PowerPoint-authoritative surface chart visual baselines, true contour/3-D surface geometry, wireframe styling, and broader real-deck corpus coverage remain deferred."),
         new(
+            EvidenceId: "freep.chart.radar-style-render-planning",
+            Area: "Chart radar standard, marker, and filled style rendering",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume shared ChartRadarPrimitivePlan paths, fills, spokes, and markers with no renderer-local radar style policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-radar-style-render-planning-2026-07-14.md",
+                "docs/parity/freep-chart-powerpoint-baseline-readiness-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
+                "freep/FreeP.App.Rendering.Wpf/SlideCanvas.cs",
+                "freep/FreeP.App.Rendering.Avalonia/SlideCanvas.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartBaselineCorpusTests.cs",
+                "freep/FreeP.App.Presentation.Tests/RendererNeutralDedupPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs"
+            ],
+            RemainingWork: "Standard, marker, and filled radar styles now have explicit no-COM shared-planner evidence plus paired WPF/Avalonia capture-readiness rows. PowerPoint-authoritative radar PNG captures, pixel-diff thresholds, broader real-deck radar corpus coverage, exact axis/ring labeling nuance, and additional radar subtype visual comparisons remain deferred to a COM-capable baseline host."),
+        new(
             EvidenceId: "freep.chart.powerpoint-baseline-readiness",
             Area: "Chart PowerPoint baseline capture readiness",
             Status: "shared-baseline-readiness-evidence",

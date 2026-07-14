@@ -906,6 +906,43 @@ public sealed class SlideCanvasTests
         act.Should().NotThrow("WPF should consume smoothed scatter path primitives");
     }
 
+    [StaFact]
+    public void SlideCanvas_RadarChart_RendersWithoutThrow()
+    {
+        var series = new ChartSeries { Name = "Coverage" };
+        series.Values.AddRange(new double?[] { 4, 6, 3, 5 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Radar,
+            RadarStyle = RadarStyle.Filled
+        };
+        chart.Categories.AddRange(new[] { "North", "East", "South", "West" });
+        chart.Series.Add(series);
+
+        var p = Presentation.CreateEmpty();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 5486400,
+            ExtentCyEmu = 3657600,
+            Chart = chart,
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+        canvas.Measure(new Size(960, 540));
+        canvas.Arrange(new Rect(0, 0, 960, 540));
+        var rtb = new RenderTargetBitmap(960, 540, 96, 96, PixelFormats.Pbgra32);
+
+        var act = () => rtb.Render(canvas);
+
+        act.Should().NotThrow("WPF should consume shared radar primitive plans");
+    }
+
     [Fact]
     public void SlideCanvas_LineSeriesRenderer_ConsumesSharedPathPrimitive()
     {

@@ -54,6 +54,20 @@ public sealed class SlideCanvasAvaloniaTests
 
     private static ChartShape MakeStockOrSurfaceRenderChart(ChartType chartType)
     {
+        if (chartType == ChartType.Radar)
+        {
+            var radar = new ChartShape
+            {
+                ChartType = ChartType.Radar,
+                RadarStyle = RadarStyle.Filled
+            };
+            radar.Categories.AddRange(new[] { "North", "East", "South", "West" });
+            var series = new ChartSeries { Name = "Coverage" };
+            series.Values.AddRange(new double?[] { 4, 6, 3, 5 });
+            radar.Series.Add(series);
+            return radar;
+        }
+
         if (chartType == ChartType.Stock)
         {
             var stock = new ChartShape { ChartType = ChartType.Stock };
@@ -1917,7 +1931,8 @@ public sealed class SlideCanvasAvaloniaTests
     [InlineData(ChartType.Stock)]
     [InlineData(ChartType.Surface)]
     [InlineData(ChartType.Surface3D)]
-    public async Task StockAndSurfaceCharts_RenderThroughSpecializedPrimitivePlans_DoesNotThrow(ChartType chartType)
+    [InlineData(ChartType.Radar)]
+    public async Task StockSurfaceAndRadarCharts_RenderThroughSpecializedPrimitivePlans_DoesNotThrow(ChartType chartType)
     {
         Exception? thrown = null;
         await Run(() =>
