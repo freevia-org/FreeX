@@ -23,6 +23,12 @@ public sealed class SlideCanvasMathBaselineTests
         return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
     }
 
+    private static MathNode ParseOmmlParagraph(string oMathParaInner)
+    {
+        var xml = $"<m:oMathPara xmlns:m=\"{M}\">{oMathParaInner}</m:oMathPara>";
+        return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
+    }
+
     // ── Pure baseline arithmetic (HB4) ──────────────────────────────────────
 
     [Fact]
@@ -1120,6 +1126,40 @@ public sealed class SlideCanvasMathBaselineTests
             Runs = new[]
             {
                 new ResolvedRun { Text = "E = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
+    public void RenderParaWithMath_OMathParaJustification_UsesSharedAlignedParagraphPlan_DoesNotThrow()
+    {
+        var mathNode = ParseOmmlParagraph(
+            "<m:oMathParaPr><m:jc m:val=\"right\"/></m:oMathParaPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+        var natural = MathLayoutEngine.Layout(((MathNode.MathParagraph)mathNode).Content, "Cambria Math", 18.0);
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0, paragraphWidthDip: 180);
+        var glyph = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        glyph.X.Should().BeApproximately(10 + 180 - natural.Metrics.Width, 0.01,
+            "m:oMathParaPr/m:jc alignment must shift shared draw-plan coordinates before WPF draws");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "P = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
                 new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
             }
         };

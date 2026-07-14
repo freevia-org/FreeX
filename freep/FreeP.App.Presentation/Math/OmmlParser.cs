@@ -35,12 +35,14 @@ public static class OmmlParser
         try
         {
             var root = XElement.Parse(rawXml);
-            // Locate the m:oMath element regardless of the wrapper form.
-            var oMath = LocateOmath(root);
-            if (oMath is null)
+            // Locate the math root regardless of the wrapper form.
+            var mathRoot = LocateMathRoot(root);
+            if (mathRoot is null)
                 return new MathNode.Unknown(fallbackText);
 
-            return ParseRow(oMath);
+            return mathRoot.Name == M + "oMathPara"
+                ? ParseMathParagraph(mathRoot)
+                : ParseRow(mathRoot);
         }
         catch
         {
@@ -50,8 +52,10 @@ public static class OmmlParser
 
     // ── Locate m:oMath ────────────────────────────────────────────────────
 
-    private static XElement? LocateOmath(XElement root)
+    private static XElement? LocateMathRoot(XElement root)
     {
+        if (root.Name == M + "oMathPara") return root;
+
         // Direct m:oMath root (e.g. the element was already the oMath).
         if (root.Name == M + "oMath") return root;
 
@@ -59,8 +63,9 @@ public static class OmmlParser
         if (root.Name == A14 + "m")
         {
             // The a14:m element itself contains m:oMath as a child (or m:oMathPara).
-            return root.Element(M + "oMathPara")?.Element(M + "oMath")
+            return root.Element(M + "oMathPara")
                 ?? root.Element(M + "oMath")
+                ?? root.Descendants(M + "oMathPara").FirstOrDefault()
                 ?? root.Descendants(M + "oMath").FirstOrDefault();
         }
 
@@ -68,12 +73,45 @@ public static class OmmlParser
         if (root.Name == MC + "AlternateContent")
         {
             var choice = root.Element(MC + "Choice");
-            return choice?.Descendants(M + "oMath").FirstOrDefault()
+            return choice?.Descendants(M + "oMathPara").FirstOrDefault()
+                ?? choice?.Descendants(M + "oMath").FirstOrDefault()
+                ?? root.Descendants(M + "oMathPara").FirstOrDefault()
                 ?? root.Descendants(M + "oMath").FirstOrDefault();
         }
 
         // Fallback: search descendants
-        return root.Descendants(M + "oMath").FirstOrDefault();
+        return root.Descendants(M + "oMathPara").FirstOrDefault()
+            ?? root.Descendants(M + "oMath").FirstOrDefault();
+    }
+
+    private static MathNode ParseMathParagraph(XElement paragraph)
+    {
+        var oMathNodes = paragraph.Elements(M + "oMath")
+            .Select(ParseRow)
+            .ToArray();
+
+        var content = oMathNodes.Length switch
+        {
+            0 => ParseRow(paragraph),
+            1 => oMathNodes[0],
+            _ => new MathNode.Row(oMathNodes)
+        };
+
+        return new MathNode.MathParagraph(
+            content,
+            ParseMathParagraphJustification(paragraph.Element(M + "oMathParaPr")));
+    }
+
+    private static MathNode.MathParagraphJustification ParseMathParagraphJustification(XElement? paragraphProperties)
+    {
+        var val = ReadVal(paragraphProperties?.Element(M + "jc"));
+        return val switch
+        {
+            "left" => MathNode.MathParagraphJustification.Left,
+            "right" => MathNode.MathParagraphJustification.Right,
+            "centerGroup" or "center-group" => MathNode.MathParagraphJustification.CenterGroup,
+            _ => MathNode.MathParagraphJustification.Center
+        };
     }
 
     // ── Row: parse a list of child elements into a Row or single node ─────
@@ -159,7 +197,7 @@ public static class OmmlParser
             "aln"      => null,
             "argPr"    => null,
             "brk"      => null,
-            "oMathPara"=> ParseRow(el),
+            "oMathPara"=> ParseMathParagraph(el),
             _          => ParseUnknown(el)
         };
     }
