@@ -98,6 +98,9 @@ public sealed class SmartArtTests : IDisposable
                     new XElement(aNs + "prstGeom", new XAttribute("prst", "rect"), new XElement(aNs + "avLst")),
                     new XElement(aNs + "solidFill",
                         new XElement(aNs + "srgbClr", new XAttribute("val", "4472C4")))),
+                new XElement(dspNs + "style",
+                    new XElement(aNs + "fontRef", new XAttribute("idx", "minor"),
+                        new XElement(aNs + "schemeClr", new XAttribute("val", "lt1")))),
                 new XElement(dspNs + "txBody",
                     new XElement(aNs + "bodyPr"),
                     new XElement(aNs + "lstStyle"),
@@ -451,6 +454,8 @@ public sealed class SmartArtTests : IDisposable
         {
             shape.Kind.Should().Be(SlideShapeKind.AutoShape);
             shape.PlainText.Should().Be(text);
+            shape.TextBody!.Paragraphs[0].Runs[0].Color!.Resolved.Should().Be(SrgbColor.White,
+                "the cached drawing's dsp:style fontRef supplies its default text color");
         }
     }
 
@@ -759,6 +764,39 @@ public sealed class SmartArtTests : IDisposable
         // Background + 3 shape ops
         ops.Should().HaveCount(1 + 3, "one DrawOp.Shape per fallback shape");
         ops.Skip(1).Should().AllBeOfType<DrawOp.Shape>("each fallback shape renders as a DrawOp.Shape");
+    }
+
+    [Fact]
+    public void Compositor_SmartArt_CachedDrawing_UsesGraphicFrameOffset()
+    {
+        var smart = new SmartArtShape();
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 457_200,
+            ExtentCxEmu = 1_828_800,
+            ExtentCyEmu = 914_400
+        });
+
+        var pres = FreeP.Core.Model.Presentation.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 10,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = 2_743_200,
+            OffsetYEmu = 1_371_600,
+            ExtentCxEmu = 7_315_200,
+            ExtentCyEmu = 3_657_600,
+            SmartArt = smart
+        });
+
+        var op = SlideCompositor.Compose(pres, pres.Slides[0]).OfType<DrawOp.Shape>().Single();
+        op.BoundsDip.X.Should().Be(384.0);
+        op.BoundsDip.Y.Should().Be(192.0);
     }
 
     [Fact]

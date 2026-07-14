@@ -918,9 +918,13 @@ public static class SlideCompositor
         // ── Cached drawing fallback ────────────────────────────────────────────────
         if (smart.FallbackShapes.Count > 0)
         {
-            // Render each fallback shape as an ordinary AutoShape.
+            // Cached dsp:drawing coordinates are local to the SmartArt graphic frame.
             foreach (var fallback in smart.FallbackShapes)
-                ComposeShape(fallback, slide, presentation, theme, ops, effectiveClrMap: effectiveClrMap);
+            {
+                var translated = SlideCloner.CloneShape(fallback);
+                TranslateCachedSmartArtShape(translated, shape.OffsetXEmu, shape.OffsetYEmu);
+                ComposeShape(translated, slide, presentation, theme, ops, effectiveClrMap: effectiveClrMap);
+            }
         }
         else
         {
@@ -939,6 +943,15 @@ public static class SlideCompositor
             };
             ComposeAutoShape(placeholder, slide, presentation, theme, ops);
         }
+    }
+
+    private static void TranslateCachedSmartArtShape(SlideShape shape, long offsetXEmu, long offsetYEmu)
+    {
+        shape.OffsetXEmu += offsetXEmu;
+        shape.OffsetYEmu += offsetYEmu;
+
+        foreach (var child in shape.Children)
+            TranslateCachedSmartArtShape(child, offsetXEmu, offsetYEmu);
     }
 
     /// <summary>Returns a default accent color for the given zero-based series index using the theme.</summary>

@@ -2649,6 +2649,20 @@ public static class PptxPackageReader
             // dsp:txBody uses a: children — same as p:txBody
             var aTxBody = new XElement(A + "txBody", txBodyEl.Attributes(), txBodyEl.Elements());
             shape.TextBody = ReadTxBody(aTxBody, scheme);
+
+            // SmartArt's cached drawing can carry its default foreground through
+            // dsp:style/a:fontRef instead of individual a:rPr elements.
+            var fontRef = sp.Elements().FirstOrDefault(e => e.Name.LocalName == "style")
+                ?.Element(A + "fontRef");
+            var fontColor = PptxColorReader.TryReadColor(fontRef, scheme);
+            if (fontColor is not null)
+            {
+                foreach (var paragraph in shape.TextBody.Paragraphs)
+                {
+                    foreach (var run in paragraph.Runs.Where(run => run.Color is null))
+                        run.Color = fontColor;
+                }
+            }
         }
 
         return shape;

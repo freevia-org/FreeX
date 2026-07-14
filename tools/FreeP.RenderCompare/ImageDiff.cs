@@ -117,6 +117,8 @@ internal static class ImageDiff
     // -----------------------------------------------------------------------
     private static void WriteHeatmap(byte[] heatPixels, int w, int h, string path)
     {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+
         // Build a Bgra32 buffer
         var buf = new byte[(long)w * h * 4];
         for (var i = 0; i < heatPixels.Length; i++)
