@@ -198,7 +198,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 40;
+    public const int SummarySchemaVersion = 41;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -2536,6 +2536,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
         blockers.AddRange(BuildBackstageRealCaptureBlockers(summary));
         blockers.AddRange(BuildSmartArtPolygonWordBaselineBlockers(summary, baselineComparisons));
+        blockers.AddRange(BuildReviewCompareCombineWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildReviewProofingWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildEquationStructureWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildLegalReferenceWordBaselineBlockers(summary, baselineComparisons));
@@ -2982,6 +2983,171 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 string.Join("/", row.Equations.ElementKindCounts.OrderBy(value => value, StringComparer.Ordinal))))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildReviewCompareCombineWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
+        foreach (var scenarioId in ReviewCompareCombineVisualProofScenarioIds)
+        {
+            var rows = summary.Evidence
+                .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .Where(row => row.Trust.Passed)
+                .ToList();
+            if (rows.Count == 0)
+                continue;
+
+            var semanticEvidence = BuildReviewCompareCombineSemanticEvidence(rows);
+            if (semanticEvidence.Count == 0)
+            {
+                blockers.Add(BuildReviewCompareCombineVisualBlocker(
+                    scenarioId,
+                    "semantic-review-compare-combine-missing",
+                    "trusted WPF and Avalonia review compare/combine revision metadata",
+                    "trusted compare/combine evidence did not record stable revision, author, and retained-model metadata; regenerate current-schema evidence or fix shared review compare/combine planning before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false));
+                continue;
+            }
+
+            var related = baselineComparisons
+                .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (related.Count == 0)
+            {
+                blockers.Add(BuildReviewCompareCombineVisualBlocker(
+                    scenarioId,
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for review compare/combine visuals",
+                    "trusted FreeW compare/combine revision evidence is present; run a Word-baseline comparison for " + scenarioId + " to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            var statuses = related
+                .Select(comparison => comparison.Status)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var candidates = related
+                .SelectMany(comparison => comparison.CandidateBaselinePaths)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                var reasons = related
+                    .Where(comparison => string.Equals(
+                        comparison.Status,
+                        FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                        StringComparison.OrdinalIgnoreCase))
+                    .Select(FormatComparisonNotes)
+                    .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var reason = reasons.Count == 0
+                    ? "MS Word baseline PNG generation was unavailable for " + scenarioId
+                    : string.Join("; ", reasons);
+                blockers.Add(BuildReviewCompareCombineVisualBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for review compare/combine visuals",
+                    reason,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                blockers.Add(BuildReviewCompareCombineVisualBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for review compare/combine visuals",
+                    "trusted compare/combine revision evidence is present, but mapped Word baseline PNGs are missing for " + scenarioId,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.All(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            blockers.Add(BuildReviewCompareCombineVisualBlocker(
+                scenarioId,
+                "word-baseline-comparison-not-passed",
+                "passing real MS Word PNG comparisons for review compare/combine visuals",
+                "trusted compare/combine evidence is present, but at least one mapped Word baseline comparison did not pass for " + scenarioId,
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false));
+        }
+
+        return blockers;
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildReviewCompareCombineVisualBlocker(
+        string scenarioId,
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline) =>
+        new(
+            scenarioId + "-word-baseline-fidelity",
+            scenarioId,
+            "Review compare/combine visual fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
+
+    private static IReadOnlyList<string> BuildReviewCompareCombineSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
+        rows
+            .Where(row => row.ReviewCompareCombine.RevisionCount > 0)
+            .Select(row => string.Concat(
+                row.HostId,
+                "/p",
+                row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                ": operation=",
+                row.ReviewCompareCombine.Operation,
+                "; revisions=",
+                row.ReviewCompareCombine.RevisionCount.ToString(CultureInfo.InvariantCulture),
+                "; authors=",
+                FormatSummaries(row.ReviewCompareCombine.Authors),
+                "; retained=",
+                BoolFlag(row.ReviewCompareCombine.HasRetainedModelSafety),
+                "; signatures=",
+                FormatSummaries(row.ReviewCompareCombine.StableSignatures)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
     private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildReviewProofingWordBaselineBlockers(

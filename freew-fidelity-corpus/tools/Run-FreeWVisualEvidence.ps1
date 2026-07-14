@@ -1828,13 +1828,14 @@ function Assert-ReviewCompareCombineVisualProofReadiness {
     }
 
     $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
-    if ([int]$summary.schemaVersion -lt 30) {
-        throw "Review compare/combine visual proof readiness requires FreeW visual evidence summary schema v30 or newer, found v$($summary.schemaVersion)"
+    if ([int]$summary.schemaVersion -lt 41) {
+        throw "Review compare/combine visual proof readiness requires FreeW visual evidence summary schema v41 or newer, found v$($summary.schemaVersion)"
     }
 
     $readinessRows = @($summary.reviewCompareCombineProofReadiness)
     $scenarios = @($summary.scenarios)
     $baselineComparisons = @($summary.baselineComparisons)
+    $remainingBlockers = @($summary.remainingEvidenceBlockers)
     $summaryFailures = @($summary.trust.failures)
     $requiredHosts = @(
         'wpf-fidelity-render',
@@ -1844,6 +1845,7 @@ function Assert-ReviewCompareCombineVisualProofReadiness {
     $trustedScenarioRows = 0
     $verifiedSemanticRows = 0
     $verifiedBaselineRows = 0
+    $verifiedUnavailableBlockers = 0
 
     foreach ($scenarioId in $selectedScenarioIds) {
         $proofRows = @($readinessRows | Where-Object { $_.scenarioId -eq $scenarioId })
@@ -1967,6 +1969,25 @@ function Assert-ReviewCompareCombineVisualProofReadiness {
                 $verifiedBaselineRows++
             }
         }
+
+        $unavailableComparisons = @($baselineComparisons | Where-Object {
+            $_.scenarioId -eq $scenarioId -and
+            $_.status -eq 'word-baseline-unavailable'
+        })
+        if ($unavailableComparisons.Count -gt 0) {
+            $blocker = @($remainingBlockers | Where-Object {
+                $_.blockerId -eq "${scenarioId}-word-baseline-fidelity" -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.status -eq 'word-baseline-unavailable' -and
+                $_.requiresWordBaseline -eq $true
+            }) | Select-Object -First 1
+            if (-not $blocker) {
+                $failures.Add("${scenarioId}: missing honest word-baseline-unavailable review compare/combine blocker")
+            }
+            else {
+                $verifiedUnavailableBlockers++
+            }
+        }
     }
 
     if ($failures.Count -gt 0) {
@@ -1980,6 +2001,9 @@ function Assert-ReviewCompareCombineVisualProofReadiness {
     }
     else {
         Write-Host "Review compare/combine Word-baseline policy rows: no Word baseline mode requested"
+    }
+    if ($verifiedUnavailableBlockers -gt 0) {
+        Write-Host "Review compare/combine Word-baseline unavailable blockers: verified rows=$verifiedUnavailableBlockers"
     }
 }
 

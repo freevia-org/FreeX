@@ -5639,11 +5639,48 @@ public sealed class VisualEvidencePlannerTests
                     && row.ReviewCompareCombine.Authors.Contains("Alice")
                     && row.ReviewCompareCombine.Authors.Contains("Bob"));
 
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.ReviewCompareCombineProofReadiness.Should().HaveCount(2);
+            withBaseline.ReviewCompareCombineProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "word-baseline-unavailable=2"
+                && row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal)
+                && row.Trust.Passed);
+            withBaseline.RemainingEvidenceBlockers.Should().HaveCount(2);
+            withBaseline.RemainingEvidenceBlockers.Should().OnlyContain(blocker =>
+                scenarioIds.Contains(blocker.ScenarioId)
+                && blocker.BlockerId == blocker.ScenarioId + "-word-baseline-fidelity"
+                && blocker.Status == FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus
+                && blocker.RequiresWordBaseline);
+            withBaseline.RemainingEvidenceBlockers.Should().Contain(blocker =>
+                blocker.ScenarioId == "review-combine-visual-proof"
+                && blocker.SemanticEvidence.Any(evidence =>
+                    evidence.Contains("operation=combine", StringComparison.Ordinal)
+                    && evidence.Contains("Alice", StringComparison.Ordinal)
+                    && evidence.Contains("Bob", StringComparison.Ordinal)));
+
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(summary);
             using var doc = JsonDocument.Parse(json);
             doc.RootElement.GetProperty("reviewCompareCombineProofReadiness").GetArrayLength().Should().Be(2);
             var firstCompareCombine = doc.RootElement.GetProperty("evidence")[0].GetProperty("reviewCompareCombine");
             firstCompareCombine.GetProperty("revisionCount").GetInt32().Should().BeGreaterThan(0);
+
+            var withBaselineJson = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var withBaselineDoc = JsonDocument.Parse(withBaselineJson);
+            withBaselineDoc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(41);
+            withBaselineDoc.RootElement.GetProperty("remainingEvidenceBlockers").EnumerateArray()
+                .Should().Contain(blocker =>
+                    blocker.GetProperty("blockerId").GetString() == "review-combine-visual-proof-word-baseline-fidelity");
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(summary);
             markdown.Should().Contain("Review Compare/Combine Visual Proof Readiness");
