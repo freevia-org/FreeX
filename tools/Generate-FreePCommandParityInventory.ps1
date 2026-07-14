@@ -713,6 +713,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML layout now maps PowerPoint-authored m:accPr/m:chr macron and overline accents to renderer-neutral horizontal-rule draw ops above the base expression before WPF or Avalonia draw. PowerPoint-authoritative math visual baselines, exact Cambria Math accent placement, stretched accent typography, and complete OfficeMath accent semantics remain deferred."),
         new(
+            EvidenceId: "freep.omml.fraction-type",
+            Area: "OMML fraction type semantics",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.FracType layout and MathBoxRenderPlanner glyph/rule/line ops with no renderer-local fraction policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-fraction-type-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout preserve m:fPr/m:type default bar, noBar, lin, and skw variants, carrying stacked/no-rule, inline-slash, and diagonal-line draw plans to both WPF and Avalonia. PowerPoint-authoritative math visual baselines, exact Cambria Math fraction metrics, skewed slash-angle fidelity, and complete OfficeMath fraction typography remain deferred."),
+        new(
             EvidenceId: "freep.omml.manual-break-alignment",
             Area: "OMML manual line-break alignment",
             Status: "shared-layout-evidence",
