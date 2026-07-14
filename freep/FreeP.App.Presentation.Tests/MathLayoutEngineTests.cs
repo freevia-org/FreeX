@@ -1045,6 +1045,45 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlEqArraySpacingAndBaseJustification_RenderPlanCarriesSharedRowOffsets()
+    {
+        var defaultNode = ParseOmml(
+            "<m:eqArr>" +
+            "<m:e><m:r><m:t>mmmm</m:t></m:r><m:aln/><m:r><m:t>=1</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>x</m:t></m:r><m:aln/><m:r><m:t>=22</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>z</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+        var spacedNode = ParseOmml(
+            "<m:eqArr>" +
+            "<m:eqArrPr><m:baseJc m:val=\"bot\"/><m:rSpRule m:val=\"3\"/><m:rSp m:val=\"24\"/></m:eqArrPr>" +
+            "<m:e><m:r><m:t>mmmm</m:t></m:r><m:aln/><m:r><m:t>=1</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>x</m:t></m:r><m:aln/><m:r><m:t>=22</m:t></m:r></m:e>" +
+            "<m:e><m:r><m:t>z</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var defaultEqArray = (MathBox.Container)MathLayoutEngine
+            .Layout(defaultNode, "Cambria Math", FontSizePt)
+            .Children[0];
+        var spacedRoot = MathLayoutEngine.Layout(spacedNode, "Cambria Math", FontSizePt);
+        var spacedEqArray = (MathBox.Container)spacedRoot.Children[0];
+
+        spacedEqArray.Children[1].Y.Should().BeGreaterThan(defaultEqArray.Children[1].Y,
+            "m:eqArrPr/m:rSpRule and m:rSp should increase shared row offsets before any host draws");
+        spacedEqArray.Metrics.Ascent.Should().BeGreaterThan(defaultEqArray.Metrics.Ascent,
+            "m:eqArrPr/m:baseJc=bot should report a bottom-row baseline contract through shared MathBox metrics");
+
+        var glyphs = MathBoxRenderPlanner.Plan(spacedRoot, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "mmmm", "=1", "x", "=22", "z" });
+        glyphs.Single(g => g.Text == "=1").X.Should().BeApproximately(glyphs.Single(g => g.Text == "=22").X, 0.01,
+            "direct m:aln alignment points should remain aligned when row spacing and base justification are present");
+        glyphs.Single(g => g.Text == "=22").Y.Should().BeGreaterThan(glyphs.Single(g => g.Text == "=1").Y);
+        glyphs.Single(g => g.Text == "z").Y.Should().BeGreaterThan(glyphs.Single(g => g.Text == "=22").Y);
+    }
+
+    [Fact]
     public void OmmlManualBreak_LayoutsAsStackedEquationArrayRows()
     {
         var node = ParseOmml(

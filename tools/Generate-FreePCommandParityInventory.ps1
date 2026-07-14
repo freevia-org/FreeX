@@ -170,6 +170,7 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-presenter-recording-camera-handoff-2026-07-14.md",
                 "docs/parity/freep-presenter-recording-default-camera-encoding-readiness-2026-07-14.md",
                 "docs/parity/freep-presenter-recording-camera-payload-2026-07-14.md",
+                "docs/parity/freep-presenter-recording-unavailable-hardware-readiness-2026-07-14.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-05.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-13.md",
                 "docs/parity/freep-presenter-recording-review-2026-07-04.md"
@@ -185,7 +186,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, paired real Windows microphone narration handoff evidence, paired Windows camera handoff readiness, paired default no-COM camera handoff/package-target readiness without encoded-payload or PowerPoint-baseline claims, deterministic encoded camera media payload artifacts through host-specific PPTX package paths, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Unavailable-hardware live capture, actual local default no-COM camera video encoding that produces non-empty mp4 payload bytes, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
+            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, paired real Windows microphone narration handoff evidence, paired Windows camera handoff readiness, paired default no-COM camera handoff/package-target readiness without encoded-payload or PowerPoint-baseline claims, deterministic encoded camera media payload artifacts through host-specific PPTX package paths, paired OS-backed unavailable-hardware/no-device evidence, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Live capture on real microphone/camera hardware, actual local default no-COM camera video encoding that produces non-empty mp4 payload bytes, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
         new(
             EvidenceId: "freep.presenter.recording.default-camera-encoding-readiness",
             Area: "Local default no-COM camera encoding readiness",
@@ -205,6 +206,25 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Avalonia.Tests/AvaloniaWindowsRecordingCaptureBackendTests.cs"
             ],
             RemainingWork: "Paired WPF/Avalonia default no-COM camera handoff readiness now records stable video/mp4 package targets while explicitly proving no local encoded payload bytes and no PowerPoint COM baseline claim. Actual local default no-COM camera video encoding that produces non-empty mp4 payloads, live unavailable-hardware/permission UX, PowerPoint COM recording baselines, and broader real-deck PowerPoint-native media/caption corpus baselines remain deferred."),
+        new(
+            EvidenceId: "freep.presenter.recording.unavailable-hardware-readiness",
+            Area: "Unavailable microphone/camera hardware readiness",
+            Status: "shared-readiness-evidence",
+            HostCoverage: "WPF/Avalonia Windows recording adapters feed a shared no-device evidence contract that distinguishes unavailable hardware from unregistered adapters",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-presenter-recording-unavailable-hardware-readiness-2026-07-14.md",
+                "docs/parity/freep-presenter-recording-camera-handoff-2026-07-14.md",
+                "docs/parity/freep-presenter-recording-default-camera-encoding-readiness-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/SlideShowRecordingHostAdapterParityPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/SlideShowRecordingHostAdapterParityPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/WpfWindowsRecordingCaptureBackendTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/AvaloniaWindowsRecordingCaptureBackendTests.cs"
+            ],
+            RemainingWork: "Paired WPF/Avalonia unavailable-hardware readiness now proves OS-backed recording adapters can report no microphone/camera devices without claiming capture, encoded payloads, or PowerPoint COM baselines. Live capture on real microphone/camera hardware, local default camera mp4 encoding, PowerPoint COM recording baselines, and broader real-deck media/caption corpus baselines remain deferred."),
         new(
             EvidenceId: "freep.media-caption.native-sidecar-depth",
             Area: "PowerPoint-native media and caption sidecar package depth",
@@ -669,6 +689,25 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
             ],
             RemainingWork: "Shared OMML parsing now treats m:boxPr/m:aln on direct m:eqArr row boxes as invisible equation-array alignment points while preserving the boxed expression. WPF and Avalonia consume the resulting shared MathBox draw coordinates. PowerPoint-authoritative math visual baselines and broader OfficeMath alignment semantics remain deferred."),
+        new(
+            EvidenceId: "freep.omml.eqarray-spacing-base-justification",
+            Area: "OMML equation-array row spacing and base justification",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.EqArray spacing/base metadata and MathBoxRenderPlanner draw ops with no renderer-local equation-array policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-eqarray-spacing-base-justification-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout preserve m:eqArrPr/m:rSpRule, m:rSp, and m:baseJc so row offsets and reported baseline/ascent are resolved before WPF or Avalonia draw. PowerPoint-authoritative math visual baselines, exact OfficeMath spacing metrics, and complete paragraph-level equation alignment remain deferred."),
         new(
             EvidenceId: "freep.omml.delimiter-shape",
             Area: "OMML delimiter shape semantics",
