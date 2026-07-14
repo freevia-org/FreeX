@@ -591,13 +591,25 @@ public static class OmmlParser
 
         foreach (var mc in mcs.Elements(M + "mc"))
         {
-            var aln = mc.Element(M + "mcPr")?.Element(M + "aln");
+            var mcPr = mc.Element(M + "mcPr");
+            var aln = mcPr?.Element(M + "aln");
             var val = aln?.Attribute(M + "val")?.Value
                    ?? aln?.Value;
-            alignments.Add(ParseMatrixColumnAlignment(val));
+            var alignment = ParseMatrixColumnAlignment(val);
+            var count = ParseMatrixColumnRepeatCount(mcPr);
+            for (var i = 0; i < count; i++)
+                alignments.Add(alignment);
         }
 
         return alignments;
+    }
+
+    private static int ParseMatrixColumnRepeatCount(XElement? mcPr)
+    {
+        var val = ReadVal(mcPr?.Element(M + "count"));
+        return int.TryParse(val, out var parsed) && parsed > 0
+            ? parsed
+            : 1;
     }
 
     private static MathNode.Matrix.MatrixBaseJustification ParseMatrixBaseJustification(XElement? mPr)

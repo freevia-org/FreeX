@@ -1164,6 +1164,42 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlMatrixColumnAlignmentCount_RepeatsAlignmentAcrossSharedColumns()
+    {
+        var node = ParseOmml(
+            "<m:m>" +
+            "<m:mPr><m:mcs>" +
+            "<m:mc><m:mcPr><m:count m:val=\"2\"/><m:aln m:val=\"left\"/></m:mcPr></m:mc>" +
+            "<m:mc><m:mcPr><m:aln m:val=\"right\"/></m:mcPr></m:mc>" +
+            "</m:mcs></m:mPr>" +
+            "<m:mr><m:e><m:r><m:t>wide</m:t></m:r></m:e><m:e><m:r><m:t>wide</m:t></m:r></m:e><m:e><m:r><m:t>wide</m:t></m:r></m:e></m:mr>" +
+            "<m:mr><m:e><m:r><m:t>x</m:t></m:r></m:e><m:e><m:r><m:t>y</m:t></m:r></m:e><m:e><m:r><m:t>z</m:t></m:r></m:e></m:mr>" +
+            "</m:m>");
+
+        var box = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+        var container = (MathBox.Container)box.Children[0];
+        var wideLeft = container.Children[0];
+        var wideRepeatedLeft = container.Children[1];
+        var wideRight = container.Children[2];
+        var repeatedLeftCell = container.Children[4];
+        var rightCell = container.Children[5];
+
+        repeatedLeftCell.X.Should().BeApproximately(wideRepeatedLeft.X, 0.01,
+            "m:mcPr/m:count should repeat the left-alignment policy into the second matrix column");
+        (rightCell.X + rightCell.Metrics.Width)
+            .Should().BeApproximately(wideRight.X + wideRight.Metrics.Width, 0.01,
+                "the following m:mc alignment policy should still apply to the next column after the repeat");
+
+        var glyphs = MathBoxRenderPlanner.Plan(box, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+        glyphs.Single(g => g.Text == "y").X.Should().BeApproximately(
+            10 + repeatedLeftCell.X,
+            0.01,
+            "WPF and Avalonia consume the repeated matrix alignment as shared draw-plan coordinates");
+    }
+
+    [Fact]
     public void Matrix_RowSpacingRuleChangesVerticalGap()
     {
         var rows = new[]
