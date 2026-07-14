@@ -894,6 +894,21 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "stackedList now uses the bounded shared list-family live-layout path for parsed nodes while other unsupported list siblings remain on cached drawing fallback. Broader SmartArt geometry families, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
+            EvidenceId: "freep.smartart.descending-block-list",
+            Area: "SmartArt descendingBlockList live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape ops emitted by the SmartArt list-family layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-descending-block-list-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "descendingBlockList now uses the bounded shared list-family live-layout path for parsed nodes as top-to-bottom right-aligned blocks that narrow toward the bottom. Unsupported list siblings remain on cached drawing fallback. Exact PowerPoint spacing/effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+        new(
             EvidenceId: "freep.smartart.picture-caption-list",
             Area: "SmartArt pictureCaptionList bounded live layout",
             Status: "shared-render-planner-evidence",

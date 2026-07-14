@@ -2049,6 +2049,15 @@ public sealed class SmartArtTests : IDisposable
         renderedText.Should().Contain("Ship");
         liveShapes.Select(op => op.BoundsDip.Y)
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared descending-block-list DrawOps");
+        liveShapes.Select(op => op.BoundsDip.Width)
+            .Should().BeInDescendingOrder("WPF and Avalonia hosts consume shared descending-block width geometry");
+
+        var rightEdge = liveShapes[0].BoundsDip.X + liveShapes[0].BoundsDip.Width;
+        foreach (var op in liveShapes)
+        {
+            (op.BoundsDip.X + op.BoundsDip.Width).Should().BeApproximately(rightEdge, 0.01,
+                "WPF and Avalonia hosts consume shared right-aligned descending-block DrawOps");
+        }
     }
 
     [Fact]
