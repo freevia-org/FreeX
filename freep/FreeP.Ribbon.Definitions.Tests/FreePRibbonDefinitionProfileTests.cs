@@ -878,6 +878,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.text-cycle",
             "freep.smartart.basic-matrix",
             "freep.smartart.basic-venn",
+            "freep.smartart.target-list",
             "freep.smartart.vertical-bullet-list",
             "freep.smartart.basic-hierarchy",
             "freep.smartart.org-chart",

@@ -96,6 +96,8 @@ public static class SmartArtLayoutEngine
             SmartArtFamily.Matrix    => LayoutMatrix    (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
             SmartArtFamily.Relationship => IsBasicVennLayout(data.LayoutUniqueId)
                 ? LayoutBasicVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                : IsTargetListLayout(data.LayoutUniqueId)
+                    ? LayoutTargetList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                 : null,
             _                        => null
         };
@@ -595,6 +597,59 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// Basic target/list geometry: concentric ellipses centered in the frame.
+    /// This is a bounded relationship-family approximation; exact PowerPoint
+    /// ring clipping, label offsets, and effects remain on cached fallback.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutTargetList(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        if (n is 0 or > 5)
+            return null;
+
+        var shapes = new List<SlideShape>();
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long innerH = Math.Max(fcy - 2 * outerPadY, 1L);
+        long maxDiameter = Math.Max(Math.Min(innerW, innerH), 1L);
+        double centerX = fx + outerPadX + innerW / 2.0;
+        double centerY = fy + outerPadY + innerH / 2.0;
+        double step = n == 1 ? 0.0 : 0.72 / n;
+
+        uint idCounter = 560;
+        for (int i = 0; i < n; i++)
+        {
+            double diameterFrac = Math.Max(1.0 - i * step, 0.28);
+            long diameter = Math.Max((long)(maxDiameter * diameterFrac), 1L);
+            long x = (long)(centerX - diameter / 2.0);
+            long y = (long)(centerY - diameter / 2.0);
+            var baseStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Relationship);
+            var translucentStyle = baseStyle with
+            {
+                Fill = new ThemeAwareColor(baseStyle.Fill.Resolved, alpha: 205)
+            };
+
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                translucentStyle,
+                x,
+                y,
+                diameter,
+                diameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape> LayoutCycle(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -926,5 +981,14 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "basicvenn", StringComparison.Ordinal);
+    }
+
+    private static bool IsTargetListLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "targetlist", StringComparison.Ordinal);
     }
 }
