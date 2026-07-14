@@ -47,6 +47,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("TablePaginationPageCompositionProof = @(");
         source.Should().Contain("DrawingObjectVisualProof = @(");
         source.Should().Contain("ShapeObjectVisualProof = @(");
+        source.Should().Contain("ObjectFormatVisualProof = @(");
         source.Should().Contain("SmartArtPolygonVisualProof = @(");
         source.Should().Contain("ChartVisualProof = @(");
         source.Should().Contain("WordArtWatermarkVisualProof = @(");
@@ -81,6 +82,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'wordart-watermark-stress'");
         source.Should().Contain("'wordart-picture-watermark-layout'");
         source.Should().Contain("freew-fidelity-corpus/runs/shape-object-proof");
+        source.Should().Contain("freew-fidelity-corpus/runs/object-format-proof");
         source.Should().Contain("freew-fidelity-corpus/runs/smartart-polygon-proof");
         source.Should().Contain("freew-fidelity-corpus/runs/chart-visual-proof");
         source.Should().Contain("freew-fidelity-corpus/runs/wordart-watermark-proof");

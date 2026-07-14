@@ -38,6 +38,9 @@
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/shape-object-proof -ScenarioSet ShapeObjectVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/object-format-proof -ScenarioSet ObjectFormatVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/smartart-polygon-proof -ScenarioSet SmartArtPolygonVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
@@ -201,6 +204,9 @@ $namedScenarioSets = @{
     )
     ShapeObjectVisualProof = @(
         'drawing-objects-complex',
+        'object-format-position-size-style'
+    )
+    ObjectFormatVisualProof = @(
         'object-format-position-size-style'
     )
     SmartArtPolygonVisualProof = @(
