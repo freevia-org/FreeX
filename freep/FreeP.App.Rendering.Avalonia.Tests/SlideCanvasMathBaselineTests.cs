@@ -239,6 +239,46 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_ManualBreakAlignment_UsesSharedMathBoxPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:r><m:t>title</m:t></m:r><m:r><m:rPr><m:brk m:alnAt=\"1\"/></m:rPr><m:t>mmmm</m:t></m:r><m:r><m:t>=1</m:t></m:r>" +
+                    "<m:r><m:rPr><m:brk m:alnAt=\"1\"/></m:rPr><m:t>x</m:t></m:r><m:r><m:t>=22</m:t></m:r>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .ToList();
+
+                glyphs.Select(g => g.Text).Should().Equal(new[] { "title", "mmmm", "=1", "x", "=22" },
+                    "m:brk rows must be normalized to a shared equation-array draw plan before Avalonia draws them");
+                glyphs.Single(g => g.Text == "=1").X.Should().BeApproximately(glyphs.Single(g => g.Text == "=22").X, 0.01,
+                    "manual-break m:alnAt rows should share the same draw-plan X coordinate before Avalonia draws");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "B = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(300, 130));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render manually broken aligned OMML from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_PreSubSup_UsesSharedMathBoxPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;
