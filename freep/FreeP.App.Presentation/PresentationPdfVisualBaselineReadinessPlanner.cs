@@ -28,6 +28,11 @@ public sealed record PresentationPdfVisualBaselineReadinessRow(
     string DefaultExtensionWithDot,
     string WpfManifestFingerprint,
     string AvaloniaManifestFingerprint,
+    string BaselineManifestPath,
+    string WpfArtifactPath,
+    string AvaloniaArtifactPath,
+    string PowerPointPdfArtifact,
+    string PowerPointPngArtifactPattern,
     string BaselineArtifactPattern,
     string PowerPointBaseline,
     bool RequiresPowerPointComBaseline,
@@ -50,7 +55,13 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
     private const string PortableSlidePdfRoute = "PortableSlidePdf";
     private const string PortableSlidePdfPlanner = "PresentationPdfExporter.BuildDocument";
     private const string PrintPackagePlanner = "PresentationPrintOutputPackageExecutor.BuildPackagePlan";
-    private const string PowerPointBaselinePattern = "powerpoint-pdf/{sourceName}.pdf + powerpoint-png/slide-NN.png";
+    private const string BaselineManifestPattern = "manifest/{sourceStem}/{evidenceId}.json";
+    private const string WpfArtifactPattern = "wpf-pdf/{sourceStem}/{evidenceId}.pdf";
+    private const string AvaloniaArtifactPattern = "avalonia-pdf/{sourceStem}/{evidenceId}.pdf";
+    private const string PowerPointPdfArtifactPattern = "powerpoint-pdf/{sourceStem}/{evidenceId}.pdf";
+    private const string PowerPointPngArtifactPattern = "powerpoint-png/{sourceStem}/{evidenceId}/slide-NN.png";
+    private const string PowerPointBaselinePattern =
+        PowerPointPdfArtifactPattern + " + " + PowerPointPngArtifactPattern;
 
     public static PresentationPdfVisualBaselineReadinessPlan Build(
         Presentation presentation,
@@ -59,26 +70,33 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
         ArgumentNullException.ThrowIfNull(presentation);
 
         var normalizedSourceName = NormalizeSourceName(sourceName);
+        var sourceStem = BuildArtifactStem(normalizedSourceName);
         var rows = new[]
         {
-            BuildPortableSlidePdfRow(presentation),
+            BuildPortableSlidePdfRow(presentation, normalizedSourceName, sourceStem),
             BuildPrintPackageRow(
                 FullPageRasterPdfEvidenceId,
                 "Full-page slide raster PDF",
                 new PresentationPrintRequest(PresentationPrintLayoutKind.FullPageSlides),
-                presentation),
+                presentation,
+                normalizedSourceName,
+                sourceStem),
             BuildPrintPackageRow(
                 HandoutPdfEvidenceId,
                 "3-up handout PDF",
                 new PresentationPrintRequest(
                     PresentationPrintLayoutKind.Handouts,
                     HandoutSlidesPerPage: 3),
-                presentation),
+                presentation,
+                normalizedSourceName,
+                sourceStem),
             BuildPrintPackageRow(
                 NotesPagePdfEvidenceId,
                 "Notes-page PDF",
                 new PresentationPrintRequest(PresentationPrintLayoutKind.NotesPages),
-                presentation),
+                presentation,
+                normalizedSourceName,
+                sourceStem),
         };
 
         return new PresentationPdfVisualBaselineReadinessPlan(
@@ -90,7 +108,10 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
             rows);
     }
 
-    private static PresentationPdfVisualBaselineReadinessRow BuildPortableSlidePdfRow(Presentation presentation)
+    private static PresentationPdfVisualBaselineReadinessRow BuildPortableSlidePdfRow(
+        Presentation presentation,
+        string sourceName,
+        string sourceStem)
     {
         var document = PresentationPdfExporter.BuildDocument(presentation);
         var pageCount = document.Pages.Count;
@@ -99,6 +120,9 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
             : PresentationExportPlanner.BuildSlideRangePlan(null, presentation.Slides.Count).DisplayName;
         var firstPage = document.Pages[0];
         var fingerprint = BuildFingerprint(
+            sourceName,
+            sourceStem,
+            PortableSlidePdfEvidenceId,
             PortableSlidePdfRoute,
             PresentationPrintOutputPackageExecutor.PdfContentType,
             PresentationExportPlanner.PdfExportExtension,
@@ -117,6 +141,11 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
             PresentationExportPlanner.PdfExportExtension,
             fingerprint,
             fingerprint,
+            BuildArtifactPath(BaselineManifestPattern, sourceStem, PortableSlidePdfEvidenceId),
+            BuildArtifactPath(WpfArtifactPattern, sourceStem, PortableSlidePdfEvidenceId),
+            BuildArtifactPath(AvaloniaArtifactPattern, sourceStem, PortableSlidePdfEvidenceId),
+            BuildArtifactPath(PowerPointPdfArtifactPattern, sourceStem, PortableSlidePdfEvidenceId),
+            BuildArtifactPath(PowerPointPngArtifactPattern, sourceStem, PortableSlidePdfEvidenceId),
             PowerPointBaselinePattern,
             PowerPointBaselineDeferred,
             RequiresPowerPointComBaseline: true,
@@ -129,10 +158,15 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
         string evidenceId,
         string outputKind,
         PresentationPrintRequest request,
-        Presentation presentation)
+        Presentation presentation,
+        string sourceName,
+        string sourceStem)
     {
         var packagePlan = PresentationPrintOutputPackageExecutor.BuildPackagePlan(request, presentation);
         var fingerprint = BuildFingerprint(
+            sourceName,
+            sourceStem,
+            evidenceId,
             packagePlan.Route.ToString(),
             packagePlan.ContentType,
             packagePlan.DefaultExtensionWithDot,
@@ -154,6 +188,11 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
             packagePlan.DefaultExtensionWithDot,
             fingerprint,
             fingerprint,
+            BuildArtifactPath(BaselineManifestPattern, sourceStem, evidenceId),
+            BuildArtifactPath(WpfArtifactPattern, sourceStem, evidenceId),
+            BuildArtifactPath(AvaloniaArtifactPattern, sourceStem, evidenceId),
+            BuildArtifactPath(PowerPointPdfArtifactPattern, sourceStem, evidenceId),
+            BuildArtifactPath(PowerPointPngArtifactPattern, sourceStem, evidenceId),
             PowerPointBaselinePattern,
             PowerPointBaselineDeferred,
             RequiresPowerPointComBaseline: true,
@@ -161,6 +200,9 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
     }
 
     private static string BuildFingerprint(
+        string sourceName,
+        string sourceStem,
+        string evidenceId,
         string route,
         string contentType,
         string extensionWithDot,
@@ -168,7 +210,31 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
         string slideRangeSummary) =>
         string.Create(
             CultureInfo.InvariantCulture,
-            $"route={route};contentType={contentType};extension={extensionWithDot};pages={pageCount};range={slideRangeSummary}");
+            $"source={sourceName};sourceStem={sourceStem};evidenceId={evidenceId};route={route};contentType={contentType};extension={extensionWithDot};pages={pageCount};range={slideRangeSummary}");
+
+    private static string BuildArtifactPath(
+        string pattern,
+        string sourceStem,
+        string evidenceId) =>
+        pattern
+            .Replace("{sourceStem}", sourceStem, StringComparison.Ordinal)
+            .Replace("{evidenceId}", evidenceId, StringComparison.Ordinal);
+
+    private static string BuildArtifactStem(string sourceName)
+    {
+        var stem = Path.GetFileNameWithoutExtension(sourceName.Trim());
+        if (string.IsNullOrWhiteSpace(stem))
+            return "Presentation";
+
+        var builder = new System.Text.StringBuilder(stem.Length);
+        foreach (var ch in stem)
+        {
+            builder.Append(char.IsLetterOrDigit(ch) || ch is '-' or '_' ? ch : '-');
+        }
+
+        var normalized = builder.ToString().Trim('-');
+        return string.IsNullOrWhiteSpace(normalized) ? "Presentation" : normalized;
+    }
 
     private static string NormalizeSourceName(string? sourceName)
     {
