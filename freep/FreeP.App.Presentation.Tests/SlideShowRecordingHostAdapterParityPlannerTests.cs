@@ -72,6 +72,34 @@ public sealed class SlideShowRecordingHostAdapterParityPlannerTests
         evidence.SummaryText.Should().Contain("not paired");
     }
 
+    [Fact]
+    public void BuildCameraEncodingReadinessEvidence_WithNoComDefaultRows_DoesNotClaimEncodedPayloadOrPowerPointBaseline()
+    {
+        var evidence = SlideShowRecordingHostAdapterParityPlanner.BuildCameraEncodingReadinessEvidence(
+            new[]
+            {
+                CameraEncodingRow(
+                    "WPF slideshow",
+                    "WPF Windows recording capture adapter",
+                    "ppt/media/freep-recordings/wpf/slide-001-camera.mp4"),
+                CameraEncodingRow(
+                    "Avalonia slideshow",
+                    "Avalonia Windows recording capture adapter",
+                    "ppt/media/freep-recordings/avalonia/slide-001-camera.mp4")
+            });
+
+        evidence.HostRows.Should().HaveCount(2);
+        evidence.HasWpfNoComHandoff.Should().BeTrue();
+        evidence.HasAvaloniaNoComHandoff.Should().BeTrue();
+        evidence.HasPairedNoComHandoff.Should().BeTrue();
+        evidence.HasPackageTargets.Should().BeTrue();
+        evidence.HasLocalEncodedPayload.Should().BeFalse();
+        evidence.ClaimsPowerPointComBaseline.Should().BeFalse();
+        evidence.SummaryText.Should().Contain("deferring video encoding honestly");
+        evidence.RemainingWork.Should().Contain("Local default no-COM real camera video encoding");
+        evidence.RemainingWork.Should().Contain("PowerPoint COM recording baselines");
+    }
+
     private static SlideShowRecordingCaptureAdapterReadiness MicrophoneReadiness(
         string hostName,
         string adapterName) =>
@@ -116,4 +144,19 @@ public sealed class SlideShowRecordingHostAdapterParityPlannerTests
             },
             requiresUserPermission: true,
             unavailableReason: string.Empty);
+
+    private static SlideShowRecordingCameraEncodingReadinessRow CameraEncodingRow(
+        string hostName,
+        string adapterName,
+        string packagePath) =>
+        new(
+            hostName,
+            adapterName,
+            packagePath,
+            "video/mp4",
+            DeviceHandoffReached: true,
+            IsCaptured: false,
+            PayloadLengthBytes: 0,
+            RequiresPowerPointCom: false,
+            $"{adapterName}: camera device handoff reached, but local video encoding is not implemented in this no-COM adapter.");
 }
