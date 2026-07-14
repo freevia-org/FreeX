@@ -905,6 +905,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.gear-cycle",
             "freep.smartart.text-cycle",
             "freep.smartart.block-cycle",
+            "freep.smartart.nondirectional-cycle",
             "freep.smartart.basic-matrix",
             "freep.smartart.titled-matrix",
             "freep.smartart.basic-venn",

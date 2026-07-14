@@ -1728,7 +1728,7 @@ public sealed class SmartArtTests : IDisposable
     public void Reader_ParsesKnownCycleFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/continuousCycle",
             nodes: [("id1", "Phase 1"), ("id2", "Phase 2"), ("id3", "Phase 3")],
             parOfConnections: []);
 
@@ -1741,6 +1741,25 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeFalse(
             "cycle-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("Phase 1", "Phase 2", "Phase 3");
+    }
+
+    [Fact]
+    public void Reader_ParsesNonDirectionalCycleAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle",
+            nodes: [("id1", "Observe"), ("id2", "Align"), ("id3", "Deliver"), ("id4", "Adapt")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "nonDirectionalCycle is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "nonDirectionalCycle is now in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Observe", "Align", "Deliver", "Adapt");
     }
 
     [Fact]
@@ -2648,6 +2667,34 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_NonDirectionalCycleSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle",
+            nodes: [("n1", "Observe"), ("n2", "Align"), ("n3", "Deliver"), ("n4", "Adapt")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four non-directional cycle boxes plus four connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Observe");
+        renderedText.Should().Contain("Adapt");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(4, "WPF and Avalonia hosts consume shared non-directional cycle connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_BasicHierarchySmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2897,7 +2944,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Cycle,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/continuousCycle",
             IsLiveLayoutSupported = false
         };
         data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });
