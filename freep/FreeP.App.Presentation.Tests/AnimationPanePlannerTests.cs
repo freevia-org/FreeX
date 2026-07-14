@@ -284,6 +284,78 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void BuildPlaybackWorkflowEvidencePlan_CombinesPaneSessionAndVisualCheckpointCoverage()
+    {
+        var timeline = AnimationPanePlanner.BuildTimelinePlan(
+            CreateSlideWithTimelineAnimations(),
+            selectedAnimationIndex: 1,
+            displayCulture: Invariant);
+        var session = AnimationPanePlanner.BuildPlaybackSessionPlan(
+            timeline,
+            AnimationPanePlaybackControlKind.PlayFromSelected);
+        var step = new AnimationStep(
+        [
+            new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = 81,
+                    Kind = AnimationKind.Entrance,
+                    Preset = AnimationPreset.Wheel,
+                    Direction = AnimationDirection.In,
+                    WheelSpokeCount = 6,
+                    DurationMs = 300
+                },
+                StartDelayMs: 0),
+            new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = 82,
+                    Kind = AnimationKind.Entrance,
+                    Preset = AnimationPreset.FlyIn,
+                    Direction = AnimationDirection.FromRight,
+                    DurationMs = 250
+                },
+                StartDelayMs: 175)
+        ]);
+        var checkpoints = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(
+            step,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        var evidence = AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(
+            timeline,
+            session,
+            checkpoints,
+            slideIndex: 2,
+            scenarioId: "Pane Playback/Selected");
+
+        evidence.ScenarioId.Should().Be("pane-playback-selected");
+        evidence.SlideIndex.Should().Be(2);
+        evidence.CommandKind.Should().Be(AnimationPanePlaybackControlKind.PlayFromSelected);
+        evidence.SessionState.Should().Be(AnimationPanePlaybackSessionState.Running);
+        evidence.StartAnimationIndex.Should().Be(1);
+        evidence.SegmentCount.Should().Be(2);
+        evidence.PlaybackCheckpointCount.Should().Be(3);
+        evidence.TrackKinds.Should().Equal(
+            SlideShowAnimationVisualTrackKind.Clip,
+            SlideShowAnimationVisualTrackKind.Translate);
+        evidence.ClipKinds.Should().Equal(SlideShowAnimationClipKind.Wheel);
+        evidence.HasSharedNoComHostEvidence.Should().BeTrue();
+        evidence.HostRows.Select(row => row.Host)
+            .Should()
+            .Equal(AnimationPanePlaybackWorkflowHost.Wpf, AnimationPanePlaybackWorkflowHost.Avalonia);
+        evidence.HostRows.Should().OnlyContain(row =>
+            row.RequiresPowerPointCom == false
+            && row.SegmentCount == 2
+            && row.PlaybackCheckpointCount == 3);
+        evidence.HostRows[0].EvidenceId.Should().Be("pane-playback-selected-slide-3-playfromselected-wpf");
+        evidence.EvidenceLines.Should().Equal(
+            "Scenario pane-playback-selected: slide 3; command PlayFromSelected; state Running; segments 2; checkpoints 3",
+            "Pane playback tracks: Clip, Translate; clips: Wheel; selected start: 2",
+            "Shared host rows: WPF/Avalonia; PowerPoint COM required: false");
+    }
+
+    [Fact]
     public void BuildPlaybackControls_EnablesSlidePlaybackButRequiresSelectedRow()
     {
         var controls = AnimationPanePlanner.BuildPlaybackControls(-1, 2, 900);

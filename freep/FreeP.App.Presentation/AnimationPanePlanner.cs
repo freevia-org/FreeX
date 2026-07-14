@@ -208,6 +208,42 @@ public sealed record AnimationPanePlaybackSessionPlan(
     public bool IsRunning => State == AnimationPanePlaybackSessionState.Running;
 }
 
+public enum AnimationPanePlaybackWorkflowHost
+{
+    Wpf,
+    Avalonia
+}
+
+public sealed record AnimationPanePlaybackWorkflowHostEvidenceRow(
+    AnimationPanePlaybackWorkflowHost Host,
+    string EvidenceId,
+    int SlideIndex,
+    AnimationPanePlaybackControlKind CommandKind,
+    AnimationPanePlaybackSessionState SessionState,
+    int SegmentCount,
+    int PlaybackCheckpointCount,
+    bool RequiresPowerPointCom,
+    string EvidenceSummary);
+
+public sealed record AnimationPanePlaybackWorkflowEvidencePlan(
+    string ScenarioId,
+    int SlideIndex,
+    AnimationPanePlaybackControlKind CommandKind,
+    AnimationPanePlaybackSessionState SessionState,
+    int? StartAnimationIndex,
+    int SegmentCount,
+    int PlaybackCheckpointCount,
+    IReadOnlyList<SlideShowAnimationVisualTrackKind> TrackKinds,
+    IReadOnlyList<SlideShowAnimationClipKind> ClipKinds,
+    IReadOnlyList<AnimationPanePlaybackWorkflowHostEvidenceRow> HostRows,
+    IReadOnlyList<string> EvidenceLines)
+{
+    public bool HasSharedNoComHostEvidence =>
+        HostRows.Any(row => row.Host == AnimationPanePlaybackWorkflowHost.Wpf) &&
+        HostRows.Any(row => row.Host == AnimationPanePlaybackWorkflowHost.Avalonia) &&
+        HostRows.All(row => !row.RequiresPowerPointCom);
+}
+
 public sealed record AnimationPaneReorderIntent(
     bool CanMove,
     int FromIndex,
@@ -1047,6 +1083,65 @@ public static class AnimationPanePlanner
             evidenceLines);
     }
 
+    public static AnimationPanePlaybackWorkflowEvidencePlan BuildPlaybackWorkflowEvidencePlan(
+        AnimationPaneTimelinePlan timelinePlan,
+        AnimationPanePlaybackSessionPlan sessionPlan,
+        IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> playbackCheckpoints,
+        int slideIndex,
+        string scenarioId = "animation-pane-playback")
+    {
+        ArgumentNullException.ThrowIfNull(timelinePlan);
+        ArgumentNullException.ThrowIfNull(sessionPlan);
+        ArgumentNullException.ThrowIfNull(playbackCheckpoints);
+
+        var safeScenarioId = NormalizeScenarioId(scenarioId);
+        var safeSlideIndex = Math.Max(0, slideIndex);
+        var frames = playbackCheckpoints
+            .SelectMany(checkpoint => checkpoint.Frames)
+            .ToArray();
+        var trackKinds = frames
+            .Select(frame => frame.TrackKind)
+            .Distinct()
+            .OrderBy(kind => kind.ToString(), StringComparer.Ordinal)
+            .ToArray();
+        var clipKinds = frames
+            .Select(frame => frame.ClipKind)
+            .Where(kind => kind != SlideShowAnimationClipKind.None)
+            .Distinct()
+            .OrderBy(kind => kind.ToString(), StringComparer.Ordinal)
+            .ToArray();
+        var summary =
+            $"slide {safeSlideIndex + 1}; command {sessionPlan.CommandKind}; state {sessionPlan.State}; "
+            + $"segments {sessionPlan.Segments.Count}; checkpoints {playbackCheckpoints.Count}; "
+            + $"tracks {FormatEnumList(trackKinds)}; clips {FormatEnumList(clipKinds)}";
+        var evidenceIdBase =
+            $"{safeScenarioId}-slide-{safeSlideIndex + 1}-{NormalizeScenarioId(sessionPlan.CommandKind.ToString())}";
+        var hostRows = new[]
+        {
+            BuildPlaybackWorkflowHostRow(AnimationPanePlaybackWorkflowHost.Wpf, evidenceIdBase, safeSlideIndex, sessionPlan, playbackCheckpoints.Count, summary),
+            BuildPlaybackWorkflowHostRow(AnimationPanePlaybackWorkflowHost.Avalonia, evidenceIdBase, safeSlideIndex, sessionPlan, playbackCheckpoints.Count, summary)
+        };
+        var evidenceLines = new[]
+        {
+            $"Scenario {safeScenarioId}: slide {safeSlideIndex + 1}; command {sessionPlan.CommandKind}; state {sessionPlan.State}; segments {sessionPlan.Segments.Count}; checkpoints {playbackCheckpoints.Count}",
+            $"Pane playback tracks: {FormatEnumList(trackKinds)}; clips: {FormatEnumList(clipKinds)}; selected start: {FormatSelectedEvidence(sessionPlan.StartAnimationIndex ?? -1)}",
+            "Shared host rows: WPF/Avalonia; PowerPoint COM required: false"
+        };
+
+        return new AnimationPanePlaybackWorkflowEvidencePlan(
+            safeScenarioId,
+            safeSlideIndex,
+            sessionPlan.CommandKind,
+            sessionPlan.State,
+            sessionPlan.StartAnimationIndex,
+            sessionPlan.Segments.Count,
+            playbackCheckpoints.Count,
+            trackKinds,
+            clipKinds,
+            hostRows,
+            evidenceLines);
+    }
+
     public static string BuildWorkflowRowSummary(AnimationPaneTimelineItemPlan item)
     {
         ArgumentNullException.ThrowIfNull(item);
@@ -1222,6 +1317,30 @@ public static class AnimationPanePlanner
 
         return string.IsNullOrWhiteSpace(normalized) ? "animation-pane" : normalized;
     }
+
+    private static AnimationPanePlaybackWorkflowHostEvidenceRow BuildPlaybackWorkflowHostRow(
+        AnimationPanePlaybackWorkflowHost host,
+        string evidenceIdBase,
+        int slideIndex,
+        AnimationPanePlaybackSessionPlan sessionPlan,
+        int playbackCheckpointCount,
+        string evidenceSummary)
+    {
+        var hostToken = host.ToString().ToLowerInvariant();
+        return new AnimationPanePlaybackWorkflowHostEvidenceRow(
+            host,
+            $"{evidenceIdBase}-{hostToken}",
+            slideIndex,
+            sessionPlan.CommandKind,
+            sessionPlan.State,
+            sessionPlan.Segments.Count,
+            playbackCheckpointCount,
+            RequiresPowerPointCom: false,
+            evidenceSummary);
+    }
+
+    private static string FormatEnumList<T>(IReadOnlyList<T> values)
+        => values.Count == 0 ? "none" : string.Join(", ", values);
 
     private static IEnumerable<AnimationPaneEffectOptionDescriptor> BuildSupportedEffectOptions(
         ShapeAnimation animation)
