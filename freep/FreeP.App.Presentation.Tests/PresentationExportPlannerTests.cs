@@ -146,6 +146,29 @@ public sealed class PresentationExportPlannerTests
         return presentation;
     }
 
+    private static Presentation BuildTransparentShapeDeck()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+        var slide = new Slide { Title = "Shape opacity evidence" };
+        slide.Shapes.Add(new SlideShape
+        {
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            OffsetYEmu = DrawingMlCoordinateUnits.PointsToEmu(90),
+            ExtentCxEmu = DrawingMlCoordinateUnits.PointsToEmu(144),
+            ExtentCyEmu = DrawingMlCoordinateUnits.PointsToEmu(72),
+            Fill = new ShapeFill.Solid(new ThemeAwareColor(SrgbColor.FromRgb(0x4472C4), alpha: 128)),
+            Outline = new ShapeOutline.Visible(
+                new ThemeAwareColor(SrgbColor.FromRgb(0xC00000), alpha: 64),
+                widthPt: 1.5),
+            Text = "Transparent",
+        });
+        slide.Notes = MakeTextBody("Shape opacity notes evidence.");
+        presentation.Slides.Add(slide);
+        return presentation;
+    }
+
     private static Presentation BuildGradientDeck()
     {
         var presentation = Presentation.CreateEmpty();
@@ -544,6 +567,42 @@ public sealed class PresentationExportPlannerTests
             fill.Color == new PdfColor(0x22, 0x22, 0x22) &&
             fill.Width > 0 &&
             fill.Height > 0);
+    }
+
+    [Fact]
+    public void NotesAndHandoutPdfRenderPlans_PreserveShapeFillAndOutlineOpacityGroups()
+    {
+        var deck = BuildTransparentShapeDeck();
+
+        var notesPlan = PresentationNotesPagePdfExporter.BuildRenderPlan(deck);
+        var handoutPlan = PresentationHandoutPdfExporter.BuildRenderPlan(
+            deck,
+            new PresentationHandoutPdfExportRequest(
+                new PresentationPrintRequest(PresentationPrintLayoutKind.Handouts, HandoutSlidesPerPage: 1)));
+
+        var notesGroups = notesPlan.Pages[0].Ops.OfType<PdfOpacityGroup>().ToArray();
+        var handoutGroups = handoutPlan.Pages[0].Ops.OfType<PdfOpacityGroup>().ToArray();
+
+        notesGroups.Should().HaveCount(2);
+        handoutGroups.Should().HaveCount(2);
+        notesGroups.Should().Contain(group => Math.Abs(group.Opacity - (128 / 255.0)) < 0.0001);
+        notesGroups.Should().Contain(group => Math.Abs(group.Opacity - (64 / 255.0)) < 0.0001);
+        handoutGroups.Should().Contain(group => Math.Abs(group.Opacity - (128 / 255.0)) < 0.0001);
+        handoutGroups.Should().Contain(group => Math.Abs(group.Opacity - (64 / 255.0)) < 0.0001);
+        notesGroups.Should().Contain(group => group.Ops.OfType<PdfFillRect>().Any(fill =>
+            fill.Color == new PdfColor(0x44, 0x72, 0xC4) &&
+            fill.Width > 0 &&
+            fill.Height > 0));
+        notesGroups.Should().Contain(group => group.Ops.OfType<PdfStrokeRect>().Any(stroke =>
+            stroke.Color == new PdfColor(0xC0, 0x00, 0x00) &&
+            stroke.LineWidth > 0));
+        handoutGroups.Should().Contain(group => group.Ops.OfType<PdfFillRect>().Any(fill =>
+            fill.Color == new PdfColor(0x44, 0x72, 0xC4) &&
+            fill.Width > 0 &&
+            fill.Height > 0));
+        handoutGroups.Should().Contain(group => group.Ops.OfType<PdfStrokeRect>().Any(stroke =>
+            stroke.Color == new PdfColor(0xC0, 0x00, 0x00) &&
+            stroke.LineWidth > 0));
     }
 
     [Fact]

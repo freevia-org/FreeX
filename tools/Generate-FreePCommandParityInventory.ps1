@@ -307,7 +307,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/PresentationPdfExporterTests.cs",
                 "freep/FreeP.App.Presentation.Tests/PresentationExportPlannerTests.cs"
             ],
-            RemainingWork: "Axis-aligned oval/ellipse fixed-layout output is covered through shared WPF/Avalonia PDF paths. Broader freeform/custom geometry, crop masks, transparency, effects, and PowerPoint-authoritative PDF visual baselines remain deferred."),
+            RemainingWork: "Axis-aligned oval/ellipse fixed-layout output is covered through shared WPF/Avalonia PDF paths. Broader gradient-stop transparency nuance, soft-edge/blur tuning, richer clipping cases, and PowerPoint-authoritative PDF visual baselines remain deferred."),
         new(
             EvidenceId: "freep.export.pdf-picture-frame-clips",
             Area: "Fixed-layout PDF picture frame clipping",
@@ -322,7 +322,24 @@ internal static class FreePCommandInventory
                 "tests/Free.Shared.Pdf.Tests/PortablePdfWriterTests.cs",
                 "freep/FreeP.App.Host.Tests/PresentationPdfExporterTests.cs"
             ],
-            RemainingWork: "Ellipse and roundRect picture-frame masks now export through shared WPF/Avalonia PDF paths. Source-image crop rectangles, picture alpha/color effects, arbitrary custom/freeform geometry clipping, richer shape effects, and PowerPoint-authoritative PDF visual baselines remain deferred."),
+            RemainingWork: "Ellipse and roundRect picture-frame masks now export through shared WPF/Avalonia PDF paths. Follow-on picture crop, picture alpha, picture color-effect, and shape-opacity PDF slices cover the next bounded effects. Arbitrary custom/freeform picture-frame clipping, richer shape effects, and PowerPoint-authoritative PDF visual baselines remain deferred."),
+        new(
+            EvidenceId: "freep.export.pdf-shape-opacity",
+            Area: "Fixed-layout PDF shape fill and outline opacity",
+            Status: "shared-fixed-layout-evidence",
+            HostCoverage: "WPF/Avalonia share the same FreeP PPTX alpha model, fixed-layout PDF exporter, notes-page PDF thumbnail mapper, handout PDF thumbnail mapper, and shared portable PDF draw-op model",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-pdf-shape-opacity-export-2026-07-14.md",
+                "docs/parity/freep-pdf-effect-thumbnail-export-2026-07-13.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Host.Tests/PptxRoundTripTests.cs",
+                "freep/FreeP.App.Host.Tests/PresentationPdfExporterTests.cs",
+                "freep/FreeP.App.Presentation.Tests/PresentationExportPlannerTests.cs"
+            ],
+            RemainingWork: "PPTX-authored shape fill and outline alpha now round-trip through the shared model and survive full-slide, notes-page, and handout PDF export paths used by WPF/Avalonia. Gradient-stop transparency nuance, soft-edge/blur tuning, richer arbitrary clipping cases, and PowerPoint-authoritative PDF visual baselines remain deferred."),
         new(
             EvidenceId: "freep.table.inline-text.workflow-depth",
             Area: "Rich inline table-cell text editing, paragraph formatting, selection, and persistence",
