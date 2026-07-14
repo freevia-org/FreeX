@@ -5,6 +5,7 @@ param(
     [string]$WordApplicationProgId = "Word.Application",
     [switch]$AllowMissingWord,
     [switch]$NoWord,
+    [switch]$UseVisibleWordPublish,
     [switch]$SkipEvidenceRender
 )
 
@@ -199,7 +200,11 @@ $fidelityRenderProject = Join-Path $repoRoot "freew\tools\FreeW.FidelityRender\F
 $pageLayoutShotProject = Join-Path $repoRoot "freew\tools\FreeW.PageLayoutShot\FreeW.PageLayoutShot.csproj"
 $pdfRasterizeProject = Join-Path $repoRoot "freew\tools\FreeW.PdfRasterize\FreeW.PdfRasterize.csproj"
 $summaryProject = Join-Path $repoRoot "freew\tools\FreeW.VisualEvidenceSummary\FreeW.VisualEvidenceSummary.csproj"
-$wordExportScript = Join-Path $repoRoot "tools\FreeW.RenderCompare\Export-WordPdfs.ps1"
+$wordExportScript = if ($UseVisibleWordPublish) {
+    Join-Path $repoRoot "tools\FreeW.RenderCompare\Export-WordPdfsVisible.ps1"
+} else {
+    Join-Path $repoRoot "tools\FreeW.RenderCompare\Export-WordPdfs.ps1"
+}
 
 New-Item -ItemType Directory -Force -Path $runRootFull, $fixtureDir, $wpfDir, $avaloniaDir, $wordPdfDir, $wordBaselineDir | Out-Null
 
@@ -226,7 +231,17 @@ if (-not $wordAvailable) {
 }
 
 try {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $wordExportScript -CorpusDir $fixtureDir -OutDir $wordPdfDir
+    $wordExportArgs = @(
+        "-NoProfile",
+        "-ExecutionPolicy", "Bypass",
+        "-File", $wordExportScript,
+        "-CorpusDir", $fixtureDir,
+        "-OutDir", $wordPdfDir)
+    if ($UseVisibleWordPublish) {
+        $wordExportArgs += @("-WordApplicationProgId", $WordApplicationProgId)
+    }
+
+    & powershell.exe @wordExportArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Word PDF export failed with exit code $LASTEXITCODE"
     }

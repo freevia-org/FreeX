@@ -14,6 +14,8 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("FreeW.FidelityRender");
         source.Should().Contain("\"--composite\", \"--software-fallback\"");
         source.Should().Contain("-AllowMissingWord");
+        source.Should().Contain("[switch]$UseVisibleWordPublish");
+        source.Should().Contain("Export-WordPdfsVisible.ps1");
         source.Should().Contain("--word-baseline-unavailable-reason");
         source.Should().Contain("--allow-no-word-fallback-evidence");
         source.Should().Contain("evidenceMode = \"no-word-fallback\"");
@@ -27,6 +29,24 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("no-Word run must record candidate Word baseline PNG paths");
         source.Should().Contain("Word baseline readiness manifest:");
         source.Should().Contain("FreeW.VisualEvidenceSummary");
+    }
+
+    [Fact]
+    public void VisibleWordPdfExporter_DrivesPublishDialogWithoutOwningExistingWordSession()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "tools",
+            "FreeW.RenderCompare",
+            "Export-WordPdfsVisible.ps1"));
+
+        source.Should().Contain("[Runtime.InteropServices.Marshal]::GetActiveObject($ProgId)");
+        source.Should().Contain("New-Object -ComObject $ProgId");
+        source.Should().Contain("$createdWord");
+        source.Should().Contain("if ($createdWord -and $word)");
+        source.Should().Contain("FileSaveAsPdfOrXps");
+        source.Should().Contain("Publish as PDF or XPS");
+        source.Should().Contain("word-export-visible-ui.csv");
+        source.Should().Contain("Visible Word PDF exports complete");
     }
 
     [Fact]

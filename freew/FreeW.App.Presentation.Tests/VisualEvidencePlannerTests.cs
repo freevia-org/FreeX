@@ -1662,6 +1662,9 @@ public sealed class VisualEvidencePlannerTests
         source.Should().Contain("Test-ComProgIdAvailable");
         source.Should().Contain("[type]::GetTypeFromProgID($ProgId, $false)");
         source.Should().Contain("-AllowMissingWord");
+        source.Should().Contain("[switch]$UseVisibleWordPublish");
+        source.Should().Contain("Export-WordPdfsVisible.ps1");
+        source.Should().Contain("-WordApplicationProgId");
         source.Should().Contain("--word-baseline-scope");
         source.Should().Contain("generated-corpus");
         source.Should().Contain("--word-baseline-unavailable-reason");
