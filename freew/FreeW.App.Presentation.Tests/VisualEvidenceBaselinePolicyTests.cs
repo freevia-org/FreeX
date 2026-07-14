@@ -182,6 +182,35 @@ public sealed class VisualEvidenceBaselinePolicyTests
     }
 
     [Fact]
+    public void WordBaselinePolicy_KeepsHeaderFooterImageProofsDirectlyComparable()
+    {
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.HeaderFooterImageVisualProofScenarioIds)
+        {
+            var row = BuildRow(
+                scenarioId,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId + "_p2.png",
+                pageNumber: 2,
+                pageCount: 2);
+
+            var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+            var comparison = FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                row,
+                FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                "COM ProgID 'Word.Application' is not registered");
+
+            policy.IsComparable.Should().BeTrue();
+            policy.BaselineScenarioId.Should().Be(scenarioId);
+            comparison.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            comparison.BaselineScenarioId.Should().Be(scenarioId);
+            comparison.BaselineId.Should().Be($"{scenarioId}/p2/{scenarioId}_p2.png");
+            comparison.CandidateBaselinePaths.Should().Contain([
+                $"{scenarioId}/{scenarioId}_p2.png",
+                $"{scenarioId}_p2.png"]);
+        }
+    }
+
+    [Fact]
     public void WordBaselinePolicy_KeepsReviewMarkupProofsDirectlyComparable()
     {
         foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.ReviewMarkupVisualProofScenarioIds)

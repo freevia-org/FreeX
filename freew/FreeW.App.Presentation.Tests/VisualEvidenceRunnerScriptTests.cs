@@ -42,6 +42,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("LegalReferenceSectionPageProof = @(");
         source.Should().Contain("PageCompositionProof = @(");
         source.Should().Contain("FloatingWrappingVisualProof = @(");
+        source.Should().Contain("HeaderFooterImageVisualProof = @(");
         source.Should().Contain("TableLayoutProof = @(");
         source.Should().Contain("TablePaginationPageCompositionProof = @(");
         source.Should().Contain("DrawingObjectVisualProof = @(");
@@ -63,6 +64,8 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("'f2-01-float-wrap'");
         source.Should().Contain("'page-composition-floating-image'");
         source.Should().Contain("freew-fidelity-corpus/runs/floating-wrapping-proof");
+        source.Should().Contain("freew-fidelity-corpus/runs/header-footer-image-proof");
+        source.Should().Contain("'f2-hf-images'");
         source.Should().Contain("$f2ObjectsProject = Join-Path $repoRoot 'freew\\tools\\_corpus_f2_objects\\_corpus_f2_objects.csproj'");
         source.Should().Contain("Generate floating/wrapping DOCX fixtures");
         source.Should().Contain("$effectiveScenarioIds -contains 'f2-01-float-wrap'");
@@ -168,6 +171,14 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("missing WPF/Avalonia floating wrap semantic evidence");
         source.Should().Contain("Floating/wrapping proof readiness: trusted paired row=1");
         source.Should().Contain("Floating/wrapping Word-baseline policy rows: verified rows=");
+        source.Should().Contain("Assert-HeaderFooterImageVisualProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Header/footer image visual proof readiness requires FreeW visual evidence summary schema v43 or newer");
+        source.Should().Contain("$readinessRows = @($summary.headerFooterImageProofReadiness | Where-Object { $_.scenarioId -eq $scenarioId })");
+        source.Should().Contain("missing header/footer image semantic readiness summary");
+        source.Should().Contain("missing honest word-baseline-unavailable header/footer image blocker");
+        source.Should().Contain("f2-hf-images-word-baseline-fidelity");
+        source.Should().Contain("Header/footer image visual proof readiness: trusted scenario rows=");
+        source.Should().Contain("Header/footer image Word-baseline policy rows: verified rows=");
         source.Should().Contain("Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("Table layout proof readiness requires FreeW visual evidence summary schema v25 or newer");
         source.Should().Contain("'table-layout-complex' = 1");

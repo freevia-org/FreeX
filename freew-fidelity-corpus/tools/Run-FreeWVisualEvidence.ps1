@@ -50,6 +50,9 @@
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/floating-wrapping-proof -ScenarioSet FloatingWrappingVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
+    pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/header-footer-image-proof -ScenarioSet HeaderFooterImageVisualProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
+
+.EXAMPLE
     pwsh freew-fidelity-corpus/tools/Run-FreeWVisualEvidence.ps1 -OutDir freew-fidelity-corpus/runs/table-pagination-page-composition-proof -ScenarioSet TablePaginationPageCompositionProof -WordBaselineUnavailableReason "COM ProgID 'Word.Application' is not registered"
 
 .EXAMPLE
@@ -170,6 +173,9 @@ $namedScenarioSets = @{
     FloatingWrappingVisualProof = @(
         'f2-01-float-wrap',
         'page-composition-floating-image'
+    )
+    HeaderFooterImageVisualProof = @(
+        'f2-hf-images'
     )
     TableLayoutProof = @(
         'table-layout-complex',
@@ -1045,6 +1051,153 @@ function Assert-FloatingWrappingProofReadiness {
     }
     else {
         Write-Host "Floating/wrapping Word-baseline policy rows: no Word baseline mode requested"
+    }
+}
+
+function Assert-HeaderFooterImageVisualProofReadiness {
+    param(
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [Parameter(Mandatory = $true)][string[]]$ScenarioIds
+    )
+
+    $scenarioId = 'f2-hf-images'
+    if ($ScenarioIds -notcontains $scenarioId) {
+        return
+    }
+
+    if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
+        throw "Header/footer image visual proof readiness cannot be checked because the summary JSON is missing: $SummaryJsonPath"
+    }
+
+    $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
+    if ([int]$summary.schemaVersion -lt 43) {
+        throw "Header/footer image visual proof readiness requires FreeW visual evidence summary schema v43 or newer, found v$($summary.schemaVersion)"
+    }
+
+    $readinessRows = @($summary.headerFooterImageProofReadiness | Where-Object { $_.scenarioId -eq $scenarioId })
+    $scenarios = @($summary.scenarios)
+    $baselineComparisons = @($summary.baselineComparisons)
+    $blockers = @($summary.remainingEvidenceBlockers)
+    $summaryFailures = @($summary.trust.failures)
+    $requiredHosts = @(
+        'wpf-fidelity-render',
+        'avalonia-page-layout-shot'
+    )
+    $failures = New-Object System.Collections.Generic.List[string]
+    $trustedScenarioRows = 0
+    $verifiedSemanticRows = 0
+    $verifiedBaselineRows = 0
+
+    if ($readinessRows.Count -lt 2) {
+        $failures.Add("${scenarioId}: expected at least two header/footer image proof readiness rows")
+    }
+
+    foreach ($proofRow in $readinessRows) {
+        if ($proofRow.trust.passed -ne $true -or $proofRow.status -ne 'paired-renderer-proof-ready') {
+            $notes = @($proofRow.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = [string]$proofRow.baselineReadiness
+            }
+            $failures.Add("${scenarioId}/p$($proofRow.pageNumber): readiness status '$($proofRow.status)' failed ($notes)")
+        }
+
+        $semantic = [string]$proofRow.semanticEvidence
+        if ([string]::IsNullOrWhiteSpace($semantic) -or $semantic -eq '-') {
+            $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing header/footer image semantic readiness summary")
+        }
+        elseif ($semantic -notlike '*header/footer image(s)*' -or $semantic -notlike '*image slots=*') {
+            $failures.Add("${scenarioId}/p$($proofRow.pageNumber): missing header/footer image slot semantic evidence")
+        }
+        else {
+            $verifiedSemanticRows++
+        }
+    }
+
+    $semanticFailures = @($summaryFailures | Where-Object {
+        ([string]$_).IndexOf("header/footer renderer pair '$scenarioId'", [StringComparison]::Ordinal) -ge 0
+    })
+    foreach ($semanticFailure in $semanticFailures) {
+        $failures.Add("${scenarioId}: WPF/Avalonia semantic parity drift ($semanticFailure)")
+    }
+
+    foreach ($hostId in $requiredHosts) {
+        $match = @($scenarios | Where-Object {
+            $_.hostId -eq $hostId -and
+            $_.scenarioId -eq $scenarioId
+        })
+
+        if ($match.Count -eq 0) {
+            $failures.Add("${hostId}/${scenarioId}: missing normalized scenario row")
+            continue
+        }
+
+        $row = $match[0]
+        if ($row.trust.passed -ne $true) {
+            $notes = @($row.trust.failures) -join '; '
+            if ([string]::IsNullOrWhiteSpace($notes)) {
+                $notes = 'no notes'
+            }
+            $failures.Add("${hostId}/${scenarioId}: scenario trust failed ($notes)")
+            continue
+        }
+
+        if ([int]$row.trustedOutputs -lt 2) {
+            $failures.Add("${hostId}/${scenarioId}: expected at least two trusted header/footer image outputs, found $($row.trustedOutputs)")
+            continue
+        }
+
+        $trustedScenarioRows++
+    }
+
+    if ($baselineComparisons.Count -gt 0) {
+        foreach ($hostId in $requiredHosts) {
+            $matches = @($baselineComparisons | Where-Object {
+                $_.hostId -eq $hostId -and
+                $_.scenarioId -eq $scenarioId
+            })
+            if ($matches.Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}: missing Word-baseline policy row")
+                continue
+            }
+
+            foreach ($comparison in $matches) {
+                if ([string]$comparison.baselineScenarioId -ne $scenarioId) {
+                    $failures.Add("${hostId}/${scenarioId}/p$($comparison.pageNumber): unexpected baseline scenario '$($comparison.baselineScenarioId)'")
+                    continue
+                }
+
+                $verifiedBaselineRows++
+            }
+        }
+
+        $hasWordBaselineUnavailable = @($baselineComparisons | Where-Object {
+            $_.scenarioId -eq $scenarioId -and
+            $_.status -eq 'word-baseline-unavailable'
+        }).Count -gt 0
+        if ($hasWordBaselineUnavailable) {
+            $blockerRows = @($blockers | Where-Object {
+                $_.blockerId -eq 'f2-hf-images-word-baseline-fidelity' -and
+                $_.scenarioId -eq $scenarioId -and
+                $_.status -eq 'word-baseline-unavailable' -and
+                $_.requiresWordBaseline -eq $true
+            })
+            if ($blockerRows.Count -eq 0) {
+                $failures.Add("${scenarioId}: missing honest word-baseline-unavailable header/footer image blocker")
+            }
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "Header/footer image visual proof readiness failed:`n - $($failures -join "`n - ")"
+    }
+
+    Write-Host "Header/footer image visual proof readiness: trusted scenario rows=$trustedScenarioRows"
+    Write-Host "Header/footer image semantic rows: verified rows=$verifiedSemanticRows"
+    if ($baselineComparisons.Count -gt 0) {
+        Write-Host "Header/footer image Word-baseline policy rows: verified rows=$verifiedBaselineRows"
+    }
+    else {
+        Write-Host "Header/footer image Word-baseline policy rows: no Word baseline mode requested"
     }
 }
 
@@ -2680,6 +2833,7 @@ Assert-ReferencesHeavyWordBaselineProofReadiness $summaryJson $effectiveScenario
 Assert-LegalReferenceSectionPageProofReadiness $summaryJson $effectiveScenarioIds
 Assert-PageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-FloatingWrappingProofReadiness $summaryJson $effectiveScenarioIds
+Assert-HeaderFooterImageVisualProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TableLayoutProofReadiness $summaryJson $effectiveScenarioIds
 Assert-TablePaginationPageCompositionProofReadiness $summaryJson $effectiveScenarioIds
 Assert-DrawingObjectVisualProofReadiness $summaryJson $effectiveScenarioIds

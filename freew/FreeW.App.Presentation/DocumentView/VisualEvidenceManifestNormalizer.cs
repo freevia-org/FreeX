@@ -66,6 +66,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceNormalizedRow> Evidence,
     IReadOnlyList<FreeWVisualEvidenceBackstagePrintReadiness> BackstagePrintEvidenceReadiness,
     IReadOnlyList<FreeWVisualFloatingWrappingProofReadiness> FloatingWrappingProofReadiness,
+    IReadOnlyList<FreeWVisualHeaderFooterImageProofReadiness> HeaderFooterImageProofReadiness,
     IReadOnlyList<FreeWVisualTablePaginationProofReadiness> TablePaginationProofReadiness,
     IReadOnlyList<FreeWVisualDrawingObjectProofReadiness> DrawingObjectProofReadiness,
     IReadOnlyList<FreeWVisualReviewMarkupProofReadiness> ReviewMarkupProofReadiness,
@@ -93,6 +94,17 @@ public sealed record FreeWVisualFloatingWrappingProofReadiness(
     string WpfScenarioId,
     string WpfOutputSummary,
     string AvaloniaScenarioId,
+    string AvaloniaOutputSummary,
+    string WordBaselineStatus,
+    string BaselineReadiness,
+    string SemanticEvidence,
+    FreeWVisualEvidenceTrust Trust);
+
+public sealed record FreeWVisualHeaderFooterImageProofReadiness(
+    string ScenarioId,
+    int PageNumber,
+    string Status,
+    string WpfOutputSummary,
     string AvaloniaOutputSummary,
     string WordBaselineStatus,
     string BaselineReadiness,
@@ -211,7 +223,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 42;
+    public const int SummarySchemaVersion = 43;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -292,6 +304,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "field-page-number-variants",
         "backstage-print-preview-fidelity",
         "backstage-pdf-export-fidelity"
+    ];
+    public static IReadOnlyList<string> HeaderFooterImageVisualProofScenarioIds { get; } =
+    [
+        "f2-hf-images"
     ];
     public static IReadOnlyList<string> DrawingObjectVisualProofScenarioIds { get; } =
         DrawingObjectRendererScenarioIds
@@ -463,6 +479,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         var backstageReadiness = BuildBackstagePrintEvidenceReadinessRows(expected, orderedRows);
         var floatingWrappingProofReadiness = BuildFloatingWrappingProofReadinessRows(expected, orderedRows, []);
+        var headerFooterImageProofReadiness = BuildHeaderFooterImageProofReadinessRows(expected, orderedRows, []);
         var tablePaginationProofReadiness = BuildTablePaginationProofReadinessRows(expected, orderedRows, []);
         var drawingObjectProofReadiness = BuildDrawingObjectProofReadinessRows(expected, orderedRows, []);
         var reviewMarkupProofReadiness = BuildReviewMarkupProofReadinessRows(expected, orderedRows, []);
@@ -480,6 +497,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             orderedRows,
             backstageReadiness,
             floatingWrappingProofReadiness,
+            headerFooterImageProofReadiness,
             tablePaginationProofReadiness,
             drawingObjectProofReadiness,
             reviewMarkupProofReadiness,
@@ -543,6 +561,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         AppendBackstagePrintEvidenceReadiness(sb, summary);
         AppendFloatingWrappingProofReadiness(sb, summary);
+        AppendHeaderFooterImageProofReadiness(sb, summary);
         AppendTablePaginationProofReadiness(sb, summary);
         AppendDrawingObjectProofReadiness(sb, summary);
         AppendReviewMarkupProofReadiness(sb, summary);
@@ -680,6 +699,33 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
         sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
         foreach (var row in summary.TablePaginationProofReadiness)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.ScenarioId)} | " +
+                $"{row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(row.Status)} | " +
+                $"{EscapeMarkdown(row.WpfOutputSummary)} | " +
+                $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | " +
+                $"{EscapeMarkdown(row.WordBaselineStatus)} | " +
+                $"{EscapeMarkdown(row.BaselineReadiness)} | " +
+                $"{EscapeMarkdown(row.SemanticEvidence)} | " +
+                $"{(row.Trust.Passed ? "passed" : "failed")} |");
+        }
+    }
+
+    private static void AppendHeaderFooterImageProofReadiness(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.HeaderFooterImageProofReadiness.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## Header/Footer Image Visual Proof Readiness");
+        sb.AppendLine();
+        sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
+        sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var row in summary.HeaderFooterImageProofReadiness)
         {
             sb.AppendLine(
                 $"| {EscapeMarkdown(row.ScenarioId)} | " +
@@ -1144,6 +1190,68 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return rows;
     }
 
+    private static IReadOnlyList<FreeWVisualHeaderFooterImageProofReadiness> BuildHeaderFooterImageProofReadinessRows(
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var rows = new List<FreeWVisualHeaderFooterImageProofReadiness>();
+        foreach (var scenarioId in HeaderFooterImageVisualProofScenarioIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            var expected = expectedScenarios
+                .Any(e => string.Equals(e.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            var hasEvidence = evidence
+                .Any(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            if (!expected && !hasEvidence)
+                continue;
+
+            foreach (var pageNumber in RequiredScenarioPages(scenarioId))
+            {
+                var wpfRows = RowsForHostScenarioPage(evidence, WpfHostId, scenarioId, pageNumber);
+                var avaloniaRows = RowsForHostScenarioPage(evidence, AvaloniaHostId, scenarioId, pageNumber);
+                var trustedWpf = wpfRows.FirstOrDefault(row => row.Trust.Passed);
+                var trustedAvalonia = avaloniaRows.FirstOrDefault(row => row.Trust.Passed);
+                var relatedBaseline = baselineComparisons
+                    .Where(comparison =>
+                        string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase)
+                        && comparison.PageNumber == pageNumber)
+                    .ToList();
+
+                if (trustedWpf is null || trustedAvalonia is null)
+                {
+                    rows.Add(new FreeWVisualHeaderFooterImageProofReadiness(
+                        scenarioId,
+                        pageNumber,
+                        "missing-paired-renderer-evidence",
+                        FormatOutputSummary(wpfRows),
+                        FormatOutputSummary(avaloniaRows),
+                        FormatWordBaselineStatus(relatedBaseline),
+                        "paired WPF/Avalonia header/footer image evidence is required before Word baseline comparison readiness",
+                        FormatHeaderFooterImageProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                        new FreeWVisualEvidenceTrust(false, BuildMissingHeaderFooterImagePairFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia))));
+                    continue;
+                }
+
+                var failures = BuildHeaderFooterImageSemanticFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia);
+                var baselineTrust = EvaluateDrawingObjectProofReadiness(relatedBaseline);
+                failures.AddRange(baselineTrust.Failures);
+                var trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+                rows.Add(new FreeWVisualHeaderFooterImageProofReadiness(
+                    scenarioId,
+                    pageNumber,
+                    trust.Passed ? "paired-renderer-proof-ready" : "header-footer-image-proof-failed",
+                    FormatOutputSummary(wpfRows),
+                    FormatOutputSummary(avaloniaRows),
+                    FormatWordBaselineStatus(relatedBaseline),
+                    FormatHeaderFooterImageBaselineReadiness(relatedBaseline, scenarioId),
+                    FormatHeaderFooterImageProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                    trust));
+            }
+        }
+
+        return rows;
+    }
+
     private static IReadOnlyList<FreeWVisualTablePaginationProofReadiness> BuildTablePaginationProofReadinessRows(
         IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
@@ -1481,6 +1589,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 summary.ExpectedScenarios,
                 summary.Evidence,
                 ordered),
+            HeaderFooterImageProofReadiness = BuildHeaderFooterImageProofReadinessRows(
+                summary.ExpectedScenarios,
+                summary.Evidence,
+                ordered),
             TablePaginationProofReadiness = BuildTablePaginationProofReadinessRows(
                 summary.ExpectedScenarios,
                 summary.Evidence,
@@ -1537,6 +1649,20 @@ public static class FreeWVisualEvidenceManifestNormalizer
             failures.Add($"drawing/object proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted WPF visual evidence");
         if (trustedAvalonia is null)
             failures.Add($"drawing/object proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
+        return failures;
+    }
+
+    private static IReadOnlyList<string> BuildMissingHeaderFooterImagePairFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow? trustedWpf,
+        FreeWVisualEvidenceNormalizedRow? trustedAvalonia)
+    {
+        var failures = new List<string>();
+        if (trustedWpf is null)
+            failures.Add($"header/footer image proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted WPF visual evidence");
+        if (trustedAvalonia is null)
+            failures.Add($"header/footer image proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
         return failures;
     }
 
@@ -1916,6 +2042,19 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return new FreeWVisualEvidenceTrust(false, failures);
     }
 
+    private static List<string> BuildHeaderFooterImageSemanticFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia)
+    {
+        var failures = new List<string>();
+        ValidateRequiredHeaderFooterImageEvidence(scenarioId, pageNumber, wpf, failures);
+        ValidateRequiredHeaderFooterImageEvidence(scenarioId, pageNumber, avalonia, failures);
+        ValidateHeaderFooterPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+        return failures;
+    }
+
     private static string FormatDrawingObjectBaselineReadiness(
         IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline,
         string scenarioId)
@@ -1929,6 +2068,35 @@ public static class FreeWVisualEvidenceManifestNormalizer
             StringComparison.OrdinalIgnoreCase)))
         {
             return "Word COM or baseline generation unavailable; paired WPF/Avalonia evidence is retained without authoritative Word parity";
+        }
+
+        if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
+            return "one or more Word baseline comparison rows failed trust; inspect baseline triage";
+
+        if (relatedBaseline.Any(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.PassedStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "real Word PNG baseline compared within configured tolerance";
+        }
+
+        return "Word baseline policy rows are present and trusted";
+    }
+
+    private static string FormatHeaderFooterImageBaselineReadiness(
+        IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline,
+        string scenarioId)
+    {
+        if (relatedBaseline.Count == 0)
+            return "paired renderer evidence is present; run Word PNG baseline comparison for " + scenarioId;
+
+        if (relatedBaseline.All(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Word COM or baseline generation unavailable; paired WPF/Avalonia header/footer image evidence is retained without authoritative Word parity";
         }
 
         if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
@@ -2339,6 +2507,46 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (avalonia is not null)
             parts.Add("Avalonia " + FormatDrawingObjectRowSemanticEvidence(avalonia));
         return parts.Count == 0 ? "-" : string.Join("; ", parts);
+    }
+
+    private static string FormatHeaderFooterImageProofSemanticEvidence(
+        FreeWVisualEvidenceNormalizedRow? wpf,
+        FreeWVisualEvidenceNormalizedRow? avalonia)
+    {
+        var parts = new List<string>();
+        if (wpf is not null)
+            parts.Add("WPF " + FormatHeaderFooterImageRowSemanticEvidence(wpf));
+        if (avalonia is not null)
+            parts.Add("Avalonia " + FormatHeaderFooterImageRowSemanticEvidence(avalonia));
+        return parts.Count == 0 ? "-" : string.Join("; ", parts);
+    }
+
+    private static string FormatHeaderFooterImageRowSemanticEvidence(FreeWVisualEvidenceNormalizedRow row)
+    {
+        var plan = row.HeaderFooters ?? HeaderFooterVisualPlanner.EmptyExpectation;
+        var slotSummaries = plan.Slots
+            .Where(slot => slot.ImageCount > 0)
+            .Select(slot => string.Concat(
+                slot.SlotName,
+                "/section",
+                slot.SectionOrdinal.ToString(CultureInfo.InvariantCulture),
+                "/page",
+                slot.PageNumber.ToString(CultureInfo.InvariantCulture),
+                "/images=",
+                slot.ImageCount.ToString(CultureInfo.InvariantCulture),
+                "/align=",
+                slot.Alignment))
+            .OrderBy(summary => summary, StringComparer.Ordinal)
+            .ToList();
+
+        return string.Concat(
+            plan.ImageCount.ToString(CultureInfo.InvariantCulture),
+            " header/footer image(s), ",
+            plan.SlotCount.ToString(CultureInfo.InvariantCulture),
+            " slot(s), slots=",
+            FormatSummaries(plan.SlotNames ?? []),
+            ", image slots=",
+            slotSummaries.Count == 0 ? "-" : FormatSummaries(slotSummaries));
     }
 
     private static string FormatLegalReferenceProofSemanticEvidence(
@@ -2772,6 +2980,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         blockers.AddRange(BuildEquationStructureWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildLegalReferenceWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildTablePaginationWordBaselineBlockers(summary, baselineComparisons));
+        blockers.AddRange(BuildHeaderFooterImageWordBaselineBlockers(summary, baselineComparisons));
 
         var rows = summary.Evidence
             .Where(row => string.Equals(row.ScenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
@@ -2884,6 +3093,167 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 requiresWordBaseline: false));
         return blockers;
     }
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildHeaderFooterImageWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        const string scenarioId = "f2-hf-images";
+        var rows = summary.Evidence
+            .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .Where(row => row.Trust.Passed)
+            .ToList();
+        if (rows.Count == 0)
+            return [];
+
+        var semanticEvidence = BuildHeaderFooterImageSemanticEvidence(rows);
+        if (semanticEvidence.Count == 0)
+        {
+            return
+            [
+                BuildHeaderFooterImageVisualBlocker(
+                    "semantic-header-footer-images-missing",
+                    "trusted WPF and Avalonia header/footer image metadata",
+                    "trusted f2-hf-images evidence did not record header/footer image metadata; regenerate current-schema evidence or fix shared header/footer planning before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false)
+            ];
+        }
+
+        var related = baselineComparisons
+            .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (related.Count == 0)
+        {
+            return
+            [
+                BuildHeaderFooterImageVisualBlocker(
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for header/footer image placement",
+                    "trusted FreeW header/footer image evidence is present; run a Word-baseline comparison for f2-hf-images to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        var statuses = related
+            .Select(comparison => comparison.Status)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var candidates = related
+            .SelectMany(comparison => comparison.CandidateBaselinePaths)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            var reasons = related
+                .Where(comparison => string.Equals(
+                    comparison.Status,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(FormatComparisonNotes)
+                .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var reason = reasons.Count == 0
+                ? "MS Word baseline PNG generation was unavailable for f2-hf-images"
+                : string.Join("; ", reasons);
+            return
+            [
+                BuildHeaderFooterImageVisualBlocker(
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for header/footer image placement",
+                    reason,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return
+            [
+                BuildHeaderFooterImageVisualBlocker(
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for header/footer image placement",
+                    "trusted header/footer image evidence is present, but mapped Word baseline PNGs are missing for f2-hf-images",
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        if (related.All(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return [];
+        }
+
+        return
+        [
+            BuildHeaderFooterImageVisualBlocker(
+                "needs-render-review",
+                "render-review resolution for failed header/footer image Word PNG comparisons",
+                "f2-hf-images Word baseline comparison did not fully pass; inspect header/footer image placement differences",
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false)
+        ];
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildHeaderFooterImageVisualBlocker(
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline) =>
+        new(
+            "f2-hf-images-word-baseline-fidelity",
+            "f2-hf-images",
+            "Header/footer image visual fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
+
+    private static IReadOnlyList<string> BuildHeaderFooterImageSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
+        rows
+            .Where(row => row.HeaderFooters.HasImages && row.HeaderFooters.ImageCount > 0)
+            .Select(row => string.Concat(
+                row.HostId,
+                "/p",
+                row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                ": images=",
+                row.HeaderFooters.ImageCount.ToString(CultureInfo.InvariantCulture),
+                "; slots=",
+                FormatSummaries(row.HeaderFooters.SlotNames ?? []),
+                "; signatures=",
+                FormatSummaries(row.HeaderFooters.ImageSignatures ?? [])))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
 
     private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildEquationStructureWordBaselineBlockers(
         FreeWVisualEvidenceNormalizedSummary summary,

@@ -1381,6 +1381,20 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void HeaderFooterImageVisualProofScenarioIds_CoverFocusedNoWordProofFamily()
+    {
+        FreeWVisualEvidenceManifestNormalizer.HeaderFooterImageVisualProofScenarioIds.Should().Equal(
+        [
+            "f2-hf-images"
+        ]);
+
+        FreeWVisualEvidenceManifestNormalizer.HeaderFooterImageVisualProofScenarioIds.Should().OnlyContain(
+            scenarioId => FreeWVisualEvidenceManifestNormalizer.HeaderFooterRendererScenarioIds.Contains(
+                scenarioId,
+                StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void DefaultExpectedScenarios_RequiresPairedTableRendererEvidence()
     {
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
@@ -7034,6 +7048,114 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("| drawing-objects-complex | 1 | paired-renderer-proof-ready |");
             markdown.Should().Contain("word-baseline-unavailable=2");
             markdown.Should().Contain("Word COM or baseline generation unavailable; paired WPF/Avalonia evidence is retained without authoritative Word parity");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void HeaderFooterImageNoWordSummary_ReportsFocusedProofReadinessWithoutAuthoritativeWordParity()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "f2-hf-images";
+            var wpfRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2))
+                .ToList();
+            var avaloniaRows = Enumerable.Range(1, 2)
+                .Select(page => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    page,
+                    pageCount: 2))
+                .ToList();
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        2),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        2)
+                ]);
+
+            summary.Trust.Passed.Should().BeTrue();
+            summary.HeaderFooterImageProofReadiness.Should().HaveCount(2);
+            summary.HeaderFooterImageProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "not-run"
+                && row.SemanticEvidence.Contains("header/footer image(s)", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("image slots=", StringComparison.Ordinal)
+                && row.Trust.Passed);
+
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.HeaderFooterImageProofReadiness.Should().HaveCount(2);
+            withBaseline.HeaderFooterImageProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "word-baseline-unavailable=2"
+                && row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("header/footer image(s)", StringComparison.Ordinal)
+                && row.Trust.Passed);
+            withBaseline.RemainingEvidenceBlockers.Should().ContainSingle(blocker =>
+                blocker.BlockerId == "f2-hf-images-word-baseline-fidelity"
+                && blocker.ScenarioId == scenarioId
+                && blocker.Status == FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus
+                && blocker.Area == "Header/footer image visual fidelity"
+                && blocker.RequiresWordBaseline
+                && blocker.SemanticEvidence.Count == 4);
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(43);
+            doc.RootElement.GetProperty("headerFooterImageProofReadiness").GetArrayLength().Should().Be(2);
+            doc.RootElement.GetProperty("remainingEvidenceBlockers").EnumerateArray()
+                .Should().Contain(blocker =>
+                    blocker.GetProperty("blockerId").GetString() == "f2-hf-images-word-baseline-fidelity");
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Header/Footer Image Visual Proof Readiness");
+            markdown.Should().Contain("| f2-hf-images | 1 | paired-renderer-proof-ready |");
+            markdown.Should().Contain("word-baseline-unavailable=2");
+            markdown.Should().Contain("Header/footer image visual fidelity");
+            markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
         }
         finally
         {
