@@ -43,8 +43,22 @@ public sealed class PrintChartTextOverlayPlannerTests
         texts.Should().Contain("PDF tick Jan");
         texts.Should().Contain("$10.00");
         texts.Should().Contain("PDF tick Jan, 8");
+        overlays.Single(overlay => overlay.Text == "Printable chart label title")
+            .Role.Should().Be(PrintChartTextOverlayRole.ChartTitle);
+        overlays.Single(overlay => overlay.Text == "Printable chart label axis")
+            .Role.Should().Be(PrintChartTextOverlayRole.CategoryAxisTitle);
+        overlays.Single(overlay => overlay.Text == "PDF Rev")
+            .Role.Should().Be(PrintChartTextOverlayRole.LegendEntry);
+        overlays.Single(overlay => overlay.Text == "PDF tick Jan")
+            .Role.Should().Be(PrintChartTextOverlayRole.CategoryTickLabel);
+        overlays.Single(overlay => overlay.Text == "$10.00")
+            .Role.Should().Be(PrintChartTextOverlayRole.ValueTickLabel);
+        overlays.Single(overlay => overlay.Text == "PDF tick Jan, 8")
+            .Role.Should().Be(PrintChartTextOverlayRole.DataLabel);
         overlays.Single(overlay => overlay.Text == "Printable value axis")
             .RotationDegrees.Should().Be(-90);
+        overlays.Single(overlay => overlay.Text == "Printable value axis")
+            .Role.Should().Be(PrintChartTextOverlayRole.ValueAxisTitle);
     }
 
     [Theory]
@@ -68,13 +82,16 @@ public sealed class PrintChartTextOverlayPlannerTests
             ShowDataLabelPercentage = true
         };
 
-        var texts = Build(chart)
-            .Select(overlay => overlay.Text)
-            .ToList();
+        var overlays = Build(chart);
+        var texts = overlays.Select(overlay => overlay.Text).ToList();
 
         texts.Should().Contain("PDF pie Jan");
         texts.Should().Contain("PDF pie Feb");
         texts.Should().Contain("PDF pie Jan, 24%");
+        overlays.Where(overlay => overlay.Text is "PDF pie Jan" or "PDF pie Feb")
+            .Should().OnlyContain(overlay => overlay.Role == PrintChartTextOverlayRole.LegendEntry);
+        overlays.Single(overlay => overlay.Text == "PDF pie Jan, 24%")
+            .Role.Should().Be(PrintChartTextOverlayRole.DataLabel);
     }
 
     [Fact]

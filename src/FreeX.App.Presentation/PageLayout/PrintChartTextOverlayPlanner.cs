@@ -13,6 +13,18 @@ public readonly record struct PrintChartOverlayTextMetrics(
 /// <summary>Measures one print-chart overlay text run at the requested font size.</summary>
 public delegate PrintChartOverlayTextMetrics PrintChartTextMeasure(string text, double fontSize);
 
+public enum PrintChartTextOverlayRole
+{
+    Unknown,
+    ChartTitle,
+    CategoryAxisTitle,
+    ValueAxisTitle,
+    LegendEntry,
+    CategoryTickLabel,
+    ValueTickLabel,
+    DataLabel
+}
+
 /// <summary>One selectable text overlay for a printed chart, in page-space device-independent units.</summary>
 public sealed record PrintChartTextOverlayPlan(
     string Text,
@@ -20,7 +32,8 @@ public sealed record PrintChartTextOverlayPlan(
     double Y,
     double FontSize,
     PresentationRgb Color,
-    double RotationDegrees);
+    double RotationDegrees,
+    PrintChartTextOverlayRole Role = PrintChartTextOverlayRole.Unknown);
 
 /// <summary>
 /// UI-free planning for selectable text overlays over printed chart bitmaps. Renderers still own
@@ -79,6 +92,7 @@ public static class PrintChartTextOverlayPlanner
             NormalizeFontSize(chart.ChartTitleFontSize, 16),
             ResolveChartTitleOverlayColor(chart, workbookTheme),
             rotationDegrees: 0,
+            role: PrintChartTextOverlayRole.ChartTitle,
             measureText);
 
         if (!ChartTypeSupport.SupportsAxes(chart.Type))
@@ -97,6 +111,7 @@ public static class PrintChartTextOverlayPlanner
                 axisFontSize,
                 axisColor,
                 rotationDegrees: 0,
+                role: PrintChartTextOverlayRole.CategoryAxisTitle,
                 measureText);
         }
 
@@ -110,6 +125,7 @@ public static class PrintChartTextOverlayPlanner
                 Math.Max(1, chartRect.Height - textInset * 2),
                 axisFontSize,
                 axisColor,
+                PrintChartTextOverlayRole.ValueAxisTitle,
                 measureText);
         }
     }
@@ -449,7 +465,8 @@ public static class PrintChartTextOverlayPlanner
                     y,
                     fontSize,
                     color,
-                    rotationDegrees: 0));
+                    rotationDegrees: 0,
+                    role: PrintChartTextOverlayRole.LegendEntry));
             }
 
             return;
@@ -472,7 +489,8 @@ public static class PrintChartTextOverlayPlanner
                 yStart + i * lineHeight,
                 fontSize,
                 color,
-                rotationDegrees: 0));
+                rotationDegrees: 0,
+                role: PrintChartTextOverlayRole.LegendEntry));
         }
     }
 
@@ -535,7 +553,8 @@ public static class PrintChartTextOverlayPlanner
                 plotRect.Bottom - normalized * plotRect.Height - fontSize / 2,
                 fontSize,
                 color,
-                chart.YAxisLabelAngle));
+                chart.YAxisLabelAngle,
+                PrintChartTextOverlayRole.ValueTickLabel));
         }
     }
 
@@ -572,6 +591,7 @@ public static class PrintChartTextOverlayPlanner
                 fontSize,
                 color,
                 chart.XAxisLabelAngle,
+                PrintChartTextOverlayRole.ValueTickLabel,
                 measureText);
         }
     }
@@ -660,6 +680,7 @@ public static class PrintChartTextOverlayPlanner
                 fontSize,
                 color,
                 chart.XAxisLabelAngle,
+                PrintChartTextOverlayRole.CategoryTickLabel,
                 measureText);
         }
     }
@@ -694,7 +715,8 @@ public static class PrintChartTextOverlayPlanner
                 plotRect.Top + (i + 0.5) * plotRect.Height / categories.Count - fontSize / 2,
                 fontSize,
                 color,
-                chart.YAxisLabelAngle));
+                chart.YAxisLabelAngle,
+                PrintChartTextOverlayRole.CategoryTickLabel));
         }
     }
 
@@ -740,7 +762,8 @@ public static class PrintChartTextOverlayPlanner
                     Math.Clamp(y, plotRect.Top, Math.Max(plotRect.Top, plotRect.Bottom - fontSize)),
                     fontSize,
                     color,
-                    chart.DataLabelAngle));
+                    chart.DataLabelAngle,
+                    PrintChartTextOverlayRole.DataLabel));
             }
         }
     }
@@ -795,6 +818,7 @@ public static class PrintChartTextOverlayPlanner
                 fontSize,
                 color,
                 chart.DataLabelAngle,
+                PrintChartTextOverlayRole.DataLabel,
                 measureText);
         }
     }
@@ -855,6 +879,7 @@ public static class PrintChartTextOverlayPlanner
         double fontSize,
         PresentationRgb color,
         double rotationDegrees,
+        PrintChartTextOverlayRole role,
         PrintChartTextMeasure measureText)
     {
         var bounded = BoundOverlayText(text, maxWidth, fontSize, measureText);
@@ -863,7 +888,7 @@ public static class PrintChartTextOverlayPlanner
 
         var textWidth = measureText(bounded, fontSize).WidthIncludingTrailingWhitespace;
         var x = centerX - textWidth / 2;
-        overlays.Add(CreateOverlay(bounded, x, y, fontSize, color, rotationDegrees));
+        overlays.Add(CreateOverlay(bounded, x, y, fontSize, color, rotationDegrees, role));
     }
 
     private static void AddVerticalAxisOverlay(
@@ -874,6 +899,7 @@ public static class PrintChartTextOverlayPlanner
         double maxWidth,
         double fontSize,
         PresentationRgb color,
+        PrintChartTextOverlayRole role,
         PrintChartTextMeasure measureText)
     {
         var bounded = BoundOverlayText(text, maxWidth, fontSize, measureText);
@@ -887,7 +913,8 @@ public static class PrintChartTextOverlayPlanner
             centerY + textWidth / 2 - fontSize,
             fontSize,
             color,
-            rotationDegrees: -90));
+            rotationDegrees: -90,
+            role: role));
     }
 
     private static PrintChartTextOverlayPlan CreateOverlay(
@@ -896,8 +923,9 @@ public static class PrintChartTextOverlayPlanner
         double y,
         double fontSize,
         PresentationRgb color,
-        double rotationDegrees) =>
-        new(text, x, y, fontSize, color, rotationDegrees);
+        double rotationDegrees,
+        PrintChartTextOverlayRole role) =>
+        new(text, x, y, fontSize, color, rotationDegrees, role);
 
     public static string BoundOverlayText(
         string? text,

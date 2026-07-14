@@ -33,7 +33,10 @@ public sealed class PrintExportDrawingEvidencePlannerTests
             Top = 24,
             Width = 260,
             Height = 180,
-            ShowLegend = true
+            ShowLegend = true,
+            ShowDataLabels = true,
+            ShowDataLabelCategoryName = true,
+            ShowDataLabelValue = true
         });
 
         var plan = PrintExportDrawingEvidencePlanner.Build(
@@ -47,12 +50,21 @@ public sealed class PrintExportDrawingEvidencePlannerTests
         plan.HasDrawingContent.Should().BeTrue();
         plan.ChartCount.Should().Be(1);
         plan.ChartTextOverlayCount.Should().BeGreaterThanOrEqualTo(3);
+        plan.HasBroadChartTextEvidence.Should().BeTrue();
+        plan.ChartTitleOverlayCount.Should().Be(1);
+        plan.ChartAxisTitleOverlayCount.Should().Be(2);
+        plan.ChartLegendEntryOverlayCount.Should().Be(1);
+        plan.ChartCategoryTickOverlayCount.Should().BeGreaterThan(0);
+        plan.ChartValueTickOverlayCount.Should().BeGreaterThan(0);
+        plan.ChartDataLabelOverlayCount.Should().Be(3);
         plan.TextBoxCount.Should().Be(1);
         plan.TextBoxTextRunCount.Should().Be(1);
         plan.Pages.Should().ContainSingle(page =>
             page.HasSelectableChartText &&
-            page.HasSelectableTextBoxText);
+            page.HasSelectableTextBoxText &&
+            page.HasBroadChartTextEvidence);
         plan.StatusText.Should().Contain("Print/export drawing evidence: 1 page, 1 chart");
+        plan.StatusText.Should().Contain("chart text roles: 1 title, 2 axis titles, 1 legend entry");
         plan.StatusText.Should().Contain("1 text box");
     }
 
