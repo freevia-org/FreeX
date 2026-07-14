@@ -21716,6 +21716,12 @@ public sealed partial class MainWindow : Window
             TryGetWorkbookShortcutRoute(shortcutKey, ToWorkbookShortcutModifiers(modifiers), out route);
     }
 
+    internal static bool TryResolveWorkbookShortcutRouteForTest(
+        Key key,
+        KeyModifiers modifiers,
+        out WorkbookShortcutRoute route) =>
+        TryGetWorkbookShortcutRoute(key, modifiers, out route);
+
     private static bool TryGetWorkbookShortcutRoute(
         WorkbookShortcutKey key,
         WorkbookShortcutModifiers modifiers,

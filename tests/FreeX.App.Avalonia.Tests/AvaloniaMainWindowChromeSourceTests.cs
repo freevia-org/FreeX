@@ -1,11 +1,21 @@
 using System.IO;
 
+using Avalonia.Input;
 using FluentAssertions;
+using FreeX.App.Presentation.Shell;
 
 namespace FreeX.App.Avalonia.Tests;
 
 public sealed class AvaloniaMainWindowChromeSourceTests
 {
+    public static IEnumerable<object[]> SharedWindowsWorkbookShortcutRoutes =>
+        WorkbookKeyboardShortcutCatalog.Rules.Select(rule => new object[] { rule });
+
+    public static IEnumerable<object[]> SharedNativeWorkbookShortcutRoutes =>
+        WorkbookKeyboardShortcutCatalog.Rules
+            .Where(rule => rule.NativeMenuChord is not null)
+            .Select(rule => new object[] { rule });
+
     [Fact]
     public void WorkbookShortcuts_RouteThroughSharedCatalog()
     {
@@ -38,6 +48,34 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().NotContain("e.Key == Key.D7 && HasCommandAndShiftModifiers");
         source.Should().NotContain("e.Key == Key.PageUp && HasCommandAndShiftModifiers");
         source.Should().NotContain("e.Key == Key.PageDown && HasOnlyCommandModifier");
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedWindowsWorkbookShortcutRoutes))]
+    public void SharedWorkbookShortcutMatrix_RoutesEveryWindowsChordThroughAvalonia(WorkbookShortcutRouteRule rule)
+    {
+        MainWindow.TryResolveWorkbookShortcutRouteForTest(
+                ToAvaloniaKey(rule.WindowsChord.Key),
+                ToAvaloniaModifiers(rule.WindowsChord.Modifiers),
+                out var route)
+            .Should().BeTrue($"Avalonia should route {rule.WindowsChord} through the shared workbook shortcut matrix");
+
+        route.Should().Be(rule.Route);
+    }
+
+    [Theory]
+    [MemberData(nameof(SharedNativeWorkbookShortcutRoutes))]
+    public void SharedWorkbookShortcutMatrix_RoutesEveryNativeMenuChordThroughAvalonia(WorkbookShortcutRouteRule rule)
+    {
+        var chord = rule.NativeMenuChord!.Value;
+
+        MainWindow.TryResolveWorkbookShortcutRouteForTest(
+                ToAvaloniaKey(chord.Key),
+                ToAvaloniaModifiers(chord.Modifiers),
+                out var route)
+            .Should().BeTrue($"Avalonia should route {chord} through the shared workbook shortcut matrix");
+
+        route.Should().Be(rule.Route);
     }
 
     [Fact]
@@ -929,6 +967,64 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         var endIndex = source.IndexOf(end, startIndex, StringComparison.Ordinal);
         endIndex.Should().BeGreaterThanOrEqualTo(0, $"source should contain '{end}' after '{start}'");
         return source[startIndex..(endIndex + end.Length)];
+    }
+
+    private static Key ToAvaloniaKey(WorkbookShortcutKey key) =>
+        key switch
+        {
+            WorkbookShortcutKey.A => Key.A,
+            WorkbookShortcutKey.Back => Key.Back,
+            WorkbookShortcutKey.B => Key.B,
+            WorkbookShortcutKey.C => Key.C,
+            WorkbookShortcutKey.D => Key.D,
+            WorkbookShortcutKey.D1 => Key.D1,
+            WorkbookShortcutKey.D2 => Key.D2,
+            WorkbookShortcutKey.D3 => Key.D3,
+            WorkbookShortcutKey.D4 => Key.D4,
+            WorkbookShortcutKey.D5 => Key.D5,
+            WorkbookShortcutKey.D6 => Key.D6,
+            WorkbookShortcutKey.D7 => Key.D7,
+            WorkbookShortcutKey.Delete => Key.Delete,
+            WorkbookShortcutKey.E => Key.E,
+            WorkbookShortcutKey.F => Key.F,
+            WorkbookShortcutKey.F3 => Key.F3,
+            WorkbookShortcutKey.F5 => Key.F5,
+            WorkbookShortcutKey.F11 => Key.F11,
+            WorkbookShortcutKey.F12 => Key.F12,
+            WorkbookShortcutKey.G => Key.G,
+            WorkbookShortcutKey.H => Key.H,
+            WorkbookShortcutKey.I => Key.I,
+            WorkbookShortcutKey.Insert => Key.Insert,
+            WorkbookShortcutKey.N => Key.N,
+            WorkbookShortcutKey.O => Key.O,
+            WorkbookShortcutKey.Oem3 => Key.Oem3,
+            WorkbookShortcutKey.OemMinus => Key.OemMinus,
+            WorkbookShortcutKey.OemPlus => Key.OemPlus,
+            WorkbookShortcutKey.PageDown => Key.PageDown,
+            WorkbookShortcutKey.PageUp => Key.PageUp,
+            WorkbookShortcutKey.P => Key.P,
+            WorkbookShortcutKey.R => Key.R,
+            WorkbookShortcutKey.S => Key.S,
+            WorkbookShortcutKey.U => Key.U,
+            WorkbookShortcutKey.V => Key.V,
+            WorkbookShortcutKey.X => Key.X,
+            WorkbookShortcutKey.Y => Key.Y,
+            WorkbookShortcutKey.Z => Key.Z,
+            _ => throw new ArgumentOutOfRangeException(nameof(key), key, null)
+        };
+
+    private static KeyModifiers ToAvaloniaModifiers(WorkbookShortcutModifiers modifiers)
+    {
+        var result = KeyModifiers.None;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control))
+            result |= KeyModifiers.Control;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt))
+            result |= KeyModifiers.Alt;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift))
+            result |= KeyModifiers.Shift;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta))
+            result |= KeyModifiers.Meta;
+        return result;
     }
 
     private static void AssertBefore(string source, string first, string second)
