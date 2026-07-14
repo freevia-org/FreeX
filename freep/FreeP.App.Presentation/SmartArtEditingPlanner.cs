@@ -1,5 +1,6 @@
 using System.Text;
 using System.Xml.Linq;
+using Free.Shared.Drawing;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -76,12 +77,20 @@ public sealed record SmartArtDataPartRewriteResult(
     int NodeCount,
     int ConnectionCount);
 
+public sealed record SmartArtDrawingCacheRegenerationResult(
+    bool Applied,
+    string Message,
+    string? DrawingPartPath,
+    int NodeCount,
+    int ShapeCount);
+
 public static class SmartArtEditingPlanner
 {
     public const string DefaultNewNodeText = "New node";
 
     private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
     private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace Dsp = "http://schemas.microsoft.com/office/drawing/2008/diagram";
 
     public static SmartArtNodeEditResult Apply(SmartArtData? data, SmartArtNodeEditIntent intent)
     {
@@ -175,6 +184,84 @@ public static class SmartArtEditingPlanner
             dataPart.PartPath,
             nodeCount,
             connectionCount);
+    }
+
+    public static SmartArtDrawingCacheRegenerationResult RegenerateDrawingCache(
+        SmartArtShape? smartArt,
+        long frameXEmu,
+        long frameYEmu,
+        long frameCxEmu,
+        long frameCyEmu,
+        PresentationTheme theme,
+        IReadOnlyDictionary<string, string>? effectiveClrMap = null)
+    {
+        ArgumentNullException.ThrowIfNull(theme);
+
+        if (smartArt?.Data is null)
+        {
+            return new SmartArtDrawingCacheRegenerationResult(
+                false,
+                "No SmartArt data model is available.",
+                null,
+                0,
+                0);
+        }
+
+        var drawingPart = FindDrawingPart(smartArt);
+        if (drawingPart is null)
+        {
+            return new SmartArtDrawingCacheRegenerationResult(
+                false,
+                "No SmartArt drawing cache part is available.",
+                null,
+                CountNodes(smartArt.Data),
+                0);
+        }
+
+        var plannedShapes = SmartArtLayoutEngine.Layout(
+            smartArt.Data,
+            frameXEmu,
+            frameYEmu,
+            frameCxEmu,
+            frameCyEmu,
+            theme,
+            effectiveClrMap,
+            smartArt.QuickStyle,
+            smartArt.Colors);
+
+        if (plannedShapes is null)
+        {
+            return new SmartArtDrawingCacheRegenerationResult(
+                false,
+                "The SmartArt layout is not covered by the shared cache regeneration planner.",
+                drawingPart.PartPath,
+                CountNodes(smartArt.Data),
+                0);
+        }
+
+        var shapes = plannedShapes.ToList();
+        if (shapes.Any(shape => shape.Kind != SlideShapeKind.AutoShape))
+        {
+            return new SmartArtDrawingCacheRegenerationResult(
+                false,
+                "SmartArt drawing cache regeneration currently supports auto-shape layouts only.",
+                drawingPart.PartPath,
+                CountNodes(smartArt.Data),
+                shapes.Count);
+        }
+
+        drawingPart.Bytes = SerializeXml(BuildDrawingCacheDocument(shapes));
+        smartArt.DrawingPartPath = drawingPart.PartPath;
+        smartArt.FallbackShapes.Clear();
+        foreach (var shape in shapes)
+            smartArt.FallbackShapes.Add(SlideCloner.CloneShape(shape));
+
+        return new SmartArtDrawingCacheRegenerationResult(
+            true,
+            "SmartArt drawing cache regenerated from the shared live-layout plan.",
+            drawingPart.PartPath,
+            CountNodes(smartArt.Data),
+            shapes.Count);
     }
 
     private static SmartArtNodeEditResult ChangeText(
@@ -456,6 +543,128 @@ public static class SmartArtEditingPlanner
         ?? smartArt.Parts.Values.FirstOrDefault(part =>
             part.PartPath.Contains("/data", StringComparison.OrdinalIgnoreCase) &&
             part.PartPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+
+    private static DiagramPart? FindDrawingPart(SmartArtShape smartArt)
+    {
+        if (!string.IsNullOrWhiteSpace(smartArt.DrawingPartPath) &&
+            smartArt.Parts.TryGetValue(smartArt.DrawingPartPath, out var drawingPart))
+        {
+            return drawingPart;
+        }
+
+        return smartArt.Parts.Values.FirstOrDefault(part =>
+            part.ContentType.Contains("diagramDrawing", StringComparison.OrdinalIgnoreCase))
+        ?? smartArt.Parts.Values.FirstOrDefault(part =>
+            part.PartPath.Contains("/drawing", StringComparison.OrdinalIgnoreCase) &&
+            part.PartPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static XDocument BuildDrawingCacheDocument(IReadOnlyList<SlideShape> shapes) =>
+        new(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Dsp + "drawing",
+                new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XElement(Dsp + "spTree",
+                    shapes.Select(BuildDrawingCacheShape))));
+
+    private static XElement BuildDrawingCacheShape(SlideShape shape)
+    {
+        var id = shape.Id == 0 ? 1u : shape.Id;
+        return new XElement(Dsp + "sp",
+            new XElement(Dsp + "nvSpPr",
+                new XElement(Dsp + "cNvPr",
+                    new XAttribute("id", id),
+                    new XAttribute("name", string.IsNullOrWhiteSpace(shape.Name) ? $"SmartArt Cache {id}" : shape.Name)),
+                new XElement(Dsp + "cNvSpPr")),
+            BuildShapeProperties(shape),
+            BuildTextBody(shape.TextBody));
+    }
+
+    private static XElement BuildShapeProperties(SlideShape shape)
+    {
+        var spPr = new XElement(Dsp + "spPr",
+            new XElement(A + "xfrm",
+                new XElement(A + "off",
+                    new XAttribute("x", shape.OffsetXEmu),
+                    new XAttribute("y", shape.OffsetYEmu)),
+                new XElement(A + "ext",
+                    new XAttribute("cx", shape.ExtentCxEmu),
+                    new XAttribute("cy", shape.ExtentCyEmu))),
+            new XElement(A + "prstGeom",
+                new XAttribute("prst", ToPresetGeometry(shape.AutoShapeKind)),
+                new XElement(A + "avLst")));
+
+        if (shape.Fill is ShapeFill.Solid solid)
+        {
+            spPr.Add(new XElement(A + "solidFill",
+                new XElement(A + "srgbClr",
+                    new XAttribute("val", ToHex(solid.Color.Resolved)))));
+        }
+        else if (shape.Fill is ShapeFill.None)
+        {
+            spPr.Add(new XElement(A + "noFill"));
+        }
+
+        if (shape.Outline is ShapeOutline.Visible outline)
+        {
+            spPr.Add(new XElement(A + "ln",
+                new XAttribute("w", Math.Max(0, (int)Math.Round(outline.WidthPt * 12700.0))),
+                new XElement(A + "solidFill",
+                    new XElement(A + "srgbClr",
+                        new XAttribute("val", ToHex(outline.Color.Resolved))))));
+        }
+        else if (shape.Outline is ShapeOutline.None)
+        {
+            spPr.Add(new XElement(A + "ln", new XElement(A + "noFill")));
+        }
+
+        return spPr;
+    }
+
+    private static XElement BuildTextBody(TextBody? textBody)
+    {
+        var txBody = new XElement(Dsp + "txBody",
+            new XElement(A + "bodyPr"),
+            new XElement(A + "lstStyle"));
+
+        if (textBody is null || textBody.Paragraphs.Count == 0)
+        {
+            txBody.Add(new XElement(A + "p"));
+            return txBody;
+        }
+
+        foreach (var paragraph in textBody.Paragraphs)
+        {
+            var p = new XElement(A + "p");
+            foreach (var run in paragraph.Runs)
+            {
+                p.Add(new XElement(A + "r",
+                    new XElement(A + "rPr", new XAttribute("lang", "en-US")),
+                    new XElement(A + "t", run.Text ?? string.Empty)));
+            }
+
+            if (!paragraph.Runs.Any())
+                p.Add(new XElement(A + "r", new XElement(A + "t", string.Empty)));
+
+            txBody.Add(p);
+        }
+
+        return txBody;
+    }
+
+    private static string ToPresetGeometry(DrawingShapeKind kind) =>
+        kind switch
+        {
+            DrawingShapeKind.Line => "line",
+            DrawingShapeKind.Rectangle => "rect",
+            DrawingShapeKind.RoundedRectangle => "roundRect",
+            DrawingShapeKind.Triangle => "triangle",
+            DrawingShapeKind.Trapezoid => "trapezoid",
+            _ => "rect"
+        };
+
+    private static string ToHex(SrgbColor color) => $"{color.R:X2}{color.G:X2}{color.B:X2}";
 
     private static XDocument BuildDataPartDocument(
         SmartArtData data,

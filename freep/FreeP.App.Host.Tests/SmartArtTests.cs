@@ -621,6 +621,61 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_SmartArt_SharedDrawingCacheRegenerationPersistsEditedOutline()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+            nodes: [("root", "Leader"), ("manager", "Manager")],
+            parOfConnections: []);
+        var savedPath = Path.Combine(_tempDir, "smartart-regenerated-cache.pptx");
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var shape = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt);
+        var smartArt = shape.SmartArt!;
+
+        SmartArtEditingPlanner.Apply(smartArt.Data, SmartArtNodeEditIntent.ChangeText("manager", "Delivery Lead"))
+            .Applied.Should().BeTrue();
+        SmartArtEditingPlanner.Apply(smartArt.Data, SmartArtNodeEditIntent.Demote("manager"))
+            .Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+
+        var cache = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            shape.OffsetXEmu,
+            shape.OffsetYEmu,
+            shape.ExtentCxEmu,
+            shape.ExtentCyEmu,
+            presentation.Theme!);
+        cache.Applied.Should().BeTrue();
+        cache.ShapeCount.Should().Be(3, "the shared hierarchy planner emits two node boxes plus one connector");
+
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        using (var archive = ZipFile.OpenRead(savedPath))
+        {
+            var entry = archive.GetEntry("ppt/diagrams/drawing1.xml");
+            entry.Should().NotBeNull("the regenerated SmartArt drawing cache feeds the existing PPTX writer");
+
+            using var reader = new StreamReader(entry!.Open(), Encoding.UTF8);
+            var doc = XDocument.Parse(reader.ReadToEnd());
+            var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+            var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+            doc.Root!.Name.Should().Be(dsp + "drawing");
+            doc.Descendants(dsp + "sp").Should().HaveCount(3);
+            doc.Descendants(a + "t").Select(t => t.Value)
+                .Should().Contain(["Leader", "Delivery Lead"])
+                .And.NotContain("Manager");
+        }
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        reread.FallbackShapes.Select(s => s.PlainText)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Should().Equal("Leader", "Delivery Lead");
+    }
+
+    [Fact]
     public void Compositor_SmartArt_WithFallbackShapes_EmitsShapeOps()
     {
         var smart = new SmartArtShape();

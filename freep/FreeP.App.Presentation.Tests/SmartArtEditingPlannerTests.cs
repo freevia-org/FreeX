@@ -255,6 +255,50 @@ public sealed class SmartArtEditingPlannerTests
             .Which.Should().Be(("parOf", "root", "manager"));
     }
 
+    [Fact]
+    public void RegenerateDrawingCache_AfterSharedOutlineEdit_RewritesDspDrawingFromLivePlan()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));
+        var smartArt = new SmartArtShape { Data = data, DrawingPartPath = "ppt/diagrams/drawing1.xml" };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.ChangeText("manager", "Delivery Lead"))
+            .Applied.Should().BeTrue();
+        SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Demote("manager"))
+            .Applied.Should().BeTrue();
+
+        var result = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme());
+
+        result.Applied.Should().BeTrue();
+        result.DrawingPartPath.Should().Be("ppt/diagrams/drawing1.xml");
+        result.NodeCount.Should().Be(2);
+        result.ShapeCount.Should().Be(3, "the shared hierarchy plan emits two node boxes plus one connector");
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Should().Equal("Leader", "Delivery Lead");
+
+        var dsp = XNamespace.Get("http://schemas.microsoft.com/office/drawing/2008/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var doc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/drawing1.xml"].Bytes));
+
+        doc.Root!.Name.Should().Be(dsp + "drawing");
+        doc.Descendants(dsp + "sp").Should().HaveCount(3);
+        doc.Descendants(a + "t").Select(t => t.Value)
+            .Should().Contain(["Leader", "Delivery Lead"])
+            .And.NotContain("Manager");
+    }
+
     private static PresentationTheme DefaultTheme() =>
         Presentation.CreateEmpty().Theme!;
 
