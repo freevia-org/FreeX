@@ -2493,7 +2493,7 @@ public static class PptxPackageReader
         if (uid.Contains("matrix"))
             return SmartArtFamily.Matrix;
 
-        if (uid.Contains("venn") || uid.Contains("relationship"))
+        if (uid.Contains("venn") || uid.Contains("relationship") || uid.Contains("target"))
             return SmartArtFamily.Relationship;
 
         if (uid.Contains("cycle") || uid.Contains("gear") || uid.Contains("radial"))
@@ -2530,7 +2530,7 @@ public static class PptxPackageReader
             SmartArtFamily.Cycle => layoutId is "cycle1" or "basiccycle" or "radialcycle" or "gearcycle" or "textcycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "basichierarchy" or "verticalbulletlist" or "orgchart",
             SmartArtFamily.Matrix => layoutId is "matrix1" or "basicmatrix",
-            SmartArtFamily.Relationship => layoutId is "basicvenn",
+            SmartArtFamily.Relationship => layoutId is "basicvenn" or "targetlist",
             _ => false
         };
     }
