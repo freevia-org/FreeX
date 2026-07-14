@@ -601,6 +601,30 @@ public abstract class MathNode
     /// A horizontal sequence of sibling nodes (corresponds to the children of
     /// <c>m:oMath</c> / <c>m:e</c> / <c>m:num</c> / <c>m:den</c> / etc.).
     /// </summary>
+    public enum MathParagraphJustification
+    {
+        Left,
+        Center,
+        Right,
+        CenterGroup
+    }
+
+    /// <summary>
+    /// <c>m:oMathPara</c> wrapper carrying paragraph-level equation alignment metadata.
+    /// Alignment is applied by shared layout only when an available paragraph width is supplied.
+    /// </summary>
+    public sealed class MathParagraph : MathNode
+    {
+        public MathNode Content { get; }
+        public MathParagraphJustification Justification { get; }
+
+        public MathParagraph(MathNode content, MathParagraphJustification justification)
+        {
+            Content = content;
+            Justification = justification;
+        }
+    }
+
     public sealed class Row : MathNode
     {
         public IReadOnlyList<MathNode> Children { get; }

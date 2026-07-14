@@ -17,6 +17,12 @@ public sealed class OmmlParserTests
         return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
     }
 
+    private static MathNode ParseParagraph(string oMathParaInner)
+    {
+        var xml = $"<m:oMathPara xmlns:m=\"{M}\">{oMathParaInner}</m:oMathPara>";
+        return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
+    }
+
     // ── HA1: m:nary limLoc default ────────────────────────────────────────
 
     [Fact]
@@ -1271,5 +1277,34 @@ public sealed class OmmlParserTests
         Assert.True(borderBox.StrikeVertical);
         Assert.True(borderBox.StrikeBottomLeftToTopRight);
         Assert.False(borderBox.StrikeTopLeftToBottomRight);
+    }
+
+    [Theory]
+    [InlineData("left", MathNode.MathParagraphJustification.Left)]
+    [InlineData("right", MathNode.MathParagraphJustification.Right)]
+    [InlineData("center", MathNode.MathParagraphJustification.Center)]
+    [InlineData("centerGroup", MathNode.MathParagraphJustification.CenterGroup)]
+    [InlineData("bogus", MathNode.MathParagraphJustification.Center)]
+    public void OMathPara_WithJustification_PreservesParagraphAlignmentMetadata(
+        string val,
+        MathNode.MathParagraphJustification expected)
+    {
+        var node = ParseParagraph(
+            $"<m:oMathParaPr><m:jc m:val=\"{val}\"/></m:oMathParaPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(expected, paragraph.Justification);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(paragraph.Content).Text);
+    }
+
+    [Fact]
+    public void OMathPara_WithNoJustification_DefaultsToCenter()
+    {
+        var node = ParseParagraph("<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+
+        var paragraph = Assert.IsType<MathNode.MathParagraph>(node);
+        Assert.Equal(MathNode.MathParagraphJustification.Center, paragraph.Justification);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(paragraph.Content).Text);
     }
 }

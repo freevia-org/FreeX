@@ -36,6 +36,12 @@ public sealed class SlideCanvasMathBaselineTests
         return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
     }
 
+    private static MathNode ParseOmmlParagraph(string oMathParaInner)
+    {
+        var xml = $"<m:oMathPara xmlns:m=\"{M}\">{oMathParaInner}</m:oMathPara>";
+        return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
+    }
+
     // ── Pure baseline arithmetic (HB4) — mirrors the WPF-side test for parity ──
 
     [Fact]
@@ -1319,6 +1325,45 @@ public sealed class SlideCanvasMathBaselineTests
         });
 
         thrown.Should().BeNull("Avalonia must render m:eqArrPr row spacing and base justification from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
+    public async Task RenderParaWithMath_OMathParaJustification_UsesSharedAlignedParagraphPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmmlParagraph(
+                    "<m:oMathParaPr><m:jc m:val=\"right\"/></m:oMathParaPr>" +
+                    "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+                var natural = MathLayoutEngine.Layout(((MathNode.MathParagraph)mathNode).Content, "Cambria Math", 18.0);
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0, paragraphWidthDip: 180);
+                var glyph = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Single();
+
+                glyph.X.Should().BeApproximately(10 + 180 - natural.Metrics.Width, 0.01,
+                    "m:oMathParaPr/m:jc alignment must shift shared draw-plan coordinates before Avalonia draws");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "P = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(320, 120));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render m:oMathParaPr/m:jc math from the shared MathBox plan without host-specific layout branching");
     }
 
     [Fact]

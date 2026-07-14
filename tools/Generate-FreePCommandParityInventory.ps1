@@ -727,6 +727,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing and layout preserve m:eqArrPr/m:rSpRule, m:rSp, and m:baseJc so row offsets and reported baseline/ascent are resolved before WPF or Avalonia draw. PowerPoint-authoritative math visual baselines, exact OfficeMath spacing metrics, and complete paragraph-level equation alignment remain deferred."),
         new(
+            EvidenceId: "freep.omml.paragraph-justification",
+            Area: "OMML paragraph-level equation justification",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.MathParagraph justification metadata and MathBoxRenderPlanner glyph coordinates with no renderer-local equation-paragraph policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-paragraph-justification-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout now preserve m:oMathParaPr/m:jc left, center, right, and centerGroup metadata and apply it to renderer-neutral glyph coordinates when an equation paragraph width is supplied. PowerPoint-authoritative math visual baselines, exact text-box/frame width integration, and full OfficeMath paragraph-distribution heuristics remain deferred."),
+        new(
             EvidenceId: "freep.omml.delimiter-shape",
             Area: "OMML delimiter shape semantics",
             Status: "shared-layout-evidence",

@@ -148,9 +148,15 @@ public static class MathLayoutEngine
     /// The container's (X,Y) is always (0,0); the caller translates it to
     /// the desired slide position.
     /// </summary>
-    public static MathBox.Container Layout(MathNode node, string fontFamily, double fontSizePt)
+    public static MathBox.Container Layout(
+        MathNode node,
+        string fontFamily,
+        double fontSizePt,
+        double? paragraphWidthDip = null)
     {
-        var box = LayoutNode(node, fontFamily, fontSizePt);
+        var box = node is MathNode.MathParagraph paragraph
+            ? LayoutMathParagraph(paragraph, fontFamily, fontSizePt, paragraphWidthDip)
+            : LayoutNode(node, fontFamily, fontSizePt);
         var root = new MathBox.Container();
         root.Children.Add(box);
         box.X = 0; box.Y = 0;
@@ -186,10 +192,39 @@ public static class MathLayoutEngine
             MathNode.GroupChr g => LayoutGroupChr(g, fontFamily, fontSizePt),
             MathNode.Matrix  m  => LayoutMatrix(m, fontFamily, fontSizePt),
             MathNode.EqArray e  => LayoutEqArray(e, fontFamily, fontSizePt),
+            MathNode.MathParagraph p => LayoutMathParagraph(p, fontFamily, fontSizePt, paragraphWidthDip: null),
             MathNode.Row     rw => LayoutRow(rw.Children, fontFamily, fontSizePt),
             MathNode.Unknown u  => LayoutFallback(u.FallbackText, fontFamily, fontSizePt),
             _                   => LayoutFallback("?", fontFamily, fontSizePt)
         };
+    }
+
+    private static MathBox LayoutMathParagraph(
+        MathNode.MathParagraph paragraph,
+        string fontFamily,
+        double fontSizePt,
+        double? paragraphWidthDip)
+    {
+        var contentBox = LayoutNode(paragraph.Content, fontFamily, fontSizePt);
+        var width = paragraphWidthDip.HasValue && paragraphWidthDip.Value > contentBox.Metrics.Width
+            ? paragraphWidthDip.Value
+            : contentBox.Metrics.Width;
+
+        contentBox.X = paragraph.Justification switch
+        {
+            MathNode.MathParagraphJustification.Right => width - contentBox.Metrics.Width,
+            MathNode.MathParagraphJustification.Center or MathNode.MathParagraphJustification.CenterGroup =>
+                (width - contentBox.Metrics.Width) / 2.0,
+            _ => 0
+        };
+        contentBox.Y = 0;
+
+        var container = new MathBox.Container();
+        container.Children.Add(contentBox);
+        container.Metrics.Width = width;
+        container.Metrics.Height = contentBox.Metrics.Height;
+        container.Metrics.Ascent = contentBox.Metrics.Ascent;
+        return container;
     }
 
     // ── Em conversion ────────────────────────────────────────────────────

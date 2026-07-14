@@ -26,6 +26,12 @@ public sealed class MathLayoutEngineTests
         return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
     }
 
+    private static MathNode ParseOmmlParagraph(string oMathParaInner)
+    {
+        var xml = $"<m:oMathPara xmlns:m=\"{M}\">{oMathParaInner}</m:oMathPara>";
+        return OmmlParser.Parse(xml, fallbackText: "FALLBACK");
+    }
+
     private static MathNode TallFraction() =>
         new MathNode.Frac(Run("1"), Run("x"));
 
@@ -2064,6 +2070,44 @@ public sealed class MathLayoutEngineTests
             "m:limUpp draws the reduced limit above the base in the shared plan");
         upperGlyphs[0].FontSizePt.Should().BeLessThan(upperGlyphs[1].FontSizePt,
             "upper limit text is reduced before renderer-specific drawing");
+    }
+
+    [Fact]
+    public void OmmlParagraphJustification_RightAlignsContentInsideSharedParagraphWidth()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:oMathParaPr><m:jc m:val=\"right\"/></m:oMathParaPr>" +
+            "<m:oMath><m:r><m:t>x</m:t></m:r></m:oMath>");
+        var natural = MathLayoutEngine.Layout(((MathNode.MathParagraph)node).Content, "Cambria Math", FontSizePt);
+        var aligned = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 180);
+
+        aligned.Metrics.Width.Should().BeApproximately(180, 0.01);
+
+        var glyph = MathBoxRenderPlanner.Plan(aligned, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        glyph.Text.Should().Be("x");
+        glyph.X.Should().BeApproximately(10 + 180 - natural.Metrics.Width, 0.01,
+            "m:oMathParaPr/m:jc=right should shift glyph coordinates in the shared plan before any host draws");
+    }
+
+    [Fact]
+    public void OmmlParagraphJustification_CenterGroupUsesCenteredSharedParagraphPlan()
+    {
+        var node = ParseOmmlParagraph(
+            "<m:oMathParaPr><m:jc m:val=\"centerGroup\"/></m:oMathParaPr>" +
+            "<m:oMath><m:r><m:t>xy</m:t></m:r></m:oMath>");
+        var natural = MathLayoutEngine.Layout(((MathNode.MathParagraph)node).Content, "Cambria Math", FontSizePt);
+        var aligned = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt, paragraphWidthDip: 200);
+
+        var glyph = MathBoxRenderPlanner.Plan(aligned, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Single();
+
+        glyph.Text.Should().Be("xy");
+        glyph.X.Should().BeApproximately(10 + (200 - natural.Metrics.Width) / 2.0, 0.01,
+            "bounded centerGroup support uses the same centered renderer-neutral coordinates as centered equation paragraphs");
     }
 
     [Fact]
