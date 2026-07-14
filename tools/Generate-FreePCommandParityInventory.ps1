@@ -364,17 +364,18 @@ internal static class FreePCommandInventory
             EvidenceId: "freep.export.pdf-visual-baseline-readiness",
             Area: "PowerPoint-authoritative PDF visual baseline readiness",
             Status: "shared-baseline-readiness-evidence",
-            HostCoverage: "WPF/Avalonia share one PDF/export package contract with source-bound manifest, WPF/Avalonia artifact, and deferred PowerPoint PDF/PNG artifact paths; no local PowerPoint COM visual baseline is claimed",
+            HostCoverage: "WPF/Avalonia share one PDF/export package contract with source-bound manifest, WPF/Avalonia PDF and page-raster artifact patterns, paired diff-report paths, and deferred PowerPoint PDF/PNG artifact paths; no local PowerPoint COM visual baseline is claimed",
             EvidenceDocs:
             [
-                "docs/parity/freep-pdf-visual-baseline-readiness-2026-07-14.md"
+                "docs/parity/freep-pdf-visual-baseline-readiness-2026-07-14.md",
+                "docs/parity/freep-pdf-baseline-diff-readiness-2026-07-14.md"
             ],
             Verification:
             [
                 "freep/FreeP.App.Presentation/PresentationPdfVisualBaselineReadinessPlanner.cs",
                 "freep/FreeP.App.Presentation.Tests/PresentationPdfVisualBaselineReadinessPlannerTests.cs"
             ],
-            RemainingWork: "No-COM readiness now covers portable slide PDF, full-page raster PDF, 3-up handout PDF, and notes-page PDF rows with source-normalized manifest paths, matching WPF/Avalonia fingerprints, and explicit PowerPoint PDF/PNG artifact targets for a COM-capable baseline machine. Actual PowerPoint-exported PDFs/PNGs, visual diffs, thresholds, and representative real-deck capture still require PowerPoint.Application COM on a baseline host."),
+            RemainingWork: "No-COM readiness now covers portable slide PDF, full-page raster PDF, 3-up handout PDF, and notes-page PDF rows with source-normalized manifest paths, matching WPF/Avalonia fingerprints, WPF/Avalonia page-raster artifact patterns, paired WPF-vs-Avalonia and deferred PowerPoint diff report targets, pinned raster DPI, and explicit PowerPoint PDF/PNG artifact targets for a COM-capable baseline machine. Actual PowerPoint-exported PDFs/PNGs, calibrated visual diffs, thresholds, and representative real-deck capture still require PowerPoint.Application COM on a baseline host."),
         new(
             EvidenceId: "freep.export.pdf-ellipse-fixed-layout",
             Area: "Fixed-layout PDF ellipse and oval shape export",

@@ -34,7 +34,14 @@ public sealed class PresentationPdfVisualBaselineReadinessPlannerTests
             row.WpfArtifactPath.StartsWith("wpf-pdf/Quarter-Review/", StringComparison.Ordinal) &&
             row.AvaloniaArtifactPath.StartsWith("avalonia-pdf/Quarter-Review/", StringComparison.Ordinal) &&
             row.PowerPointPdfArtifact.StartsWith("powerpoint-pdf/Quarter-Review/", StringComparison.Ordinal) &&
-            row.PowerPointPngArtifactPattern.StartsWith("powerpoint-png/Quarter-Review/", StringComparison.Ordinal));
+            row.PowerPointPngArtifactPattern.StartsWith("powerpoint-png/Quarter-Review/", StringComparison.Ordinal) &&
+            row.WpfPngArtifactPattern.StartsWith("wpf-png/Quarter-Review/", StringComparison.Ordinal) &&
+            row.AvaloniaPngArtifactPattern.StartsWith("avalonia-png/Quarter-Review/", StringComparison.Ordinal) &&
+            row.WpfAvaloniaDiffReportPath.StartsWith("diff/wpf-vs-avalonia/Quarter-Review/", StringComparison.Ordinal) &&
+            row.PowerPointWpfDiffReportPath.StartsWith("diff/powerpoint-vs-wpf/Quarter-Review/", StringComparison.Ordinal) &&
+            row.PowerPointAvaloniaDiffReportPath.StartsWith("diff/powerpoint-vs-avalonia/Quarter-Review/", StringComparison.Ordinal) &&
+            row.RasterizationDpi == PresentationPdfVisualBaselineReadinessPlanner.BaselineRasterizationDpi &&
+            row.DiffThresholdProfile == PresentationPdfVisualBaselineReadinessPlanner.DiffThresholdProfile);
 
         var portable = plan.Rows.Single(row =>
             row.EvidenceId == PresentationPdfVisualBaselineReadinessPlanner.PortableSlidePdfEvidenceId);
@@ -46,6 +53,8 @@ public sealed class PresentationPdfVisualBaselineReadinessPlannerTests
         portable.WpfManifestFingerprint.Should().Contain("route=PortableSlidePdf");
         portable.WpfManifestFingerprint.Should().Contain("source=Quarter Review.pptx");
         portable.WpfManifestFingerprint.Should().Contain("sourceStem=Quarter-Review");
+        portable.WpfManifestFingerprint.Should().Contain("rasterDpi=144");
+        portable.WpfManifestFingerprint.Should().Contain("diffProfile=pdf-visual-baseline-readiness-v1/manual-calibration-required");
         portable.BaselineManifestPath.Should().Be(
             "manifest/Quarter-Review/freep.pdf.baseline.portable-slide-pdf.json");
         portable.WpfArtifactPath.Should().Be(
@@ -56,6 +65,16 @@ public sealed class PresentationPdfVisualBaselineReadinessPlannerTests
             "powerpoint-pdf/Quarter-Review/freep.pdf.baseline.portable-slide-pdf.pdf");
         portable.PowerPointPngArtifactPattern.Should().Be(
             "powerpoint-png/Quarter-Review/freep.pdf.baseline.portable-slide-pdf/slide-NN.png");
+        portable.WpfPngArtifactPattern.Should().Be(
+            "wpf-png/Quarter-Review/freep.pdf.baseline.portable-slide-pdf/page-NN.png");
+        portable.AvaloniaPngArtifactPattern.Should().Be(
+            "avalonia-png/Quarter-Review/freep.pdf.baseline.portable-slide-pdf/page-NN.png");
+        portable.WpfAvaloniaDiffReportPath.Should().Be(
+            "diff/wpf-vs-avalonia/Quarter-Review/freep.pdf.baseline.portable-slide-pdf.json");
+        portable.PowerPointWpfDiffReportPath.Should().Be(
+            "diff/powerpoint-vs-wpf/Quarter-Review/freep.pdf.baseline.portable-slide-pdf.json");
+        portable.PowerPointAvaloniaDiffReportPath.Should().Be(
+            "diff/powerpoint-vs-avalonia/Quarter-Review/freep.pdf.baseline.portable-slide-pdf.json");
 
         var fullPage = plan.Rows.Single(row =>
             row.EvidenceId == PresentationPdfVisualBaselineReadinessPlanner.FullPageRasterPdfEvidenceId);

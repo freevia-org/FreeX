@@ -33,6 +33,13 @@ public sealed record PresentationPdfVisualBaselineReadinessRow(
     string AvaloniaArtifactPath,
     string PowerPointPdfArtifact,
     string PowerPointPngArtifactPattern,
+    string WpfPngArtifactPattern,
+    string AvaloniaPngArtifactPattern,
+    string WpfAvaloniaDiffReportPath,
+    string PowerPointWpfDiffReportPath,
+    string PowerPointAvaloniaDiffReportPath,
+    int RasterizationDpi,
+    string DiffThresholdProfile,
     string BaselineArtifactPattern,
     string PowerPointBaseline,
     bool RequiresPowerPointComBaseline,
@@ -50,6 +57,8 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
     public const string HandoutPdfEvidenceId = "freep.pdf.baseline.handout-3up-pdf";
     public const string NotesPagePdfEvidenceId = "freep.pdf.baseline.notes-page-pdf";
     public const string PowerPointBaselineDeferred = "n/a/deferred-powerpoint-com-pdf-and-png-baseline";
+    public const int BaselineRasterizationDpi = 144;
+    public const string DiffThresholdProfile = "pdf-visual-baseline-readiness-v1/manual-calibration-required";
     public const string PowerPointBaselineStatus =
         "Authoritative PowerPoint PDF/PNG baseline capture is deferred until PowerPoint.Application COM is available.";
     private const string PortableSlidePdfRoute = "PortableSlidePdf";
@@ -60,6 +69,11 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
     private const string AvaloniaArtifactPattern = "avalonia-pdf/{sourceStem}/{evidenceId}.pdf";
     private const string PowerPointPdfArtifactPattern = "powerpoint-pdf/{sourceStem}/{evidenceId}.pdf";
     private const string PowerPointPngArtifactPattern = "powerpoint-png/{sourceStem}/{evidenceId}/slide-NN.png";
+    private const string WpfPngArtifactPattern = "wpf-png/{sourceStem}/{evidenceId}/page-NN.png";
+    private const string AvaloniaPngArtifactPattern = "avalonia-png/{sourceStem}/{evidenceId}/page-NN.png";
+    private const string WpfAvaloniaDiffReportPattern = "diff/wpf-vs-avalonia/{sourceStem}/{evidenceId}.json";
+    private const string PowerPointWpfDiffReportPattern = "diff/powerpoint-vs-wpf/{sourceStem}/{evidenceId}.json";
+    private const string PowerPointAvaloniaDiffReportPattern = "diff/powerpoint-vs-avalonia/{sourceStem}/{evidenceId}.json";
     private const string PowerPointBaselinePattern =
         PowerPointPdfArtifactPattern + " + " + PowerPointPngArtifactPattern;
 
@@ -146,6 +160,13 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
             BuildArtifactPath(AvaloniaArtifactPattern, sourceStem, PortableSlidePdfEvidenceId),
             BuildArtifactPath(PowerPointPdfArtifactPattern, sourceStem, PortableSlidePdfEvidenceId),
             BuildArtifactPath(PowerPointPngArtifactPattern, sourceStem, PortableSlidePdfEvidenceId),
+            BuildArtifactPath(WpfPngArtifactPattern, sourceStem, PortableSlidePdfEvidenceId),
+            BuildArtifactPath(AvaloniaPngArtifactPattern, sourceStem, PortableSlidePdfEvidenceId),
+            BuildArtifactPath(WpfAvaloniaDiffReportPattern, sourceStem, PortableSlidePdfEvidenceId),
+            BuildArtifactPath(PowerPointWpfDiffReportPattern, sourceStem, PortableSlidePdfEvidenceId),
+            BuildArtifactPath(PowerPointAvaloniaDiffReportPattern, sourceStem, PortableSlidePdfEvidenceId),
+            BaselineRasterizationDpi,
+            DiffThresholdProfile,
             PowerPointBaselinePattern,
             PowerPointBaselineDeferred,
             RequiresPowerPointComBaseline: true,
@@ -193,6 +214,13 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
             BuildArtifactPath(AvaloniaArtifactPattern, sourceStem, evidenceId),
             BuildArtifactPath(PowerPointPdfArtifactPattern, sourceStem, evidenceId),
             BuildArtifactPath(PowerPointPngArtifactPattern, sourceStem, evidenceId),
+            BuildArtifactPath(WpfPngArtifactPattern, sourceStem, evidenceId),
+            BuildArtifactPath(AvaloniaPngArtifactPattern, sourceStem, evidenceId),
+            BuildArtifactPath(WpfAvaloniaDiffReportPattern, sourceStem, evidenceId),
+            BuildArtifactPath(PowerPointWpfDiffReportPattern, sourceStem, evidenceId),
+            BuildArtifactPath(PowerPointAvaloniaDiffReportPattern, sourceStem, evidenceId),
+            BaselineRasterizationDpi,
+            DiffThresholdProfile,
             PowerPointBaselinePattern,
             PowerPointBaselineDeferred,
             RequiresPowerPointComBaseline: true,
@@ -210,7 +238,7 @@ public static class PresentationPdfVisualBaselineReadinessPlanner
         string slideRangeSummary) =>
         string.Create(
             CultureInfo.InvariantCulture,
-            $"source={sourceName};sourceStem={sourceStem};evidenceId={evidenceId};route={route};contentType={contentType};extension={extensionWithDot};pages={pageCount};range={slideRangeSummary}");
+            $"source={sourceName};sourceStem={sourceStem};evidenceId={evidenceId};route={route};contentType={contentType};extension={extensionWithDot};pages={pageCount};range={slideRangeSummary};rasterDpi={BaselineRasterizationDpi};diffProfile={DiffThresholdProfile}");
 
     private static string BuildArtifactPath(
         string pattern,
