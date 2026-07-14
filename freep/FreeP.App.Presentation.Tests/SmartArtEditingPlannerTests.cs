@@ -1,3 +1,5 @@
+using System.Text;
+using System.Xml.Linq;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
 
@@ -212,6 +214,45 @@ public sealed class SmartArtEditingPlannerTests
         clone.SmartArt.Data!.Nodes[0].Text.Should().Be("Clone");
         clone.SmartArt.Parts.Should().ContainKey("ppt/diagrams/data1.xml");
         clone.SmartArt.Parts.Should().NotBeSameAs(shape.SmartArt.Parts);
+    }
+
+    [Fact]
+    public void RewriteDataPart_AfterSharedOutlineEdit_RegeneratesNativeDiagramData()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));
+        var smartArt = new SmartArtShape { Data = data };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+
+        SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.ChangeText("manager", "Delivery Lead"));
+        SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Demote("manager"));
+
+        var result = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+
+        result.Applied.Should().BeTrue();
+        result.DataPartPath.Should().Be("ppt/diagrams/data1.xml");
+        result.NodeCount.Should().Be(2);
+        result.ConnectionCount.Should().Be(1);
+
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var doc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/data1.xml"].Bytes));
+
+        doc.Descendants(dgm + "pt")
+            .Select(pt => (Id: (string?)pt.Attribute("modelId"), Text: pt.Descendants(a + "t").Single().Value))
+            .Should().Equal(("root", "Leader"), ("manager", "Delivery Lead"));
+
+        doc.Descendants(dgm + "cxn")
+            .Select(cxn => (
+                Type: (string?)cxn.Attribute("type"),
+                Source: (string?)cxn.Attribute("srcId"),
+                Destination: (string?)cxn.Attribute("destId")))
+            .Should().ContainSingle()
+            .Which.Should().Be(("parOf", "root", "manager"));
     }
 
     private static PresentationTheme DefaultTheme() =>

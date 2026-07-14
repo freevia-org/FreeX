@@ -571,6 +571,56 @@ public sealed class SmartArtTests : IDisposable
     // ── Compositor ───────────────────────────────────────────────────────────────
 
     [Fact]
+    public void RoundTrip_SmartArt_SharedDataPartRewritePersistsEditedOutline()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+            nodes: [("root", "Leader"), ("manager", "Manager")],
+            parOfConnections: []);
+        var savedPath = Path.Combine(_tempDir, "smartart-edited-outline.pptx");
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var smartArt = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        SmartArtEditingPlanner.Apply(smartArt.Data, SmartArtNodeEditIntent.ChangeText("manager", "Delivery Lead"))
+            .Applied.Should().BeTrue();
+        SmartArtEditingPlanner.Apply(smartArt.Data, SmartArtNodeEditIntent.Demote("manager"))
+            .Applied.Should().BeTrue();
+        var rewrite = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+        rewrite.Applied.Should().BeTrue();
+        rewrite.ConnectionCount.Should().Be(1);
+
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        using (var archive = ZipFile.OpenRead(savedPath))
+        {
+            var entry = archive.GetEntry("ppt/diagrams/data1.xml");
+            entry.Should().NotBeNull("the shared SmartArt data-part rewrite feeds the existing PPTX writer");
+
+            using var reader = new StreamReader(entry!.Open(), Encoding.UTF8);
+            var doc = XDocument.Parse(reader.ReadToEnd());
+            var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+            var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+
+            doc.Descendants(a + "t").Select(t => t.Value)
+                .Should().Contain("Delivery Lead");
+            doc.Descendants(dgm + "cxn")
+                .Select(cxn => (
+                    Type: (string?)cxn.Attribute("type"),
+                    Source: (string?)cxn.Attribute("srcId"),
+                    Destination: (string?)cxn.Attribute("destId")))
+                .Should().ContainSingle()
+                .Which.Should().Be(("parOf", "root", "manager"));
+        }
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+        reread.Data!.Nodes.Should().ContainSingle("the saved parOf connection rebuilds one hierarchy root");
+        reread.Data.Nodes[0].Text.Should().Be("Leader");
+        reread.Data.Nodes[0].Children.Should().ContainSingle().Which.Text.Should().Be("Delivery Lead");
+    }
+
+    [Fact]
     public void Compositor_SmartArt_WithFallbackShapes_EmitsShapeOps()
     {
         var smart = new SmartArtShape();

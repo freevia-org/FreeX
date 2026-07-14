@@ -1,3 +1,5 @@
+using System.Text;
+using System.Xml.Linq;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -67,9 +69,19 @@ public sealed record SmartArtNodeEditResult(
         new(false, kind, targetModelId, null, message, outline ?? Array.Empty<SmartArtNodeOutlineItem>());
 }
 
+public sealed record SmartArtDataPartRewriteResult(
+    bool Applied,
+    string Message,
+    string? DataPartPath,
+    int NodeCount,
+    int ConnectionCount);
+
 public static class SmartArtEditingPlanner
 {
     public const string DefaultNewNodeText = "New node";
+
+    private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+    private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
     public static SmartArtNodeEditResult Apply(SmartArtData? data, SmartArtNodeEditIntent intent)
     {
@@ -126,6 +138,43 @@ public static class SmartArtEditingPlanner
         for (var i = 0; i < data.Nodes.Count; i++)
             CollectOutline(data.Nodes[i], i, items);
         return items;
+    }
+
+    public static SmartArtDataPartRewriteResult RewriteDataPart(SmartArtShape? smartArt)
+    {
+        if (smartArt?.Data is null)
+        {
+            return new SmartArtDataPartRewriteResult(
+                false,
+                "No SmartArt data model is available.",
+                null,
+                0,
+                0);
+        }
+
+        var dataPart = FindDataPart(smartArt);
+        if (dataPart is null)
+        {
+            return new SmartArtDataPartRewriteResult(
+                false,
+                "No SmartArt diagram data part is available.",
+                null,
+                0,
+                0);
+        }
+
+        var nodeIds = new Dictionary<SmartArtNode, string>();
+        var nodeCount = 0;
+        var connectionCount = 0;
+        var document = BuildDataPartDocument(smartArt.Data, nodeIds, ref nodeCount, ref connectionCount);
+        dataPart.Bytes = SerializeXml(document);
+
+        return new SmartArtDataPartRewriteResult(
+            true,
+            "SmartArt diagram data part regenerated from the shared model.",
+            dataPart.PartPath,
+            nodeCount,
+            connectionCount);
     }
 
     private static SmartArtNodeEditResult ChangeText(
@@ -400,6 +449,99 @@ public static class SmartArtEditingPlanner
 
     private static string NormalizeText(string? text) =>
         (text ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+
+    private static DiagramPart? FindDataPart(SmartArtShape smartArt) =>
+        smartArt.Parts.Values.FirstOrDefault(part =>
+            part.ContentType.Contains("diagramData", StringComparison.OrdinalIgnoreCase))
+        ?? smartArt.Parts.Values.FirstOrDefault(part =>
+            part.PartPath.Contains("/data", StringComparison.OrdinalIgnoreCase) &&
+            part.PartPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase));
+
+    private static XDocument BuildDataPartDocument(
+        SmartArtData data,
+        Dictionary<SmartArtNode, string> nodeIds,
+        ref int nodeCount,
+        ref int connectionCount)
+    {
+        var points = new List<XElement>();
+        var connections = new List<XElement>();
+        var generatedIdIndex = 1;
+
+        foreach (var root in data.Nodes)
+            CollectDataPartElements(root, null, points, connections, nodeIds, ref generatedIdIndex, ref nodeCount, ref connectionCount);
+
+        return new XDocument(
+            new XDeclaration("1.0", "UTF-8", "yes"),
+            new XElement(Dgm + "dataModel",
+                new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                new XElement(Dgm + "ptLst", points),
+                new XElement(Dgm + "cxnLst", connections)));
+    }
+
+    private static void CollectDataPartElements(
+        SmartArtNode node,
+        SmartArtNode? parent,
+        List<XElement> points,
+        List<XElement> connections,
+        Dictionary<SmartArtNode, string> nodeIds,
+        ref int generatedIdIndex,
+        ref int nodeCount,
+        ref int connectionCount)
+    {
+        var id = GetNodeId(node, nodeIds, ref generatedIdIndex);
+        points.Add(BuildPointElement(node, id));
+        nodeCount++;
+
+        if (parent is not null)
+        {
+            var parentId = GetNodeId(parent, nodeIds, ref generatedIdIndex);
+            connections.Add(new XElement(Dgm + "cxn",
+                new XAttribute("type", "parOf"),
+                new XAttribute("srcId", parentId),
+                new XAttribute("destId", id)));
+            connectionCount++;
+        }
+
+        foreach (var child in node.Children)
+            CollectDataPartElements(child, node, points, connections, nodeIds, ref generatedIdIndex, ref nodeCount, ref connectionCount);
+    }
+
+    private static XElement BuildPointElement(SmartArtNode node, string id)
+    {
+        return new XElement(Dgm + "pt",
+            new XAttribute("modelId", id),
+            new XAttribute("type", node.IsAssistant ? "asst" : "node"),
+            new XElement(Dgm + "t",
+                NormalizeText(node.Text)
+                    .Split('\n')
+                    .Select(paragraph => new XElement(A + "p",
+                        new XElement(A + "r",
+                            new XElement(A + "t", paragraph))))));
+    }
+
+    private static string GetNodeId(
+        SmartArtNode node,
+        Dictionary<SmartArtNode, string> nodeIds,
+        ref int generatedIdIndex)
+    {
+        if (nodeIds.TryGetValue(node, out var existing))
+            return existing;
+
+        var id = string.IsNullOrWhiteSpace(node.ModelId)
+            ? $"freep-smartart-node-{generatedIdIndex++}"
+            : node.ModelId.Trim();
+        nodeIds[node] = id;
+        return id;
+    }
+
+    private static byte[] SerializeXml(XDocument document)
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), bufferSize: 1024, leaveOpen: true))
+            document.Save(writer);
+        return stream.ToArray();
+    }
 
     private readonly record struct SmartArtNodeLocation(SmartArtNode? Node, SmartArtNode? Parent, int Index)
     {

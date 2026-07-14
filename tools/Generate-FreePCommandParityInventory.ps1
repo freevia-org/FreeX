@@ -836,7 +836,23 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation/SmartArtEditingPlanner.cs",
                 "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs"
             ],
-            RemainingWork: "Shared SmartArt outline editing now covers text change, add/remove, reorder, promote, and demote model operations with deterministic outline selection and live-layout refresh evidence. PowerPoint-authored data-part rewrite, richer UI affordances, keyboard shortcuts, and PowerPoint-authoritative authoring baselines remain deferred.")
+            RemainingWork: "Shared SmartArt outline editing now covers text change, add/remove, reorder, promote, and demote model operations with deterministic outline selection and live-layout refresh evidence. PowerPoint-authored data-part rewrite, richer UI affordances, keyboard shortcuts, and PowerPoint-authoritative authoring baselines remain deferred."),
+        new(
+            EvidenceId: "freep.smartart.data-part-authoring",
+            Area: "SmartArt diagram data-part authoring",
+            Status: "shared-model-persistence-evidence",
+            HostCoverage: "WPF/Avalonia consume shared SmartArtEditingPlanner data-part rewrite output through the existing PPTX writer with no renderer-local SmartArt persistence policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-data-part-authoring-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/SmartArtEditingPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "Shared SmartArt outline edits can now regenerate the native diagram data part and round-trip edited node text plus parOf hierarchy through the PPTX writer/reader. PowerPoint-authored authoring baselines, text-pane UI workflows, richer assistant/org-chart editing nuance, exact PowerPoint visual baselines, and regeneration of layout/style/color/drawing-cache parts remain deferred.")
       ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
