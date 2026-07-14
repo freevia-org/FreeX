@@ -216,6 +216,64 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void StockBaselineReadiness_ProjectsOhlcTickDecisionsWithoutPowerPointCom()
+    {
+        var stock = BuildStockChart();
+        var stockPlan = ChartRenderPlanner.BuildStockPrimitivePlan(
+            stock,
+            new ChartPlanRect(0, 0, 240, 180));
+
+        stockPlan.HighLowLines.Should().HaveCount(3);
+        stockPlan.OpenTicks.Should().HaveCount(3);
+        stockPlan.CloseTicks.Should().HaveCount(3);
+        stockPlan.HighLowLines.Should().OnlyContain(line => line.Start.X == line.End.X);
+        stockPlan.OpenTicks.Should().OnlyContain(tick =>
+            tick.Segment.Start.X < tick.Segment.End.X &&
+            tick.Segment.End.X == stockPlan.HighLowLines[tick.Segment.StartPointIndex].Start.X);
+        stockPlan.CloseTicks.Should().OnlyContain(tick =>
+            tick.Segment.Start.X == stockPlan.HighLowLines[tick.Segment.StartPointIndex].Start.X &&
+            tick.Segment.End.X > tick.Segment.Start.X);
+        stockPlan.CloseTicks.Select(tick => tick.PriceMove)
+            .Should()
+            .Equal(
+                ChartStockPriceMove.Rising,
+                ChartStockPriceMove.Falling,
+                ChartStockPriceMove.Unchanged);
+
+        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+            [stock],
+            slideIndex: 5,
+            scenarioId: "Stock OHLC Decisions");
+
+        readiness.ChartCount.Should().Be(1);
+        readiness.CaptureRequests.Should().HaveCount(3);
+        readiness.PowerPointRequestCount.Should().Be(1);
+        readiness.SharedHostRequestCount.Should().Be(2);
+        readiness.CaptureRequests
+            .Where(request => request.Host is ChartVisualBaselineCaptureHost.Wpf or ChartVisualBaselineCaptureHost.Avalonia)
+            .Should()
+            .OnlyContain(request => !request.RequiresPowerPointCom);
+
+        var wpf = readiness.CaptureRequests.Single(request =>
+            request.Host == ChartVisualBaselineCaptureHost.Wpf);
+        wpf.CaptureId.Should().Be("freep.stock-ohlc-decisions.slide-6.chart-1.stock.wpf");
+        wpf.EvidenceSummary.Should()
+            .Contain("stock high-low/open-close tick plan")
+            .And.Contain("4 series; 3 categories");
+
+        var avalonia = readiness.CaptureRequests.Single(request =>
+            request.Host == ChartVisualBaselineCaptureHost.Avalonia);
+        avalonia.CaptureId.Should().Be("freep.stock-ohlc-decisions.slide-6.chart-1.stock.avalonia");
+        avalonia.RequiresPowerPointCom.Should().BeFalse();
+
+        readiness.CaptureRequests.Single(request =>
+                request.Host == ChartVisualBaselineCaptureHost.PowerPoint)
+            .RequiresPowerPointCom
+            .Should()
+            .BeTrue();
+    }
+
+    [Fact]
     public void DoughnutBaselineReadiness_ProjectsHoleSizeAndRingOrderDecisionsWithoutPowerPointCom()
     {
         var doughnut = BuildDoughnutChart();
@@ -340,6 +398,27 @@ public sealed class ChartBaselineCorpusTests
         chart.Series[0].Values.AddRange([3, 2, 1]);
         chart.Series.Add(new ChartSeries { Name = "Outer" });
         chart.Series[1].Values.AddRange([1, 2, 3]);
+        return chart;
+    }
+
+    private static ChartShape BuildStockChart()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Stock };
+        chart.Categories.AddRange(["Day 1", "Day 2", "Day 3"]);
+
+        foreach (var (name, values) in new[]
+        {
+            ("Open", new double?[] { 10, 12, 11 }),
+            ("High", new double?[] { 14, 16, 15 }),
+            ("Low", new double?[] { 8, 9, 10 }),
+            ("Close", new double?[] { 13, 11, 11 })
+        })
+        {
+            var series = new ChartSeries { Name = name };
+            series.Values.AddRange(values);
+            chart.Series.Add(series);
+        }
+
         return chart;
     }
 
