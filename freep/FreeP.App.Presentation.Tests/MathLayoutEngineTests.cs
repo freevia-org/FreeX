@@ -812,6 +812,40 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlEqArray_BoxPropertyAlignmentMarkers_AlignBoxedTermsInSharedPlan()
+    {
+        var node = ParseOmml(
+            "<m:eqArr>" +
+            "<m:e><m:r><m:t>mmmm</m:t></m:r><m:box><m:boxPr><m:aln/></m:boxPr><m:e><m:r><m:t>=1</m:t></m:r></m:e></m:box></m:e>" +
+            "<m:e><m:r><m:t>x</m:t></m:r><m:box><m:boxPr><m:aln/></m:boxPr><m:e><m:r><m:t>=22</m:t></m:r></m:e></m:box></m:e>" +
+            "<m:e><m:r><m:t>center</m:t></m:r></m:e>" +
+            "</m:eqArr>");
+
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+        var container = Assert.IsType<MathBox.Container>(layout.Children[0]);
+        var firstRow = Assert.IsType<MathBox.Container>(container.Children[0]);
+        var secondRow = Assert.IsType<MathBox.Container>(container.Children[1]);
+        var thirdRow = container.Children[2];
+
+        double firstMarkerX = firstRow.X + firstRow.Children[1].X;
+        double secondMarkerX = secondRow.X + secondRow.Children[1].X;
+
+        firstMarkerX.Should().BeApproximately(secondMarkerX, 0.01,
+            "m:boxPr/m:aln should feed the same shared equation-array alignment metadata as a direct m:aln marker");
+        firstRow.X.Should().BeLessThan(secondRow.X,
+            "the row with wider content before the boxed alignment point shifts left in shared layout");
+        thirdRow.X.Should().BeApproximately((container.Metrics.Width - thirdRow.Metrics.Width) / 2.0, 0.01,
+            "unaligned rows keep centered equation-array placement");
+
+        var glyphs = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "mmmm", "=1", "x", "=22", "center" });
+        glyphs.Single(g => g.Text == "=1").X.Should().BeApproximately(glyphs.Single(g => g.Text == "=22").X, 0.01,
+            "boxed aligned terms should reach WPF and Avalonia at the same shared draw-plan X coordinate");
+    }
+
+    [Fact]
     public void EqArray_RowSpacingRuleChangesVerticalGapWithoutChangingRowOrder()
     {
         var rows = new MathNode[]

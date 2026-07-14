@@ -731,11 +731,14 @@ public static class OmmlParser
 
         foreach (var child in eEl.Elements())
         {
-            if (child.Name == M + "aln")
+            if (IsEquationArrayAlignmentMarker(child))
             {
                 alignmentPointIndex ??= children.Count;
                 continue;
             }
+
+            if (TryReadBoxAlignmentMarker(child))
+                alignmentPointIndex ??= children.Count;
 
             var node = ParseElement(child);
             if (node is not null)
@@ -748,6 +751,13 @@ public static class OmmlParser
 
         return (row, alignmentPointIndex);
     }
+
+    private static bool IsEquationArrayAlignmentMarker(XElement element) =>
+        element.Name == M + "aln";
+
+    private static bool TryReadBoxAlignmentMarker(XElement element) =>
+        element.Name == M + "box" &&
+        element.Element(M + "boxPr")?.Element(M + "aln") is not null;
 
     private static MathNode ParseUnknown(XElement el)
     {

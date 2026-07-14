@@ -507,6 +507,23 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared row layout now consumes m:phantPr/m:transp for bounded single-token binary, relation, large-operator, and punctuation spacing classes while ambiguous multi-character and structured phantom bases stay packed. PowerPoint-authoritative visual baselines and full OfficeMath spacing-table typography remain deferred."),
         new(
+            EvidenceId: "freep.omml.box-alignment-points",
+            Area: "OMML boxed equation-array alignment points",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.EqArray alignment metadata and MathBoxRenderPlanner draw ops with no renderer-local math policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-box-alignment-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing now treats m:boxPr/m:aln on direct m:eqArr row boxes as invisible equation-array alignment points while preserving the boxed expression. WPF and Avalonia consume the resulting shared MathBox draw coordinates. PowerPoint-authoritative math visual baselines and broader OfficeMath alignment semantics remain deferred."),
+        new(
             EvidenceId: "freep.smartart.continuous-block-process",
             Area: "SmartArt continuous block process live layout",
             Status: "shared-render-planner-evidence",

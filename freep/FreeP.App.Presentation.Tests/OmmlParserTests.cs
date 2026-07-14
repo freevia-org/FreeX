@@ -587,6 +587,29 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Parse_EqArray_BoxPropertyAlnPreservesAlignmentPointAndBox()
+    {
+        var node = Parse(
+            "<m:eqArr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r><m:box><m:boxPr><m:aln/></m:boxPr><m:e><m:r><m:t>=1</m:t></m:r></m:e></m:box></m:e>" +
+            "<m:e><m:r><m:t>wide</m:t></m:r><m:box><m:boxPr><m:aln/></m:boxPr><m:e><m:r><m:t>=2</m:t></m:r></m:e></m:box></m:e>" +
+            "</m:eqArr>");
+
+        var eqArray = Assert.IsType<MathNode.EqArray>(node);
+        Assert.Equal(new int?[] { 1, 1 }, eqArray.AlignmentPointIndices);
+
+        var firstRow = Assert.IsType<MathNode.Row>(eqArray.Rows[0]);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(firstRow.Children[0]).Text);
+        var firstBox = Assert.IsType<MathNode.Box>(firstRow.Children[1]);
+        Assert.Equal("=1", Assert.IsType<MathNode.Run>(firstBox.Base).Text);
+
+        var secondRow = Assert.IsType<MathNode.Row>(eqArray.Rows[1]);
+        Assert.Equal("wide", Assert.IsType<MathNode.Run>(secondRow.Children[0]).Text);
+        var secondBox = Assert.IsType<MathNode.Box>(secondRow.Children[1]);
+        Assert.Equal("=2", Assert.IsType<MathNode.Run>(secondBox.Base).Text);
+    }
+
+    [Fact]
     public void Parse_EqArrayProperties_ReadsBaseJustificationAndRowSpacingMetadata()
     {
         var node = Parse(
