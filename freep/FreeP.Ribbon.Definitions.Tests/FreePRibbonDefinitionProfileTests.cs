@@ -860,6 +860,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.omml.pre-subsup-layout",
             "freep.omml.matrix-placeholder",
             "freep.omml.literal-run-style",
+            "freep.omml.nary-limit-location",
             "freep.smartart.continuous-block-process",
             "freep.smartart.basic-process",
             "freep.smartart.segmented-process",

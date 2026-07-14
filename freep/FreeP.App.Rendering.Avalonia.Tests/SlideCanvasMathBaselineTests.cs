@@ -770,6 +770,69 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_NaryLimLoc_UsesSharedLimitPlacementPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var underOverBox = MathLayoutEngine.Layout(
+                    ParseOmml(
+                        "<m:nary>" +
+                        "<m:naryPr><m:chr m:val=\"S\"/><m:limLoc m:val=\"undOvr\"/></m:naryPr>" +
+                        "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+                        "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+                        "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                        "</m:nary>"),
+                    "Cambria Math",
+                    18.0);
+                var subSupBox = MathLayoutEngine.Layout(
+                    ParseOmml(
+                        "<m:nary>" +
+                        "<m:naryPr><m:chr m:val=\"S\"/><m:limLoc m:val=\"subSup\"/></m:naryPr>" +
+                        "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+                        "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+                        "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                        "</m:nary>"),
+                    "Cambria Math",
+                    18.0);
+
+                MathBoxRenderPlanner.Plan(underOverBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Select(g => g.Text)
+                    .Should()
+                    .Equal(new[] { "n", "S", "0", "x" },
+                        "m:naryPr/m:limLoc=undOvr must be resolved in the shared plan before Avalonia draws");
+                MathBoxRenderPlanner.Plan(subSupBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Select(g => g.Text)
+                    .Should()
+                    .Equal(new[] { "S", "n", "0", "x" },
+                        "m:naryPr/m:limLoc=subSup must be resolved in the shared plan before Avalonia draws");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "N = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = underOverBox },
+                        new ResolvedRun { Text = " / ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = subSupBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(320, 160));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render n-ary limit-location math from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_OneSidedDelimiters_UseSingleSharedBracketPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

@@ -689,6 +689,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing now preserves m:rPr/m:lit as literal run metadata and resolves the bounded no-style literal case to an upright renderer-neutral glyph plan consumed by WPF and Avalonia. PowerPoint-authoritative math visual baselines, full OfficeMath linear-build-up semantics, and exact Cambria Math typography remain deferred."),
         new(
+            EvidenceId: "freep.omml.nary-limit-location",
+            Area: "OMML n-ary limit-location semantics",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.Nary limit-location metadata and MathBoxRenderPlanner glyph coordinates with no renderer-local n-ary policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-nary-limit-location-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout preserve m:naryPr/m:limLoc default subSup versus explicit undOvr placement, carrying distinct side-script and under/over glyph coordinates to both hosts. PowerPoint-authoritative math visual baselines, exact operator metrics, and complete OfficeMath display-style heuristics remain deferred."),
+        new(
             EvidenceId: "freep.smartart.continuous-block-process",
             Area: "SmartArt continuous block process live layout",
             Status: "shared-render-planner-evidence",

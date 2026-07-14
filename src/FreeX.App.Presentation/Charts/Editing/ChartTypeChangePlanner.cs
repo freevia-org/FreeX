@@ -39,10 +39,10 @@ public readonly record struct ChartTypeChangePlan(ChartType? AppliedType, string
 /// </summary>
 public static class ChartTypeChangePlanner
 {
-    /// <summary>Shared Change Chart Type dialog width used by WPF, Avalonia, and visual evidence checks.</summary>
+    /// <summary>Shared Change Chart Type dialog width used by desktop shells and visual evidence checks.</summary>
     public const double DialogWidth = 640;
 
-    /// <summary>Shared Change Chart Type dialog height used by WPF, Avalonia, and visual evidence checks.</summary>
+    /// <summary>Shared Change Chart Type dialog height used by desktop shells and visual evidence checks.</summary>
     public const double DialogHeight = 390;
 
     // English display labels and shell-localization keys for every renderer-authorable family, in a stable gallery-style order.

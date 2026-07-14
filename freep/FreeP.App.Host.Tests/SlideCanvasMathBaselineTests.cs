@@ -643,6 +643,64 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_NaryLimLoc_UsesSharedLimitPlacementPlan_DoesNotThrow()
+    {
+        var underOverBox = MathLayoutEngine.Layout(
+            ParseOmml(
+                "<m:nary>" +
+                "<m:naryPr><m:chr m:val=\"S\"/><m:limLoc m:val=\"undOvr\"/></m:naryPr>" +
+                "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+                "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+                "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                "</m:nary>"),
+            "Cambria Math",
+            18.0);
+        var subSupBox = MathLayoutEngine.Layout(
+            ParseOmml(
+                "<m:nary>" +
+                "<m:naryPr><m:chr m:val=\"S\"/><m:limLoc m:val=\"subSup\"/></m:naryPr>" +
+                "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+                "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+                "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                "</m:nary>"),
+            "Cambria Math",
+            18.0);
+
+        MathBoxRenderPlanner.Plan(underOverBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should()
+            .Equal(new[] { "n", "S", "0", "x" },
+                "m:naryPr/m:limLoc=undOvr must be resolved in the shared plan before WPF draws");
+        MathBoxRenderPlanner.Plan(subSupBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should()
+            .Equal(new[] { "S", "n", "0", "x" },
+                "m:naryPr/m:limLoc=subSup must be resolved in the shared plan before WPF draws");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "N = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = underOverBox },
+                new ResolvedRun { Text = " / ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = subSupBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_OneSidedDelimiters_UseSingleSharedBracketPlan_DoesNotThrow()
     {
         var openSuppressed = MathLayoutEngine.Layout(

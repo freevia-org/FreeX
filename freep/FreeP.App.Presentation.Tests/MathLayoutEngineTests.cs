@@ -231,6 +231,58 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlNaryLimLoc_RenderPlanDistinguishesUnderOverFromSubSup()
+    {
+        var underOver = MathLayoutEngine.Layout(
+            ParseOmml(
+                "<m:nary>" +
+                "<m:naryPr><m:chr m:val=\"S\"/><m:limLoc m:val=\"undOvr\"/></m:naryPr>" +
+                "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+                "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+                "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                "</m:nary>"),
+            "Cambria Math",
+            FontSizePt);
+        var subSup = MathLayoutEngine.Layout(
+            ParseOmml(
+                "<m:nary>" +
+                "<m:naryPr><m:chr m:val=\"S\"/><m:limLoc m:val=\"subSup\"/></m:naryPr>" +
+                "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+                "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+                "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                "</m:nary>"),
+            "Cambria Math",
+            FontSizePt);
+
+        MathBoxRenderPlanner.Plan(underOver, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should()
+            .Equal(new[] { "n", "S", "0", "x" },
+                "m:naryPr/m:limLoc=undOvr should place the upper limit above and lower limit below the operator before the operand");
+        MathBoxRenderPlanner.Plan(subSup, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .Select(g => g.Text)
+            .Should()
+            .Equal(new[] { "S", "n", "0", "x" },
+                "m:naryPr/m:limLoc=subSup should keep limits in the side script stack before the operand");
+
+        var underOverGlyphs = MathBoxRenderPlanner.Plan(underOver, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToDictionary(g => g.Text);
+        var subSupGlyphs = MathBoxRenderPlanner.Plan(subSup, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToDictionary(g => g.Text);
+
+        underOverGlyphs["n"].Y.Should().BeLessThan(underOverGlyphs["S"].Y);
+        underOverGlyphs["0"].Y.Should().BeGreaterThan(underOverGlyphs["S"].Y);
+        subSupGlyphs["n"].X.Should().BeGreaterThan(subSupGlyphs["S"].X);
+        subSupGlyphs["0"].X.Should().BeGreaterThan(subSupGlyphs["S"].X);
+        subSupGlyphs["n"].X.Should().BeLessThan(subSupGlyphs["x"].X);
+        subSupGlyphs["0"].X.Should().BeLessThan(subSupGlyphs["x"].X);
+    }
+
+    [Fact]
     public void Run_WithBoldStyle_LayoutAndRenderPlanCarryBoldMetadata()
     {
         var layout = MathLayoutEngine.Layout(Run("x", isItalic: false, isBold: true), "Cambria Math", FontSizePt);
