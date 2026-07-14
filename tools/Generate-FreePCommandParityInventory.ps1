@@ -559,6 +559,23 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "The chart baseline-depth corpus now projects stable PowerPoint/WPF/Avalonia capture requests for stock high-low/open-close ticks, 3-D surface facets/wireframe/contours, smooth scatter paths, and 100% stacked normalized extents; the no-COM radar planner slice also distinguishes standard, marker, and filled radar capture decisions for WPF/Avalonia shared-host rows. Real Microsoft PowerPoint PNG captures, pixel-diff thresholds, broader real-deck radar coverage, and broader chart-type authoritative baselines remain deferred to a COM-capable baseline host."),
         new(
+            EvidenceId: "freep.chart.doughnut-ring-baseline-readiness",
+            Area: "Chart doughnut ring and hole-size baseline readiness",
+            Status: "shared-baseline-readiness-evidence",
+            HostCoverage: "WPF/Avalonia consume shared doughnut slice primitives and chart-surface capture requests while PowerPoint rows remain explicit COM-required baseline contracts",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-doughnut-ring-baseline-readiness-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/ChartVisualBaselineReadinessPlanner.cs",
+                "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartBaselineCorpusTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs"
+            ],
+            RemainingWork: "Shared doughnut planning now has no-COM baseline-readiness evidence for authored hole size, first-slice angle, series-zero innermost ring ordering, and WPF/Avalonia capture request metadata. Microsoft PowerPoint visual baselines, broader real-deck doughnut corpus coverage, pie3D behavior, and pixel-diff thresholds remain deferred to a COM-capable baseline host."),
+        new(
             EvidenceId: "freep.omml.transparent-phantom-spacing",
             Area: "OMML transparent phantom spacing classes",
             Status: "shared-layout-evidence",

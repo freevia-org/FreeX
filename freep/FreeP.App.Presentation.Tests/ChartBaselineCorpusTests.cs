@@ -201,6 +201,50 @@ public sealed class ChartBaselineCorpusTests
             .BeTrue();
     }
 
+    [Fact]
+    public void DoughnutBaselineReadiness_ProjectsHoleSizeAndRingOrderDecisionsWithoutPowerPointCom()
+    {
+        var doughnut = BuildDoughnutChart();
+        var slices = ChartRenderPlanner.BuildDoughnutSlicePrimitives(
+            doughnut,
+            new ChartPlanRect(0, 0, 240, 180));
+
+        slices.Should().HaveCount(6);
+        slices[0].SeriesIndex.Should().Be(0);
+        slices[0].PointIndex.Should().Be(0);
+        slices[0].InnerRadius.Should().BeApproximately(30.6, 0.0001);
+        slices[0].StartAngle.Should().BeApproximately(0, 0.0001);
+        slices[3].SeriesIndex.Should().Be(1);
+        slices[3].InnerRadius.Should().BeGreaterThan(slices[0].OuterRadius);
+
+        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+            [doughnut],
+            slideIndex: 3,
+            scenarioId: "Doughnut Ring Decisions");
+
+        readiness.ChartCount.Should().Be(1);
+        readiness.CaptureRequests.Should().HaveCount(3);
+        readiness.PowerPointRequestCount.Should().Be(1);
+        readiness.SharedHostRequestCount.Should().Be(2);
+        readiness.CaptureRequests
+            .Where(request => request.Host is ChartVisualBaselineCaptureHost.Wpf or ChartVisualBaselineCaptureHost.Avalonia)
+            .Should()
+            .OnlyContain(request => !request.RequiresPowerPointCom);
+
+        var avalonia = readiness.CaptureRequests.Single(request =>
+            request.Host == ChartVisualBaselineCaptureHost.Avalonia);
+        avalonia.CaptureId.Should().Be("freep.doughnut-ring-decisions.slide-4.chart-1.doughnut.avalonia");
+        avalonia.EvidenceSummary.Should()
+            .Contain("doughnut ring and first-slice plan")
+            .And.Contain("2 series; 3 categories");
+
+        readiness.CaptureRequests.Single(request =>
+                request.Host == ChartVisualBaselineCaptureHost.PowerPoint)
+            .RequiresPowerPointCom
+            .Should()
+            .BeTrue();
+    }
+
     private static string FindCorpusDirectory()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -225,6 +269,22 @@ public sealed class ChartBaselineCorpusTests
         chart.Categories.AddRange(["North", "East", "South", "West"]);
         chart.Series.Add(new ChartSeries { Name = "Coverage" });
         chart.Series[0].Values.AddRange([4, 6, 3, 5]);
+        return chart;
+    }
+
+    private static ChartShape BuildDoughnutChart()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Doughnut,
+            DoughnutHolePercent = 40,
+            FirstSliceAngleDegrees = 90
+        };
+        chart.Categories.AddRange(["Alpha", "Beta", "Gamma"]);
+        chart.Series.Add(new ChartSeries { Name = "Inner" });
+        chart.Series[0].Values.AddRange([3, 2, 1]);
+        chart.Series.Add(new ChartSeries { Name = "Outer" });
+        chart.Series[1].Values.AddRange([1, 2, 3]);
         return chart;
     }
 }

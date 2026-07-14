@@ -853,6 +853,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.chart.stacked-area-bands",
             "freep.chart.surface-grid-rendering",
             "freep.chart.powerpoint-baseline-readiness",
+            "freep.chart.doughnut-ring-baseline-readiness",
             "freep.omml.transparent-phantom-spacing",
             "freep.omml.box-alignment-points",
             "freep.omml.delimiter-shape",
