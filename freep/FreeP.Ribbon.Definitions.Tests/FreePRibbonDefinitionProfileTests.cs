@@ -848,6 +848,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.chart.bubble-sizing-semantics",
             "freep.chart.pie-first-slice-angle",
             "freep.chart.stacked-area-bands",
+            "freep.chart.surface-grid-rendering",
             "freep.omml.transparent-phantom-spacing",
             "freep.smartart.continuous-block-process",
             "freep.smartart.basic-process",

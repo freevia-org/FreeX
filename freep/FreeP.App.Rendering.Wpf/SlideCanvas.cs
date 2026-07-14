@@ -755,9 +755,12 @@ public sealed class SlideCanvas : FrameworkElement
             case FreeP.Core.Model.ChartType.ColumnClustered:
             case FreeP.Core.Model.ChartType.ColumnStacked:
             case FreeP.Core.Model.ChartType.ColumnStacked100:
+                RenderColumnChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
+                break;
+
             case FreeP.Core.Model.ChartType.Surface:
             case FreeP.Core.Model.ChartType.Surface3D:
-                RenderColumnChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
+                RenderSurfaceChart(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH);
                 break;
 
             case FreeP.Core.Model.ChartType.BarClustered:
@@ -1053,6 +1056,25 @@ public sealed class SlideCanvas : FrameworkElement
     }
 
     // ── Doughnut chart ────────────────────────────────────────────────────────
+
+    private static void RenderSurfaceChart(
+        DrawingContext dc,
+        FreeP.Core.Model.ChartShape chart,
+        IReadOnlyList<SrgbColor> seriesColors,
+        double plotX,
+        double plotY,
+        double plotW,
+        double plotH)
+    {
+        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildSurfaceCellPrimitives(chart, plot, seriesColors))
+        {
+            dc.DrawRectangle(
+                ToBrush(primitive.Fill),
+                ToPen(primitive.Stroke),
+                ToRect(primitive.Bounds));
+        }
+    }
 
     private static void RenderDoughnutChart(
         DrawingContext dc, FreeP.Core.Model.ChartShape chart,

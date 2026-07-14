@@ -417,6 +417,24 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceCellPrimitives_SkipsBlankCellsWithoutReflowingGrid()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface);
+        chart.Series[0].Values[1] = null;
+
+        var cells = ChartRenderPlanner.BuildSurfaceCellPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        cells.Should().HaveCount(5);
+        cells.Should().NotContain(cell => cell.SeriesIndex == 0 && cell.CategoryIndex == 1);
+        cells.Single(cell => cell.SeriesIndex == 0 && cell.CategoryIndex == 2)
+            .Bounds.Should().Be(new ChartPlanRect(200, 0, 100, 60));
+        cells.Single(cell => cell.SeriesIndex == 1 && cell.CategoryIndex == 0)
+            .Bounds.Should().Be(new ChartPlanRect(0, 60, 100, 60));
+    }
+
+    [Fact]
     public void BuildFramePlan_ColumnAxisTitles_ReservesSharedTitleBands()
     {
         var chart = new ChartShape { ChartType = ChartType.ColumnClustered };

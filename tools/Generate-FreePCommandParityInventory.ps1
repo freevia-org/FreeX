@@ -472,6 +472,24 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared stacked-area planning now scales primary value axes from category totals and emits cumulative band baselines before WPF/Avalonia renderers draw the same area primitives. PowerPoint-authoritative chart visual baselines, mixed positive/negative corpus coverage, and broader type-specific chart visual fidelity remain deferred."),
         new(
+            EvidenceId: "freep.chart.surface-grid-rendering",
+            Area: "Chart surface grid rendering",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume shared ChartSurfaceCellPrimitive rectangles with no renderer-local surface grid policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-surface-grid-rendering-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Rendering.Wpf/SlideCanvas.cs",
+                "freep/FreeP.App.Rendering.Avalonia/SlideCanvas.cs",
+                "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/RendererNeutralDedupPlannerTests.cs"
+            ],
+            RemainingWork: "Surface and 3-D surface charts now render through the shared surface-cell primitive plan on both WPF and Avalonia. PowerPoint-authoritative surface chart visual baselines, true contour/3-D surface geometry, wireframe styling, and broader real-deck corpus coverage remain deferred."),
+        new(
             EvidenceId: "freep.omml.transparent-phantom-spacing",
             Area: "OMML transparent phantom spacing classes",
             Status: "shared-layout-evidence",
