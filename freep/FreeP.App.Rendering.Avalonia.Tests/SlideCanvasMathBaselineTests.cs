@@ -1234,4 +1234,50 @@ public sealed class SlideCanvasMathBaselineTests
 
         thrown.Should().BeNull("Avalonia must render m:boxPr/m:aln equation arrays from the shared MathBox plan without host-specific layout branching");
     }
+
+    [Fact]
+    public async Task RenderParaWithMath_EqArraySpacingAndBaseJustification_UsesSharedRowPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:eqArr>" +
+                    "<m:eqArrPr><m:baseJc m:val=\"bot\"/><m:rSpRule m:val=\"3\"/><m:rSp m:val=\"24\"/></m:eqArrPr>" +
+                    "<m:e><m:r><m:t>mmmm</m:t></m:r><m:aln/><m:r><m:t>=1</m:t></m:r></m:e>" +
+                    "<m:e><m:r><m:t>x</m:t></m:r><m:aln/><m:r><m:t>=22</m:t></m:r></m:e>" +
+                    "<m:e><m:r><m:t>z</m:t></m:r></m:e>" +
+                    "</m:eqArr>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .ToList();
+
+                glyphs.Select(g => g.Text).Should().Equal(new[] { "mmmm", "=1", "x", "=22", "z" },
+                    "m:eqArrPr spacing and base justification must be resolved in the shared MathBox plan before Avalonia draws them");
+                glyphs.Single(g => g.Text == "=1").X.Should().BeApproximately(glyphs.Single(g => g.Text == "=22").X, 0.01,
+                    "aligned equation terms should share the same draw-plan X coordinate before Avalonia draws");
+                glyphs.Single(g => g.Text == "=22").Y.Should().BeGreaterThan(glyphs.Single(g => g.Text == "=1").Y,
+                    "row spacing should reach Avalonia as shared draw-plan Y offsets");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "E = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(300, 160));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render m:eqArrPr row spacing and base justification from the shared MathBox plan without host-specific layout branching");
+    }
 }
