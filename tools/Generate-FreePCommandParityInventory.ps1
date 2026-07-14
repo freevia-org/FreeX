@@ -665,6 +665,24 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "The chart baseline-depth corpus now projects stable PowerPoint/WPF/Avalonia capture requests for stock high-low/open-close ticks, 3-D surface facets/wireframe/contours, smooth scatter paths, and 100% stacked normalized extents; the no-COM radar planner slice also distinguishes standard, marker, and filled radar capture decisions for WPF/Avalonia shared-host rows. Real Microsoft PowerPoint PNG captures, pixel-diff thresholds, broader real-deck radar coverage, and broader chart-type authoritative baselines remain deferred to a COM-capable baseline host."),
         new(
+            EvidenceId: "freep.chart.stock-ohlc-baseline-readiness",
+            Area: "Chart stock high-low/open-close baseline readiness",
+            Status: "shared-baseline-readiness-evidence",
+            HostCoverage: "WPF/Avalonia consume shared stock high-low line and open/close tick primitives plus paired chart-surface capture requests while PowerPoint rows remain explicit COM-required baseline contracts",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-stock-ohlc-baseline-readiness-2026-07-14.md",
+                "docs/parity/freep-chart-powerpoint-baseline-readiness-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/ChartVisualBaselineReadinessPlanner.cs",
+                "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartBaselineCorpusTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs"
+            ],
+            RemainingWork: "Shared stock chart planning now has no-COM baseline-readiness evidence for high-low stems, open/close tick orientation, rising/falling/unchanged price-move classification, and WPF/Avalonia capture request metadata. Microsoft PowerPoint stock PNG captures, exact Office tick stroke styling, broader real-deck OHLC/volume stock variants, and calibrated pixel-diff thresholds remain deferred to a COM-capable baseline host."),
+        new(
             EvidenceId: "freep.chart.doughnut-ring-baseline-readiness",
             Area: "Chart doughnut ring and hole-size baseline readiness",
             Status: "shared-baseline-readiness-evidence",
