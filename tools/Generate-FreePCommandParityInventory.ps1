@@ -1454,6 +1454,23 @@ internal static class FreePCommandInventory
             RemainingWork: "basicHierarchy now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes while unsupported hierarchy siblings remain on cached drawing fallback. Broader SmartArt geometry families, assistant/org-chart nuance, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
         ,
         new(
+            EvidenceId: "freep.smartart.horizontal-hierarchy",
+            Area: "SmartArt horizontal hierarchy live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt horizontal hierarchy planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-horizontal-hierarchy-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/SmartArtLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "horizontalHierarchy now uses a bounded shared hierarchy-family live-layout path with root/parent nodes on the left, child/report nodes in right-hand depth columns, and shared connector ops, while unsupported hierarchy siblings remain on cached drawing fallback. Exact PowerPoint geometry/effects, authoring regeneration for layout/style/color parts, and authoritative PNG baselines remain deferred.")
+        ,
+        new(
             EvidenceId: "freep.smartart.org-chart",
             Area: "SmartArt orgChart live layout",
             Status: "shared-render-planner-evidence",

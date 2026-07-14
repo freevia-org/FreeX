@@ -541,6 +541,44 @@ public sealed class SmartArtLayoutTests
     // ── Unknown family → null ──────────────────────────────────────────────────────
 
     [Fact]
+    public void HorizontalHierarchy_ReturnsLiveLeftToRightTreeBoxesAndConnectors()
+    {
+        var root = new SmartArtNode { Text = "Portfolio", Level = 0 };
+        var product = new SmartArtNode { Text = "Product", Level = 1 };
+        product.Children.Add(new SmartArtNode { Text = "Roadmap", Level = 2 });
+        root.Children.Add(product);
+        root.Children.Add(new SmartArtNode { Text = "Operations", Level = 1 });
+
+        var data = new SmartArtData
+        {
+            Family = SmartArtFamily.Hierarchy,
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy"
+        };
+        data.Nodes.Add(root);
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("horizontalHierarchy is a bounded shared hierarchy-family layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "root, children, and one grandchild should be emitted as live boxes");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "horizontalHierarchy should reuse shared parent-child connector geometry");
+
+        var boxesByText = shapes
+            .Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .ToDictionary(
+                s => s.TextBody!.Paragraphs.First().Runs.First().Text,
+                StringComparer.Ordinal);
+
+        boxesByText["Product"].OffsetXEmu.Should().BeGreaterThan(boxesByText["Portfolio"].OffsetXEmu,
+            "child/report nodes should sit to the right of the root");
+        boxesByText["Operations"].OffsetXEmu.Should().Be(boxesByText["Product"].OffsetXEmu,
+            "sibling reports share the same horizontal hierarchy depth column");
+        boxesByText["Roadmap"].OffsetXEmu.Should().BeGreaterThan(boxesByText["Product"].OffsetXEmu,
+            "deeper descendants advance to the next right-hand column");
+    }
+
+    [Fact]
     public void UnknownFamily_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Unknown, "A", "B");
@@ -1208,7 +1246,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedHierarchySibling_ReturnsNull()
     {
         var data = MakeHierarchyData("Root", "Child");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -2817,6 +2855,64 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Compositor_HorizontalHierarchy_UsesSharedLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeHierarchyData("Portfolio", "Product", "Operations");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 21,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached horizontal hierarchy fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 72,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(5, "horizontalHierarchy should render three live boxes plus two connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Portfolio");
+        renderedText.Should().Contain("Product");
+        renderedText.Should().Contain("Operations");
+        renderedText.Should().NotContain("Cached horizontal hierarchy fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume shared horizontal hierarchy connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_OrgChart_UsesLiveLayoutOverCachedDrawing()
     {
         var data = MakeHierarchyData("CEO", "Sales", "Engineering");
@@ -3045,7 +3141,7 @@ public sealed class SmartArtLayoutTests
     public void Compositor_FallsBackToCachedDrawing_WhenHierarchyFamilyLayoutIsUnsupported()
     {
         var data = MakeHierarchyData("Root", "Child");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/horizontalHierarchy";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/labeledHierarchy";
         data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };
