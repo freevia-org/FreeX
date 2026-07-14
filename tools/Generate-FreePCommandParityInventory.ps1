@@ -685,6 +685,24 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared stock chart planning now has no-COM baseline-readiness evidence for high-low stems, open/close tick orientation, rising/falling/unchanged price-move classification, and WPF/Avalonia capture request metadata. Microsoft PowerPoint stock PNG captures, exact Office tick stroke styling, broader real-deck OHLC/volume stock variants, and calibrated pixel-diff thresholds remain deferred to a COM-capable baseline host."),
         new(
+            EvidenceId: "freep.chart.stock-volume-baseline-readiness",
+            Area: "Chart stock volume/open-high-low-close baseline readiness",
+            Status: "shared-baseline-readiness-evidence",
+            HostCoverage: "WPF/Avalonia consume shared stock volume column primitives, high-low stems, open/close ticks, and paired chart-surface capture requests while PowerPoint rows remain explicit COM-required baseline contracts",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-chart-stock-volume-baseline-readiness-2026-07-14.md",
+                "docs/parity/freep-chart-stock-ohlc-baseline-readiness-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/ChartVisualBaselineReadinessPlanner.cs",
+                "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartBaselineCorpusTests.cs",
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs"
+            ],
+            RemainingWork: "Shared stock chart planning now has no-COM baseline-readiness evidence for bottom-band volume columns, five-series volume/open/high/low/close ordering, high-low stems, open/close ticks, and WPF/Avalonia capture request metadata. Microsoft PowerPoint stock-volume PNG captures, exact Office volume-axis styling, real-deck stock-volume corpus coverage, and calibrated pixel-diff thresholds remain deferred to a COM-capable baseline host."),
+        new(
             EvidenceId: "freep.chart.doughnut-ring-baseline-readiness",
             Area: "Chart doughnut ring and hole-size baseline readiness",
             Status: "shared-baseline-readiness-evidence",

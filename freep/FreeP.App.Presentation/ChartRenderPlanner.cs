@@ -481,6 +481,8 @@ public static partial class ChartRenderPlanner
     public const byte ThreeDPieDepthFillAlpha = 140;
     public const double ClassicThreeDDepthScale = 0.045;
     public const double StockTickWidthFraction = 0.32;
+    public const double StockVolumeBandHeightFraction = 0.28;
+    public const double StockVolumeBarWidthFraction = 0.55;
     public const double SurfaceCellStrokeThickness = 0.4;
     public const double SurfaceFacetStrokeThickness = 0.55;
     public const double SurfaceWireframeStrokeThickness = 0.7;
@@ -1750,6 +1752,58 @@ public static partial class ChartRenderPlanner
         return new ChartStockPrimitivePlan(highLowLines, openTicks, closeTicks);
     }
 
+    public static IReadOnlyList<ChartRectPrimitive> BuildStockVolumePrimitives(
+        ChartShape chart,
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null)
+    {
+        if (chart.ChartType != ChartType.Stock || !plot.HasPositiveArea)
+            return Array.Empty<ChartRectPrimitive>();
+
+        int volumeSeriesIndex = TryResolveStockVolumeSeries(chart);
+        if (volumeSeriesIndex < 0)
+            return Array.Empty<ChartRectPrimitive>();
+
+        int categoryCount = ResolveChartCategoryCount(chart);
+        var volumeValues = Enumerable.Range(0, categoryCount)
+            .Select(categoryIndex => TryGetSeriesValue(chart, volumeSeriesIndex, categoryIndex))
+            .Where(value => value is > 0)
+            .Select(value => value!.Value)
+            .ToArray();
+        if (volumeValues.Length == 0)
+            return Array.Empty<ChartRectPrimitive>();
+
+        double maxVolume = volumeValues.Max();
+        if (maxVolume <= 0)
+            return Array.Empty<ChartRectPrimitive>();
+
+        double categoryWidth = plot.Width / Math.Max(1, categoryCount);
+        double barWidth = Math.Max(1, categoryWidth * StockVolumeBarWidthFraction);
+        double bandHeight = Math.Max(1, plot.Height * StockVolumeBandHeightFraction);
+        var fill = new ChartFillPlan(
+            ResolveSeriesColor(volumeSeriesIndex, seriesColors),
+            RectSeriesFillAlpha);
+        var primitives = new List<ChartRectPrimitive>();
+
+        for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+        {
+            double? volume = TryGetSeriesValue(chart, volumeSeriesIndex, categoryIndex);
+            if (volume is null || volume.Value <= 0)
+                continue;
+
+            double height = Math.Max(0.5, volume.Value / maxVolume * bandHeight);
+            double x = plot.X + categoryIndex * categoryWidth + (categoryWidth - barWidth) / 2.0;
+            primitives.Add(new ChartRectPrimitive(
+                volumeSeriesIndex,
+                categoryIndex,
+                new ChartPlanRect(x, plot.Bottom - height, barWidth, height),
+                fill,
+                Stroke: null));
+        }
+
+        return primitives;
+    }
+
     public static IReadOnlyList<ChartSurfaceCellPrimitive> BuildSurfaceCellPrimitives(
         ChartShape chart,
         ChartPlanRect plot,
@@ -2179,6 +2233,15 @@ public static partial class ChartRenderPlanner
         if (highSeriesIndex >= 0 && lowSeriesIndex >= 0 && closeSeriesIndex >= 0)
             return true;
 
+        if (chart.Series.Count >= 5)
+        {
+            openSeriesIndex = 1;
+            highSeriesIndex = 2;
+            lowSeriesIndex = 3;
+            closeSeriesIndex = 4;
+            return true;
+        }
+
         if (chart.Series.Count >= 4)
         {
             openSeriesIndex = 0;
@@ -2198,6 +2261,15 @@ public static partial class ChartRenderPlanner
         }
 
         return false;
+    }
+
+    private static int TryResolveStockVolumeSeries(ChartShape chart)
+    {
+        int namedIndex = FindSeriesIndex(chart, "volume");
+        if (namedIndex >= 0)
+            return namedIndex;
+
+        return chart.Series.Count >= 5 ? 0 : -1;
     }
 
     private static int FindSeriesIndex(ChartShape chart, string token)

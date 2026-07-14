@@ -398,6 +398,29 @@ public sealed class ChartRenderPlannerTests
         plan.CloseTicks[2].Segment.Stroke.Color.Should().Be(new SrgbColor(0x44, 0x44, 0x44));
     }
 
+    [Fact]
+    public void BuildStockVolumePrimitives_UsesBottomBandVolumeColumnsForSharedRendering()
+    {
+        var chart = MakeStockVolumeChart();
+        var plot = new ChartPlanRect(0, 0, 300, 200);
+
+        var ohlcPlan = ChartRenderPlanner.BuildStockPrimitivePlan(chart, plot);
+        var volumeBars = ChartRenderPlanner.BuildStockVolumePrimitives(chart, plot);
+
+        ohlcPlan.HighLowLines.Should().HaveCount(3);
+        ohlcPlan.OpenTicks.Should().HaveCount(3);
+        ohlcPlan.CloseTicks.Should().HaveCount(3);
+        volumeBars.Should().HaveCount(3);
+        volumeBars.Should().OnlyContain(bar => bar.SeriesIndex == 0);
+        volumeBars[0].Bounds.Width.Should().BeApproximately(55, 0.0001);
+        volumeBars[0].Bounds.Bottom.Should().Be(plot.Bottom);
+        volumeBars[1].Bounds.Height.Should().BeApproximately(
+            plot.Height * ChartRenderPlanner.StockVolumeBandHeightFraction,
+            0.0001);
+        volumeBars[2].Bounds.Height.Should().BeLessThan(volumeBars[1].Bounds.Height);
+        volumeBars[0].Fill.Color.Should().Be(ChartRenderPlanner.ResolveSeriesColor(0, null));
+    }
+
     [Theory]
     [InlineData(ChartType.Surface)]
     [InlineData(ChartType.Surface3D)]
@@ -2952,6 +2975,28 @@ public sealed class ChartRenderPlannerTests
 
         foreach (var (name, values) in new[]
         {
+            ("Open", new double?[] { 10, 12, 11 }),
+            ("High", new double?[] { 14, 16, 15 }),
+            ("Low", new double?[] { 8, 9, 10 }),
+            ("Close", new double?[] { 13, 11, 14 })
+        })
+        {
+            var series = new ChartSeries { Name = name };
+            series.Values.AddRange(values);
+            chart.Series.Add(series);
+        }
+
+        return chart;
+    }
+
+    private static ChartShape MakeStockVolumeChart()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Stock };
+        chart.Categories.AddRange(new[] { "Day 1", "Day 2", "Day 3" });
+
+        foreach (var (name, values) in new[]
+        {
+            ("Volume", new double?[] { 1000, 1500, 750 }),
             ("Open", new double?[] { 10, 12, 11 }),
             ("High", new double?[] { 14, 16, 15 }),
             ("Low", new double?[] { 8, 9, 10 }),

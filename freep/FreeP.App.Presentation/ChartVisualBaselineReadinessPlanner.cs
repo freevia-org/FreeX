@@ -140,7 +140,9 @@ public static partial class ChartRenderPlanner
     {
         var decision = chart.ChartType switch
         {
-            ChartType.Stock => "stock high-low/open-close tick plan",
+            ChartType.Stock => TryResolveStockVolumeSeries(chart) >= 0
+                ? "stock volume columns plus high-low/open-close tick plan"
+                : "stock high-low/open-close tick plan",
             ChartType.Surface3D => "3-D surface projected facet, wireframe, and contour plan",
             ChartType.Surface => "surface grid and contour plan",
             ChartType.Scatter when chart.ScatterStyle is ScatterStyle.Smooth or ScatterStyle.SmoothMarker =>

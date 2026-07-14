@@ -859,6 +859,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.chart.radar-style-render-planning",
             "freep.chart.powerpoint-baseline-readiness",
             "freep.chart.stock-ohlc-baseline-readiness",
+            "freep.chart.stock-volume-baseline-readiness",
             "freep.chart.doughnut-ring-baseline-readiness",
             "freep.omml.transparent-phantom-spacing",
             "freep.omml.accent-bar-render-plan",
