@@ -4407,6 +4407,41 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_arrow_ribbon_shape_composes_shared_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Process,
+                "urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon",
+                ["Pitch", "Build", "Launch"]);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 600 and < 620)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(5, "Avalonia host consumes the shared three-stage arrow ribbon plus two connector DrawOps");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Pitch", "Build", "Launch");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.BoundsDip.X)
+            .Should().BeInAscendingOrder("Avalonia host should consume shared left-to-right arrow-ribbon geometry");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "Avalonia host should consume shared arrow-ribbon connector ops");
+    }
+
+    [Fact]
     public async Task SmartArt_radial_venn_shape_composes_shared_live_draw_ops()
     {
         IReadOnlyList<DrawOp.Shape> liveShapes = [];

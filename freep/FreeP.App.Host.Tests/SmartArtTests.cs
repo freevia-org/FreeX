@@ -1806,6 +1806,34 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesArrowRibbonAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon",
+            nodes: [("id1", "Pitch"), ("id2", "Build"), ("id3", "Launch")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process,
+            "arrowRibbon is a process-family SmartArt layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "arrowRibbon now has bounded shared ribbon-segment geometry");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Pitch", "Build", "Launch");
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        liveShapes.Should().HaveCount(5, "three arrow-ribbon segments plus two connectors should render from shared live data");
+        liveShapes.Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Pitch", "Build", "Launch");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume shared arrow-ribbon connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_LiveProcessSmartArt_ParOfChainRendersEveryStep()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2525,7 +2553,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Process,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/verticalProcess",
             IsLiveLayoutSupported = false
         };
         data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });

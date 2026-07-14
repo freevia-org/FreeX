@@ -994,6 +994,22 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "circleProcess now uses a bounded shared process live-layout path for parsed ordered-stage nodes as clockwise rounded boxes around an ellipse with loop-closing connector ops. Exact PowerPoint circular-arrow artwork, segment contours, effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
+            EvidenceId: "freep.smartart.arrow-ribbon",
+            Area: "SmartArt arrowRibbon live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared ribbon segment and connector ops emitted by the SmartArt process-family planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-arrow-ribbon-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "arrowRibbon now uses a bounded shared process live-layout path for parsed ordered-stage nodes as left-to-right ribbon segments with connector ops. Exact PowerPoint folded-ribbon contours, arrow tails, effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+        new(
             EvidenceId: "freep.smartart.basic-block-list",
             Area: "SmartArt basic block list live layout",
             Status: "shared-render-planner-evidence",

@@ -719,6 +719,37 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void ArrowRibbon_ReturnsRibbonSegmentsAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Discover", "Plan", "Deliver");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("arrowRibbon has bounded shared process-family ribbon geometry");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Ribbon)
+            .Should().HaveCount(3, "one live ribbon segment should be emitted per arrow-ribbon node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(2, "adjacent arrow-ribbon segments need shared connector ops");
+
+        var ribbons = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Ribbon).ToList();
+        ribbons.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Discover", "Plan", "Deliver");
+        ribbons.Select(s => s.OffsetXEmu)
+            .Should().BeInAscendingOrder("arrowRibbon segments should advance left-to-right");
+        ribbons.Select(s => s.OffsetYEmu).Distinct()
+            .Should().ContainSingle("arrowRibbon keeps a single centered ribbon track");
+
+        foreach (var ribbon in ribbons)
+        {
+            ribbon.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            ribbon.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (ribbon.OffsetXEmu + ribbon.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (ribbon.OffsetYEmu + ribbon.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
+    }
+
+    [Fact]
     public void CircleProcess_ReturnsCircularStageBoxesAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Process, "Discover", "Plan", "Build", "Review");
@@ -1792,6 +1823,66 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().NotContain("Cached alternating fallback");
         shapeOps.Where(op => op.Text is null)
             .Should().HaveCount(3, "WPF and Avalonia hosts consume the shared alternating-process connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_ArrowRibbon_UsesSharedLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Live A", "Live B", "Live C");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 10,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached arrow ribbon fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 73,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(5, "arrowRibbon should render three live ribbon segments plus two connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Live A");
+        renderedText.Should().Contain("Live B");
+        renderedText.Should().Contain("Live C");
+        renderedText.Should().NotContain("Cached arrow ribbon fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume the shared arrow-ribbon connector DrawOps");
+        shapeOps.Where(op => op.Text is not null).Select(op => op.BoundsDip.X)
+            .Should().BeInAscendingOrder("hosts consume shared left-to-right arrow-ribbon DrawOp geometry");
     }
 
     [Fact]

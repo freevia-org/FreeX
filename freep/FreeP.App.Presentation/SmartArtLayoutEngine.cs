@@ -84,6 +84,9 @@ public static class SmartArtLayoutEngine
         if (IsAlternatingProcessLayout(data.LayoutUniqueId))
             return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsArrowRibbonLayout(data.LayoutUniqueId))
+            return LayoutArrowRibbon(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsCircleProcessLayout(data.LayoutUniqueId))
             return LayoutCircleProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -350,6 +353,58 @@ public static class SmartArtLayoutEngine
             var from = centers[i];
             var to = centers[i + 1];
             shapes.Add(MakeConnector(idCounter++, from.x, from.y, to.x, to.y, stylePlan.Connector));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Arrow ribbon geometry: ordered process stages represented as shared ribbon
+    /// segments with straight connector ops. This is intentionally renderer-neutral
+    /// live layout, not exact PowerPoint folded-ribbon artwork.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutArrowRibbon(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * 0.16);
+        long connectorW = n > 1 ? (long)(fcx * 0.025) : 0;
+        long gap = n > 1 ? (long)(fcx * 0.015) : 0;
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long boxW = Math.Max((innerW - (n - 1) * (connectorW + gap)) / n, 1L);
+        long boxH = Math.Max(fcy - 2 * outerPadY, 1L);
+        long y = fy + outerPadY;
+        long x = fx + outerPadX;
+
+        uint idCounter = 600;
+        for (int i = 0; i < n; i++)
+        {
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Process);
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                nodeStyle,
+                x,
+                y,
+                boxW,
+                boxH,
+                NodeFontSizePt,
+                DrawingShapeKind.Ribbon));
+
+            if (i < n - 1)
+            {
+                long connY = y + boxH / 2;
+                long connX1 = x + boxW + gap / 2;
+                long connX2 = connX1 + connectorW;
+                shapes.Add(MakeConnector(idCounter++, connX1, connY, connX2, connY, stylePlan.Connector));
+            }
+
+            x += boxW + connectorW + gap;
         }
 
         return shapes;
@@ -1188,6 +1243,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "alternatingprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsArrowRibbonLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "arrowribbon", StringComparison.Ordinal);
     }
 
     private static bool IsCircleProcessLayout(string uniqueId)
