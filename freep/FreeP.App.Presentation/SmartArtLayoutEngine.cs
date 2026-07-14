@@ -84,6 +84,9 @@ public static class SmartArtLayoutEngine
         if (IsAlternatingProcessLayout(data.LayoutUniqueId))
             return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsBasicPyramidLayout(data.LayoutUniqueId))
+            return LayoutBasicPyramid(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         return data.Family switch
         {
             SmartArtFamily.Process   => LayoutProcess  (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
@@ -482,6 +485,57 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// Basic pyramid geometry: top-to-bottom centered segments that widen toward
+    /// the base. This owns renderer-neutral segment placement, not exact
+    /// PowerPoint bevels, effects, or merged segment contours.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutBasicPyramid(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = (long)(fcy * 0.01);
+
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availH = Math.Max(fcy - 2 * outerPadY - (n - 1) * gapY, 1L);
+        long segmentH = Math.Max(availH / n, 1L);
+        double minWidthFrac = n == 1 ? 1.0 : 0.34;
+
+        uint idCounter = 520;
+        long curY = fy + outerPadY;
+
+        for (int i = 0; i < n; i++)
+        {
+            double t = n == 1 ? 1.0 : (double)i / (n - 1);
+            double widthFrac = minWidthFrac + ((1.0 - minWidthFrac) * t);
+            long segmentW = Math.Max((long)(innerW * widthFrac), 1L);
+            long x = fx + outerPadX + (innerW - segmentW) / 2;
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.List);
+            var shapeKind = i == 0 ? DrawingShapeKind.Triangle : DrawingShapeKind.Trapezoid;
+
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                nodeStyle,
+                x,
+                curY,
+                segmentW,
+                segmentH,
+                NodeFontSizePt,
+                shapeKind));
+
+            curY += segmentH + gapY;
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape> LayoutCycle(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -795,5 +849,14 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "alternatingprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsBasicPyramidLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "basicpyramid", StringComparison.Ordinal);
     }
 }

@@ -803,6 +803,39 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void BasicPyramid_ReturnsCenteredWideningSegmentsWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.List, "Vision", "Strategy", "Execution", "Proof");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("basicPyramid has bounded shared pyramid-segment geometry");
+        shapes!.Should().HaveCount(4, "one live segment should be emitted per pyramid node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().BeEmpty("basicPyramid emits segment shapes without connector ops");
+
+        var segments = shapes.ToList();
+        segments[0].AutoShapeKind.Should().Be(DrawingShapeKind.Triangle, "the top segment is the pyramid cap");
+        segments.Skip(1).Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Trapezoid,
+            "lower pyramid rows are renderer-neutral trapezoid segments");
+        segments.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Vision", "Strategy", "Execution", "Proof");
+        segments.Select(s => s.OffsetYEmu)
+            .Should().BeInAscendingOrder("basicPyramid segments stack top-to-bottom");
+        segments.Select(s => s.ExtentCxEmu)
+            .Should().BeInAscendingOrder("basicPyramid segments widen toward the base");
+
+        foreach (var segment in segments)
+        {
+            segment.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            segment.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (segment.OffsetXEmu + segment.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (segment.OffsetYEmu + segment.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
+    }
+
+    [Fact]
     public void BasicMatrix_ReturnsLiveQuadrantBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.Matrix, "People", "Process", "Platform", "Proof");
@@ -1696,6 +1729,64 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().NotContain("Cached descending block list fallback");
         shapeOps.Select(op => op.BoundsDip.Y)
             .Should().BeInAscendingOrder("hosts consume the shared descending-block-list DrawOp geometry");
+    }
+
+    [Fact]
+    public void Compositor_BasicPyramid_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.List, "Live A", "Live B", "Live C", "Live D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 20,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached pyramid fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 73,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(4, "basicPyramid should render four live pyramid segments and no connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain(["Live A", "Live B", "Live C", "Live D"]);
+        renderedText.Should().NotContain("Cached pyramid fallback");
+        shapeOps.Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("hosts consume shared top-to-bottom pyramid DrawOp geometry");
+        shapeOps.Select(op => op.BoundsDip.Width)
+            .Should().BeInAscendingOrder("hosts consume shared widening pyramid segment geometry");
     }
 
     [Fact]

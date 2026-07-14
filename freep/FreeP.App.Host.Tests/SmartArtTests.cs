@@ -1245,6 +1245,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesBasicPyramidAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid",
+            nodes: [("id1", "Vision"), ("id2", "Strategy"), ("id3", "Execution"), ("id4", "Proof")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List,
+            "basicPyramid stays in the broad list-family model while using layout-specific geometry");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "basicPyramid is now in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Vision", "Strategy", "Execution", "Proof");
+    }
+
+    [Fact]
     public void Reader_ParsesBasicCycleAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1822,6 +1841,37 @@ public sealed class SmartArtTests : IDisposable
         renderedText.Should().Contain("Ship");
         liveShapes.Select(op => op.BoundsDip.Y)
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared descending-block-list DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_BasicPyramidSmartArt_RendersSharedLiveSegments()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicPyramid",
+            nodes: [("n1", "Vision"), ("n2", "Strategy"), ("n3", "Execution"), ("n4", "Proof")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.List);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(4, "four basic-pyramid segments should render from shared live data");
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("basic-pyramid live geometry emits no connectors");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain(["Vision", "Strategy", "Execution", "Proof"]);
+        liveShapes.Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared top-to-bottom pyramid DrawOps");
+        liveShapes.Select(op => op.BoundsDip.Width)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared widening pyramid segment geometry");
     }
 
     [Fact]
