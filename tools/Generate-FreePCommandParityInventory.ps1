@@ -737,6 +737,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML layout now maps PowerPoint-authored m:accPr/m:chr macron and overline accents to renderer-neutral horizontal-rule draw ops above the base expression before WPF or Avalonia draw. PowerPoint-authoritative math visual baselines, exact Cambria Math accent placement, stretched accent typography, and complete OfficeMath accent semantics remain deferred."),
         new(
+            EvidenceId: "freep.omml.radical-degree-layout",
+            Area: "OMML radical degree layout and baseline",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.Rad degree metadata and MathBoxRenderPlanner radical/glyph ops with no renderer-local radical-degree policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-radical-degree-layout-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout now proves default visible radical degrees, hidden m:radPr/m:degHide no-draw/no-gutter behavior, script-sized degree placement left of the radical sign, and paired WPF/Avalonia consumption of the same renderer-neutral radical/glyph draw ops. PowerPoint-authoritative math visual baselines, exact Cambria Math radical glyph metrics, radical-degree kerning, overline/check-mark shape tuning, and broader OfficeMath radical variants remain deferred."),
+        new(
             EvidenceId: "freep.omml.fraction-type",
             Area: "OMML fraction type semantics",
             Status: "shared-layout-evidence",

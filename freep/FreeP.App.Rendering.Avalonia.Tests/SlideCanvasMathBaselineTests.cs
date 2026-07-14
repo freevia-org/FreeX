@@ -899,6 +899,50 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_RadicalVisibleDegree_UsesSharedMathBoxPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:rad>" +
+                    "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
+                    "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                    "</m:rad>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+                ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Equal(new[] { "x", "3" },
+                    "visible radical degrees must be preserved in the shared MathBox plan before Avalonia draws");
+                var radical = ops.OfType<MathDrawOp.DrawRadical>().Single();
+                var radicand = ops.OfType<MathDrawOp.DrawGlyph>().Single(g => g.Text == "x");
+                var degree = ops.OfType<MathDrawOp.DrawGlyph>().Single(g => g.Text == "3");
+                degree.X.Should().BeLessThan(radical.X,
+                    "Avalonia consumes the shared degree position to the left of the radical sign");
+                degree.Y.Should().BeLessThan(radicand.Y,
+                    "Avalonia consumes the shared degree position above the radicand");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "R = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render visible-degree radical math from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_GroupChr_UsesSharedGlyphPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;
