@@ -1070,6 +1070,22 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "descendingBlockList now uses the bounded shared list-family live-layout path for parsed nodes as top-to-bottom right-aligned blocks that narrow toward the bottom. Unsupported list siblings remain on cached drawing fallback. Exact PowerPoint spacing/effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
+            EvidenceId: "freep.smartart.basic-pyramid",
+            Area: "SmartArt basicPyramid live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared pyramid segment shape ops emitted by the SmartArt list-family layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-basic-pyramid-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
+            ],
+            RemainingWork: "basicPyramid uses the bounded shared list-family live-layout path for parsed nodes as centered top-to-bottom pyramid segments that widen toward the base. Unsupported pyramid siblings remain on cached drawing fallback. Exact PowerPoint pyramid contours, bevels/effects, merged segment borders, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
+        new(
             EvidenceId: "freep.smartart.picture-caption-list",
             Area: "SmartArt pictureCaptionList bounded live layout",
             Status: "shared-render-planner-evidence",
