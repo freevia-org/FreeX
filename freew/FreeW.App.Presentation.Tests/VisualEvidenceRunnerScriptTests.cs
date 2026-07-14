@@ -54,6 +54,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("ReviewCompareCombineVisualProof = @(");
         source.Should().Contain("ReviewProofingVisualProof = @(");
         source.Should().Contain("EquationStructureVisualProof = @(");
+        source.Should().Contain("NotePlacementVisualProof = @(");
         source.Should().Contain("'field-page-number-variants'");
         source.Should().Contain("'references-heavy-fields'");
         source.Should().Contain("'legal-reference-section-page-numbers'");
@@ -272,6 +273,15 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Equation structure visual semantic rows: verified rows=");
         source.Should().Contain("Equation structure Word-baseline policy rows: verified rows=");
         source.Should().Contain("Equation structure Word-baseline unavailable blocker: verified");
+        source.Should().Contain("Assert-NotePlacementVisualProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Note placement visual proof readiness requires FreeW visual evidence summary schema v44 or newer");
+        source.Should().Contain("$readinessRows = @($summary.notePlacementProofReadiness)");
+        source.Should().Contain("missing synthetic endnote page semantic evidence");
+        source.Should().Contain("missing honest word-baseline-unavailable note placement blocker");
+        source.Should().Contain("Note placement visual proof readiness: trusted scenario rows=");
+        source.Should().Contain("Note placement semantic rows: verified rows=");
+        source.Should().Contain("Note placement Word-baseline policy rows: verified rows=");
+        source.Should().Contain("Note placement Word-baseline unavailable blockers: verified rows=");
         source.Should().Contain("Word baseline mode: word-png-comparison");
         source.Should().Contain("Word baseline mode: word-baseline-unavailable");
         source.Should().Contain("Word baseline mode: visual-evidence-only");

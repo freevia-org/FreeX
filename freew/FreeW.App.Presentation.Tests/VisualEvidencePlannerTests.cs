@@ -1286,6 +1286,19 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void NotePlacementVisualProofScenarioIds_CoverFocusedNoWordProofFamily()
+    {
+        FreeWVisualEvidenceManifestNormalizer.NotePlacementVisualProofScenarioIds.Should().Equal(
+            "f2-footnotes",
+            "f2-endnotes");
+
+        FreeWVisualEvidenceManifestNormalizer.NotePlacementVisualProofScenarioIds.Should().OnlyContain(
+            scenarioId => FreeWVisualEvidenceManifestNormalizer.NoteRendererScenarioIds.Contains(
+                scenarioId,
+                StringComparer.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void DefaultExpectedScenarios_RequiresPairedSectionGeometryEvidence()
     {
         var expected = FreeWVisualEvidenceManifestNormalizer.DefaultExpectedScenarios;
@@ -7164,6 +7177,151 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void NotePlacementNoWordSummary_ReportsFocusedProofReadinessWithoutAuthoritativeWordParity()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarios = FreeWVisualEvidenceManifestNormalizer.NotePlacementVisualProofScenarioIds;
+            var wpfRows = scenarios
+                .SelectMany(scenarioId =>
+                {
+                    var pageCount = string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
+                        ? 3
+                        : FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs;
+                    return Enumerable.Range(1, pageCount)
+                        .Select(page => BuildFileBackedRow(
+                            root,
+                            FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                            scenarioId,
+                            page,
+                            pageCount));
+                })
+                .ToList();
+            var avaloniaRows = scenarios
+                .SelectMany(scenarioId =>
+                {
+                    var pageCount = string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
+                        ? 3
+                        : FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs;
+                    return Enumerable.Range(1, pageCount)
+                        .Select(page => BuildFileBackedRow(
+                            root,
+                            FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                            scenarioId,
+                            page,
+                            pageCount));
+                })
+                .ToList();
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+
+            var expected = scenarios
+                .SelectMany(scenarioId =>
+                {
+                    var minimum = FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs;
+                    return new[]
+                    {
+                        new FreeWVisualEvidenceExpectedScenario(
+                            FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                            scenarioId,
+                            minimum),
+                        new FreeWVisualEvidenceExpectedScenario(
+                            FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                            scenarioId,
+                            minimum)
+                    };
+                })
+                .ToList();
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                expected);
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            var expectedReadinessRows = scenarios
+                .Sum(scenarioId => string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
+                    ? 3
+                    : FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.NotePlacementProofReadiness.Should().HaveCount(expectedReadinessRows);
+            withBaseline.NotePlacementProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready" &&
+                row.WordBaselineStatus == "word-baseline-unavailable=2" &&
+                row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal) &&
+                row.SemanticEvidence.Contains("WPF", StringComparison.Ordinal) &&
+                row.SemanticEvidence.Contains("Avalonia", StringComparison.Ordinal) &&
+                row.Trust.Passed);
+            withBaseline.NotePlacementProofReadiness
+                .Where(row => row.ScenarioId == "f2-footnotes")
+                .Should().OnlyContain(row =>
+                    row.SemanticEvidence.Contains("footnotes", StringComparison.Ordinal) &&
+                    row.SemanticEvidence.Contains("body page", StringComparison.Ordinal));
+            withBaseline.NotePlacementProofReadiness
+                .Where(row => row.ScenarioId == "f2-endnotes")
+                .Should().Contain(row =>
+                    row.PageNumber == 3 &&
+                    row.SemanticEvidence.Contains("endnotes", StringComparison.Ordinal) &&
+                    row.SemanticEvidence.Contains("synthetic page", StringComparison.Ordinal));
+            withBaseline.RemainingEvidenceBlockers
+                .Where(blocker => blocker.Area == "Note placement visual fidelity")
+                .Should().HaveCount(scenarios.Count)
+                .And.OnlyContain(blocker =>
+                    blocker.Status == FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus &&
+                    blocker.RequiresWordBaseline &&
+                    blocker.Reason.Contains("Word.Application", StringComparison.Ordinal) &&
+                    blocker.CandidateBaselinePaths.Any(path =>
+                        path.EndsWith("_p1.png", StringComparison.Ordinal)));
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(44);
+            doc.RootElement.GetProperty("notePlacementProofReadiness").GetArrayLength().Should().Be(expectedReadinessRows);
+            doc.RootElement.GetProperty("evidence").EnumerateArray()
+                .Should().Contain(row =>
+                    row.GetProperty("scenarioId").GetString() == "f2-footnotes" &&
+                    row.GetProperty("hasFootnotes").GetBoolean());
+            doc.RootElement.GetProperty("evidence").EnumerateArray()
+                .Should().Contain(row =>
+                    row.GetProperty("scenarioId").GetString() == "f2-endnotes" &&
+                    row.GetProperty("hasEndnotes").GetBoolean() &&
+                    row.GetProperty("isSyntheticPage").GetBoolean());
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Note Placement Visual Proof Readiness");
+            markdown.Should().Contain("| f2-footnotes | 1 | paired-renderer-proof-ready |");
+            markdown.Should().Contain("f2-footnotes-word-baseline-fidelity");
+            markdown.Should().Contain("f2-endnotes-word-baseline-fidelity");
+            markdown.Should().Contain("Word COM or baseline generation unavailable; paired WPF/Avalonia note placement evidence is retained without authoritative Word parity");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void TablePaginationNoWordSummary_ReportsFocusedProofReadinessWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();
@@ -8056,6 +8214,11 @@ public sealed class VisualEvidencePlannerTests
             pageCount,
             outputName,
             scenario.LayoutKind,
+            hasFootnotes: string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase),
+            hasEndnotes: string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
+                && pageNumber == 3,
+            isSyntheticPage: string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
+                && pageNumber == 3,
             sectionOrdinal: sectionPage?.SectionOrdinal,
             sectionRelativePageNumber: sectionPage?.SectionRelativePageNumber,
             sectionOwnerId: sectionPage?.SectionOwnerId,

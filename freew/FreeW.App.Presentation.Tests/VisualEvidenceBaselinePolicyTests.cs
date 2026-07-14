@@ -211,6 +211,35 @@ public sealed class VisualEvidenceBaselinePolicyTests
     }
 
     [Fact]
+    public void WordBaselinePolicy_KeepsNotePlacementProofsDirectlyComparable()
+    {
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.NotePlacementVisualProofScenarioIds)
+        {
+            var row = BuildRow(
+                scenarioId,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId + "_p1.png",
+                pageNumber: 1,
+                pageCount: FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+
+            var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+            var comparison = FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                row,
+                FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                "COM ProgID 'Word.Application' is not registered");
+
+            policy.IsComparable.Should().BeTrue();
+            policy.BaselineScenarioId.Should().Be(scenarioId);
+            comparison.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            comparison.BaselineScenarioId.Should().Be(scenarioId);
+            comparison.BaselineId.Should().Be($"{scenarioId}/p1/{scenarioId}_p1.png");
+            comparison.CandidateBaselinePaths.Should().Contain([
+                $"{scenarioId}/{scenarioId}_p1.png",
+                $"{scenarioId}_p1.png"]);
+        }
+    }
+
+    [Fact]
     public void WordBaselinePolicy_KeepsReviewMarkupProofsDirectlyComparable()
     {
         foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.ReviewMarkupVisualProofScenarioIds)
@@ -408,6 +437,9 @@ public sealed class VisualEvidenceBaselinePolicyTests
             ReviewProtection: expectation.ReviewProtection,
             ReviewMarkup: expectation.ReviewMarkup,
             ReviewCompareCombine: expectation.ReviewCompareCombine,
+            HasFootnotes: expectation.HasFootnotes,
+            HasEndnotes: expectation.HasEndnotes,
+            IsSyntheticPage: expectation.IsSyntheticPage,
             Trust: new FreeWVisualEvidenceTrust(true, []));
     }
 }

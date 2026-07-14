@@ -55,6 +55,9 @@ public sealed record FreeWVisualEvidenceNormalizedRow(
     FreeWVisualReviewProtectionExpectation ReviewProtection,
     FreeWVisualReviewMarkupExpectation ReviewMarkup,
     FreeWVisualReviewCompareCombineExpectation ReviewCompareCombine,
+    bool HasFootnotes,
+    bool HasEndnotes,
+    bool IsSyntheticPage,
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualEvidenceNormalizedSummary(
@@ -65,6 +68,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualEvidenceNormalizedScenario> Scenarios,
     IReadOnlyList<FreeWVisualEvidenceNormalizedRow> Evidence,
     IReadOnlyList<FreeWVisualEvidenceBackstagePrintReadiness> BackstagePrintEvidenceReadiness,
+    IReadOnlyList<FreeWVisualNotePlacementProofReadiness> NotePlacementProofReadiness,
     IReadOnlyList<FreeWVisualFloatingWrappingProofReadiness> FloatingWrappingProofReadiness,
     IReadOnlyList<FreeWVisualHeaderFooterImageProofReadiness> HeaderFooterImageProofReadiness,
     IReadOnlyList<FreeWVisualTablePaginationProofReadiness> TablePaginationProofReadiness,
@@ -86,6 +90,17 @@ public sealed record FreeWVisualEvidenceBackstagePrintReadiness(
     string Status,
     string OutputSummary,
     string Notes);
+
+public sealed record FreeWVisualNotePlacementProofReadiness(
+    string ScenarioId,
+    int PageNumber,
+    string Status,
+    string WpfOutputSummary,
+    string AvaloniaOutputSummary,
+    string WordBaselineStatus,
+    string BaselineReadiness,
+    string SemanticEvidence,
+    FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualFloatingWrappingProofReadiness(
     string ScenarioId,
@@ -223,7 +238,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 43;
+    public const int SummarySchemaVersion = 44;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -238,6 +253,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
         "f2-footnotes",
         "f2-endnotes"
     ];
+    public static IReadOnlyList<string> NotePlacementVisualProofScenarioIds { get; } =
+        NoteRendererScenarioIds;
     public static IReadOnlyList<string> SectionGeometryRendererScenarioIds { get; } =
     [
         "f2-section-landscape"
@@ -461,6 +478,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         var scenarios = BuildScenarioSummaries(rows, expected, expectedByKey, failures);
         ValidateBackstageRendererPairs(rows, failures);
+        ValidateNoteRendererPairs(rows, failures);
         ValidateSectionGeometryRendererPairs(rows, failures);
         ValidateReviewRendererPairs(rows, failures);
         ValidateFieldRendererPairs(rows, failures);
@@ -478,6 +496,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             .ToList();
         var summaryTrust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
         var backstageReadiness = BuildBackstagePrintEvidenceReadinessRows(expected, orderedRows);
+        var notePlacementProofReadiness = BuildNotePlacementProofReadinessRows(expected, orderedRows, []);
         var floatingWrappingProofReadiness = BuildFloatingWrappingProofReadinessRows(expected, orderedRows, []);
         var headerFooterImageProofReadiness = BuildHeaderFooterImageProofReadinessRows(expected, orderedRows, []);
         var tablePaginationProofReadiness = BuildTablePaginationProofReadinessRows(expected, orderedRows, []);
@@ -496,6 +515,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             scenarios,
             orderedRows,
             backstageReadiness,
+            notePlacementProofReadiness,
             floatingWrappingProofReadiness,
             headerFooterImageProofReadiness,
             tablePaginationProofReadiness,
@@ -560,6 +580,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
 
         AppendBackstagePrintEvidenceReadiness(sb, summary);
+        AppendNotePlacementProofReadiness(sb, summary);
         AppendFloatingWrappingProofReadiness(sb, summary);
         AppendHeaderFooterImageProofReadiness(sb, summary);
         AppendTablePaginationProofReadiness(sb, summary);
@@ -678,6 +699,33 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{EscapeMarkdown(row.WpfScenarioId)} | " +
                 $"{EscapeMarkdown(row.WpfOutputSummary)} | " +
                 $"{EscapeMarkdown(row.AvaloniaScenarioId)} | " +
+                $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | " +
+                $"{EscapeMarkdown(row.WordBaselineStatus)} | " +
+                $"{EscapeMarkdown(row.BaselineReadiness)} | " +
+                $"{EscapeMarkdown(row.SemanticEvidence)} | " +
+                $"{(row.Trust.Passed ? "passed" : "failed")} |");
+        }
+    }
+
+    private static void AppendNotePlacementProofReadiness(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.NotePlacementProofReadiness.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## Note Placement Visual Proof Readiness");
+        sb.AppendLine();
+        sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
+        sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var row in summary.NotePlacementProofReadiness)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.ScenarioId)} | " +
+                $"{row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(row.Status)} | " +
+                $"{EscapeMarkdown(row.WpfOutputSummary)} | " +
                 $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | " +
                 $"{EscapeMarkdown(row.WordBaselineStatus)} | " +
                 $"{EscapeMarkdown(row.BaselineReadiness)} | " +
@@ -1130,6 +1178,73 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 trust)
         ];
     }
+
+    private static IReadOnlyList<FreeWVisualNotePlacementProofReadiness> BuildNotePlacementProofReadinessRows(
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var rows = new List<FreeWVisualNotePlacementProofReadiness>();
+        foreach (var scenarioId in NotePlacementVisualProofScenarioIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            var expected = expectedScenarios
+                .Any(e => string.Equals(e.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            var hasEvidence = evidence
+                .Any(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            if (!expected && !hasEvidence)
+                continue;
+
+            foreach (var pageNumber in RequiredNotePlacementPages(scenarioId))
+            {
+                var wpfRows = RowsForHostScenarioPage(evidence, WpfHostId, scenarioId, pageNumber);
+                var avaloniaRows = RowsForHostScenarioPage(evidence, AvaloniaHostId, scenarioId, pageNumber);
+                var trustedWpf = wpfRows.FirstOrDefault(row => row.Trust.Passed);
+                var trustedAvalonia = avaloniaRows.FirstOrDefault(row => row.Trust.Passed);
+                var relatedBaseline = baselineComparisons
+                    .Where(comparison =>
+                        string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase)
+                        && comparison.PageNumber == pageNumber)
+                    .ToList();
+
+                if (trustedWpf is null || trustedAvalonia is null)
+                {
+                    rows.Add(new FreeWVisualNotePlacementProofReadiness(
+                        scenarioId,
+                        pageNumber,
+                        "missing-paired-renderer-evidence",
+                        FormatOutputSummary(wpfRows),
+                        FormatOutputSummary(avaloniaRows),
+                        FormatWordBaselineStatus(relatedBaseline),
+                        "paired WPF/Avalonia note placement evidence is required before Word baseline comparison readiness",
+                        FormatNotePlacementProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                        new FreeWVisualEvidenceTrust(false, BuildMissingNotePlacementPairFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia))));
+                    continue;
+                }
+
+                var failures = BuildNotePlacementSemanticFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia);
+                var baselineTrust = EvaluateDrawingObjectProofReadiness(relatedBaseline);
+                failures.AddRange(baselineTrust.Failures);
+                var trust = new FreeWVisualEvidenceTrust(failures.Count == 0, failures);
+                rows.Add(new FreeWVisualNotePlacementProofReadiness(
+                    scenarioId,
+                    pageNumber,
+                    trust.Passed ? "paired-renderer-proof-ready" : "note-placement-proof-failed",
+                    FormatOutputSummary(wpfRows),
+                    FormatOutputSummary(avaloniaRows),
+                    FormatWordBaselineStatus(relatedBaseline),
+                    FormatNotePlacementBaselineReadiness(relatedBaseline, scenarioId),
+                    FormatNotePlacementProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                    trust));
+            }
+        }
+
+        return rows;
+    }
+
+    private static IReadOnlyList<int> RequiredNotePlacementPages(string scenarioId) =>
+        string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
+            ? [1, 2, 3]
+            : RequiredScenarioPages(scenarioId);
 
     private static IReadOnlyList<FreeWVisualDrawingObjectProofReadiness> BuildDrawingObjectProofReadinessRows(
         IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
@@ -1585,6 +1700,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         return summary with
         {
+            NotePlacementProofReadiness = BuildNotePlacementProofReadinessRows(
+                summary.ExpectedScenarios,
+                summary.Evidence,
+                ordered),
             FloatingWrappingProofReadiness = BuildFloatingWrappingProofReadinessRows(
                 summary.ExpectedScenarios,
                 summary.Evidence,
@@ -1675,6 +1794,20 @@ public static class FreeWVisualEvidenceManifestNormalizer
             failures.Add($"floating/wrapping proof page 1 is missing trusted WPF visual evidence for '{FloatingWrappingWpfScenarioId}'");
         if (trustedAvalonia is null)
             failures.Add($"floating/wrapping proof page 1 is missing trusted Avalonia visual evidence for '{FloatingWrappingAvaloniaScenarioId}'");
+        return failures;
+    }
+
+    private static IReadOnlyList<string> BuildMissingNotePlacementPairFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow? trustedWpf,
+        FreeWVisualEvidenceNormalizedRow? trustedAvalonia)
+    {
+        var failures = new List<string>();
+        if (trustedWpf is null)
+            failures.Add($"note placement proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted WPF visual evidence");
+        if (trustedAvalonia is null)
+            failures.Add($"note placement proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)} is missing trusted Avalonia visual evidence");
         return failures;
     }
 
@@ -1971,6 +2104,53 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return failures;
     }
 
+    private static List<string> BuildNotePlacementSemanticFailures(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia)
+    {
+        var failures = new List<string>();
+        var pairName = $"note placement proof '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        ValidateNotePlacementSemanticRow(pairName + " WPF", scenarioId, wpf, failures);
+        ValidateNotePlacementSemanticRow(pairName + " Avalonia", scenarioId, avalonia, failures);
+        ValidateNotePlacementPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+        return failures;
+    }
+
+    private static void ValidateNotePlacementSemanticRow(
+        string rowName,
+        string scenarioId,
+        FreeWVisualEvidenceNormalizedRow row,
+        List<string> failures)
+    {
+        if (string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase))
+        {
+            if (row.HasEndnotes)
+                failures.Add($"{rowName} should not report endnote evidence for the footnote fixture");
+            if (row.IsSyntheticPage)
+                failures.Add($"{rowName} should be a normal body page, not a synthetic endnote page");
+            if (!row.ExpectedFeatureTags.Contains("footnotes", StringComparer.OrdinalIgnoreCase))
+                failures.Add($"{rowName} expected the footnotes feature tag");
+            return;
+        }
+
+        if (string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase))
+        {
+            if (row.HasFootnotes)
+                failures.Add($"{rowName} should not report footnote evidence for the endnote fixture");
+            if (!row.ExpectedFeatureTags.Contains("endnotes", StringComparer.OrdinalIgnoreCase))
+                failures.Add($"{rowName} expected the endnotes feature tag");
+            if (row.IsSyntheticPage || row.HasEndnotes)
+            {
+                if (!row.HasEndnotes)
+                    failures.Add($"{rowName} expected endnote placement evidence on the synthetic endnote page");
+                if (!row.IsSyntheticPage)
+                    failures.Add($"{rowName} should not report endnote placement on a normal body page");
+            }
+        }
+    }
+
     private static List<string> BuildTablePaginationSemanticFailures(
         string scenarioId,
         int pageNumber,
@@ -2125,6 +2305,35 @@ public static class FreeWVisualEvidenceManifestNormalizer
             StringComparison.OrdinalIgnoreCase)))
         {
             return "Word COM or baseline generation unavailable; paired WPF/Avalonia floating evidence is retained without authoritative Word wrap parity";
+        }
+
+        if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
+            return "one or more Word baseline comparison rows failed trust; inspect baseline triage";
+
+        if (relatedBaseline.Any(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.PassedStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "real Word PNG baseline compared within configured tolerance";
+        }
+
+        return "Word baseline policy rows are present and trusted";
+    }
+
+    private static string FormatNotePlacementBaselineReadiness(
+        IReadOnlyList<FreeWVisualBaselineComparison> relatedBaseline,
+        string scenarioId)
+    {
+        if (relatedBaseline.Count == 0)
+            return "paired renderer evidence is present; run Word PNG baseline comparison for " + scenarioId;
+
+        if (relatedBaseline.All(comparison => string.Equals(
+            comparison.Status,
+            FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Word COM or baseline generation unavailable; paired WPF/Avalonia note placement evidence is retained without authoritative Word parity";
         }
 
         if (relatedBaseline.Any(comparison => !comparison.Trust.Passed))
@@ -2444,6 +2653,26 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         return string.Join(", ", parts);
     }
+
+    private static string FormatNotePlacementProofSemanticEvidence(
+        FreeWVisualEvidenceNormalizedRow? wpf,
+        FreeWVisualEvidenceNormalizedRow? avalonia)
+    {
+        var parts = new List<string>();
+        if (wpf is not null)
+            parts.Add("WPF " + FormatNotePlacementRowSemanticEvidence(wpf));
+        if (avalonia is not null)
+            parts.Add("Avalonia " + FormatNotePlacementRowSemanticEvidence(avalonia));
+        return parts.Count == 0 ? "-" : string.Join("; ", parts);
+    }
+
+    private static string FormatNotePlacementRowSemanticEvidence(FreeWVisualEvidenceNormalizedRow row) =>
+        string.Join(
+            ", ",
+            row.HasFootnotes ? "footnotes" : "no footnotes",
+            row.HasEndnotes ? "endnotes" : "no endnotes",
+            row.IsSyntheticPage ? "synthetic page" : "body page",
+            "tags=" + FormatSummaries(row.ExpectedFeatureTags));
 
     private static string FormatTablePaginationProofSemanticEvidence(
         FreeWVisualEvidenceNormalizedRow? wpf,
@@ -2973,6 +3202,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
     {
         var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
         blockers.AddRange(BuildBackstageRealCaptureBlockers(summary));
+        blockers.AddRange(BuildNotePlacementWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildSmartArtPolygonWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildReviewMarkupWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildReviewCompareCombineWordBaselineBlockers(summary, baselineComparisons));
@@ -3253,6 +3483,169 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 FormatSummaries(row.HeaderFooters.ImageSignatures ?? [])))
             .Distinct(StringComparer.Ordinal)
             .OrderBy(value => value, StringComparer.Ordinal)
+            .ToList();
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildNotePlacementWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
+        foreach (var scenarioId in NotePlacementVisualProofScenarioIds)
+        {
+            var rows = summary.Evidence
+                .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .Where(row => row.Trust.Passed)
+                .ToList();
+            if (rows.Count == 0)
+                continue;
+
+            var semanticEvidence = BuildNotePlacementSemanticEvidence(rows);
+            if (semanticEvidence.Count == 0)
+            {
+                blockers.Add(BuildNotePlacementVisualBlocker(
+                    scenarioId,
+                    "semantic-note-placement-missing",
+                    "trusted WPF and Avalonia footnote/endnote placement metadata",
+                    "trusted note evidence did not record footnote/endnote placement metadata; regenerate current-schema evidence or fix shared note planning before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false));
+                continue;
+            }
+
+            var related = baselineComparisons
+                .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (related.Count == 0)
+            {
+                blockers.Add(BuildNotePlacementVisualBlocker(
+                    scenarioId,
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for note placement",
+                    "trusted FreeW note placement evidence is present; run a Word-baseline comparison for " + scenarioId + " to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            var statuses = related
+                .Select(comparison => comparison.Status)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var candidates = related
+                .SelectMany(comparison => comparison.CandidateBaselinePaths)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                var reasons = related
+                    .Where(comparison => string.Equals(
+                        comparison.Status,
+                        FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                        StringComparison.OrdinalIgnoreCase))
+                    .Select(FormatComparisonNotes)
+                    .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var reason = reasons.Count == 0
+                    ? "MS Word baseline PNG generation was unavailable for " + scenarioId
+                    : string.Join("; ", reasons);
+                blockers.Add(BuildNotePlacementVisualBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for note placement",
+                    reason,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                blockers.Add(BuildNotePlacementVisualBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for note placement",
+                    "trusted note placement evidence is present, but mapped Word baseline PNGs are missing for " + scenarioId,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.All(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            blockers.Add(BuildNotePlacementVisualBlocker(
+                scenarioId,
+                "needs-render-review",
+                "render-review resolution for failed note-placement Word PNG comparisons",
+                scenarioId + " Word baseline comparison did not fully pass; inspect note placement differences",
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false));
+        }
+
+        return blockers;
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildNotePlacementVisualBlocker(
+        string scenarioId,
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline) =>
+        new(
+            scenarioId + "-word-baseline-fidelity",
+            scenarioId,
+            "Note placement visual fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
+
+    private static IReadOnlyList<string> BuildNotePlacementSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
+        rows
+            .Where(row => row.HasFootnotes || row.HasEndnotes)
+            .Select(row => string.Concat(
+                row.HostId,
+                "/p",
+                row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                ": footnotes=",
+                BoolFlag(row.HasFootnotes),
+                "; endnotes=",
+                BoolFlag(row.HasEndnotes),
+                "; synthetic=",
+                BoolFlag(row.IsSyntheticPage),
+                "; tags=",
+                FormatSummaries(row.ExpectedFeatureTags)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
     private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildEquationStructureWordBaselineBlockers(
@@ -4639,6 +5032,9 @@ public static class FreeWVisualEvidenceManifestNormalizer
             pageExpectation.ReviewProtection,
             pageExpectation.ReviewMarkup,
             pageExpectation.ReviewCompareCombine,
+            pageExpectation.HasFootnotes,
+            pageExpectation.HasEndnotes,
+            pageExpectation.IsSyntheticPage,
             trust);
     }
 
@@ -5892,6 +6288,50 @@ public static class FreeWVisualEvidenceManifestNormalizer
         }
     }
 
+    private static void ValidateNoteRendererPairs(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows,
+        List<string> failures)
+    {
+        foreach (var scenarioId in NoteRendererScenarioIds)
+        {
+            var wpfRows = TrustedRowsForHostScenario(rows, WpfHostId, scenarioId);
+            var avaloniaRows = TrustedRowsForHostScenario(rows, AvaloniaHostId, scenarioId);
+            if (wpfRows.Count == 0 || avaloniaRows.Count == 0)
+                continue;
+
+            ValidateUniquePages(scenarioId, WpfHostId, wpfRows, failures);
+            ValidateUniquePages(scenarioId, AvaloniaHostId, avaloniaRows, failures);
+
+            var wpfPages = wpfRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var avaloniaPages = avaloniaRows.Select(r => r.PageNumber).Distinct().Order().ToList();
+            var requiredPages = RequiredScenarioPages(scenarioId);
+            var missingAvaloniaPages = requiredPages.Except(avaloniaPages).ToList();
+            var missingWpfPages = requiredPages.Except(wpfPages).ToList();
+            if (missingAvaloniaPages.Count > 0)
+            {
+                failures.Add(
+                    $"note renderer pair '{scenarioId}' is missing Avalonia page(s): {FormatPages(missingAvaloniaPages)}");
+            }
+
+            if (missingWpfPages.Count > 0)
+            {
+                failures.Add(
+                    $"note renderer pair '{scenarioId}' is missing WPF page(s): {FormatPages(missingWpfPages)}");
+            }
+
+            foreach (var pageNumber in wpfPages.Intersect(avaloniaPages))
+            {
+                var wpf = wpfRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                var avalonia = avaloniaRows.SingleOrDefault(r => r.PageNumber == pageNumber);
+                if (wpf is null || avalonia is null)
+                    continue;
+
+                ValidateRendererPairRow("note renderer pair", scenarioId, pageNumber, wpf, avalonia, failures);
+                ValidateNotePlacementPairRow(scenarioId, pageNumber, wpf, avalonia, failures);
+            }
+        }
+    }
+
     private static void ValidateEquationPairRow(
         string scenarioId,
         int pageNumber,
@@ -6532,6 +6972,21 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"signatures={string.Join(",", OrderedSummaries(slot.ImageSignatures ?? []))}"))
             .OrderBy(signature => signature, StringComparer.Ordinal)
             .ToList();
+
+    private static void ValidateNotePlacementPairRow(
+        string scenarioId,
+        int pageNumber,
+        FreeWVisualEvidenceNormalizedRow wpf,
+        FreeWVisualEvidenceNormalizedRow avalonia,
+        List<string> failures)
+    {
+        var pairName = $"note renderer pair '{scenarioId}' page {pageNumber.ToString(CultureInfo.InvariantCulture)}";
+        if (wpf.IsSyntheticPage != avalonia.IsSyntheticPage)
+        {
+            failures.Add(
+                $"{pairName} synthetic page flags differ: WPF {BoolFlag(wpf.IsSyntheticPage)}, Avalonia {BoolFlag(avalonia.IsSyntheticPage)}");
+        }
+    }
 
     private static void ValidateReviewProofingPairRow(
         string scenarioId,
@@ -7489,6 +7944,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{row.HeaderFooters.ImageCount.ToString(CultureInfo.InvariantCulture)} header/footer image(s), " +
                 $"{row.HeaderFooters.SlotCount.ToString(CultureInfo.InvariantCulture)} slot(s)");
         }
+        if (row.HasFootnotes)
+            parts.Add("footnote placement");
+        if (row.HasEndnotes)
+            parts.Add(row.IsSyntheticPage ? "synthetic endnote page" : "endnote placement");
         if (row.ProofingDiagnostics.DiagnosticCount > 0)
         {
             parts.Add(
