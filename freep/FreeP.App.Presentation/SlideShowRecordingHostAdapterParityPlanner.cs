@@ -75,6 +75,13 @@ public sealed record SlideShowRecordingHostAdapterParityEvidence(
         hostName.Contains("Avalonia", StringComparison.OrdinalIgnoreCase);
 }
 
+public enum SlideShowRecordingCameraEncodingEvidenceSource
+{
+    LocalDefaultNoComEngine,
+    DeterministicInjectedCaptureEngine,
+    PowerPointComBaseline
+}
+
 public sealed record SlideShowRecordingCameraEncodingReadinessRow(
     string HostName,
     string AdapterName,
@@ -84,18 +91,27 @@ public sealed record SlideShowRecordingCameraEncodingReadinessRow(
     bool IsCaptured,
     long PayloadLengthBytes,
     bool RequiresPowerPointCom,
+    SlideShowRecordingCameraEncodingEvidenceSource EvidenceSource,
     string StatusText)
 {
+    public bool IsLocalDefaultNoComEngine =>
+        EvidenceSource == SlideShowRecordingCameraEncodingEvidenceSource.LocalDefaultNoComEngine &&
+        !RequiresPowerPointCom;
+
+    public bool IsDeterministicInjectedCaptureEngine =>
+        EvidenceSource == SlideShowRecordingCameraEncodingEvidenceSource.DeterministicInjectedCaptureEngine &&
+        !RequiresPowerPointCom;
+
     public bool HasPackageTarget =>
         !string.IsNullOrWhiteSpace(PackagePath) &&
         PackagePath.StartsWith("ppt/media/", StringComparison.Ordinal) &&
         PackagePath.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase);
 
     public bool IsNoComHandoffOnly =>
+        IsLocalDefaultNoComEngine &&
         DeviceHandoffReached &&
         !IsCaptured &&
         PayloadLengthBytes == 0 &&
-        !RequiresPowerPointCom &&
         string.Equals(ContentType, "video/mp4", StringComparison.OrdinalIgnoreCase);
 
     public bool HasEncodedPayload =>
@@ -105,6 +121,14 @@ public sealed record SlideShowRecordingCameraEncodingReadinessRow(
         !RequiresPowerPointCom &&
         HasPackageTarget &&
         string.Equals(ContentType, "video/mp4", StringComparison.OrdinalIgnoreCase);
+
+    public bool HasDefaultNoComEncodedPayload =>
+        IsLocalDefaultNoComEngine &&
+        HasEncodedPayload;
+
+    public bool HasDeterministicEncodedPayload =>
+        IsDeterministicInjectedCaptureEngine &&
+        HasEncodedPayload;
 }
 
 public sealed record SlideShowRecordingCameraEncodingReadinessEvidence(
@@ -131,18 +155,39 @@ public sealed record SlideShowRecordingCameraEncodingReadinessEvidence(
     public bool HasLocalEncodedPayload =>
         HostRows.Any(row => row.HasEncodedPayload);
 
+    public bool HasWpfDeterministicEncodedPayload =>
+        HostRows.Any(row => IsWpf(row.HostName) && row.HasDeterministicEncodedPayload);
+
+    public bool HasAvaloniaDeterministicEncodedPayload =>
+        HostRows.Any(row => IsAvalonia(row.HostName) && row.HasDeterministicEncodedPayload);
+
+    public bool HasPairedDeterministicEncodedPayload =>
+        HasWpfDeterministicEncodedPayload && HasAvaloniaDeterministicEncodedPayload;
+
+    public bool HasWpfDefaultNoComEncodedPayload =>
+        HostRows.Any(row => IsWpf(row.HostName) && row.HasDefaultNoComEncodedPayload);
+
+    public bool HasAvaloniaDefaultNoComEncodedPayload =>
+        HostRows.Any(row => IsAvalonia(row.HostName) && row.HasDefaultNoComEncodedPayload);
+
+    public bool HasPairedDefaultNoComEncodedPayload =>
+        HasWpfDefaultNoComEncodedPayload && HasAvaloniaDefaultNoComEncodedPayload;
+
     public bool ClaimsPowerPointComBaseline =>
-        HostRows.Any(row => row.RequiresPowerPointCom);
+        HostRows.Any(row =>
+            row.RequiresPowerPointCom ||
+            row.EvidenceSource == SlideShowRecordingCameraEncodingEvidenceSource.PowerPointComBaseline);
 
     public bool HasPackageTargets =>
         HostRows.Count > 0 && HostRows.All(row => row.HasPackageTarget);
 
     public string SummaryText =>
-        (HasPairedNoComHandoff, HasPairedEncodedPayload) switch
+        (HasPairedNoComHandoff, HasPairedDeterministicEncodedPayload, HasPairedDefaultNoComEncodedPayload) switch
         {
-            (true, true) => "WPF and Avalonia both separate local default no-COM camera handoff from deterministic encoded mp4 payload packaging; real default camera video encoding remains deferred.",
-            (true, false) => "WPF and Avalonia both reach local default no-COM camera handoff with stable mp4 package targets while deferring video encoding honestly.",
-            (false, true) => "WPF and Avalonia both carry deterministic encoded camera payloads to stable mp4 package targets; default camera video encoding is not proven.",
+            (_, _, true) => "WPF and Avalonia both record actual local default no-COM camera mp4 payload evidence with stable package targets.",
+            (true, true, false) => "WPF and Avalonia both separate local default no-COM camera handoff from deterministic injected encoded mp4 payload packaging; real default camera video encoding remains deferred.",
+            (true, false, false) => "WPF and Avalonia both reach local default no-COM camera handoff with stable mp4 package targets while deferring video encoding honestly.",
+            (false, true, false) => "WPF and Avalonia both carry deterministic injected encoded camera payloads to stable mp4 package targets; default camera video encoding is not proven.",
             _ => "Local default no-COM camera handoff is not paired across WPF and Avalonia."
         };
 
