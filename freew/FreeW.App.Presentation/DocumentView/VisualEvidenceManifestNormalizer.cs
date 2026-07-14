@@ -74,6 +74,7 @@ public sealed record FreeWVisualEvidenceNormalizedSummary(
     IReadOnlyList<FreeWVisualHeaderFooterImageProofReadiness> HeaderFooterImageProofReadiness,
     IReadOnlyList<FreeWVisualTablePaginationProofReadiness> TablePaginationProofReadiness,
     IReadOnlyList<FreeWVisualDrawingObjectProofReadiness> DrawingObjectProofReadiness,
+    IReadOnlyList<FreeWVisualWordArtWatermarkProofReadiness> WordArtWatermarkProofReadiness,
     IReadOnlyList<FreeWVisualReviewMarkupProofReadiness> ReviewMarkupProofReadiness,
     IReadOnlyList<FreeWVisualReviewCompareCombineProofReadiness> ReviewCompareCombineProofReadiness,
     IReadOnlyList<FreeWVisualReviewProofingProofReadiness> ReviewProofingProofReadiness,
@@ -151,6 +152,17 @@ public sealed record FreeWVisualTablePaginationProofReadiness(
     FreeWVisualEvidenceTrust Trust);
 
 public sealed record FreeWVisualDrawingObjectProofReadiness(
+    string ScenarioId,
+    int PageNumber,
+    string Status,
+    string WpfOutputSummary,
+    string AvaloniaOutputSummary,
+    string WordBaselineStatus,
+    string BaselineReadiness,
+    string SemanticEvidence,
+    FreeWVisualEvidenceTrust Trust);
+
+public sealed record FreeWVisualWordArtWatermarkProofReadiness(
     string ScenarioId,
     int PageNumber,
     string Status,
@@ -262,7 +274,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 46;
+    public const int SummarySchemaVersion = 47;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -529,6 +541,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         var headerFooterImageProofReadiness = BuildHeaderFooterImageProofReadinessRows(expected, orderedRows, []);
         var tablePaginationProofReadiness = BuildTablePaginationProofReadinessRows(expected, orderedRows, []);
         var drawingObjectProofReadiness = BuildDrawingObjectProofReadinessRows(expected, orderedRows, []);
+        var wordArtWatermarkProofReadiness = BuildWordArtWatermarkProofReadinessRows(expected, orderedRows, []);
         var reviewMarkupProofReadiness = BuildReviewMarkupProofReadinessRows(expected, orderedRows, []);
         var reviewCompareCombineProofReadiness = BuildReviewCompareCombineProofReadinessRows(expected, orderedRows, []);
         var reviewProofingProofReadiness = BuildReviewProofingProofReadinessRows(expected, orderedRows, []);
@@ -550,6 +563,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
             headerFooterImageProofReadiness,
             tablePaginationProofReadiness,
             drawingObjectProofReadiness,
+            wordArtWatermarkProofReadiness,
             reviewMarkupProofReadiness,
             reviewCompareCombineProofReadiness,
             reviewProofingProofReadiness,
@@ -617,6 +631,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         AppendHeaderFooterImageProofReadiness(sb, summary);
         AppendTablePaginationProofReadiness(sb, summary);
         AppendDrawingObjectProofReadiness(sb, summary);
+        AppendWordArtWatermarkProofReadiness(sb, summary);
         AppendReviewMarkupProofReadiness(sb, summary);
         AppendReviewCompareCombineProofReadiness(sb, summary);
         AppendReviewProofingProofReadiness(sb, summary);
@@ -861,6 +876,33 @@ public static class FreeWVisualEvidenceManifestNormalizer
         sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
         sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
         foreach (var row in summary.DrawingObjectProofReadiness)
+        {
+            sb.AppendLine(
+                $"| {EscapeMarkdown(row.ScenarioId)} | " +
+                $"{row.PageNumber.ToString(CultureInfo.InvariantCulture)} | " +
+                $"{EscapeMarkdown(row.Status)} | " +
+                $"{EscapeMarkdown(row.WpfOutputSummary)} | " +
+                $"{EscapeMarkdown(row.AvaloniaOutputSummary)} | " +
+                $"{EscapeMarkdown(row.WordBaselineStatus)} | " +
+                $"{EscapeMarkdown(row.BaselineReadiness)} | " +
+                $"{EscapeMarkdown(row.SemanticEvidence)} | " +
+                $"{(row.Trust.Passed ? "passed" : "failed")} |");
+        }
+    }
+
+    private static void AppendWordArtWatermarkProofReadiness(
+        StringBuilder sb,
+        FreeWVisualEvidenceNormalizedSummary summary)
+    {
+        if (summary.WordArtWatermarkProofReadiness.Count == 0)
+            return;
+
+        sb.AppendLine();
+        sb.AppendLine("## WordArt/Watermark Visual Proof Readiness");
+        sb.AppendLine();
+        sb.AppendLine("| Scenario | Page | Status | WPF Output | Avalonia Output | Word Baseline | Baseline Readiness | Semantic Evidence | Trust |");
+        sb.AppendLine("| --- | ---: | --- | --- | --- | --- | --- | --- | --- |");
+        foreach (var row in summary.WordArtWatermarkProofReadiness)
         {
             sb.AppendLine(
                 $"| {EscapeMarkdown(row.ScenarioId)} | " +
@@ -1450,6 +1492,65 @@ public static class FreeWVisualEvidenceManifestNormalizer
         return rows;
     }
 
+    private static IReadOnlyList<FreeWVisualWordArtWatermarkProofReadiness> BuildWordArtWatermarkProofReadinessRows(
+        IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var rows = new List<FreeWVisualWordArtWatermarkProofReadiness>();
+        foreach (var scenarioId in WordArtWatermarkVisualProofScenarioIds.OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+        {
+            var expected = expectedScenarios
+                .Any(e => string.Equals(e.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            var hasEvidence = evidence
+                .Any(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase));
+            if (!expected && !hasEvidence)
+                continue;
+
+            foreach (var pageNumber in RequiredScenarioPages(scenarioId))
+            {
+                var wpfRows = RowsForHostScenarioPage(evidence, WpfHostId, scenarioId, pageNumber);
+                var avaloniaRows = RowsForHostScenarioPage(evidence, AvaloniaHostId, scenarioId, pageNumber);
+                var trustedWpf = wpfRows.FirstOrDefault(row => row.Trust.Passed);
+                var trustedAvalonia = avaloniaRows.FirstOrDefault(row => row.Trust.Passed);
+                var relatedBaseline = baselineComparisons
+                    .Where(comparison =>
+                        string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase)
+                        && comparison.PageNumber == pageNumber)
+                    .ToList();
+
+                if (trustedWpf is null || trustedAvalonia is null)
+                {
+                    rows.Add(new FreeWVisualWordArtWatermarkProofReadiness(
+                        scenarioId,
+                        pageNumber,
+                        "missing-paired-renderer-evidence",
+                        FormatOutputSummary(wpfRows),
+                        FormatOutputSummary(avaloniaRows),
+                        FormatWordBaselineStatus(relatedBaseline),
+                        "paired WPF/Avalonia WordArt/watermark visual evidence is required before Word baseline comparison readiness",
+                        FormatDrawingObjectProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                        new FreeWVisualEvidenceTrust(false, BuildMissingPairFailures(scenarioId, pageNumber, trustedWpf, trustedAvalonia))));
+                    continue;
+                }
+
+                var proofTrust = EvaluateDrawingObjectProofReadiness(relatedBaseline);
+                rows.Add(new FreeWVisualWordArtWatermarkProofReadiness(
+                    scenarioId,
+                    pageNumber,
+                    proofTrust.Passed ? "paired-renderer-proof-ready" : "baseline-policy-failed",
+                    FormatOutputSummary(wpfRows),
+                    FormatOutputSummary(avaloniaRows),
+                    FormatWordBaselineStatus(relatedBaseline),
+                    FormatDrawingObjectBaselineReadiness(relatedBaseline, scenarioId),
+                    FormatDrawingObjectProofSemanticEvidence(trustedWpf, trustedAvalonia),
+                    proofTrust));
+            }
+        }
+
+        return rows;
+    }
+
     private static IReadOnlyList<FreeWVisualHeaderFooterImageProofReadiness> BuildHeaderFooterImageProofReadinessRows(
         IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,
         IReadOnlyList<FreeWVisualEvidenceNormalizedRow> evidence,
@@ -1926,6 +2027,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 summary.Evidence,
                 ordered),
             DrawingObjectProofReadiness = BuildDrawingObjectProofReadinessRows(
+                summary.ExpectedScenarios,
+                summary.Evidence,
+                ordered),
+            WordArtWatermarkProofReadiness = BuildWordArtWatermarkProofReadinessRows(
                 summary.ExpectedScenarios,
                 summary.Evidence,
                 ordered),
@@ -3657,6 +3762,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         blockers.AddRange(BuildLegalReferenceWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildTablePaginationWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildHeaderFooterImageWordBaselineBlockers(summary, baselineComparisons));
+        blockers.AddRange(BuildWordArtWatermarkWordBaselineBlockers(summary, baselineComparisons));
 
         var rows = summary.Evidence
             .Where(row => string.Equals(row.ScenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase))
@@ -5344,6 +5450,171 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 BoolFlag(row.Tables.HasKeepTogetherRows),
                 "; pageFeatures=",
                 FormatTablePaginationBlockerPageFeatures(row)))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildWordArtWatermarkWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        var blockers = new List<FreeWVisualRemainingEvidenceBlocker>();
+        foreach (var scenarioId in WordArtWatermarkVisualProofScenarioIds)
+        {
+            var rows = summary.Evidence
+                .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .Where(row => row.Trust.Passed)
+                .ToList();
+            if (rows.Count == 0)
+                continue;
+
+            var semanticEvidence = BuildWordArtWatermarkSemanticEvidence(rows);
+            if (semanticEvidence.Count == 0)
+            {
+                blockers.Add(BuildWordArtWatermarkBlocker(
+                    scenarioId,
+                    "semantic-wordart-watermark-evidence-missing",
+                    "trusted WordArt/watermark rows with WordArt, watermark, and page-surface metadata",
+                    "trusted WordArt/watermark evidence did not record semantic WordArt/watermark metadata; regenerate current-schema evidence before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false));
+                continue;
+            }
+
+            var related = baselineComparisons
+                .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (related.Count == 0)
+            {
+                blockers.Add(BuildWordArtWatermarkBlocker(
+                    scenarioId,
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for WordArt/watermark visual fidelity",
+                    "paired WPF/Avalonia WordArt/watermark evidence is present; run a Word-baseline comparison for " + scenarioId + " to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            var statuses = related
+                .Select(comparison => comparison.Status)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var candidates = related
+                .SelectMany(comparison => comparison.CandidateBaselinePaths)
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                var reasons = related
+                    .Where(comparison => string.Equals(
+                        comparison.Status,
+                        FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                        StringComparison.OrdinalIgnoreCase))
+                    .Select(FormatComparisonNotes)
+                    .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var reason = reasons.Count == 0
+                    ? "MS Word baseline PNG generation was unavailable for " + scenarioId
+                    : string.Join("; ", reasons);
+                blockers.Add(BuildWordArtWatermarkBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for WordArt/watermark visual fidelity",
+                    reason,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.Any(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                blockers.Add(BuildWordArtWatermarkBlocker(
+                    scenarioId,
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for WordArt/watermark visual fidelity",
+                    "trusted WordArt/watermark evidence is present, but mapped Word baseline PNGs are missing for " + scenarioId,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true));
+                continue;
+            }
+
+            if (related.All(comparison =>
+                string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            blockers.Add(BuildWordArtWatermarkBlocker(
+                scenarioId,
+                "needs-render-review",
+                "render-review resolution for failed WordArt/watermark Word PNG comparisons",
+                scenarioId + " Word baseline comparison did not fully pass; inspect WordArt/watermark rendering differences",
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false));
+        }
+
+        return blockers;
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildWordArtWatermarkBlocker(
+        string scenarioId,
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline) =>
+        new(
+            scenarioId + "-word-baseline-fidelity",
+            scenarioId,
+            "WordArt/watermark visual fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
+
+    private static IReadOnlyList<string> BuildWordArtWatermarkSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows) =>
+        rows
+            .Where(row => row.DrawingObjects.HasWordArt && row.PageFeatures.Watermark.Present)
+            .Select(row => string.Concat(
+                row.HostId,
+                "/p",
+                row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                ": ",
+                row.DrawingObjects.Objects.Count.ToString(CultureInfo.InvariantCulture),
+                " object(s), wordart=",
+                BoolFlag(row.DrawingObjects.HasWordArt),
+                ", watermark=",
+                row.PageFeatures.Watermark.IsPicture ? "picture" : "text",
+                ", pageBorder=",
+                BoolFlag(row.PageFeatures.PageBorder.Present),
+                ", effects=",
+                row.DrawingObjects.Effects.EffectObjectCount.ToString(CultureInfo.InvariantCulture)))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
             .ToList();

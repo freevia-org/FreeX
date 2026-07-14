@@ -6979,6 +6979,17 @@ public sealed class VisualEvidencePlannerTests
                 .SemanticEvidence.Should().Contain("SmartArt polygon nodes=4");
             withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "wordart-picture-watermark-layout")
                 .SemanticEvidence.Should().Contain("picture watermark");
+            withBaseline.WordArtWatermarkProofReadiness.Should().HaveCount(2);
+            withBaseline.WordArtWatermarkProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready"
+                && row.WordBaselineStatus == "word-baseline-unavailable=2"
+                && row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal)
+                && row.SemanticEvidence.Contains("wordart", StringComparison.Ordinal)
+                && row.Trust.Passed);
+            withBaseline.WordArtWatermarkProofReadiness.Single(row => row.ScenarioId == "wordart-watermark-stress")
+                .SemanticEvidence.Should().Contain("watermark");
+            withBaseline.WordArtWatermarkProofReadiness.Single(row => row.ScenarioId == "wordart-picture-watermark-layout")
+                .SemanticEvidence.Should().Contain("picture watermark");
             var smartArtBlocker = withBaseline.RemainingEvidenceBlockers.Single(blocker =>
                 blocker.BlockerId == "chart-smartart-complex-word-baseline-fidelity");
             smartArtBlocker.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
@@ -6988,6 +6999,14 @@ public sealed class VisualEvidencePlannerTests
             smartArtBlocker.SemanticEvidence.Should().OnlyContain(evidence =>
                 evidence.Contains("pyramid1", StringComparison.Ordinal) &&
                 evidence.Contains("polygonNodes=4", StringComparison.Ordinal));
+            var wordArtBlockers = withBaseline.RemainingEvidenceBlockers
+                .Where(blocker => blocker.Area == "WordArt/watermark visual fidelity")
+                .ToList();
+            wordArtBlockers.Should().HaveCount(2);
+            wordArtBlockers.Should().OnlyContain(blocker =>
+                blocker.Status == FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus
+                && blocker.RequiresWordBaseline
+                && blocker.SemanticEvidence.Count == 2);
 
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
@@ -6998,11 +7017,21 @@ public sealed class VisualEvidencePlannerTests
                 .Should().OnlyContain(row =>
                     row.GetProperty("trust").GetProperty("passed").GetBoolean()
                     && row.GetProperty("wordBaselineStatus").GetString() == "word-baseline-unavailable=2");
+            var wordArtReadiness = doc.RootElement.GetProperty("wordArtWatermarkProofReadiness");
+            wordArtReadiness.GetArrayLength().Should().Be(2);
+            wordArtReadiness.EnumerateArray()
+                .Should().OnlyContain(row =>
+                    row.GetProperty("trust").GetProperty("passed").GetBoolean()
+                    && row.GetProperty("wordBaselineStatus").GetString() == "word-baseline-unavailable=2");
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
             markdown.Should().Contain("## Drawing/Object Visual Proof Readiness");
+            markdown.Should().Contain("## WordArt/Watermark Visual Proof Readiness");
             markdown.Should().Contain("word-baseline-unavailable=2");
             markdown.Should().Contain("SmartArt polygon nodes=4");
+            markdown.Should().Contain("wordart-watermark-stress");
+            markdown.Should().Contain("wordart-picture-watermark-layout");
+            markdown.Should().Contain("WordArt/watermark visual fidelity");
             markdown.Should().Contain("chart-smartart-complex-word-baseline-fidelity");
             markdown.Should().Contain("paired WPF/Avalonia evidence is retained without authoritative Word parity");
         }

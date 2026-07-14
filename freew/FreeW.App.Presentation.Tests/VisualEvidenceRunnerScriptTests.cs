@@ -217,6 +217,16 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Drawing object visual semantic rows: verified rows=");
         source.Should().Contain("Drawing object Word-baseline policy rows: verified rows=");
         source.Should().Contain("Drawing object Word-baseline policy rows: no Word baseline mode requested");
+        source.Should().Contain("Assert-WordArtWatermarkVisualProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("WordArt/watermark visual proof readiness requires FreeW visual evidence summary schema v47 or newer");
+        source.Should().Contain("$readinessRows = @($summary.wordArtWatermarkProofReadiness)");
+        source.Should().Contain("missing WordArt/watermark proof readiness row");
+        source.Should().Contain("missing WordArt/watermark semantic readiness summary");
+        source.Should().Contain("semantic readiness does not report picture watermark and WordArt evidence");
+        source.Should().Contain("missing honest word-baseline-unavailable WordArt/watermark blocker");
+        source.Should().Contain("WordArt/watermark visual proof readiness: trusted scenario rows=");
+        source.Should().Contain("WordArt/watermark visual semantic rows: verified rows=");
+        source.Should().Contain("WordArt/watermark Word-baseline unavailable blockers: verified rows=");
         source.Should().Contain("Assert-SmartArtPolygonVisualProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("SmartArt polygon visual proof readiness requires FreeW visual evidence summary schema v38 or newer");
         source.Should().Contain("missing Basic Pyramid polygon geometry signature");
