@@ -85,6 +85,108 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void MoveDown_ReordersFlatNodesAndLiveLayout()
+    {
+        var data = MakeFlatData(SmartArtFamily.Process, ("n1", "Plan"), ("n2", "Build"), ("n3", "Ship"));
+
+        var result = SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.MoveDown("n1"));
+
+        result.Applied.Should().BeTrue();
+        result.SelectedModelId.Should().Be("n1");
+        data.Nodes.Select(node => node.ModelId).Should().Equal("n2", "n1", "n3");
+        result.Outline.Select(item => item.Text).Should().Equal("Build", "Plan", "Ship");
+
+        var liveTexts = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!
+            .Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .OrderBy(shape => shape.OffsetXEmu)
+            .Select(shape => shape.TextBody!.Paragraphs[0].Runs[0].Text);
+
+        liveTexts.Should().Equal("Build", "Plan", "Ship");
+    }
+
+    [Fact]
+    public void MoveUp_FirstSibling_IsRejected()
+    {
+        var data = MakeFlatData(SmartArtFamily.Process, ("n1", "Only"), ("n2", "Later"));
+
+        var result = SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.MoveUp("n1"));
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Be("The SmartArt node is already first.");
+        data.Nodes.Select(node => node.ModelId).Should().Equal("n1", "n2");
+    }
+
+    [Fact]
+    public void Promote_ChildBecomesSiblingAfterParentAndNormalizesLevels()
+    {
+        var root = new SmartArtNode { ModelId = "root", Text = "Leader", Level = 0 };
+        var child = new SmartArtNode { ModelId = "child", Text = "Manager", Level = 7 };
+        var grandchild = new SmartArtNode { ModelId = "grandchild", Text = "Report", Level = 9 };
+        child.Children.Add(grandchild);
+        root.Children.Add(child);
+
+        var data = new SmartArtData { Family = SmartArtFamily.Hierarchy };
+        data.Nodes.Add(root);
+
+        var result = SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Promote("child"));
+
+        result.Applied.Should().BeTrue();
+        result.SelectedModelId.Should().Be("child");
+        data.Nodes.Select(node => node.ModelId).Should().Equal("root", "child");
+        root.Children.Should().BeEmpty();
+        child.Level.Should().Be(0);
+        grandchild.Level.Should().Be(1);
+        result.Outline.Select(item => (item.ModelId, item.Level))
+            .Should().Equal(("root", 0), ("child", 0), ("grandchild", 1));
+    }
+
+    [Fact]
+    public void Promote_RootNode_IsRejected()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"));
+
+        var result = SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Promote("root"));
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Be("A root SmartArt node cannot be promoted.");
+        data.Nodes.Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Demote_MakesNodeChildOfPreviousSiblingAndUpdatesHierarchyLayout()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("n1", "Leader"), ("n2", "Manager"), ("n3", "Peer"));
+
+        var result = SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Demote("n2"));
+
+        result.Applied.Should().BeTrue();
+        result.SelectedModelId.Should().Be("n2");
+        data.Nodes.Select(node => node.ModelId).Should().Equal("n1", "n3");
+        data.Nodes[0].Children.Should().ContainSingle();
+        data.Nodes[0].Children[0].ModelId.Should().Be("n2");
+        result.Outline.Select(item => (item.ModelId, item.Level, item.SiblingIndex))
+            .Should().Equal(("n1", 0, 0), ("n2", 1, 0), ("n3", 0, 1));
+
+        var liveTexts = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!
+            .Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Select(shape => shape.TextBody!.Paragraphs[0].Runs[0].Text);
+
+        liveTexts.Should().Contain(["Leader", "Manager", "Peer"]);
+    }
+
+    [Fact]
+    public void Demote_FirstSibling_IsRejected()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("n1", "Leader"), ("n2", "Manager"));
+
+        var result = SmartArtEditingPlanner.Apply(data, SmartArtNodeEditIntent.Demote("n1"));
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Be("The first SmartArt sibling cannot be demoted.");
+        data.Nodes.Select(node => node.ModelId).Should().Equal("n1", "n2");
+    }
+
+    [Fact]
     public void CloneShape_DeepClonesEditableSmartArtData()
     {
         var shape = new SlideShape

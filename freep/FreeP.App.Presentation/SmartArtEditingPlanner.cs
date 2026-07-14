@@ -7,7 +7,11 @@ public enum SmartArtNodeEditKind
     ChangeText,
     AddSiblingAfter,
     AddChild,
-    Remove
+    Remove,
+    MoveUp,
+    MoveDown,
+    Promote,
+    Demote
 }
 
 public sealed record SmartArtNodeEditIntent(
@@ -26,6 +30,18 @@ public sealed record SmartArtNodeEditIntent(
 
     public static SmartArtNodeEditIntent Remove(string targetModelId) =>
         new(SmartArtNodeEditKind.Remove, targetModelId);
+
+    public static SmartArtNodeEditIntent MoveUp(string targetModelId) =>
+        new(SmartArtNodeEditKind.MoveUp, targetModelId);
+
+    public static SmartArtNodeEditIntent MoveDown(string targetModelId) =>
+        new(SmartArtNodeEditKind.MoveDown, targetModelId);
+
+    public static SmartArtNodeEditIntent Promote(string targetModelId) =>
+        new(SmartArtNodeEditKind.Promote, targetModelId);
+
+    public static SmartArtNodeEditIntent Demote(string targetModelId) =>
+        new(SmartArtNodeEditKind.Demote, targetModelId);
 }
 
 public sealed record SmartArtNodeOutlineItem(
@@ -93,6 +109,10 @@ public static class SmartArtEditingPlanner
             SmartArtNodeEditKind.AddSiblingAfter => AddSiblingAfter(data, location, targetId, intent.Text),
             SmartArtNodeEditKind.AddChild => AddChild(data, location.Node, targetId, intent.Text),
             SmartArtNodeEditKind.Remove => Remove(data, location, targetId),
+            SmartArtNodeEditKind.MoveUp => Move(data, location, targetId, offset: -1),
+            SmartArtNodeEditKind.MoveDown => Move(data, location, targetId, offset: 1),
+            SmartArtNodeEditKind.Promote => Promote(data, location, targetId),
+            SmartArtNodeEditKind.Demote => Demote(data, location, targetId),
             _ => SmartArtNodeEditResult.NotApplied(intent.Kind, targetId, "Unsupported SmartArt edit.", BuildOutline(data))
         };
     }
@@ -166,6 +186,99 @@ public static class SmartArtEditingPlanner
 
         var selected = PickSelectionAfterRemove(data, siblings, location.Index, location.Parent);
         return Applied(data, SmartArtNodeEditKind.Remove, targetId, selected?.ModelId, "SmartArt node removed.");
+    }
+
+    private static SmartArtNodeEditResult Move(
+        SmartArtData data,
+        SmartArtNodeLocation location,
+        string targetId,
+        int offset)
+    {
+        var siblings = location.Parent is null ? data.Nodes : location.Parent.Children;
+        var destination = location.Index + offset;
+        if (destination < 0 || destination >= siblings.Count)
+        {
+            return SmartArtNodeEditResult.NotApplied(
+                offset < 0 ? SmartArtNodeEditKind.MoveUp : SmartArtNodeEditKind.MoveDown,
+                targetId,
+                offset < 0 ? "The SmartArt node is already first." : "The SmartArt node is already last.",
+                BuildOutline(data));
+        }
+
+        var node = siblings[location.Index];
+        siblings.RemoveAt(location.Index);
+        siblings.Insert(destination, node);
+        NormalizeLevels(data);
+
+        return Applied(
+            data,
+            offset < 0 ? SmartArtNodeEditKind.MoveUp : SmartArtNodeEditKind.MoveDown,
+            targetId,
+            node.ModelId,
+            offset < 0 ? "SmartArt node moved up." : "SmartArt node moved down.");
+    }
+
+    private static SmartArtNodeEditResult Promote(
+        SmartArtData data,
+        SmartArtNodeLocation location,
+        string targetId)
+    {
+        if (location.Parent is null)
+        {
+            return SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.Promote,
+                targetId,
+                "A root SmartArt node cannot be promoted.",
+                BuildOutline(data));
+        }
+
+        var parentLocation = FindLocation(data, location.Parent.ModelId);
+        var currentSiblings = location.Parent.Children;
+        var node = currentSiblings[location.Index];
+        currentSiblings.RemoveAt(location.Index);
+
+        var promotedSiblings = parentLocation.Parent is null
+            ? data.Nodes
+            : parentLocation.Parent.Children;
+        var insertAt = Math.Clamp(parentLocation.Index + 1, 0, promotedSiblings.Count);
+        promotedSiblings.Insert(insertAt, node);
+        NormalizeLevels(data);
+
+        return Applied(
+            data,
+            SmartArtNodeEditKind.Promote,
+            targetId,
+            node.ModelId,
+            "SmartArt node promoted.");
+    }
+
+    private static SmartArtNodeEditResult Demote(
+        SmartArtData data,
+        SmartArtNodeLocation location,
+        string targetId)
+    {
+        var siblings = location.Parent is null ? data.Nodes : location.Parent.Children;
+        if (location.Index == 0)
+        {
+            return SmartArtNodeEditResult.NotApplied(
+                SmartArtNodeEditKind.Demote,
+                targetId,
+                "The first SmartArt sibling cannot be demoted.",
+                BuildOutline(data));
+        }
+
+        var node = siblings[location.Index];
+        var newParent = siblings[location.Index - 1];
+        siblings.RemoveAt(location.Index);
+        newParent.Children.Add(node);
+        NormalizeLevels(data);
+
+        return Applied(
+            data,
+            SmartArtNodeEditKind.Demote,
+            targetId,
+            node.ModelId,
+            "SmartArt node demoted.");
     }
 
     private static SmartArtNode CreateNode(SmartArtData data, string? text, int level, bool isAssistant)

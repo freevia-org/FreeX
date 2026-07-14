@@ -753,7 +753,22 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
                 "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
             ],
-            RemainingWork: "orgChart now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes plus assistant side-slot geometry when imported nodes carry dgm:pt type=\"asst\". Unsupported hierarchy siblings remain on cached drawing fallback. Exact PowerPoint assistant connector routing, special org-chart branch styling, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+            RemainingWork: "orgChart now uses the bounded shared hierarchy-family live-layout path for parsed root/child nodes plus assistant side-slot geometry when imported nodes carry dgm:pt type=\"asst\". Unsupported hierarchy siblings remain on cached drawing fallback. Exact PowerPoint assistant connector routing, special org-chart branch styling, PowerPoint-authoritative visual baselines, and deeper SmartArt authoring/editing remain deferred."),
+        new(
+            EvidenceId: "freep.smartart.outline-editing",
+            Area: "SmartArt outline reorder, promote, and demote editing",
+            Status: "shared-model-planner-evidence",
+            HostCoverage: "WPF/Avalonia can consume the same SmartArtEditingPlanner model mutations and live-layout refreshes; no renderer-local SmartArt editing policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-outline-editing-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/SmartArtEditingPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/SmartArtEditingPlannerTests.cs"
+            ],
+            RemainingWork: "Shared SmartArt outline editing now covers text change, add/remove, reorder, promote, and demote model operations with deterministic outline selection and live-layout refresh evidence. PowerPoint-authored data-part rewrite, richer UI affordances, keyboard shortcuts, and PowerPoint-authoritative authoring baselines remain deferred.")
       ];
 
     private static IReadOnlyDictionary<string, IReadOnlyList<CommandLocation>> Collect(RibbonDefinition definition, string profile)
