@@ -280,6 +280,15 @@ public static partial class FlashFillService
         return source => TryGetFinalUrlPathSegmentStem(source, out var stem) ? stem : null;
     }
 
+    private static Func<string, string?>? TryUrlTrackingQueryCleanup(
+        IReadOnlyList<(string Source, string Expected)> examples)
+    {
+        if (!examples.All(e => TryRemoveTrackingQueryAndFragment(e.Source, out var cleaned) && cleaned == e.Expected))
+            return null;
+
+        return source => TryRemoveTrackingQueryAndFragment(source, out var cleaned) ? cleaned : null;
+    }
+
     private static Func<string, string?>? TryExtractFinalUrlPathSegmentRawSlugStem(
         IReadOnlyList<(string Source, string Expected)> examples)
     {
@@ -1430,6 +1439,63 @@ public static partial class FlashFillService
 
         query = candidate[(queryStart + 1)..queryEnd];
         return true;
+    }
+
+    private static bool TryRemoveTrackingQueryAndFragment(string source, out string cleanedUrl)
+    {
+        cleanedUrl = string.Empty;
+
+        var candidate = source.Trim();
+        if (!TryCreateHttpWebUri(candidate, out _) ||
+            !TryGetRawUrlQuery(candidate, out var query) ||
+            !QueryContainsOnlyTrackingParameters(query))
+        {
+            return false;
+        }
+
+        var queryStart = candidate.IndexOf('?', StringComparison.Ordinal);
+        if (queryStart <= 0)
+            return false;
+
+        cleanedUrl = candidate[..queryStart];
+        return cleanedUrl.Length > 0;
+    }
+
+    private static bool QueryContainsOnlyTrackingParameters(string query)
+    {
+        var foundParameter = false;
+        foreach (var segment in query.Split(['&', ';'], StringSplitOptions.None))
+        {
+            if (segment.Length == 0)
+                continue;
+
+            var equalsIndex = segment.IndexOf('=');
+            var rawName = equalsIndex < 0 ? segment : segment[..equalsIndex];
+            if (rawName.Length == 0 ||
+                !TryDecodeQueryComponent(rawName, out var name) ||
+                !IsTrackingQueryParameterName(name))
+            {
+                return false;
+            }
+
+            foundParameter = true;
+        }
+
+        return foundParameter;
+    }
+
+    private static bool IsTrackingQueryParameterName(string name)
+    {
+        if (name.StartsWith("utm_", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return name.Equals("fbclid", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("gclid", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("dclid", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("msclkid", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("mc_cid", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("mc_eid", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("igshid", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryGetDecodedQueryParameters(

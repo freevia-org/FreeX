@@ -498,6 +498,48 @@ public sealed partial class FlashFillServiceTests
     }
 
     [Fact]
+    public void Fill_UrlTrackingQueryCleanup_RemovesMarketingQueryAndFragment()
+    {
+        var result = FlashFillService.Fill(
+            [
+                (
+                    "https://shop.contoso.example/products/road-bike?utm_source=newsletter&utm_medium=email#hero",
+                    "https://shop.contoso.example/products/road-bike"
+                ),
+                (
+                    "https://fabrikam.example/docs/safety-guide.pdf?gclid=abc123;utm_campaign=spring",
+                    "https://fabrikam.example/docs/safety-guide.pdf"
+                )
+            ],
+            [
+                "https://northwind.example/catalog/electric-cargo-bike?utm_content=cta&msclkid=xyz#details",
+                "www.adatum.example/reports/q1?mc_cid=mail-42&mc_eid=user-17"
+            ]);
+
+        result.Should().BeEquivalentTo(
+            [
+                "https://northwind.example/catalog/electric-cargo-bike",
+                "www.adatum.example/reports/q1"
+            ],
+            o => o.WithStrictOrdering());
+    }
+
+    [Fact]
+    public void Fill_UrlTrackingQueryCleanup_ReturnsNullWhenRemainingHasBusinessQueryParameters()
+    {
+        var result = FlashFillService.Fill(
+            [
+                (
+                    "https://shop.contoso.example/products/road-bike?utm_source=newsletter&utm_medium=email#hero",
+                    "https://shop.contoso.example/products/road-bike"
+                )
+            ],
+            ["https://northwind.example/order?id=123&utm_source=email"]);
+
+        result.Should().BeNull();
+    }
+
+    [Fact]
     public void Fill_FinalUrlPathSegmentRawSlugStem_ExtractsExtensionlessDecodedFinalSegment()
     {
         var result = FlashFillService.Fill(
