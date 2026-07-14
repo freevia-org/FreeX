@@ -293,6 +293,7 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
                     result.IsCaptured,
                     result.PayloadBytes.Length,
                     RequiresPowerPointCom: false,
+                    SlideShowRecordingCameraEncodingEvidenceSource.LocalDefaultNoComEngine,
                     result.StatusText)
             });
         evidence.HasAvaloniaNoComHandoff.Should().BeTrue();

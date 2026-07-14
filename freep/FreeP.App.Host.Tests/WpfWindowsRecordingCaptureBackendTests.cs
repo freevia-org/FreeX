@@ -291,6 +291,7 @@ public sealed class WpfWindowsRecordingCaptureBackendTests
                     result.IsCaptured,
                     result.PayloadBytes.Length,
                     RequiresPowerPointCom: false,
+                    SlideShowRecordingCameraEncodingEvidenceSource.LocalDefaultNoComEngine,
                     result.StatusText)
             });
         evidence.HasWpfNoComHandoff.Should().BeTrue();
