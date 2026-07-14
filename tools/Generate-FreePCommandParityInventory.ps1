@@ -699,9 +699,14 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Presentation/ChartVisualBaselineReadinessPlanner.cs",
                 "freep/FreeP.App.Presentation/ChartRenderPlanner.cs",
                 "freep/FreeP.App.Presentation.Tests/ChartBaselineCorpusTests.cs",
-                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs"
+                "freep/FreeP.App.Presentation.Tests/ChartRenderPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/RendererNeutralDedupPlannerTests.cs",
+                "freep/FreeP.App.Rendering.Wpf/SlideCanvas.cs",
+                "freep/FreeP.App.Rendering.Avalonia/SlideCanvas.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasAvaloniaTests.cs"
             ],
-            RemainingWork: "Shared stock chart planning now has no-COM baseline-readiness evidence for bottom-band volume columns, five-series volume/open/high/low/close ordering, high-low stems, open/close ticks, and WPF/Avalonia capture request metadata. Microsoft PowerPoint stock-volume PNG captures, exact Office volume-axis styling, real-deck stock-volume corpus coverage, and calibrated pixel-diff thresholds remain deferred to a COM-capable baseline host."),
+            RemainingWork: "Shared stock chart planning now has no-COM baseline-readiness evidence for bottom-band volume columns, five-series volume/open/high/low/close ordering, high-low stems, open/close ticks, WPF/Avalonia renderer consumption, and WPF/Avalonia capture request metadata. Microsoft PowerPoint stock-volume PNG captures, exact Office volume-axis styling, real-deck stock-volume corpus coverage, and calibrated pixel-diff thresholds remain deferred to a COM-capable baseline host."),
         new(
             EvidenceId: "freep.chart.doughnut-ring-baseline-readiness",
             Area: "Chart doughnut ring and hole-size baseline readiness",

@@ -943,6 +943,48 @@ public sealed class SlideCanvasTests
         act.Should().NotThrow("WPF should consume shared radar primitive plans");
     }
 
+    [StaFact]
+    public void SlideCanvas_StockVolumeChart_RendersWithoutThrow()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Stock };
+        chart.Categories.AddRange(new[] { "Day 1", "Day 2", "Day 3" });
+        foreach (var (name, values) in new[]
+        {
+            ("Volume", new double?[] { 1000, 1500, 750 }),
+            ("Open", new double?[] { 10, 12, 11 }),
+            ("High", new double?[] { 14, 16, 15 }),
+            ("Low", new double?[] { 8, 9, 10 }),
+            ("Close", new double?[] { 13, 11, 14 })
+        })
+        {
+            var series = new ChartSeries { Name = name };
+            series.Values.AddRange(values);
+            chart.Series.Add(series);
+        }
+
+        var p = Presentation.CreateEmpty();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 5486400,
+            ExtentCyEmu = 3657600,
+            Chart = chart,
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+        canvas.Measure(new Size(960, 540));
+        canvas.Arrange(new Rect(0, 0, 960, 540));
+        var rtb = new RenderTargetBitmap(960, 540, 96, 96, PixelFormats.Pbgra32);
+
+        var act = () => rtb.Render(canvas);
+
+        act.Should().NotThrow("WPF should consume shared stock volume and OHLC primitive plans");
+    }
+
     [Fact]
     public void SlideCanvas_LineSeriesRenderer_ConsumesSharedPathPrimitive()
     {

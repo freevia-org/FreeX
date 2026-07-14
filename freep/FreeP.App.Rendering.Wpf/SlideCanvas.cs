@@ -776,7 +776,7 @@ public sealed class SlideCanvas : FrameworkElement
                 break;
 
             case FreeP.Core.Model.ChartType.Stock:
-                RenderStockChart(dc, chart, plotX, plotY, plotW, plotH);
+                RenderStockChart(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH);
                 break;
 
             case FreeP.Core.Model.ChartType.Pie:
@@ -1201,12 +1201,21 @@ public sealed class SlideCanvas : FrameworkElement
     private static void RenderStockChart(
         DrawingContext dc,
         FreeP.Core.Model.ChartShape chart,
+        IReadOnlyList<SrgbColor> seriesColors,
         double plotX,
         double plotY,
         double plotW,
         double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildStockVolumePrimitives(chart, plot, seriesColors))
+        {
+            dc.DrawRectangle(
+                ToBrush(primitive.Fill),
+                primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
+                ToRect(primitive.Bounds));
+        }
+
         var plan = ChartRenderPlanner.BuildStockPrimitivePlan(chart, plot);
 
         foreach (var segment in plan.HighLowLines)

@@ -311,6 +311,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot, seriesColors, fillPlans)");
             source.Should().Contain("ChartRenderPlanner.BuildRadarPrimitivePlan(chart, plot, seriesColors, fillPlans)");
             source.Should().Contain("ChartRenderPlanner.BuildStockPrimitivePlan(chart, plot)");
+            source.Should().Contain("ChartRenderPlanner.BuildStockVolumePrimitives(chart, plot, seriesColors)");
             source.Should().Contain("ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, plot, seriesColors)");
             source.Should().Contain("plan.Facets");
             source.Should().Contain("plan.WireframeSegments");

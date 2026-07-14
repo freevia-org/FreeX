@@ -99,6 +99,28 @@ public sealed class SlideCanvasAvaloniaTests
         return surface;
     }
 
+    private static ChartShape MakeStockVolumeRenderChart()
+    {
+        var chart = new ChartShape { ChartType = ChartType.Stock };
+        chart.Categories.AddRange(new[] { "Day 1", "Day 2", "Day 3" });
+
+        foreach (var (name, values) in new[]
+        {
+            ("Volume", new double?[] { 1000, 1500, 750 }),
+            ("Open", new double?[] { 10, 12, 11 }),
+            ("High", new double?[] { 14, 16, 15 }),
+            ("Low", new double?[] { 8, 9, 10 }),
+            ("Close", new double?[] { 13, 11, 14 })
+        })
+        {
+            var series = new ChartSeries { Name = name };
+            series.Values.AddRange(values);
+            chart.Series.Add(series);
+        }
+
+        return chart;
+    }
+
     private static TextBody MakeTextBody(string text)
     {
         var body = new TextBody { Wrap = true };
@@ -1964,6 +1986,42 @@ public sealed class SlideCanvasAvaloniaTests
         });
 
         thrown.Should().BeNull($"{chartType} should render through the specialized stock/surface primitive path");
+    }
+
+    [Fact]
+    public async Task StockVolumeChart_RendersThroughSharedVolumeAndOhlcPrimitivePlans_DoesNotThrow()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id = 1,
+                        Kind = SlideShapeKind.Chart,
+                        OffsetXEmu = 914400,
+                        OffsetYEmu = 457200,
+                        ExtentCxEmu = 5486400,
+                        ExtentCyEmu = 3657600,
+                        Chart = MakeStockVolumeRenderChart(),
+                    });
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull(
+            "Avalonia should consume shared stock volume and OHLC primitive plans");
     }
 
     /// <summary>

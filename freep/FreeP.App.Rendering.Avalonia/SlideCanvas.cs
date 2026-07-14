@@ -969,7 +969,7 @@ public sealed class SlideCanvas : Control
                     withMarkers: chart.ChartType == ChartType.LineMarkers);
                 break;
             case ChartType.Stock:
-                RenderStockChart(dc, chart, plotLeft, plotTop, plotW, plotH);
+                RenderStockChart(dc, chart, chartOp.SeriesColors, plotLeft, plotTop, plotW, plotH);
                 break;
             case ChartType.Pie:
                 RenderPieChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotLeft, plotTop, plotW, plotH);
@@ -1127,10 +1127,18 @@ public sealed class SlideCanvas : Control
     }
 
     private static void RenderStockChart(
-        DrawingContext dc, ChartShape chart,
+        DrawingContext dc, ChartShape chart, IReadOnlyList<SrgbColor> seriesColors,
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        foreach (var primitive in ChartRenderPlanner.BuildStockVolumePrimitives(chart, plot, seriesColors))
+        {
+            dc.DrawRectangle(
+                ToBrush(primitive.Fill),
+                primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
+                ToRect(primitive.Bounds));
+        }
+
         var plan = ChartRenderPlanner.BuildStockPrimitivePlan(chart, plot);
         foreach (var segment in plan.HighLowLines)
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
