@@ -131,6 +131,24 @@ public sealed class OmmlParserTests
         Assert.True(nary.GrowOperator);
     }
 
+    [Fact]
+    public void Nary_WithGrowAndHiddenLimits_PreservesGrowthAndDropsLimits()
+    {
+        var node = Parse(
+            "<m:nary>" +
+            "<m:naryPr><m:chr m:val=\"S\"/><m:grow/><m:subHide/><m:supHide/></m:naryPr>" +
+            "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:nary>");
+
+        var nary = Assert.IsType<MathNode.Nary>(node);
+        Assert.True(nary.GrowOperator);
+        Assert.Null(nary.SubLimit);
+        Assert.Null(nary.SupLimit);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(nary.Operand).Text);
+    }
+
     [Theory]
     [InlineData("0")]
     [InlineData("off")]

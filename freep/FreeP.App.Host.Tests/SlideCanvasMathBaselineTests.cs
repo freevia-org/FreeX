@@ -873,6 +873,44 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_NaryGrowHiddenLimits_UsesSharedPlan_DoesNotThrow()
+    {
+        var mathNode = ParseOmml(
+            "<m:nary>" +
+            "<m:naryPr><m:chr m:val=\"S\"/><m:grow/><m:subHide/><m:supHide/></m:naryPr>" +
+            "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+            "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+            "</m:nary>");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+        var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToArray();
+        glyphs.Select(g => g.Text).Should().Equal(new[] { "S", "1", "x" },
+            "hidden n-ary limits must be suppressed in the shared plan before WPF draws");
+        glyphs.Single(g => g.Text == "S").FontSizePt.Should().BeGreaterThan(27.0,
+            "m:naryPr/m:grow must still be resolved in the shared MathBox plan before WPF draws");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "N = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_NaryLimLoc_UsesSharedLimitPlacementPlan_DoesNotThrow()
     {
         var underOverBox = MathLayoutEngine.Layout(
