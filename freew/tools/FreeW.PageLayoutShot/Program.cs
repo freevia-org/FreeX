@@ -72,7 +72,6 @@ static int RenderAll(string outDir)
     var footnotesP2Path = VisualEvidenceOutputPath(outDir, "f2-footnotes", 2);
     var endnotesP1Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 1);
     var endnotesP2Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 2);
-    var endnotesP3Path = VisualEvidenceOutputPath(outDir, "f2-endnotes", 3);
     var fieldPageNumberP1Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 1);
     var fieldPageNumberP2Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 2);
     var fieldPageNumberP3Path = VisualEvidenceOutputPath(outDir, "field-page-number-variants", 3);
@@ -174,7 +173,7 @@ static int RenderAll(string outDir)
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument,
         pageNumber: 1,
-        pageCount: 3);
+        pageCount: 2);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, endnotesP2Path,
@@ -184,21 +183,8 @@ static int RenderAll(string outDir)
         evidence: evidence,
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument,
         pageNumber: 2,
-        pageCount: 3,
+        pageCount: 2,
         viewportOffsetY: 1100,
-        hasEndnotes: true,
-        isSyntheticPage: true);
-    if (rc != 0) return rc;
-
-    rc = RenderMode(DocumentViewMode.PrintLayout, endnotesP3Path,
-        width: 960, height: 1200,
-        label: "F2 Endnotes p3",
-        scenarioId: "f2-endnotes",
-        evidence: evidence,
-        documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument,
-        pageNumber: 3,
-        pageCount: 3,
-        viewportOffsetY: 2200,
         hasEndnotes: true,
         isSyntheticPage: true);
     if (rc != 0) return rc;

@@ -455,13 +455,13 @@ public sealed class VisualEvidencePlannerTests
         var endnoteExpectation = FreeWVisualEvidencePlanner.BuildPageExpectation(
             "f2-endnotes",
             endnotes.Page,
-            pageNumber: 3,
-            pageCount: 3,
-            outputName: "f2-endnotes_p3.png",
+            pageNumber: 2,
+            pageCount: 2,
+            outputName: "f2-endnotes_p2.png",
             hasEndnotes: true,
             isSyntheticPage: true,
             document: endnotes);
-        endnoteExpectation.ExpectedOutputName.Should().Be("f2-endnotes_p3.png");
+        endnoteExpectation.ExpectedOutputName.Should().Be("f2-endnotes_p2.png");
         endnoteExpectation.HasEndnotes.Should().BeTrue();
         endnoteExpectation.IsSyntheticPage.Should().BeTrue();
         endnoteExpectation.Composition.ExpectsEndnotes.Should().BeTrue();
@@ -492,7 +492,7 @@ public sealed class VisualEvidencePlannerTests
         var endnotePlan = DocumentNoteRegionPlanner.BuildEndnoteRegion(
             endnotes,
             DocumentNoteRegionPlanner.EndnoteIdsForSyntheticPage(endnotes),
-            pageNumber: 3,
+            pageNumber: 2,
             contentWidth,
             isSyntheticPage: true);
 
@@ -7721,9 +7721,7 @@ public sealed class VisualEvidencePlannerTests
             var wpfRows = scenarios
                 .SelectMany(scenarioId =>
                 {
-                    var pageCount = string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
-                        ? 3
-                        : FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs;
+                    var pageCount = FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs;
                     return Enumerable.Range(1, pageCount)
                         .Select(page => BuildFileBackedRow(
                             root,
@@ -7736,9 +7734,7 @@ public sealed class VisualEvidencePlannerTests
             var avaloniaRows = scenarios
                 .SelectMany(scenarioId =>
                 {
-                    var pageCount = string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
-                        ? 3
-                        : FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs;
+                    var pageCount = FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs;
                     return Enumerable.Range(1, pageCount)
                         .Select(page => BuildFileBackedRow(
                             root,
@@ -7794,9 +7790,7 @@ public sealed class VisualEvidencePlannerTests
                 comparisons);
 
             var expectedReadinessRows = scenarios
-                .Sum(scenarioId => string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
-                    ? 3
-                    : FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
+                .Sum(scenarioId => FreeWVisualEvidencePlanner.ResolveScenario(scenarioId).MinimumExpectedOutputs);
             withBaseline.Trust.Passed.Should().BeTrue();
             withBaseline.NotePlacementProofReadiness.Should().HaveCount(expectedReadinessRows);
             withBaseline.NotePlacementProofReadiness.Should().OnlyContain(row =>
@@ -7814,7 +7808,7 @@ public sealed class VisualEvidencePlannerTests
             withBaseline.NotePlacementProofReadiness
                 .Where(row => row.ScenarioId == "f2-endnotes")
                 .Should().Contain(row =>
-                    row.PageNumber == 3 &&
+                    row.PageNumber == 2 &&
                     row.SemanticEvidence.Contains("endnotes", StringComparison.Ordinal) &&
                     row.SemanticEvidence.Contains("synthetic page", StringComparison.Ordinal));
             withBaseline.RemainingEvidenceBlockers
@@ -8756,9 +8750,9 @@ public sealed class VisualEvidencePlannerTests
             scenario.LayoutKind,
             hasFootnotes: string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase),
             hasEndnotes: string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
-                && pageNumber == 3,
+                && pageNumber == pageCount,
             isSyntheticPage: string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
-                && pageNumber == 3,
+                && pageNumber == pageCount,
             sectionOrdinal: sectionPage?.SectionOrdinal,
             sectionRelativePageNumber: sectionPage?.SectionRelativePageNumber,
             sectionOwnerId: sectionPage?.SectionOwnerId,

@@ -1425,9 +1425,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
     }
 
     private static IReadOnlyList<int> RequiredNotePlacementPages(string scenarioId) =>
-        string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
-            ? [1, 2, 3]
-            : RequiredScenarioPages(scenarioId);
+        RequiredScenarioPages(scenarioId);
 
     private static IReadOnlyList<FreeWVisualSectionGeometryProofReadiness> BuildSectionGeometryProofReadinessRows(
         IReadOnlyList<FreeWVisualEvidenceExpectedScenario> expectedScenarios,

@@ -310,10 +310,14 @@ static void RenderDocumentComposite(
 
     // ═══ Per-page compositing ═════════════════════════════════════════════════════════════════════
     var hasSyntheticEndnotePage = panel?.PageBoxes.Any(b => b.IsEndnoteSyntheticPage && b.EndnoteIds.Count > 0) == true;
-    var evidencePageCount = pageCount + (hasSyntheticEndnotePage ? 1 : 0);
+    var scenario = FreeWVisualEvidencePlanner.ResolveScenario(name);
+    var bodyPageCount = hasSyntheticEndnotePage
+        ? Math.Min(pageCount, Math.Max(1, scenario.MinimumExpectedOutputs - 1))
+        : pageCount;
+    var evidencePageCount = bodyPageCount + (hasSyntheticEndnotePage ? 1 : 0);
     var sectionPageCounters = new Dictionary<int, int>();
 
-    for (int i = 0; i < pageCount; i++)
+    for (int i = 0; i < bodyPageCount; i++)
     {
         DocumentPage docPage = paginator.GetPage(i);
 
@@ -510,7 +514,8 @@ static void RenderDocumentComposite(
 
     // ═══ Synthetic endnotes page (rendered after all body pages) ══════════════════════════════════
     // The PaginatedEditorPanel appends one extra PageBox for endnotes when the document has endnotes.
-    // This box has no corresponding body paginator page, so we render it separately here.
+    // This box has no corresponding body paginator page, so render it into the final expected
+    // evidence slot instead of appending a Word-incomparable extra PNG.
     // Find it by IsEndnoteSyntheticPage (it may be at any index since overflow pagination can produce
     // a different body-page count than the panel body-box count).
     var endnotePageBox = panel?.PageBoxes.FirstOrDefault(b => b.IsEndnoteSyntheticPage);
@@ -544,7 +549,8 @@ static void RenderDocumentComposite(
                 bmp.Render(enVis);
             }
 
-            string endnotePath = BuildVisualEvidenceOutputPath(outDir, name, pageCount + 1);
+            var syntheticPageNumber = bodyPageCount + 1;
+            string endnotePath = BuildVisualEvidenceOutputPath(outDir, name, syntheticPageNumber);
             var byteLength = SavePng(bmp, endnotePath);
             var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
             var sectionOrdinal = FreeWVisualEvidencePlanner.ResolveSectionOrdinal(doc, endnoteBox.PageGeometry);
@@ -558,7 +564,7 @@ static void RenderDocumentComposite(
                 byteLength: byteLength,
                 pixelStats: stats,
                 page: endnoteBox.PageGeometry,
-                pageNumber: pageCount + 1,
+                pageNumber: syntheticPageNumber,
                 pageCount: evidencePageCount,
                 layoutKind: DocumentViewLayoutKind.PrintLayout,
                 availableWidthDip: endnotePageWDip,
@@ -572,7 +578,7 @@ static void RenderDocumentComposite(
                     ["renderPath"] = "composite",
                     ["captureSource"] = "wpf-composite-renderer",
                     ["documentName"] = name,
-                    ["pageIndex"] = pageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["pageIndex"] = bodyPageCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["syntheticPage"] = "endnotes"
                 },
                 document: doc);
