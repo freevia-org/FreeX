@@ -133,6 +133,47 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_MatrixColumnAlignmentCount_UsesSharedRepeatedAlignmentPlan_DoesNotThrow()
+    {
+        var matrixNode = ParseOmml(
+            "<m:m>" +
+            "<m:mPr><m:mcs>" +
+            "<m:mc><m:mcPr><m:count m:val=\"2\"/><m:aln m:val=\"left\"/></m:mcPr></m:mc>" +
+            "<m:mc><m:mcPr><m:aln m:val=\"right\"/></m:mcPr></m:mc>" +
+            "</m:mcs></m:mPr>" +
+            "<m:mr><m:e><m:r><m:t>wide</m:t></m:r></m:e><m:e><m:r><m:t>wide</m:t></m:r></m:e><m:e><m:r><m:t>wide</m:t></m:r></m:e></m:mr>" +
+            "<m:mr><m:e><m:r><m:t>x</m:t></m:r></m:e><m:e><m:r><m:t>y</m:t></m:r></m:e><m:e><m:r><m:t>z</m:t></m:r></m:e></m:mr>" +
+            "</m:m>");
+        var mathBox = MathLayoutEngine.Layout(matrixNode, "Cambria Math", 18.0);
+        var glyphs = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToList();
+        glyphs.Single(g => g.Text == "y").X.Should().BeApproximately(glyphs[1].X,
+            0.01,
+            "m:mcPr/m:count should repeat the left alignment into the second matrix column before WPF draws it");
+        glyphs.Single(g => g.Text == "z").X.Should().BeGreaterThan(glyphs[2].X,
+            "the right-aligned repeated-count successor column should shift its short cell toward the right edge");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "M = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_MatrixPlaceholder_UsesSharedPlcHidePlan_DoesNotThrow()
     {
         var visibleNode = ParseOmml(

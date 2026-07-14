@@ -712,6 +712,24 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing and layout now preserve m:mPr/m:plcHide, emit renderer-neutral placeholders for authored empty matrix cells by default, and suppress those placeholders when plcHide is set. PowerPoint-authoritative math visual baselines, exact OfficeMath placeholder chrome, full spacing-table typography, additional equation constructs, and remaining alignment semantics remain deferred."),
         new(
+            EvidenceId: "freep.omml.matrix-column-count-alignment",
+            Area: "OMML matrix column alignment repeat counts",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.Matrix repeated column-alignment metadata and MathBoxRenderPlanner glyph coordinates with no renderer-local matrix policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-matrix-column-count-alignment-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing now expands m:mPr/m:mcs/m:mc/m:mcPr/m:count into repeated matrix column-alignment metadata, so counted left/center/right column policies affect renderer-neutral glyph coordinates before WPF or Avalonia draws. PowerPoint-authoritative matrix visual baselines, exact OfficeMath column metrics, and broader matrix spacing semantics remain deferred."),
+        new(
             EvidenceId: "freep.omml.literal-run-style",
             Area: "OMML literal math run style",
             Status: "shared-layout-evidence",

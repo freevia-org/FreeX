@@ -799,6 +799,29 @@ public sealed class OmmlParserTests
     }
 
     [Fact]
+    public void Parse_MatrixColumnAlignments_RepeatsAlignmentByCount()
+    {
+        var node = Parse(
+            "<m:m>" +
+            "<m:mPr><m:mcs>" +
+            "<m:mc><m:mcPr><m:count m:val=\"2\"/><m:aln m:val=\"left\"/></m:mcPr></m:mc>" +
+            "<m:mc><m:mcPr><m:count m:val=\"0\"/><m:aln m:val=\"right\"/></m:mcPr></m:mc>" +
+            "</m:mcs></m:mPr>" +
+            "<m:mr><m:e><m:r><m:t>a</m:t></m:r></m:e><m:e><m:r><m:t>b</m:t></m:r></m:e><m:e><m:r><m:t>c</m:t></m:r></m:e></m:mr>" +
+            "</m:m>");
+
+        var matrix = Assert.IsType<MathNode.Matrix>(node);
+        Assert.Equal(
+            new[]
+            {
+                MathNode.Matrix.MatrixColumnAlignment.Left,
+                MathNode.Matrix.MatrixColumnAlignment.Left,
+                MathNode.Matrix.MatrixColumnAlignment.Right
+            },
+            matrix.ColumnAlignments);
+    }
+
+    [Fact]
     public void Parse_MatrixProperties_ReadsBaseJustificationAndSpacingMetadata()
     {
         var node = Parse(

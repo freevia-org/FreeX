@@ -861,6 +861,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.omml.groupchr-vertical-justification",
             "freep.omml.pre-subsup-layout",
             "freep.omml.matrix-placeholder",
+            "freep.omml.matrix-column-count-alignment",
             "freep.omml.literal-run-style",
             "freep.omml.nary-limit-location",
             "freep.smartart.continuous-block-process",
