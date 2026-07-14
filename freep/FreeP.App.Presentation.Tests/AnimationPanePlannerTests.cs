@@ -213,6 +213,77 @@ public sealed class AnimationPanePlannerTests
     }
 
     [Fact]
+    public void BuildVisualBaselineReadinessPlan_ProjectsPowerPointWpfAvaloniaCaptureMatrix()
+    {
+        var timeline = AnimationPanePlanner.BuildTimelinePlan(
+            CreateSlideWithTimelineAnimations(),
+            selectedAnimationIndex: 1,
+            displayCulture: Invariant);
+        var step = new AnimationStep(
+        [
+            new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = 91,
+                    Kind = AnimationKind.Entrance,
+                    Preset = AnimationPreset.Wheel,
+                    Direction = AnimationDirection.In,
+                    WheelSpokeCount = 8,
+                    DurationMs = 300
+                },
+                StartDelayMs: 0)
+        ]);
+        var checkpoints = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(
+            step,
+            slideWidthDip: 960,
+            slideHeightDip: 540);
+
+        var readiness = AnimationPanePlanner.BuildVisualBaselineReadinessPlan(
+            timeline,
+            checkpoints,
+            slideIndex: 2,
+            scenarioId: "Advanced Effect Playback");
+
+        readiness.ScenarioId.Should().Be("advanced-effect-playback");
+        readiness.SlideIndex.Should().Be(2);
+        readiness.AnimationRowCount.Should().Be(3);
+        readiness.PlaybackCheckpointCount.Should().Be(3);
+        readiness.CaptureRequests.Should().HaveCount(12);
+        readiness.PowerPointRequestCount.Should().Be(4);
+        readiness.SharedHostRequestCount.Should().Be(8);
+        readiness.IsPowerPointAuthoritativeReady.Should().BeTrue();
+        readiness.CaptureRequests.Select(request => request.Host)
+            .Should()
+            .ContainInOrder(
+                AnimationPaneBaselineCaptureHost.PowerPoint,
+                AnimationPaneBaselineCaptureHost.Wpf,
+                AnimationPaneBaselineCaptureHost.Avalonia);
+
+        var panePowerPoint = readiness.CaptureRequests.First(request =>
+            request.Host == AnimationPaneBaselineCaptureHost.PowerPoint
+            && request.Kind == AnimationPaneBaselineCaptureKind.PaneWorkflow);
+        panePowerPoint.CaptureId.Should().Be("freep.advanced-effect-playback.slide-3.pane.workflow.powerpoint");
+        panePowerPoint.SurfaceId.Should().Be("freep.advanced-effect-playback.slide-3.pane.workflow");
+        panePowerPoint.RequiresPowerPointCom.Should().BeTrue();
+        panePowerPoint.EvidenceSummary.Should().Be("Animation pane slide 3: 3 row(s); selected 2");
+
+        var midpointWpf = readiness.CaptureRequests.Single(request =>
+            request.Host == AnimationPaneBaselineCaptureHost.Wpf
+            && request.Kind == AnimationPaneBaselineCaptureKind.PlaybackCheckpoint
+            && request.Checkpoint == "midpoint");
+        midpointWpf.CaptureId.Should().Be("freep.advanced-effect-playback.slide-3.playback.midpoint.wpf");
+        midpointWpf.ElapsedMs.Should().Be(150);
+        midpointWpf.RequiresPowerPointCom.Should().BeFalse();
+        midpointWpf.EvidenceSummary.Should().Contain("Wheel Clip")
+            .And.Contain("clip Wheel 0.5");
+
+        readiness.EvidenceLines.Should().Equal(
+            "Scenario advanced-effect-playback: slide 3; rows 3; playback checkpoints 3",
+            "Capture requests: 12; PowerPoint 4; WPF 4; Avalonia 4",
+            "PowerPoint requests are readiness contracts and require desktop PowerPoint COM on the baseline machine");
+    }
+
+    [Fact]
     public void BuildPlaybackControls_EnablesSlidePlaybackButRequiresSelectedRow()
     {
         var controls = AnimationPanePlanner.BuildPlaybackControls(-1, 2, 900);
