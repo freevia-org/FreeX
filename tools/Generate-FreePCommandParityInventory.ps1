@@ -166,6 +166,7 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-presenter-recording-execution-2026-07-04.md",
                 "docs/parity/freep-presenter-recording-media-artifact-manifest-2026-07-05.md",
                 "docs/parity/freep-media-caption-shared-sidecar-retention-2026-07-14.md",
+                "docs/parity/freep-presenter-recording-microphone-handoff-2026-07-14.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-05.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-13.md",
                 "docs/parity/freep-presenter-recording-review-2026-07-04.md"
@@ -173,12 +174,15 @@ internal static class FreePCommandInventory
             Verification:
             [
                 "freep/FreeP.App.Presentation.Tests/SlideShowRecordingExecutionPlannerTests.cs",
+                "freep/FreeP.App.Presentation.Tests/SlideShowRecordingHostAdapterParityPlannerTests.cs",
                 "freep/FreeP.App.Presentation.Tests/SlideShowRecordingReviewPlannerTests.cs",
                 "freep/FreeP.App.Host.Tests/MediaFieldsTests.cs",
+                "freep/FreeP.App.Host.Tests/WpfWindowsRecordingCaptureBackendTests.cs",
+                "freep/FreeP.App.Avalonia.Tests/AvaloniaWindowsRecordingCaptureBackendTests.cs",
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Real OS microphone/camera capture implementations, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
+            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, paired real Windows microphone narration handoff evidence, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Real camera capture, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
         new(
             EvidenceId: "freep.media-caption.native-sidecar-depth",
             Area: "PowerPoint-native media and caption sidecar package depth",
