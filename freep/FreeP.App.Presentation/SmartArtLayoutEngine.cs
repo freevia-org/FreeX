@@ -84,6 +84,9 @@ public static class SmartArtLayoutEngine
         if (IsAlternatingProcessLayout(data.LayoutUniqueId))
             return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsCircleProcessLayout(data.LayoutUniqueId))
+            return LayoutCircleProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsFunnelProcessLayout(data.LayoutUniqueId))
             return LayoutFunnelProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -345,6 +348,67 @@ public static class SmartArtLayoutEngine
             var from = centers[i];
             var to = centers[i + 1];
             shapes.Add(MakeConnector(idCounter++, from.x, from.y, to.x, to.y, stylePlan.Connector));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Circle process geometry: ordered process stages placed around an ellipse
+    /// with clockwise connector ops. This is a bounded shared approximation,
+    /// not exact PowerPoint circular arrow or segment artwork.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutCircleProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+        if (n == 0) return shapes;
+
+        long padX = (long)(fcx * OuterPaddingFrac);
+        long padY = (long)(fcy * OuterPaddingFrac);
+        long innerCx = Math.Max(fcx - 2 * padX, 1L);
+        long innerCy = Math.Max(fcy - 2 * padY, 1L);
+
+        double centerX = fx + padX + innerCx / 2.0;
+        double centerY = fy + padY + innerCy / 2.0;
+        double radiusX = innerCx / 2.0 * 0.60;
+        double radiusY = innerCy / 2.0 * 0.60;
+
+        double angleStep = 360.0 / n;
+        double angleRad = angleStep * Math.PI / 180.0;
+        double boxFrac = Math.Min(0.42, Math.Sin(angleRad / 2) * 0.86);
+        long boxW = Math.Max((long)(innerCx * boxFrac), (long)(innerCx * 0.14));
+        long boxH = Math.Max((long)(innerCy * boxFrac), (long)(innerCy * 0.14));
+
+        var centers = new (double x, double y)[n];
+        uint idCounter = 320;
+
+        for (int i = 0; i < n; i++)
+        {
+            double angle = (-90 + i * angleStep) * Math.PI / 180.0;
+            double boxCenterX = centerX + radiusX * Math.Cos(angle);
+            double boxCenterY = centerY + radiusY * Math.Sin(angle);
+            long left = (long)(boxCenterX - boxW / 2.0);
+            long top = (long)(boxCenterY - boxH / 2.0);
+
+            centers[i] = (boxCenterX, boxCenterY);
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Process);
+            shapes.Add(MakeBox(idCounter++, nodes[i].Text, nodeStyle, left, top, boxW, boxH));
+        }
+
+        for (int i = 0; i < n; i++)
+        {
+            int next = (i + 1) % n;
+            shapes.Add(MakeConnector(
+                idCounter++,
+                (long)centers[i].x,
+                (long)centers[i].y,
+                (long)centers[next].x,
+                (long)centers[next].y,
+                stylePlan.Connector));
         }
 
         return shapes;
@@ -1066,6 +1130,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "alternatingprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsCircleProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "circleprocess", StringComparison.Ordinal);
     }
 
     private static bool IsFunnelProcessLayout(string uniqueId)

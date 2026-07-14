@@ -1339,6 +1339,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesCircleProcessAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess",
+            nodes: [("id1", "Stage 1"), ("id2", "Stage 2"), ("id3", "Stage 3"), ("id4", "Stage 4")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process,
+            "circleProcess remains a process-family SmartArt layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "circleProcess is in the bounded shared circular process planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Stage 1", "Stage 2", "Stage 3", "Stage 4");
+    }
+
+    [Fact]
     public void Reader_ParsesFunnelProcessAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1978,6 +1997,32 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_CircleProcessSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess",
+            nodes: [("n1", "Discover"), ("n2", "Plan"), ("n3", "Build"), ("n4", "Review")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four circle-process boxes plus four loop connectors should render from shared live data");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Discover", "Plan", "Build", "Review");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(4, "WPF and Avalonia hosts consume shared circle-process connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_FunnelProcessSmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2431,7 +2476,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Process,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon",
             IsLiveLayoutSupported = false
         };
         data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });

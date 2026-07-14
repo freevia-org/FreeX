@@ -4368,6 +4368,45 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_circle_process_shape_composes_shared_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Process,
+                "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess",
+                ["Discover", "Plan", "Build", "Review"]);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 320 and < 340)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(8, "Avalonia host consumes the shared four-stage circle process plus four connector DrawOps");
+        var textOps = liveShapes.Where(op => op.Text is not null).ToList();
+        textOps
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Discover", "Plan", "Build", "Review");
+        textOps[0].BoundsDip.Y.Should().BeLessThan(textOps[1].BoundsDip.Y,
+            "Avalonia host should consume shared top-start circle-process geometry");
+        textOps[1].BoundsDip.X.Should().BeGreaterThan(textOps[0].BoundsDip.X,
+            "Avalonia host should consume shared clockwise right-side placement");
+        textOps[2].BoundsDip.Y.Should().BeGreaterThan(textOps[1].BoundsDip.Y,
+            "Avalonia host should consume shared bottom placement");
+        textOps[3].BoundsDip.X.Should().BeLessThan(textOps[0].BoundsDip.X,
+            "Avalonia host should consume shared left-side placement");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(4, "Avalonia host should consume shared circle-process connector ops");
+    }
+
+    [Fact]
     public async Task Review_alt_text_apply_routes_through_shared_mutation_plan()
     {
         string? altTextTitle = null;

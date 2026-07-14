@@ -719,6 +719,33 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void CircleProcess_ReturnsCircularStageBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Discover", "Plan", "Build", "Review");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("circleProcess has bounded shared circular process geometry");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "one live process box should be emitted per circle-process node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(4, "circleProcess closes the process loop with shared connector ops");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Discover", "Plan", "Build", "Review");
+        boxes[0].OffsetYEmu.Should().BeLessThan(boxes[1].OffsetYEmu,
+            "the first node starts at the top of the circular process");
+        boxes[1].OffsetXEmu.Should().BeGreaterThan(boxes[0].OffsetXEmu,
+            "the second node moves clockwise to the right side");
+        boxes[2].OffsetYEmu.Should().BeGreaterThan(boxes[1].OffsetYEmu,
+            "the third node moves clockwise to the bottom");
+        boxes[3].OffsetXEmu.Should().BeLessThan(boxes[0].OffsetXEmu,
+            "the fourth node moves clockwise to the left side");
+    }
+
+    [Fact]
     public void FunnelProcess_ReturnsNarrowingStageSegmentsAndConnectors()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B", "C", "D");
@@ -1015,7 +1042,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedKnownProcessSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -1545,7 +1572,7 @@ public sealed class SmartArtLayoutTests
     public void Compositor_FallsBackToCachedDrawing_WhenKnownFamilyLayoutIsUnsupported()
     {
         var data = MakeData(SmartArtFamily.Process, "Live A", "Live B");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/arrowRibbon";
         data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };
@@ -1709,6 +1736,65 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().NotContain("Cached alternating fallback");
         shapeOps.Where(op => op.Text is null)
             .Should().HaveCount(3, "WPF and Avalonia hosts consume the shared alternating-process connector DrawOps");
+    }
+
+    [Fact]
+    public void Compositor_CircleProcess_UsesSharedLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Live A", "Live B", "Live C", "Live D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 902,
+            Name = "CachedCircleProcessFallback",
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = 914_400,
+            OffsetYEmu = 914_400,
+            ExtentCxEmu = 1_828_800,
+            ExtentCyEmu = 914_400,
+            Fill = new ShapeFill.Solid(new SrgbColor(0xEE, 0xEE, 0xEE)),
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached circle process fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 190,
+            Name = "CircleProcess SmartArt",
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(8, "circleProcess should render four live boxes plus four connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain(["Live A", "Live B", "Live C", "Live D"]);
+        renderedText.Should().NotContain("Cached circle process fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(4, "WPF and Avalonia hosts consume the shared circle-process connector DrawOps");
     }
 
     [Fact]
