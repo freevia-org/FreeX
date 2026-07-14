@@ -864,6 +864,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.omml.matrix-column-count-alignment",
             "freep.omml.literal-run-style",
             "freep.omml.nary-limit-location",
+            "freep.omml.border-box-side-strike-lines",
             "freep.smartart.continuous-block-process",
             "freep.smartart.basic-process",
             "freep.smartart.segmented-process",

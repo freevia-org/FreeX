@@ -769,6 +769,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing and layout preserve m:naryPr/m:limLoc default subSup versus explicit undOvr placement, carrying distinct side-script and under/over glyph coordinates to both hosts. PowerPoint-authoritative math visual baselines, exact operator metrics, and complete OfficeMath display-style heuristics remain deferred."),
         new(
+            EvidenceId: "freep.omml.border-box-side-strike-lines",
+            Area: "OMML border-box side and strike-line semantics",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.BorderBox side and strike metadata plus MathBoxRenderPlanner line ops with no renderer-local border-box policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-border-box-side-strike-lines-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing preserves m:borderBoxPr hidden side flags plus horizontal, vertical, and diagonal strike flags, and shared layout emits renderer-neutral border/strike line operations around the padded child box before either host draws. PowerPoint-authoritative math visual baselines, exact OfficeMath border padding/thickness metrics, and full math-box typography remain deferred."),
+        new(
             EvidenceId: "freep.smartart.continuous-block-process",
             Area: "SmartArt continuous block process live layout",
             Status: "shared-render-planner-evidence",
