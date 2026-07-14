@@ -1539,6 +1539,10 @@ public sealed class ChartRenderPlannerTests
         primitive.LineSegments[0].Start.Should().Be(new ChartPlanPoint(0, 75));
         primitive.LineSegments[0].End.Should().Be(new ChartPlanPoint(100, 50));
         primitive.LineSegments[0].Stroke.Should().Be(primitive.Stroke);
+        primitive.LinePaths.Should().ContainSingle();
+        primitive.LinePaths[0].Segments.Select(segment => segment.Kind)
+            .Should()
+            .Equal(ChartLinePathSegmentKind.Line, ChartLinePathSegmentKind.Line);
         primitive.Markers.Should().HaveCount(3);
         primitive.Markers[0].Fill.Should().Be(new ChartFillPlan(
             seriesColor,
@@ -1569,6 +1573,71 @@ public sealed class ChartRenderPlannerTests
             withMarkers: false).Single();
 
         primitive.IsSmoothed.Should().BeTrue();
+    }
+
+    [Fact]
+    public void BuildLineSeriesPrimitives_SmoothedSeriesPlansCubicPath()
+    {
+        var series = new ChartSeries
+        {
+            Name = "Smoothed",
+            SmoothLine = true
+        };
+        series.Values.AddRange(new double?[] { 10, 20, 30 });
+        var chart = new ChartShape { ChartType = ChartType.Line };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3" });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            withMarkers: false).Single();
+
+        primitive.LineSegments.Should().HaveCount(2);
+        primitive.LinePaths.Should().ContainSingle();
+        var path = primitive.LinePaths[0];
+        path.Start.Should().Be(new ChartPlanPoint(0, 75));
+        path.Stroke.Should().Be(primitive.Stroke);
+        path.Segments.Select(segment => segment.Kind)
+            .Should()
+            .Equal(ChartLinePathSegmentKind.CubicBezier, ChartLinePathSegmentKind.CubicBezier);
+
+        path.Segments[0].Control1.X.Should().BeApproximately(16.6667, 0.0001);
+        path.Segments[0].Control1.Y.Should().BeApproximately(70.8333, 0.0001);
+        path.Segments[0].Control2.X.Should().BeApproximately(66.6667, 0.0001);
+        path.Segments[0].Control2.Y.Should().BeApproximately(58.3333, 0.0001);
+        path.Segments[0].End.Should().Be(new ChartPlanPoint(100, 50));
+
+        path.Segments[1].Control1.X.Should().BeApproximately(133.3333, 0.0001);
+        path.Segments[1].Control1.Y.Should().BeApproximately(41.6667, 0.0001);
+        path.Segments[1].Control2.X.Should().BeApproximately(183.3333, 0.0001);
+        path.Segments[1].Control2.Y.Should().BeApproximately(29.1667, 0.0001);
+        path.Segments[1].End.Should().Be(new ChartPlanPoint(200, 25));
+    }
+
+    [Fact]
+    public void BuildLineSeriesPrimitives_SmoothedSeriesKeepsBlankGapsAsSeparateFigures()
+    {
+        var series = new ChartSeries
+        {
+            Name = "Smoothed",
+            SmoothLine = true
+        };
+        series.Values.AddRange(new double?[] { 10, 20, null, 40, 50 });
+        var chart = new ChartShape { ChartType = ChartType.Line };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3", "Q4", "Q5" });
+        chart.Series.Add(series);
+
+        var primitive = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100),
+            withMarkers: false).Single();
+
+        primitive.LineSegments.Should().HaveCount(2);
+        primitive.LinePaths.Should().HaveCount(2);
+        primitive.LinePaths.Select(path => path.Segments.Single().Kind)
+            .Should()
+            .Equal(ChartLinePathSegmentKind.Line, ChartLinePathSegmentKind.Line);
     }
 
     [Fact]

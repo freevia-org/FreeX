@@ -1,3 +1,4 @@
+using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -829,5 +830,71 @@ public sealed class SlideCanvasTests
         var act = () => canvas.Measure(new Size(1280, 720));
         act.Should().NotThrow(
             "CB1: combo chart with primary bars + secondary line must render without throwing");
+    }
+
+    [StaFact]
+    public void SlideCanvas_SmoothedLineChart_RendersWithoutThrow()
+    {
+        var series = new ChartSeries
+        {
+            Name = "Smoothed",
+            SmoothLine = true
+        };
+        series.Values.AddRange(new double?[] { 10, 20, 30, 15 });
+
+        var chart = new ChartShape { ChartType = ChartType.Line };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3", "Q4" });
+        chart.Series.Add(series);
+
+        var p = Presentation.CreateEmpty();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 5486400,
+            ExtentCyEmu = 3657600,
+            Chart = chart,
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+        canvas.Measure(new Size(960, 540));
+        canvas.Arrange(new Rect(0, 0, 960, 540));
+        var rtb = new RenderTargetBitmap(960, 540, 96, 96, PixelFormats.Pbgra32);
+
+        var act = () => rtb.Render(canvas);
+
+        act.Should().NotThrow("WPF should consume smoothed line path primitives");
+    }
+
+    [Fact]
+    public void SlideCanvas_LineSeriesRenderer_ConsumesSharedPathPrimitive()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.App.Rendering.Wpf",
+            "SlideCanvas.cs"));
+
+        source.Should().Contain("foreach (var path in primitive.LinePaths)");
+        source.Should().Contain("ToGeometry(path, depth)");
+        source.Should().Contain("ctx.BezierTo(");
+        source.Should().Contain("ChartLinePathSegmentKind.CubicBezier");
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }

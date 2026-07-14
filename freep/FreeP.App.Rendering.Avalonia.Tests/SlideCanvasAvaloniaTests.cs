@@ -1046,6 +1046,22 @@ public sealed class SlideCanvasAvaloniaTests
     }
 
     [Fact]
+    public void SlideCanvas_LineSeriesRenderer_ConsumesSharedPathPrimitive()
+    {
+        var root = FindRepositoryRoot();
+        var source = File.ReadAllText(Path.Combine(
+            root,
+            "freep",
+            "FreeP.App.Rendering.Avalonia",
+            "SlideCanvas.cs"));
+
+        source.Should().Contain("foreach (var path in primitive.LinePaths)");
+        source.Should().Contain("ToGeometry(path, depth)");
+        source.Should().Contain("ctx.CubicBezierTo(");
+        source.Should().Contain("ChartLinePathSegmentKind.CubicBezier");
+    }
+
+    [Fact]
     public void TableCellTextEditor_UsesAvaloniaAdapterForSharedPlannerDecisions()
     {
         var root = FindRepositoryRoot();
@@ -1995,6 +2011,52 @@ public sealed class SlideCanvasAvaloniaTests
         });
         thrown.Should().BeNull(
             "CC2/CC3: combo chart with secondary-axis line series data labels must render without throwing");
+    }
+
+    [Fact]
+    public async Task SlideCanvas_SmoothedLineChart_RendersWithoutThrow()
+    {
+        Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var series = new ChartSeries
+                {
+                    Name = "Smoothed",
+                    SmoothLine = true
+                };
+                series.Values.AddRange(new double?[] { 10, 20, 30, 15 });
+
+                var chart = new ChartShape { ChartType = ChartType.Line };
+                chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3", "Q4" });
+                chart.Series.Add(series);
+
+                var p = MakePresentation(pres =>
+                {
+                    pres.Slides[0].Shapes.Clear();
+                    pres.Slides[0].Shapes.Add(new SlideShape
+                    {
+                        Id = 1,
+                        Kind = SlideShapeKind.Chart,
+                        OffsetXEmu = 914400,
+                        OffsetYEmu = 457200,
+                        ExtentCxEmu = 5486400,
+                        ExtentCyEmu = 3657600,
+                        Chart = chart,
+                    });
+                });
+
+                var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+                canvas.Measure(new Size(960, 540));
+                canvas.Arrange(new Rect(0, 0, 960, 540));
+                var rtb = new RenderTargetBitmap(new PixelSize(960, 540));
+                rtb.Render(canvas);
+            }
+            catch (Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia should consume smoothed line path primitives");
     }
 
     /// <summary>

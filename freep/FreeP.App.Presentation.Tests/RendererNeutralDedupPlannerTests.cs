@@ -348,6 +348,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("primitive.Fill");
             source.Should().Contain("primitive.Stroke");
             source.Should().Contain("primitive.LineSegments");
+            source.Should().Contain("primitive.LinePaths");
             source.Should().Contain("primitive.Markers");
             source.Should().Contain("DrawChartMarker(dc, marker)");
             source.Should().Contain("marker.Symbol");

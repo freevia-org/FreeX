@@ -417,6 +417,42 @@ public sealed class SlideCanvas : Control
                 .ToArray()
         };
 
+    private static StreamGeometry ToGeometry(
+        ChartLinePathFigurePrimitive figure,
+        ChartClassicThreeDDepthPlan? depth = null)
+    {
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(ToPoint(OffsetIfNeeded(figure.Start, depth)), isFilled: false);
+            foreach (var segment in figure.Segments)
+            {
+                switch (segment.Kind)
+                {
+                    case ChartLinePathSegmentKind.CubicBezier:
+                        ctx.CubicBezierTo(
+                            ToPoint(OffsetIfNeeded(segment.Control1, depth)),
+                            ToPoint(OffsetIfNeeded(segment.Control2, depth)),
+                            ToPoint(OffsetIfNeeded(segment.End, depth)));
+                        break;
+
+                    default:
+                        ctx.LineTo(ToPoint(OffsetIfNeeded(segment.End, depth)));
+                        break;
+                }
+            }
+
+            ctx.EndFigure(isClosed: false);
+        }
+
+        return geometry;
+    }
+
+    private static ChartPlanPoint OffsetIfNeeded(
+        ChartPlanPoint point,
+        ChartClassicThreeDDepthPlan? depth) =>
+        depth.HasValue ? OffsetPoint(point, depth.Value) : point;
+
     private static IBrush ToBrush(ChartFillPlan fill) =>
         fill.Fill switch
         {
@@ -1110,18 +1146,18 @@ public sealed class SlideCanvas : Control
     {
         if (primitive.Depth is { } depth)
         {
-            foreach (var segment in primitive.LineSegments)
+            foreach (var path in primitive.LinePaths)
             {
-                var depthStroke = segment.Stroke with { Alpha = depth.StrokeAlpha };
-                dc.DrawLine(
+                var depthStroke = path.Stroke with { Alpha = depth.StrokeAlpha };
+                dc.DrawGeometry(
+                    null,
                     ToPen(depthStroke),
-                    ToPoint(OffsetPoint(segment.Start, depth)),
-                    ToPoint(OffsetPoint(segment.End, depth)));
+                    ToGeometry(path, depth));
             }
         }
 
-        foreach (var segment in primitive.LineSegments)
-            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+        foreach (var path in primitive.LinePaths)
+            dc.DrawGeometry(null, ToPen(path.Stroke), ToGeometry(path));
 
         foreach (var marker in primitive.Markers)
             DrawChartMarker(dc, marker);

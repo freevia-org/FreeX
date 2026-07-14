@@ -125,6 +125,23 @@ public readonly record struct ChartLineSegmentPrimitive(
     ChartPlanPoint End,
     ChartStrokePlan Stroke);
 
+public enum ChartLinePathSegmentKind
+{
+    Line,
+    CubicBezier
+}
+
+public readonly record struct ChartLinePathSegmentPrimitive(
+    ChartLinePathSegmentKind Kind,
+    ChartPlanPoint End,
+    ChartPlanPoint Control1,
+    ChartPlanPoint Control2);
+
+public readonly record struct ChartLinePathFigurePrimitive(
+    ChartPlanPoint Start,
+    IReadOnlyList<ChartLinePathSegmentPrimitive> Segments,
+    ChartStrokePlan Stroke);
+
 public readonly record struct ChartCirclePrimitive(
     int SeriesIndex,
     int PointIndex,
@@ -272,6 +289,7 @@ public readonly record struct ChartLineSeriesPrimitive(
     ChartStrokePlan? MarkerStroke,
     double MarkerRadius,
     IReadOnlyList<ChartLineSegmentPrimitive> LineSegments,
+    IReadOnlyList<ChartLinePathFigurePrimitive> LinePaths,
     IReadOnlyList<ChartCirclePrimitive> Markers,
     bool IsSmoothed)
 {
@@ -2080,6 +2098,8 @@ public static partial class ChartRenderPlanner
             previousPoint = point.Value;
         }
 
+        bool isSmoothed = series.SmoothLine == true;
+
         return new ChartLineSeriesPrimitive(
             seriesIndex,
             withMarkers,
@@ -2089,8 +2109,80 @@ public static partial class ChartRenderPlanner
             markerStroke,
             markerRadius,
             lineSegments,
+            BuildLinePathFigures(lineSegments, isSmoothed),
             markers,
-            IsSmoothed: series.SmoothLine == true);
+            IsSmoothed: isSmoothed);
+    }
+
+    public static IReadOnlyList<ChartLinePathFigurePrimitive> BuildLinePathFigures(
+        IReadOnlyList<ChartLineSegmentPrimitive> lineSegments,
+        bool isSmoothed)
+    {
+        if (lineSegments.Count == 0)
+            return Array.Empty<ChartLinePathFigurePrimitive>();
+
+        var figures = new List<ChartLinePathFigurePrimitive>();
+        var run = new List<ChartLineSegmentPrimitive>();
+
+        foreach (var segment in lineSegments)
+        {
+            if (run.Count > 0 && run[^1].EndPointIndex != segment.StartPointIndex)
+            {
+                figures.Add(BuildLinePathFigure(run, isSmoothed));
+                run.Clear();
+            }
+
+            run.Add(segment);
+        }
+
+        if (run.Count > 0)
+            figures.Add(BuildLinePathFigure(run, isSmoothed));
+
+        return figures;
+    }
+
+    private static ChartLinePathFigurePrimitive BuildLinePathFigure(
+        IReadOnlyList<ChartLineSegmentPrimitive> run,
+        bool isSmoothed)
+    {
+        var points = new List<ChartPlanPoint>(run.Count + 1) { run[0].Start };
+        points.AddRange(run.Select(segment => segment.End));
+
+        var pathSegments = isSmoothed && points.Count > 2
+            ? BuildSmoothedLinePathSegments(points)
+            : run.Select(segment => new ChartLinePathSegmentPrimitive(
+                    ChartLinePathSegmentKind.Line,
+                    segment.End,
+                    segment.Start,
+                    segment.End))
+                .ToArray();
+
+        return new ChartLinePathFigurePrimitive(run[0].Start, pathSegments, run[0].Stroke);
+    }
+
+    private static IReadOnlyList<ChartLinePathSegmentPrimitive> BuildSmoothedLinePathSegments(
+        IReadOnlyList<ChartPlanPoint> points)
+    {
+        var segments = new ChartLinePathSegmentPrimitive[points.Count - 1];
+        for (int i = 0; i < points.Count - 1; i++)
+        {
+            var previous = i == 0 ? points[i] : points[i - 1];
+            var current = points[i];
+            var next = points[i + 1];
+            var following = i + 2 < points.Count ? points[i + 2] : next;
+
+            segments[i] = new ChartLinePathSegmentPrimitive(
+                ChartLinePathSegmentKind.CubicBezier,
+                next,
+                new ChartPlanPoint(
+                    current.X + (next.X - previous.X) / 6.0,
+                    current.Y + (next.Y - previous.Y) / 6.0),
+                new ChartPlanPoint(
+                    next.X - (following.X - current.X) / 6.0,
+                    next.Y - (following.Y - current.Y) / 6.0));
+        }
+
+        return segments;
     }
 
     public static IReadOnlyList<ChartAreaSeriesPrimitive> BuildAreaSeriesPrimitives(

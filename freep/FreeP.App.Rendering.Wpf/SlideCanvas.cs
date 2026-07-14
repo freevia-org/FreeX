@@ -969,18 +969,18 @@ public sealed class SlideCanvas : FrameworkElement
     {
         if (primitive.Depth is { } depth)
         {
-            foreach (var segment in primitive.LineSegments)
+            foreach (var path in primitive.LinePaths)
             {
-                var depthStroke = segment.Stroke with { Alpha = depth.StrokeAlpha };
-                dc.DrawLine(
+                var depthStroke = path.Stroke with { Alpha = depth.StrokeAlpha };
+                dc.DrawGeometry(
+                    null,
                     ToPen(depthStroke),
-                    ToPoint(OffsetPoint(segment.Start, depth)),
-                    ToPoint(OffsetPoint(segment.End, depth)));
+                    ToGeometry(path, depth));
             }
         }
 
-        foreach (var segment in primitive.LineSegments)
-            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+        foreach (var path in primitive.LinePaths)
+            dc.DrawGeometry(null, ToPen(path.Stroke), ToGeometry(path));
 
         foreach (var marker in primitive.Markers)
             DrawChartMarker(dc, marker);
@@ -2620,6 +2620,46 @@ public sealed class SlideCanvas : FrameworkElement
                 .Select(point => OffsetPoint(point, depth))
                 .ToArray()
         };
+
+    private static Geometry ToGeometry(
+        ChartLinePathFigurePrimitive figure,
+        ChartClassicThreeDDepthPlan? depth = null)
+    {
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            ctx.BeginFigure(ToPoint(OffsetIfNeeded(figure.Start, depth)), isFilled: false, isClosed: false);
+            foreach (var segment in figure.Segments)
+            {
+                switch (segment.Kind)
+                {
+                    case ChartLinePathSegmentKind.CubicBezier:
+                        ctx.BezierTo(
+                            ToPoint(OffsetIfNeeded(segment.Control1, depth)),
+                            ToPoint(OffsetIfNeeded(segment.Control2, depth)),
+                            ToPoint(OffsetIfNeeded(segment.End, depth)),
+                            isStroked: true,
+                            isSmoothJoin: true);
+                        break;
+
+                    default:
+                        ctx.LineTo(
+                            ToPoint(OffsetIfNeeded(segment.End, depth)),
+                            isStroked: true,
+                            isSmoothJoin: true);
+                        break;
+                }
+            }
+        }
+
+        if (geometry.CanFreeze) geometry.Freeze();
+        return geometry;
+    }
+
+    private static ChartPlanPoint OffsetIfNeeded(
+        ChartPlanPoint point,
+        ChartClassicThreeDDepthPlan? depth) =>
+        depth.HasValue ? OffsetPoint(point, depth.Value) : point;
 
     private static Brush ToBrush(ChartFillPlan fill) =>
         fill.Fill switch
