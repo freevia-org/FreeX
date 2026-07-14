@@ -112,7 +112,9 @@ public static class SmartArtLayoutEngine
                     ? LayoutRadialVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
                     : IsTargetListLayout(data.LayoutUniqueId)
                         ? LayoutTargetList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
-                        : null,
+                        : IsStackedVennLayout(data.LayoutUniqueId)
+                            ? LayoutStackedVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                            : null,
             _                        => null
         };
     }
@@ -930,6 +932,65 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// Stacked Venn geometry: equally sized translucent ellipses offset down and
+    /// right in a readable stack. This is shared relationship-family evidence,
+    /// not exact PowerPoint stacked-region styling or text offsets.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutStackedVenn(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        if (n is < 2 or > 5)
+            return null;
+
+        var shapes = new List<SlideShape>();
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long innerH = Math.Max(fcy - 2 * outerPadY, 1L);
+
+        const double stepXFrac = 0.24;
+        const double stepYFrac = 0.30;
+        long diameter = Math.Min(
+            (long)(innerW / (1.0 + stepXFrac * (n - 1))),
+            (long)(innerH / (1.0 + stepYFrac * (n - 1))));
+        diameter = Math.Max(diameter, 1L);
+
+        long stepX = Math.Max((long)(diameter * stepXFrac), 1L);
+        long stepY = Math.Max((long)(diameter * stepYFrac), 1L);
+        long totalW = diameter + (n - 1) * stepX;
+        long totalH = diameter + (n - 1) * stepY;
+        long leftX = fx + outerPadX + Math.Max((innerW - totalW) / 2, 0L);
+        long topY = fy + outerPadY + Math.Max((innerH - totalH) / 2, 0L);
+
+        uint idCounter = 640;
+        for (int i = 0; i < n; i++)
+        {
+            var baseStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Relationship);
+            var translucentStyle = baseStyle with
+            {
+                Fill = new ThemeAwareColor(baseStyle.Fill.Resolved, alpha: 165)
+            };
+
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                translucentStyle,
+                leftX + i * stepX,
+                topY + i * stepY,
+                diameter,
+                diameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape> LayoutCycle(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -1315,5 +1376,14 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "targetlist", StringComparison.Ordinal);
+    }
+
+    private static bool IsStackedVennLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "stackedvenn", StringComparison.Ordinal);
     }
 }

@@ -4598,6 +4598,48 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public async Task SmartArt_stacked_venn_shape_composes_shared_live_draw_ops()
+    {
+        IReadOnlyList<DrawOp.Shape> liveShapes = [];
+
+        var ran = await OnUiThread(() =>
+        {
+            var window = new MainWindow(Array.Empty<string>());
+            var shape = MakeSmartArtShape(
+                SmartArtFamily.Relationship,
+                "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn",
+                ["Market", "Product", "Proof"]);
+            window.Editor.CurrentSlide!.Shapes.Add(shape);
+            window.Editor.Select(shape.Id);
+
+            liveShapes = SlideCompositor.Compose(window.Editor.Presentation, window.Editor.CurrentSlide)
+                .OfType<DrawOp.Shape>()
+                .Where(op => op.ShapeId is >= 640 and < 660)
+                .ToList();
+        });
+
+        if (!ran) return;
+        liveShapes.Should().HaveCount(3, "Avalonia host consumes the shared three-circle stacked Venn DrawOps");
+        liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(["Market", "Product", "Proof"]);
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("Avalonia host should consume stacked Venn ellipse ops without connectors");
+        liveShapes.Select(op => op.BoundsDip.X)
+            .Should().BeInAscendingOrder("Avalonia host should consume shared stacked Venn X offsets");
+        liveShapes.Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("Avalonia host should consume shared stacked Venn Y offsets");
+
+        for (int i = 1; i < liveShapes.Count; i++)
+        {
+            liveShapes[i].BoundsDip.X.Should().BeLessThan(liveShapes[i - 1].BoundsDip.X + liveShapes[i - 1].BoundsDip.Width,
+                "Avalonia host should consume shared horizontally overlapping stacked Venn geometry");
+            liveShapes[i].BoundsDip.Y.Should().BeLessThan(liveShapes[i - 1].BoundsDip.Y + liveShapes[i - 1].BoundsDip.Height,
+                "Avalonia host should consume shared vertically overlapping stacked Venn geometry");
+        }
+    }
+
+    [Fact]
     public async Task Review_alt_text_apply_routes_through_shared_mutation_plan()
     {
         string? altTextTitle = null;

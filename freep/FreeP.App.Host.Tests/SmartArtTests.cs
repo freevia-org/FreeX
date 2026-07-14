@@ -1764,10 +1764,39 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownRelationshipFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    public void Reader_ParsesStackedVennAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn",
+            nodes: [("id1", "Market"), ("id2", "Product"), ("id3", "Proof")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship,
+            "stackedVenn stays in the relationship-family SmartArt planner");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "stackedVenn now has bounded shared stacked-ellipse geometry");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Market", "Product", "Proof");
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        liveShapes.Should().HaveCount(3, "three stacked-Venn ellipses should render from shared live data");
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("stacked-Venn live geometry emits no connectors");
+        liveShapes.Select(op => op.BoundsDip.X)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared stacked-Venn X offsets");
+        liveShapes.Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared stacked-Venn Y offsets");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownRelationshipFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/relationship1",
             nodes: [("id1", "A"), ("id2", "B"), ("id3", "C")],
             parOfConnections: []);
 
@@ -1776,7 +1805,7 @@ public sealed class SmartArtTests : IDisposable
 
         sa.Data.Should().NotBeNull();
         sa.Data!.Family.Should().Be(SmartArtFamily.Relationship,
-            "unsupported Venn siblings still retain broad relationship-family metadata for future layout slices");
+            "unsupported relationship siblings still retain broad relationship-family metadata for future layout slices");
         sa.Data.IsLiveLayoutSupported.Should().BeFalse(
             "relationship-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("A", "B", "C");
@@ -2335,6 +2364,44 @@ public sealed class SmartArtTests : IDisposable
                 "shared target-list DrawOps should preserve a common target center");
             (op.BoundsDip.Y + op.BoundsDip.Height / 2).Should().BeApproximately(centerY, 0.01,
                 "shared target-list DrawOps should preserve a common target center");
+        }
+    }
+
+    [Fact]
+    public void Compositor_StackedVennSmartArt_RendersSharedLiveEllipses()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn",
+            nodes: [("n1", "Market"), ("n2", "Product"), ("n3", "Proof")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(3, "three stacked-Venn ellipses should render from shared live data");
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("stacked-Venn live geometry emits no connectors");
+        liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Contain(["Market", "Product", "Proof"]);
+        liveShapes.Select(op => op.BoundsDip.X)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared stacked-Venn X offsets");
+        liveShapes.Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared stacked-Venn Y offsets");
+
+        for (int i = 1; i < liveShapes.Count; i++)
+        {
+            liveShapes[i].BoundsDip.X.Should().BeLessThan(liveShapes[i - 1].BoundsDip.X + liveShapes[i - 1].BoundsDip.Width,
+                "shared stacked-Venn ellipses should overlap horizontally");
+            liveShapes[i].BoundsDip.Y.Should().BeLessThan(liveShapes[i - 1].BoundsDip.Y + liveShapes[i - 1].BoundsDip.Height,
+                "shared stacked-Venn ellipses should overlap vertically");
         }
     }
 
