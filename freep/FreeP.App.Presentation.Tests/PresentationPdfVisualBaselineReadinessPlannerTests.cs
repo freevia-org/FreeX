@@ -1,0 +1,124 @@
+using FreeP.App.Compositor;
+
+namespace FreeP.App.Compositor.Tests;
+
+public sealed class PresentationPdfVisualBaselineReadinessPlannerTests
+{
+    [Fact]
+    public void Build_ReportsMatchingWpfAvaloniaContractsForPdfBaselineRows()
+    {
+        var presentation = BuildDeck(5);
+
+        var plan = PresentationPdfVisualBaselineReadinessPlanner.Build(
+            presentation,
+            @"C:\Decks\Quarter Review.pptx");
+
+        plan.SourceName.Should().Be("Quarter Review.pptx");
+        plan.SlideCount.Should().Be(5);
+        plan.RequiresPowerPointComForLocalEvidence.Should().BeFalse();
+        plan.RequiresPowerPointComForAuthoritativeBaseline.Should().BeTrue();
+        plan.PowerPointBaselineStatus.Should().Contain("deferred");
+        plan.HasMatchingWpfAvaloniaContracts.Should().BeTrue();
+        plan.Rows.Select(row => row.EvidenceId).Should().Equal(
+            PresentationPdfVisualBaselineReadinessPlanner.PortableSlidePdfEvidenceId,
+            PresentationPdfVisualBaselineReadinessPlanner.FullPageRasterPdfEvidenceId,
+            PresentationPdfVisualBaselineReadinessPlanner.HandoutPdfEvidenceId,
+            PresentationPdfVisualBaselineReadinessPlanner.NotesPagePdfEvidenceId);
+        plan.Rows.Should().OnlyContain(row =>
+            row.PowerPointBaseline == PresentationPdfVisualBaselineReadinessPlanner.PowerPointBaselineDeferred &&
+            row.RequiresPowerPointComBaseline &&
+            row.ContentType == PresentationPrintOutputPackageExecutor.PdfContentType &&
+            row.DefaultExtensionWithDot == PresentationExportPlanner.PdfExportExtension &&
+            row.WpfManifestFingerprint == row.AvaloniaManifestFingerprint);
+
+        var portable = plan.Rows.Single(row =>
+            row.EvidenceId == PresentationPdfVisualBaselineReadinessPlanner.PortableSlidePdfEvidenceId);
+        portable.SharedPlanner.Should().Be("PresentationPdfExporter.BuildDocument");
+        portable.SharedRoute.Should().Be("PortableSlidePdf");
+        portable.Status.Should().Be("shared-pdf-plan-ready");
+        portable.PageCount.Should().Be(5);
+        portable.SlideRangeSummary.Should().Be("All slides");
+        portable.WpfManifestFingerprint.Should().Contain("route=PortableSlidePdf");
+
+        var fullPage = plan.Rows.Single(row =>
+            row.EvidenceId == PresentationPdfVisualBaselineReadinessPlanner.FullPageRasterPdfEvidenceId);
+        fullPage.SharedRoute.Should().Be(nameof(PresentationPrintOutputPackageRoute.FullPageSlidesRasterPdf));
+        fullPage.Status.Should().Be("shared-package-plan-ready");
+        fullPage.PageCount.Should().Be(5);
+        fullPage.WpfManifestFingerprint.Should().Contain("range=All slides");
+
+        var handout = plan.Rows.Single(row =>
+            row.EvidenceId == PresentationPdfVisualBaselineReadinessPlanner.HandoutPdfEvidenceId);
+        handout.SharedRoute.Should().Be(nameof(PresentationPrintOutputPackageRoute.HandoutPdf));
+        handout.PageCount.Should().Be(2);
+        handout.Detail.Should().Contain("3 slides");
+
+        var notes = plan.Rows.Single(row =>
+            row.EvidenceId == PresentationPdfVisualBaselineReadinessPlanner.NotesPagePdfEvidenceId);
+        notes.SharedRoute.Should().Be(nameof(PresentationPrintOutputPackageRoute.NotesPagePdf));
+        notes.PageCount.Should().Be(5);
+        notes.Detail.Should().Contain("Notes Pages");
+    }
+
+    [Fact]
+    public void Build_EmptyDeckKeepsPortablePlaceholderButDefersPackageRows()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+
+        var plan = PresentationPdfVisualBaselineReadinessPlanner.Build(presentation);
+
+        plan.SourceName.Should().Be("Presentation.pptx");
+        plan.SlideCount.Should().Be(0);
+        plan.HasMatchingWpfAvaloniaContracts.Should().BeTrue();
+
+        var portable = plan.Rows.Single(row =>
+            row.EvidenceId == PresentationPdfVisualBaselineReadinessPlanner.PortableSlidePdfEvidenceId);
+        portable.Status.Should().Be("shared-portable-placeholder-ready");
+        portable.PageCount.Should().Be(1);
+        portable.SlideRangeSummary.Should().Be("No slides (portable placeholder page)");
+
+        plan.Rows
+            .Where(row => row.EvidenceId != PresentationPdfVisualBaselineReadinessPlanner.PortableSlidePdfEvidenceId)
+            .Should()
+            .OnlyContain(row =>
+                row.Status == "no-slides" &&
+                row.PageCount == 0 &&
+                row.SlideRangeSummary == "No slides");
+    }
+
+    private static Presentation BuildDeck(int slideCount)
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides.Clear();
+
+        for (var i = 1; i <= slideCount; i++)
+        {
+            var slide = new Slide { Title = $"Slide {i}" };
+            slide.Shapes.Add(new SlideShape
+            {
+                Kind = SlideShapeKind.AutoShape,
+                Text = $"Body {i}",
+            });
+            slide.Notes = MakeTextBody($"Speaker note {i}.");
+            presentation.Slides.Add(slide);
+        }
+
+        presentation.Properties.Title = "PDF Baseline Deck";
+        presentation.Properties.Author = "Parity";
+        return presentation;
+    }
+
+    private static TextBody MakeTextBody(params string[] paragraphs)
+    {
+        var body = new TextBody();
+        foreach (var text in paragraphs)
+        {
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run { Text = text });
+            body.Paragraphs.Add(paragraph);
+        }
+
+        return body;
+    }
+}
