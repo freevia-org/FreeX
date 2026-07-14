@@ -5569,6 +5569,125 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void ReviewMarkupNoWordSummary_ReportsBaselineReadinessAndUnavailableBlockers()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarios = FreeWVisualEvidenceManifestNormalizer.ReviewMarkupVisualProofScenarioIds;
+            var wpfRows = scenarios
+                .Select(scenarioId => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1))
+                .ToList();
+            var avaloniaRows = scenarios
+                .Select(scenarioId => BuildFileBackedRow(
+                    root,
+                    FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                    scenarioId,
+                    pageNumber: 1,
+                    pageCount: 1))
+                .ToList();
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                wpfRows,
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                avaloniaRows,
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+
+            var expected = scenarios
+                .SelectMany(scenarioId => new[]
+                {
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                })
+                .ToList();
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                expected);
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.ReviewMarkupProofReadiness.Should().HaveCount(scenarios.Count);
+            withBaseline.ReviewMarkupProofReadiness.Should().OnlyContain(row =>
+                row.Status == "paired-renderer-proof-ready" &&
+                row.WordBaselineStatus == "word-baseline-unavailable=2" &&
+                row.BaselineReadiness.Contains("without authoritative Word parity", StringComparison.Ordinal) &&
+                row.SemanticEvidence.Contains("WPF", StringComparison.Ordinal) &&
+                row.SemanticEvidence.Contains("Avalonia", StringComparison.Ordinal) &&
+                row.Trust.Passed);
+            withBaseline.Evidence.Where(row => row.ScenarioId == "f2-tracked-changes")
+                .Should().OnlyContain(row =>
+                    row.ReviewMarkup.RevisionCount > 0 &&
+                    row.ReviewMarkup.Authors.Contains("Alice") &&
+                    row.ReviewMarkup.Authors.Contains("Bob") &&
+                    row.ReviewMarkup.Authors.Contains("Carol"));
+            withBaseline.Evidence.Where(row => row.ScenarioId == "f2-comments")
+                .Should().OnlyContain(row =>
+                    row.ReviewMarkup.CommentCount == 2 &&
+                    row.ReviewMarkup.CommentAnchorCount > 0 &&
+                    row.ReviewMarkup.CommentReferenceCount > 0);
+            withBaseline.RemainingEvidenceBlockers
+                .Where(blocker => blocker.Area == "Review markup visual fidelity")
+                .Should().HaveCount(scenarios.Count)
+                .And.OnlyContain(blocker =>
+                    blocker.Status == FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus &&
+                    blocker.RequiresWordBaseline &&
+                    blocker.Reason.Contains("Word.Application", StringComparison.Ordinal) &&
+                    blocker.SemanticEvidence.Any(evidence =>
+                        evidence.Contains("revisions=", StringComparison.Ordinal) ||
+                        evidence.Contains("comments=", StringComparison.Ordinal)));
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(42);
+            doc.RootElement.GetProperty("reviewMarkupProofReadiness").GetArrayLength().Should().Be(scenarios.Count);
+            doc.RootElement.GetProperty("remainingEvidenceBlockers").EnumerateArray()
+                .Should().Contain(blocker =>
+                    blocker.GetProperty("blockerId").GetString() == "f2-comments-word-baseline-fidelity" &&
+                    blocker.GetProperty("status").GetString() == "word-baseline-unavailable" &&
+                    blocker.GetProperty("requiresWordBaseline").GetBoolean());
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Review Markup Visual Proof Readiness");
+            markdown.Should().Contain("| f2-tracked-changes | 1 | paired-renderer-proof-ready |");
+            markdown.Should().Contain("f2-comments-word-baseline-fidelity");
+            markdown.Should().Contain("Word COM or baseline generation unavailable; paired WPF/Avalonia review markup evidence is retained without authoritative Word parity");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void BuildNormalizedSummaryFromFiles_ValidatesReviewCompareCombineProofReadiness()
     {
         var root = CreateTempRoot();

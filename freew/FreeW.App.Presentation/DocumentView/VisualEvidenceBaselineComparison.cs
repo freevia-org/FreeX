@@ -118,6 +118,8 @@ public static class FreeWVisualBaselineComparisonPlanner
             "references-heavy-fields",
             "legal-reference-section-page-numbers",
             "equation-structures",
+            "f2-tracked-changes",
+            "f2-comments",
             "review-proofing-visual-depth",
             "review-protection-proofing-comments-only",
             "review-compare-visual-proof",

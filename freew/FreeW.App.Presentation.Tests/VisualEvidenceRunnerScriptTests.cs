@@ -49,6 +49,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("SmartArtPolygonVisualProof = @(");
         source.Should().Contain("ChartVisualProof = @(");
         source.Should().Contain("WordArtWatermarkVisualProof = @(");
+        source.Should().Contain("ReviewMarkupVisualProof = @(");
         source.Should().Contain("ReviewCompareCombineVisualProof = @(");
         source.Should().Contain("ReviewProofingVisualProof = @(");
         source.Should().Contain("EquationStructureVisualProof = @(");
@@ -78,6 +79,9 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("freew-fidelity-corpus/runs/smartart-polygon-proof");
         source.Should().Contain("freew-fidelity-corpus/runs/chart-visual-proof");
         source.Should().Contain("freew-fidelity-corpus/runs/wordart-watermark-proof");
+        source.Should().Contain("freew-fidelity-corpus/runs/review-markup-proof");
+        source.Should().Contain("'f2-tracked-changes'");
+        source.Should().Contain("'f2-comments'");
         source.Should().Contain("'review-compare-visual-proof'");
         source.Should().Contain("'review-combine-visual-proof'");
         source.Should().Contain("'review-proofing-visual-depth'");
@@ -210,6 +214,17 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("missing honest word-baseline-unavailable chart visual blocker");
         source.Should().Contain("Chart visual proof readiness: trusted semantic rows=");
         source.Should().Contain("Chart visual Word-baseline unavailable blocker: verified");
+        source.Should().Contain("Assert-ReviewMarkupVisualProofReadiness $summaryJson $effectiveScenarioIds");
+        source.Should().Contain("Review markup visual proof readiness requires FreeW visual evidence summary schema v42 or newer");
+        source.Should().Contain("$readinessRows = @($summary.reviewMarkupProofReadiness)");
+        source.Should().Contain("missing review markup semantic readiness summary");
+        source.Should().Contain("missing tracked-change authorship semantic evidence");
+        source.Should().Contain("missing comment anchor/reference semantic evidence");
+        source.Should().Contain("missing honest word-baseline-unavailable review markup blocker");
+        source.Should().Contain("Review markup visual proof readiness: trusted scenario rows=");
+        source.Should().Contain("Review markup visual semantic rows: verified rows=");
+        source.Should().Contain("Review markup Word-baseline policy rows: verified rows=");
+        source.Should().Contain("Review markup Word-baseline unavailable blockers: verified rows=");
         source.Should().Contain("Assert-ReviewCompareCombineVisualProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("Review compare/combine visual proof readiness requires FreeW visual evidence summary schema v41 or newer");
         source.Should().Contain("$remainingBlockers = @($summary.remainingEvidenceBlockers)");

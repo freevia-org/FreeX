@@ -327,6 +327,37 @@ public sealed record FreeWVisualReviewProtectionExpectation(
     IReadOnlyList<FreeWVisualProtectionOperationExpectation> Operations,
     IReadOnlyList<string> StableSignatures);
 
+public sealed record FreeWVisualReviewMarkupExpectation(
+    int RevisionCount,
+    int InsertionCount,
+    int DeletionCount,
+    int FormattingRevisionCount,
+    int AuthorCount,
+    int CommentCount,
+    int ReplyCount,
+    int ResolvedCommentCount,
+    int CommentAnchorCount,
+    int CommentReferenceCount,
+    IReadOnlyList<string> Authors,
+    IReadOnlyList<string> RevisionStableSignatures,
+    IReadOnlyList<string> CommentStableSignatures)
+{
+    public static FreeWVisualReviewMarkupExpectation Empty { get; } = new(
+        RevisionCount: 0,
+        InsertionCount: 0,
+        DeletionCount: 0,
+        FormattingRevisionCount: 0,
+        AuthorCount: 0,
+        CommentCount: 0,
+        ReplyCount: 0,
+        ResolvedCommentCount: 0,
+        CommentAnchorCount: 0,
+        CommentReferenceCount: 0,
+        Authors: [],
+        RevisionStableSignatures: [],
+        CommentStableSignatures: []);
+}
+
 public sealed record FreeWVisualReviewCompareCombineExpectation(
     string Operation,
     int RevisionCount,
@@ -380,6 +411,7 @@ public sealed record FreeWVisualPageExpectation(
     FreeWVisualTableOfAuthoritiesExpectation TableOfAuthorities,
     FreeWVisualProofingDiagnosticExpectation ProofingDiagnostics,
     FreeWVisualReviewProtectionExpectation ReviewProtection,
+    FreeWVisualReviewMarkupExpectation ReviewMarkup,
     string? HeaderSlotName,
     string? FooterSlotName,
     bool HasFootnotes,
@@ -1223,6 +1255,7 @@ public static class FreeWVisualEvidencePlanner
         var tableOfAuthorities = BuildTableOfAuthoritiesExpectation(document);
         var proofingDiagnostics = BuildProofingDiagnosticExpectation(document);
         var reviewProtection = BuildReviewProtectionExpectation(document);
+        var reviewMarkup = BuildReviewMarkupExpectation(document);
         var reviewCompareCombine = BuildReviewCompareCombineExpectation(document, scenario.ScenarioId);
 
         var expectedOutputName = ExpectedOutputName(scenario.ScenarioId, pageNumber, outputName);
@@ -1242,6 +1275,7 @@ public static class FreeWVisualEvidencePlanner
             tableOfAuthorities,
             proofingDiagnostics,
             reviewProtection,
+            reviewMarkup,
             headerSlotName,
             footerSlotName,
             hasFootnotes,
@@ -2389,8 +2423,91 @@ public static class FreeWVisualEvidencePlanner
             Operations: operations,
             StableSignatures: operations
                 .Select(operation => operation.StableSignature)
-                .OrderBy(signature => signature, StringComparer.Ordinal)
-                .ToList());
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList());
+    }
+
+    public static FreeWVisualReviewMarkupExpectation BuildReviewMarkupExpectation(TextDocument? document)
+    {
+        if (document is null)
+            return FreeWVisualReviewMarkupExpectation.Empty;
+
+        var revisionEntries = RevisionList.Enumerate(document);
+        var formattingEntries = document.Blocks
+            .OfType<Paragraph>()
+            .SelectMany((paragraph, blockIndex) => paragraph.Runs
+                .Select((run, runIndex) => new
+                {
+                    BlockIndex = blockIndex,
+                    RunIndex = runIndex,
+                    Run = run
+                }))
+            .Where(entry => entry.Run.FormatRevision is not null)
+            .ToList();
+        var authors = revisionEntries
+            .Select(entry => entry.Author)
+            .Concat(formattingEntries.Select(entry => entry.Run.FormatRevision?.Author))
+            .Concat(document.Comments.Values
+                .SelectMany(comment => comment.ThreadInOrder())
+                .Select(comment => comment.Author))
+            .Where(author => !string.IsNullOrWhiteSpace(author))
+            .Select(author => author!.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(author => author, StringComparer.Ordinal)
+            .ToList();
+        var revisionSignatures = revisionEntries
+            .Select(entry => string.Join(
+                "|",
+                "kind=" + entry.Kind,
+                "author=" + NormalizeEvidenceSignatureText(entry.Author),
+                "block=" + entry.BlockIndex.ToString(CultureInfo.InvariantCulture),
+                "text=" + NormalizeEvidenceSignatureText(entry.Text)))
+            .Concat(formattingEntries.Select(entry => string.Join(
+                "|",
+                "kind=Formatting",
+                "author=" + NormalizeEvidenceSignatureText(entry.Run.FormatRevision?.Author),
+                "block=" + entry.BlockIndex.ToString(CultureInfo.InvariantCulture),
+                "run=" + entry.RunIndex.ToString(CultureInfo.InvariantCulture),
+                "text=" + NormalizeEvidenceSignatureText(entry.Run.Text))))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+        var commentAnchors = document.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.CommentId is not null && !run.IsCommentReference)
+            .Count();
+        var commentReferences = document.Blocks
+            .OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Where(run => run.CommentId is not null && run.IsCommentReference)
+            .Count();
+        var commentSignatures = document.Comments.Values
+            .SelectMany(comment => comment.ThreadInOrder()
+                .Select(threadComment => string.Join(
+                    "|",
+                    "id=" + threadComment.Id.ToString(CultureInfo.InvariantCulture),
+                    "parent=" + comment.Id.ToString(CultureInfo.InvariantCulture),
+                    "author=" + NormalizeEvidenceSignatureText(threadComment.Author),
+                    "resolved=" + BoolFlag(comment.Resolved),
+                    "reply=" + BoolFlag(!ReferenceEquals(threadComment, comment)),
+                    "text=" + NormalizeEvidenceSignatureText(threadComment.PlainText))))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+
+        return new FreeWVisualReviewMarkupExpectation(
+            RevisionCount: revisionEntries.Count,
+            InsertionCount: revisionEntries.Count(entry => entry.Kind == RevisionEntryKind.Insertion),
+            DeletionCount: revisionEntries.Count(entry => entry.Kind == RevisionEntryKind.Deletion),
+            FormattingRevisionCount: formattingEntries.Count,
+            AuthorCount: authors.Count,
+            CommentCount: document.Comments.Count,
+            ReplyCount: document.Comments.Values.Sum(comment => comment.Replies.Count),
+            ResolvedCommentCount: document.Comments.Values.Count(comment => comment.Resolved),
+            CommentAnchorCount: commentAnchors,
+            CommentReferenceCount: commentReferences,
+            Authors: authors,
+            RevisionStableSignatures: revisionSignatures,
+            CommentStableSignatures: commentSignatures);
     }
 
     public static FreeWVisualReviewCompareCombineExpectation BuildReviewCompareCombineExpectation(

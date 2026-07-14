@@ -182,6 +182,35 @@ public sealed class VisualEvidenceBaselinePolicyTests
     }
 
     [Fact]
+    public void WordBaselinePolicy_KeepsReviewMarkupProofsDirectlyComparable()
+    {
+        foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.ReviewMarkupVisualProofScenarioIds)
+        {
+            var row = BuildRow(
+                scenarioId,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId + "_p1.png",
+                pageNumber: 1,
+                pageCount: 1);
+
+            var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+            var comparison = FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                row,
+                FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                "COM ProgID 'Word.Application' is not registered");
+
+            policy.IsComparable.Should().BeTrue();
+            policy.BaselineScenarioId.Should().Be(scenarioId);
+            comparison.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            comparison.BaselineScenarioId.Should().Be(scenarioId);
+            comparison.BaselineId.Should().Be($"{scenarioId}/p1/{scenarioId}_p1.png");
+            comparison.CandidateBaselinePaths.Should().Contain([
+                $"{scenarioId}/{scenarioId}_p1.png",
+                $"{scenarioId}_p1.png"]);
+        }
+    }
+
+    [Fact]
     public void WordBaselinePolicy_KeepsReviewCompareCombineProofsDirectlyComparable()
     {
         foreach (var scenarioId in FreeWVisualEvidenceManifestNormalizer.ReviewCompareCombineVisualProofScenarioIds)
@@ -348,6 +377,7 @@ public sealed class VisualEvidenceBaselinePolicyTests
             TableOfAuthorities: expectation.TableOfAuthorities,
             ProofingDiagnostics: expectation.ProofingDiagnostics,
             ReviewProtection: expectation.ReviewProtection,
+            ReviewMarkup: expectation.ReviewMarkup,
             ReviewCompareCombine: expectation.ReviewCompareCombine,
             Trust: new FreeWVisualEvidenceTrust(true, []));
     }
