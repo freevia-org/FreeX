@@ -308,6 +308,7 @@ public sealed class VisualEvidencePlannerTests
             "quick-layout",
             "scatter-markers",
             "chart-visual-signature",
+            "chart-data",
             "smartart-style",
             "smartart-node-fills",
             "smartart-polygon-geometry",
@@ -2210,6 +2211,11 @@ public sealed class VisualEvidencePlannerTests
         expectation.ChartSmartArt.SmartArtNodeCount.Should().Be(7);
         expectation.ChartSmartArt.DistinctSmartArtFillCount.Should().BeGreaterThan(1);
         expectation.ChartSmartArt.ChartVisualSignatures.Should().HaveCount(2);
+        expectation.ChartSmartArt.ChartDataSignatures.Should().HaveCount(2);
+        expectation.ChartSmartArt.ChartDataSignatures.Should().Contain(
+            "kind=Column|categories=4|categoryLabels=Q1,Q2,Q3,Q4|series=1|points=4|seriesData=0:Revenue=1.4,1.8,1.6,2.2");
+        expectation.ChartSmartArt.ChartDataSignatures.Should().Contain(
+            "kind=Scatter|categories=4|categoryLabels=155,160,165,170|series=1|points=4|seriesData=0:Sample=52,58,62,66");
         expectation.ChartSmartArt.ChartVisualSignatures.Should().Contain(signature =>
             signature.Contains("kind=Column", StringComparison.Ordinal) &&
             signature.Contains("colorScheme=mono-blue", StringComparison.Ordinal) &&
@@ -3105,6 +3111,91 @@ public sealed class VisualEvidencePlannerTests
                 && f.Contains("SmartArt visual signatures differ", StringComparison.Ordinal)
                 && f.Contains("#486DAF", StringComparison.Ordinal)
                 && f.Contains("#101010", StringComparison.Ordinal));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void BuildNormalizedSummaryFromFiles_RequiresMatchingChartDataEvidence()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            var scenarioId = "chart-smartart-complex";
+            var wpfRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaRow = BuildFileBackedRow(
+                root,
+                FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                scenarioId,
+                pageNumber: 1,
+                pageCount: 1);
+            var avaloniaPlan = avaloniaRow.PageExpectation.ChartSmartArt;
+            var alteredCharts = avaloniaPlan.Charts
+                .Select((chart, index) => index == 0
+                    ? chart with
+                    {
+                        Series =
+                        [
+                            new ChartSeriesVisualPlan(
+                                chart.Series[0].Name,
+                                [9.9, 1.8, 1.6, 2.2])
+                        ]
+                    }
+                    : chart)
+                .ToList();
+            var avaloniaWithDifferentChartData = avaloniaRow with
+            {
+                PageExpectation = avaloniaRow.PageExpectation with
+                {
+                    ChartSmartArt = avaloniaPlan with
+                    {
+                        Charts = alteredCharts,
+                        ChartDataSignatures = ChartSmartArtVisualPlanner.BuildChartDataSignatures(alteredCharts)
+                    }
+                }
+            };
+
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [wpfRow],
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [avaloniaWithDifferentChartData],
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+
+            summary.Trust.Passed.Should().BeFalse();
+            summary.Trust.Failures.Should().Contain(f =>
+                f.Contains("chart/SmartArt renderer pair 'chart-smartart-complex' page 1", StringComparison.Ordinal)
+                && f.Contains("chart data signatures differ", StringComparison.Ordinal)
+                && f.Contains("seriesData=0:Revenue=9.9,1.8,1.6,2.2", StringComparison.Ordinal));
         }
         finally
         {
@@ -6974,6 +7065,8 @@ public sealed class VisualEvidencePlannerTests
             withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
                 .SemanticEvidence.Should().Contain("chart signatures=2");
             withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
+                .SemanticEvidence.Should().Contain("chart data signatures=2");
+            withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
                 .SemanticEvidence.Should().Contain("SmartArt layouts=orgchart1/pyramid1");
             withBaseline.DrawingObjectProofReadiness.Single(row => row.ScenarioId == "chart-smartart-complex")
                 .SemanticEvidence.Should().Contain("SmartArt polygon nodes=4");
@@ -7028,6 +7121,7 @@ public sealed class VisualEvidencePlannerTests
             markdown.Should().Contain("## Drawing/Object Visual Proof Readiness");
             markdown.Should().Contain("## WordArt/Watermark Visual Proof Readiness");
             markdown.Should().Contain("word-baseline-unavailable=2");
+            markdown.Should().Contain("chart data signatures=2");
             markdown.Should().Contain("SmartArt polygon nodes=4");
             markdown.Should().Contain("wordart-watermark-stress");
             markdown.Should().Contain("wordart-picture-watermark-layout");

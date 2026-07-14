@@ -274,7 +274,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 47;
+    public const int SummarySchemaVersion = 48;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -3382,6 +3382,8 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 $"{chartSmartArt.SmartArtCount.ToString(CultureInfo.InvariantCulture)} SmartArt");
             if (chartSmartArt.ChartVisualSignatures.Count > 0)
                 parts.Add("chart signatures=" + chartSmartArt.ChartVisualSignatures.Count.ToString(CultureInfo.InvariantCulture));
+            if (chartSmartArt.ChartDataSignatures.Count > 0)
+                parts.Add("chart data signatures=" + chartSmartArt.ChartDataSignatures.Count.ToString(CultureInfo.InvariantCulture));
             if (chartSmartArt.SmartArtVisualSignatures.Count > 0)
                 parts.Add("SmartArt signatures=" + chartSmartArt.SmartArtVisualSignatures.Count.ToString(CultureInfo.InvariantCulture));
             var smartArtLayoutIds = chartSmartArt.SmartArts
@@ -6292,6 +6294,11 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             rowFailures.Add("chart/SmartArt evidence expects chart visual signatures but the chart plan records none");
         }
+        if (tags.Contains("chart-data", StringComparer.OrdinalIgnoreCase)
+            && (chartSmartArt.ChartDataSignatures is null || chartSmartArt.ChartDataSignatures.Count == 0))
+        {
+            rowFailures.Add("chart/SmartArt evidence expects chart data signatures but the chart plan records none");
+        }
         if (tags.Contains("smartart-layout", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtLayout)
             rowFailures.Add("chart/SmartArt evidence expects SmartArt layout metadata but the SmartArt plan records none");
         if (tags.Contains("smartart-colors", StringComparer.OrdinalIgnoreCase) && !chartSmartArt.HasSmartArtColorScheme)
@@ -6330,6 +6337,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             rowFailures.Add(
                 $"chart visual signatures do not match chart plans: expected '{FormatSummaries(expectedChartSignatures)}', actual '{FormatSummaries(actualChartSignatures)}'");
+        }
+
+        var expectedChartDataSignatures = ChartSmartArtVisualPlanner.BuildChartDataSignatures(chartSmartArt.Charts ?? []);
+        var actualChartDataSignatures = OrderedSummaries(chartSmartArt.ChartDataSignatures ?? []);
+        if (!expectedChartDataSignatures.SequenceEqual(actualChartDataSignatures, StringComparer.Ordinal))
+        {
+            rowFailures.Add(
+                $"chart data signatures do not match chart plans: expected '{FormatSummaries(expectedChartDataSignatures)}', actual '{FormatSummaries(actualChartDataSignatures)}'");
         }
 
         var expectedSmartArtSignatures = ChartSmartArtVisualPlanner.BuildSmartArtVisualSignatures(chartSmartArt.SmartArts ?? []);
@@ -8307,6 +8322,14 @@ public static class FreeWVisualEvidenceManifestNormalizer
         {
             failures.Add(
                 $"{pairName} chart visual signatures differ: WPF '{FormatSummaries(wpfChartSignatures)}', Avalonia '{FormatSummaries(avaloniaChartSignatures)}'");
+        }
+
+        var wpfChartDataSignatures = OrderedSummaries(wpfPlan.ChartDataSignatures ?? []);
+        var avaloniaChartDataSignatures = OrderedSummaries(avaloniaPlan.ChartDataSignatures ?? []);
+        if (!wpfChartDataSignatures.SequenceEqual(avaloniaChartDataSignatures, StringComparer.Ordinal))
+        {
+            failures.Add(
+                $"{pairName} chart data signatures differ: WPF '{FormatSummaries(wpfChartDataSignatures)}', Avalonia '{FormatSummaries(avaloniaChartDataSignatures)}'");
         }
 
         var wpfSmartArtSignatures = OrderedSummaries(wpfPlan.SmartArtVisualSignatures ?? []);

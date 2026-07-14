@@ -28,6 +28,9 @@ public sealed class ChartSmartArtVisualPlannerTests
         plan.ShowDataLabels.Should().BeTrue();
         plan.CategoryAxisTitle.Should().Be("Quarter");
         plan.ValueAxisTitle.Should().Be("USD");
+        plan.Categories.Should().ContainInOrder("A", "B");
+        plan.Series.Should().ContainSingle()
+            .Which.Values.Should().ContainInOrder(1.0, 2.0);
 
         var signature = ChartSmartArtVisualPlanner.BuildChartVisualSignature(plan);
         signature.Should().Contain("colorScheme=mono-blue");
@@ -36,6 +39,9 @@ public sealed class ChartSmartArtVisualPlannerTests
         signature.Should().Contain("dataLabels=1");
         signature.Should().Contain("axisTitles=1");
         signature.Should().Contain("palette=#214A82,#2E5FAA,#4472C4,#6C8FD1,#A9C1E7,#D6E4F4");
+
+        ChartSmartArtVisualPlanner.BuildChartDataSignature(plan)
+            .Should().Be("kind=Column|categories=2|categoryLabels=A,B|series=1|points=2|seriesData=0:-=1,2");
     }
 
     [Fact]
@@ -67,6 +73,19 @@ public sealed class ChartSmartArtVisualPlannerTests
         chart.ShowLegend = true;
 
         ChartSmartArtVisualPlanner.BuildChartPlan(chart).ShowLegend.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ChartDataSignatures_CaptureCategorySeriesAndValueShape()
+    {
+        var chart = Chart.Create(ChartKind.Line, ["Q1", "Q2"], [1.25, 2.5], seriesName: "Actual");
+        chart.Series.Add(new ChartSeries("Forecast", [1.5, 2.75]));
+
+        var signatures = ChartSmartArtVisualPlanner.BuildChartDataSignatures(
+            [ChartSmartArtVisualPlanner.BuildChartPlan(chart)]);
+
+        signatures.Should().ContainSingle()
+            .Which.Should().Be("kind=Line|categories=2|categoryLabels=Q1,Q2|series=2|points=4|seriesData=0:Actual=1.25,2.5;1:Forecast=1.5,2.75");
     }
 
     [Fact]

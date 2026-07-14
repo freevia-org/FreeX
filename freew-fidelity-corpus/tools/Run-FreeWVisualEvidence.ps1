@@ -1878,8 +1878,8 @@ function Assert-ChartVisualProofReadiness {
     }
 
     $summary = Get-Content -LiteralPath $SummaryJsonPath -Raw | ConvertFrom-Json
-    if ([int]$summary.schemaVersion -lt 38) {
-        throw "Chart visual proof readiness requires FreeW visual evidence summary schema v38 or newer, found v$($summary.schemaVersion)"
+    if ([int]$summary.schemaVersion -lt 48) {
+        throw "Chart visual proof readiness requires FreeW visual evidence summary schema v48 or newer, found v$($summary.schemaVersion)"
     }
 
     $requiredHosts = @(
@@ -1928,6 +1928,10 @@ function Assert-ChartVisualProofReadiness {
                 $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing multiple chart plans or signatures")
                 continue
             }
+            if (@($chartSmartArt.chartDataSignatures).Count -lt 2) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing chart data signatures")
+                continue
+            }
 
             $signatures = @($chartSmartArt.chartVisualSignatures)
             if (@($signatures | Where-Object {
@@ -1946,6 +1950,25 @@ function Assert-ChartVisualProofReadiness {
                 ([string]$_).IndexOf('markers=1', [StringComparison]::Ordinal) -ge 0
             }).Count -eq 0) {
                 $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing marker scatter chart signature")
+                continue
+            }
+
+            $dataSignatures = @($chartSmartArt.chartDataSignatures)
+            if (@($dataSignatures | Where-Object {
+                ([string]$_).IndexOf('kind=Column', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('categoryLabels=Q1,Q2,Q3,Q4', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('seriesData=0:Revenue=1.4,1.8,1.6,2.2', [StringComparison]::Ordinal) -ge 0
+            }).Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing column chart data signature")
+                continue
+            }
+
+            if (@($dataSignatures | Where-Object {
+                ([string]$_).IndexOf('kind=Scatter', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('categoryLabels=155,160,165,170', [StringComparison]::Ordinal) -ge 0 -and
+                ([string]$_).IndexOf('seriesData=0:Sample=52,58,62,66', [StringComparison]::Ordinal) -ge 0
+            }).Count -eq 0) {
+                $failures.Add("${hostId}/${scenarioId}/p$($row.pageNumber): missing scatter chart data signature")
                 continue
             }
 

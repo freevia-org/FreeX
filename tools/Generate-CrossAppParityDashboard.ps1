@@ -231,7 +231,7 @@ try {
             actionableGaps = [int]$freew.summary.actionableGaps
             classifiedRows = $true
         }
-        nextSlice = "Backstage print/export and WordArt/watermark visual proof now have strict paired WPF/Avalonia renderer contracts plus no-Word real-capture smoke runs. Next FreeW evidence slices are the same runs with real Word PNG baselines on a Word-capable host, cleanup of unrelated all-up visual runner drift, and broader visual proof for drawing/object/chart/table surfaces."
+        nextSlice = "Backstage print/export, WordArt/watermark, table/page-composition, shape/object, SmartArt polygon, and chart visual proof now have paired WPF/Avalonia renderer contracts plus no-Word real-capture smoke runs; chart proof also validates shared chart data signatures across hosts. Next FreeW evidence slices are the same runs with real Word PNG baselines on a Word-capable host, cleanup of unrelated all-up visual runner drift, and broader Word-authoritative drawing/object/chart/table comparisons."
     }
 
     $freeP = [ordered]@{

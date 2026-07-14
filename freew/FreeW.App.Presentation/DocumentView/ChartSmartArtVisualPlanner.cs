@@ -14,6 +14,10 @@ public enum ChartVisualGeometryKind
     MarkerOnly
 }
 
+public sealed record ChartSeriesVisualPlan(
+    string Name,
+    IReadOnlyList<double> Values);
+
 public sealed record ChartVisualPlan(
     ChartKind Kind,
     ChartVisualGeometryKind GeometryKind,
@@ -29,7 +33,9 @@ public sealed record ChartVisualPlan(
     bool ShowAxisTitles,
     string? CategoryAxisTitle,
     string? ValueAxisTitle,
-    IReadOnlyList<string> PaletteHex);
+    IReadOnlyList<string> PaletteHex,
+    IReadOnlyList<string> Categories,
+    IReadOnlyList<ChartSeriesVisualPlan> Series);
 
 public sealed record ChartElementCommandState(
     bool CanToggleLegend,
@@ -221,7 +227,13 @@ public static class ChartSmartArtVisualPlanner
             showAxisTitles,
             showAxisTitles ? chart.CategoryAxisTitle : null,
             showAxisTitles ? chart.ValueAxisTitle : null,
-            scheme.Colors.Select(NormalizeHex).ToList());
+            scheme.Colors.Select(NormalizeHex).ToList(),
+            chart.Categories.Select(NormalizeSignatureText).ToList(),
+            chart.Series
+                .Select(series => new ChartSeriesVisualPlan(
+                    NormalizeSignatureText(series.Name),
+                    series.Values.ToList()))
+                .ToList());
     }
 
     public static IReadOnlyList<string> BuildChartVisualSignatures(IEnumerable<ChartVisualPlan> charts)
@@ -255,6 +267,39 @@ public static class ChartSmartArtVisualPlanner
             "categoryAxis=" + NormalizeSignatureText(chart.CategoryAxisTitle),
             "valueAxis=" + NormalizeSignatureText(chart.ValueAxisTitle),
             "palette=" + string.Join(",", chart.PaletteHex));
+    }
+
+    public static IReadOnlyList<string> BuildChartDataSignatures(IEnumerable<ChartVisualPlan> charts)
+    {
+        ArgumentNullException.ThrowIfNull(charts);
+
+        return charts
+            .Select(BuildChartDataSignature)
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    public static string BuildChartDataSignature(ChartVisualPlan chart)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+
+        var series = chart.Series
+            .Select((series, index) => string.Concat(
+                index.ToString(CultureInfo.InvariantCulture),
+                ":",
+                SignatureTextOrDash(series.Name),
+                "=",
+                string.Join(",", series.Values.Select(FormatSignatureDouble))))
+            .ToList();
+
+        return string.Join(
+            "|",
+            "kind=" + chart.Kind,
+            "categories=" + chart.Categories.Count.ToString(CultureInfo.InvariantCulture),
+            "categoryLabels=" + string.Join(",", chart.Categories.Select(SignatureTextOrDash)),
+            "series=" + chart.Series.Count.ToString(CultureInfo.InvariantCulture),
+            "points=" + chart.Series.Sum(s => s.Values.Count).ToString(CultureInfo.InvariantCulture),
+            "seriesData=" + string.Join(";", series));
     }
 
     public static ChartElementCommandState BuildChartElementCommandState(Chart chart)
@@ -1036,6 +1081,12 @@ public static class ChartSmartArtVisualPlanner
         return string.Join(
             " ",
             normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    private static string SignatureTextOrDash(string? value)
+    {
+        var normalized = NormalizeSignatureText(value);
+        return string.IsNullOrEmpty(normalized) ? "-" : normalized;
     }
 
     private static string NormalizeHex(string? value)

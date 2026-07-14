@@ -211,6 +211,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("missing grouped drawing/chart/SmartArt/WordArt semantic evidence");
         source.Should().Contain("missing object-format alt text, effects, or z-order semantic evidence");
         source.Should().Contain("missing chart/SmartArt semantic visual signatures");
+        source.Should().Contain("missing chart data signatures");
         source.Should().Contain("missing WordArt, watermark, page-border, or effect semantic evidence");
         source.Should().Contain("missing WordArt picture-watermark layout semantic evidence");
         source.Should().Contain("Drawing object visual proof readiness: trusted scenario rows=");
@@ -235,9 +236,11 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("SmartArt polygon visual proof readiness: trusted semantic rows=");
         source.Should().Contain("SmartArt polygon Word-baseline unavailable blocker: verified");
         source.Should().Contain("Assert-ChartVisualProofReadiness $summaryJson $effectiveScenarioIds");
-        source.Should().Contain("Chart visual proof readiness requires FreeW visual evidence summary schema v38 or newer");
+        source.Should().Contain("Chart visual proof readiness requires FreeW visual evidence summary schema v48 or newer");
         source.Should().Contain("missing styled column chart signature");
         source.Should().Contain("missing marker scatter chart signature");
+        source.Should().Contain("missing column chart data signature");
+        source.Should().Contain("missing scatter chart data signature");
         source.Should().Contain("missing honest word-baseline-unavailable chart visual blocker");
         source.Should().Contain("Chart visual proof readiness: trusted semantic rows=");
         source.Should().Contain("Chart visual Word-baseline unavailable blocker: verified");
