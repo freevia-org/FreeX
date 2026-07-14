@@ -2525,7 +2525,7 @@ public static class PptxPackageReader
 
         return family switch
         {
-            SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess",
+            SmartArtFamily.Process => layoutId is "process1" or "basicprocess" or "continuousblockprocess" or "segmentedprocess" or "chevronprocess" or "basicchevronprocess" or "closedchevronprocess" or "bendingprocess" or "alternatingprocess" or "arrowribbon" or "circleprocess" or "funnelprocess" or "verticalprocess",
             SmartArtFamily.List => layoutId is "list1" or "basicblocklist" or "verticalboxlist" or "stackedlist" or "descendingblocklist" or "basicpyramid" or "picturecaptionlist",
             SmartArtFamily.Cycle => layoutId is "cycle1" or "basiccycle" or "radialcycle" or "gearcycle" or "textcycle",
             SmartArtFamily.Hierarchy => layoutId is "hierarchy1" or "basichierarchy" or "horizontalhierarchy" or "verticalbulletlist" or "orgchart",

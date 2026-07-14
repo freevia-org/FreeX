@@ -88,6 +88,7 @@ public sealed class PptxPackageReaderSourceTests
         ExtractMethod(source, "private static bool IsLiveSmartArtLayoutSupported(")
             .Should()
             .Contain("picturecaptionlist")
+            .And.Contain("verticalprocess")
             .And.Contain("horizontalhierarchy");
     }
 

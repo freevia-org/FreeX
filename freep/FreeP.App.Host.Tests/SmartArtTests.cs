@@ -2154,6 +2154,37 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_VerticalProcessSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/verticalProcess",
+            nodes: [("n1", "Discover"), ("n2", "Qualify"), ("n3", "Convert"), ("n4", "Retain")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Process);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(7, "four vertical-process boxes plus three connectors should render from shared live data");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.Text!.Paragraphs.First().Runs.First().Text)
+            .Should().Equal("Discover", "Qualify", "Convert", "Retain");
+        liveShapes
+            .Where(op => op.Text is not null)
+            .Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared top-to-bottom vertical-process DrawOps");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(3, "WPF and Avalonia hosts consume shared vertical-process connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_VerticalBoxListSmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(

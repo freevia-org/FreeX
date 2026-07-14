@@ -1171,6 +1171,22 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "funnelProcess now uses a bounded shared process live-layout path for parsed ordered-stage nodes as top-to-bottom trapezoid segments that narrow toward the bottom with centered connector ops. Exact PowerPoint funnel contours, effects, segment overlap, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred."),
         new(
+            EvidenceId: "freep.smartart.vertical-process",
+            Area: "SmartArt verticalProcess live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared top-to-bottom stage and connector ops emitted by the SmartArt process-family planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-vertical-process-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs",
+                "freep/FreeP.App.Host.Tests/PptxPackageReaderSourceTests.cs"
+            ],
+            RemainingWork: "verticalProcess now uses a bounded shared process live-layout path for parsed ordered-stage nodes as top-to-bottom rounded boxes with centered connector ops. Exact PowerPoint vertical-process geometry, effects, spacing, authoring regeneration, and PowerPoint-authoritative visual baselines remain deferred."),
+        new(
             EvidenceId: "freep.smartart.circle-process",
             Area: "SmartArt circle process live layout",
             Status: "shared-render-planner-evidence",
