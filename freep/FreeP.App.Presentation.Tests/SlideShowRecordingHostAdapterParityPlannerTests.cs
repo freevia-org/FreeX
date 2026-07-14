@@ -94,10 +94,49 @@ public sealed class SlideShowRecordingHostAdapterParityPlannerTests
         evidence.HasPairedNoComHandoff.Should().BeTrue();
         evidence.HasPackageTargets.Should().BeTrue();
         evidence.HasLocalEncodedPayload.Should().BeFalse();
+        evidence.HasPairedEncodedPayload.Should().BeFalse();
         evidence.ClaimsPowerPointComBaseline.Should().BeFalse();
         evidence.SummaryText.Should().Contain("deferring video encoding honestly");
-        evidence.RemainingWork.Should().Contain("Local default no-COM real camera video encoding");
+        evidence.RemainingWork.Should().Contain("Actual local default no-COM real camera video encoding");
         evidence.RemainingWork.Should().Contain("PowerPoint COM recording baselines");
+    }
+
+    [Fact]
+    public void BuildCameraEncodingReadinessEvidence_WithDeterministicPayloadRows_KeepsDefaultHardwareEncodingDeferred()
+    {
+        var evidence = SlideShowRecordingHostAdapterParityPlanner.BuildCameraEncodingReadinessEvidence(
+            new[]
+            {
+                CameraEncodingRow(
+                    "WPF slideshow",
+                    "WPF Windows recording capture adapter",
+                    "ppt/media/freep-recordings/wpf/slide-001-camera.mp4"),
+                CameraEncodingRow(
+                    "Avalonia slideshow",
+                    "Avalonia Windows recording capture adapter",
+                    "ppt/media/freep-recordings/avalonia/slide-001-camera.mp4"),
+                CapturedCameraEncodingRow(
+                    "WPF slideshow",
+                    "WPF Windows recording capture adapter",
+                    "ppt/media/freep-recordings/wpf/slide-002-camera.mp4",
+                    payloadLengthBytes: 128),
+                CapturedCameraEncodingRow(
+                    "Avalonia slideshow",
+                    "Avalonia Windows recording capture adapter",
+                    "ppt/media/freep-recordings/avalonia/slide-002-camera.mp4",
+                    payloadLengthBytes: 160)
+            });
+
+        evidence.HasPairedNoComHandoff.Should().BeTrue();
+        evidence.HasWpfEncodedPayload.Should().BeTrue();
+        evidence.HasAvaloniaEncodedPayload.Should().BeTrue();
+        evidence.HasPairedEncodedPayload.Should().BeTrue();
+        evidence.HasLocalEncodedPayload.Should().BeTrue();
+        evidence.ClaimsPowerPointComBaseline.Should().BeFalse();
+        evidence.HostRows.Should().OnlyContain(row => row.HasPackageTarget);
+        evidence.SummaryText.Should().Contain("deterministic encoded mp4 payload packaging");
+        evidence.SummaryText.Should().Contain("real default camera video encoding remains deferred");
+        evidence.RemainingWork.Should().Contain("Actual local default no-COM real camera video encoding");
     }
 
     [Fact]
@@ -206,6 +245,22 @@ public sealed class SlideShowRecordingHostAdapterParityPlannerTests
             PayloadLengthBytes: 0,
             RequiresPowerPointCom: false,
             $"{adapterName}: camera device handoff reached, but local video encoding is not implemented in this no-COM adapter.");
+
+    private static SlideShowRecordingCameraEncodingReadinessRow CapturedCameraEncodingRow(
+        string hostName,
+        string adapterName,
+        string packagePath,
+        long payloadLengthBytes) =>
+        new(
+            hostName,
+            adapterName,
+            packagePath,
+            "video/mp4",
+            DeviceHandoffReached: true,
+            IsCaptured: true,
+            payloadLengthBytes,
+            RequiresPowerPointCom: false,
+            $"{adapterName}: deterministic encoded camera payload supplied for {packagePath}.");
 
     private static SlideShowRecordingCaptureAdapterReadiness NoDeviceReadiness(
         string hostName,
