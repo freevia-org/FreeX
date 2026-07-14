@@ -766,6 +766,25 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing and layout now preserve m:sPre base, pre-subscript, and pre-superscript children, place the reduced script stack to the left of the base, and carry parsed draw-plan coordinates to both hosts. PowerPoint-authoritative math visual baselines and exact OfficeMath script metrics remain deferred."),
         new(
+            EvidenceId: "freep.omml.matrix-spacing-base-justification",
+            Area: "OMML matrix spacing and base justification",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.Matrix spacing/base metadata and MathBoxRenderPlanner glyph coordinates with no renderer-local matrix policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-matrix-spacing-2026-07-06.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout preserve m:mPr/m:baseJc, m:rSpRule, m:rSp, m:cGpRule, m:cGp, and m:cSp so row offsets, column gaps, minimum column widths, and reported baseline/ascent are resolved before WPF or Avalonia draw. PowerPoint-authoritative matrix visual baselines, exact OfficeMath spacing metrics, and broader matrix typography remain deferred."),
+        new(
             EvidenceId: "freep.omml.matrix-placeholder",
             Area: "OMML matrix empty-cell placeholder handling",
             Status: "shared-layout-evidence",
