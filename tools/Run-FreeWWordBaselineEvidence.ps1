@@ -44,6 +44,105 @@ function Invoke-DotNetRunNoBuild([string]$ProjectPath, [string[]]$ToolArgs) {
     }
 }
 
+function Get-JsonArray($Value) {
+    if ($null -eq $Value) {
+        return @()
+    }
+
+    return @($Value)
+}
+
+function Write-NoWordReadinessManifest([string]$Reason, [string]$UnavailableMarkerPath) {
+    if (-not (Test-Path -LiteralPath $summaryJson -PathType Leaf)) {
+        throw "expected normalized visual evidence summary was not found: $summaryJson"
+    }
+
+    $summary = Get-Content -LiteralPath $summaryJson -Raw | ConvertFrom-Json
+    $comparisons = Get-JsonArray $summary.baselineComparisons
+    $unavailableComparisons = @($comparisons | Where-Object { $_.status -eq "word-baseline-unavailable" })
+    $remainingBlockers = Get-JsonArray $summary.remainingEvidenceBlockers
+    $wordUnavailableBlockers = @($remainingBlockers | Where-Object {
+        $_.status -eq "word-baseline-unavailable" -or
+        (Get-JsonArray $_.relatedBaselineStatuses) -contains "word-baseline-unavailable"
+    })
+    $candidateBaselinePaths = @(
+        $unavailableComparisons |
+            ForEach-Object { Get-JsonArray $_.candidateBaselinePaths } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+            Sort-Object -Unique
+    )
+    $scenarioIds = @(
+        $unavailableComparisons |
+            ForEach-Object { $_.scenarioId } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+            Sort-Object -Unique
+    )
+    $blockerIds = @(
+        $wordUnavailableBlockers |
+            ForEach-Object { $_.blockerId } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } |
+            Sort-Object -Unique
+    )
+
+    $trustFailures = New-Object System.Collections.Generic.List[string]
+    if ([bool]$summary.evidenceAuthority.authoritativeWordPngParityClaimed) {
+        $trustFailures.Add("no-Word run must not claim authoritative Word PNG parity")
+    }
+    if ([int]$summary.evidenceAuthority.realWordPngComparedRows -ne 0) {
+        $trustFailures.Add("no-Word run must not report real Word PNG comparison rows")
+    }
+    if ($unavailableComparisons.Count -eq 0) {
+        $trustFailures.Add("no-Word run must include word-baseline-unavailable comparison rows")
+    }
+    if ($candidateBaselinePaths.Count -eq 0) {
+        $trustFailures.Add("no-Word run must record candidate Word baseline PNG paths")
+    }
+
+    $readinessPath = Join-Path $runRootFull "_word_baseline_readiness_manifest.json"
+    [ordered]@{
+        schema = "freew.word-baseline-readiness.v1"
+        schemaVersion = 1
+        status = "word-baseline-unavailable"
+        evidenceMode = "no-word-fallback"
+        baselineEvidenceClass = "word-baseline-unavailable"
+        authoritativeWordPngParity = $false
+        reason = $Reason
+        allowMissingWord = [bool]$AllowMissingWord
+        forcedNoWord = [bool]$NoWord
+        unavailableMarkerPath = $UnavailableMarkerPath
+        summary = [ordered]@{
+            path = $summaryJson
+            schemaVersion = [int]$summary.schemaVersion
+            trustPassed = [bool]$summary.trust.passed
+            authorityLevel = [string]$summary.evidenceAuthority.authorityLevel
+            authoritativeWordPngParityClaimed = [bool]$summary.evidenceAuthority.authoritativeWordPngParityClaimed
+        }
+        counts = [ordered]@{
+            evidenceRows = (Get-JsonArray $summary.evidence).Count
+            baselineComparisons = $comparisons.Count
+            wordBaselineUnavailableRows = $unavailableComparisons.Count
+            realWordPngComparedRows = [int]$summary.evidenceAuthority.realWordPngComparedRows
+            missingWordBaselineRows = [int]$summary.evidenceAuthority.missingWordBaselineRows
+            remainingWordBaselineBlockers = $wordUnavailableBlockers.Count
+        }
+        comparableScenarioIds = $scenarioIds
+        candidateBaselinePaths = $candidateBaselinePaths
+        remainingWordBaselineBlockerIds = $blockerIds
+        wordCapableHostNextStep = "Run this same evidence path on a host where Word.Application is registered to replace word-baseline-unavailable rows with real Word PNG comparisons."
+        trust = [ordered]@{
+            passed = $trustFailures.Count -eq 0
+            failures = @($trustFailures)
+        }
+        createdUtc = [DateTimeOffset]::UtcNow.ToString("O")
+    } | ConvertTo-Json -Depth 8 | Set-Content -Encoding UTF8 $readinessPath
+
+    Write-Host "Word baseline readiness manifest: $readinessPath"
+
+    if ($trustFailures.Count -gt 0) {
+        throw "no-Word readiness manifest failed validation: $($trustFailures -join '; ')"
+    }
+}
+
 function Write-WordBaselineUnavailableSummary([string]$Reason) {
     $skipPath = Join-Path $runRootFull "_word_baseline_unavailable.json"
     [ordered]@{
@@ -83,6 +182,7 @@ function Write-WordBaselineUnavailableSummary([string]$Reason) {
 
     Write-Host "summary json: $summaryJson"
     Write-Host "summary markdown: $summaryMd"
+    Write-NoWordReadinessManifest $Reason $skipPath
     exit 0
 }
 

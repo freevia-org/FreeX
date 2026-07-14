@@ -19,6 +19,13 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("evidenceMode = \"no-word-fallback\"");
         source.Should().Contain("baselineEvidenceClass = \"word-baseline-unavailable\"");
         source.Should().Contain("authoritativeWordPngParity = $false");
+        source.Should().Contain("_word_baseline_readiness_manifest.json");
+        source.Should().Contain("schema = \"freew.word-baseline-readiness.v1\"");
+        source.Should().Contain("candidateBaselinePaths = $candidateBaselinePaths");
+        source.Should().Contain("remainingWordBaselineBlockerIds = $blockerIds");
+        source.Should().Contain("no-Word run must not claim authoritative Word PNG parity");
+        source.Should().Contain("no-Word run must record candidate Word baseline PNG paths");
+        source.Should().Contain("Word baseline readiness manifest:");
         source.Should().Contain("FreeW.VisualEvidenceSummary");
     }
 
