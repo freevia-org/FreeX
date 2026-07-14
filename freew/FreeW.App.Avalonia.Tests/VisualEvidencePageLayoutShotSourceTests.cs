@@ -31,6 +31,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument");
         source.Should().Contain("hasEndnotes: true");
         source.Should().Contain("isSyntheticPage: true");
+        source.Should().MatchRegex("label: \"F2 Endnotes p2\"[\\s\\S]*?viewportOffsetY: 1100,\\s*hasEndnotes: true,\\s*isSyntheticPage: true\\);");
         source.Should().Contain("AddNoteRegionOverlayIfNeeded(");
         source.Should().Contain("BuildEvidenceNoteRegionPlan(");
         source.Should().Contain("DocumentNoteRegionPlanner.BuildFootnoteRegion");
@@ -148,6 +149,23 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("WatermarkVisualPlanner.BuildPictureLayout(");
         source.Should().Contain("context.PushOpacity(plan.Opacity)");
         source.Should().NotContain("wm.IsPicture || string.IsNullOrWhiteSpace(wm.Text)");
+    }
+
+    [Fact]
+    public void WordBaselineEvidenceScript_CanForceDeterministicNoWordSummary()
+    {
+        var source = File.ReadAllText(RepositoryFile("tools", "Run-FreeWWordBaselineEvidence.ps1"));
+
+        source.Should().Contain("[switch]$NoWord");
+        source.Should().Contain("forcedNoWord = [bool]$NoWord");
+        source.Should().Contain("if (-not $AllowMissingWord -and -not $NoWord)");
+        source.Should().Contain("if ($NoWord) {");
+        source.Should().Contain("Word baseline skipped by -NoWord; no COM probe or Word process launch attempted");
+        source.Should().Contain("Test-ComProgIdAvailable $WordApplicationProgId");
+        source.IndexOf("if ($NoWord) {", StringComparison.Ordinal)
+            .Should().BeLessThan(source.IndexOf("Test-ComProgIdAvailable $WordApplicationProgId", StringComparison.Ordinal));
+        source.IndexOf("if ($NoWord) {", StringComparison.Ordinal)
+            .Should().BeLessThan(source.IndexOf("$wordExportScript -CorpusDir $fixtureDir -OutDir $wordPdfDir", StringComparison.Ordinal));
     }
 
     private static string RepositoryFile(params string[] parts)

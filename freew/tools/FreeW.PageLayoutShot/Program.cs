@@ -185,7 +185,9 @@ static int RenderAll(string outDir)
         documentFactory: FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument,
         pageNumber: 2,
         pageCount: 3,
-        viewportOffsetY: 1100);
+        viewportOffsetY: 1100,
+        hasEndnotes: true,
+        isSyntheticPage: true);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, endnotesP3Path,
