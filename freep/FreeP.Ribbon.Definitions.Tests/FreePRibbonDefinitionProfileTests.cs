@@ -878,6 +878,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.omml.matrix-column-count-alignment",
             "freep.omml.literal-run-style",
             "freep.omml.nary-limit-location",
+            "freep.omml.nary-grow-hidden-limits",
             "freep.omml.limit-placement",
             "freep.omml.scripted-function-name",
             "freep.omml.border-box-side-strike-lines",
