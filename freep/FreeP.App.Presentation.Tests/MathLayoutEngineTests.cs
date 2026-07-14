@@ -728,6 +728,27 @@ public sealed class MathLayoutEngineTests
             "overline adds ascent while underline adds descent in the shared layout");
     }
 
+    [Theory]
+    [InlineData("&#x0304;")]
+    [InlineData("&#x0305;")]
+    [InlineData("&#x00AF;")]
+    public void Acc_WithOverbarAccent_EmitsSharedHorizontalRulePlan(string accent)
+    {
+        var mathNode = ParseOmml($"<m:acc><m:accPr><m:chr m:val=\"{accent}\"/></m:accPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:acc>");
+        var box = MathLayoutEngine.Layout(mathNode, "Cambria Math", FontSizePt);
+
+        var ops = MathBoxRenderPlanner.Plan(box, 10, 20, SrgbColor.Black, "Cambria Math");
+        var rule = ops.OfType<MathDrawOp.DrawHRule>().Single();
+        var baseGlyph = ops.OfType<MathDrawOp.DrawGlyph>().Single(g => g.Text == "x");
+
+        rule.Y.Should().BeLessThan(baseGlyph.Y,
+            "PowerPoint-authored accent bars should be represented as shared line ops above the base before either host draws");
+        rule.Width.Should().BeGreaterThan(0);
+        ops.OfType<MathDrawOp.DrawGlyph>()
+            .Should().NotContain(g => g.Text == System.Net.WebUtility.HtmlDecode(accent),
+                "accent bar characters should not depend on renderer-specific combining-glyph shaping");
+    }
+
     [Fact]
     public void Delim_TwoElements_ExplicitPipeSepChr_RendersPipeBetweenElements()
     {

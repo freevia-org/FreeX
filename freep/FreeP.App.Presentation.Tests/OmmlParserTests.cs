@@ -208,6 +208,19 @@ public sealed class OmmlParserTests
         Assert.Equal("~", acc.AccentChar);
     }
 
+    [Theory]
+    [InlineData("&#x0304;")]
+    [InlineData("&#x0305;")]
+    [InlineData("&#x00AF;")]
+    public void Acc_WithOverbarAccent_PreservesRuleAccentCharacter(string accent)
+    {
+        var node = Parse($"<m:acc><m:accPr><m:chr m:val=\"{accent}\"/></m:accPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:acc>");
+
+        var acc = Assert.IsType<MathNode.Acc>(node);
+        Assert.Equal(System.Net.WebUtility.HtmlDecode(accent), acc.AccentChar);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(acc.Base).Text);
+    }
+
     [Fact]
     public void Bar_WithNoPos_DefaultsToOverline()
     {
