@@ -213,6 +213,9 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("WordArt watermark renderer pair '$scenarioId'");
         source.Should().Contain("missing grouped drawing/chart/SmartArt/WordArt semantic evidence");
         source.Should().Contain("missing object-format alt text, effects, or z-order semantic evidence");
+        source.Should().Contain("missing object-format position/size/style object semantic evidence");
+        source.Should().Contain("missing object-format shared effect semantic evidence");
+        source.Should().Contain("missing object-format effect summary '$requiredEffect'");
         source.Should().Contain("missing chart/SmartArt semantic visual signatures");
         source.Should().Contain("missing chart data signatures");
         source.Should().Contain("missing WordArt, watermark, page-border, or effect semantic evidence");

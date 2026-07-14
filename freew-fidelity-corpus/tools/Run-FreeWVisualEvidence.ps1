@@ -1663,6 +1663,38 @@ function Assert-DrawingObjectVisualProofReadiness {
                             $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing object-format alt text, effects, or z-order semantic evidence")
                             continue
                         }
+                        if ([int]$evidenceRow.drawingObjects.floatingObjectCount -ne 3 -or
+                            [int]$evidenceRow.drawingObjects.behindTextCount -ne 1 -or
+                            [int]$evidenceRow.drawingObjects.inFrontCount -ne 2 -or
+                            $evidenceRow.drawingObjects.hasImages -ne $true -or
+                            $evidenceRow.drawingObjects.hasShapes -ne $true -or
+                            $evidenceRow.drawingObjects.hasWordArt -ne $true -or
+                            $evidenceRow.drawingObjects.hasSquareWrap -ne $true -or
+                            $evidenceRow.drawingObjects.hasTopAndBottomWrap -ne $true -or
+                            [int]$evidenceRow.drawingObjects.altTextObjectCount -ne 3) {
+                            $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing object-format position/size/style object semantic evidence")
+                            continue
+                        }
+                        if ([int]$evidenceRow.drawingObjects.effects.effectObjectCount -ne 3 -or
+                            [int]$evidenceRow.drawingObjects.effects.shapeEffectObjectCount -lt 1 -or
+                            [int]$evidenceRow.drawingObjects.effects.imageEffectObjectCount -lt 1 -or
+                            [int]$evidenceRow.drawingObjects.effects.wordArtEffectObjectCount -lt 1 -or
+                            $evidenceRow.drawingObjects.effects.hasShadow -ne $true -or
+                            $evidenceRow.drawingObjects.effects.hasGlow -ne $true -or
+                            $evidenceRow.drawingObjects.effects.hasReflection -ne $true -or
+                            $evidenceRow.drawingObjects.effects.hasSoftEdge -ne $true -or
+                            $evidenceRow.drawingObjects.effects.hasBevel -ne $true -or
+                            $evidenceRow.drawingObjects.effects.hasArtisticEffect -ne $true) {
+                            $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing object-format shared effect semantic evidence")
+                            continue
+                        }
+                        $effectSummaries = @($evidenceRow.drawingObjects.effects.effectSummaries)
+                        foreach ($requiredEffect in @('Shape:shadow+bevel', 'Image:shadow+glow+reflection+soft-edge+bevel+artistic:GlowDiffused', 'WordArt:glow')) {
+                            if (($effectSummaries | Where-Object { $_ -eq $requiredEffect }).Count -eq 0) {
+                                $failures.Add("${hostId}/${scenarioId}/p$($evidenceRow.pageNumber): missing object-format effect summary '$requiredEffect'")
+                                continue
+                            }
+                        }
                     }
                     'chart-smartart-complex' {
                         if ([int]$evidenceRow.chartSmartArt.chartCount -lt 1 -or

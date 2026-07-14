@@ -3430,6 +3430,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
     {
         var objects = row.DrawingObjects;
         var chartSmartArt = row.ChartSmartArt;
+        var objectSignatures = BuildObjectFormatSemanticSignatures(objects.Objects);
         var parts = new List<string>
         {
             $"{objects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture)} object(s)",
@@ -3439,6 +3440,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
             $"{objects.AltTextObjectCount.ToString(CultureInfo.InvariantCulture)} alt-text object(s)",
             "kinds=" + FormatDrawingObjectKinds(objects)
         };
+
+        if (objectSignatures.Count > 0)
+            parts.Add("object format signatures=" + FormatSummaries(objectSignatures));
+
+        if (objects.Effects.EffectSummaries.Count > 0)
+            parts.Add("effects=" + FormatSummaries(objects.Effects.EffectSummaries));
 
         if (objects.GroupChildren.ChildKindSummaries.Count > 0)
         {
@@ -3497,6 +3504,18 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         return string.Join(", ", parts);
     }
+
+    private static List<string> BuildObjectFormatSemanticSignatures(IEnumerable<DocumentFloatingObjectSnapshot> objects) =>
+        objects
+            .Select(o => string.Join(
+                ":",
+                o.TypeTag,
+                o.Wrapping.ToString(),
+                "z" + o.ZOrderIndex.ToString(CultureInfo.InvariantCulture),
+                FormatDouble(o.Rect.WidthDip) + "x" + FormatDouble(o.Rect.HeightDip),
+                o.BehindText ? "behind" : "front"))
+            .OrderBy(signature => signature, StringComparer.Ordinal)
+            .ToList();
 
     private static string FormatDrawingObjectKinds(FreeWVisualDrawingObjectExpectation objects)
     {
@@ -3833,6 +3852,7 @@ public static class FreeWVisualEvidenceManifestNormalizer
         blockers.AddRange(BuildNotePlacementWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildSectionGeometryWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildGroupedDrawingObjectWordBaselineBlockers(summary, baselineComparisons));
+        blockers.AddRange(BuildObjectFormatWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildSmartArtPolygonWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildReviewMarkupWordBaselineBlockers(summary, baselineComparisons));
         blockers.AddRange(BuildReviewCompareCombineWordBaselineBlockers(summary, baselineComparisons));
@@ -4122,6 +4142,188 @@ public static class FreeWVisualEvidenceManifestNormalizer
             "drawing-objects-complex-word-baseline-fidelity",
             "drawing-objects-complex",
             "Grouped drawing/object visual fidelity",
+            status,
+            requiredEvidence,
+            reason,
+            relatedBaselineStatuses,
+            candidateBaselinePaths,
+            semanticEvidence,
+            requiresWordBaseline,
+            new FreeWVisualEvidenceTrust(true, []));
+    }
+
+    private static IReadOnlyList<FreeWVisualRemainingEvidenceBlocker> BuildObjectFormatWordBaselineBlockers(
+        FreeWVisualEvidenceNormalizedSummary summary,
+        IReadOnlyList<FreeWVisualBaselineComparison> baselineComparisons)
+    {
+        const string scenarioId = "object-format-position-size-style";
+        var rows = summary.Evidence
+            .Where(row => string.Equals(row.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .Where(row => row.Trust.Passed)
+            .ToList();
+        if (rows.Count == 0)
+            return [];
+
+        var semanticEvidence = BuildObjectFormatSemanticEvidence(rows);
+        if (semanticEvidence.Count == 0)
+        {
+            return
+            [
+                BuildObjectFormatVisualBlocker(
+                    "semantic-object-format-missing",
+                    "trusted object-format position, size, style, alt-text, and effect metadata",
+                    "trusted object-format-position-size-style evidence did not record object-format semantic metadata; regenerate current-schema evidence or fix shared drawing-object planning before treating this as a Word-baseline-only gap",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: false)
+            ];
+        }
+
+        var related = baselineComparisons
+            .Where(comparison => string.Equals(comparison.ScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (related.Count == 0)
+        {
+            return
+            [
+                BuildObjectFormatVisualBlocker(
+                    "needs-word-baseline-run",
+                    "real MS Word PNG comparisons for object-format position, size, and style fidelity",
+                    "object-format semantic signatures are present in trusted FreeW evidence; run a Word-baseline comparison for object-format-position-size-style to prove Word visual parity",
+                    [],
+                    [],
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        var statuses = related
+            .Select(comparison => comparison.Status)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(status => status, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var candidates = related
+            .SelectMany(comparison => comparison.CandidateBaselinePaths)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            var reasons = related
+                .Where(comparison => string.Equals(
+                    comparison.Status,
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(FormatComparisonNotes)
+                .Where(reason => !string.IsNullOrWhiteSpace(reason) && reason != "-")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(reason => reason, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var reason = reasons.Count == 0
+                ? "MS Word baseline PNG generation was unavailable for object-format-position-size-style"
+                : string.Join("; ", reasons);
+            return
+            [
+                BuildObjectFormatVisualBlocker(
+                    FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus,
+                    "real MS Word PNG comparisons for object-format position, size, and style fidelity",
+                    reason,
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        if (related.Any(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return
+            [
+                BuildObjectFormatVisualBlocker(
+                    FreeWVisualBaselineComparisonPlanner.MissingBaselineStatus,
+                    "real MS Word PNG comparisons for object-format position, size, and style fidelity",
+                    "object-format semantic signatures are present in trusted FreeW evidence, but mapped Word baseline PNGs are missing",
+                    statuses,
+                    candidates,
+                    semanticEvidence,
+                    requiresWordBaseline: true)
+            ];
+        }
+
+        if (related.All(comparison =>
+            string.Equals(comparison.Status, FreeWVisualBaselineComparisonPlanner.PassedStatus, StringComparison.OrdinalIgnoreCase)))
+        {
+            return [];
+        }
+
+        return
+        [
+            BuildObjectFormatVisualBlocker(
+                "needs-render-review",
+                "render-review resolution for failed object-format Word PNG comparisons",
+                "object-format Word baseline comparison did not fully pass; inspect position, size, style, alt-text, or effect rendering differences",
+                statuses,
+                candidates,
+                semanticEvidence,
+                requiresWordBaseline: false)
+        ];
+    }
+
+    private static IReadOnlyList<string> BuildObjectFormatSemanticEvidence(
+        IReadOnlyList<FreeWVisualEvidenceNormalizedRow> rows)
+    {
+        return rows
+            .Select(row =>
+            {
+                var objects = row.DrawingObjects;
+                var effects = objects.Effects;
+                if (objects.FloatingObjectCount < 3 ||
+                    objects.AltTextObjectCount < 3 ||
+                    effects.EffectObjectCount < 3 ||
+                    !objects.HasZOrder)
+                {
+                    return null;
+                }
+
+                return string.Concat(
+                    row.HostId,
+                    "/p",
+                    row.PageNumber.ToString(CultureInfo.InvariantCulture),
+                    ": objects=",
+                    objects.FloatingObjectCount.ToString(CultureInfo.InvariantCulture),
+                    ", altText=",
+                    objects.AltTextObjectCount.ToString(CultureInfo.InvariantCulture),
+                    ", effects=",
+                    effects.EffectObjectCount.ToString(CultureInfo.InvariantCulture),
+                    ", signatures=",
+                    FormatSummaries(BuildObjectFormatSemanticSignatures(objects.Objects)),
+                    ", effectSummaries=",
+                    FormatSummaries(effects.EffectSummaries));
+            })
+            .Where(summary => !string.IsNullOrWhiteSpace(summary))
+            .Cast<string>()
+            .OrderBy(summary => summary, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private static FreeWVisualRemainingEvidenceBlocker BuildObjectFormatVisualBlocker(
+        string status,
+        string requiredEvidence,
+        string reason,
+        IReadOnlyList<string> relatedBaselineStatuses,
+        IReadOnlyList<string> candidateBaselinePaths,
+        IReadOnlyList<string> semanticEvidence,
+        bool requiresWordBaseline)
+    {
+        return new FreeWVisualRemainingEvidenceBlocker(
+            "object-format-position-size-style-word-baseline-fidelity",
+            "object-format-position-size-style",
+            "Drawing/object visual fidelity",
             status,
             requiredEvidence,
             reason,

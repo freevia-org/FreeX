@@ -7465,6 +7465,115 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void ObjectFormatNoWordSummary_ReportsFocusedPositionSizeStyleProofWithoutAuthoritativeWordParity()
+    {
+        var root = CreateTempRoot();
+        try
+        {
+            var wpfDir = Path.Combine(root, "wpf");
+            var avaloniaDir = Path.Combine(root, "avalonia");
+            const string scenarioId = "object-format-position-size-style";
+            FreeWVisualEvidencePlanner.WriteManifest(
+                wpfDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+            FreeWVisualEvidencePlanner.WriteManifest(
+                avaloniaDir,
+                [
+                    BuildFileBackedRow(
+                        root,
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        pageNumber: 1,
+                        pageCount: 1)
+                ],
+                new DateTimeOffset(2026, 7, 14, 12, 0, 0, TimeSpan.Zero));
+
+            var summary = FreeWVisualEvidenceManifestNormalizer.BuildNormalizedSummaryFromFiles(
+                [
+                    Path.Combine(wpfDir, FreeWVisualEvidencePlanner.ManifestFileName),
+                    Path.Combine(avaloniaDir, FreeWVisualEvidencePlanner.ManifestFileName)
+                ],
+                root,
+                [
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+                        scenarioId,
+                        1),
+                    new FreeWVisualEvidenceExpectedScenario(
+                        FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
+                        scenarioId,
+                        1)
+                ]);
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.DrawingObjectProofReadiness.Should().ContainSingle();
+            withBaseline.WordArtWatermarkProofReadiness.Should().BeEmpty();
+            var readiness = withBaseline.DrawingObjectProofReadiness.Single();
+            readiness.ScenarioId.Should().Be(scenarioId);
+            readiness.Status.Should().Be("paired-renderer-proof-ready");
+            readiness.WordBaselineStatus.Should().Be("word-baseline-unavailable=2");
+            readiness.BaselineReadiness.Should().Contain("without authoritative Word parity");
+            readiness.SemanticEvidence.Should().Contain("3 object(s)");
+            readiness.SemanticEvidence.Should().Contain("3 effect object(s)");
+            readiness.SemanticEvidence.Should().Contain("3 alt-text object(s)");
+            readiness.SemanticEvidence.Should().Contain("kinds=image/shape/wordart");
+            readiness.SemanticEvidence.Should().Contain("object format signatures=");
+            readiness.SemanticEvidence.Should().Contain("Image:Square:z5:176x112:front");
+            readiness.SemanticEvidence.Should().Contain("Shape:Behind:z1:");
+            readiness.SemanticEvidence.Should().Contain("WordArt:TopAndBottom:z9:");
+            readiness.SemanticEvidence.Should().Contain("effects=Shape:shadow+bevel/Image:shadow+glow+reflection+soft-edge+bevel+artistic:GlowDiffused/WordArt:glow");
+            readiness.Trust.Passed.Should().BeTrue();
+
+            var blocker = withBaseline.RemainingEvidenceBlockers.Single();
+            blocker.BlockerId.Should().Be("object-format-position-size-style-word-baseline-fidelity");
+            blocker.Status.Should().Be(FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            blocker.Area.Should().Be("Drawing/object visual fidelity");
+            blocker.RequiresWordBaseline.Should().BeTrue();
+            blocker.SemanticEvidence.Should().HaveCount(2);
+            blocker.SemanticEvidence.Should().OnlyContain(evidence =>
+                evidence.Contains("altText=3", StringComparison.Ordinal) &&
+                evidence.Contains("effects=3", StringComparison.Ordinal));
+
+            var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
+            using var doc = JsonDocument.Parse(json);
+            doc.RootElement.GetProperty("drawingObjectProofReadiness").GetArrayLength().Should().Be(1);
+            doc.RootElement.GetProperty("wordArtWatermarkProofReadiness").GetArrayLength().Should().Be(0);
+
+            var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
+            markdown.Should().Contain("## Drawing/Object Visual Proof Readiness");
+            markdown.Should().Contain("| object-format-position-size-style | 1 | paired-renderer-proof-ready |");
+            markdown.Should().Contain("object format signatures=");
+            markdown.Should().Contain("object-format-position-size-style-word-baseline-fidelity");
+            markdown.Should().Contain("COM ProgID 'Word.Application' is not registered");
+            markdown.Should().NotContain("drawing-objects-complex");
+            markdown.Should().NotContain("chart-smartart-complex");
+            markdown.Should().NotContain("table-pagination-repeat-header");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void HeaderFooterImageNoWordSummary_ReportsFocusedProofReadinessWithoutAuthoritativeWordParity()
     {
         var root = CreateTempRoot();
