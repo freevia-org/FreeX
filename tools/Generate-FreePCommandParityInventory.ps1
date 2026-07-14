@@ -282,6 +282,7 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-animation-pane-advanced-effect-options-2026-07-05.md",
                 "docs/parity/freep-remaining-imported-animation-playback-2026-07-13.md",
                 "docs/parity/freep-animation-playback-frame-evidence-2026-07-13.md",
+                "docs/parity/freep-slideshow-playback-readiness-2026-07-14.md",
                 "docs/parity/freep-animation-pane-powerpoint-baseline-readiness-2026-07-14.md"
             ],
             Verification:
@@ -293,7 +294,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Avalonia.Tests/SlideShowHostPolicySourceTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/MainWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared animation-pane row evidence now covers selected-row state, timing editors, effect-option rows, reorder availability, playback control readiness, deterministic playback plans for remaining imported Dissolve/Flash/Spiral/Swivel/Bounce/Float/Swoop/Boomerang families, renderer-neutral playback frame descriptors consumed by WPF/Avalonia slideshow hosts, and no-COM PowerPoint/WPF/Avalonia baseline capture readiness manifests for pane UI plus playback checkpoints. Capturing and comparing the PowerPoint-authoritative animation-pane UI baselines and exact advanced effect playback visuals still requires a COM-capable PowerPoint baseline machine."),
+            RemainingWork: "Shared animation-pane row evidence now covers selected-row state, timing editors, effect-option rows, reorder availability, playback control readiness, deterministic playback plans for remaining imported Dissolve/Flash/Spiral/Swivel/Bounce/Float/Swoop/Boomerang families, renderer-neutral playback frame descriptors consumed by WPF/Avalonia slideshow hosts, paired no-COM slideshow playback-readiness host rows, and no-COM PowerPoint/WPF/Avalonia baseline capture readiness manifests for pane UI plus playback checkpoints. Capturing and comparing the PowerPoint-authoritative animation-pane UI baselines and exact advanced effect playback visuals still requires a COM-capable PowerPoint baseline machine."),
         new(
             EvidenceId: "freep.export.backstage.package-handoff",
             Area: "Backstage export and print package-handoff depth beyond notes-page PDF",

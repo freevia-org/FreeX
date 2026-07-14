@@ -898,4 +898,61 @@ public sealed class SlideShowPlaybackPlannerTests
         checkpoints[2].Frames[1].TranslateYFactor.Should().Be(0);
         checkpoints[2].EvidenceSummary.Should().Be("complete at 700ms: 2 frame(s); 0 active; 2 complete");
     }
+
+    [Fact]
+    public void BuildAnimationStepPlaybackReadinessPlan_ProjectsSharedNoComHostRows()
+    {
+        var step = new AnimationStep(
+        [
+            new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = 81,
+                    Kind = AnimationKind.Entrance,
+                    Preset = AnimationPreset.Wheel,
+                    Direction = AnimationDirection.In,
+                    WheelSpokeCount = 6,
+                    DurationMs = 300
+                },
+                StartDelayMs: 0),
+            new AnimationEntry(
+                new ShapeAnimation
+                {
+                    ShapeId = 82,
+                    Kind = AnimationKind.Entrance,
+                    Preset = AnimationPreset.FlyIn,
+                    Direction = AnimationDirection.FromRight,
+                    DurationMs = 250
+                },
+                StartDelayMs: 175)
+        ]);
+
+        var readiness = SlideShowPlaybackFramePlanner.BuildAnimationStepPlaybackReadinessPlan(
+            step,
+            slideIndex: 2,
+            stepIndex: 4,
+            slideWidthDip: 960,
+            slideHeightDip: 540,
+            scenarioId: "Deck A/Playback");
+
+        readiness.ScenarioId.Should().Be("deck-a-playback");
+        readiness.SlideIndex.Should().Be(2);
+        readiness.StepIndex.Should().Be(4);
+        readiness.AnimationEntryCount.Should().Be(2);
+        readiness.CheckpointCount.Should().Be(3);
+        readiness.DelayedEntryCount.Should().Be(1);
+        readiness.TrackKinds.Should().Equal(
+            SlideShowAnimationVisualTrackKind.Clip,
+            SlideShowAnimationVisualTrackKind.Translate);
+        readiness.ClipKinds.Should().Equal(SlideShowAnimationClipKind.Wheel);
+        readiness.HasSharedHostParity.Should().BeTrue();
+        readiness.HostRows.Select(row => row.Host)
+            .Should()
+            .Equal(SlideShowPlaybackReadinessHost.Wpf, SlideShowPlaybackReadinessHost.Avalonia);
+        readiness.HostRows.Should().OnlyContain(row => row.RequiresPowerPointCom == false);
+        readiness.HostRows.Should().OnlyContain(row => row.EvidenceId.StartsWith(
+            "deck-a-playback-slide-3-step-5-",
+            StringComparison.Ordinal));
+        readiness.EvidenceLines.Should().Contain("Shared host rows: WPF/Avalonia; PowerPoint COM required: false");
+    }
 }

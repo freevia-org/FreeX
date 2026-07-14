@@ -59,6 +59,39 @@ public sealed record SlideShowAnimationStepVisualCheckpointPlan(
     IReadOnlyList<SlideShowShapeAnimationVisualFramePlan> Frames,
     string EvidenceSummary);
 
+public enum SlideShowPlaybackReadinessHost
+{
+    Wpf,
+    Avalonia
+}
+
+public sealed record SlideShowAnimationStepPlaybackHostEvidenceRow(
+    SlideShowPlaybackReadinessHost Host,
+    string EvidenceId,
+    int SlideIndex,
+    int StepIndex,
+    int CheckpointCount,
+    bool RequiresPowerPointCom,
+    string EvidenceSummary);
+
+public sealed record SlideShowAnimationStepPlaybackReadinessPlan(
+    string ScenarioId,
+    int SlideIndex,
+    int StepIndex,
+    int AnimationEntryCount,
+    int CheckpointCount,
+    int DelayedEntryCount,
+    IReadOnlyList<SlideShowAnimationVisualTrackKind> TrackKinds,
+    IReadOnlyList<SlideShowAnimationClipKind> ClipKinds,
+    IReadOnlyList<SlideShowAnimationStepPlaybackHostEvidenceRow> HostRows,
+    IReadOnlyList<string> EvidenceLines)
+{
+    public bool HasSharedHostParity =>
+        HostRows.Any(row => row.Host == SlideShowPlaybackReadinessHost.Wpf) &&
+        HostRows.Any(row => row.Host == SlideShowPlaybackReadinessHost.Avalonia) &&
+        HostRows.All(row => !row.RequiresPowerPointCom);
+}
+
 public static class SlideShowPlaybackFramePlanner
 {
     public static IReadOnlyList<SlideShowShapeAnimationVisualFramePlan> PlanAnimationStepFrames(
@@ -108,6 +141,64 @@ public static class SlideShowPlaybackFramePlanner
                     BuildCheckpointEvidenceSummary(checkpoint.Item1, checkpoint.Item2, frames));
             })
             .ToArray();
+    }
+
+    public static SlideShowAnimationStepPlaybackReadinessPlan BuildAnimationStepPlaybackReadinessPlan(
+        AnimationStep step,
+        int slideIndex,
+        int stepIndex,
+        double slideWidthDip,
+        double slideHeightDip,
+        string scenarioId = "slideshow-playback")
+    {
+        ArgumentNullException.ThrowIfNull(step);
+
+        var safeScenarioId = NormalizeScenarioId(scenarioId);
+        var safeSlideIndex = Math.Max(0, slideIndex);
+        var safeStepIndex = Math.Max(0, stepIndex);
+        var playbackPlans = SlideShowPlaybackPlanner.PlanAnimationStep(step);
+        var checkpoints = PlanAnimationStepCheckpoints(step, slideWidthDip, slideHeightDip);
+        var trackKinds = checkpoints
+            .SelectMany(checkpoint => checkpoint.Frames)
+            .Select(frame => frame.TrackKind)
+            .Distinct()
+            .OrderBy(kind => kind.ToString(), StringComparer.Ordinal)
+            .ToArray();
+        var clipKinds = checkpoints
+            .SelectMany(checkpoint => checkpoint.Frames)
+            .Select(frame => frame.ClipKind)
+            .Where(kind => kind != SlideShowAnimationClipKind.None)
+            .Distinct()
+            .OrderBy(kind => kind.ToString(), StringComparer.Ordinal)
+            .ToArray();
+        var delayedEntryCount = playbackPlans.Count(plan => plan.DelayMs > 0);
+        var surfaceId = $"{safeScenarioId}-slide-{safeSlideIndex + 1}-step-{safeStepIndex + 1}";
+        var summary =
+            $"slide {safeSlideIndex + 1}; step {safeStepIndex + 1}; animations {playbackPlans.Count}; "
+            + $"checkpoints {checkpoints.Count}; tracks {FormatEnumList(trackKinds)}; clips {FormatEnumList(clipKinds)}";
+        var hostRows = new[]
+        {
+            BuildHostEvidenceRow(SlideShowPlaybackReadinessHost.Wpf, surfaceId, safeSlideIndex, safeStepIndex, checkpoints.Count, summary),
+            BuildHostEvidenceRow(SlideShowPlaybackReadinessHost.Avalonia, surfaceId, safeSlideIndex, safeStepIndex, checkpoints.Count, summary)
+        };
+        var evidenceLines = new[]
+        {
+            $"Scenario {safeScenarioId}: slide {safeSlideIndex + 1}; step {safeStepIndex + 1}; animations {playbackPlans.Count}; checkpoints {checkpoints.Count}",
+            $"Playback tracks: {FormatEnumList(trackKinds)}; clips: {FormatEnumList(clipKinds)}; delayed entries: {delayedEntryCount}",
+            "Shared host rows: WPF/Avalonia; PowerPoint COM required: false"
+        };
+
+        return new SlideShowAnimationStepPlaybackReadinessPlan(
+            safeScenarioId,
+            safeSlideIndex,
+            safeStepIndex,
+            playbackPlans.Count,
+            checkpoints.Count,
+            delayedEntryCount,
+            trackKinds,
+            clipKinds,
+            hostRows,
+            evidenceLines);
     }
 
     public static SlideShowShapeAnimationVisualFramePlan PlanFrame(
@@ -399,6 +490,44 @@ public static class SlideShowPlaybackFramePlanner
             activeCount,
             completeCount);
     }
+
+    private static SlideShowAnimationStepPlaybackHostEvidenceRow BuildHostEvidenceRow(
+        SlideShowPlaybackReadinessHost host,
+        string surfaceId,
+        int slideIndex,
+        int stepIndex,
+        int checkpointCount,
+        string evidenceSummary)
+    {
+        var hostId = host.ToString().ToLowerInvariant();
+        return new SlideShowAnimationStepPlaybackHostEvidenceRow(
+            host,
+            $"{surfaceId}-{hostId}",
+            slideIndex,
+            stepIndex,
+            checkpointCount,
+            RequiresPowerPointCom: false,
+            evidenceSummary);
+    }
+
+    private static string NormalizeScenarioId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "slideshow-playback";
+        }
+
+        var chars = value.Trim().ToLowerInvariant()
+            .Select(ch => char.IsLetterOrDigit(ch) ? ch : '-')
+            .ToArray();
+        var normalized = string.Join(
+            "-",
+            new string(chars).Split('-', StringSplitOptions.RemoveEmptyEntries));
+        return string.IsNullOrWhiteSpace(normalized) ? "slideshow-playback" : normalized;
+    }
+
+    private static string FormatEnumList<T>(IReadOnlyList<T> values) =>
+        values.Count == 0 ? "none" : string.Join(", ", values);
 
     private static double Lerp(double from, double to, double progress) =>
         from + (to - from) * Math.Clamp(progress, 0, 1);

@@ -66,6 +66,7 @@ public sealed class SlideShowWindow : Window
     private SlideShowInkExecutionState _inkExecutionState;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
     private IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> _lastAnimationStepFrameEvidence = Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
+    private SlideShowAnimationStepPlaybackReadinessPlan? _lastAnimationStepPlaybackReadinessPlan;
     private bool _isTornDown;
 
     // DA2 + DA3: all per-frame DispatcherTimers created by animation/transition helpers
@@ -291,6 +292,7 @@ public sealed class SlideShowWindow : Window
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
     internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
     internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest => _lastAnimationStepFrameEvidence;
+    internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest => _lastAnimationStepPlaybackReadinessPlan;
     internal SlideShowPlaybackRoute PlaybackRoute => _playbackRoute;
     internal int CurrentPresentationSlideIndex => _playbackRoute.GetSourceSlideIndex(_controller.CurrentSlideIndex);
 
@@ -1058,6 +1060,13 @@ public sealed class SlideShowWindow : Window
     private void PlayAnimationStep(AnimationStep step)
     {
         _lastAnimationStepFrameEvidence = SlideShowPlaybackFramePlanner.PlanAnimationStepCheckpoints(step, _slideDipW, _slideDipH);
+        _lastAnimationStepPlaybackReadinessPlan =
+            SlideShowPlaybackFramePlanner.BuildAnimationStepPlaybackReadinessPlan(
+                step,
+                CurrentPresentationSlideIndex,
+                stepIndex: 0,
+                slideWidthDip: _slideDipW,
+                slideHeightDip: _slideDipH);
 
         foreach (var plan in SlideShowPlaybackPlanner.PlanAnimationStep(step))
         {
