@@ -358,6 +358,7 @@ public sealed class AnimationPaneTests
         var pane = new AnimationPane(editor);
 
         var playSession = pane.ExecutePlaybackControlForTest(AnimationPanePlaybackControlKind.PlayFromSelected);
+        var workflowEvidence = pane.CurrentPlaybackWorkflowEvidencePlanForTest;
 
         playSession.State.Should().Be(AnimationPanePlaybackSessionState.Running);
         playSession.StartAnimationIndex.Should().Be(1);
@@ -365,6 +366,17 @@ public sealed class AnimationPaneTests
             segment.AnimationIndex == 1
             && segment.ShapeId == 20u
             && segment.RelativeStartMs == 0);
+        workflowEvidence.Should().NotBeNull();
+        workflowEvidence!.CommandKind.Should().Be(AnimationPanePlaybackControlKind.PlayFromSelected);
+        workflowEvidence.SessionState.Should().Be(AnimationPanePlaybackSessionState.Running);
+        workflowEvidence.SegmentCount.Should().Be(1);
+        workflowEvidence.PlaybackCheckpointCount.Should().Be(0);
+        workflowEvidence.HasSharedNoComHostEvidence.Should().BeTrue();
+        workflowEvidence.HostRows.Select(row => row.Host)
+            .Should()
+            .Equal(AnimationPanePlaybackWorkflowHost.Wpf, AnimationPanePlaybackWorkflowHost.Avalonia);
+        workflowEvidence.EvidenceLines.Should().Contain(
+            "Shared host rows: WPF/Avalonia; PowerPoint COM required: false");
         pane.CurrentPlaybackSessionPlanForTest.Should().BeSameAs(playSession);
         pane.CurrentPlaybackControlsForTest.Should().Contain(control =>
             control.Kind == AnimationPanePlaybackControlKind.Stop && control.IsEnabled);
@@ -416,6 +428,7 @@ public sealed class AnimationPaneTests
         source.Should().Contain("AnimationPanePlanner.BuildWorkflowViewPlan(");
         source.Should().Contain("AnimationPanePlanner.BuildWorkflowEvidencePlan(");
         source.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(");
         source.Should().Contain("plan.PlaybackControls");
         source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
         source.Should().Contain("var effectText = item.EffectText");

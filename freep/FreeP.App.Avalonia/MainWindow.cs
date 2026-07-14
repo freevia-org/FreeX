@@ -203,6 +203,7 @@ public sealed class MainWindow : Window
     private Button _animationPanePreviewButton = null!;
     private int _selectedAnimationIndex = -1;
     private AnimationPanePlaybackSessionPlan? _animationPanePlaybackSessionPlan;
+    private AnimationPanePlaybackWorkflowEvidencePlan? _animationPanePlaybackWorkflowEvidencePlan;
     private readonly List<string> _animationPaneRenderedRows = new();
     private readonly List<string> _animationPaneRenderedPlaybackControls = new();
     private int _animationPaneEffectOptionControlCount;
@@ -309,6 +310,8 @@ public sealed class MainWindow : Window
     internal AnimationPaneTimelinePlan? LastAnimationPaneTimelinePlan { get; private set; }
     internal AnimationPaneWorkflowEvidencePlan? LastAnimationPaneWorkflowEvidencePlan { get; private set; }
     internal AnimationPanePlaybackSessionPlan? LastAnimationPanePlaybackSessionPlan => _animationPanePlaybackSessionPlan;
+    internal AnimationPanePlaybackWorkflowEvidencePlan? LastAnimationPanePlaybackWorkflowEvidencePlan =>
+        _animationPanePlaybackWorkflowEvidencePlan;
     internal FindReplaceWorkflowPlan? LastFindReplaceWorkflowPlan { get; private set; }
     internal PresentationDesignCommandPlan? LastCustomSlideSizeRequestPlan { get; private set; }
     internal SlideSizeDialogInitialState? LastCustomSlideSizeInitialState { get; private set; }
@@ -4387,6 +4390,11 @@ public sealed class MainWindow : Window
     {
         var timeline = LastAnimationPaneTimelinePlan ?? RefreshAnimationPaneTimelinePlan(_selectedAnimationIndex);
         _animationPanePlaybackSessionPlan = AnimationPanePlanner.BuildPlaybackSessionPlan(timeline, control.Kind);
+        _animationPanePlaybackWorkflowEvidencePlan = AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(
+            timeline,
+            _animationPanePlaybackSessionPlan,
+            Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>(),
+            Editor.CurrentSlideIndex);
         RefreshVisibleAnimationPane(_selectedAnimationIndex);
 
         if (!control.IsEnabled)

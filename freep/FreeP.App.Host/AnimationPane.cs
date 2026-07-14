@@ -58,9 +58,12 @@ public sealed class AnimationPane : Border
     private readonly StackPanel _playbackControlsPanel;
     private int _selectedRowIndex = -1;   // -1 = none
     private AnimationPanePlaybackSessionPlan? _playbackSessionPlan;
+    private AnimationPanePlaybackWorkflowEvidencePlan? _playbackWorkflowEvidencePlan;
 
     internal AnimationPaneTimelinePlan CurrentTimelinePlanForTest => BuildTimelinePlan();
     internal AnimationPanePlaybackSessionPlan? CurrentPlaybackSessionPlanForTest => _playbackSessionPlan;
+    internal AnimationPanePlaybackWorkflowEvidencePlan? CurrentPlaybackWorkflowEvidencePlanForTest =>
+        _playbackWorkflowEvidencePlan;
     internal IReadOnlyList<AnimationPanePlaybackControlDescriptor> CurrentPlaybackControlsForTest =>
         BuildTimelinePlan().PlaybackControls;
     internal AnimationPaneWorkflowViewPlan CurrentWorkflowViewPlanForTest => BuildWorkflowViewPlan();
@@ -220,6 +223,11 @@ public sealed class AnimationPane : Border
     {
         var timeline = BuildTimelinePlan();
         _playbackSessionPlan = AnimationPanePlanner.BuildPlaybackSessionPlan(timeline, control.Kind);
+        _playbackWorkflowEvidencePlan = AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(
+            timeline,
+            _playbackSessionPlan,
+            Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>(),
+            _editor.CurrentSlideIndex);
         Rebuild();
 
         if (!control.IsEnabled)

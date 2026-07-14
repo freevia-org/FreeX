@@ -319,6 +319,7 @@ public sealed class MainWindowHeadlessTests
         source.Should().Contain("AnimationPanePlanner.BuildTimelinePlan(");
         source.Should().Contain("AnimationPanePlanner.BuildWorkflowEvidencePlan(");
         source.Should().Contain("AnimationPanePlanner.BuildPlaybackSessionPlan(");
+        source.Should().Contain("AnimationPanePlanner.BuildPlaybackWorkflowEvidencePlan(");
         source.Should().Contain("plan.PlaybackControls");
         source.Should().Contain("AnimationPanePlaybackControlKind.PlayFromSelected");
         source.Should().Contain("ShowAnimationPane()");
@@ -2390,6 +2391,7 @@ public sealed class MainWindowHeadlessTests
     {
         AnimationPanePlaybackSessionPlan? playSession = null;
         AnimationPanePlaybackSessionPlan? stopSession = null;
+        AnimationPanePlaybackWorkflowEvidencePlan? workflowEvidence = null;
         IReadOnlyList<string> runningControls = [];
         IReadOnlyList<string> stoppedControls = [];
 
@@ -2416,6 +2418,7 @@ public sealed class MainWindowHeadlessTests
 
             playSession = window.ExecuteAnimationPanePlaybackControlForTests(
                 AnimationPanePlaybackControlKind.PlayFromSelected);
+            workflowEvidence = window.LastAnimationPanePlaybackWorkflowEvidencePlan;
             runningControls = window.AnimationPanePlaybackControls.ToArray();
 
             stopSession = window.ExecuteAnimationPanePlaybackControlForTests(
@@ -2431,6 +2434,17 @@ public sealed class MainWindowHeadlessTests
             segment.AnimationIndex == 1
             && segment.ShapeName == "Caption box"
             && segment.RelativeStartMs == 0);
+        workflowEvidence.Should().NotBeNull();
+        workflowEvidence!.CommandKind.Should().Be(AnimationPanePlaybackControlKind.PlayFromSelected);
+        workflowEvidence.SessionState.Should().Be(AnimationPanePlaybackSessionState.Running);
+        workflowEvidence.SegmentCount.Should().Be(1);
+        workflowEvidence.PlaybackCheckpointCount.Should().Be(0);
+        workflowEvidence.HasSharedNoComHostEvidence.Should().BeTrue();
+        workflowEvidence.HostRows.Select(row => row.Host)
+            .Should()
+            .Equal(AnimationPanePlaybackWorkflowHost.Wpf, AnimationPanePlaybackWorkflowHost.Avalonia);
+        workflowEvidence.EvidenceLines.Should().Contain(
+            "Shared host rows: WPF/Avalonia; PowerPoint COM required: false");
         runningControls.Should().Equal(
             "Preview: unavailable",
             "Play From Selected: unavailable",
