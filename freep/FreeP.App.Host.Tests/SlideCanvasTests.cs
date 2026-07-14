@@ -869,6 +869,43 @@ public sealed class SlideCanvasTests
         act.Should().NotThrow("WPF should consume smoothed line path primitives");
     }
 
+    [StaFact]
+    public void SlideCanvas_SmoothedScatterChart_RendersWithoutThrow()
+    {
+        var series = new ChartSeries { Name = "Smoothed scatter" };
+        series.XValues.AddRange(new double?[] { 0, 50, 100, 150 });
+        series.Values.AddRange(new double?[] { 10, 25, 15, 35 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Scatter,
+            ScatterStyle = ScatterStyle.SmoothMarker
+        };
+        chart.Series.Add(series);
+
+        var p = Presentation.CreateEmpty();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            Kind = SlideShapeKind.Chart,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 457200,
+            ExtentCxEmu = 5486400,
+            ExtentCyEmu = 3657600,
+            Chart = chart,
+        });
+
+        var canvas = new SlideCanvas { Presentation = p, Slide = p.Slides[0] };
+        canvas.Measure(new Size(960, 540));
+        canvas.Arrange(new Rect(0, 0, 960, 540));
+        var rtb = new RenderTargetBitmap(960, 540, 96, 96, PixelFormats.Pbgra32);
+
+        var act = () => rtb.Render(canvas);
+
+        act.Should().NotThrow("WPF should consume smoothed scatter path primitives");
+    }
+
     [Fact]
     public void SlideCanvas_LineSeriesRenderer_ConsumesSharedPathPrimitive()
     {

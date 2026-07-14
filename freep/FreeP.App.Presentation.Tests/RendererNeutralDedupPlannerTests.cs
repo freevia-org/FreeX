@@ -301,7 +301,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("ChartRenderPlanner.BuildAreaSeriesPrimitives");
             source.Should().Contain("ChartRenderPlanner.BuildScatterPrimitivePlan");
             source.Should().Contain("ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot, seriesColors, fillPlans)");
-            source.Should().Contain("primitive.LineSegments");
+            source.Should().Contain("primitive.LinePaths");
             source.Should().Contain("primitive.Markers");
             source.Should().Contain("plan.DataLabels");
             source.Should().Contain("ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot, seriesColors, fillPlans)");
@@ -318,6 +318,7 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().NotContain("ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot);");
             source.Should().NotContain("ChartRenderPlanner.BuildRadarPrimitivePlan(chart, plot);");
             source.Should().NotContain("RenderScatterSeriesPrimitive");
+            source.Should().NotContain("primitive.LineSegments");
             source.Should().NotContain("double maxBubble =");
             source.Should().NotContain("chart.ScatterStyle is");
             source.Should().NotContain("catCount = Math.Max(3");
@@ -347,7 +348,6 @@ public sealed class RendererNeutralDedupPlannerTests
             source.Should().Contain("ToRect(primitive.Bounds)");
             source.Should().Contain("primitive.Fill");
             source.Should().Contain("primitive.Stroke");
-            source.Should().Contain("primitive.LineSegments");
             source.Should().Contain("primitive.LinePaths");
             source.Should().Contain("primitive.Markers");
             source.Should().Contain("DrawChartMarker(dc, marker)");

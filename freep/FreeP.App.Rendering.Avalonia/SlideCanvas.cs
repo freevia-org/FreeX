@@ -1274,8 +1274,8 @@ public sealed class SlideCanvas : Control
 
         foreach (var primitive in plan.Series)
         {
-            foreach (var segment in primitive.LineSegments)
-                dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+            foreach (var path in primitive.LinePaths)
+                dc.DrawGeometry(null, ToPen(path.Stroke), ToGeometry(path));
 
             foreach (var marker in primitive.Markers)
                 DrawChartMarker(dc, marker);

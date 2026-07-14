@@ -319,7 +319,9 @@ public readonly record struct ChartScatterSeriesPrimitive(
     bool DrawMarkers,
     IReadOnlyList<ChartPlanPoint?> Points,
     IReadOnlyList<ChartLineSegmentPrimitive> LineSegments,
-    IReadOnlyList<ChartCirclePrimitive> Markers);
+    IReadOnlyList<ChartLinePathFigurePrimitive> LinePaths,
+    IReadOnlyList<ChartCirclePrimitive> Markers,
+    bool IsSmoothed);
 
 public readonly record struct ChartScatterPrimitivePlan(
     IReadOnlyList<ChartGridLinePlan> GridLines,
@@ -2416,6 +2418,8 @@ public static partial class ChartRenderPlanner
             }
 
             dataLabels.AddRange(BuildScatterDataLabelPlans(chart, seriesIndex, points));
+            bool isSmoothed = drawLines &&
+                (series.SmoothLine ?? (chart.ScatterStyle is ScatterStyle.Smooth or ScatterStyle.SmoothMarker));
 
             seriesPrimitives.Add(new ChartScatterSeriesPrimitive(
                 seriesIndex,
@@ -2423,7 +2427,9 @@ public static partial class ChartRenderPlanner
                 drawMarkers,
                 points,
                 lineSegments,
-                markers));
+                BuildLinePathFigures(lineSegments, isSmoothed),
+                markers,
+                isSmoothed));
         }
 
         return new ChartScatterPrimitivePlan(

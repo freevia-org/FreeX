@@ -1994,6 +1994,91 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScatterPrimitivePlan_SmoothStylePlansCubicPath()
+    {
+        var series = new ChartSeries { Name = "XY" };
+        series.XValues.AddRange(new double?[] { 0, 50, 100 });
+        series.Values.AddRange(new double?[] { 10, 20, 30 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Scatter,
+            ScatterStyle = ScatterStyle.SmoothMarker
+        };
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        var primitive = plan.Series.Single();
+        primitive.IsSmoothed.Should().BeTrue();
+        primitive.DrawLines.Should().BeTrue();
+        primitive.DrawMarkers.Should().BeTrue();
+        primitive.LineSegments.Should().HaveCount(2);
+        primitive.LinePaths.Should().ContainSingle();
+        var path = primitive.LinePaths[0];
+        path.Start.Should().Be(new ChartPlanPoint(0, 75));
+        path.Stroke.Should().Be(primitive.LineSegments[0].Stroke);
+        path.Segments.Select(segment => segment.Kind)
+            .Should()
+            .Equal(ChartLinePathSegmentKind.CubicBezier, ChartLinePathSegmentKind.CubicBezier);
+
+        path.Segments[0].Control1.X.Should().BeApproximately(13.3333, 0.0001);
+        path.Segments[0].Control1.Y.Should().BeApproximately(70.8333, 0.0001);
+        path.Segments[0].Control2.X.Should().BeApproximately(53.3333, 0.0001);
+        path.Segments[0].Control2.Y.Should().BeApproximately(58.3333, 0.0001);
+        path.Segments[0].End.Should().Be(new ChartPlanPoint(80, 50));
+
+        path.Segments[1].Control1.X.Should().BeApproximately(106.6667, 0.0001);
+        path.Segments[1].Control1.Y.Should().BeApproximately(41.6667, 0.0001);
+        path.Segments[1].Control2.X.Should().BeApproximately(146.6667, 0.0001);
+        path.Segments[1].Control2.Y.Should().BeApproximately(29.1667, 0.0001);
+        path.Segments[1].End.Should().Be(new ChartPlanPoint(160, 25));
+        primitive.Markers.Select(marker => marker.PointIndex).Should().Equal(0, 1, 2);
+    }
+
+    [Fact]
+    public void BuildScatterPrimitivePlan_SeriesSmoothDecisionOverridesScatterStyle()
+    {
+        var smoothed = new ChartSeries
+        {
+            Name = "Authored smooth",
+            SmoothLine = true
+        };
+        smoothed.XValues.AddRange(new double?[] { 0, 50, 100 });
+        smoothed.Values.AddRange(new double?[] { 10, 20, 30 });
+
+        var straight = new ChartSeries
+        {
+            Name = "Authored straight",
+            SmoothLine = false
+        };
+        straight.XValues.AddRange(new double?[] { 0, 50, 100 });
+        straight.Values.AddRange(new double?[] { 30, 20, 10 });
+
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Scatter,
+            ScatterStyle = ScatterStyle.Smooth
+        };
+        chart.Series.Add(smoothed);
+        chart.Series.Add(straight);
+
+        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        plan.Series[0].IsSmoothed.Should().BeTrue();
+        plan.Series[0].LinePaths.Single().Segments
+            .Should()
+            .OnlyContain(segment => segment.Kind == ChartLinePathSegmentKind.CubicBezier);
+        plan.Series[1].IsSmoothed.Should().BeFalse();
+        plan.Series[1].LinePaths.Single().Segments
+            .Should()
+            .OnlyContain(segment => segment.Kind == ChartLinePathSegmentKind.Line);
+    }
+
+    [Fact]
     public void BuildBubblePrimitivePlan_NormalizesBubbleRadiiAndAxisLabels()
     {
         var series = new ChartSeries { Name = "Bubble" };
