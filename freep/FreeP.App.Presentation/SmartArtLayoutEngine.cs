@@ -105,9 +105,11 @@ public static class SmartArtLayoutEngine
             SmartArtFamily.Matrix    => LayoutMatrix    (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
             SmartArtFamily.Relationship => IsBasicVennLayout(data.LayoutUniqueId)
                 ? LayoutBasicVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
-                : IsTargetListLayout(data.LayoutUniqueId)
-                    ? LayoutTargetList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
-                : null,
+                : IsRadialVennLayout(data.LayoutUniqueId)
+                    ? LayoutRadialVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                    : IsTargetListLayout(data.LayoutUniqueId)
+                        ? LayoutTargetList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                        : null,
             _                        => null
         };
     }
@@ -765,6 +767,62 @@ public static class SmartArtLayoutEngine
     }
 
     /// <summary>
+    /// Radial Venn geometry: equally sized translucent ellipses around a shared
+    /// center. This keeps the relationship-family shape ops shared while exact
+    /// PowerPoint intersection blending/effects remain deferred.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutRadialVenn(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        if (n is < 3 or > 5)
+            return null;
+
+        var shapes = new List<SlideShape>();
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long innerH = Math.Max(fcy - 2 * outerPadY, 1L);
+        long diameter = Math.Max(Math.Min((long)(innerW * 0.52), (long)(innerH * 0.58)), 1L);
+
+        double centerX = fx + outerPadX + innerW / 2.0;
+        double centerY = fy + outerPadY + innerH / 2.0;
+        double radiusX = Math.Min((innerW - diameter) / 2.0, diameter * 0.44);
+        double radiusY = Math.Min((innerH - diameter) / 2.0, diameter * 0.34);
+        radiusX = Math.Max(radiusX, 0.0);
+        radiusY = Math.Max(radiusY, 0.0);
+
+        uint idCounter = 580;
+        for (int i = 0; i < n; i++)
+        {
+            double angle = -Math.PI / 2.0 + (2.0 * Math.PI * i / n);
+            long x = (long)Math.Round(centerX + Math.Cos(angle) * radiusX - diameter / 2.0);
+            long y = (long)Math.Round(centerY + Math.Sin(angle) * radiusY - diameter / 2.0);
+            var baseStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Relationship);
+            var translucentStyle = baseStyle with
+            {
+                Fill = new ThemeAwareColor(baseStyle.Fill.Resolved, alpha: 150)
+            };
+
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                translucentStyle,
+                x,
+                y,
+                diameter,
+                diameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
     /// Basic target/list geometry: concentric ellipses centered in the frame.
     /// This is a bounded relationship-family approximation; exact PowerPoint
     /// ring clipping, label offsets, and effects remain on cached fallback.
@@ -1175,6 +1233,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "basicvenn", StringComparison.Ordinal);
+    }
+
+    private static bool IsRadialVennLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "radialvenn", StringComparison.Ordinal);
     }
 
     private static bool IsTargetListLayout(string uniqueId)
