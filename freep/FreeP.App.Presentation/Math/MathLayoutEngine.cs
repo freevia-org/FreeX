@@ -1020,17 +1020,38 @@ public static class MathLayoutEngine
         c.Metrics.Height = totalH;
         c.Metrics.Ascent = ascent;
 
-        // Draw the accent glyph above the base
-        var accentGlyph = MakeGlyph(acc.AccentChar, fontFamily, fontSizePt * 0.75, isItalic: false);
-        accentGlyph.X = (totalW - accentGlyph.Metrics.Width) / 2;
-        accentGlyph.Y = 0;
-        c.Children.Add(accentGlyph);
+        if (IsHorizontalRuleAccent(acc.AccentChar))
+        {
+            var thickness = em * 0.07;
+            var hrule = new MathBox.HRule
+            {
+                X = 0,
+                Y = (accentH - thickness) / 2.0,
+                LineWidth = totalW,
+                Thickness = thickness
+            };
+            hrule.Metrics.Width = totalW;
+            hrule.Metrics.Height = thickness;
+            hrule.Metrics.Ascent = 0;
+            c.Children.Add(hrule);
+        }
+        else
+        {
+            // Draw the accent glyph above the base.
+            var accentGlyph = MakeGlyph(acc.AccentChar, fontFamily, fontSizePt * 0.75, isItalic: false);
+            accentGlyph.X = (totalW - accentGlyph.Metrics.Width) / 2;
+            accentGlyph.Y = 0;
+            c.Children.Add(accentGlyph);
+        }
 
         baseBox.X = 0; baseBox.Y = accentH + gap;
         c.Children.Add(baseBox);
 
         return c;
     }
+
+    private static bool IsHorizontalRuleAccent(string accentChar) =>
+        accentChar is "\u0304" or "\u0305" or "\u00AF";
 
     // ── Bar layout ────────────────────────────────────────────────────────
 

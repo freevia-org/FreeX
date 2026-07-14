@@ -517,6 +517,46 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_AccentBarOverline_UsesSharedHRulePlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var mathNode = ParseOmml(
+                    "<m:acc>" +
+                    "<m:accPr><m:chr m:val=\"&#x0305;\"/></m:accPr>" +
+                    "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                    "</m:acc>");
+                var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+
+                ops.OfType<MathDrawOp.DrawHRule>().Should().ContainSingle(
+                    "PowerPoint-authored accent bars must resolve to shared horizontal-rule ops before Avalonia draws");
+                ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Equal(new[] { "x" },
+                    because: "the accent bar itself should not depend on Avalonia combining-glyph shaping");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "A = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 140));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must render accent-bar math from the shared HRule plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_BorderBoxNestedMath_UsesSharedLinePlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

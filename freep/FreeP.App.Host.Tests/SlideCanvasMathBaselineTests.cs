@@ -359,6 +359,41 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [StaFact]
+    public void RenderParaWithMath_AccentBarOverline_UsesSharedHRulePlan_DoesNotThrow()
+    {
+        var mathNode = ParseOmml(
+            "<m:acc>" +
+            "<m:accPr><m:chr m:val=\"&#x0305;\"/></m:accPr>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:acc>");
+        var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+        var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
+
+        ops.OfType<MathDrawOp.DrawHRule>().Should().ContainSingle(
+            "PowerPoint-authored accent bars must resolve to shared horizontal-rule ops before WPF draws");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Equal(new[] { "x" },
+            because: "the accent bar itself should not depend on WPF combining-glyph shaping");
+
+        var para = new ResolvedParagraph
+        {
+            Runs = new[]
+            {
+                new ResolvedRun { Text = "A = ", FontFamily = "Calibri", FontSizePt = 18.0, Color = SrgbColor.Black },
+                new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = mathBox },
+            }
+        };
+
+        var visual = new DrawingVisual();
+        var act = () =>
+        {
+            using var dc = visual.RenderOpen();
+            SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+        };
+
+        act.Should().NotThrow();
+    }
+
+    [StaFact]
     public void RenderParaWithMath_RunWithMultipleTextChildren_UsesSharedFullTextPlan_DoesNotThrow()
     {
         var mathNode = ParseOmml("<m:r><m:t>sin</m:t><m:t>^2</m:t><m:t>x</m:t></m:r>");
