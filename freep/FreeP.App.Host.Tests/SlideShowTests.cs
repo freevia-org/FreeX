@@ -529,11 +529,22 @@ public sealed class SlideShowWindowTests
             readiness.HostName.Should().Be("WPF slideshow");
             readiness.AdapterName.Should().Be("WPF Windows recording capture adapter");
             readiness.Devices.Should().OnlyContain(device =>
-                device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone);
-            readiness.CanCaptureNarration.Should().Be(
-                readiness.Devices.Any(device => device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone && device.IsAvailable));
-            readiness.CanCaptureCamera.Should().BeFalse();
-            readiness.MissingStreams.Should().Contain(SlideShowRecordingCaptureStreamKind.CameraVideo);
+                device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone ||
+                device.Kind == SlideShowRecordingCaptureDeviceKind.Camera);
+            var hasAvailableMicrophone = readiness.Devices.Any(device =>
+                device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone && device.IsAvailable);
+            var hasAvailableCamera = readiness.Devices.Any(device =>
+                device.Kind == SlideShowRecordingCaptureDeviceKind.Camera && device.IsAvailable);
+            readiness.CanCaptureNarration.Should().Be(hasAvailableMicrophone);
+            readiness.CanCaptureCamera.Should().Be(hasAvailableCamera);
+            readiness.ReadyStreams.Contains(SlideShowRecordingCaptureStreamKind.NarrationAudio)
+                .Should().Be(hasAvailableMicrophone);
+            readiness.ReadyStreams.Contains(SlideShowRecordingCaptureStreamKind.CameraVideo)
+                .Should().Be(hasAvailableCamera);
+            readiness.MissingStreams.Contains(SlideShowRecordingCaptureStreamKind.NarrationAudio)
+                .Should().Be(!hasAvailableMicrophone);
+            readiness.MissingStreams.Contains(SlideShowRecordingCaptureStreamKind.CameraVideo)
+                .Should().Be(!hasAvailableCamera);
             readiness.StatusText.Should().NotContain("Recording capture adapter is not registered");
             window.RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness
                 .Should().BeSameAs(readiness);

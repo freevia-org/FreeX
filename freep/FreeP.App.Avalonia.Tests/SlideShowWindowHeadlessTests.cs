@@ -476,11 +476,21 @@ public sealed class SlideShowWindowHeadlessTests
         readiness!.HostName.Should().Be("Avalonia slideshow");
         readiness.AdapterName.Should().Be("Avalonia Windows recording capture adapter");
         readiness.StatusText.Should().NotContain("not registered");
-        readiness.CanCaptureCamera.Should().BeFalse();
-        readiness.MissingStreams.Should().Contain(SlideShowRecordingCaptureStreamKind.CameraVideo);
-        if (readiness.Devices.Any(device =>
-                device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone &&
-                device.IsAvailable))
+        readiness.Devices.Should().OnlyContain(device =>
+            device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone ||
+            device.Kind == SlideShowRecordingCaptureDeviceKind.Camera);
+
+        var hasAvailableMicrophone = readiness.Devices.Any(device =>
+            device.Kind == SlideShowRecordingCaptureDeviceKind.Microphone && device.IsAvailable);
+        var hasAvailableCamera = readiness.Devices.Any(device =>
+            device.Kind == SlideShowRecordingCaptureDeviceKind.Camera && device.IsAvailable);
+
+        readiness.CanCaptureCamera.Should().Be(hasAvailableCamera);
+        readiness.ReadyStreams.Contains(SlideShowRecordingCaptureStreamKind.CameraVideo)
+            .Should().Be(hasAvailableCamera);
+        readiness.MissingStreams.Contains(SlideShowRecordingCaptureStreamKind.CameraVideo)
+            .Should().Be(!hasAvailableCamera);
+        if (hasAvailableMicrophone)
         {
             readiness.CanCaptureNarration.Should().BeTrue();
             readiness.ReadyStreams.Should().Contain(SlideShowRecordingCaptureStreamKind.NarrationAudio);
