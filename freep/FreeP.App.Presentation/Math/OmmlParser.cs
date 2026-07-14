@@ -414,6 +414,27 @@ public static class OmmlParser
                 alphabet: run.Alphabet,
                 isLiteral: run.IsLiteral),
             MathNode.Row row => new MathNode.Row(row.Children.Select(NormalizeFunctionName).ToArray()),
+            MathNode.Sup sup => new MathNode.Sup(
+                NormalizeFunctionName(sup.Base),
+                sup.Script),
+            MathNode.Sub sub => new MathNode.Sub(
+                NormalizeFunctionName(sub.Base),
+                sub.Script),
+            MathNode.SubSup subSup => new MathNode.SubSup(
+                NormalizeFunctionName(subSup.Base),
+                subSup.Sub,
+                subSup.Sup,
+                subSup.AlignScripts),
+            MathNode.Limit limit => new MathNode.Limit(
+                NormalizeFunctionName(limit.Base),
+                limit.LimitValue,
+                limit.IsUpper),
+            MathNode.Box box => new MathNode.Box(
+                NormalizeFunctionName(box.Base),
+                box.OperatorEmulator),
+            MathNode.ArgSize argSize => new MathNode.ArgSize(
+                NormalizeFunctionName(argSize.Base),
+                argSize.Adjustment),
             _ => node
         };
 
