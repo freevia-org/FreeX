@@ -1,5 +1,7 @@
 using System.Globalization;
+using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
+using FreeX.App.Presentation.Text;
 using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using Free.Shared.Pdf;
@@ -224,6 +226,8 @@ public static class WorkbookPdfContentBuilder
         // same way WorksheetPrintRenderPlanner.TryBuild does for WPF: a single counter, seeded from
         // FirstPageNumber, running across every page that belongs to this sheet (all its print areas,
         // in export order).
+        AddVectorDrawingOps(workbook, sheet, exportPlan, request, ops, pageW, pageH);
+
         var pageNumber = ResolveEffectiveSheetPageNumber(exportPlan, request, sheet);
         var (header, footer) = ResolveHeaderFooterForPage(sheet, pageNumber);
         // &N (total pages) must reset per sheet, matching Excel and the WPF PrintRenderer path
@@ -494,6 +498,205 @@ public static class WorkbookPdfContentBuilder
         return ys;
     }
 
+    private static void AddVectorDrawingOps(
+        Workbook workbook,
+        Sheet sheet,
+        PortablePdfExportPlan exportPlan,
+        PortablePdfExportPageRequest request,
+        List<PdfDrawOp> ops,
+        double pageWidthPoints,
+        double pageHeightPoints)
+    {
+        if (request.IsCommentSummaryPage)
+            return;
+
+        var layout = BuildPageContentLayout(workbook, sheet, exportPlan, request);
+        if (layout is null || (layout.Charts.Count == 0 && layout.TextBoxes.Count == 0))
+            return;
+
+        var scaleX = pageWidthPoints / layout.PageBounds.Width;
+        var scaleY = pageHeightPoints / layout.PageBounds.Height;
+
+        foreach (var chart in layout.Charts)
+        {
+            AddFillRect(ops, chart.Bounds, chart.Fill, pageHeightPoints, scaleX, scaleY);
+            AddStrokeRect(ops, chart.Bounds, chart.Outline, chart.OutlineThickness, pageHeightPoints, scaleX, scaleY);
+
+            foreach (var overlay in chart.TextOverlays)
+                AddTextOverlay(ops, overlay, pageHeightPoints, scaleX, scaleY);
+        }
+
+        foreach (var textBox in layout.TextBoxes)
+        {
+            if (textBox.Fill is { } fill)
+                AddFillRect(ops, textBox.Bounds, fill, pageHeightPoints, scaleX, scaleY, textBox.FillAlpha / 255d);
+
+            AddStrokeRect(ops, textBox.Bounds, textBox.Outline, textBox.OutlineThickness, pageHeightPoints, scaleX, scaleY);
+
+            if (!string.IsNullOrWhiteSpace(textBox.Text))
+            {
+                var fontSize = Math.Max(1, textBox.Font.FontSize * scaleY);
+                ops.Add(new PdfText(
+                    textBox.TextBounds.Left * scaleX,
+                    pageHeightPoints - ((textBox.TextBounds.Top * scaleY) + fontSize),
+                    fontSize,
+                    ToPdfFontFace(textBox.Font.Bold, textBox.Font.Italic),
+                    ToPdfColor(textBox.Font.Color),
+                    PortablePdfWinAnsiTextCapability.Truncate(textBox.Text, 128)));
+            }
+        }
+    }
+
+    private static PageContentLayout? BuildPageContentLayout(
+        Workbook workbook,
+        Sheet sheet,
+        PortablePdfExportPlan exportPlan,
+        PortablePdfExportPageRequest request)
+    {
+        if (request.SheetIndex < 0 || request.SheetIndex >= exportPlan.ExportPrintPlan.SheetPlans.Count)
+            return null;
+
+        var sheetPlan = exportPlan.ExportPrintPlan.SheetPlans[request.SheetIndex];
+        var pagePlan = new PagePaginationResult(
+            BuildSegments(sheetPlan.RowPagePlans, static plan => plan.BodyRows, static plan => plan.TitleRows),
+            BuildSegments(sheetPlan.ColumnPagePlans, static plan => plan.BodyColumns, static plan => plan.TitleColumns),
+            PagePaginationPlanner.CalculateEffectiveScalePercent(
+                sheet.ScaleToFit,
+                sheetPlan.RowPageCount,
+                sheetPlan.ColumnPageCount));
+        var pageIndex = ResolvePageIndex(request, pagePlan);
+        return pageIndex < 0
+            ? null
+            : PageContentRenderModelBuilder.Build(
+                workbook,
+                sheet,
+                pagePlan,
+                pageIndex,
+                PortablePdfTextMeasurer.Instance);
+    }
+
+    private static int ResolvePageIndex(PortablePdfExportPageRequest request, PagePaginationResult pagePlan)
+    {
+        var pages = PrintPageGridPlanner.BuildIndexes(
+            pagePlan.RowPageCount,
+            pagePlan.ColumnPageCount,
+            request.PageOrder);
+
+        for (var index = 0; index < pages.Count; index++)
+        {
+            if (pages[index].RowPageIndex == request.RowPageIndex &&
+                pages[index].ColumnPageIndex == request.ColumnPageIndex)
+            {
+                return index;
+            }
+        }
+
+        return -1;
+    }
+
+    private static IReadOnlyList<PageAxisSegment> BuildSegments<TPlan>(
+        IReadOnlyList<TPlan> plans,
+        Func<TPlan, IReadOnlyList<uint>> getBodyIndexes,
+        Func<TPlan, IReadOnlyList<uint>> getTitleIndexes)
+    {
+        var segments = new List<PageAxisSegment>(plans.Count);
+        foreach (var plan in plans)
+        {
+            var indexes = getBodyIndexes(plan);
+            if (indexes.Count == 0)
+                indexes = getTitleIndexes(plan);
+            if (indexes.Count == 0)
+                continue;
+
+            segments.Add(new PageAxisSegment(indexes[0], indexes[^1]));
+        }
+
+        return segments;
+    }
+
+    private static void AddFillRect(
+        List<PdfDrawOp> ops,
+        LayoutRect bounds,
+        PresentationRgb color,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY,
+        double opacity = 1.0)
+    {
+        var rect = new PdfFillRect(
+            bounds.Left * scaleX,
+            pageHeightPoints - (bounds.Bottom * scaleY),
+            bounds.Width * scaleX,
+            bounds.Height * scaleY,
+            ToPdfColor(color));
+
+        ops.Add(opacity >= 0.999
+            ? rect
+            : new PdfOpacityGroup(Math.Clamp(opacity, 0, 1), [rect]));
+    }
+
+    private static void AddStrokeRect(
+        List<PdfDrawOp> ops,
+        LayoutRect bounds,
+        PresentationRgb color,
+        double lineWidth,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        if (lineWidth <= 0)
+            return;
+
+        ops.Add(new PdfStrokeRect(
+            bounds.Left * scaleX,
+            pageHeightPoints - (bounds.Bottom * scaleY),
+            bounds.Width * scaleX,
+            bounds.Height * scaleY,
+            ToPdfColor(color),
+            Math.Max(0.25, lineWidth * Math.Min(scaleX, scaleY))));
+    }
+
+    private static void AddTextOverlay(
+        List<PdfDrawOp> ops,
+        PrintChartTextOverlayPlan overlay,
+        double pageHeightPoints,
+        double scaleX,
+        double scaleY)
+    {
+        if (string.IsNullOrWhiteSpace(overlay.Text))
+            return;
+
+        var fontSize = Math.Max(1, overlay.FontSize * scaleY);
+        var text = new PdfText(
+            overlay.X * scaleX,
+            pageHeightPoints - ((overlay.Y * scaleY) + fontSize),
+            fontSize,
+            PdfFontFace.Regular,
+            ToPdfColor(overlay.Color),
+            PortablePdfWinAnsiTextCapability.Truncate(overlay.Text, 128));
+
+        if (Math.Abs(overlay.RotationDegrees) < 0.01)
+        {
+            ops.Add(text);
+            return;
+        }
+
+        ops.Add(new PdfRotationGroup(
+            overlay.X * scaleX,
+            pageHeightPoints - (overlay.Y * scaleY),
+            overlay.RotationDegrees,
+            [text]));
+    }
+
+    private static PdfFontFace ToPdfFontFace(bool bold, bool italic) =>
+        (bold, italic) switch
+        {
+            (true, true) => PdfFontFace.BoldItalic,
+            (true, false) => PdfFontFace.Bold,
+            (false, true) => PdfFontFace.Italic,
+            _ => PdfFontFace.Regular
+        };
+
     private static void RenderHeaderFooterBand(
         List<PdfDrawOp> ops,
         WorksheetHeaderFooter band,
@@ -725,6 +928,9 @@ public static class WorkbookPdfContentBuilder
     private static PdfColor? ToPdfColor(CellColor? color) =>
         color is { } c ? new PdfColor(c.R, c.G, c.B) : null;
 
+    private static PdfColor ToPdfColor(PresentationRgb color) =>
+        new(color.R, color.G, color.B);
+
     private static int FindRowIndex(IReadOnlyList<PortablePdfPageRow> rows, uint row)
     {
         for (var index = 0; index < rows.Count; index++)
@@ -757,5 +963,23 @@ public static class WorkbookPdfContentBuilder
         return bounded * columnCount > availableWidth
             ? equalWidth
             : bounded;
+    }
+
+    private sealed class PortablePdfTextMeasurer : ITextMeasurer
+    {
+        public static readonly PortablePdfTextMeasurer Instance = new();
+
+        public TextSize Measure(string? text, string? fontFamily, double fontSize, bool bold, bool italic)
+        {
+            if (string.IsNullOrEmpty(text))
+                return TextSize.Empty;
+
+            var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .Split('\n');
+            var widthFactor = bold ? 0.58 : 0.54;
+            var maxWidth = lines.Max(line => line.Length * fontSize * widthFactor);
+            return new TextSize(maxWidth, lines.Length * fontSize * 1.2);
+        }
     }
 }
