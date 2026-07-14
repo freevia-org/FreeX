@@ -217,6 +217,130 @@ public sealed class SmartArtEditingPlannerTests
     }
 
     [Fact]
+    public void ApplyTextPaneOutline_RebuildsSharedTreeAndLiveLayout()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/orgChart";
+
+        var result = SmartArtEditingPlanner.ApplyTextPaneOutline(data,
+        [
+            new("Executive", 0, ModelId: "root"),
+            new("Assistant", 1, IsAssistant: true, ModelId: "assistant"),
+            new("Platform", 1, ModelId: "manager"),
+            new("QA", 2),
+            new("Operations", 0, ModelId: "operations")
+        ]);
+
+        result.Applied.Should().BeTrue();
+        result.RowCount.Should().Be(5);
+        result.Outline.Select(item => (item.ModelId, item.Text, item.Level, item.SiblingIndex, item.IsAssistant))
+            .Should().Equal(
+                ("root", "Executive", 0, 0, false),
+                ("assistant", "Assistant", 1, 0, true),
+                ("manager", "Platform", 1, 1, false),
+                ("freep-smartart-node-4", "QA", 2, 0, false),
+                ("operations", "Operations", 0, 1, false));
+
+        data.Nodes.Should().HaveCount(2);
+        data.Nodes[0].Children.Should().HaveCount(2);
+        data.Nodes[0].Children[0].IsAssistant.Should().BeTrue();
+        data.Nodes[0].Children[1].Children.Should().ContainSingle().Which.Text.Should().Be("QA");
+
+        var liveTexts = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme())!
+            .Where(shape => shape.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Select(shape => shape.TextBody!.Paragraphs[0].Runs[0].Text);
+
+        liveTexts.Should().Contain(["Executive", "Assistant", "Platform", "QA", "Operations"]);
+    }
+
+    [Fact]
+    public void ApplyTextPaneOutline_SkippedParentLevelIsRejectedWithoutMutation()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));
+
+        var result = SmartArtEditingPlanner.ApplyTextPaneOutline(data,
+        [
+            new("Executive", 0, ModelId: "root"),
+            new("Too Deep", 2, ModelId: "deep")
+        ]);
+
+        result.Applied.Should().BeFalse();
+        result.Message.Should().Be("SmartArt text-pane levels cannot skip a parent level.");
+        data.Nodes.Select(node => node.Text).Should().Equal("Leader", "Manager");
+    }
+
+    [Fact]
+    public void ApplyTextPaneOutline_PreservesPicturePayloadsByStableNodeId()
+    {
+        var picture = new ImagePart { Bytes = [0x89, 0x50, 0x4E, 0x47], ContentType = "image/png" };
+        var data = MakeFlatData(SmartArtFamily.List, ("a", "Alpha"), ("b", "Beta"));
+        data.Nodes[1].Picture = picture;
+
+        var result = SmartArtEditingPlanner.ApplyTextPaneOutline(data,
+        [
+            new("Beta revised", 0, ModelId: "b"),
+            new("Alpha", 0, ModelId: "a")
+        ]);
+
+        result.Applied.Should().BeTrue();
+        data.Nodes.Select(node => node.ModelId).Should().Equal("b", "a");
+        data.Nodes[0].Picture.Should().BeSameAs(picture);
+        data.Nodes[1].Picture.Should().BeNull();
+    }
+
+    [Fact]
+    public void TextPaneOutline_DataPartAndDrawingCacheRegenerationShareAppliedModel()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));
+        var smartArt = new SmartArtShape { Data = data, DrawingPartPath = "ppt/diagrams/drawing1.xml" };
+        smartArt.Parts["ppt/diagrams/data1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/data1.xml",
+            ContentType = "application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dgm:dataModel xmlns:dgm=\"http://schemas.openxmlformats.org/drawingml/2006/diagram\" />")
+        };
+        smartArt.Parts["ppt/diagrams/drawing1.xml"] = new DiagramPart
+        {
+            PartPath = "ppt/diagrams/drawing1.xml",
+            ContentType = "application/vnd.ms-office.drawingml.diagramDrawing+xml",
+            Bytes = Encoding.UTF8.GetBytes("<dsp:drawing xmlns:dsp=\"http://schemas.microsoft.com/office/drawing/2008/diagram\" />")
+        };
+
+        SmartArtEditingPlanner.ApplyTextPaneOutline(data,
+        [
+            new("Executive", 0, ModelId: "root"),
+            new("Delivery Lead", 1, ModelId: "manager")
+        ]).Applied.Should().BeTrue();
+
+        var dataPart = SmartArtEditingPlanner.RewriteDataPart(smartArt);
+        var cache = SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            FrameX,
+            FrameY,
+            FrameCx,
+            FrameCy,
+            DefaultTheme());
+
+        dataPart.Applied.Should().BeTrue();
+        dataPart.ConnectionCount.Should().Be(1);
+        cache.Applied.Should().BeTrue();
+        cache.ShapeCount.Should().Be(3);
+
+        var dgm = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/diagram");
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var dataDoc = XDocument.Parse(Encoding.UTF8.GetString(smartArt.Parts["ppt/diagrams/data1.xml"].Bytes));
+        dataDoc.Descendants(a + "t").Select(t => t.Value)
+            .Should().Equal("Executive", "Delivery Lead");
+        dataDoc.Descendants(dgm + "cxn")
+            .Should().ContainSingle()
+            .Which.Attribute("destId")!.Value.Should().Be("manager");
+
+        smartArt.FallbackShapes.Select(shape => shape.PlainText)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Should().Equal("Executive", "Delivery Lead");
+    }
+
+    [Fact]
     public void RewriteDataPart_AfterSharedOutlineEdit_RegeneratesNativeDiagramData()
     {
         var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("manager", "Manager"));

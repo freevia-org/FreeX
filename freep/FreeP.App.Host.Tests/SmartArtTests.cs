@@ -676,6 +676,52 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void RoundTrip_SmartArt_TextPaneOutlineRegeneratesDataPartAndDrawingCache()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy1",
+            nodes: [("root", "Leader"), ("manager", "Manager"), ("legacy", "Legacy")],
+            parOfConnections: []);
+        var savedPath = Path.Combine(_tempDir, "smartart-text-pane-outline-cache.pptx");
+
+        var presentation = PptxPackageReader.Read(pptxPath);
+        var shape = presentation.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt);
+        var smartArt = shape.SmartArt!;
+
+        var textPane = SmartArtEditingPlanner.ApplyTextPaneOutline(smartArt.Data,
+        [
+            new("Executive", 0, ModelId: "root"),
+            new("Delivery Lead", 1, ModelId: "manager"),
+            new("Release", 2)
+        ]);
+        textPane.Applied.Should().BeTrue();
+        textPane.Outline.Select(item => (item.Text, item.Level))
+            .Should().Equal(("Executive", 0), ("Delivery Lead", 1), ("Release", 2));
+
+        SmartArtEditingPlanner.RewriteDataPart(smartArt).Applied.Should().BeTrue();
+        SmartArtEditingPlanner.RegenerateDrawingCache(
+            smartArt,
+            shape.OffsetXEmu,
+            shape.OffsetYEmu,
+            shape.ExtentCxEmu,
+            shape.ExtentCyEmu,
+            presentation.Theme!).Applied.Should().BeTrue();
+
+        PptxPackageWriter.Write(presentation, savedPath);
+
+        var reread = PptxPackageReader.Read(savedPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        reread.Data!.Nodes.Should().ContainSingle();
+        reread.Data.Nodes[0].Text.Should().Be("Executive");
+        reread.Data.Nodes[0].Children.Should().ContainSingle().Which.Text.Should().Be("Delivery Lead");
+        reread.Data.Nodes[0].Children[0].Children.Should().ContainSingle().Which.Text.Should().Be("Release");
+        reread.FallbackShapes.Select(s => s.PlainText)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Should().Equal("Executive", "Delivery Lead", "Release");
+    }
+
+    [Fact]
     public void Compositor_SmartArt_WithFallbackShapes_EmitsShapeOps()
     {
         var smart = new SmartArtShape();

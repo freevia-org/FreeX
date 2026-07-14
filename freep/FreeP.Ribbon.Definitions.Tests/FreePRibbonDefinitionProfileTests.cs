@@ -876,6 +876,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.org-chart",
             "freep.smartart.outline-editing",
             "freep.smartart.data-part-authoring",
+            "freep.smartart.text-pane-cache-authoring",
         };
 
         workflowEvidence.Should().HaveCount(expectedWorkflowEvidenceIds.Length);

@@ -84,6 +84,18 @@ public sealed record SmartArtDrawingCacheRegenerationResult(
     int NodeCount,
     int ShapeCount);
 
+public sealed record SmartArtTextPaneOutlineRow(
+    string Text,
+    int Level,
+    bool IsAssistant = false,
+    string? ModelId = null);
+
+public sealed record SmartArtTextPaneApplyResult(
+    bool Applied,
+    string Message,
+    int RowCount,
+    IReadOnlyList<SmartArtNodeOutlineItem> Outline);
+
 public static class SmartArtEditingPlanner
 {
     public const string DefaultNewNodeText = "New node";
@@ -147,6 +159,118 @@ public static class SmartArtEditingPlanner
         for (var i = 0; i < data.Nodes.Count; i++)
             CollectOutline(data.Nodes[i], i, items);
         return items;
+    }
+
+    public static SmartArtTextPaneApplyResult ApplyTextPaneOutline(
+        SmartArtData? data,
+        IReadOnlyList<SmartArtTextPaneOutlineRow> rows)
+    {
+        ArgumentNullException.ThrowIfNull(rows);
+
+        if (data is null)
+        {
+            return new SmartArtTextPaneApplyResult(
+                false,
+                "No SmartArt data model is available.",
+                0,
+                Array.Empty<SmartArtNodeOutlineItem>());
+        }
+
+        if (rows.Count == 0)
+        {
+            return new SmartArtTextPaneApplyResult(
+                false,
+                "At least one SmartArt text-pane row is required.",
+                0,
+                BuildOutline(data));
+        }
+
+        var existingNodes = EnumerateNodes(data).ToList();
+        var existingById = existingNodes
+            .Where(node => !string.IsNullOrWhiteSpace(node.ModelId))
+            .GroupBy(node => node.ModelId.Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var rebuiltRoots = new List<SmartArtNode>();
+        var stack = new List<SmartArtNode>();
+
+        for (var index = 0; index < rows.Count; index++)
+        {
+            var row = rows[index];
+            var level = Math.Max(0, row.Level);
+            if (index == 0 && level != 0)
+            {
+                return new SmartArtTextPaneApplyResult(
+                    false,
+                    "The first SmartArt text-pane row must be a root node.",
+                    0,
+                    BuildOutline(data));
+            }
+
+            if (level > stack.Count)
+            {
+                return new SmartArtTextPaneApplyResult(
+                    false,
+                    "SmartArt text-pane levels cannot skip a parent level.",
+                    0,
+                    BuildOutline(data));
+            }
+
+            var explicitId = NormalizeModelId(row.ModelId);
+            var candidateId = explicitId
+                ?? (index < existingNodes.Count ? NormalizeModelId(existingNodes[index].ModelId) : null)
+                ?? CreateModelId(usedIds);
+
+            if (usedIds.Contains(candidateId))
+            {
+                if (explicitId is not null)
+                {
+                    return new SmartArtTextPaneApplyResult(
+                        false,
+                        "Duplicate SmartArt text-pane node ids are not allowed.",
+                        0,
+                        BuildOutline(data));
+                }
+
+                candidateId = CreateModelId(usedIds);
+            }
+
+            usedIds.Add(candidateId);
+            var preservedNode = existingById.TryGetValue(candidateId, out var byId)
+                ? byId
+                : index < existingNodes.Count
+                    ? existingNodes[index]
+                    : null;
+
+            var node = new SmartArtNode
+            {
+                ModelId = candidateId,
+                Text = NormalizeText(row.Text),
+                Level = level,
+                IsAssistant = row.IsAssistant,
+                Picture = preservedNode?.Picture
+            };
+
+            if (stack.Count > level)
+                stack.RemoveRange(level, stack.Count - level);
+
+            if (level == 0)
+                rebuiltRoots.Add(node);
+            else
+                stack[level - 1].Children.Add(node);
+
+            stack.Add(node);
+        }
+
+        data.Nodes.Clear();
+        data.Nodes.AddRange(rebuiltRoots);
+        NormalizeLevels(data);
+
+        return new SmartArtTextPaneApplyResult(
+            true,
+            "SmartArt text-pane outline applied to the shared model.",
+            rows.Count,
+            BuildOutline(data));
     }
 
     public static SmartArtDataPartRewriteResult RewriteDataPart(SmartArtShape? smartArt)
@@ -434,6 +558,11 @@ public static class SmartArtEditingPlanner
             EnumerateNodes(data).Select(n => n.ModelId),
             StringComparer.OrdinalIgnoreCase);
 
+        return CreateModelId(existing);
+    }
+
+    private static string CreateModelId(HashSet<string> existing)
+    {
         for (var index = existing.Count + 1; ; index++)
         {
             var candidate = $"freep-smartart-node-{index}";
@@ -532,6 +661,12 @@ public static class SmartArtEditingPlanner
         items.Add(new SmartArtNodeOutlineItem(node.ModelId, node.Text, node.Level, siblingIndex, node.IsAssistant));
         for (var i = 0; i < node.Children.Count; i++)
             CollectOutline(node.Children[i], i, items);
+    }
+
+    private static string? NormalizeModelId(string? modelId)
+    {
+        var trimmed = modelId?.Trim();
+        return string.IsNullOrWhiteSpace(trimmed) ? null : trimmed;
     }
 
     private static string NormalizeText(string? text) =>
