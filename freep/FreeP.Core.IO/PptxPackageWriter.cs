@@ -362,6 +362,11 @@ public static class PptxPackageWriter
         var preservedContentTypeWriterOwnedPaths = new HashSet<string>(
             preservedChartWorkbookPaths,
             StringComparer.OrdinalIgnoreCase);
+        foreach (var mediaPath in FindPreservedMediaPackagePaths(packageSnapshot, presentation))
+        {
+            preservedContentTypeWriterOwnedPaths.Add(mediaPath);
+        }
+
         foreach (var captionPath in FindPreservedCaptionPackagePaths(packageSnapshot, presentation))
         {
             preservedContentTypeWriterOwnedPaths.Add(captionPath);
@@ -495,6 +500,7 @@ public static class PptxPackageWriter
         }
 
         int globalChartIndex = 1; // monotonically increasing across all slides
+        var writtenMediaPaths = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         var writtenCaptionPaths = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         for (int si = 0; si < presentation.Slides.Count; si++)
         {
@@ -513,7 +519,7 @@ public static class PptxPackageWriter
             var (mediaRelIds, fillBlipRelIds) = WriteSlideMedia(archive, slide, si + 1);
 
             // Write media audio/video files for Media shapes
-            var mediaFileRelIds = WriteSlideMediaFiles(archive, slide, si + 1);
+            var mediaFileRelIds = WriteSlideMediaFiles(archive, slide, si + 1, packageSnapshot, writtenMediaPaths);
 
             // Write charts into the archive, get back rel-id map
             var chartRelIds = WriteSlideCharts(archive, slide, ref globalChartIndex, packageSnapshot);
@@ -600,7 +606,7 @@ public static class PptxPackageWriter
             foreach (var (_, mediaRelId, mediaPath) in mediaRelIds)
                 slideRels.Add(mediaRelId, ImageRelType, $"../media/{mediaPath.Split('/').Last()}");
             foreach (var (_, mediaFileRelId, mediaFilePath, isVideo) in mediaFileRelIds)
-                slideRels.Add(mediaFileRelId, isVideo ? VideoRelType : AudioRelType, $"../media/{mediaFilePath.Split('/').Last()}");
+                slideRels.Add(mediaFileRelId, isVideo ? VideoRelType : AudioRelType, MakeRelativePath(slidePath, mediaFilePath));
             foreach (var (_, relationship, target, isExternal) in captionTrackRels)
                 slideRels.Add(relationship.RelationshipId, CaptionRelType, target, isExternal);
             foreach (var (_, fillBlipRelId, fillBlipPath) in fillBlipRelIds)
@@ -4020,7 +4026,11 @@ public static class PptxPackageWriter
     /// The relId uses prefix "rIdVid" to avoid collision with the "rIdMedia" image prefix.
     /// </summary>
     private static List<(uint shapeId, string relId, string mediaPath, bool isVideo)> WriteSlideMediaFiles(
-        ZipArchive archive, Slide slide, int slideIndex)
+        ZipArchive archive,
+        Slide slide,
+        int slideIndex,
+        PptxPackageSnapshot? packageSnapshot,
+        Dictionary<string, byte[]> writtenMediaPaths)
     {
         var result = new List<(uint, string, string, bool)>();
         int n = 1;
@@ -4043,15 +4053,77 @@ public static class PptxPackageWriter
                 "audio/x-ms-wma"  => "wma",
                 _                 => "mp4"
             };
-            var mediaPath = $"ppt/media/slide{slideIndex}_video{n}.{ext}";
-            var relId     = $"rIdVid{n}";
+            var mediaPath = TryGetPreservedMediaPackagePath(media, packageSnapshot, writtenMediaPaths, out var preservedPath)
+                ? preservedPath
+                : $"ppt/media/slide{slideIndex}_video{n}.{ext}";
+            mediaPath = EnsureUniqueMediaPackagePath(mediaPath, writtenMediaPaths, media.Bytes);
+            var relId = $"rIdVid{n}";
 
-            WriteRawEntry(archive, mediaPath, media.Bytes);
+            if (!writtenMediaPaths.ContainsKey(mediaPath))
+            {
+                WriteRawEntry(archive, mediaPath, media.Bytes);
+                writtenMediaPaths.Add(mediaPath, media.Bytes);
+            }
             result.Add((shape.Id, relId, mediaPath, media.IsVideo));
             n++;
         }
 
         return result;
+    }
+
+    private static bool TryGetPreservedMediaPackagePath(
+        MediaInfo media,
+        PptxPackageSnapshot? packageSnapshot,
+        IReadOnlyDictionary<string, byte[]> writtenMediaPaths,
+        out string mediaPath)
+    {
+        mediaPath = string.Empty;
+        if (packageSnapshot is null
+            || !TryNormalizeInternalMediaPackagePath(media.SourcePackagePath, out var normalizedPath)
+            || !packageSnapshot.TryGetEntry(normalizedPath, out var preservedBytes)
+            || preservedBytes.Length == 0
+            || media.Bytes.Length == 0
+            || !media.Bytes.SequenceEqual(preservedBytes))
+        {
+            return false;
+        }
+
+        if (writtenMediaPaths.TryGetValue(normalizedPath, out var writtenBytes) &&
+            !writtenBytes.SequenceEqual(preservedBytes))
+        {
+            return false;
+        }
+
+        mediaPath = normalizedPath;
+        return true;
+    }
+
+    private static string EnsureUniqueMediaPackagePath(
+        string mediaPath,
+        IReadOnlyDictionary<string, byte[]> writtenMediaPaths,
+        byte[] bytes)
+    {
+        if (!writtenMediaPaths.TryGetValue(mediaPath, out var writtenBytes) ||
+            writtenBytes.SequenceEqual(bytes))
+        {
+            return mediaPath;
+        }
+
+        var extension = Path.GetExtension(mediaPath).TrimStart('.');
+        if (string.IsNullOrWhiteSpace(extension))
+            extension = "bin";
+
+        var directory = GetDirectoryName(mediaPath);
+        var fileName = Path.GetFileNameWithoutExtension(mediaPath);
+        var suffix = 1;
+        string candidate;
+        do
+        {
+            candidate = $"{directory}/{fileName}_{suffix++}.{extension}";
+        }
+        while (writtenMediaPaths.ContainsKey(candidate));
+
+        return candidate;
     }
 
     private static List<(uint shapeId, MediaCaptionTrackRelationship relationship, string target, bool isExternal)> WriteSlideMediaCaptionTracks(
@@ -4217,6 +4289,25 @@ public static class PptxPackageWriter
         return true;
     }
 
+    private static bool TryNormalizeInternalMediaPackagePath(string? source, out string mediaPath)
+    {
+        mediaPath = string.Empty;
+        if (string.IsNullOrWhiteSpace(source) || IsExternalCaptionTrackSource(source))
+            return false;
+
+        var normalized = ToZipEntryPath(source);
+        if (string.IsNullOrWhiteSpace(normalized)
+            || normalized.Split('/').Any(part => part is "." or "..")
+            || !normalized.StartsWith("ppt/media/", StringComparison.OrdinalIgnoreCase)
+            || GetAudioVideoExtension(normalized) is not ("mp4" or "mov" or "avi" or "wmv" or "mp3" or "m4a" or "wav" or "wma"))
+        {
+            return false;
+        }
+
+        mediaPath = normalized;
+        return true;
+    }
+
     private static bool TryGetCaptionTrackBytes(
         MediaCaptionTrackInfo track,
         PptxPackageSnapshot? packageSnapshot,
@@ -4266,6 +4357,24 @@ public static class PptxPackageWriter
     }
 
     private static string GetCaptionTrackExtension(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source))
+            return string.Empty;
+
+        var end = source.AsSpan();
+        var queryIndex = source.IndexOfAny(['?', '#']);
+        if (queryIndex >= 0)
+            end = source.AsSpan(0, queryIndex);
+
+        var slashIndex = end.LastIndexOf('/');
+        var fileName = slashIndex >= 0 ? end[(slashIndex + 1)..] : end;
+        var dotIndex = fileName.LastIndexOf('.');
+        return dotIndex >= 0 && dotIndex < fileName.Length - 1
+            ? fileName[(dotIndex + 1)..].ToString().ToLowerInvariant()
+            : string.Empty;
+    }
+
+    private static string GetAudioVideoExtension(string source)
     {
         if (string.IsNullOrWhiteSpace(source))
             return string.Empty;
@@ -5124,6 +5233,36 @@ public static class PptxPackageWriter
 
                     paths.Add(normalizedPath);
                 }
+            }
+        }
+
+        return paths;
+    }
+
+    private static HashSet<string> FindPreservedMediaPackagePaths(
+        PptxPackageSnapshot? packageSnapshot,
+        Presentation presentation)
+    {
+        var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (packageSnapshot is null)
+            return paths;
+
+        foreach (var slide in presentation.Slides)
+        {
+            foreach (var shape in AllShapes(slide.Shapes))
+            {
+                if (shape.Kind != SlideShapeKind.Media
+                    || shape.Media is not { } media
+                    || !TryNormalizeInternalMediaPackagePath(media.SourcePackagePath, out var normalizedPath)
+                    || !packageSnapshot.TryGetEntry(normalizedPath, out var preservedBytes)
+                    || preservedBytes.Length == 0
+                    || media.Bytes.Length == 0
+                    || !media.Bytes.SequenceEqual(preservedBytes))
+                {
+                    continue;
+                }
+
+                paths.Add(normalizedPath);
             }
         }
 

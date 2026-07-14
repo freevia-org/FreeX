@@ -808,6 +808,114 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_PowerPointNativeMediaAndCaptionPackage_SemanticEdit_PreservesAuthoredSidecarPaths()
+    {
+        const string nativeMediaPath = "ppt/media/powerpoint/native-video.mp4";
+        var nativeCaptionTrack = new CaptionTrackFixture(
+            "rIdPowerPointNativeCaption",
+            "ppt/media/powerpoint/native-video-en.vtt",
+            "en-US",
+            "Native video captions",
+            "Native media caption");
+        var mediaBytes = new byte[] { 0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70 };
+
+        var pres = new Presentation();
+        var slide = new Slide();
+        slide.Shapes.Add(new SlideShape
+        {
+            Id          = 1,
+            Name        = "PowerPoint native media",
+            Kind        = SlideShapeKind.Media,
+            OffsetXEmu  = 914400,
+            OffsetYEmu  = 914400,
+            ExtentCxEmu = 4572000,
+            ExtentCyEmu = 2743200,
+            Picture = new ImagePart { Bytes = CreateMinimal1x1Png(), ContentType = "image/png" },
+            Media = new MediaInfo
+            {
+                IsVideo = true,
+                Bytes = mediaBytes,
+                ContentType = "video/mp4"
+            }
+        });
+        pres.Slides.Add(slide);
+
+        using var source = new MemoryStream();
+        PptxPackageWriter.Write(pres, source);
+        MoveMediaPackagePart(source, slideIndex: 1, nativeMediaPath);
+        AddCaptionTracks(source, [nativeCaptionTrack]);
+
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        loaded.PackageSnapshot!.TryGetEntry(nativeMediaPath, out var snapshotMediaBytes)
+            .Should().BeTrue("the original PowerPoint media sidecar should be captured in the package snapshot");
+        snapshotMediaBytes.Should().Equal(mediaBytes);
+        loaded.PackageSnapshot.TryGetEntry(nativeCaptionTrack.PackagePath, out var snapshotCaptionBytes)
+            .Should().BeTrue("the original PowerPoint caption sidecar should be captured in the package snapshot");
+        snapshotCaptionBytes.Should().Equal(CaptionPayload(nativeCaptionTrack.Text));
+
+        var loadedMedia = loaded.Slides[0].Shapes[0].Media!;
+        loadedMedia.SourcePackagePath.Should().Be(nativeMediaPath);
+        loadedMedia.Bytes.Should().Equal(mediaBytes);
+        loadedMedia.CaptionTracks.Should().ContainSingle()
+            .Which.Should().Match<MediaCaptionTrackInfo>(track =>
+                track.RelationshipId == nativeCaptionTrack.RelationshipId &&
+                track.Source == nativeCaptionTrack.PackagePath &&
+                track.Language == nativeCaptionTrack.Language &&
+                track.Label == nativeCaptionTrack.Label &&
+                track.Bytes.SequenceEqual(CaptionPayload(nativeCaptionTrack.Text)));
+
+        loaded.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "Modeled edit",
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 3657600,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            Text = "edit"
+        });
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+
+        saved.Position = 0;
+        using (var zip = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            ReadBytes(zip, nativeMediaPath).Should().Equal(mediaBytes,
+                "the native PowerPoint media sidecar should survive a modeled slide edit at the original package path");
+            ReadBytes(zip, nativeCaptionTrack.PackagePath).Should().Equal(CaptionPayload(nativeCaptionTrack.Text));
+            zip.GetEntry("ppt/media/slide1_video1.mp4").Should().BeNull(
+                "read/native media files should not be unnecessarily renamed during save");
+            zip.GetEntry("ppt/media/slide1_caption1.vtt").Should().BeNull(
+                "read/native caption tracks should not be unnecessarily renamed during save");
+
+            var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+            var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            rels.Root!.Elements(relNs + "Relationship")
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video")
+                .Attribute("Target")!.Value.Should().Be("../media/powerpoint/native-video.mp4");
+            rels.Root!.Elements(relNs + "Relationship")
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption")
+                .Attribute("Target")!.Value.Should().Be("../media/powerpoint/native-video-en.vtt");
+        }
+
+        saved.Position = 0;
+        var reopened = PptxPackageReader.Read(saved);
+        reopened.Slides[0].Shapes[0].Media!.SourcePackagePath.Should().Be(nativeMediaPath);
+        reopened.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle()
+            .Which.Source.Should().Be(nativeCaptionTrack.PackagePath);
+        var transcript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(reopened);
+        transcript.Tracks.Should().ContainSingle()
+            .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
+                descriptor.Source == nativeCaptionTrack.PackagePath &&
+                descriptor.Status == PresentationMediaTranscriptTrackStatus.Available &&
+                descriptor.Cues[0].Text == nativeCaptionTrack.Text);
+        reopened.Slides[0].Shapes.Should().Contain(shape => shape.Name == "Modeled edit");
+    }
+
+    [Fact]
     public void Media_SlideCloner_ClonesMedia()
     {
         var shape = new SlideShape
@@ -1340,6 +1448,23 @@ public sealed class MediaFieldsTests
         }
     }
 
+    private static void MoveMediaPackagePart(MemoryStream package, int slideIndex, string destinationPath)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true);
+        var relsPath = $"ppt/slides/_rels/slide{slideIndex}.xml.rels";
+        var rels = ReadXml(archive, relsPath);
+        var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+        var mediaRel = rels.Root!.Elements(relNs + "Relationship")
+            .Single(e => e.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/video");
+        var oldPath = "ppt/media/" + Path.GetFileName(mediaRel.Attribute("Target")!.Value);
+        var mediaBytes = ReadBytes(archive, oldPath);
+        archive.GetEntry(oldPath)!.Delete();
+        WriteBytes(archive, destinationPath, mediaBytes);
+        mediaRel.SetAttributeValue("Target", CaptionRelationshipTarget(destinationPath));
+        WriteXml(archive, relsPath, rels);
+    }
+
     private static void AddContentTypeOverride(MemoryStream package, string partName, string contentType)
     {
         package.Position = 0;
@@ -1384,6 +1509,14 @@ public sealed class MediaFieldsTests
         var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
         using var writer = new StreamWriter(entry.Open());
         writer.Write(text);
+    }
+
+    private static void WriteBytes(ZipArchive archive, string path, byte[] bytes)
+    {
+        archive.GetEntry(path)?.Delete();
+        var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
+        using var stream = entry.Open();
+        stream.Write(bytes);
     }
 
     private static Slide CreateCaptionedMediaSlide(uint shapeId, string shapeName)

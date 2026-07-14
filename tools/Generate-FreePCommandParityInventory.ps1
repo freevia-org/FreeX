@@ -180,6 +180,24 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Real OS microphone/camera capture implementations, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
         new(
+            EvidenceId: "freep.media-caption.native-sidecar-depth",
+            Area: "PowerPoint-native media and caption sidecar package depth",
+            Status: "shared-package-retention-evidence",
+            HostCoverage: "WPF/Avalonia consume shared PPTX reader/writer media package paths and caption descriptors with no host-specific media sidecar policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-media-caption-native-media-sidecar-depth-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.Core.Model/Slide.cs",
+                "freep/FreeP.Core.IO/PptxPackageReader.cs",
+                "freep/FreeP.Core.IO/PptxPackageWriter.cs",
+                "freep/FreeP.App.Host.Tests/MediaFieldsTests.cs",
+                "freep/FreeP.App.Presentation.Tests/PresentationMediaTranscriptPlannerTests.cs"
+            ],
+            RemainingWork: "Imported embedded media now retains original ppt/media package paths, matching package-snapshot bytes save back to the authored media path, and nested caption sidecars keep package entries plus relationship targets after semantic slide edits. Broader real-deck PowerPoint-native media/caption baselines, PowerPoint COM baselines, and real microphone/camera/playback/capture-device behavior remain deferred."),
+        new(
             EvidenceId: "freep.presenter.ink.execution",
             Area: "Presenter ink, laser, and persistence execution",
             Status: "shared-executable-evidence",

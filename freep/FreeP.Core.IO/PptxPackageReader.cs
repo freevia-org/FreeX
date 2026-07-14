@@ -2967,6 +2967,7 @@ public static class PptxPackageReader
                             {
                                 mediaInfo.Bytes       = mediaBytes;
                                 mediaInfo.ContentType = OpcMediaTypes.GetAudioVideoContentType(mediaPath);
+                                mediaInfo.SourcePackagePath = mediaPath;
                             }
                         }
                     }
@@ -2996,6 +2997,7 @@ public static class PptxPackageReader
                             {
                                 mediaInfo.Bytes       = mBytes;
                                 mediaInfo.ContentType = OpcMediaTypes.GetAudioVideoContentType(mPath);
+                                mediaInfo.SourcePackagePath = mPath;
                             }
                             break;
                         }

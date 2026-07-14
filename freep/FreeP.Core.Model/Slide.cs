@@ -173,6 +173,12 @@ public sealed class MediaInfo
     public string ContentType { get; set; } = "video/mp4";
 
     /// <summary>
+    /// Original embedded media package path, when loaded from a PPTX package.
+    /// Empty for newly-authored or link-only media.
+    /// </summary>
+    public string SourcePackagePath { get; set; } = string.Empty;
+
+    /// <summary>
     /// For link-only media: the external URI from r:link on the videoFile/audioFile element.
     /// Empty when the media is embedded.
     /// </summary>
