@@ -916,6 +916,93 @@ public sealed class MediaFieldsTests
     }
 
     [Fact]
+    public void Media_PowerPointNativeCaptionPackage_CollidingRelationshipId_RetargetsCaptionMetadata()
+    {
+        var nativeCaptionTrack = new CaptionTrackFixture(
+            "rIdMedia1",
+            "ppt/media/collision/native-video-en.vtt",
+            "en-US",
+            "Collision captions",
+            "Relationship collision caption");
+
+        var pres = new Presentation();
+        pres.Slides.Add(CreateCaptionedMediaSlide(1, "Relationship collision video"));
+
+        using var source = new MemoryStream();
+        PptxPackageWriter.Write(pres, source);
+        RenamePosterImageRelationshipId(source, slideIndex: 1, "rIdPosterOriginal");
+        AddCaptionTracks(source, [nativeCaptionTrack]);
+
+        source.Position = 0;
+        var loaded = PptxPackageReader.Read(source);
+        var loadedTrack = loaded.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        loadedTrack.RelationshipId.Should().Be("rIdMedia1",
+            "the source package can use an id that later collides with FreeP's generated poster relationship id");
+        loadedTrack.Source.Should().Be(nativeCaptionTrack.PackagePath);
+        loadedTrack.Bytes.Should().Equal(CaptionPayload(nativeCaptionTrack.Text));
+
+        loaded.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 2,
+            Name = "Modeled edit",
+            Kind = SlideShapeKind.AutoShape,
+            OffsetXEmu = 914400,
+            OffsetYEmu = 3657600,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            Text = "edit"
+        });
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+
+        saved.Position = 0;
+        using (var zip = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            ReadBytes(zip, nativeCaptionTrack.PackagePath).Should().Equal(CaptionPayload(nativeCaptionTrack.Text));
+
+            var rels = ReadXml(zip, "ppt/slides/_rels/slide1.xml.rels");
+            var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+            var relationships = rels.Root!.Elements(relNs + "Relationship").ToArray();
+            relationships.Select(e => e.Attribute("Id")!.Value).Should().OnlyHaveUniqueItems();
+
+            relationships
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image")
+                .Attribute("Id")!.Value.Should().Be("rIdMedia1");
+
+            var captionRel = relationships
+                .Single(e => e.Attribute("Type")?.Value == "http://schemas.microsoft.com/office/2011/relationships/mediaCaption");
+            captionRel.Attribute("Id")!.Value.Should().Be("rIdCaption1",
+                "the native caption relationship id must move away from the writer-owned poster id");
+            captionRel.Attribute("Target")!.Value.Should().Be("../media/collision/native-video-en.vtt");
+            captionRel.Attribute("TargetMode").Should().BeNull();
+
+            var slideXml = ReadXml(zip, "ppt/slides/slide1.xml");
+            var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+            var captionEl = slideXml.Descendants().Single(e => e.Name.LocalName == "caption");
+            captionEl.Attribute(r + "embed")!.Value.Should().Be("rIdCaption1",
+                "the p20media:caption metadata must point at the remapped caption relationship");
+            captionEl.Attribute("lang")!.Value.Should().Be(nativeCaptionTrack.Language);
+            captionEl.Attribute("label")!.Value.Should().Be(nativeCaptionTrack.Label);
+        }
+
+        saved.Position = 0;
+        var reopened = PptxPackageReader.Read(saved);
+        var reopenedTrack = reopened.Slides[0].Shapes[0].Media!.CaptionTracks.Should().ContainSingle().Subject;
+        reopenedTrack.RelationshipId.Should().Be("rIdCaption1");
+        reopenedTrack.Source.Should().Be(nativeCaptionTrack.PackagePath);
+        reopenedTrack.Bytes.Should().Equal(CaptionPayload(nativeCaptionTrack.Text));
+
+        var transcript = PresentationMediaTranscriptPlanner.BuildTranscriptPlan(reopened);
+        transcript.Tracks.Should().ContainSingle()
+            .Which.Should().Match<PresentationMediaTranscriptTrackDescriptor>(descriptor =>
+                descriptor.Source == nativeCaptionTrack.PackagePath &&
+                descriptor.Status == PresentationMediaTranscriptTrackStatus.Available &&
+                descriptor.Cues[0].Text == nativeCaptionTrack.Text);
+        reopened.Slides[0].Shapes.Should().Contain(shape => shape.Name == "Modeled edit");
+    }
+
+    [Fact]
     public void Media_SlideCloner_ClonesMedia()
     {
         var shape = new SlideShape
@@ -1479,6 +1566,29 @@ public sealed class MediaFieldsTests
             new XAttribute("PartName", partName),
             new XAttribute("ContentType", contentType)));
         WriteXml(archive, "[Content_Types].xml", contentTypes);
+    }
+
+    private static void RenamePosterImageRelationshipId(MemoryStream package, int slideIndex, string replacementRelId)
+    {
+        package.Position = 0;
+        using var archive = new ZipArchive(package, ZipArchiveMode.Update, leaveOpen: true);
+        var relsPath = $"ppt/slides/_rels/slide{slideIndex}.xml.rels";
+        var rels = ReadXml(archive, relsPath);
+        var relNs = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/relationships");
+        var imageRel = rels.Root!.Elements(relNs + "Relationship")
+            .Single(e => e.Attribute("Type")?.Value == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image");
+        var originalRelId = imageRel.Attribute("Id")!.Value;
+        imageRel.SetAttributeValue("Id", replacementRelId);
+        WriteXml(archive, relsPath, rels);
+
+        var slidePath = $"ppt/slides/slide{slideIndex}.xml";
+        var slide = ReadXml(archive, slidePath);
+        var a = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var r = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+        var blip = slide.Descendants(a + "blip")
+            .Single(e => e.Attribute(r + "embed")?.Value == originalRelId);
+        blip.SetAttributeValue(r + "embed", replacementRelId);
+        WriteXml(archive, slidePath, slide);
     }
 
     private static byte[] ReadBytes(ZipArchive archive, string path)

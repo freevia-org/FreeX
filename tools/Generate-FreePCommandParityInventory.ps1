@@ -173,6 +173,7 @@ internal static class FreePCommandInventory
                 "docs/parity/freep-presenter-recording-unavailable-hardware-readiness-2026-07-14.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-05.md",
                 "docs/parity/freep-powerpoint-native-media-caption-package-baseline-2026-07-13.md",
+                "docs/parity/freep-media-caption-relid-collision-2026-07-14.md",
                 "docs/parity/freep-presenter-recording-review-2026-07-04.md"
             ],
             Verification:
@@ -186,7 +187,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/SlideShowTests.cs",
                 "freep/FreeP.App.Avalonia.Tests/SlideShowWindowHeadlessTests.cs"
             ],
-            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, paired real Windows microphone narration handoff evidence, paired Windows camera handoff readiness, paired default no-COM camera handoff/package-target readiness without encoded-payload or PowerPoint-baseline claims, paired deterministic injected encoded camera media payload artifacts through host-specific PPTX package paths, explicit planner evidence-source tagging that separates injected payload packaging, default-engine handoff, future default-engine payload rows, and PowerPoint COM baselines, paired OS-backed unavailable-hardware/no-device evidence, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Live capture on real microphone/camera hardware, actual local default no-COM camera video encoding that produces non-empty mp4 payload bytes, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
+            RemainingWork: "Shared recording capture adapter readiness contracts, paired WPF/Avalonia backend injection, paired real Windows microphone narration handoff evidence, paired Windows camera handoff readiness, paired default no-COM camera handoff/package-target readiness without encoded-payload or PowerPoint-baseline claims, paired deterministic injected encoded camera media payload artifacts through host-specific PPTX package paths, explicit planner evidence-source tagging that separates injected payload packaging, default-engine handoff, future default-engine payload rows, and PowerPoint COM baselines, paired OS-backed unavailable-hardware/no-device evidence, deterministic captured-artifact host evidence, review rows, session-summary persistable counts, captured PPTX media-part payload authoring, generated WebVTT recording-caption artifact persistence, focused single-track, external-link, multi-track, original-path/relationship-id, relationship-id collision remapping, content-type override, and shared-sidecar PowerPoint-native media caption relationship/package baselines are covered. Live capture on real microphone/camera hardware, actual local default no-COM camera video encoding that produces non-empty mp4 payload bytes, broader real-deck PowerPoint-native media/caption corpus baselines, and PowerPoint COM recording baselines remain deferred."),
         new(
             EvidenceId: "freep.presenter.recording.default-camera-encoding-readiness",
             Area: "Local default no-COM camera encoding readiness",
@@ -232,7 +233,8 @@ internal static class FreePCommandInventory
             HostCoverage: "WPF/Avalonia consume shared PPTX reader/writer media package paths and caption descriptors with no host-specific media sidecar policy",
             EvidenceDocs:
             [
-                "docs/parity/freep-media-caption-native-media-sidecar-depth-2026-07-14.md"
+                "docs/parity/freep-media-caption-native-media-sidecar-depth-2026-07-14.md",
+                "docs/parity/freep-media-caption-relid-collision-2026-07-14.md"
             ],
             Verification:
             [
@@ -242,7 +244,7 @@ internal static class FreePCommandInventory
                 "freep/FreeP.App.Host.Tests/MediaFieldsTests.cs",
                 "freep/FreeP.App.Presentation.Tests/PresentationMediaTranscriptPlannerTests.cs"
             ],
-            RemainingWork: "Imported embedded media now retains original ppt/media package paths, matching package-snapshot bytes save back to the authored media path, and nested caption sidecars keep package entries plus relationship targets after semantic slide edits. Broader real-deck PowerPoint-native media/caption baselines, PowerPoint COM baselines, and real microphone/camera/playback/capture-device behavior remain deferred."),
+            RemainingWork: "Imported embedded media now retains original ppt/media package paths, matching package-snapshot bytes save back to the authored media path, nested caption sidecars keep package entries plus relationship targets after semantic slide edits, and colliding native caption relationship ids remap away from writer-owned poster/media ids while retargeting p20media:caption metadata. Broader real-deck PowerPoint-native media/caption baselines, PowerPoint COM baselines, and real microphone/camera/playback/capture-device behavior remain deferred."),
         new(
             EvidenceId: "freep.presenter.ink.execution",
             Area: "Presenter ink, laser, and persistence execution",
