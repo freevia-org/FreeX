@@ -340,6 +340,84 @@ public sealed class SmartArtEditingPlannerTests
             .Should().Equal("Executive", "Delivery Lead");
     }
 
+    [Theory]
+    [InlineData(SmartArtTextPaneShortcutKey.Enter, SmartArtTextPaneShortcutModifiers.None, SmartArtNodeEditKind.AddSiblingAfter, "smartart.text-pane.enter.add-sibling-after")]
+    [InlineData(SmartArtTextPaneShortcutKey.Enter, SmartArtTextPaneShortcutModifiers.Control, SmartArtNodeEditKind.AddChild, "smartart.text-pane.ctrl-enter.add-child")]
+    [InlineData(SmartArtTextPaneShortcutKey.Tab, SmartArtTextPaneShortcutModifiers.None, SmartArtNodeEditKind.Demote, "smartart.text-pane.tab.demote")]
+    [InlineData(SmartArtTextPaneShortcutKey.Tab, SmartArtTextPaneShortcutModifiers.Shift, SmartArtNodeEditKind.Promote, "smartart.text-pane.shift-tab.promote")]
+    [InlineData(SmartArtTextPaneShortcutKey.Up, SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift, SmartArtNodeEditKind.MoveUp, "smartart.text-pane.alt-shift-up.move-up")]
+    [InlineData(SmartArtTextPaneShortcutKey.Down, SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift, SmartArtNodeEditKind.MoveDown, "smartart.text-pane.alt-shift-down.move-down")]
+    public void PlanTextPaneKeyboardRoute_MapsSharedChordsToEditIntents(
+        SmartArtTextPaneShortcutKey key,
+        SmartArtTextPaneShortcutModifiers modifiers,
+        SmartArtNodeEditKind expectedKind,
+        string expectedRouteId)
+    {
+        var route = SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(key, modifiers, " manager ");
+
+        route.Should().NotBeNull();
+        route!.RouteId.Should().Be(expectedRouteId);
+        route.Key.Should().Be(key);
+        route.Modifiers.Should().Be(modifiers);
+        route.Intent.Kind.Should().Be(expectedKind);
+        route.Intent.TargetModelId.Should().Be("manager");
+    }
+
+    [Fact]
+    public void PlanTextPaneKeyboardRoute_RejectsUnownedChordsAndMissingSelection()
+    {
+        SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
+                SmartArtTextPaneShortcutKey.Up,
+                SmartArtTextPaneShortcutModifiers.None,
+                "manager")
+            .Should()
+            .BeNull();
+
+        SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
+                SmartArtTextPaneShortcutKey.Tab,
+                SmartArtTextPaneShortcutModifiers.None,
+                "  ")
+            .Should()
+            .BeNull();
+    }
+
+    [Fact]
+    public void PlanTextPaneKeyboardRoute_FeedsSharedModelEditsForHostAdapters()
+    {
+        var data = MakeFlatData(SmartArtFamily.Hierarchy, ("root", "Leader"), ("peer", "Peer"), ("manager", "Manager"));
+
+        var addChild = SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
+            SmartArtTextPaneShortcutKey.Enter,
+            SmartArtTextPaneShortcutModifiers.Control,
+            "manager");
+        SmartArtEditingPlanner.Apply(data, addChild!.Intent).Applied.Should().BeTrue();
+
+        var moveDown = SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
+            SmartArtTextPaneShortcutKey.Down,
+            SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift,
+            "peer");
+        SmartArtEditingPlanner.Apply(data, moveDown!.Intent).Applied.Should().BeTrue();
+
+        var demote = SmartArtEditingPlanner.PlanTextPaneKeyboardRoute(
+            SmartArtTextPaneShortcutKey.Tab,
+            SmartArtTextPaneShortcutModifiers.None,
+            "peer");
+        SmartArtEditingPlanner.Apply(data, demote!.Intent).Applied.Should().BeTrue();
+
+        data.Nodes.Select(node => node.ModelId).Should().Equal("root", "manager");
+        data.Nodes[0].Children.Should().BeEmpty();
+        data.Nodes[1].Children.Select(node => node.ModelId).Should().Equal("freep-smartart-node-4", "peer");
+        data.Nodes[1].Children[0].Text.Should().Be(SmartArtEditingPlanner.DefaultNewNodeText);
+        SmartArtEditingPlanner.BuildOutline(data)
+            .Select(item => (item.ModelId, item.Level, item.SiblingIndex))
+            .Should()
+            .Equal(
+                ("root", 0, 0),
+                ("manager", 0, 1),
+                ("freep-smartart-node-4", 1, 0),
+                ("peer", 1, 1));
+    }
+
     [Fact]
     public void RewriteDataPart_AfterSharedOutlineEdit_RegeneratesNativeDiagramData()
     {

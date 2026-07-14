@@ -17,6 +17,23 @@ public enum SmartArtNodeEditKind
     Demote
 }
 
+[Flags]
+public enum SmartArtTextPaneShortcutModifiers
+{
+    None = 0,
+    Shift = 1,
+    Control = 2,
+    Alt = 4
+}
+
+public enum SmartArtTextPaneShortcutKey
+{
+    Enter,
+    Tab,
+    Up,
+    Down
+}
+
 public sealed record SmartArtNodeEditIntent(
     SmartArtNodeEditKind Kind,
     string TargetModelId,
@@ -96,6 +113,13 @@ public sealed record SmartArtTextPaneApplyResult(
     int RowCount,
     IReadOnlyList<SmartArtNodeOutlineItem> Outline);
 
+public sealed record SmartArtTextPaneKeyboardRoute(
+    string RouteId,
+    SmartArtTextPaneShortcutKey Key,
+    SmartArtTextPaneShortcutModifiers Modifiers,
+    SmartArtNodeEditIntent Intent,
+    string Description);
+
 public static class SmartArtEditingPlanner
 {
     public const string DefaultNewNodeText = "New node";
@@ -103,6 +127,63 @@ public static class SmartArtEditingPlanner
     private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
     private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Dsp = "http://schemas.microsoft.com/office/drawing/2008/diagram";
+
+    public static SmartArtTextPaneKeyboardRoute? PlanTextPaneKeyboardRoute(
+        SmartArtTextPaneShortcutKey key,
+        SmartArtTextPaneShortcutModifiers modifiers,
+        string? targetModelId)
+    {
+        var targetId = NormalizeModelId(targetModelId);
+        if (targetId is null)
+            return null;
+
+        return (key, modifiers) switch
+        {
+            (SmartArtTextPaneShortcutKey.Enter, SmartArtTextPaneShortcutModifiers.None) =>
+                Route(
+                    "smartart.text-pane.enter.add-sibling-after",
+                    key,
+                    modifiers,
+                    SmartArtNodeEditIntent.AddSiblingAfter(targetId, DefaultNewNodeText),
+                    "Enter adds a sibling row after the selected SmartArt text-pane row."),
+            (SmartArtTextPaneShortcutKey.Enter, SmartArtTextPaneShortcutModifiers.Control) =>
+                Route(
+                    "smartart.text-pane.ctrl-enter.add-child",
+                    key,
+                    modifiers,
+                    SmartArtNodeEditIntent.AddChild(targetId, DefaultNewNodeText),
+                    "Ctrl+Enter adds a child row below the selected SmartArt text-pane row."),
+            (SmartArtTextPaneShortcutKey.Tab, SmartArtTextPaneShortcutModifiers.None) =>
+                Route(
+                    "smartart.text-pane.tab.demote",
+                    key,
+                    modifiers,
+                    SmartArtNodeEditIntent.Demote(targetId),
+                    "Tab demotes the selected SmartArt text-pane row."),
+            (SmartArtTextPaneShortcutKey.Tab, SmartArtTextPaneShortcutModifiers.Shift) =>
+                Route(
+                    "smartart.text-pane.shift-tab.promote",
+                    key,
+                    modifiers,
+                    SmartArtNodeEditIntent.Promote(targetId),
+                    "Shift+Tab promotes the selected SmartArt text-pane row."),
+            (SmartArtTextPaneShortcutKey.Up, SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift) =>
+                Route(
+                    "smartart.text-pane.alt-shift-up.move-up",
+                    key,
+                    modifiers,
+                    SmartArtNodeEditIntent.MoveUp(targetId),
+                    "Alt+Shift+Up moves the selected SmartArt text-pane row earlier."),
+            (SmartArtTextPaneShortcutKey.Down, SmartArtTextPaneShortcutModifiers.Alt | SmartArtTextPaneShortcutModifiers.Shift) =>
+                Route(
+                    "smartart.text-pane.alt-shift-down.move-down",
+                    key,
+                    modifiers,
+                    SmartArtNodeEditIntent.MoveDown(targetId),
+                    "Alt+Shift+Down moves the selected SmartArt text-pane row later."),
+            _ => null
+        };
+    }
 
     public static SmartArtNodeEditResult Apply(SmartArtData? data, SmartArtNodeEditIntent intent)
     {
@@ -671,6 +752,14 @@ public static class SmartArtEditingPlanner
 
     private static string NormalizeText(string? text) =>
         (text ?? string.Empty).Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+
+    private static SmartArtTextPaneKeyboardRoute Route(
+        string routeId,
+        SmartArtTextPaneShortcutKey key,
+        SmartArtTextPaneShortcutModifiers modifiers,
+        SmartArtNodeEditIntent intent,
+        string description) =>
+        new(routeId, key, modifiers, intent, description);
 
     private static DiagramPart? FindDataPart(SmartArtShape smartArt) =>
         smartArt.Parts.Values.FirstOrDefault(part =>

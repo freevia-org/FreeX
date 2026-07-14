@@ -856,6 +856,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.omml.transparent-phantom-spacing",
             "freep.omml.box-alignment-points",
             "freep.omml.delimiter-shape",
+            "freep.omml.groupchr-vertical-justification",
             "freep.omml.pre-subsup-layout",
             "freep.omml.matrix-placeholder",
             "freep.omml.literal-run-style",
