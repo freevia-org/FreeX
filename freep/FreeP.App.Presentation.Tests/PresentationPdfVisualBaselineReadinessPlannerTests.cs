@@ -29,7 +29,12 @@ public sealed class PresentationPdfVisualBaselineReadinessPlannerTests
             row.RequiresPowerPointComBaseline &&
             row.ContentType == PresentationPrintOutputPackageExecutor.PdfContentType &&
             row.DefaultExtensionWithDot == PresentationExportPlanner.PdfExportExtension &&
-            row.WpfManifestFingerprint == row.AvaloniaManifestFingerprint);
+            row.WpfManifestFingerprint == row.AvaloniaManifestFingerprint &&
+            row.BaselineManifestPath.StartsWith("manifest/Quarter-Review/", StringComparison.Ordinal) &&
+            row.WpfArtifactPath.StartsWith("wpf-pdf/Quarter-Review/", StringComparison.Ordinal) &&
+            row.AvaloniaArtifactPath.StartsWith("avalonia-pdf/Quarter-Review/", StringComparison.Ordinal) &&
+            row.PowerPointPdfArtifact.StartsWith("powerpoint-pdf/Quarter-Review/", StringComparison.Ordinal) &&
+            row.PowerPointPngArtifactPattern.StartsWith("powerpoint-png/Quarter-Review/", StringComparison.Ordinal));
 
         var portable = plan.Rows.Single(row =>
             row.EvidenceId == PresentationPdfVisualBaselineReadinessPlanner.PortableSlidePdfEvidenceId);
@@ -39,6 +44,18 @@ public sealed class PresentationPdfVisualBaselineReadinessPlannerTests
         portable.PageCount.Should().Be(5);
         portable.SlideRangeSummary.Should().Be("All slides");
         portable.WpfManifestFingerprint.Should().Contain("route=PortableSlidePdf");
+        portable.WpfManifestFingerprint.Should().Contain("source=Quarter Review.pptx");
+        portable.WpfManifestFingerprint.Should().Contain("sourceStem=Quarter-Review");
+        portable.BaselineManifestPath.Should().Be(
+            "manifest/Quarter-Review/freep.pdf.baseline.portable-slide-pdf.json");
+        portable.WpfArtifactPath.Should().Be(
+            "wpf-pdf/Quarter-Review/freep.pdf.baseline.portable-slide-pdf.pdf");
+        portable.AvaloniaArtifactPath.Should().Be(
+            "avalonia-pdf/Quarter-Review/freep.pdf.baseline.portable-slide-pdf.pdf");
+        portable.PowerPointPdfArtifact.Should().Be(
+            "powerpoint-pdf/Quarter-Review/freep.pdf.baseline.portable-slide-pdf.pdf");
+        portable.PowerPointPngArtifactPattern.Should().Be(
+            "powerpoint-png/Quarter-Review/freep.pdf.baseline.portable-slide-pdf/slide-NN.png");
 
         var fullPage = plan.Rows.Single(row =>
             row.EvidenceId == PresentationPdfVisualBaselineReadinessPlanner.FullPageRasterPdfEvidenceId);
@@ -46,6 +63,8 @@ public sealed class PresentationPdfVisualBaselineReadinessPlannerTests
         fullPage.Status.Should().Be("shared-package-plan-ready");
         fullPage.PageCount.Should().Be(5);
         fullPage.WpfManifestFingerprint.Should().Contain("range=All slides");
+        fullPage.BaselineManifestPath.Should().Be(
+            "manifest/Quarter-Review/freep.pdf.baseline.full-page-raster-pdf.json");
 
         var handout = plan.Rows.Single(row =>
             row.EvidenceId == PresentationPdfVisualBaselineReadinessPlanner.HandoutPdfEvidenceId);
@@ -66,9 +85,11 @@ public sealed class PresentationPdfVisualBaselineReadinessPlannerTests
         var presentation = Presentation.CreateEmpty();
         presentation.Slides.Clear();
 
-        var plan = PresentationPdfVisualBaselineReadinessPlanner.Build(presentation);
+        var plan = PresentationPdfVisualBaselineReadinessPlanner.Build(
+            presentation,
+            "  Q3 board deck!.pptx  ");
 
-        plan.SourceName.Should().Be("Presentation.pptx");
+        plan.SourceName.Should().Be("Q3 board deck!.pptx");
         plan.SlideCount.Should().Be(0);
         plan.HasMatchingWpfAvaloniaContracts.Should().BeTrue();
 
@@ -77,6 +98,8 @@ public sealed class PresentationPdfVisualBaselineReadinessPlannerTests
         portable.Status.Should().Be("shared-portable-placeholder-ready");
         portable.PageCount.Should().Be(1);
         portable.SlideRangeSummary.Should().Be("No slides (portable placeholder page)");
+        portable.BaselineManifestPath.Should().Be(
+            "manifest/Q3-board-deck/freep.pdf.baseline.portable-slide-pdf.json");
 
         plan.Rows
             .Where(row => row.EvidenceId != PresentationPdfVisualBaselineReadinessPlanner.PortableSlidePdfEvidenceId)

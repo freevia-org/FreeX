@@ -319,6 +319,21 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "PowerPoint-authoritative fixed-layout, image, video, print, and Backstage visual baselines still require a PowerPoint COM-capable machine; local WPF/Avalonia evidence does not claim Microsoft PowerPoint visual parity."),
         new(
+            EvidenceId: "freep.export.pdf-visual-baseline-readiness",
+            Area: "PowerPoint-authoritative PDF visual baseline readiness",
+            Status: "shared-baseline-readiness-evidence",
+            HostCoverage: "WPF/Avalonia share one PDF/export package contract with source-bound manifest, WPF/Avalonia artifact, and deferred PowerPoint PDF/PNG artifact paths; no local PowerPoint COM visual baseline is claimed",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-pdf-visual-baseline-readiness-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/PresentationPdfVisualBaselineReadinessPlanner.cs",
+                "freep/FreeP.App.Presentation.Tests/PresentationPdfVisualBaselineReadinessPlannerTests.cs"
+            ],
+            RemainingWork: "No-COM readiness now covers portable slide PDF, full-page raster PDF, 3-up handout PDF, and notes-page PDF rows with source-normalized manifest paths, matching WPF/Avalonia fingerprints, and explicit PowerPoint PDF/PNG artifact targets for a COM-capable baseline machine. Actual PowerPoint-exported PDFs/PNGs, visual diffs, thresholds, and representative real-deck capture still require PowerPoint.Application COM on a baseline host."),
+        new(
             EvidenceId: "freep.export.pdf-ellipse-fixed-layout",
             Area: "Fixed-layout PDF ellipse and oval shape export",
             Status: "shared-fixed-layout-evidence",
