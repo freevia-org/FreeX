@@ -1,5 +1,8 @@
 using FreeP.App.Compositor;
 using FreeP.App.Host.Recording;
+using System.IO;
+using System.IO.Compression;
+using System.Xml.Linq;
 
 namespace FreeP.App.Host.Tests;
 
@@ -194,6 +197,53 @@ public sealed class WpfWindowsRecordingCaptureBackendTests
     }
 
     [Fact]
+    public void Planner_WithWpfCameraBackend_PersistsEncodedVideoPayloadThroughPptxPackage()
+    {
+        var (presentation, cameraArtifact) = BuildPresentationWithCapturedCameraArtifact(
+            new WpfWindowsRecordingCaptureBackend(
+                new FakeDeviceCatalog(
+                    new SlideShowRecordingCaptureDeviceDescriptor(
+                        SlideShowRecordingCaptureDeviceKind.Camera,
+                        "camera-0",
+                        "Presenter camera",
+                        IsDefault: true,
+                        IsAvailable: true,
+                        "video/mp4")),
+                new FakeCaptureEngine()));
+        using var stream = new MemoryStream();
+
+        PptxPackageWriter.Write(presentation, stream);
+
+        stream.Position = 0;
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
+        {
+            var mediaEntry = archive.GetEntry("ppt/media/freep-recordings/wpf/slide-001-camera.mp4");
+            mediaEntry.Should().NotBeNull("the WPF encoded camera payload must be written at the host package path");
+            ReadBytes(mediaEntry!).Should().Equal(cameraArtifact.PayloadBytes);
+
+            archive.GetEntry("ppt/media/recordingArtifacts.xml").Should().NotBeNull();
+            using var contentTypesStream = archive.GetEntry("[Content_Types].xml")!.Open();
+            var contentTypes = XDocument.Load(contentTypesStream);
+            var contentTypesNamespace = XNamespace.Get("http://schemas.openxmlformats.org/package/2006/content-types");
+            contentTypes.Root!.Elements(contentTypesNamespace + "Default").Any(element =>
+                    string.Equals(element.Attribute("Extension")?.Value, "mp4", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(element.Attribute("ContentType")?.Value, "video/mp4", StringComparison.OrdinalIgnoreCase))
+                .Should().BeTrue();
+        }
+
+        stream.Position = 0;
+        var reloaded = PptxPackageReader.Read(stream);
+        var reloadedCamera = reloaded.RecordingMediaArtifacts
+            .Single(artifact => artifact.Kind == PresentationRecordingMediaArtifactKind.CameraVideo);
+
+        reloadedCamera.PackagePath.Should().Be("ppt/media/freep-recordings/wpf/slide-001-camera.mp4");
+        reloadedCamera.ContentType.Should().Be("video/mp4");
+        reloadedCamera.ContentSha256.Should().Be(cameraArtifact.ContentSha256);
+        reloadedCamera.ContentLengthBytes.Should().Be(cameraArtifact.ContentLengthBytes);
+        reloadedCamera.PayloadBytes.Should().Equal(cameraArtifact.PayloadBytes);
+    }
+
+    [Fact]
     public void DefaultWindowsEngine_CameraCaptureDefersEncodedPayloadAfterHandoff()
     {
         var engine = new WpfWindowsRecordingCaptureEngine();
@@ -221,6 +271,48 @@ public sealed class WpfWindowsRecordingCaptureBackendTests
         result.StatusText.Should().Contain("camera device handoff reached");
         result.StatusText.Should().Contain("video encoding is not implemented");
         result.PayloadBytes.Should().BeEmpty();
+    }
+
+    private static (Presentation Presentation, PresentationRecordingMediaArtifact CameraArtifact)
+        BuildPresentationWithCapturedCameraArtifact(ISlideShowRecordingCaptureBackend backend)
+    {
+        var presentation = Presentation.CreateEmpty();
+        var started = new DateTimeOffset(2026, 7, 14, 10, 0, 0, TimeSpan.Zero);
+        var plan = SlideShowPresenterToolPlanner.BuildPlan(
+            SlideShowTimingIntent.RecordTimings,
+            SlideShowRecordingMediaIntent.NarrationAndMedia);
+        var recording = SlideShowRecordingExecutionPlanner.CreateState(
+            plan,
+            currentSlideIndex: 0,
+            started,
+            backend);
+        recording = SlideShowRecordingExecutionPlanner.MoveToSlide(
+            recording,
+            slideIndex: 1,
+            started.AddMilliseconds(2400));
+        var review = SlideShowRecordingReviewPlanner.BuildPlan(presentation, recording);
+
+        SlideShowRecordingReviewPlanner.ApplyPersistableArtifacts(presentation, review);
+
+        var cameraArtifact = presentation.RecordingMediaArtifacts
+            .Single(artifact => artifact.Kind == PresentationRecordingMediaArtifactKind.CameraVideo);
+        cameraArtifact.Should().Match<PresentationRecordingMediaArtifact>(artifact =>
+            artifact.HasPayload &&
+            artifact.SuggestedFileName == "slide-001-camera.mp4" &&
+            artifact.ContentType == "video/mp4" &&
+            artifact.PackagePath == "ppt/media/freep-recordings/wpf/slide-001-camera.mp4" &&
+            artifact.CapturedByHost == WpfWindowsRecordingCaptureBackend.HostName &&
+            artifact.ContentSha256.Length == 64);
+
+        return (presentation, cameraArtifact);
+    }
+
+    private static byte[] ReadBytes(ZipArchiveEntry entry)
+    {
+        using var stream = entry.Open();
+        using var memory = new MemoryStream();
+        stream.CopyTo(memory);
+        return memory.ToArray();
     }
 
     private sealed class FakeDeviceCatalog : IWpfWindowsRecordingDeviceCatalog
