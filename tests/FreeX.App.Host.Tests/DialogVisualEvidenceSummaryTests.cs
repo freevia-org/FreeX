@@ -202,7 +202,7 @@ public sealed class DialogVisualEvidenceSummaryTests
               "rows": [
                 { "routeId": "dialog.AutoFilter" },
                 { "routeId": "dialog.GoalSeekStatus" },
-                { "routeId": "dialog.FindReplace" },
+                { "routeId": "dialog.ExportOptions" },
                 { "routeId": "dialog.ScenarioManager" }
               ]
             }
@@ -217,7 +217,7 @@ public sealed class DialogVisualEvidenceSummaryTests
               "surfaces": [
                 { "id": "dialog.AutoFilter", "kind": "dialog", "png": "dialog.AutoFilter.png", "captured": true, "note": "" },
                 { "id": "dialog.GoalSeekStatus", "kind": "dialog", "png": "dialog.GoalSeekStatus.png", "captured": true, "note": "" },
-                { "id": "dialog.FindReplace", "kind": "dialog", "png": "dialog.FindReplace.png", "captured": true, "note": "" },
+                { "id": "dialog.ExportOptions", "kind": "dialog", "png": "dialog.ExportOptions.png", "captured": true, "note": "" },
                 { "id": "dialog.ScenarioManager", "kind": "dialog", "png": "dialog.ScenarioManager.png", "captured": true, "note": "" }
               ]
             }
@@ -232,7 +232,7 @@ public sealed class DialogVisualEvidenceSummaryTests
               "surfaces": [
                 { "id": "dialog.AutoFilter", "kind": "dialog", "png": "dialog.AutoFilter.png", "captured": true, "note": "" },
                 { "id": "dialog.GoalSeekStatus", "kind": "dialog", "png": "dialog.GoalSeekStatus.png", "captured": true, "note": "" },
-                { "id": "dialog.FindReplace", "kind": "dialog", "png": "dialog.FindReplace.png", "captured": true, "note": "" },
+                { "id": "dialog.ExportOptions", "kind": "dialog", "png": "dialog.ExportOptions.png", "captured": true, "note": "" },
                 { "id": "dialog.ScenarioManager", "kind": "dialog", "png": "dialog.ScenarioManager.png", "captured": true, "note": "" }
               ]
             }
@@ -242,8 +242,8 @@ public sealed class DialogVisualEvidenceSummaryTests
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.AutoFilter.png"), width: 5, height: 4, nonBlank: true);
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.GoalSeekStatus.png"), width: 3, height: 2, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.GoalSeekStatus.png"), width: 3, height: 4, nonBlank: true);
-        WritePng(Path.Combine(wpfManifestDirectory, "dialog.FindReplace.png"), width: 4, height: 4, nonBlank: true);
-        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.FindReplace.png"), width: 4, height: 5, nonBlank: true);
+        WritePng(Path.Combine(wpfManifestDirectory, "dialog.ExportOptions.png"), width: 4, height: 4, nonBlank: true);
+        WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ExportOptions.png"), width: 4, height: 5, nonBlank: true);
         WritePng(Path.Combine(wpfManifestDirectory, "dialog.ScenarioManager.png"), width: 3, height: 2, nonBlank: true);
         WritePng(Path.Combine(avaloniaManifestDirectory, "dialog.ScenarioManager.png"), width: 5, height: 2, nonBlank: true);
 
@@ -262,14 +262,14 @@ public sealed class DialogVisualEvidenceSummaryTests
         var markdown = File.ReadAllText(markdownPath);
         markdown.Should().Contain("| content/visual mismatch | 1 | False | dialog.AutoFilter |");
         markdown.Should().Contain("| evidence limitation | 1 | False | dialog.GoalSeekStatus |");
-        markdown.Should().Contain("| expected platform/native difference | 1 | True | dialog.FindReplace |");
+        markdown.Should().Contain("| expected platform/native difference | 1 | True | dialog.ExportOptions |");
         markdown.Should().Contain("| real logical-size mismatch | 1 | False | dialog.ScenarioManager |");
         markdown.Should().Contain("## Policy-Accepted Native/Control Differences");
-        markdown.Should().Contain("| Find/Replace native control stack | 1 | dialog.FindReplace |");
+        markdown.Should().Contain("| Export options native spacing | 1 | dialog.ExportOptions |");
         markdown.Should().Contain("| dialog.AutoFilter | content/visual mismatch |");
         markdown.Should().Contain("| dialog.ScenarioManager | real logical-size mismatch |");
         markdown.Should().Contain("| dialog.GoalSeekStatus | evidence limitation |");
-        markdown.Should().Contain("| dialog.FindReplace | expected platform/native difference | Find/Replace native control stack |");
+        markdown.Should().Contain("| dialog.ExportOptions | expected platform/native difference | Export options native spacing |");
 
         using var json = JsonDocument.Parse(File.ReadAllText(jsonPath));
         var buckets = json.RootElement.GetProperty("summary").GetProperty("dimensionMismatchBuckets");
@@ -282,14 +282,14 @@ public sealed class DialogVisualEvidenceSummaryTests
         json.RootElement.GetProperty("dimensionMismatchClassification").GetArrayLength().Should().Be(4);
         json.RootElement.GetProperty("dimensionMismatchDetails").GetArrayLength().Should().Be(4);
         var policyFamily = json.RootElement.GetProperty("policyAcceptedNativeDifferenceFamilies")[0];
-        policyFamily.GetProperty("family").GetString().Should().Be("Find/Replace native control stack");
+        policyFamily.GetProperty("family").GetString().Should().Be("Export options native spacing");
         policyFamily.GetProperty("count").GetInt32().Should().Be(1);
-        var findReplaceComparison = json.RootElement.GetProperty("pairedSurfaces")
+        var exportOptionsComparison = json.RootElement.GetProperty("pairedSurfaces")
             .EnumerateArray()
-            .Single(row => row.GetProperty("id").GetString() == "dialog.FindReplace")
+            .Single(row => row.GetProperty("id").GetString() == "dialog.ExportOptions")
             .GetProperty("comparison");
-        findReplaceComparison.GetProperty("policyAcceptance").GetProperty("status").GetString().Should().Be("policy-accepted");
-        findReplaceComparison.GetProperty("policyAcceptance").GetProperty("family").GetString().Should().Be("Find/Replace native control stack");
+        exportOptionsComparison.GetProperty("policyAcceptance").GetProperty("status").GetString().Should().Be("policy-accepted");
+        exportOptionsComparison.GetProperty("policyAcceptance").GetProperty("family").GetString().Should().Be("Export options native spacing");
     }
 
     [Fact]
@@ -1206,13 +1206,16 @@ public sealed class DialogVisualEvidenceSummaryTests
             """
             {
               "summary": {
-                "totalRoutes": 4,
-                "wpfCaptures": 4,
-                "avaloniaCaptures": 4,
-                "avaloniaHarnessRoutes": 4,
-                "sharedOrPresentationBacked": 4
+                "totalRoutes": 7,
+                "wpfCaptures": 7,
+                "avaloniaCaptures": 7,
+                "avaloniaHarnessRoutes": 7,
+                "sharedOrPresentationBacked": 7
               },
               "rows": [
+                { "routeId": "dialog.FindReplace" },
+                { "routeId": "dialog.FindReplace.Find" },
+                { "routeId": "dialog.FindReplace.Replace" },
                 { "routeId": "dialog.ConditionalFormatNewRule" },
                 { "routeId": "dialog.Consolidate" },
                 { "routeId": "dialog.PivotTableOptions" },
@@ -1228,6 +1231,27 @@ public sealed class DialogVisualEvidenceSummaryTests
               "platform": "windows",
               "shell": "wpf",
               "surfaces": [
+                {
+                  "id": "dialog.FindReplace",
+                  "kind": "dialog",
+                  "png": "dialog.FindReplace.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.FindReplace.Find",
+                  "kind": "dialog",
+                  "png": "dialog.FindReplace.Find.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.FindReplace.Replace",
+                  "kind": "dialog",
+                  "png": "dialog.FindReplace.Replace.png",
+                  "captured": true,
+                  "note": ""
+                },
                 {
                   "id": "dialog.ConditionalFormatNewRule",
                   "kind": "dialog",
@@ -1268,6 +1292,27 @@ public sealed class DialogVisualEvidenceSummaryTests
               "shell": "avalonia",
               "surfaces": [
                 {
+                  "id": "dialog.FindReplace",
+                  "kind": "dialog",
+                  "png": "dialog.FindReplace.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.FindReplace.Find",
+                  "kind": "dialog",
+                  "png": "dialog.FindReplace.Find.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
+                  "id": "dialog.FindReplace.Replace",
+                  "kind": "dialog",
+                  "png": "dialog.FindReplace.Replace.png",
+                  "captured": true,
+                  "note": ""
+                },
+                {
                   "id": "dialog.ConditionalFormatNewRule",
                   "kind": "dialog",
                   "png": "dialog.ConditionalFormatNewRule.png",
@@ -1301,6 +1346,9 @@ public sealed class DialogVisualEvidenceSummaryTests
 
         var expectedSizes = new Dictionary<string, (int Width, int Height, string Source)>
         {
+            ["dialog.FindReplace"] = (720, 430, "FindReplaceDialogPlanner.Width/Height"),
+            ["dialog.FindReplace.Find"] = (720, 430, "FindReplaceDialogPlanner.Width/Height"),
+            ["dialog.FindReplace.Replace"] = (720, 430, "FindReplaceDialogPlanner.Width/Height"),
             ["dialog.ConditionalFormatNewRule"] = (634, 334, "ConditionalFormatDialogCatalog.RuleEditorCaptureWidth/Height"),
             ["dialog.Consolidate"] = (380, 420, "ConsolidateDialogPlanner.CaptureWidth/Height"),
             ["dialog.PivotTableOptions"] = (520, 676, "PivotOptionsPlanner.DialogWidth/LayoutAndFormatCaptureHeight"),

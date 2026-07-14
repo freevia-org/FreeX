@@ -520,6 +520,17 @@ internal static class ParityCapture
             {
                 CaptureDialog(results, "dialog.GoalSeek", outDir, () => CreateGoalSeekParityDialog(sheet.Id));
             }
+            else if (string.Equals(targetSurfaceId, "dialog.FindReplace", StringComparison.Ordinal) ||
+                targetSurfaceId.StartsWith("dialog.FindReplace.", StringComparison.Ordinal))
+            {
+                CaptureDialogTabs(results, "dialog.FindReplace", outDir,
+                    () => new FindReplaceDialog(
+                        getWorkbook: () => workbook,
+                        commandBus: new CommandBus(_ => new WorkbookCommandContext(workbook)),
+                        navigateTo: _ => { },
+                        replaceMode: false),
+                    ["Find", "Replace"]);
+            }
             else if (string.Equals(targetSurfaceId, "dialog.PivotTableOptions", StringComparison.Ordinal) ||
                 targetSurfaceId.StartsWith("dialog.PivotTableOptions.", StringComparison.Ordinal))
             {

@@ -484,6 +484,13 @@ function Get-ExpectedEvidenceSize {
 
     if ($Shell -eq "wpf" -or $Shell -eq "avalonia") {
         switch ($SurfaceId) {
+            { $_ -eq "dialog.FindReplace" -or $_ -eq "dialog.FindReplace.Find" -or $_ -eq "dialog.FindReplace.Replace" } {
+                return [pscustomobject]@{
+                    width = 720
+                    height = 430
+                    source = "FindReplaceDialogPlanner.Width/Height"
+                }
+            }
             "dialog.GoToSpecial" {
                 return [pscustomobject]@{
                     width = 430

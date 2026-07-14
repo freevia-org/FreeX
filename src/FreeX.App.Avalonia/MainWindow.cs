@@ -10172,10 +10172,10 @@ public sealed partial class MainWindow : Window
         var dialog = new Window
         {
             Title = UiText.Get("FindReplace_FindAndReplace"),
-            Width = 720,
-            Height = 440,
-            MinWidth = 520,
-            MinHeight = 380,
+            Width = FindReplaceDialogPlanner.Width,
+            Height = FindReplaceDialogPlanner.Height,
+            MinWidth = FindReplaceDialogPlanner.MinWidth,
+            MinHeight = FindReplaceDialogPlanner.MinHeight,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             ShowInTaskbar = false,
         };

@@ -7,6 +7,15 @@ namespace FreeX.App.Services.Tests;
 public sealed class GoToDialogPlannerTests
 {
     [Fact]
+    public void FindReplaceDialogSize_MatchesSharedWpfLogicalEvidenceTarget()
+    {
+        FindReplaceDialogPlanner.Width.Should().Be(720);
+        FindReplaceDialogPlanner.Height.Should().Be(430);
+        FindReplaceDialogPlanner.MinWidth.Should().Be(520);
+        FindReplaceDialogPlanner.MinHeight.Should().Be(360);
+    }
+
+    [Fact]
     public void GoToSpecialDialogSize_MatchesSharedWpfLogicalEvidenceTarget()
     {
         GoToSpecialDialogPlanner.Width.Should().Be(430);

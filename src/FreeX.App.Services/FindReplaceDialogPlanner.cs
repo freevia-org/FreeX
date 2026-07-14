@@ -6,6 +6,11 @@ namespace FreeX.App.Services;
 
 public static class FindReplaceDialogPlanner
 {
+    public const double Width = 720;
+    public const double Height = 430;
+    public const double MinWidth = 520;
+    public const double MinHeight = 360;
+
     public static IReadOnlyList<FindResultRow> BuildFindResultRows(Workbook workbook, IReadOnlyList<FindResult> results) =>
         results
             .Select(result => CreateFindResultRow(workbook, result))
