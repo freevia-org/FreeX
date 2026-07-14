@@ -179,11 +179,10 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
-    public void Rad_WithDegHideOff_EmitsDegreeGlyphBeforeRadicand()
+    public void Rad_WithVisibleDegree_PositionsDegreeBeforeRadicalAndAboveRadicandBaseline()
     {
         var node = ParseOmml(
             "<m:rad>" +
-            "<m:radPr><m:degHide m:val=\"off\"/></m:radPr>" +
             "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
             "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
             "</m:rad>");
@@ -191,11 +190,68 @@ public sealed class MathLayoutEngineTests
 
         var container = Assert.IsType<MathBox.Container>(box.Children[0]);
         container.Children.Should().HaveCount(3, "visible radical degree adds a degree box alongside radical and radicand");
+        var radical = Assert.IsType<MathBox.Radical>(container.Children[0]);
+        var radicand = Assert.IsType<MathBox.Glyph>(container.Children[1]);
+        var degree = Assert.IsType<MathBox.Glyph>(container.Children[2]);
+
+        degree.Text.Should().Be("3");
+        radicand.Text.Should().Be("x");
+        degree.FontSizePt.Should().BeApproximately(FontSizePt * 0.65, 0.01,
+            "the radical degree is laid out as a script-sized shared glyph");
+        degree.X.Should().BeLessThan(radical.X,
+            "the visible degree must sit to the left of the radical sign in shared layout");
+        radical.X.Should().BeGreaterThanOrEqualTo(degree.X + degree.Metrics.Width,
+            "the radical sign should reserve the degree width instead of overlapping it");
+        radicand.X.Should().BeGreaterThan(radical.X,
+            "the radicand must start after the radical check-mark");
+        degree.Y.Should().BeLessThan(radicand.Y,
+            "the visible degree must be placed above the radicand top before any renderer draws it");
+        (degree.Y + degree.Metrics.Ascent).Should().BeLessThan(radicand.Y + radicand.Metrics.Ascent,
+            "the degree baseline should remain above the radicand baseline");
+        box.Metrics.Ascent.Should().BeApproximately(radicand.Y + radicand.Metrics.Ascent, 0.01,
+            "the radical baseline is still governed by the radicand, not the degree index");
 
         var ops = MathBoxRenderPlanner.Plan(box, 10, 20, SrgbColor.Black, "Cambria Math");
         ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text)
             .Should().Equal(new[] { "x", "3" },
                 "visible degree and radicand glyphs must both reach the renderer-neutral plan");
+        var radicalOp = ops.OfType<MathDrawOp.DrawRadical>().Single();
+        var radicandOp = ops.OfType<MathDrawOp.DrawGlyph>().Single(g => g.Text == "x");
+        var degreeOp = ops.OfType<MathDrawOp.DrawGlyph>().Single(g => g.Text == "3");
+        degreeOp.X.Should().BeLessThan(radicalOp.X,
+            "renderers consume the shared degree position instead of recomputing it");
+        degreeOp.Y.Should().BeLessThan(radicandOp.Y,
+            "renderers consume a visible degree that is already above the radicand");
+    }
+
+    [Fact]
+    public void Rad_WithHiddenDegree_DoesNotReserveDegreeWidthOrEmitDegreeGlyph()
+    {
+        var visible = ParseOmml(
+            "<m:rad>" +
+            "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:rad>");
+        var hidden = ParseOmml(
+            "<m:rad>" +
+            "<m:radPr><m:degHide/></m:radPr>" +
+            "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:rad>");
+
+        var visibleBox = MathLayoutEngine.Layout(visible, "Cambria Math", FontSizePt);
+        var hiddenBox = MathLayoutEngine.Layout(hidden, "Cambria Math", FontSizePt);
+        var hiddenContainer = Assert.IsType<MathBox.Container>(hiddenBox.Children[0]);
+
+        hiddenContainer.Children.Should().HaveCount(2,
+            "m:radPr/m:degHide removes the degree box from the shared MathBox tree");
+        hiddenBox.Metrics.Width.Should().BeLessThan(visibleBox.Metrics.Width,
+            "hidden degree radicals should not keep a ghost degree gutter");
+
+        var ops = MathBoxRenderPlanner.Plan(hiddenBox, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Equal(new[] { "x" },
+            "hidden radical degrees must not reach WPF or Avalonia draw operations");
+        ops.OfType<MathDrawOp.DrawRadical>().Should().ContainSingle();
     }
 
     [Fact]

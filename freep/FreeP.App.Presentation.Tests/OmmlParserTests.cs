@@ -146,6 +146,20 @@ public sealed class OmmlParserTests
     // m:radPr/m:degHide CT_OnOff semantics.
 
     [Fact]
+    public void Rad_WithDegreeAndNoDegHide_PreservesVisibleDegree()
+    {
+        var node = Parse(
+            "<m:rad>" +
+            "<m:deg><m:r><m:t>3</m:t></m:r></m:deg>" +
+            "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+            "</m:rad>");
+
+        var radical = Assert.IsType<MathNode.Rad>(node);
+        Assert.Equal("3", Assert.IsType<MathNode.Run>(radical.Degree).Text);
+        Assert.Equal("x", Assert.IsType<MathNode.Run>(radical.Radicand).Text);
+    }
+
+    [Fact]
     public void Rad_WithBareDegHide_HidesDegree()
     {
         var node = Parse(
