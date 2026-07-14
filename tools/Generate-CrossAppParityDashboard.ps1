@@ -231,7 +231,7 @@ try {
             actionableGaps = [int]$freew.summary.actionableGaps
             classifiedRows = $true
         }
-        nextSlice = "Backstage print/export, WordArt/watermark, table/page-composition, shape/object, SmartArt polygon, and chart visual proof now have paired WPF/Avalonia renderer contracts plus no-Word real-capture smoke runs; chart proof also validates shared chart data signatures across hosts. Next FreeW evidence slices are the same runs with real Word PNG baselines on a Word-capable host, cleanup of unrelated all-up visual runner drift, and broader Word-authoritative drawing/object/chart/table comparisons."
+        nextSlice = "Backstage print/export, WordArt/watermark, table/page-composition, shape/object, SmartArt polygon, and chart visual proof now have paired WPF/Avalonia renderer contracts plus no-Word real-capture smoke runs; chart proof also validates shared chart data signatures across hosts. All-up no-Word runner fallback drift is classified as runner evidence hygiene, not a FreeW Word parity gap or MS Word PNG parity claim. Next FreeW evidence slices are the same runs with real Word PNG baselines on a Word-capable host and broader Word-authoritative drawing/object/chart/table comparisons."
     }
 
     $freeP = [ordered]@{

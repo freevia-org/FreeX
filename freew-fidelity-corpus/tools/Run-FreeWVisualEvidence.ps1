@@ -139,6 +139,8 @@ if ($wordBaselineRoot -and -not [string]::IsNullOrWhiteSpace($WordBaselineUnavai
     throw "-WordBaselineUnavailableReason cannot be combined with -WordBaselineDir or -IncludeWordBaseline."
 }
 
+$allowNoWordFallbackEvidence = -not $wordBaselineRoot
+
 $fixtureDir = Join-Path $runRoot 'fixtures\f2'
 $wpfDir = Join-Path $runRoot 'wpf'
 $avaloniaDir = Join-Path $runRoot 'avalonia'
@@ -304,7 +306,8 @@ function Invoke-PowerShellStep {
 
 function Assert-BackstageEvidenceReadiness {
     param(
-        [Parameter(Mandatory = $true)][string]$SummaryJsonPath
+        [Parameter(Mandatory = $true)][string]$SummaryJsonPath,
+        [bool]$AllowNoWordFallbackEvidence = $false
     )
 
     if (-not (Test-Path -LiteralPath $SummaryJsonPath -PathType Leaf)) {
@@ -338,6 +341,10 @@ function Assert-BackstageEvidenceReadiness {
         'backstage-print-preview-fidelity' = 'backstage-print-preview-fixed-layout-capture'
         'backstage-pdf-export-fidelity' = 'backstage-pdf-export-raster-capture'
     }
+    $requiredCaptureSourceByHost = @{
+        'wpf-fidelity-render' = 'wpf-composite-renderer'
+        'avalonia-page-layout-shot' = 'avalonia-render-target'
+    }
     $requiredHosts = @(
         'wpf-fidelity-render',
         'avalonia-page-layout-shot'
@@ -345,6 +352,7 @@ function Assert-BackstageEvidenceReadiness {
     $requiredPages = @(1, 2)
     $failures = New-Object System.Collections.Generic.List[string]
     $trustedCount = 0
+    $fallbackHygieneCount = 0
 
     foreach ($scenarioId in $requiredScenarios) {
         foreach ($hostId in $requiredHosts) {
@@ -361,14 +369,14 @@ function Assert-BackstageEvidenceReadiness {
                 }
 
                 $row = $match[0]
-                if ($row.status -ne 'trusted') {
+                $isFallbackHygiene = $AllowNoWordFallbackEvidence -and
+                    $row.status -eq 'fallback'
+                if ($row.status -ne 'trusted' -and -not $isFallbackHygiene) {
                     $output = if ([string]::IsNullOrWhiteSpace([string]$row.outputSummary)) { '-' } else { [string]$row.outputSummary }
                     $notes = if ([string]::IsNullOrWhiteSpace([string]$row.notes)) { 'no notes' } else { [string]$row.notes }
                     $failures.Add("$scenarioId/$hostId/p${pageNumber}: status '$($row.status)' output '$output' notes '$notes'")
                     continue
                 }
-
-                $trustedCount++
 
                 $expectedWorkflow = $requiredWorkflowByScenario[$scenarioId]
                 $evidenceMatch = @($evidenceRows | Where-Object {
@@ -383,6 +391,42 @@ function Assert-BackstageEvidenceReadiness {
                 }
 
                 $metadata = $evidenceMatch[0].hostMetadata
+                if ($isFallbackHygiene) {
+                    if ($hostId -ne 'wpf-fidelity-render') {
+                        $failures.Add("$scenarioId/$hostId/p${pageNumber}: fallback hygiene is only valid for WPF software renderer rows")
+                        continue
+                    }
+
+                    $captureSource = [string]$metadata.captureSource
+                    if ($captureSource -ne 'software-renderer') {
+                        $failures.Add("$scenarioId/$hostId/p${pageNumber}: fallback hygiene expected captureSource 'software-renderer', found '$captureSource'")
+                        continue
+                    }
+
+                    $renderTargetBitmap = [string]$metadata.wpfRenderTargetBitmap
+                    if ($renderTargetBitmap -ne 'unavailable') {
+                        $failures.Add("$scenarioId/$hostId/p${pageNumber}: fallback hygiene expected wpfRenderTargetBitmap 'unavailable', found '$renderTargetBitmap'")
+                        continue
+                    }
+
+                    if ([string]::IsNullOrWhiteSpace([string]$metadata.wpfRenderTargetBitmapReason)) {
+                        $failures.Add("$scenarioId/$hostId/p${pageNumber}: fallback hygiene expected wpfRenderTargetBitmapReason")
+                        continue
+                    }
+
+                    $fallbackHygieneCount++
+                }
+                else {
+                    $expectedCaptureSource = $requiredCaptureSourceByHost[$hostId]
+                    $captureSource = [string]$metadata.captureSource
+                    if ($captureSource -ne $expectedCaptureSource) {
+                        $failures.Add("$scenarioId/$hostId/p${pageNumber}: captureSource '$captureSource' expected '$expectedCaptureSource'")
+                        continue
+                    }
+
+                    $trustedCount++
+                }
+
                 $workflow = [string]$metadata.backstageWorkflow
                 if ($workflow -ne $expectedWorkflow) {
                     $failures.Add("$scenarioId/$hostId/p${pageNumber}: backstageWorkflow '$workflow' expected '$expectedWorkflow'")
@@ -417,9 +461,13 @@ function Assert-BackstageEvidenceReadiness {
         throw "Backstage evidence readiness failed:`n - $($failures -join "`n - ")"
     }
 
-    Write-Host "Backstage evidence readiness: trusted required rows=$trustedCount"
-    Write-Host "Backstage artifact metadata: verified rows=$trustedCount schema=v$($summary.schemaVersion)"
-    Write-Host "Backstage capture routes: verified rows=$trustedCount"
+    $verifiedRows = $trustedCount + $fallbackHygieneCount
+    Write-Host "Backstage evidence readiness: trusted real rows=$trustedCount fallback hygiene rows=$fallbackHygieneCount"
+    Write-Host "Backstage artifact metadata: verified rows=$verifiedRows schema=v$($summary.schemaVersion)"
+    Write-Host "Backstage capture routes: verified rows=$verifiedRows"
+    if ($fallbackHygieneCount -gt 0) {
+        Write-Host "Backstage runner evidence hygiene: WPF software fallback rows=$fallbackHygieneCount"
+    }
 }
 
 function Test-ScenarioFilterIncludesBackstage {
@@ -3722,13 +3770,17 @@ elseif (-not [string]::IsNullOrWhiteSpace($WordBaselineUnavailableReason)) {
     )
 }
 
+if ($allowNoWordFallbackEvidence) {
+    $summaryArgs += '--allow-no-word-fallback-evidence'
+}
+
 foreach ($scenario in @($effectiveScenarioIds)) {
     $summaryArgs += @('--include-scenario', $scenario)
 }
 
 Invoke-DotNetStep 'Validate and normalize combined visual evidence' $summaryArgs
 if (Test-ScenarioFilterIncludesBackstage $effectiveScenarioIds) {
-    Assert-BackstageEvidenceReadiness $summaryJson
+    Assert-BackstageEvidenceReadiness $summaryJson $allowNoWordFallbackEvidence
 }
 else {
     Write-Host "Backstage evidence readiness: skipped by scenario filter"

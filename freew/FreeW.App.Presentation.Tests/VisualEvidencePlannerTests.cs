@@ -4639,10 +4639,35 @@ public sealed class VisualEvidencePlannerTests
                 row.Status == "fallback" &&
                 row.Notes.Contains("real wpf-composite-renderer capture still required", StringComparison.Ordinal));
             summary.RemainingEvidenceBlockers.Should().ContainSingle(blocker =>
-                blocker.BlockerId == "backstage-real-captures-backstage-pdf-export-fidelity" &&
-                blocker.Status == "missing-real-captures" &&
+                blocker.BlockerId == "backstage-runner-evidence-hygiene-backstage-pdf-export-fidelity" &&
+                blocker.Area == "Backstage print/export visual evidence runner" &&
+                blocker.Status == "runner-evidence-hygiene" &&
                 blocker.SemanticEvidence.Contains("wpf-fidelity-render/p1=fallback") &&
-                blocker.Trust.Passed == false);
+                blocker.RequiresWordBaseline == false &&
+                blocker.Trust.Passed);
+            summary.RemainingEvidenceBlockers.Should().NotContain(blocker =>
+                blocker.Status == "missing-real-captures");
+
+            var comparisons = summary.Evidence
+                .Select(row => FreeWVisualBaselineComparisonPlanner.BuildWordBaselineUnavailableComparison(
+                    row,
+                    FreeWVisualBaselineComparisonTolerance.WordPngDefault,
+                    "COM ProgID 'Word.Application' is not registered"))
+                .ToList();
+            var withBaseline = FreeWVisualEvidenceManifestNormalizer.WithBaselineComparisons(
+                summary,
+                comparisons);
+
+            withBaseline.Trust.Passed.Should().BeTrue();
+            withBaseline.BaselineComparisons.Should().OnlyContain(comparison =>
+                comparison.Status == FreeWVisualBaselineComparisonPlanner.WordBaselineUnavailableStatus);
+            withBaseline.EvidenceAuthority.AuthoritativeWordPngParityClaimed.Should().BeFalse();
+            withBaseline.RemainingEvidenceBlockers.Should().ContainSingle(blocker =>
+                blocker.BlockerId == "backstage-runner-evidence-hygiene-backstage-pdf-export-fidelity" &&
+                blocker.Status == "runner-evidence-hygiene" &&
+                blocker.Trust.Passed);
+            withBaseline.RemainingEvidenceBlockers.Should().NotContain(blocker =>
+                blocker.Status == "missing-real-captures");
         }
         finally
         {

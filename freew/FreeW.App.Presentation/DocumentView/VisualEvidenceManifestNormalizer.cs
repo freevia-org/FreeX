@@ -274,7 +274,7 @@ public sealed record FreeWVisualRemainingEvidenceBlocker(
 public static class FreeWVisualEvidenceManifestNormalizer
 {
     public const string SummarySchemaId = "freew.visual-evidence-summary.v1";
-    public const int SummarySchemaVersion = 49;
+    public const int SummarySchemaVersion = 50;
     public const string SummaryJsonFileName = "freew_visual_evidence_summary.json";
     public const string SummaryMarkdownFileName = "freew_visual_evidence_summary.md";
     public const string WpfHostId = "wpf-fidelity-render";
@@ -5737,6 +5737,23 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 _ => scenarioGroup.Key
             };
 
+            if (missing.All(IsBackstageWpfSoftwareFallbackReadinessRow))
+            {
+                blockers.Add(new FreeWVisualRemainingEvidenceBlocker(
+                    $"backstage-runner-evidence-hygiene-{scenarioGroup.Key}",
+                    scenarioGroup.Key,
+                    "Backstage print/export visual evidence runner",
+                    "runner-evidence-hygiene",
+                    $"real WPF composite capture rows for {scenarioGroup.Key} on a capture-capable runner before treating the WPF side as renderer parity evidence",
+                    $"{scenarioLabel} has paired renderer contracts and trusted Avalonia rows, but the no-Word runner retained WPF software fallback evidence with wpfRenderTargetBitmap=unavailable: {missingSummary}. This is runner evidence hygiene, not a FreeW Word parity gap or an MS Word PNG parity claim.",
+                    [],
+                    [],
+                    semanticEvidence,
+                    false,
+                    new FreeWVisualEvidenceTrust(true, [])));
+                continue;
+            }
+
             blockers.Add(new FreeWVisualRemainingEvidenceBlocker(
                 $"backstage-real-captures-{scenarioGroup.Key}",
                 scenarioGroup.Key,
@@ -5757,6 +5774,10 @@ public static class FreeWVisualEvidenceManifestNormalizer
 
         return blockers;
     }
+
+    private static bool IsBackstageWpfSoftwareFallbackReadinessRow(FreeWVisualEvidenceBackstagePrintReadiness row) =>
+        string.Equals(row.HostId, WpfHostId, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(row.Status, "fallback", StringComparison.OrdinalIgnoreCase);
 
     private static FreeWVisualRemainingEvidenceBlocker BuildReferencesHeavyToaBlocker(
         string status,
