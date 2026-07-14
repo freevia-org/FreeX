@@ -914,6 +914,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.basic-hierarchy",
             "freep.smartart.horizontal-hierarchy",
             "freep.smartart.labeled-hierarchy",
+            "freep.smartart.table-hierarchy",
             "freep.smartart.org-chart",
             "freep.smartart.outline-editing",
             "freep.smartart.data-part-authoring",

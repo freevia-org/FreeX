@@ -3150,6 +3150,64 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Compositor_TableHierarchy_UsesSharedLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeHierarchyData("Portfolio", "Owners", "Milestones");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 23,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached table hierarchy fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 74,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(5, "tableHierarchy uses the bounded shared hierarchy approximation: three live boxes plus two connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Portfolio");
+        renderedText.Should().Contain("Owners");
+        renderedText.Should().Contain("Milestones");
+        renderedText.Should().NotContain("Cached table hierarchy fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(2, "WPF and Avalonia hosts consume the same shared hierarchy connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_OrgChart_UsesLiveLayoutOverCachedDrawing()
     {
         var data = MakeHierarchyData("CEO", "Sales", "Engineering");
@@ -3378,7 +3436,7 @@ public sealed class SmartArtLayoutTests
     public void Compositor_FallsBackToCachedDrawing_WhenHierarchyFamilyLayoutIsUnsupported()
     {
         var data = MakeHierarchyData("Root", "Child");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/unknownHierarchy";
         data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };

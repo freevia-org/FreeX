@@ -1787,7 +1787,7 @@ public sealed class SmartArtTests : IDisposable
     public void Reader_ParsesKnownHierarchyFamilyButDisablesLiveLayoutForUnsupportedSibling()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
-            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy",
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/unknownHierarchy",
             nodes: [("R", "Root"), ("C", "Child")],
             parOfConnections: [("R", "C")]);
 
@@ -1801,6 +1801,27 @@ public sealed class SmartArtTests : IDisposable
             "hierarchy-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Should().ContainSingle();
         sa.Data.Nodes[0].Children.Should().ContainSingle().Which.Text.Should().Be("Child");
+    }
+
+    [Fact]
+    public void Reader_ParsesTableHierarchyAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy",
+            nodes: [("R", "Portfolio"), ("C1", "Owners"), ("C2", "Milestones")],
+            parOfConnections: [("R", "C1"), ("R", "C2")]);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Hierarchy,
+            "tableHierarchy is a hierarchy-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "tableHierarchy is in the bounded shared hierarchy live-layout planner");
+        sa.Data.Nodes.Should().ContainSingle();
+        sa.Data.Nodes[0].Text.Should().Be("Portfolio");
+        sa.Data.Nodes[0].Children.Select(n => n.Text).Should().BeEquivalentTo(new[] { "Owners", "Milestones" });
     }
 
     [Fact]
@@ -2931,7 +2952,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Hierarchy,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/tableHierarchy",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/unknownHierarchy",
             IsLiveLayoutSupported = false
         };
         var root = new SmartArtNode { Text = "Root", Level = 0 };
