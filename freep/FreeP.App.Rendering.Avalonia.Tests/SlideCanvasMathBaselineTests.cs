@@ -1058,6 +1058,63 @@ public sealed class SlideCanvasMathBaselineTests
     }
 
     [Fact]
+    public async Task RenderParaWithMath_DelimiterSeparator_UsesSharedSeparatorPlan_DoesNotThrow()
+    {
+        System.Exception? thrown = null;
+        await Run(() =>
+        {
+            try
+            {
+                var customSeparator = MathLayoutEngine.Layout(
+                    ParseOmml(
+                        "<m:d>" +
+                        "<m:dPr><m:sepChr m:val=\"|\"/></m:dPr>" +
+                        "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                        "<m:e><m:r><m:t>y</m:t></m:r></m:e>" +
+                        "</m:d>"),
+                    "Cambria Math",
+                    18.0);
+                var emptySeparator = MathLayoutEngine.Layout(
+                    ParseOmml(
+                        "<m:d>" +
+                        "<m:dPr><m:sepChr m:val=\"\"/></m:dPr>" +
+                        "<m:e><m:r><m:t>x</m:t></m:r></m:e>" +
+                        "<m:e><m:r><m:t>y</m:t></m:r></m:e>" +
+                        "</m:d>"),
+                    "Cambria Math",
+                    18.0);
+
+                MathBoxRenderPlanner.Plan(customSeparator, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Select(g => g.Text)
+                    .Should().Equal(new[] { "x", "|", "y" },
+                        "m:dPr/m:sepChr custom separator glyphs must be resolved in the shared plan before Avalonia draws");
+                MathBoxRenderPlanner.Plan(emptySeparator, 10, 20, SrgbColor.Black, "Cambria Math")
+                    .OfType<MathDrawOp.DrawGlyph>()
+                    .Select(g => g.Text)
+                    .Should().Equal(new[] { "x", "y" },
+                        "explicit empty m:sepChr suppresses the visible separator before Avalonia draws");
+
+                var para = new ResolvedParagraph
+                {
+                    Runs = new[]
+                    {
+                        new ResolvedRun { Text = "D = ", FontFamily = "Arial", FontSizePt = 18.0, Color = SrgbColor.Black },
+                        new ResolvedRun { FontFamily = "Cambria Math", FontSizePt = 18.0, Color = SrgbColor.Black, MathLayout = customSeparator },
+                    }
+                };
+
+                var rtb = new RenderTargetBitmap(new PixelSize(260, 120));
+                using DrawingContext dc = rtb.CreateDrawingContext();
+                SlideCanvas.RenderParaWithMath(dc, para, startX: 10, startY: 20);
+            }
+            catch (System.Exception ex) { thrown = ex; }
+        });
+
+        thrown.Should().BeNull("Avalonia must consume delimiter separator glyphs from the shared MathBox plan without host-specific layout branching");
+    }
+
+    [Fact]
     public async Task RenderParaWithMath_CenteredDelimiterShape_UsesSharedOrdinaryBracketPlan_DoesNotThrow()
     {
         System.Exception? thrown = null;

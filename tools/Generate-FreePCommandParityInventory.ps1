@@ -832,6 +832,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing and layout now preserve m:dPr/m:shp centered vs match semantics, keeping centered delimiter glyphs at ordinary bracket height while the tall inner expression still drives shared container height and baseline. PowerPoint-authoritative math visual baselines, exact delimiter glyph metrics, and complete OfficeMath delimiter typography remain deferred."),
         new(
+            EvidenceId: "freep.omml.delimiter-separator",
+            Area: "OMML delimiter separator semantics",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.Delim separator metadata and MathBoxRenderPlanner glyph coordinates with no renderer-local delimiter policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-delimiter-separator-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing and layout now preserve m:dPr/m:sepChr default comma, custom separator glyphs, and explicit-empty separator suppression for multi-element delimiters, carrying renderer-neutral glyph coordinates to WPF and Avalonia. PowerPoint-authoritative math visual baselines, exact Cambria Math separator spacing, and complete OfficeMath delimiter typography remain deferred."),
+        new(
             EvidenceId: "freep.omml.groupchr-vertical-justification",
             Area: "OMML group-character vertical justification",
             Status: "shared-layout-evidence",
