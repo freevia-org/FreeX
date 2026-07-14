@@ -1687,10 +1687,29 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
-    public void Reader_ParsesKnownCycleFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    public void Reader_ParsesBlockCycleAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
             layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/blockCycle",
+            nodes: [("id1", "Sense"), ("id2", "Decide"), ("id3", "Act"), ("id4", "Learn")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle,
+            "blockCycle is a cycle-family layout and should stay renderer-neutral");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "blockCycle is in the bounded shared live-layout planner");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Sense", "Decide", "Act", "Learn");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownCycleFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle",
             nodes: [("id1", "Phase 1"), ("id2", "Phase 2"), ("id3", "Phase 3")],
             parOfConnections: []);
 
@@ -2540,6 +2559,34 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_BlockCycleSmartArt_RendersSharedLiveShapes()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/blockCycle",
+            nodes: [("n1", "Sense"), ("n2", "Decide"), ("n3", "Act"), ("n4", "Learn")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Cycle);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(8, "four block-cycle boxes plus four connectors should render from shared live data");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Sense");
+        renderedText.Should().Contain("Learn");
+        liveShapes.Where(op => op.Text is null)
+            .Should().HaveCount(4, "WPF and Avalonia hosts consume shared block-cycle connector DrawOps");
+    }
+
+    [Fact]
     public void Compositor_BasicHierarchySmartArt_RendersSharedLiveShapes()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -2760,7 +2807,7 @@ public sealed class SmartArtTests : IDisposable
         var data = new SmartArtData
         {
             Family = SmartArtFamily.Cycle,
-            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/textCycle",
+            LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle",
             IsLiveLayoutSupported = false
         };
         data.Nodes.Add(new SmartArtNode { Text = "Live A", Level = 0 });

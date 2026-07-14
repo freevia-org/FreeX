@@ -1417,6 +1417,22 @@ internal static class FreePCommandInventory
             RemainingWork: "textCycle now uses the bounded shared cycle-family live-layout path for parsed nodes as a renderer-neutral rounded-box/connector approximation. Other unsupported cycle siblings remain on cached drawing fallback. Exact PowerPoint text-cycle placement, richer cycle geometry, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
         ,
         new(
+            EvidenceId: "freep.smartart.block-cycle",
+            Area: "SmartArt blockCycle live layout",
+            Status: "shared-render-planner-evidence",
+            HostCoverage: "WPF/Avalonia consume ordinary shared slide shape and connector ops emitted by the SmartArt cycle-family layout planner; no renderer-local SmartArt policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-smartart-block-cycle-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation.Tests/SmartArtLayoutTests.cs",
+                "freep/FreeP.App.Host.Tests/SmartArtTests.cs"
+            ],
+            RemainingWork: "blockCycle now uses the bounded shared cycle-family live-layout path for parsed nodes as a renderer-neutral rounded-box/connector approximation. Other unsupported cycle siblings remain on cached drawing fallback. Exact PowerPoint block-cycle segment geometry, richer cycle spacing/effects, PowerPoint-authoritative visual baselines, and SmartArt authoring/editing remain deferred.")
+        ,
+        new(
             EvidenceId: "freep.smartart.basic-matrix",
             Area: "SmartArt basic matrix live layout",
             Status: "shared-render-planner-evidence",
