@@ -293,6 +293,30 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlNaryGrow_WithHiddenLimits_ScalesOperatorWithoutLimitGlyphs()
+    {
+        var node = ParseOmml(
+            "<m:nary>" +
+            "<m:naryPr><m:chr m:val=\"S\"/><m:grow/><m:subHide/><m:supHide/></m:naryPr>" +
+            "<m:sub><m:r><m:t>0</m:t></m:r></m:sub>" +
+            "<m:sup><m:r><m:t>n</m:t></m:r></m:sup>" +
+            "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
+            "</m:nary>");
+        var layout = MathLayoutEngine.Layout(node, "Cambria Math", FontSizePt);
+
+        var glyphs = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math")
+            .OfType<MathDrawOp.DrawGlyph>()
+            .ToArray();
+
+        glyphs.Select(g => g.Text)
+            .Should()
+            .Equal(new[] { "S", "1", "x" },
+                "hidden n-ary sub/sup limits must be removed while the grow operator and operand remain in the shared plan");
+        glyphs.Single(g => g.Text == "S").FontSizePt.Should().BeGreaterThan(FontSizePt * 1.50,
+            "m:naryPr/m:grow should still scale the operator after hidden limits are suppressed");
+    }
+
+    [Fact]
     public void OmmlNaryLimLoc_RenderPlanDistinguishesUnderOverFromSubSup()
     {
         var underOver = MathLayoutEngine.Layout(
