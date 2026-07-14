@@ -1126,6 +1126,61 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void StackedVenn_ReturnsOffsetTranslucentEllipsesWithoutConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Market", "Product", "Proof");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("stackedVenn has bounded shared relationship-family geometry");
+        shapes!.Should().HaveCount(3, "one live ellipse should be emitted per stacked Venn node");
+        shapes.Should().OnlyContain(s => s.AutoShapeKind == DrawingShapeKind.Ellipse,
+            "stackedVenn emits offset translucent ellipse shapes without connector ops");
+
+        var ellipses = shapes.ToList();
+        ellipses.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("Market", "Product", "Proof");
+        ellipses.Select(s => s.OffsetXEmu)
+            .Should().BeInAscendingOrder("stackedVenn ellipses should step down and right");
+        ellipses.Select(s => s.OffsetYEmu)
+            .Should().BeInAscendingOrder("stackedVenn ellipses should step down and right");
+
+        for (int i = 1; i < ellipses.Count; i++)
+        {
+            ellipses[i].OffsetXEmu.Should().BeLessThan(
+                ellipses[i - 1].OffsetXEmu + ellipses[i - 1].ExtentCxEmu,
+                "adjacent stacked Venn ellipses should overlap horizontally");
+            ellipses[i].OffsetYEmu.Should().BeLessThan(
+                ellipses[i - 1].OffsetYEmu + ellipses[i - 1].ExtentCyEmu,
+                "adjacent stacked Venn ellipses should overlap vertically");
+        }
+
+        foreach (var ellipse in ellipses)
+        {
+            ((ShapeFill.Solid)ellipse.Fill!).Color.Alpha.Should().BeLessThan(255,
+                "stacked Venn fills must remain translucent so overlaps are visible in shared renderers");
+            ellipse.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            ellipse.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (ellipse.OffsetXEmu + ellipse.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (ellipse.OffsetYEmu + ellipse.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(6)]
+    public void StackedVenn_OutsideBoundedNodeCount_ReturnsNullForCachedFallback(int nodeCount)
+    {
+        var data = MakeData(SmartArtFamily.Relationship, Enumerable.Range(1, nodeCount).Select(i => $"N{i}").ToArray());
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn";
+
+        var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        result.Should().BeNull("the bounded stackedVenn planner owns only readable two-to-five node relationship diagrams");
+    }
+
+    [Fact]
     public void UnsupportedKnownProcessSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
@@ -1177,7 +1232,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedRelationshipSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Relationship, "A", "B", "C");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/relationship1";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -2360,6 +2415,64 @@ public sealed class SmartArtLayoutTests
             "hosts consume shared radial placement instead of a single stacked fallback shape");
         shapeOps.Select(op => op.BoundsDip.Y).Distinct().Should().HaveCountGreaterThan(1,
             "hosts consume shared radial placement instead of a single row fallback shape");
+    }
+
+    [Fact]
+    public void Compositor_StackedVenn_UsesSharedLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Relationship, "Market", "Product", "Proof");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 23,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            TextBody = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached stacked Venn fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id = 76,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(3, "stackedVenn should render three live ellipses and no connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain(["Market", "Product", "Proof"]);
+        renderedText.Should().NotContain("Cached stacked Venn fallback");
+        shapeOps.Select(op => op.BoundsDip.X)
+            .Should().BeInAscendingOrder("hosts consume shared stacked Venn rightward offsets");
+        shapeOps.Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("hosts consume shared stacked Venn downward offsets");
     }
 
     [Fact]
