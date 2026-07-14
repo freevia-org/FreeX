@@ -84,6 +84,9 @@ public static class SmartArtLayoutEngine
         if (IsAlternatingProcessLayout(data.LayoutUniqueId))
             return LayoutAlternatingProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
+        if (IsFunnelProcessLayout(data.LayoutUniqueId))
+            return LayoutFunnelProcess(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
+
         if (IsDescendingBlockListLayout(data.LayoutUniqueId))
             return LayoutDescendingBlockList(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan);
 
@@ -342,6 +345,63 @@ public static class SmartArtLayoutEngine
             var from = centers[i];
             var to = centers[i + 1];
             shapes.Add(MakeConnector(idCounter++, from.x, from.y, to.x, to.y, stylePlan.Connector));
+        }
+
+        return shapes;
+    }
+
+    /// <summary>
+    /// Funnel process geometry: ordered stages stack vertically and narrow toward
+    /// the bottom while connectors keep WPF/Avalonia on the same shared DrawOp path.
+    /// </summary>
+    private static IReadOnlyList<SlideShape> LayoutFunnelProcess(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        var shapes = new List<SlideShape>();
+        var centers = new (long x, long topY, long bottomY)[n];
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long gapY = (long)(fcy * 0.018);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long availH = Math.Max(fcy - 2 * outerPadY - (n - 1) * gapY, 1L);
+        long stageH = Math.Max(availH / n, 1L);
+        double minWidthFrac = n == 1 ? 0.82 : 0.42;
+
+        uint idCounter = 190;
+        long curY = fy + outerPadY;
+
+        for (int i = 0; i < n; i++)
+        {
+            double t = n == 1 ? 0.0 : (double)i / (n - 1);
+            double widthFrac = 1.0 - ((1.0 - minWidthFrac) * t);
+            long stageW = Math.Max((long)(innerW * widthFrac), 1L);
+            long x = fx + outerPadX + (innerW - stageW) / 2;
+            var nodeStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Process);
+
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                nodeStyle,
+                x,
+                curY,
+                stageW,
+                stageH,
+                NodeFontSizePt,
+                DrawingShapeKind.Trapezoid));
+
+            centers[i] = (x + stageW / 2, curY, curY + stageH);
+            curY += stageH + gapY;
+        }
+
+        for (int i = 0; i < n - 1; i++)
+        {
+            var from = centers[i];
+            var to = centers[i + 1];
+            shapes.Add(MakeConnector(idCounter++, from.x, from.bottomY, to.x, to.topY, stylePlan.Connector));
         }
 
         return shapes;
@@ -1006,6 +1066,15 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "alternatingprocess", StringComparison.Ordinal);
+    }
+
+    private static bool IsFunnelProcessLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "funnelprocess", StringComparison.Ordinal);
     }
 
     private static bool IsBasicPyramidLayout(string uniqueId)

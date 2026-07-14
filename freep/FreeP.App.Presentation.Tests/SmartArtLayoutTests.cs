@@ -719,6 +719,37 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void FunnelProcess_ReturnsNarrowingStageSegmentsAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Process, "A", "B", "C", "D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("funnelProcess has bounded shared funnel-stage geometry");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.Trapezoid)
+            .Should().HaveCount(4, "one live trapezoid segment should be emitted per funnel-process node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(3, "adjacent funnel-process stages need shared connector ops");
+
+        var segments = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Trapezoid).ToList();
+        segments.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().Equal("A", "B", "C", "D");
+        segments.Select(s => s.OffsetYEmu)
+            .Should().BeInAscendingOrder("funnel stages should stack top-to-bottom");
+        segments.Select(s => s.ExtentCxEmu)
+            .Should().BeInDescendingOrder("funnel stages should narrow toward the bottom");
+
+        foreach (var segment in segments)
+        {
+            segment.OffsetXEmu.Should().BeGreaterThanOrEqualTo(FrameX);
+            segment.OffsetYEmu.Should().BeGreaterThanOrEqualTo(FrameY);
+            (segment.OffsetXEmu + segment.ExtentCxEmu).Should().BeLessThanOrEqualTo(FrameX + FrameCx);
+            (segment.OffsetYEmu + segment.ExtentCyEmu).Should().BeLessThanOrEqualTo(FrameY + FrameCy);
+        }
+    }
+
+    [Fact]
     public void BasicBlockList_ReturnsLiveVerticalListBoxesWithoutConnectors()
     {
         var data = MakeData(SmartArtFamily.List, "A", "B", "C");
@@ -984,7 +1015,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedKnownProcessSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Process, "A", "B");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -1514,7 +1545,7 @@ public sealed class SmartArtLayoutTests
     public void Compositor_FallsBackToCachedDrawing_WhenKnownFamilyLayoutIsUnsupported()
     {
         var data = MakeData(SmartArtFamily.Process, "Live A", "Live B");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/circleProcess";
         data.IsLiveLayoutSupported = false;
 
         var smart = new SmartArtShape { Data = data };
@@ -1559,6 +1590,66 @@ public sealed class SmartArtLayoutTests
         var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
         shapeOps.Should().ContainSingle("unsupported process variants should render cached drawing, not live boxes");
         shapeOps[0].Text?.Paragraphs[0].Runs[0].Text.Should().Be("Cached fallback");
+    }
+
+    [Fact]
+    public void Compositor_FunnelProcess_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Process, "Live A", "Live B", "Live C", "Live D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/funnelProcess";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 20,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached funnel fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 64,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(7, "funnelProcess should render four live stages plus three connectors");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain(["Live A", "Live B", "Live C", "Live D"]);
+        renderedText.Should().NotContain("Cached funnel fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(3, "WPF and Avalonia hosts consume shared funnel connector DrawOps");
+        shapeOps.Where(op => op.Text is not null).Select(op => op.BoundsDip.Y)
+            .Should().BeInAscendingOrder("hosts consume shared top-to-bottom funnel DrawOp geometry");
+        shapeOps.Where(op => op.Text is not null).Select(op => op.BoundsDip.Width)
+            .Should().BeInDescendingOrder("hosts consume shared narrowing funnel segment geometry");
     }
 
     [Fact]
