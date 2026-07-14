@@ -94,6 +94,9 @@ public static class SmartArtLayoutEngine
             SmartArtFamily.Cycle     => LayoutCycle     (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
             SmartArtFamily.Hierarchy => LayoutHierarchy (data,  frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan, IsOrgChartLayout(data.LayoutUniqueId)),
             SmartArtFamily.Matrix    => LayoutMatrix    (nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan),
+            SmartArtFamily.Relationship => IsBasicVennLayout(data.LayoutUniqueId)
+                ? LayoutBasicVenn(nodes, frameXEmu, frameYEmu, frameCxEmu, frameCyEmu, stylePlan)
+                : null,
             _                        => null
         };
     }
@@ -536,6 +539,62 @@ public static class SmartArtLayoutEngine
         return shapes;
     }
 
+    /// <summary>
+    /// Basic Venn geometry: overlapping translucent ellipses centered in the
+    /// frame. This models bounded relationship-family placement with shared
+    /// shape ops, not exact PowerPoint blend math or text offsets.
+    /// </summary>
+    private static IReadOnlyList<SlideShape>? LayoutBasicVenn(
+        List<SmartArtNode> nodes,
+        long fx, long fy, long fcx, long fcy,
+        SmartArtStylePlan stylePlan)
+    {
+        int n = nodes.Count;
+        if (n is 0 or > 4)
+            return null;
+
+        var shapes = new List<SlideShape>();
+
+        long outerPadX = (long)(fcx * OuterPaddingFrac);
+        long outerPadY = (long)(fcy * OuterPaddingFrac);
+        long innerW = Math.Max(fcx - 2 * outerPadX, 1L);
+        long innerH = Math.Max(fcy - 2 * outerPadY, 1L);
+
+        const double overlapStepFrac = 0.58;
+        long diameter = n == 1
+            ? Math.Min((long)(innerW * 0.62), (long)(innerH * 0.82))
+            : Math.Min((long)(innerW / (1.0 + overlapStepFrac * (n - 1))), (long)(innerH * 0.82));
+        diameter = Math.Max(diameter, 1L);
+
+        long step = n == 1 ? 0 : Math.Max((long)(diameter * overlapStepFrac), 1L);
+        long totalW = diameter + (n - 1) * step;
+        long leftX = fx + outerPadX + Math.Max((innerW - totalW) / 2, 0L);
+        long topY = fy + outerPadY + Math.Max((innerH - diameter) / 2, 0L);
+
+        uint idCounter = 540;
+        for (int i = 0; i < n; i++)
+        {
+            var baseStyle = stylePlan.GetNodeStyle(i, nodes[i].Level, SmartArtFamily.Relationship);
+            var translucentStyle = baseStyle with
+            {
+                Fill = new ThemeAwareColor(baseStyle.Fill.Resolved, alpha: 150)
+            };
+
+            shapes.Add(MakeBox(
+                idCounter++,
+                nodes[i].Text,
+                translucentStyle,
+                leftX + i * step,
+                topY,
+                diameter,
+                diameter,
+                NodeFontSizePt,
+                DrawingShapeKind.Ellipse));
+        }
+
+        return shapes;
+    }
+
     private static IReadOnlyList<SlideShape> LayoutCycle(
         List<SmartArtNode> nodes,
         long fx, long fy, long fcx, long fcy,
@@ -858,5 +917,14 @@ public static class SmartArtLayoutEngine
 
         var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
         return string.Equals(id.Split('/').Last(), "basicpyramid", StringComparison.Ordinal);
+    }
+
+    private static bool IsBasicVennLayout(string uniqueId)
+    {
+        if (string.IsNullOrWhiteSpace(uniqueId))
+            return false;
+
+        var id = uniqueId.Replace('\\', '/').Trim().ToLowerInvariant();
+        return string.Equals(id.Split('/').Last(), "basicvenn", StringComparison.Ordinal);
     }
 }

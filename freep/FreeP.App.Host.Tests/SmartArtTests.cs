@@ -1415,6 +1415,25 @@ public sealed class SmartArtTests : IDisposable
     }
 
     [Fact]
+    public void Reader_ParsesBasicVennAsLiveLayoutSupported()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicVenn",
+            nodes: [("id1", "Audience"), ("id2", "Need"), ("id3", "Offer")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship,
+            "basicVenn is tracked as a relationship-family SmartArt layout");
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue(
+            "basicVenn now has bounded shared overlapping-ellipse geometry");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("Audience", "Need", "Offer");
+    }
+
+    [Fact]
     public void Reader_ParsesBasicCycleAsLiveLayoutSupported()
     {
         var pptxPath = MakeSmartArtPptxWithNodeTree(
@@ -1666,6 +1685,25 @@ public sealed class SmartArtTests : IDisposable
         sa.Data.IsLiveLayoutSupported.Should().BeFalse(
             "matrix-family layouts outside the bounded allow-list should keep cached-drawing fallback");
         sa.Data.Nodes.Select(n => n.Text).Should().Equal("A", "B", "C", "D");
+    }
+
+    [Fact]
+    public void Reader_ParsesKnownRelationshipFamilyButDisablesLiveLayoutForUnsupportedSibling()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/stackedVenn",
+            nodes: [("id1", "A"), ("id2", "B"), ("id3", "C")],
+            parOfConnections: []);
+
+        var sa = PptxPackageReader.Read(pptxPath)
+            .Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship,
+            "unsupported Venn siblings still retain broad relationship-family metadata for future layout slices");
+        sa.Data.IsLiveLayoutSupported.Should().BeFalse(
+            "relationship-family layouts outside the bounded allow-list should keep cached-drawing fallback");
+        sa.Data.Nodes.Select(n => n.Text).Should().Equal("A", "B", "C");
     }
 
     [Fact]
@@ -2023,6 +2061,40 @@ public sealed class SmartArtTests : IDisposable
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared top-to-bottom pyramid DrawOps");
         liveShapes.Select(op => op.BoundsDip.Width)
             .Should().BeInAscendingOrder("WPF and Avalonia hosts consume shared widening pyramid segment geometry");
+    }
+
+    [Fact]
+    public void Compositor_BasicVennSmartArt_RendersSharedLiveEllipses()
+    {
+        var pptxPath = MakeSmartArtPptxWithNodeTree(
+            layoutUniqueId: "urn:microsoft.com/office/officeart/2005/8/layout/basicVenn",
+            nodes: [("n1", "Audience"), ("n2", "Need"), ("n3", "Offer")],
+            parOfConnections: []);
+
+        var pres = PptxPackageReader.Read(pptxPath);
+        var sa = pres.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.SmartArt).SmartArt!;
+
+        sa.Data.Should().NotBeNull();
+        sa.Data!.Family.Should().Be(SmartArtFamily.Relationship);
+        sa.Data.IsLiveLayoutSupported.Should().BeTrue();
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+        var liveShapes = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+
+        liveShapes.Should().HaveCount(3, "three basic-Venn ellipses should render from shared live data");
+        liveShapes.Where(op => op.Text is null)
+            .Should().BeEmpty("basic-Venn live geometry emits no connectors");
+        var renderedText = liveShapes
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain(["Audience", "Need", "Offer"]);
+        for (int i = 1; i < liveShapes.Count; i++)
+        {
+            liveShapes[i].BoundsDip.X.Should().BeGreaterThan(liveShapes[i - 1].BoundsDip.X);
+            liveShapes[i].BoundsDip.X.Should().BeLessThan(
+                liveShapes[i - 1].BoundsDip.X + liveShapes[i - 1].BoundsDip.Width,
+                "WPF and Avalonia hosts consume shared overlapping Venn ellipse DrawOps");
+        }
     }
 
     [Fact]
