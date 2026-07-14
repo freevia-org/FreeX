@@ -742,6 +742,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared row layout now consumes m:phantPr/m:transp for bounded single-token binary, relation, large-operator, and punctuation spacing classes while ambiguous multi-character and structured phantom bases stay packed. PowerPoint-authoritative visual baselines and full OfficeMath spacing-table typography remain deferred."),
         new(
+            EvidenceId: "freep.omml.box-operator-emulator-spacing",
+            Area: "OMML boxed operator-emulator spacing",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.Box operator-emulator metadata and MathLayoutEngine row advances with no renderer-local math policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-box-operator-emulator-2026-07-13.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing preserves m:boxPr/m:opEmu as renderer-neutral MathNode.Box metadata, and shared row layout gives boxed single-token and bounded multi-glyph relation operators deterministic operator-class spacing before WPF or Avalonia draw. PowerPoint-authoritative math visual baselines, exact OfficeMath spacing-table metrics, and broader operator-emulator line-break/alignment behavior remain deferred."),
+        new(
             EvidenceId: "freep.omml.accent-bar-render-plan",
             Area: "OMML accent-bar render-plan semantics",
             Status: "shared-layout-evidence",

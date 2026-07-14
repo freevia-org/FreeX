@@ -862,6 +862,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.chart.stock-volume-baseline-readiness",
             "freep.chart.doughnut-ring-baseline-readiness",
             "freep.omml.transparent-phantom-spacing",
+            "freep.omml.box-operator-emulator-spacing",
             "freep.omml.accent-bar-render-plan",
             "freep.omml.radical-degree-layout",
             "freep.omml.fraction-type",
