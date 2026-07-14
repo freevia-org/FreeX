@@ -147,6 +147,60 @@ public sealed class ChartBaselineCorpusTests
             "PowerPoint requests are readiness contracts and require desktop PowerPoint COM on the baseline machine");
     }
 
+    [Fact]
+    public void RadarBaselineReadiness_ProjectsStyleSpecificSharedHostDecisionsWithoutPowerPointCom()
+    {
+        var filledRadar = BuildRadarChart(RadarStyle.Filled);
+        var markerRadar = BuildRadarChart(RadarStyle.Marker);
+        var charts = new[] { filledRadar, markerRadar };
+
+        var filledPlan = ChartRenderPlanner.BuildRadarPrimitivePlan(
+            filledRadar,
+            new ChartPlanRect(0, 0, 240, 180));
+        filledPlan.Series[0].Path.Fill.Should()
+            .Be(new ChartFillPlan(ChartRenderPlanner.ResolveSeriesColor(0, null), ChartRenderPlanner.RadarFillAlpha));
+        filledPlan.Series[0].Markers.Should().BeEmpty();
+
+        var markerPlan = ChartRenderPlanner.BuildRadarPrimitivePlan(
+            markerRadar,
+            new ChartPlanRect(0, 0, 240, 180));
+        markerPlan.Series[0].Markers.Should().HaveCount(4);
+        markerPlan.Series[0].Path.Fill.Should().BeNull();
+
+        var readiness = ChartRenderPlanner.BuildVisualBaselineReadinessPlan(
+            charts,
+            slideIndex: 2,
+            scenarioId: "Radar Type Decisions");
+
+        readiness.ChartCount.Should().Be(2);
+        readiness.CaptureRequests.Should().HaveCount(6);
+        readiness.PowerPointRequestCount.Should().Be(2);
+        readiness.SharedHostRequestCount.Should().Be(4);
+        readiness.CaptureRequests
+            .Where(request => request.Host is ChartVisualBaselineCaptureHost.Wpf or ChartVisualBaselineCaptureHost.Avalonia)
+            .Should()
+            .OnlyContain(request => !request.RequiresPowerPointCom);
+
+        var filledAvalonia = readiness.CaptureRequests.Single(request =>
+            request.Host == ChartVisualBaselineCaptureHost.Avalonia
+            && request.ChartIndex == 0);
+        filledAvalonia.CaptureId.Should().Be("freep.radar-type-decisions.slide-3.chart-1.radar.avalonia");
+        filledAvalonia.EvidenceSummary.Should().Contain("filled radar area opacity");
+
+        var markerWpf = readiness.CaptureRequests.Single(request =>
+            request.Host == ChartVisualBaselineCaptureHost.Wpf
+            && request.ChartIndex == 1);
+        markerWpf.CaptureId.Should().Be("freep.radar-type-decisions.slide-3.chart-2.radar.wpf");
+        markerWpf.EvidenceSummary.Should().Contain("radar marker");
+
+        readiness.CaptureRequests.Single(request =>
+                request.Host == ChartVisualBaselineCaptureHost.PowerPoint
+                && request.ChartIndex == 0)
+            .RequiresPowerPointCom
+            .Should()
+            .BeTrue();
+    }
+
     private static string FindCorpusDirectory()
     {
         for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
@@ -159,5 +213,18 @@ public sealed class ChartBaselineCorpusTests
         }
 
         throw new DirectoryNotFoundException("Could not locate tools/FreeP.RenderCompare/corpus.");
+    }
+
+    private static ChartShape BuildRadarChart(RadarStyle style)
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Radar,
+            RadarStyle = style
+        };
+        chart.Categories.AddRange(["North", "East", "South", "West"]);
+        chart.Series.Add(new ChartSeries { Name = "Coverage" });
+        chart.Series[0].Values.AddRange([4, 6, 3, 5]);
+        return chart;
     }
 }

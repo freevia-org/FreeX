@@ -152,7 +152,12 @@ public static partial class ChartRenderPlanner
                 "bar/column gap, overlap, and depth plan",
             ChartType.Pie => "pie first-slice and visible-point sweep plan",
             ChartType.Doughnut => "doughnut ring and first-slice plan",
-            ChartType.Radar => "radar spoke, ring, marker, and blank-point plan",
+            ChartType.Radar => chart.RadarStyle switch
+            {
+                RadarStyle.Filled => "filled radar area opacity, spoke-ring, and blank-point plan",
+                RadarStyle.Marker => "radar marker, spoke-ring, and blank-point plan",
+                _ => "standard radar spoke-ring and blank-point plan",
+            },
             ChartType.Bubble => "bubble size representation and marker plan",
             _ => "shared chart frame, axis, legend, and series plan",
         };
