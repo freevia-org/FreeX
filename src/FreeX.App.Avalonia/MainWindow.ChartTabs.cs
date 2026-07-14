@@ -195,7 +195,11 @@ public sealed partial class MainWindow
         var preview = BuildChartTypePreviewPanel(panel.Preview);
 
         var dialog = NewChartDialog(UiText.Get("ChangeChartType_Title"), "ChangeChartTypeDialog");
-        dialog.MinWidth = 600;
+        dialog.Width = ChartTypeChangePlanner.DialogWidth;
+        dialog.Height = ChartTypeChangePlanner.DialogHeight;
+        dialog.MinWidth = ChartTypeChangePlanner.DialogWidth;
+        dialog.MinHeight = ChartTypeChangePlanner.DialogHeight;
+        dialog.SizeToContent = SizeToContent.Manual;
 
         var (okButton, cancelButton, buttonRow) = CreateChartDialogButtons("ChangeChartType");
         okButton.Click += (_, _) => dialog.Close(subtypeGallery.SelectedItem is ChartTypePickerOptionPlan picked ? (ChartType?)picked.Type : null);

@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using FreeX.App.Presentation.Charts.Editing;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Host;
@@ -21,8 +22,8 @@ public sealed class ChangeChartTypeDialog : Window
         SelectedChartType = currentType;
         Result = CreateResult(currentType);
         Title = UiText.Get("ChangeChartType_Title");
-        Width = 640;
-        Height = 390;
+        Width = ChartTypeChangePlanner.DialogWidth;
+        Height = ChartTypeChangePlanner.DialogHeight;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;

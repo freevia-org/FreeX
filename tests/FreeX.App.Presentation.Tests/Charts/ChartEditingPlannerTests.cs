@@ -164,6 +164,13 @@ public sealed class ChartEditingPlannerTests
     }
 
     [Fact]
+    public void TypeChange_DialogFrameSize_MatchesPairedVisualEvidenceContract()
+    {
+        ChartTypeChangePlanner.DialogWidth.Should().Be(640);
+        ChartTypeChangePlanner.DialogHeight.Should().Be(390);
+    }
+
+    [Fact]
     public void TypePicker_SupportedOptions_CarryLocalizationKeysAndRecommendationFlags()
     {
         var options = ChartTypePickerPlanner.GetSupportedOptions();
