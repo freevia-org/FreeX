@@ -1800,6 +1800,40 @@ public sealed class MathLayoutEngineTests
     }
 
     [Fact]
+    public void OmmlGroupChrVertJcTop_AlignsObjectTopToSharedBaseline()
+    {
+        var layout = MathLayoutEngine.Layout(
+            ParseOmml("<m:groupChr><m:groupChrPr><m:vertJc m:val=\"top\"/></m:groupChrPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:groupChr>"),
+            "Cambria Math",
+            FontSizePt);
+
+        layout.Metrics.Ascent.Should().BeApproximately(0, 0.01,
+            "m:groupChrPr/m:vertJc=top aligns the group-character object's top to the shared baseline");
+
+        var ops = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text)
+            .Should().Equal(new[] { "\u23DE", "x" },
+                "vertical justification changes shared baseline metrics without adding renderer-local draw ops");
+    }
+
+    [Fact]
+    public void OmmlGroupChrVertJcBottom_AlignsObjectBottomToSharedBaseline()
+    {
+        var layout = MathLayoutEngine.Layout(
+            ParseOmml("<m:groupChr><m:groupChrPr><m:pos m:val=\"bot\"/><m:vertJc/></m:groupChrPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:groupChr>"),
+            "Cambria Math",
+            FontSizePt);
+
+        layout.Metrics.Ascent.Should().BeApproximately(layout.Metrics.Height, 0.01,
+            "a present m:vertJc without m:val defaults to bot and aligns the object bottom to the shared baseline");
+
+        var ops = MathBoxRenderPlanner.Plan(layout, 10, 20, SrgbColor.Black, "Cambria Math");
+        ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text)
+            .Should().Equal(new[] { "\u23DF", "x" },
+                "both WPF and Avalonia consume the same underbrace glyph plan and bottom-aligned metrics");
+    }
+
+    [Fact]
     public void LimitLow_CentersLimitBelowBase_AndGrowsDescent()
     {
         var node = new MathNode.Limit(Run("lim"), Run("0"), isUpper: false);

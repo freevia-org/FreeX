@@ -612,6 +612,26 @@ internal static class FreePCommandInventory
             ],
             RemainingWork: "Shared OMML parsing and layout now preserve m:dPr/m:shp centered vs match semantics, keeping centered delimiter glyphs at ordinary bracket height while the tall inner expression still drives shared container height and baseline. PowerPoint-authoritative math visual baselines, exact delimiter glyph metrics, and complete OfficeMath delimiter typography remain deferred."),
         new(
+            EvidenceId: "freep.omml.groupchr-vertical-justification",
+            Area: "OMML group-character vertical justification",
+            Status: "shared-layout-evidence",
+            HostCoverage: "WPF/Avalonia consume shared MathNode.GroupChr vertical-justification metadata and MathBox baseline metrics with no renderer-local group-character policy",
+            EvidenceDocs:
+            [
+                "docs/parity/freep-omml-groupchr-vertical-justification-2026-07-14.md"
+            ],
+            Verification:
+            [
+                "freep/FreeP.App.Presentation/Math/MathNode.cs",
+                "freep/FreeP.App.Presentation/Math/OmmlParser.cs",
+                "freep/FreeP.App.Presentation/Math/MathLayoutEngine.cs",
+                "freep/FreeP.App.Presentation.Tests/OmmlParserTests.cs",
+                "freep/FreeP.App.Presentation.Tests/MathLayoutEngineTests.cs",
+                "freep/FreeP.App.Host.Tests/SlideCanvasMathBaselineTests.cs",
+                "freep/FreeP.App.Rendering.Avalonia.Tests/SlideCanvasMathBaselineTests.cs"
+            ],
+            RemainingWork: "Shared OMML parsing now preserves m:groupChrPr/m:vertJc top vs bottom baseline alignment, including the bare-element default to bottom, and shared layout maps it to renderer-neutral MathBox ascent metrics consumed by both WPF and Avalonia. PowerPoint-authoritative math visual baselines, exact stretched group-character glyph metrics, and complete OfficeMath group-character typography remain deferred."),
+        new(
             EvidenceId: "freep.omml.pre-subsup-layout",
             Area: "OMML pre-sub/superscript layout",
             Status: "shared-layout-evidence",

@@ -235,6 +235,7 @@ public sealed class OmmlParserTests
         var groupChr = Assert.IsType<MathNode.GroupChr>(node);
         Assert.True(groupChr.IsAbove);
         Assert.Equal("\u23DE", groupChr.GrpChar);
+        Assert.Equal(MathNode.GroupChr.GroupChrVerticalJustification.Top, groupChr.VerticalJustification);
         Assert.Equal("x", Assert.IsType<MathNode.Run>(groupChr.Base).Text);
     }
 
@@ -246,6 +247,7 @@ public sealed class OmmlParserTests
         var groupChr = Assert.IsType<MathNode.GroupChr>(node);
         Assert.False(groupChr.IsAbove);
         Assert.Equal("\u23DF", groupChr.GrpChar);
+        Assert.Equal(MathNode.GroupChr.GroupChrVerticalJustification.Top, groupChr.VerticalJustification);
     }
 
     [Fact]
@@ -256,6 +258,7 @@ public sealed class OmmlParserTests
         var groupChr = Assert.IsType<MathNode.GroupChr>(node);
         Assert.True(groupChr.IsAbove);
         Assert.Equal("\u23DE", groupChr.GrpChar);
+        Assert.Equal(MathNode.GroupChr.GroupChrVerticalJustification.Top, groupChr.VerticalJustification);
     }
 
     [Fact]
@@ -266,6 +269,27 @@ public sealed class OmmlParserTests
         var groupChr = Assert.IsType<MathNode.GroupChr>(node);
         Assert.False(groupChr.IsAbove);
         Assert.Equal("\u23B4", groupChr.GrpChar);
+    }
+
+    [Fact]
+    public void GroupChr_WithBareVertJc_DefaultsAttributeToBottomJustification()
+    {
+        var node = Parse("<m:groupChr><m:groupChrPr><m:vertJc/></m:groupChrPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:groupChr>");
+
+        var groupChr = Assert.IsType<MathNode.GroupChr>(node);
+        Assert.Equal(MathNode.GroupChr.GroupChrVerticalJustification.Bottom, groupChr.VerticalJustification);
+    }
+
+    [Theory]
+    [InlineData("top", MathNode.GroupChr.GroupChrVerticalJustification.Top)]
+    [InlineData("bot", MathNode.GroupChr.GroupChrVerticalJustification.Bottom)]
+    [InlineData("bottom", MathNode.GroupChr.GroupChrVerticalJustification.Bottom)]
+    [InlineData("bogus", MathNode.GroupChr.GroupChrVerticalJustification.Top)]
+    public void GroupChr_WithVertJc_PreservesSharedBaselineJustification(string val, MathNode.GroupChr.GroupChrVerticalJustification expected)
+    {
+        var node = Parse($"<m:groupChr><m:groupChrPr><m:vertJc m:val=\"{val}\"/></m:groupChrPr><m:e><m:r><m:t>x</m:t></m:r></m:e></m:groupChr>");
+
+        Assert.Equal(expected, Assert.IsType<MathNode.GroupChr>(node).VerticalJustification);
     }
 
     // m:d begChr explicit-empty vs absent.

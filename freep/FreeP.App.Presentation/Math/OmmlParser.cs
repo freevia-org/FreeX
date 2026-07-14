@@ -530,10 +530,33 @@ public static class OmmlParser
         string grpChar = ReadVal(grpPr?.Element(M + "chr"))
                       ?? (isAbove ? "\u23DE" : "\u23DF");
         var eEl = el.Element(M + "e") ?? el;
-        return new MathNode.GroupChr(grpChar, ParseRow(eEl), isAbove);
+        return new MathNode.GroupChr(
+            grpChar,
+            ParseRow(eEl),
+            isAbove,
+            ParseGroupChrVerticalJustification(grpPr));
     }
 
     // ── m:m matrix ────────────────────────────────────────────────────────
+
+    private static MathNode.GroupChr.GroupChrVerticalJustification ParseGroupChrVerticalJustification(XElement? grpPr)
+    {
+        var vertJc = grpPr?.Element(M + "vertJc");
+        if (vertJc is null)
+            return MathNode.GroupChr.GroupChrVerticalJustification.Top;
+
+        var val = vertJc.Attribute(M + "val")?.Value
+               ?? vertJc.Attribute("val")?.Value;
+
+        if (string.IsNullOrWhiteSpace(val))
+            return MathNode.GroupChr.GroupChrVerticalJustification.Bottom;
+
+        return val.Trim().ToLowerInvariant() switch
+        {
+            "bot" or "bottom" => MathNode.GroupChr.GroupChrVerticalJustification.Bottom,
+            _ => MathNode.GroupChr.GroupChrVerticalJustification.Top
+        };
+    }
 
     private static MathNode ParseMatrix(XElement el)
     {

@@ -425,11 +425,31 @@ public abstract class MathNode
     /// <summary><c>m:groupChr</c> — a grouping character above/below the base.</summary>
     public sealed class GroupChr : MathNode
     {
+        public enum GroupChrVerticalJustification
+        {
+            /// <summary>Legacy constructed-node behavior: keep the grouped expression baseline.</summary>
+            Baseline,
+            /// <summary><c>m:groupChrPr/m:vertJc</c> top: align the group-character object top to the baseline.</summary>
+            Top,
+            /// <summary><c>m:groupChrPr/m:vertJc</c> bot: align the group-character object bottom to the baseline.</summary>
+            Bottom
+        }
+
         public string GrpChar { get; }
         public MathNode Base { get; }
         public bool IsAbove { get; }
-        public GroupChr(string grpChar, MathNode @base, bool isAbove = true)
-        { GrpChar = grpChar; Base = @base; IsAbove = isAbove; }
+        public GroupChrVerticalJustification VerticalJustification { get; }
+        public GroupChr(
+            string grpChar,
+            MathNode @base,
+            bool isAbove = true,
+            GroupChrVerticalJustification verticalJustification = GroupChrVerticalJustification.Baseline)
+        {
+            GrpChar = grpChar;
+            Base = @base;
+            IsAbove = isAbove;
+            VerticalJustification = verticalJustification;
+        }
     }
 
     // ── Matrix ───────────────────────────────────────────────────────────────

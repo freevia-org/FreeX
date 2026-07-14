@@ -692,10 +692,12 @@ public sealed class SlideCanvasMathBaselineTests
             {
                 var mathNode = ParseOmml(
                     "<m:groupChr>" +
-                    "<m:groupChrPr><m:pos m:val=\"bot\"/></m:groupChrPr>" +
+                    "<m:groupChrPr><m:pos m:val=\"bot\"/><m:vertJc m:val=\"bot\"/></m:groupChrPr>" +
                     "<m:e><m:f><m:num><m:r><m:t>1</m:t></m:r></m:num><m:den><m:r><m:t>x</m:t></m:r></m:den></m:f></m:e>" +
                     "</m:groupChr>");
                 var mathBox = MathLayoutEngine.Layout(mathNode, "Cambria Math", 18.0);
+                mathBox.Metrics.Ascent.Should().BeApproximately(mathBox.Metrics.Height, 0.01,
+                    "m:groupChrPr/m:vertJc=bot baseline alignment must be resolved in shared layout before Avalonia draws");
                 var ops = MathBoxRenderPlanner.Plan(mathBox, 10, 20, SrgbColor.Black, "Cambria Math");
                 ops.OfType<MathDrawOp.DrawGlyph>().Select(g => g.Text).Should().Contain("\u23DF",
                     "missing bottom m:groupChrPr/m:chr should resolve to a shared underbrace glyph before Avalonia draws");

@@ -1223,11 +1223,22 @@ public static class MathLayoutEngine
             grpGlyph.X = (totalW - grpGlyph.Metrics.Width) / 2; grpGlyph.Y = baseBox.Metrics.Height + gap;
         }
 
-        c.Metrics.Ascent = ascent;
+        c.Metrics.Ascent = ResolveGroupChrAscent(gc.VerticalJustification, ascent, totalH);
         c.Children.Add(grpGlyph);
         c.Children.Add(baseBox);
         return c;
     }
+
+    private static double ResolveGroupChrAscent(
+        MathNode.GroupChr.GroupChrVerticalJustification verticalJustification,
+        double baselineAscent,
+        double totalHeight) =>
+        verticalJustification switch
+        {
+            MathNode.GroupChr.GroupChrVerticalJustification.Top => 0,
+            MathNode.GroupChr.GroupChrVerticalJustification.Bottom => totalHeight,
+            _ => baselineAscent
+        };
 
     private static MathBox.Glyph MakeGroupCharacterGlyph(
         string groupChar,
