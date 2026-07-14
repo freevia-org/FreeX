@@ -371,6 +371,25 @@ public sealed class SmartArtLayoutTests
             .Should().BeEquivalentTo(new[] { "Plan", "Draft", "Review", "Publish" });
     }
 
+    [Fact]
+    public void BlockCycle_ReturnsLiveCircularBoxesAndConnectors()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Sense", "Decide", "Act", "Learn");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/blockCycle";
+
+        var shapes = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
+
+        shapes.Should().NotBeNull("blockCycle is admitted as a bounded shared cycle-family layout");
+        shapes!.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle)
+            .Should().HaveCount(4, "one live box should be emitted per block-cycle node");
+        shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.Line)
+            .Should().HaveCount(4, "blockCycle should reuse the shared circular connector planner");
+
+        var boxes = shapes.Where(s => s.AutoShapeKind == DrawingShapeKind.RoundedRectangle).ToList();
+        boxes.Select(s => s.TextBody?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .Should().BeEquivalentTo(new[] { "Sense", "Decide", "Act", "Learn" });
+    }
+
     // ── Hierarchy layout ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -1257,7 +1276,7 @@ public sealed class SmartArtLayoutTests
     public void UnsupportedCycleSibling_ReturnsNull()
     {
         var data = MakeData(SmartArtFamily.Cycle, "A", "B", "C");
-        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/textCycle";
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/nonDirectionalCycle";
         data.IsLiveLayoutSupported = false;
 
         var result = SmartArtLayoutEngine.Layout(data, FrameX, FrameY, FrameCx, FrameCy, DefaultTheme());
@@ -2762,6 +2781,63 @@ public sealed class SmartArtLayoutTests
         renderedText.Should().NotContain("Cached text cycle fallback");
         shapeOps.Where(op => op.Text is null)
             .Should().HaveCount(4, "hosts consume shared text-cycle connector DrawOps without renderer-local SmartArt policy");
+    }
+
+    [Fact]
+    public void Compositor_BlockCycle_UsesLiveLayoutOverCachedDrawing()
+    {
+        var data = MakeData(SmartArtFamily.Cycle, "Live A", "Live B", "Live C", "Live D");
+        data.LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/blockCycle";
+
+        var smart = new SmartArtShape { Data = data };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id            = 21,
+            Kind          = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu    = FrameX,
+            OffsetYEmu    = FrameY,
+            ExtentCxEmu   = FrameCx / 2,
+            ExtentCyEmu   = FrameCy / 2,
+            TextBody      = new TextBody
+            {
+                Paragraphs =
+                {
+                    new Paragraph
+                    {
+                        Runs = { new Run { Text = "Cached block cycle fallback" } }
+                    }
+                }
+            }
+        });
+
+        var container = new SlideShape
+        {
+            Id          = 121,
+            Kind        = SlideShapeKind.SmartArt,
+            OffsetXEmu  = FrameX,
+            OffsetYEmu  = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt    = smart
+        };
+
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var ops = SlideCompositor.Compose(pres, pres.Slides[0]);
+
+        var shapeOps = ops.Skip(1).OfType<DrawOp.Shape>().ToList();
+        shapeOps.Should().HaveCount(8, "blockCycle should render four live boxes plus four connectors through the shared cycle planner");
+        var renderedText = shapeOps
+            .Select(op => op.Text?.Paragraphs.FirstOrDefault()?.Runs.FirstOrDefault()?.Text)
+            .ToList();
+        renderedText.Should().Contain("Live A");
+        renderedText.Should().Contain("Live D");
+        renderedText.Should().NotContain("Cached block cycle fallback");
+        shapeOps.Where(op => op.Text is null)
+            .Should().HaveCount(4, "hosts consume shared block-cycle connector DrawOps without renderer-local SmartArt policy");
     }
 
     [Fact]

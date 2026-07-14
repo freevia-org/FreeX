@@ -900,6 +900,7 @@ public sealed class FreePRibbonDefinitionProfileTests
             "freep.smartart.radial-cycle",
             "freep.smartart.gear-cycle",
             "freep.smartart.text-cycle",
+            "freep.smartart.block-cycle",
             "freep.smartart.basic-matrix",
             "freep.smartart.basic-venn",
             "freep.smartart.radial-venn",
