@@ -315,6 +315,9 @@ public readonly record struct ChartSurfaceGeometryPlan(
     // visible color facets while retaining the logical cell topology above.
     public IReadOnlyList<ChartSurfaceFacetPrimitive> RenderFacets { get; init; } =
         Array.Empty<ChartSurfaceFacetPrimitive>();
+
+    public IReadOnlyList<ChartLineSegmentPrimitive> FrameSegments { get; init; } =
+        Array.Empty<ChartLineSegmentPrimitive>();
 }
 
 public readonly record struct ChartBarClusterSlot(
@@ -486,6 +489,7 @@ public sealed class ChartScenePlan
     public ChartSecondaryValueAxisPrimitivePlan SecondaryAxis { get; init; }
     public IReadOnlyList<ChartTextPlan> CategoryAxisLabels { get; init; } = Array.Empty<ChartTextPlan>();
     public IReadOnlyList<ChartTextPlan> ValueAxisLabels { get; init; } = Array.Empty<ChartTextPlan>();
+    public IReadOnlyList<ChartTextPlan> SurfaceSeriesAxisLabels { get; init; } = Array.Empty<ChartTextPlan>();
     public IReadOnlyList<ChartAxisTitlePlan> AxisTitles { get; init; } = Array.Empty<ChartAxisTitlePlan>();
     public IReadOnlyList<ChartLegendItemPlan> LegendItems { get; init; } = Array.Empty<ChartLegendItemPlan>();
 
@@ -1158,6 +1162,7 @@ public static partial class ChartRenderPlanner
             SecondaryAxis = BuildSecondaryValueAxisPrimitivePlan(chart, frame),
             CategoryAxisLabels = BuildCategoryAxisLabelPlans(chart, frame),
             ValueAxisLabels = BuildValueAxisLabelPlans(chart, frame),
+            SurfaceSeriesAxisLabels = BuildSurfaceSeriesAxisLabelPlans(chart, frame),
             AxisTitles = BuildAxisTitlePlans(chart, frame),
             LegendItems = BuildLegendItemPlans(chart, frame, seriesColors, fillPlans),
             Rectangles = rectangles,
@@ -1583,6 +1588,46 @@ public static partial class ChartRenderPlanner
                     Alignment: ChartPlanTextAlignment.Right,
                     AxisLabelFormat: BuildAxisLabelFormatPlan(chart.ValueAxis)));
             }
+        }
+
+        return labels;
+    }
+
+    public static IReadOnlyList<ChartTextPlan> BuildSurfaceSeriesAxisLabelPlans(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        if (chart.ChartType != ChartType.Surface3D ||
+            !frame.HasPlot ||
+            chart.Series.Count == 0)
+        {
+            return Array.Empty<ChartTextPlan>();
+        }
+
+        var plot = frame.Plot;
+        double depthX = Math.Min(plot.Width * 0.12, 44.0);
+        double depthY = Math.Min(plot.Height * 0.44, 88.0);
+        double scaleX = plot.Width / 360.0;
+        double frontRightX = plot.X + 308.0 * scaleX;
+        double frontRightY = plot.Bottom;
+        var labels = new List<ChartTextPlan>(chart.Series.Count);
+        for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            double seriesT = chart.Series.Count <= 1
+                ? 0
+                : seriesIndex / (double)(chart.Series.Count - 1);
+            var point = new ChartPlanPoint(
+                frontRightX + depthX * seriesT + 5.0,
+                frontRightY - depthY * seriesT);
+            string text = string.IsNullOrWhiteSpace(chart.Series[seriesIndex].Name)
+                ? $"Series {seriesIndex + 1}"
+                : chart.Series[seriesIndex].Name;
+            labels.Add(new ChartTextPlan(
+                text,
+                new ChartPlanRect(point.X + 7.0, point.Y - 7.0, 80.0, 14.0),
+                IsBold: false,
+                FontSize: ResolveTextFontSize(chart, 7.0),
+                Alignment: ChartPlanTextAlignment.Left));
         }
 
         return labels;
@@ -2530,10 +2575,14 @@ public static partial class ChartRenderPlanner
                 triangulateCompleteCells: true)
             : facets;
         var contours = BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
+        var frameSegments = chart.ChartType == ChartType.Surface3D
+            ? BuildSurfaceFrameSegments(plot)
+            : Array.Empty<ChartLineSegmentPrimitive>();
 
         return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours)
         {
-            RenderFacets = renderFacets
+            RenderFacets = renderFacets,
+            FrameSegments = frameSegments
         };
     }
 
@@ -2578,6 +2627,61 @@ public static partial class ChartRenderPlanner
 
         return new ChartPlanPoint(Math.Round(x, 4), Math.Round(y, 4));
     }
+
+    private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceFrameSegments(
+        ChartPlanRect plot)
+    {
+        double scaleX = plot.Width / 360.0;
+        double scaleY = plot.Height / 189.0;
+        var frontLeft = new ChartPlanPoint(
+            plot.X - 7.0 * scaleX,
+            plot.Bottom - 37.0 * scaleY);
+        var frontRight = new ChartPlanPoint(
+            plot.X + 308.0 * scaleX,
+            plot.Bottom + 2.0 * scaleY);
+        var valueTop = new ChartPlanPoint(frontLeft.X, plot.Y + 45.0 * scaleY);
+        var backTopLeft = new ChartPlanPoint(plot.X + 124.0 * scaleX, plot.Y + 1.0 * scaleY);
+        var backTopRight = new ChartPlanPoint(plot.Right, plot.Y + 15.0 * scaleY);
+        var stroke = new ChartStrokePlan(
+            new SrgbColor(0x00, 0x00, 0x00),
+            Alpha: 220,
+            Thickness: 0.7);
+        var segments = new List<ChartLineSegmentPrimitive>(16);
+
+        AddSurfaceFrameSegment(segments, frontLeft, frontRight, stroke);
+        AddSurfaceFrameSegment(segments, frontLeft, valueTop, stroke);
+        AddSurfaceFrameSegment(segments, valueTop, backTopLeft, stroke);
+        AddSurfaceFrameSegment(segments, backTopLeft, backTopRight, stroke);
+        AddSurfaceFrameSegment(segments, frontRight, backTopRight, stroke);
+
+        for (int tickIndex = 1; tickIndex < 5; tickIndex++)
+        {
+            double fraction = tickIndex / 4.0;
+            var leftAxis = InterpolateSurfaceFramePoint(frontLeft, valueTop, fraction);
+            var categoryAxis = InterpolateSurfaceFramePoint(frontRight, backTopRight, fraction);
+            var depthWall = InterpolateSurfaceFramePoint(valueTop, backTopLeft, fraction);
+            var backWall = InterpolateSurfaceFramePoint(backTopLeft, backTopRight, fraction);
+            AddSurfaceFrameSegment(segments, leftAxis, categoryAxis, stroke);
+            AddSurfaceFrameSegment(segments, depthWall, backWall, stroke);
+        }
+
+        return segments;
+    }
+
+    private static ChartPlanPoint InterpolateSurfaceFramePoint(
+        ChartPlanPoint start,
+        ChartPlanPoint end,
+        double fraction) =>
+        new(
+            start.X + (end.X - start.X) * fraction,
+            start.Y + (end.Y - start.Y) * fraction);
+
+    private static void AddSurfaceFrameSegment(
+        List<ChartLineSegmentPrimitive> segments,
+        ChartPlanPoint start,
+        ChartPlanPoint end,
+        ChartStrokePlan stroke) =>
+        segments.Add(new ChartLineSegmentPrimitive(-1, -1, -1, start, end, stroke));
 
     private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceWireframeSegments(
         IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,

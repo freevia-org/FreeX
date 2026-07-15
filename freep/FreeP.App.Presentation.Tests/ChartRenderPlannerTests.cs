@@ -666,6 +666,7 @@ public sealed class ChartRenderPlannerTests
         plan.Facets.Should().HaveCount(2);
         plan.WireframeSegments.Should().HaveCount(7);
         plan.ContourSegments.Should().NotBeEmpty();
+        plan.FrameSegments.Should().NotBeEmpty();
         plan.Facets.Should().OnlyContain(facet => facet.Points.Count == 4);
         plan.Facets.Select(facet => facet.AverageNormalizedValue)
             .Should()

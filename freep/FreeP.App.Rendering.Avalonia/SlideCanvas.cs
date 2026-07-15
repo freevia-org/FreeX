@@ -1051,6 +1051,14 @@ public sealed class SlideCanvas : Control
                 ToTextAlignment(label.Alignment));
         }
 
+        foreach (var label in scene.SurfaceSeriesAxisLabels)
+        {
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+                label.IsBold,
+                label.FontSize,
+                ToTextAlignment(label.Alignment));
+        }
+
         foreach (var titlePlan in scene.AxisTitles)
             DrawChartAxisTitle(dc, titlePlan);
 
@@ -1082,6 +1090,8 @@ public sealed class SlideCanvas : Control
             return;
 
         var renderFacets = plan.RenderFacets.Count > 0 ? plan.RenderFacets : plan.Facets;
+        foreach (var segment in plan.FrameSegments)
+            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
         if (renderFacets.Count > 0)
         {
             foreach (var facet in renderFacets)
