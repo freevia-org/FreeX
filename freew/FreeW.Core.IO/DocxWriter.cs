@@ -4283,8 +4283,8 @@ public static class DocxWriter
                     new XAttribute("loCatId", SmartArtLayoutCategory(smartArt)),
                     new XAttribute("qsTypeId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/" + (smartArt.StyleId ?? "simple1")),
                     new XAttribute("qsCatId", "simple"),
-                    new XAttribute("csTypeId", "urn:microsoft.com/office/officeart/2005/8/colors/" + (smartArt.ColorSchemeId ?? "accent0_1")),
-                    new XAttribute("csCatId", "colorful"),
+                    new XAttribute("csTypeId", "urn:microsoft.com/office/officeart/2005/8/colors/" + SmartArtColorGallerySuffix(smartArt.ColorSchemeId)),
+                    new XAttribute("csCatId", SmartArtColorCategory(smartArt.ColorSchemeId)),
                     new XAttribute("phldr", "1")),
                 new XElement(Dgm + "spPr"),
                 DiagramText(string.Empty)));
@@ -4308,7 +4308,7 @@ public static class DocxWriter
             semanticNodes.Add((id, presentationId, parentId, ordinal, depth));
             ptLst.Add(new XElement(Dgm + "pt",
                 new XAttribute("modelId", id),
-                new XElement(Dgm + "prSet", new XAttribute("phldr", "1")),
+                new XElement(Dgm + "prSet", new XAttribute("phldrT", "[Text]")),
                 new XElement(Dgm + "spPr"),
                 DiagramText(node.Text)));
 
@@ -4340,14 +4340,22 @@ public static class DocxWriter
         var isHierarchyLayout = string.Equals(SmartArtLayoutCategory(smartArt), "hierarchy", StringComparison.Ordinal);
         var isPyramidLayout = string.Equals(SmartArtLayoutCategory(smartArt), "pyramid", StringComparison.Ordinal);
 
-        void AddPresentationPoint(string id, string assocId, string name, string? styleLabel = null)
+        void AddPresentationPoint(
+            string id,
+            string assocId,
+            string name,
+            string? styleLabel = null,
+            int? styleIndex = null,
+            int styleCount = 0)
         {
             var prSet = new XElement(Dgm + "prSet",
                 new XAttribute("presAssocID", assocId),
                 new XAttribute("presName", name),
-                new XAttribute("presStyleCnt", 0));
+                new XAttribute("presStyleCnt", styleCount));
             if (!string.IsNullOrEmpty(styleLabel))
                 prSet.Add(new XAttribute("presStyleLbl", styleLabel));
+            if (styleIndex is not null)
+                prSet.Add(new XAttribute("presStyleIdx", styleIndex.Value));
             ptLst.Add(new XElement(Dgm + "pt",
                 new XAttribute("modelId", id),
                 new XAttribute("type", "pres"),
@@ -4386,8 +4394,8 @@ public static class DocxWriter
                     var levelTextId = SmartArtModelId(nodePresentationId++);
                     containerIds[node.Id] = containerId;
                     AddPresentationPoint(containerId, node.Id, "Name8");
-                    AddPresentationPoint(levelId, node.Id, "level", "node1");
-                    AddPresentationPoint(levelTextId, node.Id, "levelTx", "revTx");
+                    AddPresentationPoint(levelId, node.Id, "level", "node1", node.Ordinal, semanticNodes.Count);
+                    AddPresentationPoint(levelTextId, node.Id, "levelTx", "revTx", 0);
                     AddPresentationConnection("presOf", node.Id, levelId);
                     AddPresentationConnection("presOf", node.Id, levelTextId, 1);
                     AddPresentationConnection("presParOf", containerId, levelId);
@@ -4573,6 +4581,28 @@ public static class DocxWriter
         return smartArt.Kind == SmartArtKind.Process ? "process" : "list";
     }
 
+    private static string SmartArtColorGallerySuffix(string? colorId)
+    {
+        return colorId?.ToLowerInvariant() switch
+        {
+            "accent1" => "accent1_2",
+            "accent1g" => "accent1_2",
+            "accent2" => "accent2_1",
+            "accent3" => "accent3_1",
+            _ => colorId ?? "accent1_2"
+        };
+    }
+
+    private static string SmartArtColorCategory(string? colorId)
+    {
+        var suffix = colorId ?? "accent1_2";
+        return suffix.StartsWith("accent1", StringComparison.OrdinalIgnoreCase) ? "accent1"
+            : suffix.StartsWith("accent2", StringComparison.OrdinalIgnoreCase) ? "accent2"
+            : suffix.StartsWith("accent3", StringComparison.OrdinalIgnoreCase) ? "accent3"
+            : suffix.StartsWith("accent", StringComparison.OrdinalIgnoreCase) ? "accent1"
+            : suffix.StartsWith("colorful", StringComparison.OrdinalIgnoreCase) ? "colorful" : "accent1";
+    }
+
     private static string SmartArtModelId(int index) =>
         "{4F4B0000-0000-4000-8000-" + index.ToString("D12", System.Globalization.CultureInfo.InvariantCulture) + "}";
 
@@ -4654,7 +4684,7 @@ public static class DocxWriter
                 "trapezoid" => new XElement(A + "avLst",
                     new XElement(A + "gd",
                         new XAttribute("name", "adj"),
-                        new XAttribute("fmla", "val 85714"))),
+                        new XAttribute("fmla", "val 68182"))),
                 "roundRect" => new XElement(A + "avLst",
                     new XElement(A + "gd",
                         new XAttribute("name", "adj"),
@@ -4669,12 +4699,22 @@ public static class DocxWriter
                 noFill ? new XElement(A + "noFill") : SolidFill(fillHex),
                 line,
                 new XElement(A + "effectLst"));
+            var textSize = shapeKind == "trapezoid"
+                ? Math.Clamp((int)Math.Round(height / 12700d * 56d), 900, 3100)
+                : 1100;
             var textBody = new XElement(Dsp + "txBody",
                 new XElement(A + "bodyPr",
                     new XAttribute("spcFirstLastPara", 0),
                     new XAttribute("vert", "horz"),
                     new XAttribute("wrap", "square"),
+                    new XAttribute("lIns", 39370),
+                    new XAttribute("tIns", 39370),
+                    new XAttribute("rIns", 39370),
+                    new XAttribute("bIns", 39370),
+                    new XAttribute("numCol", 1),
+                    new XAttribute("spcCol", 1270),
                     new XAttribute("anchor", "ctr"),
+                    new XAttribute("anchorCtr", 0),
                     new XElement(A + "noAutofit")),
                 new XElement(A + "lstStyle"),
                 string.IsNullOrEmpty(text)
@@ -4682,11 +4722,21 @@ public static class DocxWriter
                         new XElement(A + "endParaRPr", new XAttribute("lang", "en-US")))
                     : new XElement(A + "p",
                         new XAttribute("algn", "ctr"),
+                        new XElement(A + "pPr",
+                            new XAttribute("marL", 0),
+                            new XAttribute("lvl", 0),
+                            new XAttribute("indent", 0),
+                            new XAttribute("algn", "ctr"),
+                            new XAttribute("defTabSz", 1377950),
+                            new XElement(A + "lnSpc", new XElement(A + "spcPct", new XAttribute("val", 90000))),
+                            new XElement(A + "spcBef", new XElement(A + "spcPct", new XAttribute("val", 0))),
+                            new XElement(A + "spcAft", new XElement(A + "spcPct", new XAttribute("val", 35000))),
+                            new XElement(A + "buNone")),
                         new XElement(A + "r",
                             new XElement(A + "rPr",
                                 new XAttribute("lang", "en-US"),
-                                new XAttribute("sz", 1100),
-                                SolidFill(textHex)),
+                                new XAttribute("sz", textSize),
+                                new XAttribute("kern", 1200)),
                             new XElement(A + "t", text))));
 
             spTree.Add(new XElement(Dsp + "sp",
@@ -4771,12 +4821,13 @@ public static class DocxWriter
             else
             {
                 var layerGap = Math.Max(1L, PointsToEmu(2));
-                var pyramidBoxH = Math.Max(1L, Math.Min(PointsToEmu(28), frameH - 2 * margin));
+                var usableH = Math.Max(1L, frameH - 2 * margin);
+                var pyramidBoxH = Math.Max(1L,
+                    (usableH - layerGap * Math.Max(0, nodes.Count - 1)) / Math.Max(1, nodes.Count));
                 var usableW = Math.Max(1L, frameW - 2 * margin);
-                var pyramidBoxW = Math.Max(1L, usableW / Math.Max(1, nodes.Count));
                 for (var i = 0; i < nodes.Count; i++)
                 {
-                    var width = Math.Max(1L, pyramidBoxW - i * Math.Max(1L, pyramidBoxW / Math.Max(1, nodes.Count * 3)));
+                    var width = Math.Max(1L, usableW * (i + 1) / Math.Max(1, nodes.Count));
                     var x = margin + (usableW - width) / 2;
                     var y = margin + i * (pyramidBoxH + layerGap);
                     var fillHex = colorScheme.FillHexAt(i).TrimStart('#').ToUpperInvariant();
@@ -5076,12 +5127,8 @@ public static class DocxWriter
     {
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/colors/";
         var colorId = smartArt.ColorSchemeId ?? "accent1_2";
-        var uniqueId = BaseUrn + colorId;
-        var category = colorId.StartsWith("accent1", StringComparison.OrdinalIgnoreCase) ? "accent1"
-            : colorId.StartsWith("accent2", StringComparison.OrdinalIgnoreCase) ? "accent2"
-            : colorId.StartsWith("accent3", StringComparison.OrdinalIgnoreCase) ? "accent3"
-            : colorId.StartsWith("accent", StringComparison.OrdinalIgnoreCase) ? "accent1"
-            : colorId.StartsWith("colorful", StringComparison.OrdinalIgnoreCase) ? "colorful" : "accent1";
+        var uniqueId = BaseUrn + SmartArtColorGallerySuffix(smartArt.ColorSchemeId);
+        var category = SmartArtColorCategory(colorId);
         var styleLabels = SmartArtGalleryStyleLabels.Select(name =>
             new XElement(Dgm + "styleLbl", new XAttribute("name", name),
                 new XElement(Dgm + "fillClrLst", new XAttribute("meth", "repeat"),
@@ -5096,6 +5143,7 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute("uniqueId", uniqueId),
+            smartArt.ColorSchemeId is null ? null : new XAttribute("freewColorId", smartArt.ColorSchemeId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "catLst",

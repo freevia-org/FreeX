@@ -330,6 +330,30 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
+    public void PyramidData_UsesWordTextPlaceholdersAndPresentationStyles()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+        smartArt.LayoutId = "pyramid1";
+
+        var data = EntryXml(WriteBytes(SingleDiagramDocument(smartArt)), "word/diagrams/data1.xml");
+        var semanticNodes = data.Descendants(Dgm + "pt")
+            .Where(pt => pt.Element(Dgm + "t")?.Descendants(A + "t").Any() == true)
+            .ToList();
+        semanticNodes.Should().HaveCount(4);
+        semanticNodes.Select(pt => pt.Element(Dgm + "prSet")!.Attribute("phldrT")!.Value)
+            .Should().Equal("[Text]", "[Text]", "[Text]", "[Text]");
+
+        var levels = data.Descendants(Dgm + "pt")
+            .Where(pt => pt.Element(Dgm + "prSet")?.Attribute("presName")?.Value == "level")
+            .ToList();
+        levels.Should().HaveCount(4);
+        levels.Select(pt => pt.Element(Dgm + "prSet")!.Attribute("presStyleIdx")!.Value)
+            .Should().Equal("0", "1", "2", "3");
+        levels.Select(pt => pt.Element(Dgm + "prSet")!.Attribute("presStyleCnt")!.Value)
+            .Should().OnlyContain(value => value == "4");
+    }
+
+    [Fact]
     public void WordStockRenderedDrawing_UsesNativeShapeScaffoldAndPresentationIds()
     {
         var hierarchy = SmartArt.Create(SmartArtKind.Hierarchy, ["Root", "Child"]);
@@ -368,7 +392,7 @@ public class SmartArtRoundTripTests
                     .Select(prSet => prSet.Parent!.Attribute("modelId")!.Value));
         pyramidShapes.SelectMany(shape => shape.Descendants(A + "prstGeom"))
             .Should().OnlyContain(geometry => geometry.Attribute("prst")!.Value == "trapezoid"
-                && geometry.Element(A + "avLst")!.Element(A + "gd")!.Attribute("fmla")!.Value == "val 85714");
+                && geometry.Element(A + "avLst")!.Element(A + "gd")!.Attribute("fmla")!.Value == "val 68182");
 
         hierarchyDrawing.Descendants(Dsp + "sp").Count()
             .Should().BeGreaterThan(hierarchyData.Descendants(Dgm + "pt")
@@ -541,6 +565,24 @@ public class SmartArtRoundTripTests
 
         var qsXml = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
         qsXml.Root!.Attribute("uniqueId")!.Value.Should().EndWith("flat1");
+    }
+
+    [Fact]
+    public void WordColorGalleryIds_UseNativeSuffixAndPreserveFreeWId()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Hierarchy, ["Root"]);
+        smartArt.ColorSchemeId = "accent1";
+
+        var bytes = WriteBytes(SingleDiagramDocument(smartArt));
+        var data = EntryXml(bytes, "word/diagrams/data1.xml");
+        var docPrSet = data.Root!.Element(Dgm + "ptLst")!.Element(Dgm + "pt")!
+            .Element(Dgm + "prSet")!;
+        docPrSet.Attribute("csTypeId")!.Value.Should().EndWith("/colors/accent1_2");
+        docPrSet.Attribute("csCatId")!.Value.Should().Be("accent1");
+
+        var colors = EntryXml(bytes, "word/diagrams/colors1.xml");
+        colors.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/accent1_2");
+        colors.Root.Attribute("freewColorId")!.Value.Should().Be("accent1");
     }
 
     [Fact]
