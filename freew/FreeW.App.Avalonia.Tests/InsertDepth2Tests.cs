@@ -1013,20 +1013,15 @@ public sealed class InsertDepth2Tests
         elementSlots[0].Should().Be(("sin(x + y)", "sin", "x + y"));
         texts.Should().Equal(
             "sin",
-            EquationVisualPlanner.FunctionOpenDelimiterText,
-            "x + y",
-            EquationVisualPlanner.FunctionCloseDelimiterText);
+            "x + y");
         roles.Should().Equal(
             EquationVisualSegmentRole.FunctionName,
-            EquationVisualSegmentRole.FunctionOpenDelimiter,
-            EquationVisualSegmentRole.FunctionArgument,
-            EquationVisualSegmentRole.FunctionCloseDelimiter);
+            EquationVisualSegmentRole.FunctionArgument);
         roles.Should().NotContain(EquationVisualSegmentRole.LinearFallback);
         styles[0].Italic.Should().BeFalse();
-        styles[1].Italic.Should().BeFalse();
-        styles[2].Italic.Should().BeTrue();
+        styles[1].Italic.Should().BeTrue();
         styles[0].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
-        styles[2].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        styles[1].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
         placedText.Should().Be("\uFFFC");
         placedGlyphCount.Should().Be(1,
             "Avalonia should reserve a function application as one structural layout cell");

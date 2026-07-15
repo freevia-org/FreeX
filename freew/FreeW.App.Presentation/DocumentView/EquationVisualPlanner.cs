@@ -425,8 +425,6 @@ public static class EquationVisualPlanner
     public const string MatrixRowSeparatorText = "; ";
     public const string OverbarCueText = "\u00af";
     public const string UnderbarCueText = "_";
-    public const string FunctionOpenDelimiterText = "(";
-    public const string FunctionCloseDelimiterText = ")";
 
     private static EquationVisualStyle NormalStyle { get; } = new(
         DefaultMathFontFamily,
@@ -1076,11 +1074,7 @@ public static class EquationVisualPlanner
 
         var runSegments = new List<EquationVisualSegment>();
         AddIfAny(runSegments, run.FuncName, EquationVisualSegmentRole.FunctionName, FunctionNameStyle);
-        if (!string.IsNullOrEmpty(run.FuncName))
-            AddIfAny(runSegments, FunctionOpenDelimiterText, EquationVisualSegmentRole.FunctionOpenDelimiter, FunctionDelimiterStyle);
         AddIfAny(runSegments, argumentText, EquationVisualSegmentRole.FunctionArgument, StructureStyle);
-        if (!string.IsNullOrEmpty(run.FuncName))
-            AddIfAny(runSegments, FunctionCloseDelimiterText, EquationVisualSegmentRole.FunctionCloseDelimiter, FunctionDelimiterStyle);
 
         if (runSegments.Count == 0)
             return;
@@ -1405,9 +1399,8 @@ public static class EquationVisualPlanner
                     "|",
                     "geometry=function-apply",
                     "name=" + NormalizeSignatureText(element.FunctionName),
-                    "open=" + NormalizeSignatureText(FunctionOpenDelimiterText),
                     "argument=" + NormalizeSignatureText(element.FunctionArgument),
-                    "close=" + NormalizeSignatureText(FunctionCloseDelimiterText),
+                    "form=omml-name-argument",
                     "functionScale=" + FormatDouble(StructureFontSizeScale)),
             _ => "geometry=segments|text=" + NormalizeSignatureText(element.LinearText)
         };

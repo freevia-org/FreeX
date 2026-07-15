@@ -14243,6 +14243,7 @@ public sealed class DocumentView : Control
             EquationVisualElementKind.Accent or EquationVisualElementKind.GroupChar => MeasureEquationDecorator(element, baseFormatting),
             EquationVisualElementKind.Bar => MeasureEquationBar(element, baseFormatting),
             EquationVisualElementKind.Delimiter => MeasureEquationDelimiter(element, baseFormatting),
+            EquationVisualElementKind.FunctionApply => MeasureEquationFunctionApply(element, baseFormatting),
             _ => MeasureEquationSegments(element.Segments, baseFormatting)
         };
     }
@@ -14339,6 +14340,13 @@ public sealed class DocumentView : Control
         return new Size(open.Width + content.Width + close.Width + 4, Math.Max(content.Height, Math.Max(open.Height, close.Height)));
     }
 
+    private Size MeasureEquationFunctionApply(EquationVisualElement element, RunFormatting baseFormatting)
+    {
+        var name = MeasureEquationText(element.FunctionName, baseFormatting, EquationFunctionNameStyle);
+        var argument = MeasureEquationSlot(element.FunctionArgumentPlan, element.FunctionArgument, baseFormatting, EquationStructureStyle);
+        return new Size(name.Width + argument.Width + 2, Math.Max(name.Height, argument.Height));
+    }
+
     private Size MeasureEquationText(string text, RunFormatting baseFormatting, EquationVisualStyle style)
     {
         var formatted = Build(text, EquationFormatting(baseFormatting, style));
@@ -14386,6 +14394,9 @@ public sealed class DocumentView : Control
                 return;
             case EquationVisualElementKind.Delimiter:
                 DrawEquationDelimiter(context, element, bounds, baseFormatting);
+                return;
+            case EquationVisualElementKind.FunctionApply:
+                DrawEquationFunctionApply(context, element, bounds, baseFormatting);
                 return;
             default:
                 DrawEquationSegments(context, element.Segments, bounds, baseFormatting);
@@ -14488,6 +14499,13 @@ public sealed class DocumentView : Control
         DrawEquationText(context, element.CloseDelimiter, new Rect(bounds.Right - close.Width, bounds.Y, close.Width, bounds.Height), baseFormatting, EquationDelimiterStyle, centered: true);
     }
 
+    private void DrawEquationFunctionApply(DrawingContext context, EquationVisualElement element, Rect bounds, RunFormatting baseFormatting)
+    {
+        var name = MeasureEquationText(element.FunctionName, baseFormatting, EquationFunctionNameStyle);
+        DrawEquationText(context, element.FunctionName, new Rect(bounds.X, bounds.Y, name.Width, bounds.Height), baseFormatting, EquationFunctionNameStyle);
+        DrawEquationSlot(context, element.FunctionArgumentPlan, element.FunctionArgument, new Rect(bounds.X + name.Width + 2, bounds.Y, Math.Max(0, bounds.Width - name.Width - 2), bounds.Height), baseFormatting, EquationStructureStyle);
+    }
+
     private void DrawEquationSlot(DrawingContext context, EquationVisualPlan? plan, string text, Rect bounds, RunFormatting baseFormatting, EquationVisualStyle style, bool centered = false)
     {
         if (plan is not null)
@@ -14575,6 +14593,7 @@ public sealed class DocumentView : Control
     private static EquationVisualStyle EquationLargeOperatorStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, false, EquationVisualPlanner.LargeOperatorFontSizeScale, EquationVisualBaselineRole.Normal, 0);
     private static EquationVisualStyle EquationDecoratorStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, false, EquationVisualPlanner.DecoratorFontSizeScale, EquationVisualBaselineRole.Normal, 0);
     private static EquationVisualStyle EquationDelimiterStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, false, EquationVisualPlanner.DelimiterFontSizeScale, EquationVisualBaselineRole.Normal, 0);
+    private static EquationVisualStyle EquationFunctionNameStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, false, EquationVisualPlanner.StructureFontSizeScale, EquationVisualBaselineRole.Normal, 0);
 
     private FormattedText Build(string text, RunFormatting fmt)
     {

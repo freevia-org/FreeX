@@ -856,18 +856,14 @@ public sealed class EquationVisualPlannerTests
         plan.Elements[0].FunctionArgument.Should().Be("x + y");
         plan.Segments.Select(segment => segment.Text).Should().Equal(
             "sin",
-            EquationVisualPlanner.FunctionOpenDelimiterText,
-            "x + y",
-            EquationVisualPlanner.FunctionCloseDelimiterText);
+            "x + y");
         plan.Segments.Select(segment => segment.Role).Should().Equal(
             EquationVisualSegmentRole.FunctionName,
-            EquationVisualSegmentRole.FunctionOpenDelimiter,
-            EquationVisualSegmentRole.FunctionArgument,
-            EquationVisualSegmentRole.FunctionCloseDelimiter);
+            EquationVisualSegmentRole.FunctionArgument);
         plan.Segments[0].Style.Italic.Should().BeFalse();
-        plan.Segments[2].Style.Italic.Should().BeTrue();
+        plan.Segments[1].Style.Italic.Should().BeTrue();
         plan.Segments[0].Style.FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
-        plan.Segments[2].Style.FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
+        plan.Segments[1].Style.FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
         plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
     }
 
@@ -898,14 +894,10 @@ public sealed class EquationVisualPlannerTests
 
         plan.Segments.Select(segment => segment.Text).Should().Equal(
             "sin",
-            EquationVisualPlanner.FunctionOpenDelimiterText,
-            "a+x^2",
-            EquationVisualPlanner.FunctionCloseDelimiterText);
+            "a+x^2");
         plan.Segments.Select(segment => segment.Role).Should().Equal(
             EquationVisualSegmentRole.FunctionName,
-            EquationVisualSegmentRole.FunctionOpenDelimiter,
-            EquationVisualSegmentRole.FunctionArgument,
-            EquationVisualSegmentRole.FunctionCloseDelimiter);
+            EquationVisualSegmentRole.FunctionArgument);
         plan.Segments.Should().NotContain(segment => segment.Role == EquationVisualSegmentRole.LinearFallback);
     }
 
@@ -968,7 +960,7 @@ public sealed class EquationVisualPlannerTests
             "NAryOperator=1",
             "RadicalDegree=1"]);
         evidence.BaselineRoleCounts.Should().Contain([
-            "Normal=15",
+            "Normal=13",
             "Subscript=2",
             "Superscript=3"]);
         evidence.ElementGeometrySignatures.Should().Contain(signature =>
@@ -995,6 +987,6 @@ public sealed class EquationVisualPlannerTests
             && signature.Contains("roles=Text,Base,Superscript", StringComparison.Ordinal));
         evidence.SlotGeometrySignatures.Should().Contain(signature =>
             signature.Contains("slot=nary-operand", StringComparison.Ordinal)
-            && signature.Contains("roles=FunctionName,FunctionOpenDelimiter,FunctionArgument,FunctionCloseDelimiter", StringComparison.Ordinal));
+            && signature.Contains("roles=FunctionName,FunctionArgument", StringComparison.Ordinal));
     }
 }

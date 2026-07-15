@@ -649,11 +649,9 @@ public sealed class DocumentViewRoundTripTests
             .ToList();
         visualText.Should().Equal(
             "sin",
-            EquationVisualPlanner.FunctionOpenDelimiterText,
-            "x + y",
-            EquationVisualPlanner.FunctionCloseDelimiterText);
-        visualText.Should().NotContain("sin(x + y)",
-            "function application should render as styled function/argument parts instead of raw linear fallback");
+            "x + y");
+        visualText.Should().NotContain("(",
+            "Word OfficeMath functions contain a function name and argument, not display parentheses");
 
         var visualRuns = LogicalDescendants<TextBlock>(functionPanel)
             .SelectMany(textBlock => textBlock.Inlines.OfType<System.Windows.Documents.Run>())
