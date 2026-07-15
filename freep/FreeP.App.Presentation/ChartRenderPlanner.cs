@@ -1433,6 +1433,8 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartTextPlan>();
         if (ShouldPlanDataTable(chart, frame))
             return Array.Empty<ChartTextPlan>();
+        if (chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart))
+            return BuildImportedSurface3DCategoryAxisLabelPlans(chart, frame);
 
         var labels = new List<ChartTextPlan>(chart.Categories.Count);
         var plot = frame.Plot;
@@ -1467,6 +1469,46 @@ public static partial class ChartRenderPlanner
                     Alignment: ChartPlanTextAlignment.Center,
                     AxisLabelFormat: BuildAxisLabelFormatPlan(chart.CategoryAxis)));
             }
+        }
+
+        return labels;
+    }
+
+    private static IReadOnlyList<ChartTextPlan> BuildImportedSurface3DCategoryAxisLabelPlans(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        var plot = frame.Plot;
+        // The imported Surface3D front category edge is projected down toward
+        // the far-right category instead of following the flat plot baseline.
+        double scaleX = plot.Width / 360.0;
+        double scaleY = plot.Height / 189.0;
+        var frontLeft = new ChartPlanPoint(
+            plot.X + 8.0 * scaleX,
+            plot.Bottom - 40.0 * scaleY);
+        var frontRight = new ChartPlanPoint(
+            plot.X + 308.0 * scaleX,
+            plot.Bottom);
+        var labels = new List<ChartTextPlan>(chart.Categories.Count);
+        for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
+        {
+            double categoryT = chart.Categories.Count <= 1
+                ? 0
+                : categoryIndex / (double)(chart.Categories.Count - 1);
+            var point = new ChartPlanPoint(
+                frontLeft.X + (frontRight.X - frontLeft.X) * categoryT,
+                frontLeft.Y + (frontRight.Y - frontLeft.Y) * categoryT);
+            labels.Add(new ChartTextPlan(
+                FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
+                new ChartPlanRect(
+                    point.X - 21.0 * scaleX,
+                    point.Y + 16.0 * scaleY,
+                    42.0 * scaleX,
+                    ResolveCategoryLabelHeight(chart)),
+                IsBold: false,
+                FontSize: ResolveTextFontSize(chart, 7.0),
+                Alignment: ChartPlanTextAlignment.Center,
+                AxisLabelFormat: BuildAxisLabelFormatPlan(chart.CategoryAxis)));
         }
 
         return labels;

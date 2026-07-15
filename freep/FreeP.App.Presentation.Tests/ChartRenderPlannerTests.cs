@@ -93,6 +93,7 @@ public sealed class ChartRenderPlannerTests
     public void UsesClassicOfficeChartStyle_DistinguishesStylelessAndStyledCharts()
     {
         ChartRenderPlanner.UsesClassicOfficeChartStyle(new ChartShape()).Should().BeTrue();
+        ChartRenderPlanner.UsesClassicOfficeChartStyle(new ChartShape { StyleId = 2 }).Should().BeFalse();
         ChartRenderPlanner.UsesClassicOfficeChartStyle(new ChartShape { StyleId = 102 }).Should().BeFalse();
     }
 

@@ -6,6 +6,16 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class ChartBaselineCorpusTests
 {
     [Fact]
+    public void ChartLabelsCorpus_PreservesAuthoritativeChartStyle()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[2].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        chart.StyleId.Should().Be(2);
+        chart.ValueAxis.HasMajorGridlines.Should().BeTrue();
+    }
+
+    [Fact]
     public void ChartLabelsCorpus_PiePercentLabelsPreservePowerPointSeparatorAndAutomaticTitle()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
@@ -111,9 +121,20 @@ public sealed class ChartBaselineCorpusTests
         var surface = charts.Single(chart => chart.ChartType == ChartType.Surface3D);
         scenes.Single(scene => scene.GeometryKind == ChartSceneGeometryKind.Surface)
             .Surface.Should().NotBeNull();
-        ChartRenderPlanner.BuildFramePlan(surface, new ChartPlanRect(0, 0, 480, 288)).Plot
+        var surfaceFrame = ChartRenderPlanner.BuildFramePlan(surface, new ChartPlanRect(0, 0, 480, 288));
+        surfaceFrame.Plot
             .Should().Be(new ChartPlanRect(44, 57, 360, 189),
                 "PowerPoint reserves a dedicated projected frame for classic Surface3D charts");
+        var surfaceCategoryLabels = ChartRenderPlanner.BuildCategoryAxisLabelPlans(surface, surfaceFrame);
+        surfaceCategoryLabels.Select(label => label.Text)
+            .Should().Equal("North", "East", "South");
+        surfaceCategoryLabels[0].Bounds.Y
+            .Should().BeLessThan(surfaceCategoryLabels[^1].Bounds.Y,
+                "PowerPoint projects Surface3D category labels down toward the far-right category");
+        surfaceCategoryLabels[0].Bounds.X
+            .Should().BeApproximately(31, 0.0001);
+        surfaceCategoryLabels[^1].Bounds.X
+            .Should().BeApproximately(331, 0.0001);
         var surfaceCells = ChartRenderPlanner.BuildSurfaceCellPrimitives(
             surface,
             new ChartPlanRect(0, 0, 360, 220));
