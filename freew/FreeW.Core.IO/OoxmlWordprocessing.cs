@@ -84,6 +84,7 @@ internal static class Ooxml
     /// </summary>
     public static readonly XNamespace V = "urn:schemas-microsoft-com:vml";
     public static readonly XNamespace O = "urn:schemas-microsoft-com:office:office";
+    public static readonly XNamespace W10 = "urn:schemas-microsoft-com:office:word";
 
     /// <summary>The OPC content type + relationship type for an embedded OLE object's binary part.</summary>
     public const string OleObjectContentType = "application/vnd.openxmlformats-officedocument.oleObject";
