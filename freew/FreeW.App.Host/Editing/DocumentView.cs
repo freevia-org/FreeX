@@ -79,6 +79,10 @@ public sealed class DocumentView : RichTextBox
     /// <summary>Glyph-shrink factor applied to superscript/subscript runs (and undone on commit).</summary>
     private const double SuperSubScale = 0.65;
 
+    // Keep note markers visually superscripted without letting WPF's Superscript baseline expand the
+    // surrounding line box. The transform is calibrated to Word's cached footnote/endnote references.
+    private const double NoteReferenceSuperscriptOffsetDip = 5.0;
+
     private TextDocument _model = TextDocument.CreateEmpty();
     private DocumentViewDepthLayoutPlan _viewDepthLayout =
         DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
@@ -8568,10 +8572,9 @@ public sealed class DocumentView : RichTextBox
     {
         var marker = new WpfRun(footnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture))
         {
-            BaselineAlignment = BaselineAlignment.Superscript,
-            FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint * SuperSubScale,
             Tag = new FootnoteMarker(footnoteId)
         };
+        ApplyNoteReferencePresentation(marker, document);
         if (document.Footnotes.TryGetValue(footnoteId, out var footnote) && footnote.PlainText is { Length: > 0 } text)
             marker.ToolTip = text;
         return marker;
@@ -8695,13 +8698,22 @@ public sealed class DocumentView : RichTextBox
     {
         var marker = new WpfRun(endnoteId.ToString(System.Globalization.CultureInfo.InvariantCulture))
         {
-            BaselineAlignment = BaselineAlignment.Superscript,
-            FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint * SuperSubScale,
             Tag = new EndnoteMarker(endnoteId)
         };
+        ApplyNoteReferencePresentation(marker, document);
         if (document.Endnotes.TryGetValue(endnoteId, out var endnote) && endnote.PlainText is { Length: > 0 } text)
             marker.ToolTip = text;
         return marker;
+    }
+
+    private static void ApplyNoteReferencePresentation(WpfRun marker, TextDocument document)
+    {
+        marker.BaselineAlignment = BaselineAlignment.Baseline;
+        marker.FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint * SuperSubScale;
+        marker.TextEffects.Add(new TextEffect
+        {
+            Transform = new TranslateTransform(0, -NoteReferenceSuperscriptOffsetDip)
+        });
     }
 
     /// <summary>Carried on an endnote-marker WPF run's Tag so CommitToModel can round-trip its id.</summary>

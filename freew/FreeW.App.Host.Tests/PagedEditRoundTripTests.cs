@@ -1,4 +1,6 @@
 using System.Linq;
+using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
@@ -145,6 +147,40 @@ public sealed class PagedEditRoundTripTests
     }
 
     // ── multi-paragraph document: block count identity ────────────────────────────────────────────
+
+    [StaFact]
+    public void NoteReferenceMarkers_UseTransformsWithoutExpandingTheLineBox()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+
+        var footnoteParagraph = new Paragraph("Footnote");
+        footnoteParagraph.Runs.Add(Run.FootnoteReference(1));
+        doc.Blocks.Add(footnoteParagraph);
+        doc.Footnotes[1] = new Footnote(1, "Footnote body");
+
+        var endnoteParagraph = new Paragraph("Endnote");
+        endnoteParagraph.Runs.Add(Run.EndnoteReference(2));
+        doc.Blocks.Add(endnoteParagraph);
+        doc.Endnotes[2] = new Endnote(2, "Endnote body");
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+        var markers = editor.Document.Blocks
+            .OfType<System.Windows.Documents.Paragraph>()
+            .SelectMany(paragraph => paragraph.Inlines.OfType<System.Windows.Documents.Run>())
+            .Where(run => run.Text is "1" or "2")
+            .ToList();
+
+        markers.Should().HaveCount(2);
+        foreach (var marker in markers)
+        {
+            marker.BaselineAlignment.Should().Be(BaselineAlignment.Baseline);
+            marker.TextEffects.Should().ContainSingle();
+            var translation = marker.TextEffects[0].Transform.Should().BeOfType<TranslateTransform>().Which;
+            translation.Y.Should().Be(-5.0);
+        }
+    }
 
     [StaFact]
     public void MultiBlock_BlockCountIdentical_AfterRoundTrip()
