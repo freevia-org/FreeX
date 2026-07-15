@@ -201,33 +201,6 @@ if ($hwnd -eq [IntPtr]::Zero) {
 }
 if ($hwnd -eq [IntPtr]::Zero) { Write-Error "No window"; $proc.Kill(); exit 1 }
 
-function Get-WindowTitle($windowHandle) {
-    $title = New-Object System.Text.StringBuilder 512
-    [ScreenshotWin32]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
-    return $title.ToString()
-}
-
-function Get-ForegroundWindowInfo {
-    $foreground = [ScreenshotWin32]::GetForegroundWindow()
-    if ($foreground -eq [IntPtr]::Zero) {
-        return [pscustomobject]@{
-            Handle = "0"
-            ProcessId = $null
-            Title = ""
-        }
-    }
-
-    $actualPid = 0
-    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
-    $title = New-Object System.Text.StringBuilder 512
-    [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
-    return [pscustomobject]@{
-        Handle = $foreground.ToString()
-        ProcessId = $actualPid
-        Title = $title.ToString()
-    }
-}
-
 function Write-RootCaptureBlockerManifest($operation, $expectedPid, $expectedTitle, $reason) {
     $manifestPath = Join-Path $outDir "screenshot_blocker_manifest.json"
     [pscustomobject]@{
@@ -253,24 +226,10 @@ function Write-RootCaptureBlockerManifest($operation, $expectedPid, $expectedTit
     Write-Warning "Saved blocker manifest $manifestPath"
 }
 
-function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operation = "capture") {
-    $foreground = [ScreenshotWin32]::GetForegroundWindow()
-    if ($foreground -eq [IntPtr]::Zero) {
-        Clear-ScreenshotEvidenceArtifacts
-        Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle "No foreground window was available."
-        throw "Blocked: no foreground window before $operation."
-    }
-
-    $actualPid = 0
-    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
-    $title = New-Object System.Text.StringBuilder 512
-    [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
-    $actualTitle = $title.ToString()
-    if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
-        Clear-ScreenshotEvidenceArtifacts
-        Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle "Foreground window '$actualTitle' (PID $actualPid) did not match expected '$expectedTitle' (PID $expectedPid)."
-        throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid) before $operation."
-    }
+$script:ForegroundWindowOwnershipFailureAction = {
+    param($operation, $expectedPid, $expectedTitle, $reason)
+    Clear-ScreenshotEvidenceArtifacts
+    Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle $reason
 }
 
 function Assert-ForegroundProcessOwnership($expectedPid, $operation = "capture") {
@@ -359,7 +318,7 @@ function Set-FreeXForegroundWindow($windowHandle, $expectedPid, $expectedTitle, 
         }
     }
 
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle $operation
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle $operation $script:ForegroundWindowOwnershipFailureAction
 }
 
 function Find-FreeXOpenWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
@@ -393,7 +352,7 @@ function Invoke-FreeXOpenWorkbookDialogTour($expectedPid, $ownerWindowHandle, $e
     New-Item -ItemType Directory -Force -Path $openWorkbookDialogOutDir | Out-Null
     Clear-OpenWorkbookDialogEvidenceArtifacts
 
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "FreeX native Open dialog keyboard input"
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "FreeX native Open dialog keyboard input" $script:ForegroundWindowOwnershipFailureAction
     [System.Windows.Forms.SendKeys]::SendWait("^o")
     Start-Sleep -Milliseconds 1200
     Assert-ForegroundProcessOwnership $expectedPid "FreeX native Open dialog capture"
@@ -495,7 +454,7 @@ function Invoke-FreeXSaveAsWorkbookDialogTour($expectedPid, $ownerWindowHandle, 
     New-Item -ItemType Directory -Force -Path $saveAsWorkbookDialogOutDir | Out-Null
     Clear-SaveAsWorkbookDialogEvidenceArtifacts
 
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "FreeX native Save As dialog keyboard input"
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "FreeX native Save As dialog keyboard input" $script:ForegroundWindowOwnershipFailureAction
     [System.Windows.Forms.SendKeys]::SendWait("{F12}")
     Start-Sleep -Milliseconds 1200
     Assert-ForegroundProcessOwnership $expectedPid "FreeX native Save As dialog capture"
@@ -704,14 +663,14 @@ function Screenshot-Tab($tabName, $widthSpec) {
     }
 
     $selPat = $tabEl.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
-    Assert-ForegroundWindowOwnership $proc.Id $expectedTitle "ribbon tab selection"
+    Assert-ForegroundWindowOwnership $proc.Id $expectedTitle "ribbon tab selection" $script:ForegroundWindowOwnershipFailureAction
     if ($selPat -ne $null) { $selPat.Select() }
     Start-Sleep -Milliseconds 800
 
     $wrect = New-Object ScreenshotWin32+RECT
     [ScreenshotWin32]::GetWindowRect($hwnd, [ref]$wrect) | Out-Null
     $w = $wrect.Right - $wrect.Left
-    Assert-ForegroundWindowOwnership $proc.Id $expectedTitle "screen capture"
+    Assert-ForegroundWindowOwnership $proc.Id $expectedTitle "screen capture" $script:ForegroundWindowOwnershipFailureAction
 
     $safe = $tabName -replace '[^a-zA-Z0-9_]','_'
     $fileName = "ribbon_$($widthSpec.Label)_$safe.png"
