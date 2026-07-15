@@ -188,12 +188,26 @@ public sealed class ChartBaselineCorpusTests
         ChartRenderPlanner.ComputePrimaryValueAxisRange(stacked)
             .Should()
             .Be((0, 1, 0.25));
+        var stackedFrame = ChartRenderPlanner.BuildFramePlan(
+            stacked,
+            new ChartPlanRect(0, 0, 480, 288));
+        stackedFrame.Plot
+            .Should().Be(new ChartPlanRect(31, 54, 411, 219),
+                "PowerPoint gives imported 100%-stacked columns a taller plot with a narrower category gutter");
         var stackedBars = ChartRenderPlanner.BuildColumnPrimitives(
             stacked,
-            new ChartPlanRect(0, 0, 360, 220));
+            stackedFrame.Plot);
+        stackedBars.Should().NotBeEmpty();
+        double categoryWidth = stackedFrame.Plot.Width / stacked.Categories.Count;
+        double expectedBarWidth = categoryWidth / 3.5;
+        foreach (var bar in stackedBars)
+            bar.Bounds.Width.Should().BeApproximately(expectedBarWidth, 0.0001);
+        stackedBars.Where(bar => bar.CategoryIndex == 0)
+            .Select(bar => bar.Bounds.X)
+            .Should().OnlyContain(x => Math.Abs(
+                x - (stackedFrame.Plot.X + (categoryWidth - expectedBarWidth) / 2)) < 0.0001);
         stackedBars.Where(bar => bar.CategoryIndex == 0).Sum(bar => bar.Bounds.Height)
-            .Should()
-            .BeApproximately(220, 0.0001);
+            .Should().BeApproximately(stackedFrame.Plot.Height, 0.0001);
         var stackedLabels = ChartRenderPlanner.BuildDataLabelPlans(
             stacked,
             new ChartPlanRect(0, 0, 360, 220));
