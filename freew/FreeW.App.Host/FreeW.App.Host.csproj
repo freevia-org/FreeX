@@ -78,7 +78,9 @@
   <ItemGroup>
     <Content Include="Resources\FreeW.ico" CopyToOutputDirectory="PreserveNewest" />
     <!-- FreeW's own icons: Word-specific artwork plus a few Word-unique glyphs. -->
-    <Content Include="Resources\CommandIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Resources\CommandIconsSvg\**\*.svg"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
     <!-- Insert > Icons content library: curated monochrome SVGs for document insertion (W20). -->
     <Content Include="Resources\ContentIconsSvg\**\*.svg" CopyToOutputDirectory="PreserveNewest" />
     <!-- Reuse FreeX's actual Office-quality icons wherever a command has a FreeX equivalent, so e.g.
