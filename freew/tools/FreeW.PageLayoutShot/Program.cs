@@ -780,7 +780,15 @@ static int RenderMode(
     var captureWidth = width;
     var captureHeight = height;
     if (capturesWordComparablePageSurface)
-        (bytes, captureWidth, captureHeight) = CropToDocumentPageSurface(bytes, evidencePage, width, height);
+    {
+        (bytes, captureWidth, captureHeight) = CropToDocumentPageSurface(
+            bytes,
+            evidencePage,
+            width,
+            height,
+            pageNumber,
+            viewportOffsetY);
+    }
     bytes = AddNoteRegionOverlayIfNeeded(
         bytes,
         captureWidth,
@@ -842,7 +850,15 @@ static int RenderMode(
         var fallbackWidth = width;
         var fallbackHeight = height;
         if (ShouldCaptureWordComparablePageSurface(scenarioId))
-            (pngBytes, fallbackWidth, fallbackHeight) = CropToDocumentPageSurface(pngBytes, evidencePage, width, height);
+        {
+            (pngBytes, fallbackWidth, fallbackHeight) = CropToDocumentPageSurface(
+                pngBytes,
+                evidencePage,
+                width,
+                height,
+                pageNumber,
+                viewportOffsetY);
+        }
         pngBytes = AddNoteRegionOverlayIfNeeded(
             pngBytes,
             fallbackWidth,
@@ -1091,7 +1107,9 @@ static (byte[] PngBytes, int PixelWidth, int PixelHeight) CropToDocumentPageSurf
     byte[] pngBytes,
     PageSettings page,
     int fallbackWidth,
-    int fallbackHeight)
+    int fallbackHeight,
+    int pageNumber,
+    double viewportOffsetY)
 {
     using var source = SKBitmap.Decode(pngBytes);
     if (source is null)
@@ -1103,9 +1121,16 @@ static (byte[] PngBytes, int PixelWidth, int PixelHeight) CropToDocumentPageSurf
     if (source.Width < pixelWidth || source.Height < pixelHeight)
         return (pngBytes, source.Width, source.Height);
 
-    // Print Layout centers the white page horizontally in the viewport and starts the first page at y=0.
+    // Reuse the same Print Layout surface geometry that DocumentView uses. The frame may already
+    // have scrolled to the requested page, so translate its physical page top into the viewport.
     var sourceX = Math.Clamp((source.Width - pixelWidth) / 2, 0, source.Width - pixelWidth);
-    var sourceY = 0;
+    var pageIndex = Math.Max(0, pageNumber - 1);
+    var surfacePlan = DocumentViewLayoutPlanner.BuildSurfacePlan(
+        page,
+        DocumentViewLayoutKind.PrintLayout,
+        source.Width);
+    var pageTopInViewport = surfacePlan.PageTopDip(pageIndex) - viewportOffsetY;
+    var sourceY = Math.Clamp((int)Math.Round(pageTopInViewport), 0, source.Height - pixelHeight);
     using var surface = SKSurface.Create(new SKImageInfo(pixelWidth, pixelHeight, SKColorType.Bgra8888, SKAlphaType.Premul));
     if (surface is null)
         return (pngBytes, source.Width, source.Height);

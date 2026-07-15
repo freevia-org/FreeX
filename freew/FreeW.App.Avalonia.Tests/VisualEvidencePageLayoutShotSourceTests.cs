@@ -34,6 +34,10 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().MatchRegex("label: \"F2 Endnotes p2\"[\\s\\S]*?viewportOffsetY: 1100,\\s*hasEndnotes: true\\s*\\);");
         source.Should().Contain("AddNoteRegionOverlayIfNeeded(");
         source.Should().Contain("BuildEvidenceNoteRegionPlan(");
+        source.Should().Contain("CropToDocumentPageSurface(");
+        source.Should().MatchRegex("CropToDocumentPageSurface\\([\\s\\S]*?pageNumber,\\s*viewportOffsetY\\)");
+        source.Should().Contain("DocumentViewLayoutPlanner.BuildSurfacePlan(");
+        source.Should().Contain("pageTopInViewport = surfacePlan.PageTopDip(pageIndex) - viewportOffsetY");
         source.Should().Contain("DocumentNoteRegionPlanner.BuildFootnoteRegion");
         source.Should().Contain("DocumentNoteRegionPlanner.BuildEndnoteRegion");
         source.Should().Contain("[\"noteRegionRenderStatus\"] = \"shared-plan-overlay\"");
