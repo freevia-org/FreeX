@@ -1,5 +1,6 @@
 using System.Linq;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -107,6 +108,23 @@ public sealed class PagedEditNoteRegionTests
     // ─────────────────────────────────────────────────────────────────────────────────────────────
     // 2. Endnotes synthetic page
     // ─────────────────────────────────────────────────────────────────────────────────────────────
+
+    [StaFact]
+    public void FootnotePlacementFixture_AssignsReferencesToTheirWordLikeBodyPage()
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildFootnotePlacementDocument();
+        var (panel, editor) = BuildPanel(doc);
+
+        var assignment = PaginationEngine.ComputeBlockPageAssignment(editor);
+        var blocks = editor.Document.Blocks.ToArray();
+        var diagnostics = string.Join(
+            Environment.NewLine,
+            blocks.Select((block, index) =>
+                $"block={index} page={assignment.ElementAtOrDefault(index)} text={new System.Windows.Documents.TextRange(block.ContentStart, block.ContentEnd).Text.Trim()}"));
+        Assert.True(panel.PageBoxes.Count == 2, diagnostics);
+        Assert.True(panel.PageBoxes[0].FootnoteIds.SequenceEqual([1, 2]), diagnostics);
+        Assert.Empty(panel.PageBoxes[1].FootnoteIds);
+    }
 
     /// <summary>
     /// A document with endnotes must have a synthetic endnotes page box appended after all body

@@ -29,10 +29,10 @@ namespace FreeW.App.Host.Editing;
 ///
 /// <para>
 /// <strong>Engine-driven sharding (Phase 3b-1):</strong> <see cref="PaginationEngine.ComputeBlockPageAssignment"/>
-/// is called on the source editor to derive per-page block index ranges.  Blocks with an explicit
-/// <c>BreakPageBefore</c> (set by the paginator's section-break post-processing) open new page slots;
-/// overflow-driven page boundaries are honoured by the same paginator page count.  The result is a
-/// per-block page assignment array that drives <see cref="ShardByPageAssignment"/>.
+/// is called on the source editor to derive per-page block index ranges. Explicit breaks,
+/// overflow-driven boundaries, and footnote-reference positions are resolved by the same WPF
+/// paginator. The result is a per-block page assignment array that drives
+/// <see cref="ShardByPageAssignment"/>.
 /// </para>
 ///
 /// <para>
@@ -149,8 +149,8 @@ internal sealed class PaginatedEditorPanel : ScrollViewer
 
         // ── Step 2: engine-driven page assignment ─────────────────────────────────────────────────
         // PaginationEngine.ComputeBlockPageAssignment walks the WPF paginator's scratch clone and
-        // returns a per-block page index array.  Explicit breaks (BreakPageBefore / section breaks)
-        // are honoured; the page count comes from the authoritative print paginator.
+        // returns a per-block page index array. Explicit breaks, overflow, and footnote-reference
+        // positions are honoured; the page count comes from the authoritative print paginator.
         int[] assignment;
         int pageCount;
         try

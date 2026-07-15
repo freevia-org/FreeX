@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Documents;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Editing;
@@ -12,6 +13,11 @@ namespace FreeW.App.Host.Editing;
 /// </summary>
 internal static class PaginationEngine
 {
+    // WPF's FlowDocument paginator needs a small printable-frame clearance in addition to the
+    // measured note rows. Word keeps the body frame above that clearance, which is what makes a
+    // reference near the bottom of a page move together with its footnote.
+    private const double FootnoteFrameClearanceDip = 24.0;
+
     /// <summary>
     /// Paginates <paramref name="editor"/>'s current content at the model's page geometry and returns
     /// the page count and inter-page Y offsets in the editor's DIP coordinate space.
@@ -36,6 +42,7 @@ internal static class PaginationEngine
     {
         // --- Step 1: paginate a scratch clone via the authoritative print path ------------------
         var flow = PrintLayout.BuildPaginatedDocument(editor);
+        ApplyFootnoteBodyReserve(flow, editor.Model);
 
         // Post-process: a NextPage/EvenPage/OddPage section break is stored on the last paragraph
         // of the *preceding* section (the FreeW/docx convention). The XAML round-trip in
@@ -231,12 +238,9 @@ internal static class PaginationEngine
     ///   <item>Build a scratch <see cref="FlowDocument"/> clone and apply section-break flags
     ///   (identical to <see cref="Compute"/>).</item>
     ///   <item>Run the WPF paginator to determine the page count.</item>
-    ///   <item>Walk the scratch clone's top-level blocks in order.  A block whose
-    ///   <c>BreakPageBefore</c> is <c>true</c> is the first block of the <em>next</em> page.
-    ///   All other blocks stay on the current page.  This mirrors how the WPF paginator assigns
-    ///   blocks to pages for explicit breaks.  Overflow-driven page transitions are not detectable
-    ///   from the block list alone; the engine falls back to even distribution for any pages that
-    ///   are not covered by an explicit break.</item>
+    ///   <item>Walk the scratch clone's top-level blocks in order and query the WPF paginator for
+    ///   each block's page. Blocks containing footnote references use the reference position itself
+    ///   so a paragraph that straddles a boundary keeps its note with the page containing the mark.</item>
     /// </list>
     /// </para>
     ///
@@ -256,10 +260,12 @@ internal static class PaginationEngine
 
         // Build scratch clone and run the paginator — same as Compute().
         FlowDocument flow;
+        DocumentPaginator innerPaginator;
         int pageCount;
         try
         {
             flow = PrintLayout.BuildPaginatedDocument(editor);
+            ApplyFootnoteBodyReserve(flow, editor.Model);
             ApplySectionBreakFlags(editor, flow);
 
             var page = editor.Model.Page;
@@ -268,7 +274,7 @@ internal static class PaginationEngine
             if (contentHeight <= 0)
                 return new int[modelBlocks.Count]; // all page 0
 
-            var innerPaginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
+            innerPaginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
             innerPaginator.PageSize = new Size(pageWidth, pageHeight);
             innerPaginator.ComputePageCount();
             pageCount = Math.Max(1, innerPaginator.PageCount);
@@ -282,33 +288,62 @@ internal static class PaginationEngine
         if (pageCount == 1)
             return new int[modelBlocks.Count]; // all page 0
 
-        // Walk scratch blocks: assign each to its page using BreakPageBefore.
-        // A block with BreakPageBefore=true is the FIRST block of a new page.
+        // Ask the paginator for each block's actual page. The previous implementation only
+        // advanced on explicit BreakPageBefore flags, leaving all ordinary overflow blocks on
+        // page 0 and attaching later-page footnotes to the wrong body page.
         var scratchBlocks = flow.Blocks.ToArray();
         var assignment = new int[modelBlocks.Count];
         int currentPage = 0;
+        var dynamicPaginator = innerPaginator as DynamicDocumentPaginator;
 
         for (int i = 0; i < scratchBlocks.Length && i < modelBlocks.Count; i++)
         {
             var scratch = scratchBlocks[i];
-            bool isExplicitBreak = scratch is System.Windows.Documents.Paragraph p && p.BreakPageBefore;
-
-            // Block 0 can never start a new page (it is the first block of page 0).
-            if (isExplicitBreak && i > 0)
+            try
             {
-                currentPage = Math.Min(currentPage + 1, pageCount - 1);
+                if (dynamicPaginator is not null)
+                {
+                    var markerPositions = DocumentView.CollectFootnoteMarkerPositions([scratch]);
+                    var pageNumber = markerPositions.Count > 0
+                        ? markerPositions
+                            .Select(dynamicPaginator.GetPageNumber)
+                            .Where(page => page >= 0)
+                            .DefaultIfEmpty(dynamicPaginator.GetPageNumber(scratch.ContentStart))
+                            .Max()
+                        : dynamicPaginator.GetPageNumber(scratch.ContentStart);
+                    if (pageNumber >= 0)
+                        currentPage = Math.Clamp(pageNumber, 0, pageCount - 1);
+                }
             }
+            catch (NotSupportedException) { }
+            catch (InvalidOperationException) { }
 
             assignment[i] = currentPage;
         }
 
-        // If the explicit breaks only account for fewer pages than the paginator says, the
-        // remaining pages are overflow-driven.  In that case the last explicit-break page
-        // effectively absorbs all overflow blocks — the coordinator will still round-trip them
-        // correctly because the commit path doesn't care which page box a block lives in, only
-        // the document order.  No further redistribution is needed for 3b-1.
-
         return assignment;
+    }
+
+    private static void ApplyFootnoteBodyReserve(FlowDocument flow, TextDocument document)
+    {
+        if (document.Footnotes.Count == 0)
+            return;
+
+        var (_, contentWidthDip) = PageLayout.ContentAreaDip(document.Page);
+        var noteIds = document.Footnotes.Keys.OrderBy(id => id).ToList();
+        var notePlan = DocumentNoteRegionPlanner.BuildFootnoteRegion(
+            document,
+            noteIds,
+            pageNumber: 1,
+            contentWidthDip);
+        if (notePlan.EstimatedHeightDip <= 0)
+            return;
+
+        flow.PagePadding = new Thickness(
+            flow.PagePadding.Left,
+            flow.PagePadding.Top,
+            flow.PagePadding.Right,
+            flow.PagePadding.Bottom + notePlan.EstimatedHeightDip + FootnoteFrameClearanceDip);
     }
 
     private static void ApplySectionBreakFlags(DocumentView editor, FlowDocument flow)
