@@ -25,6 +25,25 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartTypesCorpus_PreservesPowerPointAutomaticTitlesForSingleSeriesCharts()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "18-chart-types.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var charts = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .ToArray();
+
+        charts[0].Title.Should().Be("Share");
+        charts[0].HasAutomaticTitle.Should().BeTrue();
+        charts[1].Title.Should().Be("Bubbles");
+        charts[1].HasAutomaticTitle.Should().BeTrue();
+        charts[3].Title.Should().Be("Series1");
+        charts[3].HasAutomaticTitle.Should().BeTrue();
+    }
+
+    [Fact]
     public void ChartBaselineDepthCorpusDeck_ExercisesSharedPlannerDecisions()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");

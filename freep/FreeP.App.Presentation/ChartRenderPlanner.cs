@@ -921,6 +921,18 @@ public static partial class ChartRenderPlanner
                 plot.Width + 10.0,
                 plot.Height + 20.0);
         }
+        if (chart.ChartType == ChartType.Doughnut &&
+            UsesImportedTextMetrics(chart) &&
+            chart.HasAutomaticTitle)
+        {
+            // PowerPoint gives an imported doughnut a taller chart-owned plot
+            // box while keeping the automatic title above that plot.
+            plot = new ChartPlanRect(
+                plot.X + 5.0,
+                plot.Y - 5.0,
+                plot.Width,
+                plot.Height + 56.0);
+        }
         if (UsesStockLineFallback(chart))
         {
             // Classic PowerPoint reserves a compact left value-axis gutter and a
@@ -952,13 +964,11 @@ public static partial class ChartRenderPlanner
                 bounds.Width - 2 * margin,
                 titleHeight)
             : null;
-        if (titleBounds is { } pieTitle &&
-            family == ChartRenderFamily.Pie &&
+        if (titleBounds is { } automaticTitle &&
             UsesImportedTextMetrics(chart) &&
-            chart.HasAutomaticTitle &&
-            chart.DataLabels is { ShowValue: true, ShowPercent: true })
+            chart.HasAutomaticTitle)
         {
-            titleBounds = pieTitle with { Y = pieTitle.Y - 10.0 };
+            titleBounds = automaticTitle with { Y = automaticTitle.Y - 10.0 };
         }
         return new ChartFramePlan(
             bounds,
