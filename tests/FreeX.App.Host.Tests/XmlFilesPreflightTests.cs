@@ -12,7 +12,8 @@ public sealed class XmlFilesPreflightTests
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-XmlFiles.ps1");
 
         script.Should().Contain("[string[]]$XmlRoots = @()");
-        script.Should().Contain("git -C $repoRoot ls-files --deduplicate");
+        script.Should().Contain("ToolScriptSupport.ps1");
+        WorkspaceFileLocator.ReadAllText("tools", "ToolScriptSupport.ps1").Should().Contain("git -C $RepoRoot ls-files --deduplicate");
         script.Should().Contain("\".slnx\"");
         script.Should().Contain("[System.Xml.XmlReader]::Create");
         script.Should().Contain("XML validation failed");

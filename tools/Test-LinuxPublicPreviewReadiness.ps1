@@ -11,20 +11,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $validationErrors = New-Object System.Collections.Generic.List[string]
 
-function Resolve-InputPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return [System.IO.Path]::GetFullPath($Path)
-    }
-
-    $currentDirectoryCandidate = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
-    if (Test-Path -LiteralPath $currentDirectoryCandidate) {
-        return $currentDirectoryCandidate
-    }
-
-    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -64,7 +51,7 @@ function Get-EvidenceMap {
     return $map
 }
 
-$root = Resolve-InputPath -Path $ArtifactRoot
+$root = Resolve-InputPath -Path $ArtifactRoot -RepoRoot $repoRoot
 Assert-True (Test-Path -LiteralPath $root) "Artifact root '$root' was not found."
 
 $runtimeManifests = New-Object System.Collections.Generic.List[object]
@@ -147,7 +134,7 @@ $manifest = [ordered]@{
     status = if ($validationErrors.Count -eq 0) { "ready" } else { "blocked" }
 }
 
-$manifestFull = Resolve-InputPath -Path $ManifestPath
+$manifestFull = Resolve-InputPath -Path $ManifestPath -RepoRoot $repoRoot
 $manifestDir = Split-Path -Parent $manifestFull
 if (-not (Test-Path -LiteralPath $manifestDir)) {
     New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null

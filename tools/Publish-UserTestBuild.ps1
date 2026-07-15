@@ -13,6 +13,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+
 function Assert-SafeArtifactToken {
     param(
         [Parameter(Mandatory = $true)]
@@ -159,12 +161,6 @@ function ConvertTo-MsBuildVersion {
     $minor = if ($numericParts.Count -gt 1) { $numericParts[1] } else { 0 }
     $patch = if ($numericParts.Count -gt 2) { $numericParts[2] } else { 0 }
     return "$major.$minor.$patch"
-}
-
-function ConvertTo-XmlAttributeValue {
-    param([Parameter(Mandatory = $true)][string]$Value)
-
-    return [System.Security.SecurityElement]::Escape($Value)
 }
 
 function Get-MsixManifestPublisher {
@@ -408,7 +404,7 @@ if ($PublishMode -eq "Msix") {
             $msixPublisher = Get-MsixManifestPublisher -Certificate $importedSigningCertificate
         }
 
-        $msixPublisherAttribute = ConvertTo-XmlAttributeValue -Value $msixPublisher
+        $msixPublisherAttribute = ConvertTo-ToolXmlAttribute -Value $msixPublisher
 
     $manifestPath = Join-Path $publishDir "AppxManifest.xml"
     $manifest = @"

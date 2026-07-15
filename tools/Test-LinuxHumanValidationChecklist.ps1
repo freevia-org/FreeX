@@ -10,6 +10,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $validationErrors = New-Object System.Collections.Generic.List[string]
 
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
+
 # Human gates a tester must record before a Linux build can be a public-preview candidate.
 # Mirrors the human portion of docs/release/linux-public-preview-checklist.md.
 $RequiredGates = @(
@@ -28,21 +30,6 @@ $RequiredGates = @(
     "known_issues_reviewed"
 )
 
-function Resolve-InputPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return [System.IO.Path]::GetFullPath($Path)
-    }
-
-    $currentDirectoryCandidate = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
-    if (Test-Path -LiteralPath $currentDirectoryCandidate) {
-        return $currentDirectoryCandidate
-    }
-
-    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
-}
-
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
 
@@ -54,7 +41,7 @@ function Add-ValidationError {
     Write-Error $Message -ErrorAction Continue
 }
 
-$path = Resolve-InputPath -Path $ChecklistPath
+$path = Resolve-InputPath -Path $ChecklistPath -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $path)) {
     Add-ValidationError "Checklist '$path' was not found."
     Write-Host "Linux human validation FAILED."
@@ -119,7 +106,7 @@ $manifest = [ordered]@{
     status = if ($validationErrors.Count -eq 0) { "validated" } else { "blocked" }
 }
 
-$manifestFull = Resolve-InputPath -Path $ManifestPath
+$manifestFull = Resolve-InputPath -Path $ManifestPath -RepoRoot $repoRoot
 $manifestDir = Split-Path -Parent $manifestFull
 if (-not (Test-Path -LiteralPath $manifestDir)) {
     New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null

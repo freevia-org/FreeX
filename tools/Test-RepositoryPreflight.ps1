@@ -15,15 +15,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Invoke-RepositoryPreflight {
     param(
@@ -32,7 +24,7 @@ function Invoke-RepositoryPreflight {
         [hashtable]$Parameters = @{}
     )
 
-    $resolvedScriptPath = Resolve-RepoPath $ScriptPath
+    $resolvedScriptPath = Resolve-ToolRepoPath -Path $ScriptPath -RepoRoot $repoRoot
     if (-not (Test-Path -LiteralPath $resolvedScriptPath -PathType Leaf)) {
         throw "$Label preflight script was not found: $resolvedScriptPath"
     }
