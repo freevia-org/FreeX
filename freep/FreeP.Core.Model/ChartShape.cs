@@ -405,6 +405,12 @@ public sealed class ChartShape
     public ChartType ChartType { get; set; } = ChartType.ColumnClustered;
 
     /// <summary>
+    /// True when an imported stock chart authors <c>c:hiLowLines</c>. When false,
+    /// PowerPoint renders the stock series as ordinary line-and-marker series.
+    /// </summary>
+    public bool HasHighLowLines { get; set; } = true;
+
+    /// <summary>
     /// Authored chart style identifier from <c>c:chartSpace/c:style</c> or its
     /// newer compatibility extension. Null means the classic Office default style.
     /// </summary>

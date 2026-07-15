@@ -393,6 +393,7 @@ internal static class PptxChartReader
     {
         ReadVaryColors(el, shape);
         shape.ChartType = ChartType.Stock;
+        shape.HasHighLowLines = el.Element(C + "hiLowLines") is not null;
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }
 

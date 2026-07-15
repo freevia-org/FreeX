@@ -1001,12 +1001,15 @@ public sealed class ChartTests : IDisposable
             var chartDoc = LoadChartXml(archive, chartIndex: 1);
             chartDoc.Descendants(ChartNs + "stockChart").Should().ContainSingle(
                 "stock charts should keep their PowerPoint chart family instead of downgrading to c:lineChart");
+            chartDoc.Descendants(ChartNs + "hiLowLines").Should().ContainSingle(
+                "new stock charts use the high-low rendering authored by PowerPoint");
             chartDoc.Descendants(ChartNs + "lineChart").Should().BeEmpty();
         }
 
         var reloaded = PptxPackageReader.Read(path);
         var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
         rt.ChartType.Should().Be(ChartType.Stock);
+        rt.HasHighLowLines.Should().BeTrue();
         rt.Series.Should().HaveCount(4);
     }
 

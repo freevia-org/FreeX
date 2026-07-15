@@ -27,6 +27,22 @@ public sealed class ChartBaselineCorpusTests
             });
 
         var stock = charts.Single(chart => chart.ChartType == ChartType.Stock);
+        stock.HasHighLowLines.Should().BeFalse(
+            "the PowerPoint baseline stock chart relies on its line-series fallback");
+        var stockFallback = ChartRenderPlanner.BuildStockFallbackLineSeriesPrimitives(
+            stock,
+            new ChartPlanRect(0, 0, 360, 220));
+        stockFallback.Should().HaveCount(4);
+        stockFallback.Should().OnlyContain(series => series.Markers.Count == 3);
+        stockFallback.Select(series => series.Markers[0].Symbol).Should().Equal(
+            ChartMarkerPrimitiveSymbol.Diamond,
+            ChartMarkerPrimitiveSymbol.Square,
+            ChartMarkerPrimitiveSymbol.X,
+            ChartMarkerPrimitiveSymbol.Triangle);
+        stockFallback[0].Points[0]!.Value.X.Should().BeApproximately(60, 0.0001,
+            "stock fallback points sit at PowerPoint category-band centers");
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(stock).Should().Be((0, 18, 2),
+            "PowerPoint gives the fallback its denser stock-chart value scale");
         var stockPlan = ChartRenderPlanner.BuildStockPrimitivePlan(
             stock,
             new ChartPlanRect(0, 0, 360, 220));

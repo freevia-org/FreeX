@@ -455,6 +455,7 @@ internal static class PptxChartWriter
         new XElement(C + "stockChart",
             BuildVaryColorsEl(chart),
             seriesEls,
+            chart.HasHighLowLines ? new XElement(C + "hiLowLines") : null,
             new XElement(C + "axId", new XAttribute("val", catAxId)),
             new XElement(C + "axId", new XAttribute("val", valAxId)));
 

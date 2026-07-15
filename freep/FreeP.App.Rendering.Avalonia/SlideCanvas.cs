@@ -1135,6 +1135,13 @@ public sealed class SlideCanvas : Control
         double plotX, double plotY, double plotW, double plotH)
     {
         var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
+        if (!chart.HasHighLowLines)
+        {
+            foreach (var primitive in ChartRenderPlanner.BuildStockFallbackLineSeriesPrimitives(chart, plot, seriesColors))
+                RenderLineSeriesPrimitive(dc, primitive);
+            return;
+        }
+
         foreach (var primitive in ChartRenderPlanner.BuildStockVolumePrimitives(chart, plot, seriesColors))
         {
             dc.DrawRectangle(

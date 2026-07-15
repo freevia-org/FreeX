@@ -500,6 +500,14 @@ public static partial class ChartRenderPlanner
         new(0xF7, 0x96, 0x46)
     ];
 
+    private static readonly ChartMarkerPrimitiveSymbol[] StockFallbackMarkerSymbols =
+    [
+        ChartMarkerPrimitiveSymbol.Diamond,
+        ChartMarkerPrimitiveSymbol.Square,
+        ChartMarkerPrimitiveSymbol.X,
+        ChartMarkerPrimitiveSymbol.Triangle
+    ];
+
     // PowerPoint's default varying surface style moves through the theme's
     // blue, orange, green, and yellow accents as elevation increases.
     private static readonly SrgbColor[] SurfaceVaryColors =
@@ -816,12 +824,22 @@ public static partial class ChartRenderPlanner
             plotTop,
             plotRight - plotLeft,
             plotBottom - plotTop);
+        if (UsesStockLineFallback(chart))
+        {
+            // Classic PowerPoint reserves a compact left value-axis gutter and a
+            // taller title/category band for this legacy stock-chart fallback.
+            plot = new ChartPlanRect(
+                bounds.X + 35.0,
+                bounds.Y + 54.0,
+                bounds.Width - 49.0,
+                bounds.Height - 87.0);
+        }
         if (TryResolveManualLayoutRect(chart.PlotAreaManualLayout, bounds, out var manualPlot))
             plot = manualPlot;
         ChartPlanRect? titleBounds = chart.Title is not null
             ? new ChartPlanRect(
                 bounds.X + margin,
-                bounds.Y + margin,
+                UsesStockLineFallback(chart) ? bounds.Y + 7.0 : bounds.Y + margin,
                 bounds.Width - 2 * margin,
                 titleHeight)
             : null;
@@ -1072,6 +1090,21 @@ public static partial class ChartRenderPlanner
                 lines.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(plot.X, y),
                     new ChartPlanPoint(plot.Right, y)));
+            }
+        }
+
+        // PowerPoint's stock-chart line fallback keeps the category grid authored
+        // by c:catAx/majorGridlines, including the two outer plot boundaries.
+        if (UsesStockLineFallback(chart) && chart.CategoryAxis.HasMajorGridlines)
+        {
+            int categoryCount = ResolveChartCategoryCount(chart);
+            double categoryWidth = plot.Width / Math.Max(1, categoryCount);
+            for (int index = 0; index <= categoryCount; index++)
+            {
+                double x = plot.X + index * categoryWidth;
+                lines.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(x, plot.Y),
+                    new ChartPlanPoint(x, plot.Bottom)));
             }
         }
 
@@ -1860,6 +1893,63 @@ public static partial class ChartRenderPlanner
         return new ChartStockPrimitivePlan(highLowLines, openTicks, closeTicks);
     }
 
+    /// <summary>
+    /// Builds the line-and-marker presentation PowerPoint uses for a <c>stockChart</c>
+    /// that omits <c>hiLowLines</c>. OOXML still calls this a stock chart, but it is
+    /// visually a four-series category chart with points centered in their category bands.
+    /// </summary>
+    public static IReadOnlyList<ChartLineSeriesPrimitive> BuildStockFallbackLineSeriesPrimitives(
+        ChartShape chart,
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
+    {
+        if (chart.ChartType != ChartType.Stock || chart.HasHighLowLines ||
+            chart.Series.Count == 0 || !plot.HasPositiveArea)
+        {
+            return Array.Empty<ChartLineSeriesPrimitive>();
+        }
+
+        var (minimum, maximum, _) = ComputePrimaryValueAxisRange(chart);
+        double range = maximum - minimum;
+        if (range <= 0)
+            return Array.Empty<ChartLineSeriesPrimitive>();
+
+        int categoryCount = ResolveChartCategoryCount(chart);
+        double categoryWidth = plot.Width / Math.Max(1, categoryCount);
+        var primitives = new List<ChartLineSeriesPrimitive>(chart.Series.Count);
+
+        for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+        {
+            var points = new ChartPlanPoint?[categoryCount];
+            var series = chart.Series[seriesIndex];
+            for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+            {
+                double? value = ResolveBlankSensitiveValue(
+                    chart,
+                    categoryIndex < series.Values.Count ? series.Values[categoryIndex] : null);
+                if (value is null)
+                    continue;
+
+                points[categoryIndex] = new ChartPlanPoint(
+                    plot.X + (categoryIndex + 0.5) * categoryWidth,
+                    MapCartesianValueToY(value.Value, minimum, range, plot));
+            }
+
+            primitives.Add(BuildLineSeriesPrimitive(
+                seriesIndex,
+                withMarkers: true,
+                points,
+                series,
+                seriesColors,
+                fillPlans,
+                ShouldSpanBlankSegments(chart),
+                StockFallbackMarkerSymbols[seriesIndex % StockFallbackMarkerSymbols.Length]));
+        }
+
+        return primitives;
+    }
+
     public static IReadOnlyList<ChartRectPrimitive> BuildStockVolumePrimitives(
         ChartShape chart,
         ChartPlanRect plot,
@@ -2605,7 +2695,8 @@ public static partial class ChartRenderPlanner
         ChartSeries? series = null,
         IReadOnlyList<SrgbColor>? seriesColors = null,
         ChartFillPlanSet? fillPlans = null,
-        bool spanBlankSegments = false)
+        bool spanBlankSegments = false,
+        ChartMarkerPrimitiveSymbol? automaticMarkerSymbol = null)
     {
         series ??= new ChartSeries();
         bool suppressLine = series.LineStyle?.NoFill == true;
@@ -2666,7 +2757,9 @@ public static partial class ChartRenderPlanner
                     pointIndex,
                     point.Value,
                     ResolveMarkerRadius(markerStyle, LineMarkerRadius),
-                    ResolveMarkerSymbol(markerStyle),
+                    markerStyle is null && automaticMarkerSymbol.HasValue
+                        ? automaticMarkerSymbol.Value
+                        : ResolveMarkerSymbol(markerStyle),
                     ResolveMarkerFill(series, seriesIndex, pointIndex, markerStyle, seriesColors, RectSeriesFillAlpha, fillPlans),
                     ResolveMarkerStroke(series, seriesIndex, pointIndex, markerStyle, seriesColors, LineMarkerStrokeThickness)));
             }
@@ -3597,6 +3690,8 @@ public static partial class ChartRenderPlanner
 
         double min = chart.ValueAxis.Min ?? (dataMin >= 0 ? 0 : dataMin);
         double max = chart.ValueAxis.Max ?? dataMax;
+        if (UsesStockLineFallback(chart) && chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
+            return ComputeStockFallbackValueAxisRange(min, max);
         return ComputeNiceRange(min, max);
     }
 
@@ -5226,6 +5321,38 @@ public static partial class ChartRenderPlanner
             niceMax += majorUnit;
 
         return (niceMin, niceMax, majorUnit);
+    }
+
+    private static bool UsesStockLineFallback(ChartShape chart) =>
+        chart.ChartType == ChartType.Stock && !chart.HasHighLowLines;
+
+    private static (double min, double max, double majorUnit) ComputeStockFallbackValueAxisRange(
+        double min,
+        double max)
+    {
+        if (max <= min)
+            max = min + 1;
+
+        // PowerPoint gives the line fallback a denser category-chart scale than
+        // its normal four-major-interval default, leaving one interval of headroom.
+        double rawUnit = (max - min) / 8.0;
+        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(Math.Max(rawUnit, double.Epsilon))));
+        double normalized = rawUnit / magnitude;
+        double multiplier = normalized switch
+        {
+            <= 1.0 => 1.0,
+            <= 2.0 => 2.0,
+            <= 2.5 => 2.5,
+            <= 5.0 => 5.0,
+            _ => 10.0
+        };
+        double unit = multiplier * magnitude;
+        double niceMin = min >= 0 ? 0 : Math.Floor(min / unit) * unit;
+        double niceMax = Math.Ceiling(max / unit) * unit;
+        if (niceMax <= max + 1e-9)
+            niceMax += unit;
+
+        return (niceMin, niceMax, unit);
     }
 
     public static ChartBarClusterSlot ResolveBarClusterSpacing(
