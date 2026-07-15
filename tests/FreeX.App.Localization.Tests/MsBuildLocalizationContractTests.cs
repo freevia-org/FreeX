@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
 
@@ -31,6 +32,13 @@ public sealed class MsBuildLocalizationContractTests
             .Should().Be("fr-FR;de-DE");
         properties.GetProperty("FreeSharedLocalizationSupportedCulturePattern").GetString()
             .Should().Be("fr-FR|de-DE");
+
+        var pattern = $"^({properties.GetProperty("FreeSharedLocalizationSupportedCulturePattern").GetString()})[\\\\/]$";
+        Regex.IsMatch("fr-FR\\", pattern).Should().BeTrue();
+        Regex.IsMatch("fr-FR/", pattern).Should().BeTrue();
+        Regex.IsMatch("de-DE\\", pattern).Should().BeTrue();
+        Regex.IsMatch("de-DE/", pattern).Should().BeTrue();
+        Regex.IsMatch("uk-UA/", pattern).Should().BeFalse();
     }
 
     [Fact]
@@ -46,6 +54,7 @@ public sealed class MsBuildLocalizationContractTests
         props.Should().Contain("Contains('/src/')");
         props.Should().Contain("Contains('/tests/')");
         targets.Should().Contain("FreeSharedLocalizationSupportedCulturePattern");
+        targets.Should().Contain("[\\\\/]$");
         targets.Should().NotContain("DestinationSubDirectory)' == 'fr-FR\\");
         targets.Should().NotContain("fr-FR");
     }

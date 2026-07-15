@@ -11,7 +11,7 @@
         Condition="'%(ReferenceCopyLocalPaths.Filename)' == 'Free.Shared.Localization.resources'" />
       <_FreeSharedLocalizationSupported Include="@(_FreeSharedLocalizationSatellites)"
         Condition="'$(FreeSharedLocalizationFilterAllSatellites)' != 'true' And
-          '$([System.Text.RegularExpressions.Regex]::IsMatch(&quot;%(_FreeSharedLocalizationSatellites.DestinationSubDirectory)&quot;, &quot;^($(FreeSharedLocalizationSupportedCulturePattern))\\$&quot;))' == 'True'" />
+          '$([System.Text.RegularExpressions.Regex]::IsMatch(&quot;%(_FreeSharedLocalizationSatellites.DestinationSubDirectory)&quot;, &quot;^($(FreeSharedLocalizationSupportedCulturePattern))[\\/]$&quot;))' == 'True'" />
       <ReferenceCopyLocalPaths Remove="@(_FreeSharedLocalizationSatellites)" />
       <ReferenceCopyLocalPaths Include="@(_FreeSharedLocalizationSupported)" />
     </ItemGroup>
