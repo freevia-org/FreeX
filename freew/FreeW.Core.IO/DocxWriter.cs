@@ -272,10 +272,9 @@ public static class DocxWriter
             WriteBinaryPart(archive, "word/embeddings/" + embedded.FileName, embedded.EmbeddedObject.Payload);
         foreach (var smartArt in smartArts)
         {
-            // F2: the data part carries a dgm:dataModelExt pointing (via DrawingRelationshipId) at the
-            // rendered-geometry drawing part, whose relationship is declared in the data part's own .rels.
+            // F2: the data part carries a dgm:dataModelExt pointing at the rendered-geometry drawing part.
+            // Word resolves that relationship against document.xml.rels, matching native Word packages.
             WritePart(archive, "word/diagrams/" + smartArt.DataFileName, BuildDiagramData(smartArt.SmartArt, smartArt.DrawingRelationshipId));
-            WritePart(archive, "word/diagrams/_rels/" + smartArt.DataFileName + ".rels", BuildDiagramDataRels(smartArt));
             WritePart(archive, "word/diagrams/" + smartArt.LayoutFileName, BuildDiagramLayout(smartArt.SmartArt));
             WritePart(archive, "word/diagrams/" + smartArt.QuickStyleFileName, BuildDiagramQuickStyle(smartArt.SmartArt));
             WritePart(archive, "word/diagrams/" + smartArt.ColorsFileName, BuildDiagramColors(smartArt.SmartArt));
@@ -417,8 +416,7 @@ public static class DocxWriter
                         $"quickStyle{index}.xml",
                         $"colors{index}.xml",
                         // Word resolves dgm:dataModelExt/@relId against the document-level relationship
-                        // set (the native package points at rId8 there). Keep the same id in the data-part
-                        // rels emitted for backwards compatibility with the existing reader/tests.
+                        // set, matching the native package.
                         $"rIdDgmDrawing{index}",
                         $"drawing{index}.xml",
                         (uint)index));
@@ -4579,18 +4577,6 @@ public static class DocxWriter
         "{4F4B0000-0000-4000-8000-" + index.ToString("D12", System.Globalization.CultureInfo.InvariantCulture) + "}";
 
     /// <summary>
-    /// Builds the SmartArt DATA part's relationships (word/diagrams/_rels/dataN.xml.rels). F2: a single
-    /// diagramDrawing relationship from the data part to its rendered-geometry drawing part (drawingN.xml),
-    /// which the data part's dgm:dataModelExt/@relId references. Targets are data-part-relative.
-    /// </summary>
-    private static XDocument BuildDiagramDataRels(SmartArtPart part) => new(
-        OpcRelationships.CreateRoot(
-            OpcRelationships.CreateRelationship(
-                part.DrawingRelationshipId,
-                DiagramDrawingRelType,
-                part.DrawingFileName)));
-
-    /// <summary>
     /// Builds the SmartArt rendered-geometry part (word/diagrams/drawingN.xml — dsp:drawing). F2: computes a
     /// SIMPLE deterministic layout in EMU keyed off the diagram kind and emits one dsp:sp per node, each
     /// carrying its text (dsp:txBody/a:p/a:r/a:t) and an a:xfrm (a:off x/y + a:ext cx/cy), all inside one
@@ -5032,21 +5018,52 @@ public static class DocxWriter
     /// Persists the FreeW <see cref="SmartArt.StyleId"/> as a <c>freewStyleId</c> extension attribute so
     /// the reader can recover the exact catalog entry on round-trip.
     /// </summary>
+    private static readonly string[] SmartArtGalleryStyleLabels =
+    [
+        "node0", "lnNode1", "vennNode1", "alignNode1", "node1", "node2", "node3", "node4",
+        "fgImgPlace1", "alignImgPlace1", "bgImgPlace1", "sibTrans2D1", "fgSibTrans2D1",
+        "bgSibTrans2D1", "sibTrans1D1", "callout", "asst0", "asst1", "asst2", "asst3", "asst4",
+        "parChTrans2D1", "parChTrans2D2", "parChTrans2D3", "parChTrans2D4", "parChTrans1D1",
+        "parChTrans1D2", "parChTrans1D3", "parChTrans1D4", "fgAcc1", "conFgAcc1", "alignAcc1",
+        "trAlignAcc1", "bgAcc1", "solidFgAcc1", "solidAlignAcc1", "solidBgAcc1",
+        "fgAccFollowNode1", "alignAccFollowNode1", "bgAccFollowNode1", "fgAcc0", "fgAcc2", "fgAcc3",
+        "fgAcc4", "bgShp", "dkBgShp", "trBgShp", "fgShp", "revTx"
+    ];
+
     private static XDocument BuildDiagramQuickStyle(SmartArt smartArt)
     {
+        var labels = SmartArtGalleryStyleLabels;
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/quickstyle/";
         var uniqueId = BaseUrn + (smartArt.StyleId ?? "simple1");
+        var styleLabels = labels.Select(name =>
+            new XElement(Dgm + "styleLbl",
+                new XAttribute("name", name),
+                new XElement(Dgm + "scene3d",
+                    new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
+                    new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
+                new XElement(Dgm + "sp3d"),
+                new XElement(Dgm + "txPr"),
+                new XElement(Dgm + "style",
+                    new XElement(A + "lnRef", new XAttribute("idx", 2),
+                        new XElement(A + "scrgbClr", new XAttribute("r", 0), new XAttribute("g", 0), new XAttribute("b", 0))),
+                    new XElement(A + "fillRef", new XAttribute("idx", 1),
+                        new XElement(A + "scrgbClr", new XAttribute("r", 0), new XAttribute("g", 0), new XAttribute("b", 0))),
+                    new XElement(A + "effectRef", new XAttribute("idx", 0),
+                        new XElement(A + "scrgbClr", new XAttribute("r", 0), new XAttribute("g", 0), new XAttribute("b", 0))),
+                    new XElement(A + "fontRef", new XAttribute("idx", "minor"),
+                        new XElement(A + "schemeClr", new XAttribute("val", "lt1")))))).ToList();
         var elem = new XElement(Dgm + "styleDef",
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute("uniqueId", uniqueId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
-            new XElement(Dgm + "catLst"),
+            new XElement(Dgm + "catLst",
+                new XElement(Dgm + "cat", new XAttribute("type", "simple"), new XAttribute("pri", 10100))),
             new XElement(Dgm + "scene3d",
                 new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
                 new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
-            new XElement(Dgm + "styleLbl", new XAttribute("name", "node0")));
+            styleLabels);
         return new XDocument(elem);
     }
 
@@ -5058,21 +5075,32 @@ public static class DocxWriter
     private static XDocument BuildDiagramColors(SmartArt smartArt)
     {
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/colors/";
-        var uniqueId = BaseUrn + (smartArt.ColorSchemeId ?? "accent0_1");
+        var colorId = smartArt.ColorSchemeId ?? "accent1_2";
+        var uniqueId = BaseUrn + colorId;
+        var category = colorId.StartsWith("accent1", StringComparison.OrdinalIgnoreCase) ? "accent1"
+            : colorId.StartsWith("accent2", StringComparison.OrdinalIgnoreCase) ? "accent2"
+            : colorId.StartsWith("accent3", StringComparison.OrdinalIgnoreCase) ? "accent3"
+            : colorId.StartsWith("accent", StringComparison.OrdinalIgnoreCase) ? "accent1"
+            : colorId.StartsWith("colorful", StringComparison.OrdinalIgnoreCase) ? "colorful" : "accent1";
+        var styleLabels = SmartArtGalleryStyleLabels.Select(name =>
+            new XElement(Dgm + "styleLbl", new XAttribute("name", name),
+                new XElement(Dgm + "fillClrLst", new XAttribute("meth", "repeat"),
+                    new XElement(A + "schemeClr", new XAttribute("val", category))),
+                new XElement(Dgm + "linClrLst", new XAttribute("meth", "repeat"),
+                    new XElement(A + "schemeClr", new XAttribute("val", "lt1"))),
+                new XElement(Dgm + "effectClrLst"),
+                new XElement(Dgm + "txLinClrLst"),
+                new XElement(Dgm + "txFillClrLst"),
+                new XElement(Dgm + "txEffectClrLst"))).ToList();
         var elem = new XElement(Dgm + "colorsDef",
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute("uniqueId", uniqueId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
-            new XElement(Dgm + "catLst"),
-            new XElement(Dgm + "styleLbl", new XAttribute("name", "node0"),
-                new XElement(Dgm + "fillClrLst", new XAttribute("meth", "repeat"),
-                    new XElement(A + "schemeClr", new XAttribute("val", "accent1"))),
-                new XElement(Dgm + "linClrLst", new XAttribute("meth", "repeat"),
-                    new XElement(A + "schemeClr", new XAttribute("val", "accent1"))),
-                new XElement(Dgm + "txFillClrLst", new XAttribute("meth", "repeat"),
-                    new XElement(A + "schemeClr", new XAttribute("val", "lt1")))));
+            new XElement(Dgm + "catLst",
+                new XElement(Dgm + "cat", new XAttribute("type", category), new XAttribute("pri", 11200))),
+            styleLabels);
         return new XDocument(elem);
     }
 

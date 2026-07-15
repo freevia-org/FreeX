@@ -180,7 +180,7 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
-    public void Diagram_RenderedDrawingPart_ContentTypeAndDataRel_ArePresent()
+    public void Diagram_RenderedDrawingPart_UsesNativeRelationshipAndGalleryParts()
     {
         // F2: a fifth part (word/diagrams/drawing1.xml — dsp:drawing) carries pre-laid-out shapes, referenced
         // from the data part via a diagramDrawing relationship + a dgm:dataModelExt inside the data model.
@@ -196,16 +196,9 @@ public class SmartArtRoundTripTests
             o.Attribute("PartName")!.Value == "/word/diagrams/drawing1.xml" &&
             o.Attribute("ContentType")!.Value == DrawingContentType);
 
-        // The data part's own .rels carries a diagramDrawing relationship to drawing1.xml.
-        var dataRels = EntryXml(docx, "word/diagrams/_rels/data1.xml.rels");
-        var drawingRel = dataRels.Root!.Elements(Rel + "Relationship")
-            .Single(r => r.Attribute("Type")!.Value == DrawingRelType);
-        drawingRel.Attribute("Target")!.Value.Should().Be("drawing1.xml");
-
         // The data model points Word at the pre-laid-out drawing through the required Office extension.
         var dataXml = EntryXml(docx, "word/diagrams/data1.xml");
         var dataModelExt = dataXml.Descendants(Dsp + "dataModelExt").Should().ContainSingle().Subject;
-        dataModelExt.Attribute("relId")!.Value.Should().Be(drawingRel.Attribute("Id")!.Value);
         dataModelExt.Attribute("minVer")!.Value.Should().Be(Dgm.NamespaceName);
 
         var documentRels = EntryXml(docx, "word/_rels/document.xml.rels");
@@ -214,6 +207,16 @@ public class SmartArtRoundTripTests
                 r.Attribute("Id")!.Value == dataModelExt.Attribute("relId")!.Value &&
                 r.Attribute("Type")!.Value == DrawingRelType &&
                 r.Attribute("Target")!.Value == "diagrams/drawing1.xml");
+
+        using (var zip = new ZipArchive(new MemoryStream(docx), ZipArchiveMode.Read))
+            zip.GetEntry("word/diagrams/_rels/data1.xml.rels").Should().BeNull("native Word keeps the drawing relationship at document scope");
+
+        var styleLabels = EntryXml(docx, "word/diagrams/quickStyle1.xml")
+            .Descendants(Dgm + "styleLbl").Select(e => e.Attribute("name")!.Value).ToList();
+        styleLabels.Should().Contain(["node1", "fgAcc0", "revTx"]);
+        var colorLabels = EntryXml(docx, "word/diagrams/colors1.xml")
+            .Descendants(Dgm + "styleLbl").Select(e => e.Attribute("name")!.Value).ToList();
+        colorLabels.Should().Contain(["node1", "fgAcc0", "revTx"]);
     }
 
     [Fact]
