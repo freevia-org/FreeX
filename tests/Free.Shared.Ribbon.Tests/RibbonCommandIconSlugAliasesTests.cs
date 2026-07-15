@@ -5,6 +5,10 @@ public sealed class RibbonCommandIconSlugAliasesTests
     public static IEnumerable<object[]> ConsolidatedAliases =>
     [
         ["custom-paragraph-spacing", "paragraph-spacing"],
+        ["allow-edit-ranges", "allow-users-to-edit-ranges"],
+        ["date-and-time", "date-time"],
+        ["lookup-and-reference", "lookup-reference"],
+        ["math-and-trig", "math-trig"],
         ["customize-colors", "theme-colors"],
         ["customize-fonts", "theme-fonts"],
         ["draftview", "draft-view"],
