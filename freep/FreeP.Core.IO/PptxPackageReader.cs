@@ -660,63 +660,46 @@ public static class PptxPackageReader
 
     private static PresentationTheme? ReadTheme(ZipArchive archive, string masterPath)
     {
-        var masterDir = GetDirectoryName(masterPath);
-        var masterRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(masterPath));
-        var themeTarget = OpcRelationships.FirstTargetByType(masterRels, ThemeRelType);
-        if (themeTarget is null) return null;
-
-        var themePath = ResolveRelativeZipPath(masterDir, themeTarget);
-        var xml = OpcXml.TryLoadXml(archive, themePath);
-        if (xml?.Root is null) return null;
+        var sharedTheme = DrawingMlThemeReader.TryReadThemePart(archive, masterPath, "ppt/theme/theme1.xml");
+        if (sharedTheme is null)
+            return null;
 
         var theme = new PresentationTheme
         {
-            Name = xml.Root.Attribute("name")?.Value ?? "Office Theme"
+            Name = sharedTheme.Name ?? "Office Theme"
         };
 
-        var clrScheme = xml.Root.Element(A + "themeElements")?.Element(A + "clrScheme");
-        if (clrScheme is not null)
-            ReadColorScheme(clrScheme, theme.ColorScheme);
-
-        var fontScheme = xml.Root.Element(A + "themeElements")?.Element(A + "fontScheme");
-        if (fontScheme is not null)
+        foreach (var (slot, _) in DrawingMlThemeColorSlotMapper.ColorSchemeElements)
         {
-            theme.FontScheme.MajorLatinFont = fontScheme
-                .Element(A + "majorFont")?.Element(A + "latin")?.Attribute("typeface")?.Value ?? "Calibri Light";
-            theme.FontScheme.MinorLatinFont = fontScheme
-                .Element(A + "minorFont")?.Element(A + "latin")?.Attribute("typeface")?.Value ?? "Calibri";
+            if (sharedTheme.ColorScheme[slot] is { } color)
+                theme.ColorScheme[ToPresentationSlot(slot)] = new SrgbColor(
+                    color.ResolvedColor.R,
+                    color.ResolvedColor.G,
+                    color.ResolvedColor.B);
         }
 
+        theme.FontScheme.MajorLatinFont = sharedTheme.FontScheme.MajorLatinTypeface ?? theme.FontScheme.MajorLatinFont;
+        theme.FontScheme.MinorLatinFont = sharedTheme.FontScheme.MinorLatinTypeface ?? theme.FontScheme.MinorLatinFont;
         return theme;
     }
 
-    private static void ReadColorScheme(XElement clrScheme, PresentationColorScheme scheme)
-    {
-        ReadColorSlot(clrScheme, "dk1", ThemeColorSlot.Dk1, scheme);
-        ReadColorSlot(clrScheme, "lt1", ThemeColorSlot.Lt1, scheme);
-        ReadColorSlot(clrScheme, "dk2", ThemeColorSlot.Dk2, scheme);
-        ReadColorSlot(clrScheme, "lt2", ThemeColorSlot.Lt2, scheme);
-        ReadColorSlot(clrScheme, "accent1", ThemeColorSlot.Accent1, scheme);
-        ReadColorSlot(clrScheme, "accent2", ThemeColorSlot.Accent2, scheme);
-        ReadColorSlot(clrScheme, "accent3", ThemeColorSlot.Accent3, scheme);
-        ReadColorSlot(clrScheme, "accent4", ThemeColorSlot.Accent4, scheme);
-        ReadColorSlot(clrScheme, "accent5", ThemeColorSlot.Accent5, scheme);
-        ReadColorSlot(clrScheme, "accent6", ThemeColorSlot.Accent6, scheme);
-        ReadColorSlot(clrScheme, "hlink", ThemeColorSlot.HLink, scheme);
-        ReadColorSlot(clrScheme, "folHlink", ThemeColorSlot.FolHLink, scheme);
-    }
-
-    private static void ReadColorSlot(XElement clrScheme, string elName, ThemeColorSlot slot, PresentationColorScheme scheme)
-    {
-        var el = clrScheme.Element(A + elName);
-        if (el is null) return;
-
-        var srgb = el.Element(A + "srgbClr")?.Attribute("val")?.Value;
-        if (!string.IsNullOrWhiteSpace(srgb) && TryParseHex6(srgb, out var rgb)) { scheme[slot] = rgb; return; }
-
-        var last = el.Element(A + "sysClr")?.Attribute("lastClr")?.Value;
-        if (!string.IsNullOrWhiteSpace(last) && TryParseHex6(last, out var sysRgb)) scheme[slot] = sysRgb;
-    }
+    private static ThemeColorSlot ToPresentationSlot(DrawingMlThemeColorSlot slot) =>
+        slot switch
+        {
+            DrawingMlThemeColorSlot.Dark1 => ThemeColorSlot.Dk1,
+            DrawingMlThemeColorSlot.Light1 => ThemeColorSlot.Lt1,
+            DrawingMlThemeColorSlot.Dark2 => ThemeColorSlot.Dk2,
+            DrawingMlThemeColorSlot.Light2 => ThemeColorSlot.Lt2,
+            DrawingMlThemeColorSlot.Accent1 => ThemeColorSlot.Accent1,
+            DrawingMlThemeColorSlot.Accent2 => ThemeColorSlot.Accent2,
+            DrawingMlThemeColorSlot.Accent3 => ThemeColorSlot.Accent3,
+            DrawingMlThemeColorSlot.Accent4 => ThemeColorSlot.Accent4,
+            DrawingMlThemeColorSlot.Accent5 => ThemeColorSlot.Accent5,
+            DrawingMlThemeColorSlot.Accent6 => ThemeColorSlot.Accent6,
+            DrawingMlThemeColorSlot.Hyperlink => ThemeColorSlot.HLink,
+            DrawingMlThemeColorSlot.FollowedHyperlink => ThemeColorSlot.FolHLink,
+            _ => ThemeColorSlot.Dk1
+        };
 
     // ── Slide Master ─────────────────────────────────────────────────────────────
 
@@ -5152,6 +5135,7 @@ public static class PptxPackageReader
         => value is "1"
             || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
 
+    // Kept as the product-model adapter for non-theme DrawingML color helpers and source contracts.
     private static bool TryParseHex6(string? hex, out SrgbColor color)
     {
         color = default;

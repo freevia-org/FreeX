@@ -1,6 +1,7 @@
 ﻿using System.IO;
 using System.IO.Compression;
 using System.Xml.Linq;
+using Free.Shared.Drawing;
 using Free.Shared.Opc;
 using FreeW.Core.Model;
 using static FreeW.Core.IO.Ooxml;
@@ -98,51 +99,29 @@ public static class DocxReader
     /// </summary>
     private static void ReadTheme(ZipArchive archive, TextDocument document)
     {
-        var themeXml = LoadPart(archive, ResolveThemePartPath(archive) ?? "word/theme/theme1.xml");
-        var elements = themeXml?.Root?.Element(A + "themeElements");
-        if (elements is null)
+        var sharedTheme = DrawingMlThemeReader.TryReadThemePart(archive, "word/document.xml", "word/theme/theme1.xml");
+        if (sharedTheme is null)
             return;
 
-        var clr = elements.Element(A + "clrScheme");
-        var fonts = elements.Element(A + "fontScheme");
-        var fmt = elements.Element(A + "fmtScheme");
-        if (clr is null || fonts is null)
-            return;
-
-        // Each clrScheme slot wraps a single colour element; recover its RRGGBB (srgbClr/@val) or, for a
-        // sysClr (e.g. windowText/window), its lastClr fallback. Anything else is treated as absent.
-        string Slot(string name)
-        {
-            var slot = clr.Element(A + name);
-            var srgb = slot?.Element(A + "srgbClr")?.Attribute("val")?.Value;
-            if (!string.IsNullOrEmpty(srgb))
-                return srgb.ToUpperInvariant();
-            var sys = slot?.Element(A + "sysClr")?.Attribute("lastClr")?.Value;
-            return string.IsNullOrEmpty(sys) ? string.Empty : sys.ToUpperInvariant();
-        }
+        string Slot(DrawingMlThemeColorSlot slot) =>
+            sharedTheme.ColorScheme[slot] is { } color
+                ? color.ResolvedColor.ToHexRgb()
+                : string.Empty;
 
         var scheme = new ThemeColorScheme(
-            Slot("dk1"), Slot("lt1"), Slot("dk2"), Slot("lt2"),
-            Slot("accent1"), Slot("accent2"), Slot("accent3"),
-            Slot("accent4"), Slot("accent5"), Slot("accent6"),
-            Slot("hlink"), Slot("folHlink"));
-
-        string LatinFont(string fontElement) =>
-            fonts.Element(A + fontElement)?.Element(A + "latin")?.Attribute("typeface")?.Value ?? string.Empty;
+            Slot(DrawingMlThemeColorSlot.Dark1), Slot(DrawingMlThemeColorSlot.Light1),
+            Slot(DrawingMlThemeColorSlot.Dark2), Slot(DrawingMlThemeColorSlot.Light2),
+            Slot(DrawingMlThemeColorSlot.Accent1), Slot(DrawingMlThemeColorSlot.Accent2),
+            Slot(DrawingMlThemeColorSlot.Accent3), Slot(DrawingMlThemeColorSlot.Accent4),
+            Slot(DrawingMlThemeColorSlot.Accent5), Slot(DrawingMlThemeColorSlot.Accent6),
+            Slot(DrawingMlThemeColorSlot.Hyperlink), Slot(DrawingMlThemeColorSlot.FollowedHyperlink));
 
         document.Theme = DocumentTheme.InferPreset(
             scheme,
-            LatinFont("majorFont"),
-            LatinFont("minorFont"),
-            fmt?.Attribute("name")?.Value);
+            sharedTheme.FontScheme.MajorLatinTypeface ?? string.Empty,
+            sharedTheme.FontScheme.MinorLatinTypeface ?? string.Empty,
+            sharedTheme.FormatSchemeName);
     }
-
-    /// <summary>
-    /// Finds the theme part path from the document relationships (the rel whose Type ends with "/theme"),
-    /// resolved relative to the word/ folder. Returns null when no such relationship exists.
-    /// </summary>
-    private static string? ResolveThemePartPath(ZipArchive archive)
-        => ResolveDocumentRelPartPath(archive, "/theme");
 
     /// <summary>
     /// Resolves the settings part (via the officeDocument's "/settings" relationship, falling back to the
