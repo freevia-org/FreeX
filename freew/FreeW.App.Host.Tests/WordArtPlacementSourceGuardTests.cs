@@ -12,6 +12,8 @@ public sealed class WordArtPlacementSourceGuardTests
 
         wpf.Should().Contain("DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(");
         avalonia.Should().Contain("DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(");
+        wpf.Should().Contain("BuildWarpedDrawingWordArtVisual(");
+        wpf.Should().Contain("if (wordArtPlan.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)");
         wpf.Should().Contain("CreateWordArtGlyphs(");
         avalonia.Should().Contain("BuildFittedWordArtGlyphs(");
         wpf.Should().Contain("AddWarpedWordArtGlyph(");

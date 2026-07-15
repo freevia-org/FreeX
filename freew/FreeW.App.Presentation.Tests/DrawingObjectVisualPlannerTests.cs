@@ -257,6 +257,24 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
+    public void WordArtPlacementPlan_ClampsNarrowArchUpSpanDenominator()
+    {
+        var plan = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            WordArtWarp.ArchUp,
+            [0.1, 0.1],
+            boundsWidthDip: 200,
+            boundsHeightDip: 100);
+
+        plan.Glyphs.Should().HaveCount(2);
+        plan.Glyphs.Should().OnlyContain(glyph =>
+            double.IsFinite(glyph.CenterXNormalized)
+            && double.IsFinite(glyph.CenterYNormalized)
+            && double.IsFinite(glyph.RotationRadians));
+        plan.Glyphs[0].RotationRadians.Should().BeLessThan(0);
+        plan.Glyphs[1].RotationRadians.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void GroupPlan_RecordsMixedChildrenWithLocalOffsetsAndTypedPlans()
     {
         var group = new DrawingGroup

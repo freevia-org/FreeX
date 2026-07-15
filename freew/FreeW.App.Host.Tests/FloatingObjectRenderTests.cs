@@ -343,6 +343,45 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void InlineOverlay_RendersArchUpWordArtThroughWarpedVisualAdapter()
+    {
+        var wordArt = new WordArt("Inline warp", WordArtStyle.GlowBlue, 24)
+        {
+            Warp = WordArtWarp.ArchUp
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var container = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>()
+            .Single()
+            .Inlines.OfType<System.Windows.Documents.InlineUIContainer>()
+            .Single();
+        var canvas = container.Child.Should().BeOfType<Canvas>().Subject;
+        canvas.Tag.Should().BeSameAs(wordArt);
+        container.BaselineAlignment.Should().Be(BaselineAlignment.Center);
+        canvas.Background.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromRgb(0x24, 0x24, 0x24));
+        canvas.Effect.Should().BeOfType<DropShadowEffect>()
+            .Which.Color.Should().Be(Color.FromRgb(0x2E, 0x75, 0xB6));
+        canvas.Width.Should().BeGreaterThan(0);
+        canvas.Height.Should().BeGreaterThan(0);
+
+        canvas.Measure(new Size(400, 100));
+        canvas.Arrange(new Rect(0, 0, canvas.Width, canvas.Height));
+        canvas.UpdateLayout();
+
+        var glyphs = canvas.Children.OfType<TextBlock>().ToList();
+        glyphs.Should().HaveCount(wordArt.Text.Length);
+        glyphs.Any(glyph => glyph.RenderTransform is RotateTransform rotation && Math.Abs(rotation.Angle) > 0.1)
+            .Should().BeTrue();
+    }
+
+    [StaFact]
     public void FloatingOverlay_RendersGroupedMixedChildrenWithoutPlaceholderLabels()
     {
         var image = new InlineImage(MinimalPng(), widthPt: 32, heightPt: 24)

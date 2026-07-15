@@ -387,6 +387,7 @@ public static class DrawingObjectVisualPlanner
             return new DrawingObjectWordArtPlacementPlan(warp, []);
 
         var halfSpan = totalWidth / 2;
+        var normalizedHalfSpan = Math.Max(1, halfSpan);
         var currentX = boundsWidthDip / 2 - halfSpan;
         var archDepth = Math.Min(boundsHeightDip * 0.28, Math.Max(3, totalWidth * 0.12));
         var waveAmplitude = Math.Min(boundsHeightDip * 0.16, Math.Max(2, totalWidth * 0.055));
@@ -395,13 +396,13 @@ public static class DrawingObjectVisualPlanner
         foreach (var width in glyphWidths)
         {
             var centerX = currentX + width / 2;
-            var normalizedX = (centerX - boundsWidthDip / 2) / halfSpan;
+            var normalizedX = (centerX - boundsWidthDip / 2) / normalizedHalfSpan;
             double centerY;
             double tangent;
             if (warp == WordArtWarp.ArchUp)
             {
                 centerY = boundsHeightDip / 2 - archDepth / 2 + archDepth * normalizedX * normalizedX;
-                tangent = 2 * archDepth * normalizedX / halfSpan;
+                tangent = 2 * archDepth * normalizedX / normalizedHalfSpan;
             }
             else
             {
