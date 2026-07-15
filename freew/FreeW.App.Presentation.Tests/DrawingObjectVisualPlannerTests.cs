@@ -163,7 +163,7 @@ public sealed class DrawingObjectVisualPlannerTests
 
         plan.WordArt.Fill.Kind.Should().Be(expectedFill);
         (plan.WordArt.OutlineColorHex ?? "none").Should().Be(expectedOutline);
-        plan.WordArt.Bold.Should().BeTrue();
+        plan.WordArt.Bold.Should().BeFalse();
         plan.WordArt.WarpHint.Should().Be("slant");
         plan.Effects.Summary.Should().Be(expectedEffects);
         plan.Summary.Should().Contain("style:" + style);

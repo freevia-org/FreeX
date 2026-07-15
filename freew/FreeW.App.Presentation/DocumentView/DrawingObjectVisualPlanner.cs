@@ -577,7 +577,7 @@ public static class DrawingObjectVisualPlanner
 
     private static DrawingObjectWordArtPlan BuildWordArtPlan(WordArt wordArt)
     {
-        var (fill, outline, bold) = BuildWordArtStylePlan(wordArt.Style);
+        var (fill, outline, _) = BuildWordArtStylePlan(wordArt.Style);
         return new DrawingObjectWordArtPlan(
             wordArt.Text,
             wordArt.Style,
@@ -585,7 +585,7 @@ public static class DrawingObjectVisualPlanner
             Math.Max(1, wordArt.FontSizePt * DipPerPoint),
             fill,
             outline,
-            bold,
+            false,
             BuildWordArtWarpHint(wordArt.Warp));
     }
 
