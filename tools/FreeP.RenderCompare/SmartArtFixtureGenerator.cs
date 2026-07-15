@@ -201,7 +201,17 @@ internal static class SmartArtFixtureGenerator
         Console.WriteLine($"  Written: {outputPath}");
     }
 
-    private static bool UsePowerPointGenerator() => true;
+    private static bool UsePowerPointGenerator()
+    {
+        try
+        {
+            return Type.GetTypeFromProgID("PowerPoint.Application", throwOnError: false) is not null;
+        }
+        catch (PlatformNotSupportedException)
+        {
+            return false;
+        }
+    }
 
     private static void GenerateWithPowerPoint(string outputPath)
     {

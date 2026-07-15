@@ -2196,12 +2196,12 @@ public static class PptxPackageWriter
                         GrpSpHeader(),
                         master.Placeholders.Select(s => BuildShapeEl(s, scheme, new())).OfType<XElement>())),
                 BuildColorMapEl(master.ColorMap),
-                master.TextStyles is not null ? BuildTxStylesEl(master.TextStyles) : null,
                 new XElement(P + "sldLayoutIdLst",
                     layoutRelIds.Select((lr, i) =>
                         new XElement(P + "sldLayoutId",
                             new XAttribute("id", 2147483649u + (uint)i),
-                            new XAttribute(R + "id", lr.relId))))));
+                            new XAttribute(R + "id", lr.relId)))),
+                master.TextStyles is not null ? BuildTxStylesEl(master.TextStyles) : null));
 
     private static XElement BuildColorMapEl(Dictionary<string, string>? colorMap)
     {
