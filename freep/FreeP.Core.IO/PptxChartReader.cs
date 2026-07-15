@@ -68,6 +68,7 @@ internal static class PptxChartReader
         shape.PlotAreaManualLayout = ReadManualLayout(plotArea.Element(C + "layout"));
 
         var serIdxMap = DetectChartTypeAndSeries(plotArea, shape, scheme);
+        ApplyPowerPointPieAutomaticTitleDefault(chartEl, shape);
 
         // Axes (catAx / dateAx = category axis; valAx = value axis)
         bool primaryValAxRead = false;
@@ -1197,6 +1198,25 @@ internal static class PptxChartReader
         // PowerPoint exposes the sparse pie form (showPercent without showVal)
         // as value-and-percent labels when it opens an imported presentation.
         labels.ShowValue = true;
+    }
+
+    private static void ApplyPowerPointPieAutomaticTitleDefault(
+        XElement chartEl,
+        ChartShape shape)
+    {
+        if (shape.ChartType != ChartType.Pie ||
+            shape.Title is not null ||
+            chartEl.Element(C + "autoTitleDeleted")?.Attribute("val")?.Value != "0" ||
+            shape.Series.Count != 1 ||
+            string.IsNullOrWhiteSpace(shape.Series[0].Name))
+        {
+            return;
+        }
+
+        // PowerPoint renders the single pie-series name as an automatic chart
+        // title when autoTitleDeleted is explicitly false.
+        shape.Title = shape.Series[0].Name;
+        shape.HasAutomaticTitle = true;
     }
 
     private static ChartDataTableSettings? ReadDataTable(XElement? dTableEl, PresentationColorScheme scheme)

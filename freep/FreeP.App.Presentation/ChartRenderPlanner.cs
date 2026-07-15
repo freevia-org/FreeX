@@ -759,9 +759,14 @@ public static partial class ChartRenderPlanner
         double categoryLabelHeight = ResolveCategoryLabelHeight(chart);
         double barCategoryLabelWidth = ResolveBarCategoryLabelWidth(chart);
         double legendLineHeight = ResolveLegendLineHeight(chart);
-        double titleHeight = UsesImportedTextMetrics(chart) ? 28.0 : TitleHeight;
-        double titleAreaHeight = chart.Title is not null ? titleHeight + margin : 0;
         var family = GetRenderFamily(chart.ChartType);
+        double titleHeight = UsesImportedTextMetrics(chart) ? 28.0 : TitleHeight;
+        bool titleOverlaysPlot = family == ChartRenderFamily.Pie &&
+            chart.HasAutomaticTitle &&
+            chart.DataLabels is null;
+        double titleAreaHeight = chart.Title is not null && !titleOverlaysPlot
+            ? titleHeight + margin
+            : 0;
         bool hasSecondaryValueAxis = family is not (ChartRenderFamily.Pie
             or ChartRenderFamily.ScatterLike
             or ChartRenderFamily.Radar) &&

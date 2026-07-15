@@ -147,6 +147,9 @@ public sealed class ChartBaselineCorpusTests
         var pie = presentation.Slides[1].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
 
         pie.ChartType.Should().Be(ChartType.Pie);
+        pie.Title.Should().Be("Share",
+            "PowerPoint displays the single pie-series name when autoTitleDeleted is false");
+        pie.HasAutomaticTitle.Should().BeTrue();
         pie.DataLabels.Should().NotBeNull();
         pie.DataLabels!.ShowValue.Should().BeTrue(
             "PowerPoint expands this imported pie label form to value-and-percent labels");

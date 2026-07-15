@@ -419,6 +419,9 @@ public sealed class ChartShape
     /// <summary>Chart title text, or null if no title.</summary>
     public string? Title { get; set; }
 
+    /// <summary>True when PowerPoint supplied <see cref="Title"/> as an automatic title.</summary>
+    public bool HasAutomaticTitle { get; set; }
+
     /// <summary>
     /// Default chart text properties from <c>c:chartSpace/c:txPr</c>. These apply to
     /// chart-owned text such as axes, legends, and data labels when no more-specific

@@ -81,7 +81,7 @@ internal static class PptxChartWriter
         var plotArea = BuildPlotArea(chart);
         var legendEl = BuildLegendEl(chart);
 
-        var titleEl = chart.Title is not null
+        var titleEl = chart.Title is not null && !chart.HasAutomaticTitle
             ? BuildTitleEl(chart.Title)
             : null;
 
