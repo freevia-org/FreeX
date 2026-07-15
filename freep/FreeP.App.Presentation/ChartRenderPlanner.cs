@@ -5428,33 +5428,35 @@ public static partial class ChartRenderPlanner
         bool stacked)
     {
         double gapWidth = Math.Clamp(chart.BarGapWidthPercent ?? (int)DefaultBarGapWidthPercent, 0, 500);
-        double clusterSize = categorySize * 100.0 / (100.0 + gapWidth);
-        clusterSize = Math.Clamp(clusterSize, 1.0, categorySize);
-        double categoryStart = (categorySize - clusterSize) / 2.0;
-
         if (stacked || seriesCount <= 1)
         {
+            double singleSeriesSize = categorySize / (1.0 + gapWidth / 100.0);
+            double singleCategoryStart = (categorySize - singleSeriesSize) / 2.0;
             return new ChartBarClusterSlot(
-                categoryStart,
+                singleCategoryStart,
                 categorySize,
-                categoryStart,
-                clusterSize,
-                clusterSize,
-                clusterSize);
+                singleCategoryStart,
+                singleSeriesSize,
+                singleSeriesSize,
+                singleSeriesSize);
         }
 
         double overlap = Math.Clamp(chart.BarOverlapPercent ?? 0, -100, 100) / 100.0;
-        double denominator = seriesCount - overlap * (seriesCount - 1);
-        double seriesSize = denominator <= 0 ? clusterSize : clusterSize / denominator;
+        // PowerPoint defines GapWidth as a percentage of a single bar, not of
+        // the full multi-series cluster. The category band therefore contains
+        // the occupied series widths plus one bar-relative gap.
+        double occupiedFactor = 1.0 + (1.0 - overlap) * (seriesCount - 1);
+        double denominator = occupiedFactor + gapWidth / 100.0;
+        double seriesSize = denominator <= 0 ? categorySize : categorySize / denominator;
         double seriesStep = seriesSize * (1.0 - overlap);
         double occupied = seriesSize + seriesStep * (seriesCount - 1);
-        double clusterStart = categoryStart + (clusterSize - occupied) / 2.0;
+        double categoryStart = (categorySize - occupied) / 2.0;
 
         return new ChartBarClusterSlot(
             categoryStart,
             categorySize,
-            clusterStart,
-            clusterSize,
+            categoryStart,
+            occupied,
             seriesSize,
             seriesStep);
     }

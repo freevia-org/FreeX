@@ -1378,22 +1378,25 @@ public sealed class ChartRenderPlannerTests
             chart,
             new ChartPlanRect(0, 0, 200, 100));
 
-        primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
-            SeriesIndex: 0,
-            CategoryIndex: 0,
-            Bounds: new ChartPlanRect(30, 80, 19, 20),
-            Fill: new ChartFillPlan(new SrgbColor(0x4F, 0x81, 0xBD), ChartRenderPlanner.RectSeriesFillAlpha),
-            Stroke: null));
-        primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
-            SeriesIndex: 1,
-            CategoryIndex: 0,
-            Bounds: new ChartPlanRect(50, 40, 19, 60),
-            Fill: new ChartFillPlan(new SrgbColor(0xC0, 0x50, 0x4D), ChartRenderPlanner.RectSeriesFillAlpha),
-            Stroke: null));
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        first.Bounds.X.Should().BeApproximately(21.4286, 0.0001);
+        first.Bounds.Y.Should().BeApproximately(80, 0.0001);
+        first.Bounds.Width.Should().BeApproximately(27.5714, 0.0001);
+        first.Bounds.Height.Should().BeApproximately(20, 0.0001);
+        first.Fill.Should().Be(new ChartFillPlan(
+            new SrgbColor(0x4F, 0x81, 0xBD), ChartRenderPlanner.RectSeriesFillAlpha));
+
+        var second = primitives.Single(p => p.SeriesIndex == 1 && p.CategoryIndex == 0);
+        second.Bounds.X.Should().BeApproximately(50, 0.0001);
+        second.Bounds.Y.Should().BeApproximately(40, 0.0001);
+        second.Bounds.Width.Should().BeApproximately(27.5714, 0.0001);
+        second.Bounds.Height.Should().BeApproximately(60, 0.0001);
+        second.Fill.Should().Be(new ChartFillPlan(
+            new SrgbColor(0xC0, 0x50, 0x4D), ChartRenderPlanner.RectSeriesFillAlpha));
     }
 
     [Fact]
-    public void ResolveBarClusterSpacing_DefaultMatchesExistingPowerPointClusterGeometry()
+    public void ResolveBarClusterSpacing_DefaultMatchesPowerPointBarRelativeGapGeometry()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
 
@@ -1403,10 +1406,18 @@ public sealed class ChartRenderPlannerTests
             seriesCount: 2,
             stacked: false);
 
-        slot.CategoryStart.Should().BeApproximately(30, 0.0001);
-        slot.ClusterSize.Should().BeApproximately(40, 0.0001);
-        slot.SeriesSize.Should().BeApproximately(20, 0.0001);
-        slot.SeriesStep.Should().BeApproximately(20, 0.0001);
+        slot.CategoryStart.Should().BeApproximately(21.4286, 0.0001);
+        slot.ClusterSize.Should().BeApproximately(57.1429, 0.0001);
+        slot.SeriesSize.Should().BeApproximately(28.5714, 0.0001);
+        slot.SeriesStep.Should().BeApproximately(28.5714, 0.0001);
+
+        var threeSeriesSlot = ChartRenderPlanner.ResolveBarClusterSpacing(
+            chart,
+            categorySize: 100,
+            seriesCount: 3,
+            stacked: false);
+        threeSeriesSlot.SeriesSize.Should().BeApproximately(22.2222, 0.0001,
+            "PowerPoint's 150% gap is measured against one series column");
     }
 
     [Fact]
@@ -1453,7 +1464,7 @@ public sealed class ChartRenderPlannerTests
             OffsetY: -3.75,
             IsHorizontalBar: false,
             IsStacked: false));
-        first.Bounds.X.Should().BeApproximately(31.25, 0.0001);
+        first.Bounds.X.Should().BeApproximately(22.6786, 0.0001);
         first.Bounds.Y.Should().BeApproximately(78.75, 0.0001);
         second.Bounds.X.Should().BeApproximately(53.75, 0.0001);
         second.Bounds.Y.Should().BeApproximately(36.25, 0.0001);
@@ -1605,18 +1616,21 @@ public sealed class ChartRenderPlannerTests
             chart,
             new ChartPlanRect(0, 0, 200, 100));
 
-        primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
-            SeriesIndex: 0,
-            CategoryIndex: 0,
-            Bounds: new ChartPlanRect(0, 75, 40, 9),
-            Fill: new ChartFillPlan(new SrgbColor(0x4F, 0x81, 0xBD), ChartRenderPlanner.RectSeriesFillAlpha),
-            Stroke: null));
-        primitives.Should().ContainEquivalentOf(new ChartRectPrimitive(
-            SeriesIndex: 1,
-            CategoryIndex: 0,
-            Bounds: new ChartPlanRect(0, 65, 120, 9),
-            Fill: new ChartFillPlan(new SrgbColor(0xC0, 0x50, 0x4D), ChartRenderPlanner.RectSeriesFillAlpha),
-            Stroke: null));
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        first.Bounds.X.Should().BeApproximately(0, 0.0001);
+        first.Bounds.Y.Should().BeApproximately(75, 0.0001);
+        first.Bounds.Width.Should().BeApproximately(40, 0.0001);
+        first.Bounds.Height.Should().BeApproximately(13.2857, 0.0001);
+        first.Fill.Should().Be(new ChartFillPlan(
+            new SrgbColor(0x4F, 0x81, 0xBD), ChartRenderPlanner.RectSeriesFillAlpha));
+
+        var second = primitives.Single(p => p.SeriesIndex == 1 && p.CategoryIndex == 0);
+        second.Bounds.X.Should().BeApproximately(0, 0.0001);
+        second.Bounds.Y.Should().BeApproximately(60.7143, 0.0001);
+        second.Bounds.Width.Should().BeApproximately(120, 0.0001);
+        second.Bounds.Height.Should().BeApproximately(13.2857, 0.0001);
+        second.Fill.Should().Be(new ChartFillPlan(
+            new SrgbColor(0xC0, 0x50, 0x4D), ChartRenderPlanner.RectSeriesFillAlpha));
     }
 
     [Fact]
@@ -1632,10 +1646,10 @@ public sealed class ChartRenderPlannerTests
 
         var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
         var second = primitives.Single(p => p.SeriesIndex == 1 && p.CategoryIndex == 0);
-        first.Bounds.Y.Should().BeApproximately(77.0833, 0.0001);
-        first.Bounds.Height.Should().BeApproximately(3.1667, 0.0001);
-        second.Bounds.Y.Should().BeApproximately(68.75, 0.0001);
-        second.Bounds.Height.Should().BeApproximately(3.1667, 0.0001);
+        first.Bounds.Y.Should().BeApproximately(79.1667, 0.0001);
+        first.Bounds.Height.Should().BeApproximately(7.3333, 0.0001);
+        second.Bounds.Y.Should().BeApproximately(62.5, 0.0001);
+        second.Bounds.Height.Should().BeApproximately(7.3333, 0.0001);
         second.Bounds.Bottom.Should().BeLessThan(first.Bounds.Y, "negative overlap leaves a visible gap between series bars");
     }
 
@@ -1666,7 +1680,7 @@ public sealed class ChartRenderPlannerTests
         first.Bounds.X.Should().BeApproximately(1.125, 0.0001);
         first.Bounds.Y.Should().BeApproximately(73.875, 0.0001);
         second.Bounds.X.Should().BeApproximately(3.375, 0.0001);
-        second.Bounds.Y.Should().BeApproximately(61.625, 0.0001);
+        second.Bounds.Y.Should().BeApproximately(57.3393, 0.0001);
     }
 
     [Fact]
