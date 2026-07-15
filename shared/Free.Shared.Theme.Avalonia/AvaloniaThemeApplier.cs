@@ -25,7 +25,7 @@ public static class AvaloniaThemeApplier
 
     /// <summary>
     /// Builds an Avalonia <see cref="ResourceDictionary"/> containing an
-    /// <see cref="ImmutableSolidColorBrush"/> for each of the 21 color roles under
+    /// <see cref="ImmutableSolidColorBrush"/> for each of the 22 color roles under
     /// <c>{keyPrefix}{Role}Brush</c> keys (matching the WPF applier's key pattern).
     /// Also adds raw <see cref="global::Avalonia.Media.Color"/> entries under
     /// <c>{keyPrefix}{Role}Color</c> and double metrics under
@@ -57,6 +57,7 @@ public static class AvaloniaThemeApplier
         AddBrush("TitleBarDisabled",     c.TitleBarDisabled);
         AddBrush("TitleBarButtonBorder", c.TitleBarButtonBorder);
         AddBrush("RibbonButtonHover",    c.RibbonButtonHover);
+        AddBrush("RibbonInlineDivider",  c.RibbonInlineDivider);
         AddBrush("Text",                 c.Text);
         AddBrush("MutedText",            c.MutedText);
         AddBrush("SubtleText",           c.SubtleText);

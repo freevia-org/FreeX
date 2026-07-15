@@ -16,6 +16,7 @@ using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
 using Free.Shared.Shell.Avalonia;
+using Free.Shared.Theme;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.IO;
@@ -1869,7 +1870,8 @@ public sealed class MainWindow : Window
         var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
             FreePRibbonAvalonia.Build(),
             registry,
-            afterExecute: null);
+            afterExecute: null,
+            palette: RibbonVisualPalette.FromTheme(App.ActiveTheme));
 
         HasToolbar = true;
         return new Border

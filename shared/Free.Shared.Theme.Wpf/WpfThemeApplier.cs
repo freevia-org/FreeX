@@ -24,7 +24,7 @@ public static class WpfThemeApplier
 
     /// <summary>
     /// Builds a <see cref="ResourceDictionary"/> containing a frozen
-    /// <see cref="SolidColorBrush"/> for each of the 21 color roles, double values for
+    /// <see cref="SolidColorBrush"/> for each of the 22 color roles, double values for
     /// the 6 metrics, and <see cref="FontFamily"/> resources for the 5 typography roles,
     /// plus 5 prefix-free neutral keys (<c>ThemeNeutral*Brush</c>, WS-G round 8) and
     /// 5 prefix-free accent keys (<c>ThemeAccent*Brush</c> / <c>ThemeRibbonButtonHoverBrush</c>,
@@ -59,6 +59,7 @@ public static class WpfThemeApplier
         AddBrush("TitleBarDisabled",     c.TitleBarDisabled);
         AddBrush("TitleBarButtonBorder", c.TitleBarButtonBorder);
         AddBrush("RibbonButtonHover",    c.RibbonButtonHover);
+        AddBrush("RibbonInlineDivider",  c.RibbonInlineDivider);
         AddBrush("Text",                 c.Text);
         AddBrush("MutedText",            c.MutedText);
         AddBrush("SubtleText",           c.SubtleText);

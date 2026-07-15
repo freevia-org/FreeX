@@ -5,6 +5,7 @@ using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Model;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Theme;
 using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Ribbon;
@@ -43,8 +44,9 @@ internal static class AvaloniaRibbonHost
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(session, setStatus, callbacks);
         var definition = AvaloniaRibbonComposition.BuildDefinition();
-        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry, contextSource);
-        return (ribbon, () => AvaloniaRibbonRenderer.SyncToggleStates(ribbon, registry));
+        var palette = RibbonVisualPalette.FromTheme(App.ActiveTheme);
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry, contextSource, palette: palette);
+        return (ribbon, () => AvaloniaRibbonRenderer.SyncToggleStates(ribbon, registry, palette));
     }
 
     /// <summary>
@@ -75,7 +77,10 @@ internal static class AvaloniaRibbonHost
     {
         var registry = AvaloniaRibbonComposition.BuildRegistry(session, setStatus, callbacks);
         var definition = AvaloniaRibbonComposition.BuildDefinition();
-        return AvaloniaRibbonRenderer.BuildRibbon(definition, registry);
+        return AvaloniaRibbonRenderer.BuildRibbon(
+            definition,
+            registry,
+            palette: RibbonVisualPalette.FromTheme(App.ActiveTheme));
     }
 }
 

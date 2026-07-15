@@ -10,6 +10,8 @@ using Avalonia.Media;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Theme;
+using Free.Shared.Theme.Avalonia;
 
 using Xunit;
 
@@ -30,20 +32,32 @@ public sealed class AvaloniaRibbonThemeTests
     private static Task RunOnUiThread(Action action) =>
         Session.Dispatch(action, CancellationToken.None);
 
-    [Fact]
-    public void Palette_MatchesWpfRibbonSurfaceAndAccent()
+    public static IEnumerable<object[]> BrandThemeCases()
     {
-        // Visual parity with WPF: the ribbon surface is the white FreeXRibbonSurfaceBrush (#FFFFFF) and
-        // the accent is FreeXAccentBrush (#0F6D8C) — not the former macOS-adapted gray/green palette.
-        Assert.Equal(Color.FromRgb(0xFF, 0xFF, 0xFF), AvaloniaRibbonRenderer.SurfaceColor);
-        Assert.Equal(Color.FromRgb(0x0F, 0x6D, 0x8C), AvaloniaRibbonRenderer.AccentColor);
-        Assert.Equal(Colors.White, AvaloniaRibbonRenderer.SurfaceColor);
+        yield return new object[] { BrandThemes.FreeX };
+        yield return new object[] { BrandThemes.FreeW };
+        yield return new object[] { BrandThemes.FreeP };
+        yield return new object[] { BrandThemes.FreeXMidnight };
+    }
 
-        // Tab strip parity with WPF: inactive tabs stay flat on the ribbon surface, while
-        // selected tabs carry the accent underline with near-black labels (FreeXTextBrush #1F1F1F,
-        // ThemeResources.xaml:13) — the white selected tab pops out of the gray strip.
-        Assert.Equal(Color.FromRgb(0xF7, 0xF8, 0xF8), AvaloniaRibbonRenderer.TabStripColor);
-        Assert.Equal(Color.FromRgb(0x1F, 0x1F, 0x1F), AvaloniaRibbonRenderer.TabTextColor);
+    [Theory]
+    [MemberData(nameof(BrandThemeCases))]
+    public void Palette_DerivesEveryVisualRoleFromBrandTheme(Theme theme)
+    {
+        var palette = AvaloniaRibbonRenderer.ResolvePalette(RibbonVisualPalette.FromTheme(theme));
+        var colors = theme.Colors;
+
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.RibbonSurface), palette.SurfaceColor);
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.Accent), palette.AccentColor);
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.Border), palette.DividerColor);
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.RibbonInlineDivider), palette.InlineDividerColor);
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.MutedText), palette.GroupLabelColor);
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.RibbonButtonHover), palette.HoverColor);
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.BorderStrong), palette.HoverBorderColor);
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.AccentPressed), palette.CheckedColor);
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.AccentSoft), palette.TabHoverColor);
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.ChromeSurface), palette.TabStripColor);
+        Assert.Equal(AvaloniaThemeApplier.ToColor(colors.Text), palette.TabTextColor);
     }
 
     [Fact]
@@ -75,7 +89,10 @@ public sealed class AvaloniaRibbonThemeTests
         // WPF parity: the ribbon body is the white FreeXRibbonSurfaceBrush while the window chrome
         // (sheet-tabs / status bar) is a separate light surface (the WPF FreeXChromeSurfaceBrush analog),
         // so they are intentionally distinct — not the former single shared gray surface.
-        Assert.NotEqual(AvaloniaRibbonRenderer.SurfaceColor, MainWindow.ChromeSurfaceColor);
+        var ribbonSurface = AvaloniaRibbonRenderer
+            .ResolvePalette(RibbonVisualPalette.FromTheme(BrandThemes.FreeX))
+            .SurfaceColor;
+        Assert.NotEqual(ribbonSurface, MainWindow.ChromeSurfaceColor);
     });
 
     [Fact]

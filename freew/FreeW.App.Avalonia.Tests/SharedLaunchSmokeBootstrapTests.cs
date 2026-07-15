@@ -33,6 +33,8 @@ public sealed class SharedLaunchSmokeBootstrapTests
     {
         var app = File.ReadAllText(FindRepoFile("freew", "FreeW.App.Avalonia", "App.cs"));
         app.Should().Contain("using Free.Shared.Shell.Avalonia;");
+        app.Should().Contain("using Free.Shared.Theme.Avalonia;");
+        app.Should().Contain("AvaloniaThemeApplier.BuildResources(theme, \"FreeW\")");
         app.Should().Contain("SisterAvaloniaAppBootstrap.Initialize(");
         app.Should().Contain("new SisterAvaloniaAppBootstrapSpec<MainWindow>(");
         app.Should().NotContain("Styles.Add(new FluentTheme())");
