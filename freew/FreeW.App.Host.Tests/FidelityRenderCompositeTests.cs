@@ -193,7 +193,12 @@ public sealed class FidelityRenderCompositeTests
                     {
                         var hv = new DrawingVisual();
                         using (var dc = hv.RenderOpen())
-                            dc.DrawRectangle(new VisualBrush(hfPage.Visual) { Stretch = Stretch.None },
+                            dc.DrawRectangle(new VisualBrush(hfPage.Visual)
+                            {
+                                Stretch = Stretch.None,
+                                AlignmentX = AlignmentX.Left,
+                                AlignmentY = AlignmentY.Top
+                            },
                                 null, new Rect(marginLeft, 2, pageWDip - marginLeft - marginRight, hfH));
                         bmp.Render(hv);
                     }
@@ -210,7 +215,12 @@ public sealed class FidelityRenderCompositeTests
                     {
                         var fv = new DrawingVisual();
                         using (var dc = fv.RenderOpen())
-                            dc.DrawRectangle(new VisualBrush(hfPage.Visual) { Stretch = Stretch.None },
+                            dc.DrawRectangle(new VisualBrush(hfPage.Visual)
+                            {
+                                Stretch = Stretch.None,
+                                AlignmentX = AlignmentX.Left,
+                                AlignmentY = AlignmentY.Top
+                            },
                                 null, new Rect(marginLeft, pixH - hfH - 2, pageWDip - marginLeft - marginRight, hfH));
                         bmp.Render(fv);
                     }
@@ -295,6 +305,24 @@ public sealed class FidelityRenderCompositeTests
                 return true;
         }
         return false;
+    }
+
+    private static int MinInkX(byte[] pixels, int stride, Rect region)
+    {
+        var x0 = Math.Max(0, (int)region.Left);
+        var y0 = Math.Max(0, (int)region.Top);
+        var x1 = Math.Min(stride / 4, (int)region.Right);
+        var y1 = Math.Min(pixels.Length / stride, (int)region.Bottom);
+        var min = x1;
+        for (var y = y0; y < y1; y++)
+        for (var x = x0; x < x1; x++)
+        {
+            var idx = y * stride + x * 4;
+            if (pixels[idx + 3] > 10 && (pixels[idx] < 240 || pixels[idx + 1] < 240 || pixels[idx + 2] < 240))
+                min = Math.Min(min, x);
+        }
+
+        return min;
     }
 
     private static Color ParseHexColor(string hex, Color fallback)
@@ -458,6 +486,26 @@ public sealed class FidelityRenderCompositeTests
 
         HasNonWhitePixelsInRegion(pixels, stride, new Rect(0, 0, bmp.PixelWidth, bmp.PixelHeight))
             .Should().BeTrue("header/footer doc composite render must produce non-blank output");
+    }
+
+    [StaFact]
+    public void CompositeRender_HeaderFooter_IsNotClippedAtPrintableLeftMargin()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.FinalSectionHeadersFooters.Header = new HeaderFooter("Page Header Text");
+        doc.FinalSectionHeadersFooters.Footer = new HeaderFooter("Page Footer Text");
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("body"));
+
+        var bmp = RenderComposite(doc);
+        var pixels = GetPixels(bmp);
+        var stride = bmp.PixelWidth * 4;
+        var leftMargin = (int)Math.Round(PageLayout.PointsToDip(doc.Page.MarginLeftPt));
+
+        MinInkX(pixels, stride, new Rect(0, 0, bmp.PixelWidth, 36))
+            .Should().BeGreaterThanOrEqualTo(leftMargin - 2);
+        MinInkX(pixels, stride, new Rect(0, bmp.PixelHeight - 38, bmp.PixelWidth, 38))
+            .Should().BeGreaterThanOrEqualTo(leftMargin - 2);
     }
 
     [StaFact]

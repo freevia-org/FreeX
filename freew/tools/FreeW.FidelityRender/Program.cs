@@ -477,7 +477,12 @@ static void RenderDocumentComposite(
                     {
                         var hfVis = new DrawingVisual();
                         using (var dc = hfVis.RenderOpen())
-                            dc.DrawRectangle(new VisualBrush(hfPage.Visual) { Stretch = Stretch.None },
+                            dc.DrawRectangle(new VisualBrush(hfPage.Visual)
+                            {
+                                Stretch = Stretch.None,
+                                AlignmentX = AlignmentX.Left,
+                                AlignmentY = AlignmentY.Top
+                            },
                                 null, new Rect(thisMarginLeft, 2, thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
@@ -494,7 +499,12 @@ static void RenderDocumentComposite(
                     {
                         var hfVis = new DrawingVisual();
                         using (var dc = hfVis.RenderOpen())
-                            dc.DrawRectangle(new VisualBrush(hfPage.Visual) { Stretch = Stretch.None },
+                            dc.DrawRectangle(new VisualBrush(hfPage.Visual)
+                            {
+                                Stretch = Stretch.None,
+                                AlignmentX = AlignmentX.Left,
+                                AlignmentY = AlignmentY.Top
+                            },
                                 null, new Rect(thisMarginLeft, thisPixH - hfH - 2, thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
