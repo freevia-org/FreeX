@@ -2126,7 +2126,8 @@ public static partial class ChartRenderPlanner
                     cell.SeriesIndex,
                     cell.CategoryIndex,
                     heightNormalized,
-                    chart.ChartType == ChartType.Surface3D),
+                    chart.ChartType == ChartType.Surface3D,
+                    UsesImportedTextMetrics(chart)),
                 cell.Value,
                 cell.NormalizedValue);
             pointsByKey[(cell.SeriesIndex, cell.CategoryIndex)] = point;
@@ -2160,7 +2161,8 @@ public static partial class ChartRenderPlanner
         int seriesIndex,
         int categoryIndex,
         double normalized,
-        bool isThreeD)
+        bool isThreeD,
+        bool usesImportedTextMetrics)
     {
         double categoryT = categoryCount <= 1 ? 0 : categoryIndex / (double)(categoryCount - 1);
         double seriesT = seriesCount <= 1 ? 0 : seriesIndex / (double)(seriesCount - 1);
@@ -2175,7 +2177,9 @@ public static partial class ChartRenderPlanner
         double depthX = Math.Min(plot.Width * 0.18, 72.0);
         double depthY = Math.Min(plot.Height * 0.26, 52.0);
         double categorySlopeY = Math.Min(plot.Height * 0.20, 40.0);
-        double lift = Math.Min(plot.Height * 0.50, 88.0);
+        double lift = Math.Min(
+            plot.Height * (usesImportedTextMetrics ? 0.90 : 0.50),
+            usesImportedTextMetrics ? 170.0 : 88.0);
         double drawableWidth = Math.Max(1, plot.Width - depthX);
         double x = plot.X + categoryT * drawableWidth + seriesT * depthX;
         double y = plot.Bottom + categoryT * categorySlopeY - seriesT * depthY - normalized * lift;

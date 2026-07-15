@@ -72,7 +72,7 @@ public sealed class ChartBaselineCorpusTests
             surface,
             new ChartPlanRect(0, 0, 360, 189));
         surfaceGeometry.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 0).Point.Y
-            .Should().BeApproximately(167, 0.0001,
+            .Should().BeApproximately(146.5, 0.0001,
                 "Surface3D height follows the PowerPoint value axis instead of normalizing to the smallest data value");
         surfaceGeometry.Facets.Should().HaveCount(4);
         surfaceGeometry.WireframeSegments.Should().HaveCountGreaterThan(surfaceGeometry.Facets.Count);
