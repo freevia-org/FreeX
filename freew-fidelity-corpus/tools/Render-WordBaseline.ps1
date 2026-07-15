@@ -77,8 +77,24 @@ $pdfDir = Join-Path $OutDir '_pdf'; $null = New-Item -ItemType Directory -Force 
 $wordDir = Join-Path $OutDir 'word'; $null = New-Item -ItemType Directory -Force $wordDir
 
 Write-Host "== Word baseline: $($files.Count) doc(s) -> $wordDir ==" -ForegroundColor Cyan
-$word = New-Object -ComObject Word.Application
-$word.Visible = $false
+$word = $null
+$ownsWord = $false
+try {
+    $word = [System.Runtime.InteropServices.Marshal]::GetActiveObject('Word.Application')
+    Write-Host "Word baseline mode: reusing running Word COM instance"
+}
+catch {
+    $word = New-Object -ComObject Word.Application
+    $word.Visible = $false
+    $ownsWord = $true
+    Write-Host "Word baseline mode: created Word COM instance"
+}
+$originalDisplayAlerts = $null
+$originalAutomationSecurity = $null
+if (-not $ownsWord) {
+    try { $originalDisplayAlerts = $word.DisplayAlerts } catch {}
+    try { $originalAutomationSecurity = $word.AutomationSecurity } catch {}
+}
 try { $word.DisplayAlerts = 0 } catch {}
 try { $word.AutomationSecurity = 3 } catch {}   # msoAutomationSecurityForceDisable
 $ok = 0; $fail = 0
@@ -101,8 +117,20 @@ try {
     }
 }
 finally {
-    $word.Quit()
-    [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null
+    if ($ownsWord) {
+        $word.Quit()
+    }
+    else {
+        if ($null -ne $originalDisplayAlerts) {
+            try { $word.DisplayAlerts = $originalDisplayAlerts } catch {}
+        }
+        if ($null -ne $originalAutomationSecurity) {
+            try { $word.AutomationSecurity = $originalAutomationSecurity } catch {}
+        }
+    }
+    if ($null -ne $word) {
+        [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null
+    }
     [System.GC]::Collect(); [System.GC]::WaitForPendingFinalizers()
 }
 Write-Host "== done: $ok ok, $fail failed. PNGs in $wordDir ==" -ForegroundColor Green

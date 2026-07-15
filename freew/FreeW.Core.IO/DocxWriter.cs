@@ -1258,11 +1258,9 @@ public static class DocxWriter
         foreach (var footnote in document.Footnotes.Values.OrderBy(f => f.Id))
         {
             var element = new XElement(W + "footnote", new XAttribute(W + "id", footnote.Id));
-            if (footnote.Content.Count == 0)
-                element.Add(new XElement(W + "p"));
-            else
-                foreach (var paragraph in footnote.Content)
-                    element.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
+            foreach (var paragraph in BuildNoteContent(
+                footnote.Content, noDrawings, noHyperlinks, "footnoteRef"))
+                element.Add(paragraph);
             footnotes.Add(element);
         }
 
@@ -1298,15 +1296,35 @@ public static class DocxWriter
         foreach (var endnote in document.Endnotes.Values.OrderBy(e => e.Id))
         {
             var element = new XElement(W + "endnote", new XAttribute(W + "id", endnote.Id));
-            if (endnote.Content.Count == 0)
-                element.Add(new XElement(W + "p"));
-            else
-                foreach (var paragraph in endnote.Content)
-                    element.Add(BuildParagraph(paragraph, noDrawings, noHyperlinks));
+            foreach (var paragraph in BuildNoteContent(
+                endnote.Content, noDrawings, noHyperlinks, "endnoteRef"))
+                element.Add(paragraph);
             endnotes.Add(element);
         }
 
         return new XDocument(endnotes);
+    }
+
+    private static IReadOnlyList<XElement> BuildNoteContent(
+        IReadOnlyList<Paragraph> content,
+        RunDrawings drawings,
+        IReadOnlyDictionary<string, string> hyperlinks,
+        string referenceElementName)
+    {
+        var paragraphs = content.Count == 0
+            ? new List<XElement> { new XElement(W + "p") }
+            : content.Select(paragraph => BuildParagraph(paragraph, drawings, hyperlinks)).ToList();
+
+        // Word requires a footnoteRef/endnoteRef marker in the note body to display its automatic number.
+        // Keep it after pPr so the paragraph remains schema-valid and before the authored note text.
+        var referenceRun = new XElement(W + "r", new XElement(W + referenceElementName));
+        var properties = paragraphs[0].Element(W + "pPr");
+        if (properties is null)
+            paragraphs[0].AddFirst(referenceRun);
+        else
+            properties.AddAfterSelf(referenceRun);
+
+        return paragraphs;
     }
 
     /// <summary>

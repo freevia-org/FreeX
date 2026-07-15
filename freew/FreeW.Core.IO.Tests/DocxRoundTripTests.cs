@@ -2125,6 +2125,7 @@ public class DocxRoundTripTests
         var footnotesXml = footnotesReader.ReadToEnd();
         footnotesXml.Should().Contain("A footnote.");
         footnotesXml.Should().Contain("w:id=\"1\"");
+        footnotesXml.Should().Contain("footnoteRef");
     }
 
     [Fact]
@@ -2200,6 +2201,7 @@ public class DocxRoundTripTests
         var endnotesXml = endnotesReader.ReadToEnd();
         endnotesXml.Should().Contain("An endnote.");
         endnotesXml.Should().Contain("w:id=\"1\"");
+        endnotesXml.Should().Contain("endnoteRef");
     }
 
     [Fact]

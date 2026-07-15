@@ -3907,6 +3907,10 @@ public sealed class DocumentView : Control
     private const double FootnoteTopPadding = 7.0;
     private const double FootnoteInterNoteSpacing = 15.0;
     private const double FootnoteTrailingPadding = 6.0;
+    private const double EndnoteAfterBodyGap = 20.0;
+    private const double EndnoteSeparatorToTextGap = 7.0;
+    private const double EndnoteInterNoteSpacing = 15.0;
+    private const double EndnoteTrailingPadding = 6.0;
 
     /// <summary>
     /// DB2: Measures the true wrapped height of a single note's content (number prefix + paragraph text)
@@ -4271,9 +4275,9 @@ public sealed class DocumentView : Control
     }
 
     /// <summary>
-    /// AV-NOTERENDER (endnotes): renders an "Endnotes" heading + separator, then the numbered endnote
-    /// texts, in a synthetic section after the last body page. The section's vertical extent is recorded
-    /// in <see cref="_endnoteExtentDip"/> so the scrollable content height reserves room for it.
+    /// AV-NOTERENDER (endnotes): appends numbered endnote text after the final body paragraph when the
+    /// last physical page has room. A synthetic section remains as the overflow fallback. The synthetic
+    /// section's vertical extent is recorded in <see cref="_endnoteExtentDip"/>.
     /// <para>
     /// DB3: endnote numbers use <see cref="ComputeNoteDisplayNumber"/> with the document's
     /// <see cref="TextDocument.EndnoteNumbering"/> options (Word defaults to LowerRoman for endnotes).
@@ -4283,7 +4287,13 @@ public sealed class DocumentView : Control
     {
         if (_doc.Endnotes.Count == 0) return;
 
-        // Start just below the last body page (in page-space). The last page's bottom edge:
+        if (TryGetFinalPageEndnoteSeparatorY(out var separatorY))
+        {
+            LayoutEndnoteRegion(separatorY);
+            return;
+        }
+
+        // Overflow fallback: retain a distinct section after the last physical body page.
         var lastPageBottom = _surfacePlan.PageTopDip(_pageCount - 1) + _pageHeightPx;
         var startY = lastPageBottom + PageGap + _marginTopDip * 0.25;
 
@@ -4316,6 +4326,61 @@ public sealed class DocumentView : Control
 
         // Record how far past the last body page the endnotes section extends.
         _endnoteExtentDip = Math.Max(0, y - lastPageBottom) + DeskPadding;
+    }
+
+    private bool TryGetFinalPageEndnoteSeparatorY(out double separatorY)
+    {
+        separatorY = 0;
+        var finalPage = Math.Max(0, _pageCount - 1);
+        var finalBodyBottom = _placed
+            .Where(placed => !placed.Sentinel && PageIndexFromPageSpaceY(placed.Y) == finalPage)
+            .Select(placed => placed.Y + placed.LineHeight)
+            .DefaultIfEmpty(double.NaN)
+            .Max();
+        if (double.IsNaN(finalBodyBottom))
+            return false;
+
+        var pageTop = _surfacePlan.PageTopDip(finalPage);
+        var usableBottom = pageTop + _pageHeightPx - _marginBottomDip;
+        separatorY = Math.Max(pageTop + _marginTopDip, finalBodyBottom + EndnoteAfterBodyGap);
+        return separatorY + MeasureEndnoteRegionHeight() <= usableBottom;
+    }
+
+    private double MeasureEndnoteRegionHeight()
+    {
+        var height = EndnoteSeparatorToTextGap;
+        var options = _doc.EndnoteNumbering;
+        var sequence = Math.Max(1, options.StartAt);
+        var ids = _doc.Endnotes.Keys.OrderBy(id => id).ToList();
+        for (var index = 0; index < ids.Count; index++)
+        {
+            var note = _doc.Endnotes[ids[index]];
+            var content = note.Content.Count > 0
+                ? note.Content
+                : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
+            height += MeasureNoteContentHeight(ComputeNoteDisplayNumber(sequence++, options), content, _contentLeft, _contentWidth);
+            height += index == ids.Count - 1 ? EndnoteTrailingPadding : EndnoteInterNoteSpacing;
+        }
+        return height;
+    }
+
+    private void LayoutEndnoteRegion(double separatorY)
+    {
+        _noteSeparators.Add((_contentLeft, _contentLeft + _contentWidth, separatorY));
+        var y = separatorY + EndnoteSeparatorToTextGap;
+        var options = _doc.EndnoteNumbering;
+        var sequence = Math.Max(1, options.StartAt);
+        var ids = _doc.Endnotes.Keys.OrderBy(id => id).ToList();
+        for (var index = 0; index < ids.Count; index++)
+        {
+            var note = _doc.Endnotes[ids[index]];
+            var content = note.Content.Count > 0
+                ? note.Content
+                : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
+            y = LayoutNoteContent(ComputeNoteDisplayNumber(sequence++, options), content, _contentLeft, y, _contentWidth);
+            if (index < ids.Count - 1)
+                y += EndnoteInterNoteSpacing;
+        }
     }
 
     // Layout-pass mutable state for paged layout (reset at start of Relayout).

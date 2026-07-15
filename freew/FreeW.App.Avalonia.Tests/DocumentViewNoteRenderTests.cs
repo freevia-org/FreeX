@@ -149,7 +149,7 @@ public sealed class DocumentViewNoteRenderTests
     // ── Test 3: endnote produces a section after the last body page with an "Endnotes" heading ───────
 
     [Fact]
-    public async Task Endnote_produces_end_section_with_heading_and_text()
+    public async Task Endnote_produces_final_page_items_without_synthetic_heading()
     {
         IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)>? items = null;
         IReadOnlyList<(double X1, double X2, double Y)>? seps = null;
@@ -167,29 +167,29 @@ public sealed class DocumentViewNoteRenderTests
         items.Should().NotBeNull();
         items!.Should().NotBeEmpty("an endnote must produce render items");
 
-        // The "Endnotes" heading must be present.
-        items!.Should().Contain(i => i.Text == "Endnotes",
-            "the endnotes section must carry an 'Endnotes' heading");
+        items!.Should().NotContain(i => i.Text == "Endnotes",
+            "Word appends fitting endnotes directly after the final body paragraph without a synthetic heading");
 
         // The number marker "1" matches the body reference.
         items!.Should().Contain(i => i.IsNumberMarker && i.Text.Trim() == "1",
             "the endnote number marker must match the body reference number");
 
         // The endnote body text must be laid out.
-        var textJoined = string.Concat(items!.Where(i => !i.IsNumberMarker && i.Text != "Endnotes").Select(i => i.Text));
+        var textJoined = string.Concat(items!.Where(i => !i.IsNumberMarker).Select(i => i.Text));
         textJoined.Should().Contain("endnote");
 
         seps.Should().NotBeNull();
-        seps!.Should().NotBeEmpty("the endnotes section must have a separator under the heading");
+        seps!.Should().NotBeEmpty("fitting endnotes must have a separator after the final body paragraph");
     }
 
     // ── Test 4: endnote section lands AFTER the last body page (page-space) ───────────────────────────
 
     [Fact]
-    public async Task Endnote_section_is_below_last_body_page()
+    public async Task Fitting_endnotes_follow_the_last_body_line_on_its_page()
     {
         IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)>? items = null;
-        int pageCount = -1;
+        IReadOnlyList<(double X1, double X2, double Y)>? seps = null;
+        IReadOnlyList<(char Ch, double X, double W, double Y, double LineHeight, bool IsSubscript)>? body = null;
         var ran = await OnUiThread(() =>
         {
             var doc = DocWithEndnote(1, "Endnote body.");
@@ -197,21 +197,22 @@ public sealed class DocumentViewNoteRenderTests
             view.LoadDocument(doc);
             view.Measure(new Size(816, 4000));
             items = view.NoteRenderItems;
-            pageCount = view.PageCount;
+            seps = view.NoteSeparators;
+            body = view.GetPlacedForBlock(0);
         });
 
         if (!ran) return;
         items.Should().NotBeNull();
 
-        // Last body page bottom (page-space): DeskPadding(24) + (pages-1)*(pageH+gap) + pageH.
-        const double deskPadding = 24.0;
-        const double pageGap = 20.0;
-        var pageHeight = 792.0 * (96.0 / 72.0); // ≈ 1056
-        var lastPageBottom = deskPadding + (pageCount - 1) * (pageHeight + pageGap) + pageHeight;
+        seps.Should().NotBeNullOrEmpty();
+        body.Should().NotBeNullOrEmpty();
 
-        var heading = items!.First(i => i.Text == "Endnotes");
-        heading.Y.Should().BeGreaterThan(lastPageBottom,
-            "the endnotes heading must render after the last body page");
+        var bodyBottom = body!.Max(item => item.Y + item.LineHeight);
+        var separatorY = seps![0].Y;
+        separatorY.Should().BeGreaterThan(bodyBottom,
+            "fitting endnotes must follow the final body line on the same page");
+        items!.Min(item => item.Y).Should().BeGreaterThan(separatorY,
+            "endnote content must remain below its final-page separator");
     }
 
     // ── Test 5: footnote numbers match multiple references ───────────────────────────────────────────
