@@ -5439,43 +5439,25 @@ public sealed class DocumentView : RichTextBox
         if (glyphs.Count == 0 || totalWidth <= 0)
             return;
 
-        var halfSpan = totalWidth / 2;
-        var currentX = canvas.ActualWidth / 2 - halfSpan;
-        var placements = new List<(double CenterX, double CenterY, double RotationDegrees, double Width, double Height)>(glyphs.Count);
-        for (var index = 0; index < glyphs.Count; index++)
-        {
-            var glyph = glyphs[index];
-            var width = glyph.DesiredSize.Width;
-            var height = glyph.DesiredSize.Height;
-            var centerX = currentX + width / 2;
-            var normalizedX = (centerX - canvas.ActualWidth / 2) / Math.Max(1, halfSpan);
-            double centerY;
-            double rotationDegrees;
-            if (wordArt.Warp == WordArtWarp.ArchUp)
-            {
-                var depth = Math.Min(canvas.ActualHeight * 0.28, Math.Max(3, totalWidth * 0.12));
-                centerY = canvas.ActualHeight / 2 - depth / 2 + depth * normalizedX * normalizedX;
-                rotationDegrees = Math.Atan(2 * depth * normalizedX / Math.Max(1, halfSpan)) * 180 / Math.PI;
-            }
-            else
-            {
-                var amplitude = Math.Min(canvas.ActualHeight * 0.16, Math.Max(2, totalWidth * 0.055));
-                var progress = (centerX - (canvas.ActualWidth / 2 - halfSpan)) / totalWidth;
-                var phase = Math.PI * 2 * progress;
-                centerY = canvas.ActualHeight / 2 + amplitude * Math.Sin(phase);
-                rotationDegrees = Math.Atan(amplitude * Math.PI * 2 * Math.Cos(phase) / totalWidth) * 180 / Math.PI;
-            }
-
-            placements.Add((centerX, centerY, rotationDegrees, width, height));
-            currentX += width;
-        }
+        var sharedPlacements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            wordArt.Warp,
+            glyphs.Select(glyph => glyph.DesiredSize.Width).ToList(),
+            canvas.ActualWidth,
+            canvas.ActualHeight).Glyphs;
 
         var outlineBrush = wordArt.Outline.IsVisible
             ? BuildDrawingStrokeBrush(wordArt.Outline)
             : null;
         for (var index = 0; index < glyphs.Count; index++)
         {
-            var placement = placements[index];
+            var sharedPlacement = sharedPlacements[index];
+            var glyph = glyphs[index];
+            var placement = (
+                sharedPlacement.CenterXNormalized * canvas.ActualWidth,
+                sharedPlacement.CenterYNormalized * canvas.ActualHeight,
+                sharedPlacement.RotationRadians * 180 / Math.PI,
+                glyph.DesiredSize.Width,
+                glyph.DesiredSize.Height);
             var character = wordArt.Text[index].ToString();
             if (outlineBrush is not null)
             {
