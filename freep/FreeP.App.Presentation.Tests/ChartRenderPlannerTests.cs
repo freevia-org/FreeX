@@ -169,6 +169,21 @@ public sealed class ChartRenderPlannerTests
             .Should().BeSameAs(seriesLabels);
     }
 
+    [Fact]
+    public void ResolveEffectiveLabels_ComboOverrideDoesNotInheritPrimaryGroupLabels()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            DataLabels = new ChartDataLabels { ShowValue = true }
+        };
+        chart.Series.Add(new ChartSeries { Name = "Columns" });
+        chart.Series.Add(new ChartSeries { Name = "Line", OverrideChartType = ChartType.Line });
+
+        ChartRenderPlanner.ResolveEffectiveLabels(chart, 0).Should().NotBeNull();
+        ChartRenderPlanner.ResolveEffectiveLabels(chart, 1).Should().BeNull();
+    }
+
     [Theory]
     [InlineData(1200, "1.2K")]
     [InlineData(42, "42")]

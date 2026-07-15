@@ -3678,7 +3678,8 @@ public static partial class ChartRenderPlanner
     public static ChartDataLabels? ResolveEffectiveLabels(ChartShape chart, int seriesIndex)
     {
         var series = seriesIndex < chart.Series.Count ? chart.Series[seriesIndex] : null;
-        var labels = series?.DataLabels ?? chart.DataLabels;
+        var labels = series?.DataLabels ??
+            (series?.OverrideChartType.HasValue == true ? null : chart.DataLabels);
         return labels is not null && labels.HasAny ? labels : null;
     }
 
