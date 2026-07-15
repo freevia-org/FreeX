@@ -477,6 +477,7 @@ public sealed class ChartRenderPlannerTests
     public void BuildSurfaceGeometryPlan_Surface3DPlansProjectedFacetsAndWireframe()
     {
         var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.Series[0].Values[2] = chart.Series[0].Values[0];
 
         var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
             chart,
@@ -498,6 +499,10 @@ public sealed class ChartRenderPlannerTests
             "3-D surface projection should raise higher values instead of drawing a flat fallback grid");
         highest.Point.X.Should().BeGreaterThan(lowest.Point.X,
             "3-D surface projection should include depth offset across the series axis");
+
+        var south = plan.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 2);
+        south.Point.Y.Should().BeGreaterThan(lowest.Point.Y,
+            "the category axis should recede downwards to the right in PowerPoint's 3-D surface view");
     }
 
     [Fact]

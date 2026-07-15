@@ -2015,13 +2015,13 @@ public static partial class ChartRenderPlanner
                 Math.Round(plot.Bottom - seriesT * plot.Height, 4));
         }
 
-        double depthX = Math.Min(plot.Width * 0.16, 28.0);
-        double depthY = Math.Min(plot.Height * 0.12, 20.0);
-        double lift = Math.Min(plot.Height * 0.32, 48.0);
+        double depthX = Math.Min(plot.Width * 0.18, 72.0);
+        double depthY = Math.Min(plot.Height * 0.26, 52.0);
+        double categorySlopeY = Math.Min(plot.Height * 0.20, 40.0);
+        double lift = Math.Min(plot.Height * 0.50, 88.0);
         double drawableWidth = Math.Max(1, plot.Width - depthX);
-        double drawableHeight = Math.Max(1, plot.Height - lift);
         double x = plot.X + categoryT * drawableWidth + seriesT * depthX;
-        double y = plot.Y + lift + (1 - seriesT) * drawableHeight - seriesT * depthY - normalized * lift;
+        double y = plot.Bottom + categoryT * categorySlopeY - seriesT * depthY - normalized * lift;
 
         return new ChartPlanPoint(Math.Round(x, 4), Math.Round(y, 4));
     }
