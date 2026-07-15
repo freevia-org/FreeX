@@ -700,6 +700,10 @@ public sealed class AvaloniaRibbonRendererTests
         [InlineData("Select")]
         [InlineData("Add Watch")]
         [InlineData("Delete Watch")]
+        [InlineData("Allow Edit Ranges")]
+        [InlineData("Date and Time")]
+        [InlineData("Lookup and Reference")]
+        [InlineData("Math and Trig")]
         public Task IconBuild_KnownCommand_LoadsSharedSvg(string commandName) => RunOnUiThread(() =>
     {
         // A command with a matching CommandIconsSvg/<slug>.svg must render the SAME shared SVG the WPF

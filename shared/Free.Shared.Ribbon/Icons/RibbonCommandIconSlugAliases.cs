@@ -11,6 +11,9 @@ public static class RibbonCommandIconSlugAliases
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["orientation"] = "page-orientation", ["size"] = "paper-size",
+            ["allow-edit-ranges"] = "allow-users-to-edit-ranges",
+            ["date-and-time"] = "date-time", ["lookup-and-reference"] = "lookup-reference",
+            ["math-and-trig"] = "math-trig",
             ["custom-paragraph-spacing"] = "paragraph-spacing",
             ["font-family"] = "fonts", ["font-size"] = "fonts", ["font-dialog"] = "fonts",
             ["highlight"] = "highlighter", ["clear-formatting"] = "clear",
