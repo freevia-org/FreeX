@@ -729,15 +729,11 @@ public sealed class SlideCanvas : FrameworkElement
         var bounds = chartOp.BoundsDip;
         var chart  = chartOp.ChartShape;
 
-        // ── Frame background (white) + border ──────────────────────────────────
+        // ── Frame background ───────────────────────────────────────────────────
         bool classicOfficeStyle = ChartRenderPlanner.UsesClassicOfficeChartStyle(chart);
         var frameBrush = FreezeBrush(new SolidColorBrush(Colors.White));
-        Pen? framePen = classicOfficeStyle
-            ? null
-            : new Pen(FreezeBrush(new SolidColorBrush(Color.FromRgb(0xBF, 0xBF, 0xBF))), 0.5);
-        if (framePen?.CanFreeze == true) framePen.Freeze();
         var frameRect = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-        dc.DrawRectangle(frameBrush, framePen, frameRect);
+        dc.DrawRectangle(frameBrush, null, frameRect);
 
         // ── Layout areas ────────────────────────────────────────────────────────
         var frame = ChartRenderPlanner.BuildFramePlan(chart, ToPlanRect(bounds));

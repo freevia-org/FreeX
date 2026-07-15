@@ -933,10 +933,7 @@ public sealed class SlideCanvas : Control
         dc.FillRectangle(Brushes.White,
             new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
         bool classicOfficeStyle = ChartRenderPlanner.UsesClassicOfficeChartStyle(chart);
-        Pen? framePen = classicOfficeStyle
-            ? null
-            : new Pen(new SolidColorBrush(Color.FromRgb(0xBF, 0xBF, 0xBF)), 0.5);
-        dc.DrawRectangle(null, framePen,
+        dc.DrawRectangle(null, null,
             new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
 
         var frame = ChartRenderPlanner.BuildFramePlan(chart, ToPlanRect(bounds));
