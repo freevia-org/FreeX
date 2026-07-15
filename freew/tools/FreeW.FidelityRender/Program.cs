@@ -222,9 +222,45 @@ static void RenderDocumentComposite(
         }
     }
 
+    // Footnotes consume space from the body frame in Word.  The composite used to paginate body
+    // content at the full printable height and paint notes over the result, which let extra body
+    // paragraphs remain on the page.  Probe the same PageBox assignment used for the note overlay,
+    // then reserve the largest note region before paginating the body.
+    double footnoteReserveDip = 0;
+    if (doc.Footnotes.Count > 0)
+    {
+        try
+        {
+            var notePanelSource = new DocumentView { Width = pageWDip };
+            notePanelSource.LoadModel(doc);
+            var notePanel = PaginatedEditorPanel.Build(notePanelSource);
+            foreach (var pageBox in notePanel.PageBoxes.Where(box => box.FootnoteIds.Count > 0))
+            {
+                var noteBitmap = RenderNoteRegion(
+                    doc,
+                    pageBox.FootnoteIds,
+                    Array.Empty<int>(),
+                    pageWDip,
+                    marginLeft,
+                    marginRight,
+                    isEndnotePage: false);
+                if (noteBitmap is not null)
+                    footnoteReserveDip = Math.Max(footnoteReserveDip, noteBitmap.Height + 4);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  [warn] Footnote reserve probe failed for {name}: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
     flow.PageWidth   = pageWDip;
     flow.PageHeight  = pageHDip;
-    flow.PagePadding = new Thickness(marginLeft, marginTop, marginRight, marginBottom);
+    flow.PagePadding = new Thickness(
+        marginLeft,
+        marginTop,
+        marginRight,
+        marginBottom + footnoteReserveDip);
 
     // Layer 2: call ApplyColumnLayout so multi-column sections render with the correct column count.
     // The old path hard-coded ColumnWidth=pageW (single column). This fixes that miss.
@@ -463,9 +499,10 @@ static void RenderDocumentComposite(
                     thisPageWDip, thisMarginLeft, thisMarginRight, isEndnotePage: false);
                 if (footnoteBmp is not null)
                 {
-                    // Place the footnote region just above the footer strip.
+                    // Keep the note region inside the printable frame. Word's note separator sits
+                    // above the bottom margin rather than above an arbitrary footer-height strip.
                     double fnH = footnoteBmp.Height;
-                    double fnY = thisPixH - hfH - fnH - 4;
+                    double fnY = Math.Max(thisMarginTop, thisPixH - thisMarginBottom - fnH);
                     var fnVis = new DrawingVisual();
                     using (var dc = fnVis.RenderOpen())
                         dc.DrawImage(footnoteBmp, new Rect(0, fnY, thisPixW, fnH));

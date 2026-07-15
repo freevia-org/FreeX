@@ -27,11 +27,11 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("f2-endnotes");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-endnotes\", 1)");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-endnotes\", 2)");
-        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-endnotes\", 3)");
+        source.Should().NotContain("VisualEvidenceOutputPath(outDir, \"f2-endnotes\", 3)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEndnotePlacementDocument");
         source.Should().Contain("hasEndnotes: true");
-        source.Should().Contain("isSyntheticPage: true");
-        source.Should().MatchRegex("label: \"F2 Endnotes p2\"[\\s\\S]*?viewportOffsetY: 1100,\\s*hasEndnotes: true,\\s*isSyntheticPage: true\\);");
+        source.Should().NotContain("isSyntheticPage: true");
+        source.Should().MatchRegex("label: \"F2 Endnotes p2\"[\\s\\S]*?viewportOffsetY: 1100,\\s*hasEndnotes: true\\s*\\);");
         source.Should().Contain("AddNoteRegionOverlayIfNeeded(");
         source.Should().Contain("BuildEvidenceNoteRegionPlan(");
         source.Should().Contain("DocumentNoteRegionPlanner.BuildFootnoteRegion");
@@ -165,7 +165,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.IndexOf("if ($NoWord) {", StringComparison.Ordinal)
             .Should().BeLessThan(source.IndexOf("Test-ComProgIdAvailable $WordApplicationProgId", StringComparison.Ordinal));
         source.IndexOf("if ($NoWord) {", StringComparison.Ordinal)
-            .Should().BeLessThan(source.IndexOf("$wordExportScript -CorpusDir $fixtureDir -OutDir $wordPdfDir", StringComparison.Ordinal));
+            .Should().BeLessThan(source.IndexOf("& powershell.exe @wordExportArgs", StringComparison.Ordinal));
     }
 
     private static string RepositoryFile(params string[] parts)
