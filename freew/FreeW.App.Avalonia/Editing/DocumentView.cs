@@ -4198,8 +4198,10 @@ public sealed class DocumentView : Control
             // Body text area bottom on this page (page-space), using the reserved effective height.
             var bandReservation = _footnoteBandHeightByPage.TryGetValue(pg, out var bh) ? bh : 0.0;
             var bodyBottom = pageTop + _marginTopDip + (_layoutTextAreaHeight - bandReservation);
-            // Footer top (where the footer line begins).
+            // Footnotes occupy the bottom margin, not the lower footer-distance strip. Keep them
+            // above the text margin and, when a footer sits higher, above that footer as well.
             var footerTop = pageBottom - footerDistDip;
+            var footnoteBottom = Math.Min(pageBottom - _marginBottomDip, footerTop);
 
             // DB2: true total band height = separator + true wrapped heights of all notes on this page.
             var trueHeight = 4.0 + 6.0; // top-pad + separator
@@ -4215,14 +4217,14 @@ public sealed class DocumentView : Control
                 trueHeight += 2; // inter-note gap
             }
 
-            // DB2: anchor the band so its bottom aligns with the footer top.
-            // The band top is (footerTop - trueHeight), but must stay at/below the body bottom.
-            var bandTop = Math.Max(bodyBottom + 2, footerTop - trueHeight);
+            // DB2: anchor the band to the usable bottom-margin edge. The band top is
+            // (footnoteBottom - trueHeight), but must stay at/below the body bottom.
+            var bandTop = Math.Max(bodyBottom + 2, footnoteBottom - trueHeight);
             // Also clamp: band must not start above the mid-margin (guard for very tall bands on short pages).
-            bandTop = Math.Min(bandTop, footerTop - 6);
-            // DB2: available height within the band = from bandTop to footerTop. If overflow, content is
-            // clipped at footerTop (split-to-next-page is a follow-up; for now we clip).
-            var availBandHeight = Math.Max(6, footerTop - bandTop);
+            bandTop = Math.Min(bandTop, footnoteBottom - 6);
+            // DB2: available height within the band = from bandTop to the usable margin edge. If overflow,
+            // content is clipped there (split-to-next-page is a follow-up; for now we clip).
+            var availBandHeight = Math.Max(6, footnoteBottom - bandTop);
 
             // Separator rule: a short line (~1.5") at the left of the content column.
             var sepWidth = Math.Min(2 * 72 * PxPerPoint, _contentWidth * 0.4);

@@ -124,25 +124,25 @@ public sealed class DocumentViewNoteRenderTests
         seps.Should().NotBeNull();
         seps!.Should().NotBeEmpty("a footnote band must have a separator rule");
 
-        // Page geometry: pageTop = 24, pageHeight = 792*(96/72) = 1056 → pageBottom ≈ 1080.
-        // Body text area bottom = pageTop + marginTopDip (96) + textAreaHeight (1056 - 96 - 96 = 864) = 1056.
+        // Page geometry: pageTop = 24, pageHeight = 792*(96/72) = 1056, and the
+        // usable bottom-margin edge is pageBottom minus the 96 DIP bottom margin.
         const double pageTop = 24.0;
         const double pageBottom = pageTop + 792.0 * (96.0 / 72.0);   // ≈ 1080
-        const double bodyAreaBottom = pageTop + 96.0 + (792.0 * (96.0 / 72.0) - 96.0 - 96.0); // ≈ 1056
+        const double bottomMarginTop = pageBottom - 96.0; // ≈ 984
 
         var sepY = seps![0].Y;
-        sepY.Should().BeGreaterThanOrEqualTo(bodyAreaBottom - 4,
-            "the footnote separator must sit at/below the body text area bottom");
-        sepY.Should().BeLessThan(pageBottom,
-            "the footnote separator must stay above the page bottom edge");
+        sepY.Should().BeLessThanOrEqualTo(bottomMarginTop,
+            "the footnote separator must use the bottom-margin edge rather than the lower footer-distance strip");
+        sepY.Should().BeGreaterThan(bottomMarginTop - 96,
+            "the short footnote band must remain inside the bottom margin area");
 
-        // Note text items must be below the separator and above the page bottom.
+        // Note text items must be below the separator and no lower than the body bottom margin.
         foreach (var it in items!)
         {
             it.Y.Should().BeGreaterThanOrEqualTo(sepY - 2,
                 "footnote text must be below the separator");
-            it.Y.Should().BeLessThan(pageBottom,
-                "footnote text must stay on the page");
+            it.Y.Should().BeLessThanOrEqualTo(bottomMarginTop,
+                "footnote text must stay above the usable bottom-margin edge");
         }
     }
 
