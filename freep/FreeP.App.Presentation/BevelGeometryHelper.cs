@@ -25,6 +25,22 @@ public sealed class BevelEdgeSet
 public static class BevelGeometryHelper
 {
     /// <summary>
+    /// Converts a DrawingML bevel surface dimension to its conservative 2-D
+    /// raster footprint. PowerPoint shades only part of the declared bevel face
+    /// in a front-on rendering, so using the raw dimension overstates the edge.
+    /// </summary>
+    public static (double WidthDip, double HeightDip) GetRenderDimensions(
+        LayoutRect bounds,
+        double bevelWidthDip,
+        double bevelHeightDip)
+    {
+        const double visibleSurfaceFraction = 0.4;
+        return (
+            Math.Min(bevelWidthDip * visibleSurfaceFraction, bounds.Width / 3),
+            Math.Min(bevelHeightDip * visibleSurfaceFraction, bounds.Height / 3));
+    }
+
+    /// <summary>
     /// Computes which edges of a rectangular shape should be rendered as highlight
     /// or shade for a bevel effect, given the light direction.
     ///

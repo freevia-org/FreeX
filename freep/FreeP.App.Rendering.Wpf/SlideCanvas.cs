@@ -402,8 +402,7 @@ public sealed class SlideCanvas : FrameworkElement
         dc.PushClip(shapeGeo);
 
         double x = bounds.X, y = bounds.Y, w = bounds.Width, h = bounds.Height;
-        double bw = Math.Min(bevelW, w / 3);
-        double bh = Math.Min(bevelH, h / 3);
+        var (bw, bh) = BevelGeometryHelper.GetRenderDimensions(bounds, bevelW, bevelH);
 
         // Draw trapezoidal wedge for each active edge
         void DrawWedge(bool active, Brush brush, Point tl, Point tr, Point bl, Point br)

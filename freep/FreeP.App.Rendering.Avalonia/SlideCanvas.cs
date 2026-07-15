@@ -347,8 +347,7 @@ public sealed class SlideCanvas : Control
         using var clipScope = dc.PushGeometryClip(shapeGeo);
 
         double x = bounds.X, y = bounds.Y, w = bounds.Width, h = bounds.Height;
-        double bw = Math.Min(bevelW, w / 3);
-        double bh = Math.Min(bevelH, h / 3);
+        var (bw, bh) = BevelGeometryHelper.GetRenderDimensions(bounds, bevelW, bevelH);
 
         void DrawWedge(bool active, IBrush brush, Point tl, Point tr, Point br, Point bl)
         {

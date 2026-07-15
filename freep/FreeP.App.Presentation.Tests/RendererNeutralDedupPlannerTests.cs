@@ -55,6 +55,18 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void BevelGeometryHelper_MapsSurfaceDimensionsToVisibleFootprint()
+    {
+        var dimensions = BevelGeometryHelper.GetRenderDimensions(
+            new LayoutRect(0, 0, 100, 80),
+            bevelWidthDip: 20,
+            bevelHeightDip: 15);
+
+        dimensions.WidthDip.Should().BeApproximately(8, 0.001);
+        dimensions.HeightDip.Should().BeApproximately(6, 0.001);
+    }
+
+    [Fact]
     public void ResolvedShapeEffectRenderPlanner_ExpandsShadowAndGlowPasses()
     {
         var effects = new ResolvedShapeEffects
