@@ -2446,7 +2446,7 @@ public sealed class SlideCanvas : FrameworkElement
             "pct20" => BuildDotPatternBrush(bg, fg, 4, 4, 2, 0.75),
             "pct25" => BuildDotPatternBrush(bg, fg, 4, 4, 2, 1.0),
             "pct30" => BuildDotPatternBrush(bg, fg, 4, 4, 2, 1.25),
-            "pct40" => BuildDotPatternBrush(bg, fg, 4, 4, 3, 1.5),
+            "pct40" => BuildCheckerPatternBrush(bg, fg),
             "pct50" => BuildHalfHalfBrush(bg, fg, horizontal: false),
             "pct60" => BuildDotPatternBrush(fg, bg, 4, 4, 3, 1.5),
             "pct75" => BuildDotPatternBrush(fg, bg, 4, 4, 2, 1.0),
@@ -2506,6 +2506,27 @@ public sealed class SlideCanvas : FrameworkElement
                 new RectangleGeometry(new Rect(0, 0, 2, 4))));
             dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
                 new RectangleGeometry(new Rect(2, 0, 2, 4))));
+        }
+        return new DrawingBrush(dg)
+        {
+            TileMode = TileMode.Tile,
+            Viewport = new Rect(0, 0, 4, 4),
+            ViewportUnits = BrushMappingMode.Absolute,
+            Stretch = Stretch.None
+        };
+    }
+
+    private static DrawingBrush BuildCheckerPatternBrush(Color bg, Color fg)
+    {
+        var dg = new DrawingGroup();
+        dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
+            new RectangleGeometry(new Rect(0, 0, 4, 4))));
+        for (int y = 0; y < 4; y++)
+        for (int x = 0; x < 4; x++)
+        {
+            if ((x + y) % 2 == 0)
+                dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
+                    new RectangleGeometry(new Rect(x, y, 1, 1))));
         }
         return new DrawingBrush(dg)
         {

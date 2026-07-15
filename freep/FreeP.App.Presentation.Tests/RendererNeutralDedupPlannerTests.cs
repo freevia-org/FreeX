@@ -487,6 +487,18 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void WpfAndAvaloniaSlideCanvases_UseOrderedDitherForPct40PatternFills()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+        var avalonia = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Avalonia", "SlideCanvas.cs");
+
+        wpf.Should().Contain("\"pct40\" => BuildCheckerPatternBrush(bg, fg)");
+        wpf.Should().Contain("private static DrawingBrush BuildCheckerPatternBrush");
+        avalonia.Should().Contain("case \"pct40\":");
+        avalonia.Should().Contain("if ((x + y) % 2 == 0) SetPixel(x, y, fg)");
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_UseRendererNeutralChartAxisTitlePlanning()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
