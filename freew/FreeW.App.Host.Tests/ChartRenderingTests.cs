@@ -283,4 +283,34 @@ public sealed class ChartRenderingTests
         Assert.Contains("Weight (kg)", allTexts);
         Assert.Contains("Height (cm)", allTexts);
     }
+
+    [StaFact]
+    public void WordStyleChart_UsesScaledTitlesAndValueAxisTickLabels()
+    {
+        var view = new DocumentView();
+        view.LoadModel(TextDocument.CreateEmpty());
+        var chart = new Chart
+        {
+            Kind = ChartKind.Column,
+            Title = "Revenue by quarter",
+            ValueAxisTitle = "USD",
+            CategoryAxisTitle = "Quarter",
+            WidthPt = 300,
+            HeightPt = 168
+        };
+        chart.Categories.AddRange(new[] { "Q1", "Q2", "Q3", "Q4" });
+        chart.Series.Add(new ChartSeries("Revenue", new double[] { 1.4, 1.8, 1.6, 2.2 }));
+        view.InsertChart(chart);
+
+        var textBlocks = LogicalDescendants<System.Windows.Controls.TextBlock>(view.Document);
+        var title = textBlocks.Single(text => text.Text == "Revenue by quarter");
+        Assert.Equal(18, title.FontSize);
+        Assert.Equal(16, textBlocks.Single(text => text.Text == "USD").FontSize);
+        Assert.Equal(16, textBlocks.Single(text => text.Text == "Quarter").FontSize);
+
+        var axisTickLabels = textBlocks
+            .Where(text => text.Text is "0" or "0.55" or "1.1" or "1.65" or "2.2")
+            .ToList();
+        Assert.Equal(5, axisTickLabels.Count);
+    }
 }

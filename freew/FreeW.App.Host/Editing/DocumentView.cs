@@ -10871,8 +10871,9 @@ public sealed class DocumentView : RichTextBox
             var title = new TextBlock
             {
                 Text = chart.Title,
-                FontWeight = FontWeights.SemiBold,
-                Margin = new Thickness(0, 0, 0, 4),
+                FontSize = 18,
+                FontWeight = FontWeights.Normal,
+                Margin = new Thickness(0, 0, 0, 8),
                 HorizontalAlignment = HorizontalAlignment.Center
             };
             DockPanel.SetDock(title, Dock.Top);
@@ -10906,12 +10907,12 @@ public sealed class DocumentView : RichTextBox
             var valueLabel = new TextBlock
             {
                 Text = settings.ValueAxisTitle,
-                FontSize = 9,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x59, 0x59, 0x59)),
+                FontSize = 16,
+                Foreground = System.Windows.Media.Brushes.Black,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 LayoutTransform = new RotateTransform(-90)
             };
-            var valueHost = new Border { Child = valueLabel, Padding = new Thickness(2) };
+            var valueHost = new Border { Child = valueLabel, Padding = new Thickness(2), Width = 34 };
             DockPanel.SetDock(valueHost, Dock.Left);
             root.Children.Add(valueHost);
         }
@@ -10920,8 +10921,8 @@ public sealed class DocumentView : RichTextBox
             var catLabel = new TextBlock
             {
                 Text = settings.CategoryAxisTitle,
-                FontSize = 9,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x59, 0x59, 0x59)),
+                FontSize = 16,
+                Foreground = System.Windows.Media.Brushes.Black,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 2, 0, 0)
             };
@@ -10956,6 +10957,7 @@ public sealed class DocumentView : RichTextBox
         {
             Width = widthPx,
             Height = heightPx,
+            CornerRadius = new CornerRadius(10),
             Background = System.Windows.Media.Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
             BorderThickness = new Thickness(strokeThickness),
@@ -11055,6 +11057,7 @@ public sealed class DocumentView : RichTextBox
             var barW = Math.Max(1, (groupW - 2 * gap) / seriesCount);
             if (settings.ShowGridlines)
                 DrawChartGridlines(plot, plotH, w);
+            AddValueAxisLabels(plot, axis, plotH);
             plot.Children.Add(ChartAxisLine(0, zeroY, w, zeroY));
             for (var c = 0; c < cats; c++)
             {
@@ -11070,7 +11073,7 @@ public sealed class DocumentView : RichTextBox
                     {
                         Width = barW * 0.92,
                         Height = Math.Max(1, barH),
-                        Fill = new SolidColorBrush(settings.Palette[s % settings.Palette.Length])
+                        Fill = ChartDataBrush(settings, s, c, seriesCount)
                     };
                     Canvas.SetLeft(rect, rectLeft);
                     Canvas.SetTop(rect, rectTop);
@@ -11091,6 +11094,7 @@ public sealed class DocumentView : RichTextBox
             var gap = groupH * 0.15;
             var barH = Math.Max(1, (groupH - 2 * gap) / seriesCount);
             plot.Children.Add(ChartAxisLine(zeroX, 0, zeroX, h));
+            AddValueAxisLabels(plot, axis, h);
             for (var c = 0; c < cats; c++)
             {
                 for (var s = 0; s < seriesCount; s++)
@@ -11105,7 +11109,7 @@ public sealed class DocumentView : RichTextBox
                     {
                         Width = Math.Max(1, barW),
                         Height = barH * 0.92,
-                        Fill = new SolidColorBrush(settings.Palette[s % settings.Palette.Length])
+                        Fill = ChartDataBrush(settings, s, c, seriesCount)
                     };
                     Canvas.SetLeft(rect, barLeft);
                     Canvas.SetTop(rect, barTop);
@@ -11130,6 +11134,7 @@ public sealed class DocumentView : RichTextBox
         var plotH = Math.Max(8, h - labelStrip);
         if (settings.ShowGridlines)
             DrawChartGridlines(plot, plotH, w);
+        AddValueAxisLabels(plot, axis, plotH);
         var zeroY = plotH - axis.ZeroFraction * plotH;
         plot.Children.Add(ChartAxisLine(0, zeroY, w, zeroY));
 
@@ -11187,6 +11192,7 @@ public sealed class DocumentView : RichTextBox
         if (settings.ShowGridlines)
             DrawChartGridlines(plot, plotH, w);
         var axis = settings.ValueAxis;
+        AddValueAxisLabels(plot, axis, plotH);
         var zeroY = plotH - axis.ZeroFraction * plotH;
         plot.Children.Add(ChartAxisLine(0, zeroY, w, zeroY));
 
@@ -11317,7 +11323,7 @@ public sealed class DocumentView : RichTextBox
         var label = new TextBlock
         {
             Text = chart.Categories[index],
-            FontSize = 9,
+            FontSize = 10,
             Width = Math.Max(1, width),
             TextAlignment = align,
             TextTrimming = TextTrimming.CharacterEllipsis
@@ -11325,6 +11331,36 @@ public sealed class DocumentView : RichTextBox
         Canvas.SetLeft(label, left);
         Canvas.SetTop(label, top);
         plot.Children.Add(label);
+    }
+
+    private static SolidColorBrush ChartDataBrush(ChartRenderSettings settings, int seriesIndex, int categoryIndex, int seriesCount)
+    {
+        // Word's monochromatic single-series column/bar charts shade individual points. Preserve
+        // series-based colours for grouped/multi-series charts, but cycle the selected palette for
+        // a single series so a mono-blue chart keeps the native per-category progression.
+        var paletteIndex = seriesCount == 1 ? categoryIndex : seriesIndex;
+        return new SolidColorBrush(settings.Palette[paletteIndex % settings.Palette.Length]);
+    }
+
+    private static void AddValueAxisLabels(Canvas plot, ChartValueAxisPlan axis, double plotHeight)
+    {
+        const int tickCount = 4;
+        for (var tick = 0; tick <= tickCount; tick++)
+        {
+            var fraction = tick / (double)tickCount;
+            var value = axis.Minimum + axis.Range * fraction;
+            var label = new TextBlock
+            {
+                Text = value.ToString("G4", System.Globalization.CultureInfo.InvariantCulture),
+                FontSize = 10,
+                Width = 28,
+                TextAlignment = System.Windows.TextAlignment.Right,
+                Foreground = System.Windows.Media.Brushes.Black
+            };
+            Canvas.SetLeft(label, -31);
+            Canvas.SetTop(label, Math.Clamp(plotHeight - plotHeight * fraction - 7, -2, plotHeight - 12));
+            plot.Children.Add(label);
+        }
     }
 
     /// <summary>Inserts an inline shape / text box at the caret. Size in points; preserved on save.</summary>
