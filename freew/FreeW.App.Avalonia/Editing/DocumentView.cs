@@ -15413,10 +15413,8 @@ public sealed class DocumentView : Control
         var displayText = wd.Text;
         using (context.PushClip(rect))
         {
-            if (wd.Warp == WordArtWarp.ArchUp)
-                DrawArchUpWordArtText(context, displayText, textFmt, rect);
-            else if (wd.Warp == WordArtWarp.Wave1)
-                DrawWave1WordArtText(context, displayText, textFmt, rect);
+            if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
+                DrawWarpedWordArtText(context, displayText, textFmt, rect, wd.Warp);
             else
             {
                 var ft = Build(displayText, textFmt);
@@ -15433,10 +15431,8 @@ public sealed class DocumentView : Control
             var outlineFmt = textFmt with { ColorHex = wd.Outline.ColorHex };
             using (context.PushClip(rect))
             {
-                if (wd.Warp == WordArtWarp.ArchUp)
-                    DrawArchUpWordArtText(context, displayText, outlineFmt, rect, new Vector(1, 1));
-                else if (wd.Warp == WordArtWarp.Wave1)
-                    DrawWave1WordArtText(context, displayText, outlineFmt, rect, new Vector(1, 1));
+                if (wd.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
+                    DrawWarpedWordArtText(context, displayText, outlineFmt, rect, wd.Warp, new Vector(1, 1));
                 else
                 {
                     var outlineFt = Build(displayText, outlineFmt);
@@ -15448,17 +15444,20 @@ public sealed class DocumentView : Control
         }
     }
 
-    private void DrawArchUpWordArtText(
+    private void DrawWarpedWordArtText(
         DrawingContext context,
         string text,
         RunFormatting format,
         Rect rect,
+        WordArtWarp warp,
         Vector offset = default)
     {
         var glyphs = BuildFittedWordArtGlyphs(text, format, rect);
-        var placements = BuildArchUpGlyphPlacements(
+        var placements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            warp,
             glyphs.Select(glyph => glyph.WidthIncludingTrailingWhitespace).ToList(),
-            rect);
+            rect.Width,
+            rect.Height).Glyphs;
 
         for (var index = 0; index < glyphs.Count; index++)
         {
@@ -15467,31 +15466,9 @@ public sealed class DocumentView : Control
             using var transform = context.PushTransform(
                 Matrix.CreateTranslation(-glyph.WidthIncludingTrailingWhitespace / 2, -glyph.Height / 2)
                 * Matrix.CreateRotation(placement.RotationRadians)
-                * Matrix.CreateTranslation(placement.CenterX + offset.X, placement.CenterY + offset.Y));
-            context.DrawText(glyph, new Point(0, 0));
-        }
-    }
-
-    private void DrawWave1WordArtText(
-        DrawingContext context,
-        string text,
-        RunFormatting format,
-        Rect rect,
-        Vector offset = default)
-    {
-        var glyphs = BuildFittedWordArtGlyphs(text, format, rect);
-        var placements = BuildWave1GlyphPlacements(
-            glyphs.Select(glyph => glyph.WidthIncludingTrailingWhitespace).ToList(),
-            rect);
-
-        for (var index = 0; index < glyphs.Count; index++)
-        {
-            var glyph = glyphs[index];
-            var placement = placements[index];
-            using var transform = context.PushTransform(
-                Matrix.CreateTranslation(-glyph.WidthIncludingTrailingWhitespace / 2, -glyph.Height / 2)
-                * Matrix.CreateRotation(placement.RotationRadians)
-                * Matrix.CreateTranslation(placement.CenterX + offset.X, placement.CenterY + offset.Y));
+                * Matrix.CreateTranslation(
+                    rect.X + placement.CenterXNormalized * rect.Width + offset.X,
+                    rect.Y + placement.CenterYNormalized * rect.Height + offset.Y));
             context.DrawText(glyph, new Point(0, 0));
         }
     }
@@ -15511,64 +15488,6 @@ public sealed class DocumentView : Control
         }
 
         return glyphs;
-    }
-
-    internal static IReadOnlyList<(double CenterX, double CenterY, double RotationRadians)> BuildArchUpGlyphPlacements(
-        IReadOnlyList<double> glyphWidths,
-        Rect rect)
-    {
-        if (glyphWidths.Count == 0)
-            return [];
-
-        var totalWidth = glyphWidths.Sum();
-        if (totalWidth <= 0)
-            return [];
-
-        var halfSpan = totalWidth / 2;
-        var archDepth = Math.Min(rect.Height * 0.28, Math.Max(3, totalWidth * 0.12));
-        var centeredY = rect.Center.Y - archDepth / 2;
-        var currentX = rect.Center.X - halfSpan;
-        var placements = new List<(double CenterX, double CenterY, double RotationRadians)>(glyphWidths.Count);
-        foreach (var width in glyphWidths)
-        {
-            var centerX = currentX + width / 2;
-            var normalizedX = (centerX - rect.Center.X) / halfSpan;
-            var centerY = centeredY + archDepth * normalizedX * normalizedX;
-            var tangent = 2 * archDepth * normalizedX / halfSpan;
-            placements.Add((centerX, centerY, Math.Atan(tangent)));
-            currentX += width;
-        }
-
-        return placements;
-    }
-
-    internal static IReadOnlyList<(double CenterX, double CenterY, double RotationRadians)> BuildWave1GlyphPlacements(
-        IReadOnlyList<double> glyphWidths,
-        Rect rect)
-    {
-        if (glyphWidths.Count == 0)
-            return [];
-
-        var totalWidth = glyphWidths.Sum();
-        if (totalWidth <= 0)
-            return [];
-
-        var halfSpan = totalWidth / 2;
-        var amplitude = Math.Min(rect.Height * 0.16, Math.Max(2, totalWidth * 0.055));
-        var currentX = rect.Center.X - halfSpan;
-        var placements = new List<(double CenterX, double CenterY, double RotationRadians)>(glyphWidths.Count);
-        foreach (var width in glyphWidths)
-        {
-            var centerX = currentX + width / 2;
-            var progress = (centerX - (rect.Center.X - halfSpan)) / totalWidth;
-            var phase = Math.PI * 2 * progress;
-            var centerY = rect.Center.Y + amplitude * Math.Sin(phase);
-            var tangent = amplitude * Math.PI * 2 * Math.Cos(phase) / totalWidth;
-            placements.Add((centerX, centerY, Math.Atan(tangent)));
-            currentX += width;
-        }
-
-        return placements;
     }
 
     private static IBrush? BuildWordArtFillBrush(DrawingObjectFillPlan fill)

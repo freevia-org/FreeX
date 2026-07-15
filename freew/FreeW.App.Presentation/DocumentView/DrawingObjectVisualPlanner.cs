@@ -160,6 +160,15 @@ public sealed record DrawingObjectWordArtPlan(
         + ";warp:" + WarpHint;
 }
 
+public sealed record DrawingObjectWordArtGlyphPlacementPlan(
+    double CenterXNormalized,
+    double CenterYNormalized,
+    double RotationRadians);
+
+public sealed record DrawingObjectWordArtPlacementPlan(
+    WordArtWarp Warp,
+    IReadOnlyList<DrawingObjectWordArtGlyphPlacementPlan> Glyphs);
+
 public sealed record DrawingObjectInlineWordArtPlan(
     DrawingObjectWordArtPlan WordArt,
     DrawingObjectEffectsPlan Effects)
@@ -361,6 +370,57 @@ public static class DrawingObjectVisualPlanner
         return new DrawingObjectInlineWordArtPlan(
             BuildWordArtPlan(wordArt),
             BuildWordArtEffectsPlan(wordArt.Style));
+    }
+
+    public static DrawingObjectWordArtPlacementPlan BuildWordArtPlacementPlan(
+        WordArtWarp warp,
+        IReadOnlyList<double> glyphWidths,
+        double boundsWidthDip,
+        double boundsHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(glyphWidths);
+        if (glyphWidths.Count == 0 || boundsWidthDip <= 0 || boundsHeightDip <= 0)
+            return new DrawingObjectWordArtPlacementPlan(warp, []);
+
+        var totalWidth = glyphWidths.Sum();
+        if (totalWidth <= 0 || warp is not (WordArtWarp.ArchUp or WordArtWarp.Wave1))
+            return new DrawingObjectWordArtPlacementPlan(warp, []);
+
+        var halfSpan = totalWidth / 2;
+        var normalizedHalfSpan = Math.Max(1, halfSpan);
+        var normalizedTotalWidth = Math.Max(1, totalWidth);
+        var currentX = boundsWidthDip / 2 - halfSpan;
+        var archDepth = Math.Min(boundsHeightDip * 0.28, Math.Max(3, totalWidth * 0.12));
+        var waveAmplitude = Math.Min(boundsHeightDip * 0.16, Math.Max(2, totalWidth * 0.055));
+        var placements = new List<DrawingObjectWordArtGlyphPlacementPlan>(glyphWidths.Count);
+
+        foreach (var width in glyphWidths)
+        {
+            var centerX = currentX + width / 2;
+            var normalizedX = (centerX - boundsWidthDip / 2) / normalizedHalfSpan;
+            double centerY;
+            double tangent;
+            if (warp == WordArtWarp.ArchUp)
+            {
+                centerY = boundsHeightDip / 2 - archDepth / 2 + archDepth * normalizedX * normalizedX;
+                tangent = 2 * archDepth * normalizedX / normalizedHalfSpan;
+            }
+            else
+            {
+                var progress = (centerX - (boundsWidthDip / 2 - halfSpan)) / normalizedTotalWidth;
+                var phase = Math.PI * 2 * progress;
+                centerY = boundsHeightDip / 2 + waveAmplitude * Math.Sin(phase);
+                tangent = waveAmplitude * Math.PI * 2 * Math.Cos(phase) / normalizedTotalWidth;
+            }
+
+            placements.Add(new DrawingObjectWordArtGlyphPlacementPlan(
+                centerX / boundsWidthDip,
+                centerY / boundsHeightDip,
+                Math.Atan(tangent)));
+            currentX += width;
+        }
+
+        return new DrawingObjectWordArtPlacementPlan(warp, placements);
     }
 
     public static DrawingObjectVisualPlan BuildVisualPlan(

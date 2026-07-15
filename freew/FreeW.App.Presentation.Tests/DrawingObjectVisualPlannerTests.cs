@@ -209,6 +209,89 @@ public sealed class DrawingObjectVisualPlannerTests
     }
 
     [Fact]
+    public void WordArtPlacementPlan_UsesSharedNormalizedArchUpCurveAndTangents()
+    {
+        var plan = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            WordArtWarp.ArchUp,
+            [30, 30, 30],
+            boundsWidthDip: 200,
+            boundsHeightDip: 100);
+
+        plan.Glyphs.Should().HaveCount(3);
+        plan.Glyphs[0].CenterXNormalized.Should().BeApproximately(0.35, 0.001);
+        plan.Glyphs[1].CenterXNormalized.Should().BeApproximately(0.5, 0.001);
+        plan.Glyphs[2].CenterXNormalized.Should().BeApproximately(0.65, 0.001);
+        plan.Glyphs[1].CenterYNormalized.Should().BeLessThan(plan.Glyphs[0].CenterYNormalized);
+        plan.Glyphs[0].RotationRadians.Should().BeLessThan(0);
+        plan.Glyphs[1].RotationRadians.Should().BeApproximately(0, 0.001);
+        plan.Glyphs[2].RotationRadians.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void WordArtPlacementPlan_UsesSharedNormalizedWave1CurveAndTangents()
+    {
+        var plan = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            WordArtWarp.Wave1,
+            [20, 20, 20, 20],
+            boundsWidthDip: 200,
+            boundsHeightDip: 100);
+
+        plan.Glyphs.Should().HaveCount(4);
+        plan.Glyphs[0].CenterYNormalized.Should().BeGreaterThan(0.5);
+        plan.Glyphs[1].CenterYNormalized.Should().BeGreaterThan(0.5);
+        plan.Glyphs[2].CenterYNormalized.Should().BeLessThan(0.5);
+        plan.Glyphs[3].CenterYNormalized.Should().BeLessThan(0.5);
+        plan.Glyphs[0].RotationRadians.Should().BeGreaterThan(0);
+        plan.Glyphs[1].RotationRadians.Should().BeLessThan(0);
+        plan.Glyphs[2].RotationRadians.Should().BeLessThan(0);
+        plan.Glyphs[3].RotationRadians.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void WordArtPlacementPlan_LeavesUnsupportedWarpAndInvalidBoundsEmpty()
+    {
+        DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(WordArtWarp.Circle, [20, 20], 200, 100)
+            .Glyphs.Should().BeEmpty();
+        DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(WordArtWarp.ArchUp, [20, 20], 0, 100)
+            .Glyphs.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void WordArtPlacementPlan_ClampsNarrowArchUpSpanDenominator()
+    {
+        var plan = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            WordArtWarp.ArchUp,
+            [0.1, 0.1],
+            boundsWidthDip: 200,
+            boundsHeightDip: 100);
+
+        plan.Glyphs.Should().HaveCount(2);
+        plan.Glyphs.Should().OnlyContain(glyph =>
+            double.IsFinite(glyph.CenterXNormalized)
+            && double.IsFinite(glyph.CenterYNormalized)
+            && double.IsFinite(glyph.RotationRadians));
+        plan.Glyphs[0].RotationRadians.Should().BeLessThan(0);
+        plan.Glyphs[1].RotationRadians.Should().BeGreaterThan(0);
+    }
+
+    [Fact]
+    public void WordArtPlacementPlan_ClampsNarrowWave1SpanDenominator()
+    {
+        var plan = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            WordArtWarp.Wave1,
+            [0.01, 0.01],
+            boundsWidthDip: 200,
+            boundsHeightDip: 100);
+
+        plan.Glyphs.Should().HaveCount(2);
+        plan.Glyphs.Should().OnlyContain(glyph =>
+            double.IsFinite(glyph.CenterXNormalized)
+            && double.IsFinite(glyph.CenterYNormalized)
+            && double.IsFinite(glyph.RotationRadians)
+            && Math.Abs(glyph.RotationRadians) < 1.5);
+    }
+
+    [Fact]
     public void GroupPlan_RecordsMixedChildrenWithLocalOffsetsAndTypedPlans()
     {
         var group = new DrawingGroup

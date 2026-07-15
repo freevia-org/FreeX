@@ -504,12 +504,13 @@ public sealed class DocumentViewFloatingFO3Tests
     [Fact]
     public void ArchUpGlyphPlacement_IsSymmetricAndCurved()
     {
-        var placements = DocumentView.BuildArchUpGlyphPlacements([10d, 10d, 10d, 10d, 10d], new Rect(20, 30, 100, 40));
+        var placements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            WordArtWarp.ArchUp, [10d, 10d, 10d, 10d, 10d], 100, 40).Glyphs;
 
         placements.Should().HaveCount(5);
-        placements[0].CenterY.Should().BeApproximately(placements[4].CenterY, 0.001);
-        placements[1].CenterY.Should().BeApproximately(placements[3].CenterY, 0.001);
-        placements[0].CenterY.Should().BeGreaterThan(placements[2].CenterY);
+        placements[0].CenterYNormalized.Should().BeApproximately(placements[4].CenterYNormalized, 0.001);
+        placements[1].CenterYNormalized.Should().BeApproximately(placements[3].CenterYNormalized, 0.001);
+        placements[0].CenterYNormalized.Should().BeGreaterThan(placements[2].CenterYNormalized);
         placements[0].RotationRadians.Should().BeLessThan(0);
         placements[2].RotationRadians.Should().BeApproximately(0, 0.001);
         placements[4].RotationRadians.Should().BeGreaterThan(0);
@@ -518,15 +519,16 @@ public sealed class DocumentViewFloatingFO3Tests
     [Fact]
     public void Wave1GlyphPlacement_UsesOneCenteredSineCycle()
     {
-        var placements = DocumentView.BuildWave1GlyphPlacements([10d, 10d, 10d, 10d, 10d], new Rect(20, 30, 100, 40));
+        var placements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            WordArtWarp.Wave1, [10d, 10d, 10d, 10d, 10d], 100, 40).Glyphs;
 
         placements.Should().HaveCount(5);
-        placements[0].CenterY.Should().BeLessThan(placements[1].CenterY);
-        placements[1].CenterY.Should().BeGreaterThan(placements[2].CenterY);
-        placements[2].CenterY.Should().BeGreaterThan(placements[3].CenterY);
-        placements[3].CenterY.Should().BeLessThan(placements[4].CenterY);
-        (placements[0].CenterY + placements[4].CenterY).Should().BeApproximately(100, 0.001);
-        (placements[1].CenterY + placements[3].CenterY).Should().BeApproximately(100, 0.001);
+        placements[0].CenterYNormalized.Should().BeLessThan(placements[1].CenterYNormalized);
+        placements[1].CenterYNormalized.Should().BeGreaterThan(placements[2].CenterYNormalized);
+        placements[2].CenterYNormalized.Should().BeGreaterThan(placements[3].CenterYNormalized);
+        placements[3].CenterYNormalized.Should().BeLessThan(placements[4].CenterYNormalized);
+        (placements[0].CenterYNormalized + placements[4].CenterYNormalized).Should().BeApproximately(1, 0.001);
+        (placements[1].CenterYNormalized + placements[3].CenterYNormalized).Should().BeApproximately(1, 0.001);
         placements[0].RotationRadians.Should().BeGreaterThan(0);
         placements[2].RotationRadians.Should().BeLessThan(0);
     }

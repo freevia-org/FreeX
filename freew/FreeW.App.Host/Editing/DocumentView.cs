@@ -5384,7 +5384,8 @@ public sealed class DocumentView : RichTextBox
         DrawingObjectWordArtPlan wordArt,
         System.Windows.Media.Brush fillBrush,
         System.Windows.Media.Brush foreground,
-        System.Windows.Media.Effects.Effect? effect)
+        System.Windows.Media.Effects.Effect? effect,
+        bool fitTextToBounds = true)
     {
         var canvas = new Canvas
         {
@@ -5397,7 +5398,7 @@ public sealed class DocumentView : RichTextBox
         // The caller assigns the final size immediately after this method returns. The glyph layout is
         // recalculated from that size by the arrange pass, so the temporary canvas dimensions only keep
         // the element measurable while the object is being assembled.
-        canvas.SizeChanged += (_, _) => ArrangeWarpedWordArtGlyphs(canvas, wordArt, foreground);
+        canvas.SizeChanged += (_, _) => ArrangeWarpedWordArtGlyphs(canvas, wordArt, foreground, fitTextToBounds);
         return canvas;
     }
 
@@ -5419,7 +5420,8 @@ public sealed class DocumentView : RichTextBox
     private static void ArrangeWarpedWordArtGlyphs(
         Canvas canvas,
         DrawingObjectWordArtPlan wordArt,
-        System.Windows.Media.Brush foreground)
+        System.Windows.Media.Brush foreground,
+        bool fitTextToBounds = true)
     {
         if (canvas.ActualWidth <= 1 || canvas.ActualHeight <= 1)
             return;
@@ -5429,7 +5431,7 @@ public sealed class DocumentView : RichTextBox
         var glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
         var totalWidth = glyphs.Sum(glyph => glyph.DesiredSize.Width);
         var targetWidth = canvas.ActualWidth * 0.8;
-        if (totalWidth > targetWidth && totalWidth > 0)
+        if (fitTextToBounds && totalWidth > targetWidth && totalWidth > 0)
         {
             fontSize = Math.Max(8, fontSize * targetWidth / totalWidth);
             glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
@@ -5439,43 +5441,25 @@ public sealed class DocumentView : RichTextBox
         if (glyphs.Count == 0 || totalWidth <= 0)
             return;
 
-        var halfSpan = totalWidth / 2;
-        var currentX = canvas.ActualWidth / 2 - halfSpan;
-        var placements = new List<(double CenterX, double CenterY, double RotationDegrees, double Width, double Height)>(glyphs.Count);
-        for (var index = 0; index < glyphs.Count; index++)
-        {
-            var glyph = glyphs[index];
-            var width = glyph.DesiredSize.Width;
-            var height = glyph.DesiredSize.Height;
-            var centerX = currentX + width / 2;
-            var normalizedX = (centerX - canvas.ActualWidth / 2) / Math.Max(1, halfSpan);
-            double centerY;
-            double rotationDegrees;
-            if (wordArt.Warp == WordArtWarp.ArchUp)
-            {
-                var depth = Math.Min(canvas.ActualHeight * 0.28, Math.Max(3, totalWidth * 0.12));
-                centerY = canvas.ActualHeight / 2 - depth / 2 + depth * normalizedX * normalizedX;
-                rotationDegrees = Math.Atan(2 * depth * normalizedX / Math.Max(1, halfSpan)) * 180 / Math.PI;
-            }
-            else
-            {
-                var amplitude = Math.Min(canvas.ActualHeight * 0.16, Math.Max(2, totalWidth * 0.055));
-                var progress = (centerX - (canvas.ActualWidth / 2 - halfSpan)) / totalWidth;
-                var phase = Math.PI * 2 * progress;
-                centerY = canvas.ActualHeight / 2 + amplitude * Math.Sin(phase);
-                rotationDegrees = Math.Atan(amplitude * Math.PI * 2 * Math.Cos(phase) / totalWidth) * 180 / Math.PI;
-            }
-
-            placements.Add((centerX, centerY, rotationDegrees, width, height));
-            currentX += width;
-        }
+        var sharedPlacements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
+            wordArt.Warp,
+            glyphs.Select(glyph => glyph.DesiredSize.Width).ToList(),
+            canvas.ActualWidth,
+            canvas.ActualHeight).Glyphs;
 
         var outlineBrush = wordArt.Outline.IsVisible
             ? BuildDrawingStrokeBrush(wordArt.Outline)
             : null;
         for (var index = 0; index < glyphs.Count; index++)
         {
-            var placement = placements[index];
+            var sharedPlacement = sharedPlacements[index];
+            var glyph = glyphs[index];
+            var placement = (
+                sharedPlacement.CenterXNormalized * canvas.ActualWidth,
+                sharedPlacement.CenterYNormalized * canvas.ActualHeight,
+                sharedPlacement.RotationRadians * 180 / Math.PI,
+                glyph.DesiredSize.Width,
+                glyph.DesiredSize.Height);
             var character = wordArt.Text[index].ToString();
             if (outlineBrush is not null)
             {
@@ -10747,9 +10731,9 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Renders inline WordArt as an InlineUIContainer hosting a TextBlock that carries the model
-    /// <see cref="WordArt"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The text is
-    /// drawn at the WordArt's font size with a style-derived fill/outline as a lightweight visual stand-in.
+    /// Renders inline WordArt as an InlineUIContainer carrying the model <see cref="WordArt"/> on its Tag
+    /// (so CommitToModel round-trips it, mirroring shapes). ArchUp/Wave1 reuse the same glyph placement
+    /// adapter as floating WordArt; other warps retain the compact TextBlock visual.
     /// </summary>
     private static InlineUIContainer BuildWordArtRun(WordArt wordArt, DocumentEffectSet effectSet)
     {
@@ -10758,21 +10742,42 @@ public sealed class DocumentView : RichTextBox
         var foreground = BuildDrawingFillBrush(wordArtPlan.Fill);
         var wpfEffect = BuildWordArtEffect(plan.Effects, effectSet);
 
-        // Warp hint: when a warp is set, add a slight italic skew as a best-effort visual cue
-        // (WPF has no built-in text-path warp; full geometry warp is deferred).
-        var element = new TextBlock
+        FrameworkElement element;
+        if (wordArtPlan.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
         {
-            Text       = wordArtPlan.Text,
-            FontSize   = wordArtPlan.FontSizeDip,
-            FontWeight = wordArtPlan.Bold ? FontWeights.Bold : FontWeights.Normal,
-            Foreground = foreground,
-            Effect     = wpfEffect,
-            Tag        = wordArt, // carries the model WordArt so CommitToModel can round-trip it
-        };
-        // Apply warp visual hint
-        if (wordArtPlan.Warp != WordArtWarp.None)
-            element.FontStyle = wordArtPlan.Warp is WordArtWarp.ArchUp or WordArtWarp.Inflate or WordArtWarp.Wave1
-                ? FontStyles.Normal : FontStyles.Italic;
+            var warpForeground = BuildDrawingWordArtTextBrush(wordArtPlan.Fill);
+            var canvas = (Canvas)BuildWarpedDrawingWordArtVisual(
+                wordArtPlan,
+                foreground,
+                warpForeground,
+                wpfEffect,
+                fitTextToBounds: false);
+            var glyphs = CreateWordArtGlyphs(
+                wordArtPlan.Text,
+                Math.Max(8, wordArtPlan.FontSizeDip),
+                wordArtPlan.Bold,
+                warpForeground);
+            canvas.Width = Math.Max(1, glyphs.Sum(glyph => glyph.DesiredSize.Width));
+            canvas.Height = Math.Max(1, glyphs.Count == 0 ? 1 : glyphs.Max(glyph => glyph.DesiredSize.Height));
+            element = canvas;
+        }
+        else
+        {
+            var textBlock = new TextBlock
+            {
+                Text       = wordArtPlan.Text,
+                FontSize   = wordArtPlan.FontSizeDip,
+                FontWeight = wordArtPlan.Bold ? FontWeights.Bold : FontWeights.Normal,
+                Foreground = foreground,
+                Effect     = wpfEffect,
+            };
+            if (wordArtPlan.Warp != WordArtWarp.None)
+                textBlock.FontStyle = wordArtPlan.Warp is WordArtWarp.Inflate
+                    ? FontStyles.Normal : FontStyles.Italic;
+            element = textBlock;
+        }
+
+        element.Tag = wordArt; // carries the model WordArt so CommitToModel can round-trip it
 
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Center };
     }
