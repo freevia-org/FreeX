@@ -746,7 +746,7 @@ public sealed class SlideCanvas : FrameworkElement
 
         // ── Gridlines (drawn before bars so they appear behind) ─────────────────
         var gridLinePlan = ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame);
-        if (gridLinePlan.GridLines.Count > 0)
+        if (!ChartRenderPlanner.UsesProjectedSurfaceFrame(chart) && gridLinePlan.GridLines.Count > 0)
         {
             var gridPen = CreateChartGridLinePen(gridLinePlan);
             foreach (var gridLine in gridLinePlan.GridLines)

@@ -563,6 +563,17 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void UsesProjectedSurfaceFrame_OnlyForSurface3D()
+    {
+        ChartRenderPlanner.UsesProjectedSurfaceFrame(new ChartShape { ChartType = ChartType.Surface3D })
+            .Should().BeTrue();
+        ChartRenderPlanner.UsesProjectedSurfaceFrame(new ChartShape { ChartType = ChartType.Surface })
+            .Should().BeFalse();
+        ChartRenderPlanner.UsesProjectedSurfaceFrame(new ChartShape { ChartType = ChartType.ColumnClustered })
+            .Should().BeFalse();
+    }
+
+    [Fact]
     public void BuildSurfaceGeometryPlan_Surface3DPreservesIncompleteCellsAsTriangles()
     {
         var chart = MakeSurfaceChart(ChartType.Surface3D);

@@ -838,6 +838,13 @@ public static partial class ChartRenderPlanner
             _ => ChartRenderFamily.Cartesian
         };
 
+    /// <summary>
+    /// Surface3D owns a projected back-wall grid, so it must not also receive the
+    /// flat Cartesian grid rendered by the generic chart frame.
+    /// </summary>
+    public static bool UsesProjectedSurfaceFrame(ChartShape chart) =>
+        chart.ChartType == ChartType.Surface3D;
+
     public static IReadOnlyList<ChartLegendItemPlan> BuildLegendItemPlans(
         ChartShape chart,
         ChartFramePlan frame,
