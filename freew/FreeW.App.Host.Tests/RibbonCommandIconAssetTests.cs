@@ -88,7 +88,7 @@ public sealed class RibbonCommandIconAssetTests
     [Fact]
     public void FreeW_document_views_use_shared_run_clone_helper()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         foreach (var relativePath in new[]
         {
             Path.Combine("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"),
