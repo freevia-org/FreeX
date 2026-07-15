@@ -276,6 +276,13 @@ public sealed class ChartRenderPlannerTests
         ChartRenderPlanner.FormatAxisValue(value).Should().Be(expected);
     }
 
+    [Fact]
+    public void FormatAxisLabelValue_DoesNotAbbreviateGeneralThousands()
+    {
+        ChartRenderPlanner.FormatAxisLabelValue(8000, "General").Should().Be("8000");
+        ChartRenderPlanner.FormatAxisLabelValue(1200, null).Should().Be("1.2K");
+    }
+
     [Theory]
     [InlineData(0.25, "0.0%", "25.0%")]
     [InlineData(1234.5, "#,##0.0", "1,234.5")]

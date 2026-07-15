@@ -1293,7 +1293,7 @@ public static partial class ChartRenderPlanner
             bool importedTextMetrics = UsesImportedTextMetrics(chart);
             if (importedTextMetrics && chart.SecondaryValueAxis is { Delete: false })
             {
-                double legendX = Math.Min(frame.Bounds.Right, plot.Right + 50.0);
+                double legendX = Math.Min(frame.Bounds.Right, plot.Right + 80.0);
                 return new ChartPlanRect(
                     legendX,
                     plot.Y,
@@ -1570,7 +1570,7 @@ public static partial class ChartRenderPlanner
             {
                 double x = plot.X + plot.Width * tickIndex / steps;
                 labels.Add(new ChartTextPlan(
-                    FormatAxisValue(value, chart.ValueAxis.NumberFormatCode),
+                    FormatChartAxisLabelValue(chart, value, chart.ValueAxis.NumberFormatCode),
                     new ChartPlanRect(x - ResolveAxisLabelWidth(chart) / 2, plot.Bottom + 2, ResolveAxisLabelWidth(chart), ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
@@ -1581,7 +1581,7 @@ public static partial class ChartRenderPlanner
             {
                 double y = plot.Bottom - plot.Height * tickIndex / steps;
                 labels.Add(new ChartTextPlan(
-                    FormatAxisValue(value, chart.ValueAxis.NumberFormatCode),
+                    FormatChartAxisLabelValue(chart, value, chart.ValueAxis.NumberFormatCode),
                     new ChartPlanRect(plot.X - ResolveAxisLabelWidth(chart), y - 6, ResolveAxisLabelWidth(chart) - GridlinePad, ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
@@ -1966,8 +1966,12 @@ public static partial class ChartRenderPlanner
         var plot = frame.Plot;
         var labels = new List<ChartTextPlan>(tickCount + 1);
         var ticks = new List<ChartGridLinePlan>(tickCount + 1);
-        double labelX = plot.Right + AxisMajorTickLength + GridlinePad;
-        double labelWidth = Math.Max(1, AxisLabelWidth - AxisMajorTickLength - GridlinePad);
+        double labelX = plot.Right + AxisMajorTickLength + GridlinePad +
+            (UsesImportedTextMetrics(chart) ? 8.0 : 0.0);
+        double labelWidth = Math.Max(
+            1,
+            (UsesImportedTextMetrics(chart) ? 72.0 : AxisLabelWidth) -
+            AxisMajorTickLength - GridlinePad);
         for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
         {
             double value = niceMin + majorUnit * tickIndex;
@@ -1976,7 +1980,7 @@ public static partial class ChartRenderPlanner
                 new ChartPlanPoint(plot.Right, y),
                 new ChartPlanPoint(plot.Right + AxisMajorTickLength, y)));
             labels.Add(new ChartTextPlan(
-                FormatAxisValue(value, chart.SecondaryValueAxis.NumberFormatCode),
+                FormatChartAxisLabelValue(chart, value, chart.SecondaryValueAxis.NumberFormatCode),
                 new ChartPlanRect(labelX, y - 6, labelWidth, UsesImportedTextMetrics(chart) ? 32.0 : 12.0),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
@@ -4247,6 +4251,18 @@ public static partial class ChartRenderPlanner
         double max = chart.ValueAxis.Max ?? dataMax;
         if (UsesStockLineFallback(chart) && chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
             return ComputeStockFallbackValueAxisRange(min, max);
+        if (chart.ChartType == ChartType.ColumnClustered &&
+            UsesImportedTextMetrics(chart) &&
+            chart.Series.Any(series => series.OnSecondaryAxis) &&
+            chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
+        {
+            // PowerPoint gives imported column+line combos a denser primary
+            // scale than a standalone clustered column chart.
+            var range = ComputeNiceRange(min, max, targetIntervals: 10);
+            return range.max - max <= range.majorUnit * 0.25
+                ? (range.min, range.max + range.majorUnit, range.majorUnit)
+                : range;
+        }
         if (chart.ChartType == ChartType.BarClustered &&
             UsesImportedTextMetrics(chart) &&
             chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
@@ -4276,6 +4292,14 @@ public static partial class ChartRenderPlanner
 
         double min = chart.SecondaryValueAxis?.Min ?? (dataMin >= 0 ? 0 : dataMin);
         double max = chart.SecondaryValueAxis?.Max ?? dataMax;
+        if (UsesImportedTextMetrics(chart) &&
+            chart.Series.Any(series => series.OnSecondaryAxis) &&
+            chart.SecondaryValueAxis?.Min is null && chart.SecondaryValueAxis?.Max is null)
+        {
+            // The imported combo baseline uses eight readable secondary-axis
+            // intervals, which keeps the 0..8000 labels at 1000 increments.
+            return ComputeNiceRange(min, max, targetIntervals: 8);
+        }
         return ComputeNiceRange(min, max);
     }
 
@@ -4346,6 +4370,28 @@ public static partial class ChartRenderPlanner
         string.IsNullOrWhiteSpace(numberFormatCode)
             ? FormatAxisValue(value)
             : FormatWithCode(value, numberFormatCode!);
+
+    public static string FormatAxisLabelValue(double value, string? numberFormatCode) =>
+        string.Equals(numberFormatCode, "General", StringComparison.OrdinalIgnoreCase)
+            ? FormatAxisValueWithoutScale(value)
+            : string.IsNullOrWhiteSpace(numberFormatCode)
+                ? FormatAxisValue(value)
+            : FormatWithCode(value, numberFormatCode!);
+
+    private static string FormatChartAxisLabelValue(
+        ChartShape chart,
+        double value,
+        string? numberFormatCode) =>
+        UsesImportedTextMetrics(chart) &&
+        chart.Series.Any(series => series.OnSecondaryAxis) &&
+        string.IsNullOrWhiteSpace(numberFormatCode)
+            ? FormatAxisValueWithoutScale(value)
+            : FormatAxisLabelValue(value, numberFormatCode);
+
+    private static string FormatAxisValueWithoutScale(double value) =>
+        value == Math.Floor(value)
+            ? ((long)value).ToString(CultureInfo.InvariantCulture)
+            : value.ToString("G3", CultureInfo.InvariantCulture);
 
     public static ChartDataLabels? ResolveEffectiveLabels(ChartShape chart, int seriesIndex)
     {
@@ -5080,7 +5126,7 @@ public static partial class ChartRenderPlanner
 
             double value = xMin + xUnit * tickIndex;
             xLabels.Add(new ChartTextPlan(
-                FormatAxisValue(value, xAxisLabelFormat?.FormatCode),
+                FormatAxisLabelValue(value, xAxisLabelFormat?.FormatCode),
                 new ChartPlanRect(x - 20, plot.Bottom + 2, 40, 12),
                 IsBold: false,
                 FontSize: 6.5,
@@ -5097,7 +5143,7 @@ public static partial class ChartRenderPlanner
 
             double value = yMin + yUnit * tickIndex;
             yLabels.Add(new ChartTextPlan(
-                FormatAxisValue(value, yAxisLabelFormat?.FormatCode),
+                FormatAxisLabelValue(value, yAxisLabelFormat?.FormatCode),
                 new ChartPlanRect(plot.X - 38, y - 6, 36, 12),
                 IsBold: false,
                 FontSize: 6.5,

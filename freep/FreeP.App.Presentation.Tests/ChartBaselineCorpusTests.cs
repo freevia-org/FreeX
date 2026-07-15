@@ -16,6 +16,28 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartLabelsCorpus_ImportedComboUsesPowerPointAxisIntervalsAndGeneralLabels()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[2].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        chart.Series.Should().Contain(series => series.OnSecondaryAxis);
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart)
+            .Should().Be((0, 200, 20));
+        ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart)
+            .Should().Be((0, 8000, 1000));
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+        scene.ValueAxisLabels.Select(label => label.Text)
+            .Should().Equal("0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200");
+        scene.SecondaryAxis.Labels.Select(label => label.Text)
+            .Should().Equal("0", "1000", "2000", "3000", "4000", "5000", "6000", "7000", "8000");
+    }
+
+    [Fact]
     public void ChartLabelsCorpus_PiePercentLabelsPreservePowerPointSeparatorAndAutomaticTitle()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
