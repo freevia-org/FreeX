@@ -515,6 +515,22 @@ public sealed class DocumentViewFloatingFO3Tests
         placements[4].RotationRadians.Should().BeGreaterThan(0);
     }
 
+    [Fact]
+    public void Wave1GlyphPlacement_UsesOneCenteredSineCycle()
+    {
+        var placements = DocumentView.BuildWave1GlyphPlacements([10d, 10d, 10d, 10d, 10d], new Rect(20, 30, 100, 40));
+
+        placements.Should().HaveCount(5);
+        placements[0].CenterY.Should().BeLessThan(placements[1].CenterY);
+        placements[1].CenterY.Should().BeGreaterThan(placements[2].CenterY);
+        placements[2].CenterY.Should().BeGreaterThan(placements[3].CenterY);
+        placements[3].CenterY.Should().BeLessThan(placements[4].CenterY);
+        (placements[0].CenterY + placements[4].CenterY).Should().BeApproximately(100, 0.001);
+        (placements[1].CenterY + placements[3].CenterY).Should().BeApproximately(100, 0.001);
+        placements[0].RotationRadians.Should().BeGreaterThan(0);
+        placements[2].RotationRadians.Should().BeLessThan(0);
+    }
+
     // ── SmartArt collection tests ─────────────────────────────────────────────────────────────────
 
     [Fact]
