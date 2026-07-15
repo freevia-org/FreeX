@@ -2910,6 +2910,8 @@ public static class PptxPackageReader
         var txBody = sp.Element(P + "txBody");
         if (txBody is not null) shape.TextBody = ReadTxBody(txBody, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath);
 
+        ApplyShapeStyleReferences(sp.Element(P + "style"), shape, scheme);
+
         return shape;
     }
 
@@ -3406,6 +3408,47 @@ public static class PptxPackageReader
             if (hasSomething)
                 shape.Effects = fx;
         }
+    }
+
+    private static void ApplyShapeStyleReferences(
+        XElement? style,
+        SlideShape shape,
+        PresentationColorScheme scheme)
+    {
+        if (style is null) return;
+
+        // p:style references theme format-matrix entries. The reference color is
+        // supplied alongside the index, so materialize the common inherited line
+        // and font color only when the shape did not author an explicit override.
+        if (shape.Outline is null)
+        {
+            var lineReference = style.Element(A + "lnRef");
+            var lineColor = PptxColorReader.TryReadColor(lineReference, scheme);
+            if (lineColor is not null)
+            {
+                var index = int.TryParse(lineReference?.Attribute("idx")?.Value,
+                    NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedIndex)
+                    ? parsedIndex
+                    : 0;
+                var widthPt = index switch
+                {
+                    1 => 1.0,
+                    2 => 1.5,
+                    3 => 2.0,
+                    _ => 0.75
+                };
+                shape.Outline = new ShapeOutline.Visible(lineColor, widthPt, OutlineDash.Solid);
+            }
+        }
+
+        if (shape.TextBody is null) return;
+
+        var fontColor = PptxColorReader.TryReadColor(style.Element(A + "fontRef"), scheme);
+        if (fontColor is null) return;
+
+        foreach (var paragraph in shape.TextBody.Paragraphs)
+        foreach (var run in paragraph.Runs.Where(run => run.Color is null))
+            run.Color = fontColor;
     }
 
     // ── Blip resolver ─────────────────────────────────────────────────────────

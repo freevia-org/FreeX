@@ -111,6 +111,22 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void FillsCorpusDeck_MaterializesInheritedLineAndFontReferences()
+    {
+        var presentation = PptxPackageReader.Read(Path.Combine(FindCorpusDirectory(), "12-fills.pptx"));
+        var shapes = presentation.Slides.Single().Shapes;
+
+        foreach (var name in new[] { "Grad3Stop", "GradRadial", "PatternDiag", "PatternCross", "GradPreset" })
+        {
+            var shape = shapes.Single(candidate => candidate.Name == name);
+            var outline = shape.Outline.Should().BeOfType<ShapeOutline.Visible>().Subject;
+            outline.WidthPt.Should().Be(1.5);
+            outline.Color.Resolved.Should().Be(new SrgbColor(0x03, 0x0E, 0x14));
+            shape.TextBody!.Paragraphs.Single().Runs.Single().Color!.Resolved.Should().Be(SrgbColor.White);
+        }
+    }
+
+    [Fact]
     public void ChartBaselineDepthCorpusDeck_ProjectsPowerPointWpfAvaloniaBaselineReadiness()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");

@@ -1062,7 +1062,8 @@ public static class SlideCompositor
         ShapeFill.Gradient g => new ResolvedFill.Gradient(
             g.Stops.Select(stop => new ResolvedFill.ResolvedGradientStop(
                 stop.Position,
-                ThemeColorResolver.Resolve(stop.Color, theme, effectiveClrMap))).ToArray(),
+                ThemeColorResolver.Resolve(stop.Color, theme, effectiveClrMap),
+                stop.Color.Alpha)).ToArray(),
             g.Kind,
             g.AngleDegrees),
         ShapeFill.Picture p => new ResolvedFill.Picture(p.ImageBytes, p.ContentType, p.Tile),
@@ -1112,7 +1113,8 @@ public static class SlideCompositor
         var resolvedStops = g.Stops.Select(s =>
             new ResolvedFill.ResolvedGradientStop(
                 s.Position,
-                ThemeColorResolver.Resolve(s.Color, theme, effectiveClrMap))).ToArray();
+                ThemeColorResolver.Resolve(s.Color, theme, effectiveClrMap),
+                s.Color.Alpha)).ToArray();
         return new ResolvedFill.Gradient(resolvedStops, g.Kind, g.AngleDegrees);
     }
 

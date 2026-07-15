@@ -4638,7 +4638,8 @@ public static partial class ChartRenderPlanner
         new(
             gradient.Stops.Select(stop => new ResolvedFill.ResolvedGradientStop(
                 stop.Position,
-                stop.Color.Resolved)).ToArray(),
+                stop.Color.Resolved,
+                stop.Color.Alpha)).ToArray(),
             gradient.Kind,
             gradient.AngleDegrees);
 

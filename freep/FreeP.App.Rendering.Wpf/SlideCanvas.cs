@@ -2347,7 +2347,9 @@ public sealed class SlideCanvas : FrameworkElement
         for (int index = 0; index < g.Stops.Count; index++)
         {
             var start = g.Stops[index];
-            stops.Add(new System.Windows.Media.GradientStop(Color.FromRgb(start.Color.R, start.Color.G, start.Color.B), start.Position));
+            stops.Add(new System.Windows.Media.GradientStop(
+                Color.FromArgb(start.Alpha, start.Color.R, start.Color.G, start.Color.B),
+                start.Position));
             if (index == g.Stops.Count - 1)
                 continue;
 
@@ -2359,8 +2361,9 @@ public sealed class SlideCanvas : FrameworkElement
                     start.Color,
                     end.Color,
                     easePositions ? GradientColorInterpolation.EasePowerPointPosition(fraction) : fraction);
+                var alpha = (byte)Math.Round(start.Alpha + (end.Alpha - start.Alpha) * fraction);
                 stops.Add(new System.Windows.Media.GradientStop(
-                    Color.FromRgb(color.R, color.G, color.B),
+                    Color.FromArgb(alpha, color.R, color.G, color.B),
                     start.Position + (end.Position - start.Position) * fraction));
             }
         }

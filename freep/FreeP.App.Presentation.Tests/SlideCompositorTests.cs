@@ -1048,6 +1048,30 @@ public sealed class SlideCompositorTests
     }
 
     [Fact]
+    public void Compose_GradientFill_PreservesStopAlpha()
+    {
+        var p = MakePresentation();
+        p.Slides[0].Shapes.Clear();
+        p.Slides[0].Shapes.Add(new SlideShape
+        {
+            Id = 1,
+            OffsetXEmu = 100000,
+            OffsetYEmu = 100000,
+            ExtentCxEmu = 900000,
+            ExtentCyEmu = 500000,
+            Fill = new ShapeFill.Gradient(
+                new ThemeAwareColor(new SrgbColor(0x00, 0x00, 0xFF)),
+                new ThemeAwareColor(new SrgbColor(0xFF, 0x00, 0x00), alpha: 0),
+                90.0)
+        });
+
+        var shapeOp = SlideCompositor.Compose(p, FirstSlide(p)).OfType<DrawOp.Shape>().Single();
+        var gradient = shapeOp.Fill.Should().BeOfType<ResolvedFill.Gradient>().Subject;
+
+        gradient.Stops.Select(stop => stop.Alpha).Should().Equal(255, 0);
+    }
+
+    [Fact]
     public void Compose_MultiStopGradientFill_AllStopsResolved()
     {
         var p = MakePresentation();

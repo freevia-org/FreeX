@@ -284,10 +284,14 @@ public abstract class ResolvedFill
         /// <summary>Stop position in [0, 1].</summary>
         public double Position { get; }
         public SrgbColor Color { get; }
-        public ResolvedGradientStop(double position, SrgbColor color)
+        /// <summary>Opacity of the stop, where 255 is fully opaque.</summary>
+        public byte Alpha { get; }
+
+        public ResolvedGradientStop(double position, SrgbColor color, byte alpha = 255)
         {
             Position = position;
             Color = color;
+            Alpha = alpha;
         }
     }
 
