@@ -7,7 +7,7 @@ public sealed class FindReplaceDialogPolicySourceTests
     [Fact]
     public void FindReplaceDialog_RoutesStatePolicyThroughPresentationPlanner()
     {
-        var repositoryRoot = FindRepositoryRoot();
+        var repositoryRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
             repositoryRoot,
             "freep",
@@ -43,16 +43,4 @@ public sealed class FindReplaceDialogPolicySourceTests
         plannerSource.Should().NotContain("FindReplaceStatusKind.");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

@@ -8,7 +8,7 @@ public sealed class SlideObjectInsertionRoutingSourceTests
     public void MainWindow_RoutesObjectInsertionThroughPlanner()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
@@ -28,16 +28,4 @@ public sealed class SlideObjectInsertionRoutingSourceTests
         source.Should().NotContain("Editor.InsertChart(");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

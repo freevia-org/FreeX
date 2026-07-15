@@ -86,7 +86,7 @@ public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
     public void WorkflowOwnsAtomicWritePolicyForBothFormats()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Presentation",
             "PresentationFilePersistenceWorkflow.cs"));
@@ -119,16 +119,4 @@ public sealed class PresentationFilePersistenceWorkflowTests : IDisposable
         return presentation;
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

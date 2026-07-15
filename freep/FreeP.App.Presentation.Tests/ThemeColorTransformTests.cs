@@ -93,7 +93,7 @@ public sealed class ThemeColorTransformTests
     [Fact]
     public void ThemeColorConsumers_UseSharedTransformHelper()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var readerSource = File.ReadAllText(Path.Combine(root, "freep", "FreeP.Core.IO", "PptxColorReader.cs"));
         var resolverSource = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Presentation", "ThemeColorResolver.cs"));
 
@@ -135,7 +135,7 @@ public sealed class ThemeColorTransformTests
     [Fact]
     public void ThemeColorConsumers_UseSharedRoleMapHelper()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var readerSource = File.ReadAllText(Path.Combine(root, "freep", "FreeP.Core.IO", "PptxColorReader.cs"));
         var resolverSource = File.ReadAllText(Path.Combine(root, "freep", "FreeP.App.Presentation", "ThemeColorResolver.cs"));
 
@@ -168,16 +168,4 @@ public sealed class ThemeColorTransformTests
             schemeClr.Add(new XElement(A + name, new XAttribute("val", value)));
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

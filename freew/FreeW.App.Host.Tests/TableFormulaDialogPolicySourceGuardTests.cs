@@ -43,21 +43,9 @@ public sealed class TableFormulaDialogPolicySourceGuardTests
 
     private static string ReadHostSource(params string[] pathParts)
     {
-        var root = Path.Combine(FindRepositoryRoot(), "freew", "FreeW.App.Host");
+        var root = Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host");
         var fullPath = pathParts.Aggregate(root, Path.Combine);
         return File.ReadAllText(fullPath);
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

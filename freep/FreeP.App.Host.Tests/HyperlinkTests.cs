@@ -574,20 +574,8 @@ public sealed class HyperlinkTests : IDisposable
 
     private static string ReadHostSource(string fileName)
     {
-        var path = Path.Combine(FindRepositoryRoot(), "freep", "FreeP.App.Host", fileName);
+        var path = Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"), "freep", "FreeP.App.Host", fileName);
         return File.ReadAllText(path);
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

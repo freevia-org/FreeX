@@ -10,7 +10,7 @@ public sealed class FileCommandWorkflowSourceTests
     public void SisterAppFileCommands_UseSharedWorkflow(string appFolder, string projectFolder)
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             appFolder,
             projectFolder,
             "FileCommands.cs"));
@@ -61,7 +61,7 @@ public sealed class FileCommandWorkflowSourceTests
     public void SharedWpfShellOwnsSisterFileCommandPromptWiring()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             "shared",
             "Free.Shared.Shell.Wpf",
             "SisterWpfFileCommandWorkflow.cs"));
@@ -79,7 +79,7 @@ public sealed class FileCommandWorkflowSourceTests
     public void SharedUserMessageServiceOwnsFileCommandPromptPolicy()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             "shared",
             "Free.Shared.AppServices",
             "IUserMessageService.cs"));
@@ -97,16 +97,4 @@ public sealed class FileCommandWorkflowSourceTests
         source.Should().Contain("_ => SaveChangesPrompt.Cancel");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

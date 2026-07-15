@@ -210,7 +210,7 @@ public sealed class FreeWOptionsTests : IDisposable
     [Fact]
     public void WpfOptionsDialog_UsesPresentationOptionsPolicy()
     {
-        var repoRoot = FindRepoRoot();
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var dialogSource = File.ReadAllText(Path.Combine(repoRoot, "freew", "FreeW.App.Host", "OptionsDialog.cs"));
 
         dialogSource.Should().Contain("using FreeW.App.Presentation.Options;");
@@ -227,16 +227,4 @@ public sealed class FreeWOptionsTests : IDisposable
         public string GetApplicationDataDirectory() => path;
     }
 
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root.");
-    }
 }

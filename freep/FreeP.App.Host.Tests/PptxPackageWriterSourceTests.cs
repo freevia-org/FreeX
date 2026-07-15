@@ -9,7 +9,7 @@ public sealed class PptxPackageWriterSourceTests
     public void PreservedRelationshipMerge_UsesSharedOpcRelationshipParser()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.Core.IO",
             "PptxPackageWriter.cs"));
@@ -25,7 +25,7 @@ public sealed class PptxPackageWriterSourceTests
     public void PreservedContentTypeMerge_UsesSharedOpcContentTypeMerger()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.Core.IO",
             "PptxPackageWriter.cs"));
@@ -42,7 +42,7 @@ public sealed class PptxPackageWriterSourceTests
     public void PackageRetentionClassification_DelegatesToSharedOpcClassifier()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.Core.IO",
             "PptxPackageWriter.cs"));
@@ -63,7 +63,7 @@ public sealed class PptxPackageWriterSourceTests
     public void DocumentProperties_UseSharedOpcPropertyHelpersAndConstants()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.Core.IO",
             "PptxPackageWriter.cs"));
@@ -83,7 +83,7 @@ public sealed class PptxPackageWriterSourceTests
     public void DrawingMlSrgbFormatting_UsesSharedRgbHelper()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.Core.IO",
             "PptxPackageWriter.cs"));
@@ -109,16 +109,4 @@ public sealed class PptxPackageWriterSourceTests
             : source[start..];
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }
