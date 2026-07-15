@@ -1063,13 +1063,32 @@ public sealed class ChartRenderPlannerTests
         var items = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, new[] { suppliedColor });
 
         items.Should().HaveCount(2);
-        items[0].SwatchBounds.Should().Be(new ChartPlanRect(316, 11, 8, 8));
+        items[0].SwatchBounds.Should().Be(new ChartPlanRect(316, 139, 8, 8));
         items[0].Label.Text.Should().Be("Point 1");
-        items[0].Label.Bounds.Should().Be(new ChartPlanRect(326, 8, 66, ChartRenderPlanner.LegendHeight));
+        items[0].Label.Bounds.Should().Be(new ChartPlanRect(326, 136, 66, ChartRenderPlanner.LegendHeight));
         items[0].Fill.Should().Be(new ChartFillPlan(suppliedColor, Alpha: 255));
-        items[1].SwatchBounds.Should().Be(new ChartPlanRect(316, 25, 8, 8));
+        items[1].SwatchBounds.Should().Be(new ChartPlanRect(316, 153, 8, 8));
         items[1].Label.Text.Should().Be("Point 2");
         items[1].Fill.Should().Be(new ChartFillPlan(new SrgbColor(0x4F, 0x81, 0xBD), Alpha: 255));
+    }
+
+    [Fact]
+    public void BuildLegendItemPlans_RightBarLegend_ReversesSeriesToMatchVisualOrder()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.BarClustered);
+        chart.Legend = LegendPosition.Right;
+        var colors = new[]
+        {
+            new SrgbColor(0x11, 0x22, 0x33),
+            new SrgbColor(0x44, 0x55, 0x66)
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var items = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, colors);
+
+        items.Select(item => item.Label.Text).Should().Equal("Forecast", "Actual");
+        items.Select(item => item.Fill.Color).Should().Equal(colors[1], colors[0]);
+        items[0].Label.Bounds.Y.Should().Be(136);
     }
 
     [Fact]

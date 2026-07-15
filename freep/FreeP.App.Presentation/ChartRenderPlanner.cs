@@ -846,8 +846,9 @@ public static partial class ChartRenderPlanner
         if (!legendBounds.HasPositiveArea)
             return Array.Empty<ChartLegendItemPlan>();
 
+        bool hasManualLayout = TryResolveManualLayoutRect(chart.LegendManualLayout, frame.Bounds, out _);
         bool verticalLegend = frame.LegendRight;
-        if (TryResolveManualLayoutRect(chart.LegendManualLayout, frame.Bounds, out _) &&
+        if (hasManualLayout &&
             legendBounds.Height < LegendHeight * 1.5 &&
             legendBounds.Width >= 80.0)
         {
@@ -868,20 +869,28 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartLegendItemPlan>();
 
         var items = new List<ChartLegendItemPlan>(itemsToShow);
+        double firstItemY = verticalLegend && !hasManualLayout
+            ? legendBounds.Y + Math.Max(0, (legendBounds.Height - itemsToShow * legendLineHeight) / 2)
+            : legendBounds.Y;
         for (int itemIndex = 0; itemIndex < itemsToShow; itemIndex++)
         {
+            int sourceItemIndex = frame.IsPie
+                ? itemIndex
+                : frame.IsBar
+                    ? itemCount - itemIndex - 1
+                    : itemIndex;
             double itemX = verticalLegend ? legendBounds.X : legendBounds.X + itemIndex * 80.0;
-            double itemY = verticalLegend ? legendBounds.Y + itemIndex * legendLineHeight : legendBounds.Y;
+            double itemY = verticalLegend ? firstItemY + itemIndex * legendLineHeight : legendBounds.Y;
             double textWidth = verticalLegend
                 ? Math.Max(0, legendWidth - 10)
                 : Math.Min(70, Math.Max(0, legendBounds.Right - itemX - 10));
             string text = frame.IsPie
-                ? itemIndex < chart.Categories.Count
-                    ? chart.Categories[itemIndex]
-                    : $"Point {itemIndex + 1}"
-                : chart.Series[itemIndex].Name;
-            var color = seriesColors is not null && itemIndex < seriesColors.Count
-                ? seriesColors[itemIndex]
+                ? sourceItemIndex < chart.Categories.Count
+                    ? chart.Categories[sourceItemIndex]
+                    : $"Point {sourceItemIndex + 1}"
+                : chart.Series[sourceItemIndex].Name;
+            var color = seriesColors is not null && sourceItemIndex < seriesColors.Count
+                ? seriesColors[sourceItemIndex]
                 : FallbackSeriesColors[0];
 
             items.Add(new ChartLegendItemPlan(
@@ -894,9 +903,9 @@ public static partial class ChartRenderPlanner
                     Alignment: ChartPlanTextAlignment.Left),
                 fillPlans is not null
                     ? frame.IsPie
-                        ? ResolvePointFill(chart.Series[0], 0, itemIndex, seriesColors, alpha: 255, fillPlans,
+                        ? ResolvePointFill(chart.Series[0], 0, sourceItemIndex, seriesColors, alpha: 255, fillPlans,
                             ShouldVaryPointColors(chart))
-                        : ResolveSeriesFill(itemIndex, seriesColors, alpha: 255, fillPlans)
+                        : ResolveSeriesFill(sourceItemIndex, seriesColors, alpha: 255, fillPlans)
                     : new ChartFillPlan(color, Alpha: 255)));
         }
 
@@ -933,9 +942,9 @@ public static partial class ChartRenderPlanner
                 importedTextMetrics
                     ? frame.Bounds.X + frame.Bounds.Width - legendAreaWidth + legendInset
                     : frame.Bounds.X + frame.Bounds.Width - legendAreaWidth - legendInset,
-                plot.Y,
+                frame.Bounds.Y,
                 legendWidth,
-                plot.Height);
+                frame.Bounds.Height);
         }
 
         double legendAreaHeight = frame.LegendAreaHeight > 0
