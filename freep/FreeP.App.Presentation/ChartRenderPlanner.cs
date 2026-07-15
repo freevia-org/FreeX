@@ -475,6 +475,10 @@ public static partial class ChartRenderPlanner
     public const double ImportedScatterPlotLeftInset = 10.5;
     public const double ImportedScatterPlotUpwardOffset = 10.5;
     public const double ImportedScatterPlotRightInset = 3.0;
+    public const double ImportedBarPlotLeftOffset = -4.5;
+    public const double ImportedBarPlotUpwardOffset = 4.5;
+    public const double ImportedBarPlotWidthReduction = 15.0;
+    public const double ImportedBarPlotHeightExtension = 20.25;
     public const byte BubbleFillAlpha = 180;
     public const double BubbleStrokeThickness = 0.8;
     public const byte RadarFillAlpha = 80;
@@ -841,6 +845,16 @@ public static partial class ChartRenderPlanner
                 plot.Y - ImportedScatterPlotUpwardOffset,
                 plot.Width - ImportedScatterPlotLeftInset - ImportedScatterPlotRightInset,
                 plot.Height);
+        }
+        if (chart.ChartType == ChartType.BarClustered && UsesImportedTextMetrics(chart))
+        {
+            // Imported PowerPoint bars use a tighter plot rectangle than the
+            // generic chart frame, with a longer category band below the grid.
+            plot = new ChartPlanRect(
+                plot.X + ImportedBarPlotLeftOffset,
+                plot.Y - ImportedBarPlotUpwardOffset,
+                plot.Width - ImportedBarPlotWidthReduction,
+                plot.Height + ImportedBarPlotHeightExtension);
         }
         if (UsesStockLineFallback(chart))
         {
@@ -3731,6 +3745,12 @@ public static partial class ChartRenderPlanner
         double max = chart.ValueAxis.Max ?? dataMax;
         if (UsesStockLineFallback(chart) && chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
             return ComputeStockFallbackValueAxisRange(min, max);
+        if (chart.ChartType == ChartType.BarClustered &&
+            UsesImportedTextMetrics(chart) &&
+            chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
+        {
+            return ComputeNiceRange(min, max, targetIntervals: 6);
+        }
         return ComputeNiceRange(min, max);
     }
 
@@ -5333,12 +5353,18 @@ public static partial class ChartRenderPlanner
     private static (double min, double max, double majorUnit) ComputeNiceRange(
         double min,
         double max)
+        => ComputeNiceRange(min, max, targetIntervals: 4);
+
+    private static (double min, double max, double majorUnit) ComputeNiceRange(
+        double min,
+        double max,
+        int targetIntervals)
     {
         if (max <= min)
             max = min + 1;
 
         double range = max - min;
-        double rawUnit = range / 4.0;
+        double rawUnit = range / Math.Max(1, targetIntervals);
         if (rawUnit <= 0)
             rawUnit = 1;
 
