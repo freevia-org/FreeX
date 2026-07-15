@@ -141,6 +141,43 @@ public sealed class SlidePanePlannerTests
     }
 
     [Fact]
+    public void BuildSessionProjection_ProjectsCollapseSelectionDragAndPaneEntries()
+    {
+        var slides = new[]
+        {
+            new Slide { Id = "rId2" },
+            new Slide { Id = "rId3" },
+            new Slide { Id = "rId4" }
+        };
+        var section = new PresentationSection { Id = "body", Name = "Body" };
+        section.SlideIds.Add("rId3");
+        section.SlideIds.Add("rId4");
+        var drag = SlidePanePlanner.BeginDragSession(0, 12);
+        var state = new SlidePaneSessionState(
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "BODY" },
+            SelectedSlideIndex: 2,
+            drag);
+
+        var projection = SlidePanePlanner.BuildSessionProjection(
+            slides,
+            new[] { section },
+            state);
+
+        projection.SelectedSlideIndex.Should().Be(2);
+        projection.DragSession.Should().BeSameAs(drag);
+        projection.Entries.Select(entry => entry.Kind).Should().Equal(
+            SlidePaneEntryKind.Slide,
+            SlidePaneEntryKind.SectionHeader);
+        projection.PaneEntries.Should().BeSameAs(projection.Entries);
+        projection.PaneItemIsSlide.Should().Equal(true, false);
+
+        var expanded = SlidePanePlanner.ToggleSection(state, "body");
+        expanded.CollapsedSectionIds.Should().BeEmpty();
+        expanded.SelectedSlideIndex.Should().Be(2);
+        expanded.DragSession.Should().BeSameAs(drag);
+    }
+
+    [Fact]
     public void DefaultThumbnailMetrics_UseSixteenByNineSlideAspect()
     {
         SlidePanePlanner.DefaultThumbnailWidth.Should().Be(150.0);

@@ -108,7 +108,8 @@ public sealed class MainWindow : Window
     private readonly ListBox _slidePaneList;
     private readonly Border _slidePaneInsertionIndicator;
     private readonly Button _slidePaneNewSlideButton;
-    private readonly HashSet<string> _slidePaneCollapsedSectionIds = new(StringComparer.OrdinalIgnoreCase);
+    private SlidePaneSessionState _slidePaneSessionState = SlidePaneSessionState.Empty;
+    private SlidePaneSessionProjection? _slidePaneProjection;
     private readonly List<SlidePaneThumbnailVisualPlan> _slidePaneRenderedThumbnailPlans = new();
     private readonly List<SlidePaneSectionHeaderVisualPlan> _slidePaneRenderedSectionHeaderPlans = new();
     private readonly TextBox _notesBox;
@@ -245,8 +246,6 @@ public sealed class MainWindow : Window
 
     private bool _notesRefreshing;
     private bool _slidePaneRefreshing;
-    private SlidePaneDragSessionState _slidePaneDragSession = SlidePaneDragSessionState.None;
-
     private sealed record SlidePaneSectionHeaderTag(string SectionId, int SectionIndex);
 
     // ── Smoke surface ──────────────────────────────────────────────────────────
@@ -6190,11 +6189,14 @@ public sealed class MainWindow : Window
             _slidePaneRenderedThumbnailPlans.Clear();
             _slidePaneRenderedSectionHeaderPlans.Clear();
 
-            var entries = SlidePanePlanner.BuildEntries(
+            _slidePaneSessionState = SlidePanePlanner.SetSelectedSlide(
+                _slidePaneSessionState,
+                Editor.CurrentSlideIndex);
+            _slidePaneProjection = SlidePanePlanner.BuildSessionProjection(
                 _presentation.Slides,
                 _presentation.Sections,
-                _slidePaneCollapsedSectionIds);
-            foreach (var entry in entries)
+                _slidePaneSessionState);
+            foreach (var entry in _slidePaneProjection.Entries)
             {
                 if (entry.Kind == SlidePaneEntryKind.SectionHeader)
                 {
@@ -6206,7 +6208,7 @@ public sealed class MainWindow : Window
                 var plan = SlidePanePlanner.BuildThumbnailVisualPlan(
                     entry,
                     slide,
-                    Editor.CurrentSlideIndex);
+                    _slidePaneProjection.SelectedSlideIndex);
                 _slidePaneRenderedThumbnailPlans.Add(plan);
 
                 // Small SlideCanvas thumbnail using the shared slide pane metrics.
@@ -6449,8 +6451,7 @@ public sealed class MainWindow : Window
         if (string.IsNullOrWhiteSpace(sectionId))
             return;
 
-        if (!_slidePaneCollapsedSectionIds.Add(sectionId))
-            _slidePaneCollapsedSectionIds.Remove(sectionId);
+        _slidePaneSessionState = SlidePanePlanner.ToggleSection(_slidePaneSessionState, sectionId);
 
         RefreshSlidePane();
     }
@@ -6569,14 +6570,17 @@ public sealed class MainWindow : Window
         if (!point.Properties.IsLeftButtonPressed)
             return;
 
-        _slidePaneDragSession = SlidePanePlanner.BeginDragSession(
-            sourceSlideIndex,
-            e.GetPosition(item).Y);
+        _slidePaneSessionState = _slidePaneSessionState with
+        {
+            DragSession = SlidePanePlanner.BeginDragSession(
+                sourceSlideIndex,
+                e.GetPosition(item).Y)
+        };
     }
 
     private void OnSlidePaneItemPointerMoved(object? sender, PointerEventArgs e)
     {
-        if (sender is not ListBoxItem item || !_slidePaneDragSession.IsTracking)
+        if (sender is not ListBoxItem item || !_slidePaneSessionState.DragSession.IsTracking)
             return;
 
         var point = e.GetCurrentPoint(item);
@@ -6584,13 +6588,13 @@ public sealed class MainWindow : Window
             return;
 
         var update = SlidePanePlanner.UpdateDragSession(
-            _slidePaneDragSession,
+            _slidePaneSessionState.DragSession,
             GetSlidePaneItemKinds(),
             e.GetPosition(item).Y,
             e.GetPosition(_slidePaneList).Y,
             SlidePanePlanner.DefaultSlideItemHeight);
-        _slidePaneDragSession = update.State;
-        if (!_slidePaneDragSession.IsDragging)
+        _slidePaneSessionState = _slidePaneSessionState with { DragSession = update.State };
+        if (!_slidePaneSessionState.DragSession.IsDragging)
             return;
 
         if (update.ShouldCapturePointer)
@@ -6603,9 +6607,9 @@ public sealed class MainWindow : Window
     private void OnSlidePaneItemPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
         var completion = SlidePanePlanner.CompleteDragSession(
-            _slidePaneDragSession,
+            _slidePaneSessionState.DragSession,
             _presentation.Slides.Count);
-        _slidePaneDragSession = completion.State;
+        _slidePaneSessionState = _slidePaneSessionState with { DragSession = completion.State };
 
         if (!completion.ShouldReleaseCapture)
         {
@@ -6621,7 +6625,10 @@ public sealed class MainWindow : Window
 
     private void OnSlidePaneItemPointerCaptureLost(object? sender, PointerCaptureLostEventArgs e)
     {
-        _slidePaneDragSession = SlidePanePlanner.CancelDragSession(_slidePaneDragSession);
+        _slidePaneSessionState = _slidePaneSessionState with
+        {
+            DragSession = SlidePanePlanner.CancelDragSession(_slidePaneSessionState.DragSession)
+        };
         HideSlidePaneInsertionIndicator();
     }
 
@@ -6641,14 +6648,17 @@ public sealed class MainWindow : Window
         double pointerYWithinItem,
         double pointerYWithinPane)
     {
-        _slidePaneDragSession = SlidePanePlanner.BeginDragSession(sourceSlideIndex, startPointerY);
+        _slidePaneSessionState = _slidePaneSessionState with
+        {
+            DragSession = SlidePanePlanner.BeginDragSession(sourceSlideIndex, startPointerY)
+        };
         var update = SlidePanePlanner.UpdateDragSession(
-            _slidePaneDragSession,
+            _slidePaneSessionState.DragSession,
             GetSlidePaneItemKinds(),
             pointerYWithinItem,
             pointerYWithinPane,
             SlidePanePlanner.DefaultSlideItemHeight);
-        _slidePaneDragSession = update.State;
+        _slidePaneSessionState = _slidePaneSessionState with { DragSession = update.State };
         if (update.State.IsDragging)
             ShowSlidePaneInsertionIndicator(update.DropVisualPlan);
         else
@@ -6660,9 +6670,9 @@ public sealed class MainWindow : Window
     internal bool CompleteSlidePaneDragForTests()
     {
         var completion = SlidePanePlanner.CompleteDragSession(
-            _slidePaneDragSession,
+            _slidePaneSessionState.DragSession,
             _presentation.Slides.Count);
-        _slidePaneDragSession = completion.State;
+        _slidePaneSessionState = _slidePaneSessionState with { DragSession = completion.State };
         HideSlidePaneInsertionIndicator();
         return completion.ShouldReleaseCapture &&
             SlidePanePlanner.TryApplyAction(Editor, completion.Action);
@@ -6768,10 +6778,7 @@ public sealed class MainWindow : Window
         _slidePaneInsertionIndicator.IsVisible = false;
 
     private IReadOnlyList<bool> GetSlidePaneItemKinds() =>
-        _slidePaneList.Items
-            .OfType<ListBoxItem>()
-            .Select(item => item.Tag is int)
-            .ToArray();
+        _slidePaneProjection?.PaneItemIsSlide ?? Array.Empty<bool>();
 
     private static IBrush BrushFromHex(string hex) =>
         new SolidColorBrush(Color.Parse(hex));
@@ -6873,6 +6880,9 @@ public sealed class MainWindow : Window
 
     private void OnCurrentSlideChanged(object? sender, EventArgs e)
     {
+        _slidePaneSessionState = SlidePanePlanner.SetSelectedSlide(
+            _slidePaneSessionState,
+            Editor.CurrentSlideIndex);
         _selectedCommentIndex = null;
         _selectedAnimationIndex = -1;
         _selectedMediaCaptionTrackIndex = null;

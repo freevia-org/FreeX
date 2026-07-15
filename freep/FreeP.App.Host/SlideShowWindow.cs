@@ -383,32 +383,28 @@ public sealed class SlideShowWindow : Window
             }
         }
 
-        // Check if the click lands on a trigger shape first.
-        if (slide is not null && slide.Animations.Any(a => a.TriggerShapeId is not null))
+        var pointerIntent = SlideShowHostPlanner.PlanPointerClick(
+            slide,
+            SlideShowHostPlanner.MapCanvasPointToSlide(
+                clickPt.X,
+                clickPt.Y,
+                _slideCanvas.ActualWidth,
+                _slideCanvas.ActualHeight,
+                CurrentSlideMetrics()));
+        switch (pointerIntent.Kind)
         {
-            var triggerShapeId = HitTestTriggerShape(slide, clickPt.X, clickPt.Y);
-            if (triggerShapeId is not null)
-            {
-                PlayTriggerGroup(triggerShapeId.Value);
-                e.Handled = true;
-                return;
-            }
+            case SlideShowPointerClickIntentKind.Trigger when pointerIntent.TriggerShapeId is uint triggerShapeId:
+                PlayTriggerGroup(triggerShapeId);
+                break;
+            case SlideShowPointerClickIntentKind.Hyperlink when pointerIntent.Hyperlink is not null:
+                ActivateHyperlink(pointerIntent.Hyperlink);
+                break;
+            case SlideShowPointerClickIntentKind.Advance:
+                DoAdvance();
+                break;
         }
 
-        // Check if the click lands on a hyperlinked shape.
-        if (slide is not null)
-        {
-            var hlink = HitTestHyperlink(slide, clickPt.X, clickPt.Y);
-            if (hlink is not null)
-            {
-                ActivateHyperlink(hlink);
-                e.Handled = true;
-                return;
-            }
-        }
-
-        // Not a trigger or hyperlink — regular advance.
-        DoAdvance();
+        e.Handled = pointerIntent.IsHandled;
     }
 
     private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)

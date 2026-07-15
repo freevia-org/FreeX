@@ -370,32 +370,28 @@ public sealed class SlideShowWindow : Window
             return;
         }
 
-        // Check for trigger shape click.
-        if (slide is not null && slide.Animations.Any(a => a.TriggerShapeId is not null))
+        var pointerIntent = SlideShowHostPlanner.PlanPointerClick(
+            slide,
+            SlideShowHostPlanner.MapCanvasPointToSlide(
+                pt.X,
+                pt.Y,
+                _slideCanvas.Bounds.Width,
+                _slideCanvas.Bounds.Height,
+                CurrentSlideMetrics()));
+        switch (pointerIntent.Kind)
         {
-            var triggerShapeId = HitTestTriggerShape(slide, pt.X, pt.Y);
-            if (triggerShapeId is not null)
-            {
-                PlayTriggerGroup(triggerShapeId.Value);
-                e.Handled = true;
-                return;
-            }
+            case SlideShowPointerClickIntentKind.Trigger when pointerIntent.TriggerShapeId is uint triggerShapeId:
+                PlayTriggerGroup(triggerShapeId);
+                break;
+            case SlideShowPointerClickIntentKind.Hyperlink when pointerIntent.Hyperlink is not null:
+                ActivateHyperlink(pointerIntent.Hyperlink);
+                break;
+            case SlideShowPointerClickIntentKind.Advance:
+                DoAdvance();
+                break;
         }
 
-        // Check for hyperlink click.
-        if (slide is not null)
-        {
-            var hlink = HitTestHyperlink(slide, pt.X, pt.Y);
-            if (hlink is not null)
-            {
-                ActivateHyperlink(hlink);
-                e.Handled = true;
-                return;
-            }
-        }
-
-        // Regular advance.
-        DoAdvance();
+        e.Handled = pointerIntent.IsHandled;
     }
 
     private void OnPointerMoved(object? sender, PointerEventArgs e)

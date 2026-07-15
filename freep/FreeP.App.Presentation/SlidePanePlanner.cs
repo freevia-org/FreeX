@@ -105,6 +105,29 @@ public sealed record SlidePaneDragCompletionPlan(
     SlidePaneActionPlan Action,
     bool ShouldReleaseCapture);
 
+public sealed record SlidePaneSessionState(
+    IReadOnlySet<string> CollapsedSectionIds,
+    int SelectedSlideIndex,
+    SlidePaneDragSessionState DragSession)
+{
+    public static SlidePaneSessionState Empty { get; } = new(
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+        -1,
+        SlidePaneDragSessionState.None);
+}
+
+public sealed record SlidePaneSessionProjection(
+    SlidePaneSessionState State,
+    IReadOnlyList<SlidePaneEntry> Entries,
+    IReadOnlyList<bool> PaneItemIsSlide)
+{
+    public IReadOnlyList<SlidePaneEntry> PaneEntries => Entries;
+
+    public int SelectedSlideIndex => State.SelectedSlideIndex;
+
+    public SlidePaneDragSessionState DragSession => State.DragSession;
+}
+
 public enum SlidePaneActionKind
 {
     InsertAfterSlide,
@@ -169,6 +192,54 @@ public static class SlidePanePlanner
     public const double DefaultDropIndicatorThickness = 2.0;
     public const double DefaultDropIndicatorHorizontalInset = 0.0;
     public const string DefaultDropIndicatorAccentHex = "#B7472A";
+
+    public static SlidePaneSessionProjection BuildSessionProjection(
+        IReadOnlyList<Slide> slides,
+        IReadOnlyList<PresentationSection> sections,
+        SlidePaneSessionState? state = null)
+    {
+        ArgumentNullException.ThrowIfNull(slides);
+        ArgumentNullException.ThrowIfNull(sections);
+
+        state ??= SlidePaneSessionState.Empty;
+        var entries = BuildEntries(slides, sections, state.CollapsedSectionIds);
+        var paneItemIsSlide = entries
+            .Select(entry => entry.Kind == SlidePaneEntryKind.Slide)
+            .ToArray();
+
+        return new SlidePaneSessionProjection(state, entries, paneItemIsSlide);
+    }
+
+    public static SlidePaneSessionProjection BuildProjection(
+        IReadOnlyList<Slide> slides,
+        IReadOnlyList<PresentationSection> sections,
+        SlidePaneSessionState? state = null) =>
+        BuildSessionProjection(slides, sections, state);
+
+    public static SlidePaneSessionState SetSelectedSlide(
+        SlidePaneSessionState state,
+        int selectedSlideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return state with { SelectedSlideIndex = selectedSlideIndex };
+    }
+
+    public static SlidePaneSessionState ToggleSection(
+        SlidePaneSessionState state,
+        string sectionId)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (string.IsNullOrWhiteSpace(sectionId))
+            return state;
+
+        var collapsedSectionIds = new HashSet<string>(
+            state.CollapsedSectionIds,
+            StringComparer.OrdinalIgnoreCase);
+        if (!collapsedSectionIds.Add(sectionId))
+            collapsedSectionIds.Remove(sectionId);
+
+        return state with { CollapsedSectionIds = collapsedSectionIds };
+    }
 
     public static IReadOnlyList<SlidePaneEntry> BuildEntries(
         IReadOnlyList<Slide> slides,

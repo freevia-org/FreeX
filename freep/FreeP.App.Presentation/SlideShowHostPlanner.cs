@@ -21,6 +21,24 @@ public enum SlideShowHostCommandKind
     NavigateToSlide
 }
 
+public enum SlideShowPointerClickIntentKind
+{
+    NoOp,
+    Trigger,
+    Hyperlink,
+    Advance
+}
+
+public sealed record SlideShowPointerClickIntent(
+    SlideShowPointerClickIntentKind Kind,
+    uint? TriggerShapeId = null,
+    Hyperlink? Hyperlink = null)
+{
+    public bool IsHandled => Kind is
+        SlideShowPointerClickIntentKind.Trigger or
+        SlideShowPointerClickIntentKind.Hyperlink;
+}
+
 public sealed record SlideShowSlideMetrics(double WidthDip, double HeightDip)
 {
     public static readonly SlideShowSlideMetrics Default = new(960, 540);
@@ -275,6 +293,33 @@ public static class SlideShowHostPlanner
         return step is null
             ? SlideShowHostCommand.HandledNoOp()
             : SlideShowHostCommand.PlayStep(step);
+    }
+
+    public static SlideShowPointerClickIntent PlanPointerClick(
+        Slide? slide,
+        SlideShowPoint slidePoint)
+    {
+        ArgumentNullException.ThrowIfNull(slidePoint);
+
+        if (slide is null)
+        {
+            return new SlideShowPointerClickIntent(SlideShowPointerClickIntentKind.Advance);
+        }
+
+        var triggerShapeId = HitTestTriggerShape(slide, slidePoint);
+        if (triggerShapeId is not null)
+        {
+            return new SlideShowPointerClickIntent(
+                SlideShowPointerClickIntentKind.Trigger,
+                TriggerShapeId: triggerShapeId);
+        }
+
+        var hyperlink = HitTestHyperlink(slide, slidePoint);
+        return hyperlink is null
+            ? new SlideShowPointerClickIntent(SlideShowPointerClickIntentKind.Advance)
+            : new SlideShowPointerClickIntent(
+                SlideShowPointerClickIntentKind.Hyperlink,
+                Hyperlink: hyperlink);
     }
 
     public static SlideShowHostCommand PlanInternalSlideJump(
