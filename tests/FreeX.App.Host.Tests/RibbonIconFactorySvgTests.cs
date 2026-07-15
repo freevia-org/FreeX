@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FluentAssertions;
+using Free.Shared.Ribbon.Icons;
 using FreeX.App.Host;
 
 namespace FreeX.App.Host.Tests;
@@ -179,7 +180,6 @@ public sealed class RibbonIconFactorySvgTests
     [InlineData("Find & Select", "find-and-select", "find")]
     [InlineData("Insert Link", "insert-link", "hyperlink")]
     [InlineData("Header & Footer", "header-and-footer", "header-footer")]
-    [InlineData("Pictures", "pictures", "picture")]
     [InlineData("Export PDF/XPS", "export-pdf-xps", "export")]
     [InlineData("Collapse Group", "collapse-group", "hide-detail")]
     [InlineData("Expand Group", "expand-group", "show-detail")]
@@ -195,21 +195,18 @@ public sealed class RibbonIconFactorySvgTests
         string expectedSlug,
         string expectedAlias)
     {
-        var slugMethod = typeof(RibbonIconFactory).GetMethod(
-            "ToCommandIconSlug",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        var aliasesMethod = typeof(RibbonIconFactory).GetMethod(
-            "GetCommandIconSlugCandidates",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        slugMethod.Should().NotBeNull();
-        aliasesMethod.Should().NotBeNull();
-
-        var slug = (string)slugMethod!.Invoke(null, [commandName])!;
-        var candidates = ((IEnumerable<string>)aliasesMethod!.Invoke(null, [slug])!).ToList();
+        var slug = RibbonCommandIconPolicy.ToCommandIconSlug(commandName);
+        var candidates = RibbonCommandIconPolicy.GetCommandIconSlugCandidates(slug).ToList();
 
         slug.Should().Be(expectedSlug);
         candidates.Should().ContainInOrder(expectedSlug, expectedAlias);
+    }
+
+    [Fact]
+    public void CommandIconSlugAliases_TrySharedCanonicalAliasBeforeHistoricalPictureSlug()
+    {
+        RibbonCommandIconPolicy.GetCommandIconSlugCandidates("pictures")
+            .Should().Equal("picture", "pictures");
     }
 
     [Theory]
@@ -222,18 +219,8 @@ public sealed class RibbonIconFactorySvgTests
         string commandName,
         string expectedSlug)
     {
-        var normalizeMethod = typeof(RibbonIconFactory).GetMethod(
-            "NormalizeCommandIconName",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        var slugMethod = typeof(RibbonIconFactory).GetMethod(
-            "ToCommandIconSlug",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        normalizeMethod.Should().NotBeNull();
-        slugMethod.Should().NotBeNull();
-
-        var normalized = (string)normalizeMethod!.Invoke(null, [commandName])!;
-        var slug = (string)slugMethod!.Invoke(null, [normalized])!;
+        var normalized = RibbonCommandIconPolicy.NormalizeCommandIconName(commandName);
+        var slug = RibbonCommandIconPolicy.ToCommandIconSlug(normalized);
 
         normalized.Should().NotContain("#");
         slug.Should().Be(expectedSlug);
@@ -269,20 +256,29 @@ public sealed class RibbonIconFactorySvgTests
         string commandName,
         string expectedAlias)
     {
-        var slugMethod = typeof(RibbonIconFactory).GetMethod(
-            "ToCommandIconSlug",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        var aliasesMethod = typeof(RibbonIconFactory).GetMethod(
-            "GetCommandIconSlugCandidates",
-            BindingFlags.NonPublic | BindingFlags.Static);
-
-        slugMethod.Should().NotBeNull();
-        aliasesMethod.Should().NotBeNull();
-
-        var slug = (string)slugMethod!.Invoke(null, [commandName])!;
-        var candidates = ((IEnumerable<string>)aliasesMethod!.Invoke(null, [slug])!).ToList();
+        var slug = RibbonCommandIconPolicy.ToCommandIconSlug(commandName);
+        var candidates = RibbonCommandIconPolicy.GetCommandIconSlugCandidates(slug).ToList();
 
         candidates.Should().Contain(expectedAlias);
+    }
+
+    [Theory]
+    [InlineData("Allow Edit Ranges")]
+    [InlineData("Date and Time")]
+    [InlineData("Lookup and Reference")]
+    [InlineData("Math and Trig")]
+    public void CreateCommandIcon_ResolvesRemovedShortNamesThroughCanonicalSvgAliases(string commandName)
+    {
+        StaTestRunner.Run(() =>
+        {
+            var icon = RibbonIconFactory.CreateCommandIcon(
+                commandName,
+                new RibbonCommandIcon(RibbonCommandIconKind.Generic),
+                size: 32,
+                Brushes.Black);
+
+            icon.Should().BeOfType<Image>().Which.Source.Should().BeOfType<DrawingImage>();
+        });
     }
 
     [Fact]

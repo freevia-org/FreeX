@@ -192,18 +192,6 @@ public sealed class SlideCanvasAvaloniaTests
         };
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 
     [Fact]
     public async Task InCanvasTextEditor_CommitPlainText_UsesSharedPlannerCommand()
@@ -1042,7 +1030,7 @@ public sealed class SlideCanvasAvaloniaTests
     [Fact]
     public void TableCellEditAdapter_DelegatesToSharedPlanner()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var adapter = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -1066,7 +1054,7 @@ public sealed class SlideCanvasAvaloniaTests
     [Fact]
     public void InCanvasTextEditAdapter_DelegatesToSharedShapePlanner()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var adapter = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -1084,7 +1072,7 @@ public sealed class SlideCanvasAvaloniaTests
     [Fact]
     public void SlideCanvas_LineSeriesRenderer_ConsumesSharedPathPrimitive()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -1100,7 +1088,7 @@ public sealed class SlideCanvasAvaloniaTests
     [Fact]
     public void TableCellTextEditor_UsesAvaloniaAdapterForSharedPlannerDecisions()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -1129,7 +1117,7 @@ public sealed class SlideCanvasAvaloniaTests
     [Fact]
     public void InCanvasTextEditor_UsesAvaloniaAdapterForSharedShapePlannerDecisions()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
             root,
             "freep",

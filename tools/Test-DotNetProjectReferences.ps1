@@ -6,28 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
-
-function Get-RelativeRepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $rootPath = [System.IO.Path]::GetFullPath($resolvedProjectRoot)
-    if (-not $rootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
-        $rootPath += [System.IO.Path]::DirectorySeparatorChar
-    }
-
-    $rootUri = New-Object System.Uri($rootPath)
-    $pathUri = New-Object System.Uri([System.IO.Path]::GetFullPath($Path))
-    return [System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString())
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Test-IsIgnoredProjectPath {
     param([Parameter(Mandatory = $true)][System.IO.FileInfo]$ProjectFile)
@@ -36,7 +15,7 @@ function Test-IsIgnoredProjectPath {
         return $true
     }
 
-    $relativePath = Get-RelativeRepoPath $ProjectFile.FullName
+    $relativePath = Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $ProjectFile.FullName
     $segments = $relativePath -split "/"
     return $segments -contains "bin" -or
         $segments -contains "obj" -or
@@ -45,31 +24,7 @@ function Test-IsIgnoredProjectPath {
         $segments -contains ".claude"
 }
 
-function Test-IsIgnoredDirectoryName {
-    param([Parameter(Mandatory = $true)][string]$Name)
-
-    return $Name -in @("bin", "obj", ".git", ".worktrees", ".claude")
-}
-
-function Get-ProjectFiles {
-    param([Parameter(Mandatory = $true)][System.IO.DirectoryInfo]$Directory)
-
-    foreach ($projectFile in $Directory.EnumerateFiles("*.csproj")) {
-        if (-not (Test-IsIgnoredProjectPath $projectFile)) {
-            $projectFile
-        }
-    }
-
-    foreach ($childDirectory in $Directory.EnumerateDirectories()) {
-        if (Test-IsIgnoredDirectoryName $childDirectory.Name) {
-            continue
-        }
-
-        Get-ProjectFiles -Directory $childDirectory
-    }
-}
-
-$resolvedProjectRoot = Resolve-RepoPath $ProjectRoot
+$resolvedProjectRoot = Resolve-ToolRepoPath -Path $ProjectRoot -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
     throw "Project root was not found: $resolvedProjectRoot"
 }
@@ -79,7 +34,7 @@ if (-not $resolvedProjectRootPath.EndsWith([System.IO.Path]::DirectorySeparatorC
 }
 
 $projectFiles = @(
-    Get-ProjectFiles -Directory (Get-Item -LiteralPath $resolvedProjectRoot) |
+    Get-ToolProjectFiles -Directory (Get-Item -LiteralPath $resolvedProjectRoot) |
         Sort-Object FullName
 )
 
@@ -95,7 +50,7 @@ foreach ($projectFile in $projectFiles) {
     [xml]$projectXml = Get-Content -LiteralPath $projectFile.FullName -Raw
     $projectReferences = @($projectXml.Project.ItemGroup.ProjectReference)
     $referencesByResolvedPath = @{}
-    $relativeProjectPath = Get-RelativeRepoPath $projectFile.FullName
+    $relativeProjectPath = Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $projectFile.FullName
 
     foreach ($projectReference in $projectReferences) {
         $include = [string]$projectReference.Include

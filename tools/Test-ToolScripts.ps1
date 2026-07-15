@@ -6,42 +6,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
-
-function Test-IsExcludedPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $relativePath = Get-RepositoryRelativePath $Path
-    $segments = $relativePath -split '[\\/]'
-    return $segments -contains "bin" -or
-        $segments -contains "obj" -or
-        $segments -contains ".worktrees" -or
-        $segments -contains ".claude"
-}
-
-function Get-RepositoryRelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if (-not [System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    $root = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    if ($fullPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $fullPath.Substring($root.Length).TrimStart([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    }
-
-    return $Path
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Assert-ToolSourceCentralization {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
@@ -49,10 +14,25 @@ function Assert-ToolSourceCentralization {
     $supportPath = Join-Path $ToolRoot "ToolScriptSupport.ps1"
     $support = Get-Content -LiteralPath $supportPath -Raw
     foreach ($requiredHelper in @(
+            "function Resolve-ToolRepoPath",
+            "function Test-ToolPathRooted",
+            "function ConvertTo-ToolPlatformPath",
+            "function Resolve-ToolFullPath",
+            "function Resolve-InputPath",
+            "function Get-ToolRelativePath",
+            "function ConvertTo-ToolNormalizedRelativePath",
+            "function Test-ToolExcludedPath",
+            "function Get-ToolTrackedRepositoryFiles",
+            "function Test-ToolIgnoredDirectoryName",
+            "function Get-ToolProjectFiles",
             "function ConvertTo-ToolRepoRelativePath",
             "function Read-ToolJson",
             "function ConvertTo-ToolMarkdownCell",
-            "function Test-ToolGeneratedContentMatches")) {
+            "function Test-ToolGeneratedContentMatches",
+            "function Invoke-FidelityCorpusDownload",
+            "function Get-RepoRoot",
+            "function Get-GitValue",
+            "function Resolve-FreeXExe")) {
         if (-not $support.Contains($requiredHelper)) {
             throw "ToolScriptSupport.ps1 is missing required helper '$requiredHelper'."
         }
@@ -74,6 +54,49 @@ function Assert-ToolSourceCentralization {
         if ($generator -match 'function\s+(ConvertTo-RepoRelativePath|Read-(JsonFile|GeneratedJson)|Escape-MarkdownCell|Test-FileContentMatches)\b') {
             throw "$generatorName redeclares a helper owned by ToolScriptSupport.ps1."
         }
+    }
+
+    $centralizedScriptHelpers = [ordered]@{
+        "Test-JsonFiles.ps1" = @("Resolve-RepoPath", "Test-IsExcludedPath", "Get-RepositoryRelativePath", "Get-TrackedRepositoryFiles")
+        "Test-XmlFiles.ps1" = @("Resolve-RepoPath", "Test-IsBuildOutputPath", "Get-RepositoryRelativePath", "Get-TrackedRepositoryFiles")
+        "Test-RepositoryPreflight.ps1" = @("Resolve-RepoPath")
+        "Test-SolutionProjects.ps1" = @("Resolve-RepoPath", "Normalize-RelativePath", "Get-RelativePath", "Test-IsIgnoredDirectoryName", "Get-ProjectFiles")
+        "Test-DotNetProjectReferences.ps1" = @("Resolve-RepoPath", "Get-RelativeRepoPath", "Test-IsIgnoredDirectoryName", "Get-ProjectFiles")
+        "Test-DotNetSdkReadiness.ps1" = @("Resolve-RepoPath", "Get-RelativeRepoPath", "Test-IsIgnoredDirectoryName", "Get-ProjectFiles")
+        "Test-ConflictMarkers.ps1" = @("Resolve-RepoPath", "Get-RelativeRepoPath", "Test-IsIgnoredPath")
+        "Test-TesterReleaseReadiness.ps1" = @("Resolve-RepoPath")
+        "Invoke-ForegroundCapture.ps1" = @("Resolve-RepoPath")
+        "Test-LinuxPublicPreviewReadiness.ps1" = @("Resolve-InputPath")
+        "Test-LinuxPublicPreviewPromotion.ps1" = @("Resolve-InputPath")
+        "Test-LinuxHumanValidationChecklist.ps1" = @("Resolve-InputPath")
+        "Test-MacOsPublicPreviewReadiness.ps1" = @("Resolve-InputPath")
+        "Test-MacOsPublicPreviewPromotion.ps1" = @("Resolve-InputPath")
+        "Test-MacOsHumanValidationChecklist.ps1" = @("Resolve-InputPath")
+        "Run-UxParitySuite.ps1" = @("Get-RepoRoot", "Get-GitValue", "Resolve-FreeXExe")
+        "Run-UxParityScenarioBatch.ps1" = @("Get-RepoRoot", "Get-GitValue", "Resolve-FreeXExe")
+        "Publish-UserTestBuild.ps1" = @()
+    }
+    foreach ($entry in $centralizedScriptHelpers.GetEnumerator()) {
+        $scriptPath = Join-Path $ToolRoot $entry.Key
+        $script = Get-Content -LiteralPath $scriptPath -Raw
+        if (-not $script.Contains("ToolScriptSupport.ps1")) {
+            throw "$($entry.Key) must dot-source ToolScriptSupport.ps1 for shared helpers."
+        }
+
+        foreach ($helperName in $entry.Value) {
+            if ($script -match "function\s+$([regex]::Escape($helperName))\b") {
+                throw "$($entry.Key) redeclares shared helper '$helperName'."
+            }
+        }
+    }
+
+    $publishScript = Get-Content -LiteralPath (Join-Path $ToolRoot "Publish-UserTestBuild.ps1") -Raw
+    if (-not $publishScript.Contains("ConvertTo-ToolXmlAttribute")) {
+        throw "Publish-UserTestBuild.ps1 must use ConvertTo-ToolXmlAttribute."
+    }
+
+    if ($publishScript -match 'function\s+ConvertTo-XmlAttributeValue\b') {
+        throw "Publish-UserTestBuild.ps1 redeclares obsolete helper ConvertTo-XmlAttributeValue."
     }
 
     $screenshotSupportPath = Join-Path $ToolRoot "ScreenshotCaptureSupport.ps1"
@@ -203,6 +226,70 @@ public class ScreenshotWin32 {
     Write-Host "Validated ScreenshotCaptureSupport source and behavior guards."
 }
 
+function Assert-SharedToolHelperBehavior {
+    param([Parameter(Mandatory = $true)][string]$RepoRoot)
+
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-tool-helper-behavior-" + [guid]::NewGuid().ToString("N"))
+    $syntheticRepoRoot = Join-Path (Join-Path $tempRoot ".worktrees") "linked-repo"
+    New-Item -ItemType Directory -Force -Path $syntheticRepoRoot | Out-Null
+    $originalLocation = Get-Location
+    try {
+        Set-Location ([System.IO.Path]::GetTempPath())
+
+        $expectedRelativePath = "src\bin\sample.json"
+        $relativeForwardSlashPath = "src/bin/sample.json"
+        $relativeBackslashPath = "src\bin\sample.json"
+        $absolutePath = Join-Path (Join-Path (Join-Path $syntheticRepoRoot "src") "bin") "sample.json"
+        $absoluteForwardSlashPath = $absolutePath.Replace([string][char]92, "/")
+
+        foreach ($path in @($relativeForwardSlashPath, $relativeBackslashPath, $absolutePath, $absoluteForwardSlashPath)) {
+            $relativePath = ConvertTo-ToolRepoRelativePath -Path $path -RepoRoot $syntheticRepoRoot
+            if ($relativePath -cne $expectedRelativePath) {
+                throw "ConvertTo-ToolRepoRelativePath was not slash-agnostic or repo-root anchored for '$path': '$relativePath'."
+            }
+
+            if (-not (Test-ToolExcludedPath -Path $path -RepoRoot $syntheticRepoRoot)) {
+                throw "Test-ToolExcludedPath did not exclude '$path'."
+            }
+        }
+
+        $nonExcludedPath = Join-Path (Join-Path $syntheticRepoRoot "src") "sample.json"
+        if (Test-ToolExcludedPath -Path $nonExcludedPath.Replace([string][char]92, "/") -RepoRoot $syntheticRepoRoot) {
+            throw "Test-ToolExcludedPath treated a non-excluded absolute path as excluded."
+        }
+
+        $relativeFromRoot = Get-ToolRelativePath -RootPath $syntheticRepoRoot -Path $absoluteForwardSlashPath
+        if ($relativeFromRoot -cne "src/bin/sample.json") {
+            throw "Get-ToolRelativePath returned '$relativeFromRoot' for a linked-worktree path."
+        }
+
+        $resolvedTools = Resolve-ToolRepoPath -Path "tools\ToolScriptSupport.ps1" -RepoRoot $RepoRoot
+        $expectedTools = Join-Path (Join-Path $RepoRoot "tools") "ToolScriptSupport.ps1"
+        if (-not [System.IO.Path]::GetFullPath($resolvedTools).Equals([System.IO.Path]::GetFullPath($expectedTools), [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Resolve-ToolRepoPath was not stable from outside the repository working directory."
+        }
+    }
+    finally {
+        Set-Location $originalLocation
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    if (@(Get-ToolTrackedRepositoryFiles -RepoRoot $RepoRoot).Count -eq 0) {
+        throw "Get-ToolTrackedRepositoryFiles returned no tracked files."
+    }
+
+    if (@(Get-ToolProjectFiles -Directory (Get-Item -LiteralPath $RepoRoot)).Count -eq 0) {
+        throw "Get-ToolProjectFiles returned no project files."
+    }
+
+    $escapedXml = ConvertTo-ToolXmlAttribute -Value 'CN=A&B <C> "D"'
+    if ($escapedXml -cne 'CN=A&amp;B &lt;C&gt; &quot;D&quot;') {
+        throw "ConvertTo-ToolXmlAttribute returned an unexpected escaped value."
+    }
+
+    Write-Host "Validated shared repository helper behavior."
+}
+
 function Assert-GeneratedDocCheckNewlineSemantics {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -257,24 +344,130 @@ function Assert-GeneratedDocCheckNewlineSemantics {
     Write-Host "Validated generated-document newline normalization source and behavior."
 }
 
-$resolvedScriptDirectory = Resolve-RepoPath $ScriptDirectory
+function Assert-FidelityCorpusDownloaderBehavior {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    . (Join-Path $ToolRoot "ToolScriptSupport.ps1")
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-fidelity-downloader-" + [guid]::NewGuid().ToString("N"))
+    $filesDirectory = Join-Path $tempRoot "files"
+    New-Item -ItemType Directory -Force -Path $filesDirectory | Out-Null
+
+    try {
+        $manifestPath = Join-Path $tempRoot "manifest.csv"
+        @(
+            "id,file,source,license,url",
+            "local-present,local/present.docx,local,Private,local://local/present.docx",
+            "local-missing,local/missing.docx,local,Private,local://local/missing.docx",
+            "existing,existing.xlsx,synthetic,MIT,https://example.invalid/existing.xlsx",
+            "download,nested/downloaded.xlsx,synthetic,MIT,https://example.invalid/downloaded.xlsx",
+            "failure,nested/partial.xlsx,synthetic,MIT,https://example.invalid/partial.xlsx",
+            "other-source,other.xlsx,other,MIT,https://example.invalid/other.xlsx"
+        ) | Set-Content -LiteralPath $manifestPath
+
+        $localPresent = Join-Path $filesDirectory "local/present.docx"
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $localPresent) | Out-Null
+        [System.IO.File]::WriteAllText($localPresent, "private")
+        [System.IO.File]::WriteAllText((Join-Path $filesDirectory "existing.xlsx"), "existing")
+
+        $downloadAction = {
+            param([string]$Uri, [string]$TargetPath, $Row)
+            if ($Row.id -eq "failure") {
+                [System.IO.File]::WriteAllText($TargetPath, "partial")
+                throw "synthetic download failure"
+            }
+
+            [System.IO.File]::WriteAllText($TargetPath, "downloaded:$Uri")
+        }
+
+        $result = Invoke-FidelityCorpusDownload `
+            -ManifestPath $manifestPath `
+            -FilesDirectory $filesDirectory `
+            -CorpusLabel "Synthetic fidelity corpus" `
+            -LocalDirectoryLabel "synthetic/files/" `
+            -DownloadAction $downloadAction
+
+        if ($result.Downloaded -ne 2 -or $result.Skipped -ne 1 -or
+            $result.LocalSkipped -ne 2 -or $result.Failed -ne 1 -or
+            $result.RowCount -ne 6 -or $result.ExitCode -ne 1) {
+            throw "Synthetic fidelity downloader counters were not preserved: $($result | ConvertTo-Json -Compress)"
+        }
+
+        $downloadedPath = Join-Path $filesDirectory "nested/downloaded.xlsx"
+        if (-not (Test-Path -LiteralPath $downloadedPath -PathType Leaf) -or
+            (Get-Content -LiteralPath $downloadedPath -Raw) -cne "downloaded:https://example.invalid/downloaded.xlsx") {
+            throw "Synthetic fidelity downloader did not create the nested downloaded target."
+        }
+
+        if (Test-Path -LiteralPath (Join-Path $filesDirectory "nested/partial.xlsx")) {
+            throw "Synthetic fidelity downloader did not remove a partial failed target."
+        }
+
+        $sourceManifestPath = Join-Path $tempRoot "source-manifest.csv"
+        @(
+            "id,file,source,license,url",
+            "selected,selected.xlsx,selected,MIT,https://example.invalid/selected.xlsx",
+            "excluded,excluded.xlsx,excluded,MIT,https://example.invalid/excluded.xlsx"
+        ) | Set-Content -LiteralPath $sourceManifestPath
+        $sourceResult = Invoke-FidelityCorpusDownload `
+            -ManifestPath $sourceManifestPath `
+            -FilesDirectory $filesDirectory `
+            -CorpusLabel "Synthetic source-filter corpus" `
+            -LocalDirectoryLabel "synthetic/files/" `
+            -Source "selected" `
+            -DownloadAction $downloadAction
+        if ($sourceResult.RowCount -ne 1 -or $sourceResult.Downloaded -ne 1 -or
+            (Test-Path -LiteralPath (Join-Path $filesDirectory "excluded.xlsx"))) {
+            throw "Synthetic fidelity downloader did not preserve source filtering."
+        }
+
+        $invalidManifestPath = Join-Path $tempRoot "invalid-manifest.csv"
+        @(
+            "id,file,source,license,url",
+            "missing-license,invalid.xlsx,synthetic,,https://example.invalid/invalid.xlsx"
+        ) | Set-Content -LiteralPath $invalidManifestPath
+        $missingLicenseRejected = $false
+        try {
+            Invoke-FidelityCorpusDownload `
+                -ManifestPath $invalidManifestPath `
+                -FilesDirectory $filesDirectory `
+                -CorpusLabel "Synthetic invalid corpus" `
+                -LocalDirectoryLabel "synthetic/files/" `
+                -DownloadAction $downloadAction | Out-Null
+        }
+        catch {
+            $missingLicenseRejected = $_.Exception.Message -like "Manifest row 'missing-license' is missing a license.*"
+        }
+        if (-not $missingLicenseRejected) {
+            throw "Synthetic fidelity downloader did not reject a missing manifest license."
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "Validated synthetic fidelity corpus downloader behavior."
+}
+
+$resolvedScriptDirectory = Resolve-ToolRepoPath -Path $ScriptDirectory -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedScriptDirectory -PathType Container)) {
     throw "Tool script directory was not found: $resolvedScriptDirectory"
 }
 
 $scripts = @(Get-ChildItem -LiteralPath $resolvedScriptDirectory -Filter "*.ps1" -File -Recurse |
-    Where-Object { -not (Test-IsExcludedPath $_.FullName) } |
+    Where-Object { -not (Test-ToolExcludedPath -Path $_.FullName -RepoRoot $repoRoot) } |
     Sort-Object FullName)
 if ($scripts.Count -eq 0) {
     throw "No PowerShell tool scripts were found in $resolvedScriptDirectory"
 }
 
-$toolsRoot = [System.IO.Path]::GetFullPath((Resolve-RepoPath "tools")).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+$toolsRoot = [System.IO.Path]::GetFullPath((Resolve-ToolRepoPath -Path "tools" -RepoRoot $repoRoot)).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 $resolvedDirectory = [System.IO.Path]::GetFullPath($resolvedScriptDirectory).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     Assert-ToolSourceCentralization -ToolRoot $resolvedDirectory
     Assert-ScreenshotCaptureSupportBehavior -ToolRoot $resolvedDirectory
+    Assert-SharedToolHelperBehavior -RepoRoot $repoRoot
     Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
+    Assert-FidelityCorpusDownloaderBehavior -ToolRoot $resolvedDirectory
 }
 
 $failedScripts = New-Object System.Collections.Generic.List[string]

@@ -8,7 +8,7 @@ public sealed class SlideShowHostPolicySourceTests
     public void WpfSlideShowWindow_DelegatesHostPolicyToPresentationPlanner()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Host",
             "SlideShowWindow.cs"));
@@ -82,7 +82,7 @@ public sealed class SlideShowHostPolicySourceTests
     public void WpfSlideShowWindow_ExecutesAnimationStepsThroughSharedPlaybackPlans()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Host",
             "SlideShowWindow.cs"));
@@ -169,16 +169,4 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("Storyboard.SetTarget(flashAnim, _slideCanvas);");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

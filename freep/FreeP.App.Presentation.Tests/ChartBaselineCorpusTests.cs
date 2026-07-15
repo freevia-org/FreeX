@@ -25,6 +25,25 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartTypesCorpus_PreservesPowerPointAutomaticTitlesForSingleSeriesCharts()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "18-chart-types.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var charts = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .ToArray();
+
+        charts[0].Title.Should().Be("Share");
+        charts[0].HasAutomaticTitle.Should().BeTrue();
+        charts[1].Title.Should().Be("Bubbles");
+        charts[1].HasAutomaticTitle.Should().BeTrue();
+        charts[3].Title.Should().Be("Series1");
+        charts[3].HasAutomaticTitle.Should().BeTrue();
+    }
+
+    [Fact]
     public void ChartBaselineDepthCorpusDeck_ExercisesSharedPlannerDecisions()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
@@ -116,6 +135,11 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.ContourSegments.Should().NotBeEmpty();
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 3).Should().Be(2);
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 4).Should().Be(2);
+        surfaceGeometry.RenderFacets.Should().HaveCount(6,
+            "imported PowerPoint Surface3D cells render as two visible triangles when complete");
+        surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
+        surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255,
+            "PowerPoint's imported Surface3D facets are opaque fills");
 
         var scatter = charts.Single(chart => chart.ChartType == ChartType.Scatter);
         scatter.Series.Should().OnlyContain(series => !series.OnSecondaryAxis,
@@ -164,12 +188,26 @@ public sealed class ChartBaselineCorpusTests
         ChartRenderPlanner.ComputePrimaryValueAxisRange(stacked)
             .Should()
             .Be((0, 1, 0.25));
+        var stackedFrame = ChartRenderPlanner.BuildFramePlan(
+            stacked,
+            new ChartPlanRect(0, 0, 480, 288));
+        stackedFrame.Plot
+            .Should().Be(new ChartPlanRect(31, 54, 411, 219),
+                "PowerPoint gives imported 100%-stacked columns a taller plot with a narrower category gutter");
         var stackedBars = ChartRenderPlanner.BuildColumnPrimitives(
             stacked,
-            new ChartPlanRect(0, 0, 360, 220));
+            stackedFrame.Plot);
+        stackedBars.Should().NotBeEmpty();
+        double categoryWidth = stackedFrame.Plot.Width / stacked.Categories.Count;
+        double expectedBarWidth = categoryWidth / 3.5;
+        foreach (var bar in stackedBars)
+            bar.Bounds.Width.Should().BeApproximately(expectedBarWidth, 0.0001);
+        stackedBars.Where(bar => bar.CategoryIndex == 0)
+            .Select(bar => bar.Bounds.X)
+            .Should().OnlyContain(x => Math.Abs(
+                x - (stackedFrame.Plot.X + (categoryWidth - expectedBarWidth) / 2)) < 0.0001);
         stackedBars.Where(bar => bar.CategoryIndex == 0).Sum(bar => bar.Bounds.Height)
-            .Should()
-            .BeApproximately(220, 0.0001);
+            .Should().BeApproximately(stackedFrame.Plot.Height, 0.0001);
         var stackedLabels = ChartRenderPlanner.BuildDataLabelPlans(
             stacked,
             new ChartPlanRect(0, 0, 360, 220));

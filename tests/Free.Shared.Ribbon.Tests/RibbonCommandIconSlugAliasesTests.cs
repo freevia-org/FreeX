@@ -2,6 +2,54 @@ namespace Free.Shared.Ribbon.Tests;
 
 public sealed class RibbonCommandIconSlugAliasesTests
 {
+    public static IEnumerable<object[]> ConsolidatedAliases =>
+    [
+        ["custom-paragraph-spacing", "paragraph-spacing"],
+        ["allow-edit-ranges", "allow-users-to-edit-ranges"],
+        ["date-and-time", "date-time"],
+        ["lookup-and-reference", "lookup-reference"],
+        ["math-and-trig", "math-trig"],
+        ["customize-colors", "theme-colors"],
+        ["customize-fonts", "theme-fonts"],
+        ["draftview", "draft-view"],
+        ["image-brightness-minus40", "image-brightness-minus20"],
+        ["image-brightness-plus40", "image-brightness-plus20"],
+        ["image-saturation-0", "image-saturation-50"],
+        ["image-saturation-200", "image-saturation-50"],
+        ["image-transparency-25", "image-transparency-50"],
+        ["image-transparency-75", "image-transparency-50"],
+        ["shape-flip-horizontal", "image-flip-horizontal"],
+        ["shape-flip-vertical", "image-flip-vertical"],
+        ["shape-position", "image-position"],
+        ["shape-rotate-left90", "image-rotate-left90"],
+        ["shape-rotate-right90", "image-rotate-right90"],
+        ["shape-rotate", "image-rotate"],
+        ["shape-wrap", "image-wrap"],
+        ["shape-wrap-behind", "image-wrap-behind"],
+        ["shape-wrap-front", "image-wrap-front"],
+        ["shape-wrap-inline", "image-wrap-inline"],
+        ["shape-wrap-square", "image-wrap-square"],
+        ["shape-wrap-tight", "image-wrap-tight"],
+        ["shape-wrap-top-bottom", "image-wrap-top-bottom"],
+        ["index-insert", "index"],
+        ["index-mark", "index"],
+        ["insert-quickpart", "paste-special"],
+        ["merge-rule-fill-in", "merge-rule-ask"],
+        ["merge-rule-ref", "merge-rule-ask"],
+        ["merge-rule-set", "merge-rule-ask"],
+        ["merge-rule-skip-record-if", "merge-rule-if"],
+        ["multilevel-list", "multilevel-define"],
+        ["multilevel-preset-0", "multilevel-define"],
+        ["multilevel-preset-1", "multilevel-define"],
+        ["multilevel-preset-2", "multilevel-define"],
+        ["printlayout", "print-layout"],
+        ["reset-style-set", "style-set"],
+        ["reviewingpane", "reviewing-pane"],
+        ["toc", "table-of-contents"],
+        ["tof", "table-of-contents"],
+        ["weblayout", "web-layout"],
+    ];
+
     [Theory]
     [InlineData("align-center", "center")]
     [InlineData("datetime", "date-time")]
@@ -19,6 +67,18 @@ public sealed class RibbonCommandIconSlugAliasesTests
         Free.Shared.Ribbon.Icons.RibbonCommandIconSlugAliases.GetCandidates(alias)
             .First()
             .Should().Be(canonical);
+    }
+
+    [Theory]
+    [MemberData(nameof(ConsolidatedAliases))]
+    public void Every_removed_exact_duplicate_slug_has_a_canonical_alias(string alias, string canonical)
+    {
+        Free.Shared.Ribbon.Icons.RibbonCommandIconSlugAliases.TryGetCanonicalSlug(alias, out var actual)
+            .Should().BeTrue();
+        actual.Should().Be(canonical);
+        Free.Shared.Ribbon.Icons.RibbonCommandIconSlugAliases.GetCandidates(alias)
+            .Take(2)
+            .Should().Equal(canonical, alias);
     }
 
     [Fact]

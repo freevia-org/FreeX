@@ -355,7 +355,7 @@ public sealed class WindowsRecordingCaptureBackendTests
     [Fact]
     public void PlatformComposition_UsesSharedBackendAndHasNoHostLocalCopies()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var wpfSource = Read(root, "freep", "FreeP.App.Host", "SlideShowWindow.cs");
         var avaloniaSource = Read(root, "freep", "FreeP.App.Avalonia", "SlideShowWindow.cs");
 
@@ -429,18 +429,6 @@ public sealed class WindowsRecordingCaptureBackendTests
         }
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 
     private static WindowsRecordingCaptureBackend CreateBackend(
         IWindowsRecordingDeviceCatalog deviceCatalog,

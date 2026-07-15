@@ -148,7 +148,11 @@ public sealed class ReviewCommentAndCustomShowSessionTests
 
         foreach (var source in new[] { wpfMainWindow, avaloniaMainWindow })
         {
-            source.Should().Contain("PresentationCommentMutationService.Apply(");
+            source.Should().Contain("PresentationReviewWorkflowSession");
+            source.Should().Contain("_reviewWorkflowSession");
+            source.Should().Contain("RenderCommentPane");
+            source.Should().Contain("RenderProofingPaneIfVisible");
+            source.Should().NotContain("PresentationCommentMutationService.Apply(");
             source.Should().NotContain("BuildAddCommentPlan(");
             source.Should().NotContain("TryApplyCommentMutationPlan(");
             source.Should().Contain("BuildCustomShowSessionPlan(");

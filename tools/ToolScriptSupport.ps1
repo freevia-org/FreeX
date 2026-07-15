@@ -1,14 +1,218 @@
+function Test-ToolPathRooted {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return $true
+    }
+
+    return $Path -match '^(?:[A-Za-z]:[\\/]|[\\/]{2})'
+}
+
+function ConvertTo-ToolPlatformPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $separator = [string][System.IO.Path]::DirectorySeparatorChar
+    return $Path.Replace([string][char]92, $separator).Replace([string][char]47, $separator)
+}
+
+function Resolve-ToolFullPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [string]$BasePath = (Get-Location).Path
+    )
+
+    $normalizedPath = ConvertTo-ToolPlatformPath -Path $Path
+    if (Test-ToolPathRooted -Path $Path) {
+        return [System.IO.Path]::GetFullPath($normalizedPath)
+    }
+
+    $normalizedBasePath = ConvertTo-ToolPlatformPath -Path $BasePath
+    if (-not (Test-ToolPathRooted -Path $BasePath)) {
+        $normalizedBasePath = [System.IO.Path]::GetFullPath($normalizedBasePath)
+    }
+
+    return [System.IO.Path]::GetFullPath((Join-Path $normalizedBasePath $normalizedPath))
+}
+
 function Resolve-ToolRepoPath {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][string]$RepoRoot
     )
 
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
+    $fullRepoRoot = Resolve-ToolFullPath -Path $RepoRoot
+    return Resolve-ToolFullPath -Path $Path -BasePath $fullRepoRoot
+}
+
+function Resolve-InputPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$RepoRoot
+    )
+
+    if (Test-ToolPathRooted -Path $Path) {
+        return Resolve-ToolFullPath -Path $Path
     }
 
-    return Join-Path $RepoRoot $Path
+    $currentDirectoryCandidate = Resolve-ToolFullPath -Path $Path
+    if (Test-Path -LiteralPath $currentDirectoryCandidate) {
+        return $currentDirectoryCandidate
+    }
+
+    return Resolve-ToolRepoPath -Path $Path -RepoRoot $RepoRoot
+}
+
+function Get-ToolRelativePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$RootPath,
+        [Parameter(Mandatory = $true)][string]$Path
+    )
+
+    $fullRootPath = Resolve-ToolFullPath -Path $RootPath
+    $fullPath = Resolve-ToolFullPath -Path $Path -BasePath $fullRootPath
+    $rootWithSeparator = $fullRootPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
+
+    $rootUri = [System.Uri]::new($rootWithSeparator)
+    $pathUri = [System.Uri]::new($fullPath)
+    return ConvertTo-ToolNormalizedRelativePath -Path ([System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString()))
+}
+
+function ConvertTo-ToolNormalizedRelativePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    return $Path.Replace([string][char]92, "/")
+}
+
+function Test-ToolExcludedPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$RepoRoot,
+        [string[]]$ExcludedDirectoryNames = @("bin", "obj", ".worktrees", ".claude")
+    )
+
+    $relativePath = Get-ToolRelativePath -RootPath $RepoRoot -Path $Path
+    $segments = (ConvertTo-ToolNormalizedRelativePath -Path $relativePath) -split '/'
+    foreach ($directoryName in $ExcludedDirectoryNames) {
+        if ($segments -contains $directoryName) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
+function Get-ToolTrackedRepositoryFiles {
+    param([Parameter(Mandatory = $true)][string]$RepoRoot)
+
+    $gitOutput = & git -C $RepoRoot ls-files --deduplicate
+    if ($LASTEXITCODE -ne 0) {
+        throw "Unable to enumerate tracked files with git ls-files."
+    }
+
+    foreach ($relativePath in $gitOutput) {
+        if ([string]::IsNullOrWhiteSpace($relativePath)) {
+            continue
+        }
+
+        $relativePath
+    }
+}
+
+function Test-ToolIgnoredDirectoryName {
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        [string[]]$IgnoredDirectoryNames = @("bin", "obj", ".git", ".worktrees", ".claude")
+    )
+
+    return $IgnoredDirectoryNames -contains $Name
+}
+
+function Get-ToolProjectFiles {
+    param(
+        [Parameter(Mandatory = $true)][System.IO.DirectoryInfo]$Directory,
+        [string[]]$IgnoredDirectoryNames = @("bin", "obj", ".git", ".worktrees", ".claude"),
+        [string[]]$IgnoredProjectNamePatterns = @("*_wpftmp.csproj")
+    )
+
+    foreach ($projectFile in $Directory.EnumerateFiles("*.csproj")) {
+        $isIgnored = $false
+        foreach ($pattern in $IgnoredProjectNamePatterns) {
+            if ($projectFile.Name -like $pattern) {
+                $isIgnored = $true
+                break
+            }
+        }
+
+        if (-not $isIgnored) {
+            $projectFile
+        }
+    }
+
+    foreach ($childDirectory in $Directory.EnumerateDirectories()) {
+        if (Test-ToolIgnoredDirectoryName -Name $childDirectory.Name -IgnoredDirectoryNames $IgnoredDirectoryNames) {
+            continue
+        }
+
+        Get-ToolProjectFiles `
+            -Directory $childDirectory `
+            -IgnoredDirectoryNames $IgnoredDirectoryNames `
+            -IgnoredProjectNamePatterns $IgnoredProjectNamePatterns
+    }
+}
+
+function Get-RepoRoot {
+    param([Parameter(Mandatory = $true)][string]$ScriptRoot)
+
+    return (Resolve-Path (Join-Path $ScriptRoot "..")).Path
+}
+
+function Get-GitValue {
+    param(
+        [string]$RepoRoot,
+        [string[]]$Arguments
+    )
+
+    try {
+        $value = & git -C $RepoRoot @Arguments 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            return ($value -join "`n").Trim()
+        }
+    }
+    catch {
+    }
+
+    return $null
+}
+
+function Resolve-FreeXExe {
+    param(
+        [string]$RepoRoot,
+        [string]$RequestedPath,
+        [switch]$SkipBuild
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace($RequestedPath)) {
+        $resolved = Resolve-ToolRepoPath -Path $RequestedPath -RepoRoot $RepoRoot
+        if (-not (Test-Path -LiteralPath $resolved)) {
+            throw "FreeX executable was not found at $RequestedPath"
+        }
+        return (Resolve-Path -LiteralPath $resolved).Path
+    }
+
+    $candidate = Join-Path $RepoRoot "src/FreeX.App.Host/bin/Release/net10.0-windows10.0.19041.0/FreeX.App.Host.exe"
+    if (-not (Test-Path $candidate) -and -not $SkipBuild) {
+        $buildOutput = & dotnet build (Join-Path $RepoRoot "src/FreeX.App.Host/FreeX.App.Host.csproj") --configuration Release
+        $buildOutput | ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) {
+            throw "FreeX host build failed with exit code $LASTEXITCODE"
+        }
+    }
+
+    if (-not (Test-Path $candidate)) {
+        throw "FreeX host executable was not found. Build Release or pass -FreeXExe. Expected: $candidate"
+    }
+
+    return (Resolve-Path $candidate).Path
 }
 
 function ConvertTo-ToolRepoRelativePath {
@@ -17,13 +221,26 @@ function ConvertTo-ToolRepoRelativePath {
         [Parameter(Mandatory = $true)][string]$RepoRoot
     )
 
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $fullRoot = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\')
-    if ($fullPath.StartsWith($fullRoot + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $fullPath.Substring($fullRoot.Length + 1).Replace('/', '\')
+    $fullRoot = Resolve-ToolFullPath -Path $RepoRoot
+    $fullPath = Resolve-ToolFullPath -Path $Path -BasePath $fullRoot
+    $trimmedRoot = $fullRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq [char]92) {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [System.StringComparison]::Ordinal
     }
 
-    return $fullPath.Replace('/', '\')
+    if ($fullPath.Equals($trimmedRoot, $comparison)) {
+        return ""
+    }
+
+    $rootPrefix = $trimmedRoot + [System.IO.Path]::DirectorySeparatorChar
+    if ($fullPath.StartsWith($rootPrefix, $comparison)) {
+        return $fullPath.Substring($rootPrefix.Length).Replace([string][char]47, [string][char]92)
+    }
+
+    return $fullPath.Replace([string][char]47, [string][char]92)
 }
 
 function Read-ToolJson {
@@ -96,5 +313,105 @@ function Test-ToolGeneratedContentMatches {
 
     if ($expected -cne $actual) {
         throw "$Label is out of date. Run $GeneratorScriptName to refresh it."
+    }
+}
+
+function Invoke-FidelityCorpusDownload {
+    param(
+        [Parameter(Mandatory = $true)][string]$ManifestPath,
+        [Parameter(Mandatory = $true)][string]$FilesDirectory,
+        [Parameter(Mandatory = $true)][string]$CorpusLabel,
+        [Parameter(Mandatory = $true)][string]$LocalDirectoryLabel,
+        [string]$Source,
+        [switch]$Force,
+        [scriptblock]$DownloadAction
+    )
+
+    if (-not (Test-Path -LiteralPath $ManifestPath -PathType Leaf)) {
+        throw "Manifest not found: $ManifestPath"
+    }
+
+    if (-not (Test-Path -LiteralPath $FilesDirectory -PathType Container)) {
+        New-Item -ItemType Directory -Path $FilesDirectory -Force | Out-Null
+    }
+
+    $rows = @(Import-Csv -LiteralPath $ManifestPath)
+    if (-not [string]::IsNullOrWhiteSpace($Source)) {
+        $rows = @($rows | Where-Object { $_.source -eq $Source })
+    }
+
+    if ($null -eq $DownloadAction) {
+        $DownloadAction = {
+            param([string]$Uri, [string]$TargetPath)
+            Invoke-WebRequest -Uri $Uri -OutFile $TargetPath -UseBasicParsing -TimeoutSec 120
+        }
+    }
+
+    $downloaded = 0
+    $skipped = 0
+    $failed = 0
+    $localSkipped = 0
+
+    foreach ($row in $rows) {
+        if ([string]::IsNullOrWhiteSpace($row.license)) {
+            throw "Manifest row '$($row.id)' is missing a license."
+        }
+
+        $target = Join-Path $FilesDirectory $row.file
+        if ($row.url -like 'local://*' -or $row.source -eq 'local') {
+            if (Test-Path -LiteralPath $target) {
+                Write-Host "[local ] $($row.file) (present)"
+            }
+            else {
+                Write-Warning "[local ] $($row.file) declared local but not found in $LocalDirectoryLabel"
+            }
+
+            $localSkipped++
+            continue
+        }
+
+        if ((Test-Path -LiteralPath $target) -and -not $Force) {
+            $skipped++
+            Write-Host "[skip  ] $($row.file) (already downloaded)"
+            continue
+        }
+
+        try {
+            $targetDirectory = Split-Path -Parent $target
+            if (-not (Test-Path -LiteralPath $targetDirectory -PathType Container)) {
+                New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
+            }
+
+            & $DownloadAction $row.url $target $row
+            $size = (Get-Item -LiteralPath $target).Length
+            if ($size -le 0) {
+                throw "downloaded 0 bytes"
+            }
+
+            $downloaded++
+            Write-Host ("[ok    ] {0} ({1:N0} bytes, {2})" -f $row.file, $size, $row.license)
+        }
+        catch {
+            $failed++
+            if (Test-Path -LiteralPath $target -PathType Leaf) {
+                Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+            }
+
+            Write-Warning "[fail  ] $($row.file) <- $($row.url): $($_.Exception.Message)"
+        }
+    }
+
+    Write-Host ""
+    Write-Host ("{0}: {1} downloaded, {2} already present, {3} local, {4} failed (of {5} rows)." -f `
+        $CorpusLabel, $downloaded, $skipped, $localSkipped, $failed, $rows.Count)
+    Write-Host "Files: $FilesDirectory"
+
+    [pscustomobject]@{
+        Downloaded  = $downloaded
+        Skipped     = $skipped
+        LocalSkipped = $localSkipped
+        Failed      = $failed
+        RowCount    = $rows.Count
+        ExitCode    = if ($failed -gt 0) { 1 } else { 0 }
     }
 }

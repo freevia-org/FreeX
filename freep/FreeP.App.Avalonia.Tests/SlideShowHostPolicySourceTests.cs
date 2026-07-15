@@ -8,7 +8,7 @@ public sealed class SlideShowHostPolicySourceTests
     public void AvaloniaSlideShowWindow_DelegatesHostPolicyToPresentationPlanner()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Avalonia",
             "SlideShowWindow.cs"));
@@ -82,7 +82,7 @@ public sealed class SlideShowHostPolicySourceTests
     public void AvaloniaSlideShowWindow_cancels_timers_before_preparing_next_slide_overlay()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Avalonia",
             "SlideShowWindow.cs"));
@@ -103,7 +103,7 @@ public sealed class SlideShowHostPolicySourceTests
     public void AvaloniaSlideShowWindow_ExecutesAnimationStepsThroughSharedPlaybackPlans()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Avalonia",
             "SlideShowWindow.cs"));
@@ -186,16 +186,4 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("AnimateOpacity(_slideCanvas, plan.FromOpacity, plan.FlashOpacity, plan.DurationMs / 2");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

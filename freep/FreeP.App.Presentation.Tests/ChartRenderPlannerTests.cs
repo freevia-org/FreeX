@@ -907,6 +907,52 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_ComboLineOverlay_UsesCenteredSmoothSquareMarkerDefaults()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            SecondaryValueAxis = new ChartAxis()
+        };
+        chart.Categories.AddRange(new[] { "Jan", "Feb", "Mar", "Apr" });
+
+        var columns = new ChartSeries { Name = "Revenue" };
+        columns.Values.AddRange(new double?[] { 120, 145, 98, 175 });
+        chart.Series.Add(columns);
+
+        var line = new ChartSeries
+        {
+            Name = "Units",
+            OnSecondaryAxis = true,
+            OverrideChartType = ChartType.LineMarkers
+        };
+        line.Values.AddRange(new double?[] { 5200, 6100, 4800, 7400 });
+        chart.Series.Add(line);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 480, 288));
+        var overlay = scene.ComboLineSeries.Should().ContainSingle().Subject;
+        double categoryWidth = scene.Frame.Plot.Width / chart.Categories.Count;
+
+        overlay.WithMarkers.Should().BeTrue();
+        overlay.Markers.Should().HaveCount(4);
+        overlay.Markers.Select(marker => marker.Symbol)
+            .Should()
+            .OnlyContain(symbol => symbol == ChartMarkerPrimitiveSymbol.Square);
+        overlay.Markers.Select(marker => marker.Radius)
+            .Should()
+            .OnlyContain(radius => Math.Abs(radius - 5.0) < 0.0001);
+        overlay.IsSmoothed.Should().BeTrue();
+        overlay.Points[0]!.Value.X.Should().BeApproximately(
+            scene.Frame.Plot.X + categoryWidth / 2.0,
+            0.0001);
+        overlay.Points[^1]!.Value.X.Should().BeApproximately(
+            scene.Frame.Plot.Right - categoryWidth / 2.0,
+            0.0001);
+    }
+
+    [Fact]
     public void BuildFramePlan_DataTable_ReservesBottomTableBand()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
@@ -1489,6 +1535,43 @@ public sealed class ChartRenderPlannerTests
         second.Bounds.Height.Should().BeApproximately(60, 0.0001);
         second.Fill.Should().Be(new ChartFillPlan(
             new SrgbColor(0xC0, 0x50, 0x4D), ChartRenderPlanner.RectSeriesFillAlpha));
+    }
+
+    [Fact]
+    public void BuildColumnPrimitives_ExcludesInterleavedComboLineFromClusterGeometry()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Jan", "Feb" });
+
+        var firstColumn = new ChartSeries { Name = "Revenue" };
+        firstColumn.Values.AddRange(new double?[] { 120, 145 });
+        chart.Series.Add(firstColumn);
+
+        var line = new ChartSeries
+        {
+            Name = "Units",
+            OnSecondaryAxis = true,
+            OverrideChartType = ChartType.LineMarkers
+        };
+        line.Values.AddRange(new double?[] { 5200, 6100 });
+        chart.Series.Add(line);
+
+        var secondColumn = new ChartSeries { Name = "Series 3" };
+        secondColumn.Values.AddRange(new double?[] { 2, 3 });
+        chart.Series.Add(secondColumn);
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        primitives.Should().HaveCount(4);
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        var second = primitives.Single(p => p.SeriesIndex == 2 && p.CategoryIndex == 0);
+        first.Bounds.X.Should().BeApproximately(21.4286, 0.0001);
+        first.Bounds.Width.Should().BeApproximately(27.5714, 0.0001);
+        second.Bounds.X.Should().BeApproximately(50, 0.0001,
+            "the interleaved line series must not consume a column slot");
+        second.Bounds.Width.Should().BeApproximately(27.5714, 0.0001);
     }
 
     [Fact]

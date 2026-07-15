@@ -309,7 +309,13 @@ public readonly record struct ChartSurfaceGeometryPlan(
     IReadOnlyList<ChartSurfacePointPrimitive> Points,
     IReadOnlyList<ChartSurfaceFacetPrimitive> Facets,
     IReadOnlyList<ChartLineSegmentPrimitive> WireframeSegments,
-    IReadOnlyList<ChartLineSegmentPrimitive> ContourSegments);
+    IReadOnlyList<ChartLineSegmentPrimitive> ContourSegments)
+{
+    // Imported PowerPoint surface charts can subdivide complete cells into two
+    // visible color facets while retaining the logical cell topology above.
+    public IReadOnlyList<ChartSurfaceFacetPrimitive> RenderFacets { get; init; } =
+        Array.Empty<ChartSurfaceFacetPrimitive>();
+}
 
 public readonly record struct ChartBarClusterSlot(
     double CategoryStart,
@@ -548,6 +554,7 @@ public static partial class ChartRenderPlanner
     public const double SurfaceContourStrokeThickness = 0.9;
     private const double DipPerPoint = 96.0 / 72.0;
     private const double DefaultBarGapWidthPercent = 150.0;
+    private const double ImportedPercentStackedGapWidthPercent = 250.0;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -921,6 +928,18 @@ public static partial class ChartRenderPlanner
                 plot.Width + 10.0,
                 plot.Height + 20.0);
         }
+        if (chart.ChartType == ChartType.Doughnut &&
+            UsesImportedTextMetrics(chart) &&
+            chart.HasAutomaticTitle)
+        {
+            // PowerPoint gives an imported doughnut a taller chart-owned plot
+            // box while keeping the automatic title above that plot.
+            plot = new ChartPlanRect(
+                plot.X + 5.0,
+                plot.Y - 5.0,
+                plot.Width,
+                plot.Height + 56.0);
+        }
         if (UsesStockLineFallback(chart))
         {
             // Classic PowerPoint reserves a compact left value-axis gutter and a
@@ -941,6 +960,16 @@ public static partial class ChartRenderPlanner
                 bounds.Width - 120.0,
                 bounds.Height - 99.0);
         }
+        else if (chart.ChartType == ChartType.ColumnStacked100 && UsesImportedTextMetrics(chart))
+        {
+            // Imported 100%-stacked columns use a taller plot and a narrower
+            // left category gutter than the generic chart frame.
+            plot = new ChartPlanRect(
+                bounds.X + 31.0,
+                bounds.Y + 54.0,
+                bounds.Width - 69.0,
+                bounds.Height - 69.0);
+        }
         if (TryResolveManualLayoutRect(chart.PlotAreaManualLayout, bounds, out var manualPlot))
             plot = manualPlot;
         ChartPlanRect? titleBounds = chart.Title is not null
@@ -952,13 +981,11 @@ public static partial class ChartRenderPlanner
                 bounds.Width - 2 * margin,
                 titleHeight)
             : null;
-        if (titleBounds is { } pieTitle &&
-            family == ChartRenderFamily.Pie &&
+        if (titleBounds is { } automaticTitle &&
             UsesImportedTextMetrics(chart) &&
-            chart.HasAutomaticTitle &&
-            chart.DataLabels is { ShowValue: true, ShowPercent: true })
+            chart.HasAutomaticTitle)
         {
-            titleBounds = pieTitle with { Y = pieTitle.Y - 10.0 };
+            titleBounds = automaticTitle with { Y = automaticTitle.Y - 10.0 };
         }
         return new ChartFramePlan(
             bounds,
@@ -1885,7 +1912,13 @@ public static partial class ChartRenderPlanner
         bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
         bool percentStacked = IsHundredPercentStacked(chart.ChartType);
         double categoryWidth = plot.Width / categoryCount;
-        int seriesCount = Math.Max(1, chart.Series.Count);
+        var columnSeriesIndices = chart.Series
+            .Select((series, index) => (series, index))
+            .Where(item => item.series.OverrideChartType is not (
+                ChartType.Line or ChartType.LineMarkers or ChartType.Scatter or ChartType.Bubble))
+            .Select(item => item.index)
+            .ToArray();
+        int seriesCount = Math.Max(1, columnSeriesIndices.Length);
         var spacing = ResolveBarClusterSpacing(chart, categoryWidth, seriesCount, stacked);
         bool varyByPoint = ShouldVaryPointColors(chart);
 
@@ -1895,17 +1928,10 @@ public static partial class ChartRenderPlanner
             var slot = ResolveBarClusterSlot(plot.X, categoryIndex, spacing);
             double stackedY = plot.Bottom;
 
-            for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+            for (int columnSeriesIndex = 0; columnSeriesIndex < columnSeriesIndices.Length; columnSeriesIndex++)
             {
+                int seriesIndex = columnSeriesIndices[columnSeriesIndex];
                 var series = chart.Series[seriesIndex];
-                if (series.OverrideChartType.HasValue &&
-                    series.OverrideChartType.Value is ChartType.Line
-                        or ChartType.LineMarkers
-                        or ChartType.Scatter
-                        or ChartType.Bubble)
-                {
-                    continue;
-                }
 
                 double? rawValue = ResolveBlankSensitiveValue(
                     chart,
@@ -1922,7 +1948,7 @@ public static partial class ChartRenderPlanner
 
                 double x = stacked
                     ? slot.ClusterStart
-                    : slot.ClusterStart + seriesIndex * slot.SeriesStep;
+                    : slot.ClusterStart + columnSeriesIndex * slot.SeriesStep;
                 double drawWidth = Math.Max(1, slot.SeriesSize - (stacked ? 0 : 1));
                 if (stacked)
                 {
@@ -1939,7 +1965,7 @@ public static partial class ChartRenderPlanner
                     var depth = BuildBarGapDepthPlan(
                         chart,
                         categoryWidth,
-                        seriesIndex,
+                        columnSeriesIndex,
                         seriesCount,
                         isHorizontalBar: false,
                         stacked);
@@ -1964,7 +1990,7 @@ public static partial class ChartRenderPlanner
                     var depth = BuildBarGapDepthPlan(
                         chart,
                         categoryWidth,
-                        seriesIndex,
+                        columnSeriesIndex,
                         seriesCount,
                         isHorizontalBar: false,
                         stacked);
@@ -2375,9 +2401,21 @@ public static partial class ChartRenderPlanner
 
         var wireframe = BuildSurfaceWireframeSegments(pointsByKey, seriesCount, categoryCount);
         var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
+        var renderFacets = chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
+            ? BuildSurfaceFacetPrimitives(
+                chart,
+                pointsByKey,
+                seriesCount,
+                categoryCount,
+                seriesColors,
+                triangulateCompleteCells: true)
+            : facets;
         var contours = BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
 
-        return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours);
+        return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours)
+        {
+            RenderFacets = renderFacets
+        };
     }
 
     private static ChartSurfaceGeometryPlan EmptySurfaceGeometryPlan(
@@ -2477,7 +2515,8 @@ public static partial class ChartRenderPlanner
         IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
         int seriesCount,
         int categoryCount,
-        IReadOnlyList<SrgbColor>? seriesColors)
+        IReadOnlyList<SrgbColor>? seriesColors,
+        bool triangulateCompleteCells = false)
     {
         var facets = new List<ChartSurfaceFacetPrimitive>();
         var stroke = new ChartStrokePlan(
@@ -2498,22 +2537,36 @@ public static partial class ChartRenderPlanner
                     continue;
                 }
 
-                double averageValue = facetPoints.Average(point => point.Value);
-                double averageNormalized = facetPoints.Average(point => point.NormalizedValue);
-                var color = ResolveSurfaceFacetColor(
-                    chart,
-                    seriesIndex,
-                    seriesColors,
-                    averageNormalized);
+                var renderPointSets = triangulateCompleteCells && facetPoints.Count == 4
+                    ? new[]
+                    {
+                        new[] { facetPoints[0], facetPoints[1], facetPoints[2] },
+                        new[] { facetPoints[0], facetPoints[2], facetPoints[3] }
+                    }
+                    : new[] { facetPoints.ToArray() };
 
-                facets.Add(new ChartSurfaceFacetPrimitive(
-                    seriesIndex,
-                    categoryIndex,
-                    facetPoints.Select(point => point.Point).ToArray(),
-                    new ChartFillPlan(color, Alpha: chart.ChartType == ChartType.Surface3D ? (byte)220 : (byte)185),
-                    stroke,
-                    averageValue,
-                    averageNormalized));
+                foreach (var renderPoints in renderPointSets)
+                {
+                    double averageValue = renderPoints.Average(point => point.Value);
+                    double averageNormalized = renderPoints.Average(point => point.NormalizedValue);
+                    var color = ResolveSurfaceFacetColor(
+                        chart,
+                        seriesIndex,
+                        seriesColors,
+                        averageNormalized);
+                    byte facetAlpha = chart.ChartType == ChartType.Surface3D
+                        ? UsesImportedTextMetrics(chart) ? (byte)255 : (byte)220
+                        : (byte)185;
+
+                    facets.Add(new ChartSurfaceFacetPrimitive(
+                        seriesIndex,
+                        categoryIndex,
+                        renderPoints.Select(point => point.Point).ToArray(),
+                        new ChartFillPlan(color, facetAlpha),
+                        stroke,
+                        averageValue,
+                        averageNormalized));
+                }
             }
         }
 
@@ -2916,7 +2969,7 @@ public static partial class ChartRenderPlanner
         double secondaryRange = secondaryMax - secondaryMin;
         var (primaryMin, primaryMax, _) = ComputePrimaryValueAxisRange(chart);
         double primaryRange = primaryMax - primaryMin;
-        double stepX = categoryCount > 1 ? plot.Width / (categoryCount - 1) : plot.Width / 2;
+        double stepX = plot.Width / Math.Max(1, categoryCount);
         var primitives = new List<ChartLineSeriesPrimitive>();
 
         for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
@@ -2942,9 +2995,7 @@ public static partial class ChartRenderPlanner
                 if (rawValue is null)
                     continue;
 
-                double x = categoryCount == 1
-                    ? plot.X + plot.Width / 2
-                    : plot.X + categoryIndex * stepX;
+                double x = plot.X + (categoryIndex + 0.5) * stepX;
                 double y = plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }
@@ -2956,7 +3007,10 @@ public static partial class ChartRenderPlanner
                 series,
                 seriesColors,
                 fillPlans,
-                ShouldSpanBlankSegments(chart)));
+                ShouldSpanBlankSegments(chart),
+                automaticMarkerSymbol: ChartMarkerPrimitiveSymbol.Square,
+                automaticMarkerRadius: 5.0,
+                defaultSmoothLine: true));
         }
 
         return primitives;
@@ -2970,7 +3024,9 @@ public static partial class ChartRenderPlanner
         IReadOnlyList<SrgbColor>? seriesColors = null,
         ChartFillPlanSet? fillPlans = null,
         bool spanBlankSegments = false,
-        ChartMarkerPrimitiveSymbol? automaticMarkerSymbol = null)
+        ChartMarkerPrimitiveSymbol? automaticMarkerSymbol = null,
+        double? automaticMarkerRadius = null,
+        bool? defaultSmoothLine = null)
     {
         series ??= new ChartSeries();
         bool suppressLine = series.LineStyle?.NoFill == true;
@@ -2992,7 +3048,7 @@ public static partial class ChartRenderPlanner
             defaultMarkerStyle,
             seriesColors,
             LineMarkerStrokeThickness);
-        var markerRadius = ResolveMarkerRadius(defaultMarkerStyle, LineMarkerRadius);
+        var markerRadius = ResolveMarkerRadius(defaultMarkerStyle, automaticMarkerRadius ?? LineMarkerRadius);
         var lineSegments = new List<ChartLineSegmentPrimitive>();
         var markers = new List<ChartCirclePrimitive>();
         int? previousPointIndex = null;
@@ -3030,7 +3086,7 @@ public static partial class ChartRenderPlanner
                     seriesIndex,
                     pointIndex,
                     point.Value,
-                    ResolveMarkerRadius(markerStyle, LineMarkerRadius),
+                    ResolveMarkerRadius(markerStyle, automaticMarkerRadius ?? LineMarkerRadius),
                     markerStyle is null && automaticMarkerSymbol.HasValue
                         ? automaticMarkerSymbol.Value
                         : ResolveMarkerSymbol(markerStyle),
@@ -3042,7 +3098,7 @@ public static partial class ChartRenderPlanner
             previousPoint = point.Value;
         }
 
-        bool isSmoothed = series.SmoothLine == true;
+        bool isSmoothed = series.SmoothLine ?? defaultSmoothLine ?? false;
 
         return new ChartLineSeriesPrimitive(
             seriesIndex,
@@ -5653,6 +5709,8 @@ public static partial class ChartRenderPlanner
         bool stacked)
     {
         double gapWidth = Math.Clamp(chart.BarGapWidthPercent ?? (int)DefaultBarGapWidthPercent, 0, 500);
+        if (stacked && chart.ChartType == ChartType.ColumnStacked100 && UsesImportedTextMetrics(chart))
+            gapWidth = ImportedPercentStackedGapWidthPercent;
         if (stacked || seriesCount <= 1)
         {
             double singleSeriesSize = categorySize / (1.0 + gapWidth / 100.0);
