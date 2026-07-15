@@ -2894,10 +2894,15 @@ public static partial class ChartRenderPlanner
         bool triangulateCompleteCells = false)
     {
         var facets = new List<ChartSurfaceFacetPrimitive>();
-        var stroke = new ChartStrokePlan(
-            new SrgbColor(0xFF, 0xFF, 0xFF),
-            Alpha: 185,
-            SurfaceFacetStrokeThickness);
+        var stroke = chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
+            ? new ChartStrokePlan(
+                new SrgbColor(0x00, 0x00, 0x00),
+                Alpha: 0,
+                SurfaceFacetStrokeThickness)
+            : new ChartStrokePlan(
+                new SrgbColor(0xFF, 0xFF, 0xFF),
+                Alpha: 185,
+                SurfaceFacetStrokeThickness);
 
         for (int seriesIndex = 0; seriesIndex < seriesCount - 1; seriesIndex++)
         {
