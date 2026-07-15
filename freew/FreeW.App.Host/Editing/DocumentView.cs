@@ -8355,7 +8355,7 @@ public sealed class DocumentView : RichTextBox
         var topAndBottomWidthDip = FloatingWrapReservationTextWidthDip(document);
         var reservation = DocumentViewLayoutPlanner.BuildFloatingWrapReservation(run, topAndBottomWidthDip);
         if (reservation is not null)
-            return BuildFloatingWrapReservationFloater(marker, run, reservation);
+            return BuildFloatingWrapReservationFloater(marker, run, reservation, document);
 
         return WrapHyperlinkIfNeeded(run, new WpfRun(string.Empty) { Tag = marker });
     }
@@ -8365,7 +8365,11 @@ public sealed class DocumentView : RichTextBox
         return DocumentViewLayoutPlanner.BuildFloatingWrapReservationTextWidthDip(document.Page);
     }
 
-    private static Floater BuildFloatingWrapReservationFloater(AnchorMarker marker, ModelRun run, DocumentFloatingWrapReservationPlan reservation)
+    private static Floater BuildFloatingWrapReservationFloater(
+        AnchorMarker marker,
+        ModelRun run,
+        DocumentFloatingWrapReservationPlan reservation,
+        TextDocument document)
     {
         var reservationMarker = new FloatingWrapReservationMarker(
             marker,
@@ -8393,9 +8397,44 @@ public sealed class DocumentView : RichTextBox
             Width = reservation.WidthDip,
             HorizontalAlignment = reservation.Wrapping == ImageWrapping.TopAndBottom
                 ? HorizontalAlignment.Center
-                : HorizontalAlignment.Left,
+                : BuildFloatingWrapHorizontalAlignment(run, document),
             Tag = reservationMarker,
         };
+    }
+
+    private static HorizontalAlignment BuildFloatingWrapHorizontalAlignment(ModelRun run, TextDocument document)
+    {
+        var (anchor, offsetPt, widthPt) = run switch
+        {
+            { Image: { IsFloating: true } image } =>
+                (image.HorizontalAnchor, image.HorizontalOffsetPt, image.WidthPt),
+            { Shape: { IsFloating: true, Placement: { } placement } shape } =>
+                (placement.HorizontalAnchor, placement.HorizontalOffsetPt, shape.WidthPt),
+            { Chart: { IsFloating: true, Placement: { } placement } chart } =>
+                (placement.HorizontalAnchor, placement.HorizontalOffsetPt, chart.WidthPt),
+            { WordArt: { IsFloating: true, Placement: { } placement } wordArt } =>
+                (placement.HorizontalAnchor, placement.HorizontalOffsetPt, Math.Max(72, wordArt.FontSizePt * Math.Max(1, wordArt.Text.Length) * 0.62)),
+            { SmartArt: { IsFloating: true, Placement: { } placement } smartArt } =>
+                (placement.HorizontalAnchor, placement.HorizontalOffsetPt, smartArt.WidthPt),
+            { DrawingGroup: { } group } =>
+                (group.Placement.HorizontalAnchor, group.Placement.HorizontalOffsetPt, group.WidthPt),
+            _ => (HorizontalAnchor.Margin, 0, 0),
+        };
+
+        var page = document.Page;
+        var pageWidthPt = Math.Max(1, page.WidthPt);
+        var contentLeftPt = Math.Max(0, page.MarginLeftPt);
+        var contentWidthPt = Math.Max(1, pageWidthPt - page.MarginLeftPt - page.MarginRightPt);
+        var leftPt = anchor switch
+        {
+            HorizontalAnchor.Page => offsetPt,
+            _ => contentLeftPt + offsetPt,
+        };
+        var centerPt = leftPt + Math.Max(0, widthPt) / 2;
+        var contentCenterPt = contentLeftPt + contentWidthPt / 2;
+        return centerPt > contentCenterPt
+            ? HorizontalAlignment.Right
+            : HorizontalAlignment.Left;
     }
 
     private static Inline WrapHyperlinkIfNeeded(ModelRun run, Inline inline)

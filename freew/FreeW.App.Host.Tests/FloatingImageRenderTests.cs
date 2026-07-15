@@ -226,6 +226,26 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void FloatingImage_WrapReservationAlignsWithRightHandObject()
+    {
+        var doc = DocWithFloatingText(
+            ImageWrapping.Tight,
+            out _,
+            hOffPt: 300,
+            vOffPt: 60,
+            hAnchor: HorizontalAnchor.Margin,
+            vAnchor: VerticalAnchor.Page);
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        RenderedParagraph(view).Inlines.OfType<WpfFloater>()
+            .Should()
+            .ContainSingle()
+            .Which.HorizontalAlignment.Should()
+            .Be(System.Windows.HorizontalAlignment.Right);
+    }
+
+    [StaFact]
     public void FloatingImage_BehindAndInFrontDoNotReserveButSurviveCommitInOrder()
     {
         foreach (var wrapping in new[] { ImageWrapping.Behind, ImageWrapping.InFront })
