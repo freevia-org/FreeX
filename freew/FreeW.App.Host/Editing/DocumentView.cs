@@ -6393,6 +6393,22 @@ public sealed class DocumentView : RichTextBox
         IList<ModelBlock> target,
         TextDocument document)
     {
+        static IEnumerable<System.Windows.Documents.Block> FlattenSections(BlockCollection source)
+        {
+            foreach (var block in source)
+            {
+                if (block is System.Windows.Documents.Section section)
+                {
+                    foreach (var nested in FlattenSections(section.Blocks))
+                        yield return nested;
+                }
+                else
+                {
+                    yield return block;
+                }
+            }
+        }
+
         ModelTable? pendingSegmentTable = null;
         WpfTableTag? pendingSegmentTag = null;
 
@@ -6406,7 +6422,7 @@ public sealed class DocumentView : RichTextBox
             pendingSegmentTag = null;
         }
 
-        foreach (var block in blocks)
+        foreach (var block in FlattenSections(blocks))
         {
             switch (block)
             {
@@ -7059,23 +7075,76 @@ public sealed class DocumentView : RichTextBox
         TextDocument document,
         int sourceBlockIndex)
     {
-        var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: document.Page);
+        var leadingContentHeightDip = EstimateLeadingContentHeightDip(document, sourceBlockIndex);
+        var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(
+            table,
+            page: document.Page,
+            firstPageLeadingContentHeightDip: leadingContentHeightDip);
         var paginationPlan = tableLayoutPlan.Pagination;
         if (ShouldRenderPlannedTablePages(table, paginationPlan))
         {
-            return paginationPlan.Pages
-                .Select((page, segmentIndex) => (System.Windows.Documents.Block)BuildTable(
+            var blocks = new List<System.Windows.Documents.Block>();
+            foreach (var (page, segmentIndex) in paginationPlan.Pages.Select((page, index) => (page, index)))
+            {
+                var section = new System.Windows.Documents.Section
+                {
+                    BreakPageBefore = segmentIndex > 0,
+                    Margin = new Thickness(0)
+                };
+                section.Blocks.Add(BuildTable(
                     table,
                     document,
                     sourceBlockIndex,
                     tableLayoutPlan,
                     page,
                     segmentIndex,
-                    paginationPlan.Pages.Count))
-                .ToList();
+                    paginationPlan.Pages.Count));
+                blocks.Add(section);
+            }
+
+            return blocks;
         }
 
         return [BuildTable(table, document, sourceBlockIndex, tableLayoutPlan)];
+    }
+
+    private static double EstimateLeadingContentHeightDip(TextDocument document, int sourceBlockIndex)
+    {
+        if (sourceBlockIndex <= 0)
+            return 0;
+
+        var defaultFontSizeDip = Math.Max(8, document.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
+        var height = 0.0;
+        foreach (var block in document.Blocks.Take(sourceBlockIndex))
+        {
+            if (block is not ModelParagraph paragraph)
+                continue;
+
+            var charsPerLine = paragraph.StyleId?.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) == true
+                ? 72
+                : 92;
+            var lineCount = Math.Max(1, (int)Math.Ceiling(
+                Math.Max(1, paragraph.PlainText.Length) / (double)charsPerLine));
+            var lineHeightDip = paragraph.Formatting.LineRule switch
+            {
+                LineSpacingRule.Exact or LineSpacingRule.AtLeast when paragraph.Formatting.LineHeightPt > 0
+                    => paragraph.Formatting.LineHeightPt * PxPerPoint,
+                _ => defaultFontSizeDip * Math.Max(1, paragraph.Formatting.LineSpacing)
+            };
+            height += lineCount * lineHeightDip
+                + paragraph.Formatting.SpaceBeforePt * PxPerPoint
+                + paragraph.Formatting.SpaceAfterPt * PxPerPoint;
+
+            if (paragraph.StyleId?.Equals("Heading1", StringComparison.OrdinalIgnoreCase) == true)
+                height += defaultFontSizeDip * 0.6;
+        }
+
+        // Word reserves a bottom band for a page footnote while the editable WPF flow keeps the note body
+        // outside the table's document tree. Include that reservation when estimating the first page.
+        if (document.Footnotes.Count > 0)
+            height += 80;
+
+        return Math.Max(0, height);
     }
 
     private static bool ShouldRenderPlannedTablePages(ModelTable table, DocumentTablePaginationPlan paginationPlan) =>
@@ -7109,6 +7178,8 @@ public sealed class DocumentView : RichTextBox
                 paginationPage?.PageNumber ?? 1,
                 isPaginationSegment)
         };
+        if (isPaginationSegment)
+            wpf.CellSpacing = 0;
         var columns = table.ColumnCount;
         for (var c = 0; c < columns; c++)
         {

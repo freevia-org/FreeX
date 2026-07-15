@@ -557,7 +557,11 @@ public static class DocumentViewLayoutPlanner
         return plans;
     }
 
-    public static DocumentTableLayoutPlan BuildTableLayoutPlan(Table table, int tableIndex = 0, PageSettings? page = null)
+    public static DocumentTableLayoutPlan BuildTableLayoutPlan(
+        Table table,
+        int tableIndex = 0,
+        PageSettings? page = null,
+        double firstPageLeadingContentHeightDip = 0)
     {
         ArgumentNullException.ThrowIfNull(table);
 
@@ -656,7 +660,11 @@ public static class DocumentViewLayoutPlanner
                 .Select(width => RoundDip(PageLayout.PointsToDip(Math.Max(0, width))))
                 .ToList(),
             cells,
-            BuildTablePaginationPlan(table, page ?? new PageSettings(), tableIndex));
+            BuildTablePaginationPlan(
+                table,
+                page ?? new PageSettings(),
+                tableIndex,
+                firstPageLeadingContentHeightDip));
     }
 
     public static DocumentTableCellEffectiveFillPlan BuildTableCellEffectiveFillPlan(
@@ -836,13 +844,17 @@ public static class DocumentViewLayoutPlanner
     public static DocumentTablePaginationPlan BuildTablePaginationPlan(
         Table table,
         PageSettings page,
-        int tableIndex = 0)
+        int tableIndex = 0,
+        double firstPageLeadingContentHeightDip = 0)
     {
         ArgumentNullException.ThrowIfNull(table);
         ArgumentNullException.ThrowIfNull(page);
 
         var (_, contentHeightDip) = PageLayout.ContentAreaDip(page);
         var availableBodyHeightDip = RoundDip(Math.Max(MinimumTableRowHeightDip, contentHeightDip));
+        var firstPageAvailableBodyHeightDip = RoundDip(Math.Max(
+            MinimumTableRowHeightDip,
+            availableBodyHeightDip - Math.Max(0, firstPageLeadingContentHeightDip)));
         var headerRowIndexes = table.Formatting.RepeatHeaderRow && table.Rows.Count > 0
             ? new[] { 0 }
             : [];
@@ -870,7 +882,9 @@ public static class DocumentViewLayoutPlanner
                 ? headerRowIndexes
                 : [];
             currentUsed = repeatedHeaderRows.Sum(index => estimatedHeights[index]);
-            pageAvailable = availableBodyHeightDip;
+            pageAvailable = pageNumber == 1
+                ? firstPageAvailableBodyHeightDip
+                : availableBodyHeightDip;
         }
 
         void FinishPage()

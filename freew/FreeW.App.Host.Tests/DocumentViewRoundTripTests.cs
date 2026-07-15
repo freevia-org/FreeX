@@ -944,24 +944,25 @@ public sealed class DocumentViewRoundTripTests
         var modelTable = doc.Blocks.OfType<Table>().Single();
         var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(modelTable, doc.Page);
         var repeatedPage = pagination.Pages.Single(page => page.IncludesRepeatedHeader);
-        var firstPageRowIndex = repeatedPage.SourceRowIndexes[0];
 
         var view = new DocumentView();
         view.LoadModel(doc);
 
-        var wpfTables = view.Document.Blocks.OfType<System.Windows.Documents.Table>().ToList();
+        var wpfTables = RenderedTables(view.Document);
+        var tableSections = RenderedTableSections(view.Document);
         wpfTables.Should().HaveCount(pagination.Pages.Count);
-        wpfTables[0].BreakPageBefore.Should().BeFalse();
-        wpfTables[1].BreakPageBefore.Should().BeTrue();
-        wpfTables[0].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(pagination.Pages[0].RenderRows.Count);
-        wpfTables[1].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(pagination.Pages[1].RenderRows.Count);
+        tableSections.Should().HaveCount(pagination.Pages.Count);
+        tableSections[0].BreakPageBefore.Should().BeFalse();
+        tableSections[1].BreakPageBefore.Should().BeTrue();
+        wpfTables[0].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
+        wpfTables[1].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
 
         var renderedRows = wpfTables.SelectMany(table => table.RowGroups.SelectMany(group => group.Rows)).ToList();
         renderedRows.Should().HaveCount(modelTable.Rows.Count + repeatedPage.RepeatedHeaderRowIndexes.Count);
         var secondPageRows = wpfTables[1].RowGroups.SelectMany(group => group.Rows).ToList();
         RenderedRowText(secondPageRows[0]).Should().Contain("Step");
         RenderedRowText(secondPageRows[0]).Should().Contain("Pagination evidence");
-        RenderedRowText(secondPageRows[1]).Should().Contain($"Row {firstPageRowIndex}");
+        RenderedRowText(secondPageRows[1]).Should().Contain("Row 5");
 
         view.CommitToModel();
 
@@ -978,16 +979,18 @@ public sealed class DocumentViewRoundTripTests
         var modelTable = doc.Blocks.OfType<Table>().Single();
         modelTable.Formatting = modelTable.Formatting with { RepeatHeaderRow = false };
         var pagination = DocumentViewLayoutPlanner.BuildTablePaginationPlan(modelTable, doc.Page);
-        var secondPageFirstRow = pagination.Pages[1].SourceRowIndexes[0];
 
         var view = new DocumentView();
         view.LoadModel(doc);
 
-        var wpfTables = view.Document.Blocks.OfType<System.Windows.Documents.Table>().ToList();
+        var wpfTables = RenderedTables(view.Document);
+        var tableSections = RenderedTableSections(view.Document);
         wpfTables.Should().HaveCount(pagination.Pages.Count);
-        wpfTables[1].BreakPageBefore.Should().BeTrue();
+        tableSections.Should().HaveCount(pagination.Pages.Count);
+        tableSections[1].BreakPageBefore.Should().BeTrue();
         var secondPageRows = wpfTables[1].RowGroups.SelectMany(group => group.Rows).ToList();
-        RenderedRowText(secondPageRows[0]).Should().Contain($"Row {secondPageFirstRow}");
+        secondPageRows.Should().HaveCount(4);
+        RenderedRowText(secondPageRows[0]).Should().Contain("Row 5");
         RenderedRowText(secondPageRows[0]).Should().NotContain("Pagination evidence");
 
         view.CommitToModel();
@@ -997,12 +1000,75 @@ public sealed class DocumentViewRoundTripTests
         committedTable.Formatting.RepeatHeaderRow.Should().BeFalse();
     }
 
+    [StaFact]
+    public void TablePageCompositionStress_RendersWordLikePhysicalSegments()
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument();
+        var sourceTable = doc.Blocks.OfType<Table>().Single();
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var tables = RenderedTables(view.Document);
+        var sections = RenderedTableSections(view.Document);
+        tables.Should().HaveCount(3);
+        sections.Should().HaveCount(3);
+        sections.Select(section => section.BreakPageBefore).Should().Equal(false, true, true);
+
+        var pageRows = tables
+            .Select(table => table.RowGroups.SelectMany(group => group.Rows).ToList())
+            .ToList();
+        pageRows.Select(rows => rows.Count).Should().Equal(3, 5, 3);
+        RenderedRowText(pageRows[0][0]).Should().Contain("Page area");
+        RenderedRowText(pageRows[0][1]).Should().Contain("Segment 1");
+        RenderedRowText(pageRows[0][2]).Should().Contain("Segment 2");
+        RenderedRowText(pageRows[1][0]).Should().Contain("Page area");
+        RenderedRowText(pageRows[1][1]).Should().Contain("Segment 3");
+        RenderedRowText(pageRows[1][4]).Should().Contain("Segment 6");
+        RenderedRowText(pageRows[2][0]).Should().Contain("Page area");
+        RenderedRowText(pageRows[2][1]).Should().Contain("Segment 7");
+        RenderedRowText(pageRows[2][2]).Should().Contain("Segment 8");
+
+        view.CommitToModel();
+        view.Model.Blocks.OfType<Table>().Should().ContainSingle()
+            .Which.Rows.Should().HaveCount(sourceTable.Rows.Count);
+    }
+
     private static string RenderedRowText(System.Windows.Documents.TableRow row)
     {
         var text = row.Cells.SelectMany(RenderedCellParagraphs)
             .Select(paragraph => new TextRange(paragraph.ContentStart, paragraph.ContentEnd).Text.Trim());
         return string.Join(" ", text);
     }
+
+    private static List<System.Windows.Documents.Table> RenderedTables(FlowDocument document)
+    {
+        static IEnumerable<System.Windows.Documents.Block> FlattenSections(BlockCollection blocks)
+        {
+            foreach (var block in blocks)
+            {
+                if (block is System.Windows.Documents.Section section)
+                {
+                    foreach (var nested in FlattenSections(section.Blocks))
+                        yield return nested;
+                }
+                else
+                {
+                    yield return block;
+                }
+            }
+        }
+
+        return FlattenSections(document.Blocks)
+            .OfType<System.Windows.Documents.Table>()
+            .ToList();
+    }
+
+    private static List<System.Windows.Documents.Section> RenderedTableSections(FlowDocument document) =>
+        document.Blocks
+            .OfType<System.Windows.Documents.Section>()
+            .Where(section => section.Blocks.OfType<System.Windows.Documents.Table>().Any())
+            .ToList();
 
     private static IEnumerable<System.Windows.Documents.Paragraph> RenderedCellParagraphs(System.Windows.Documents.TableCell cell)
     {
