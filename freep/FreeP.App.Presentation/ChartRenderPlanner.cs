@@ -2090,9 +2090,14 @@ public static partial class ChartRenderPlanner
         if (categoryCount < 2 || seriesCount < 2 || !plot.HasPositiveArea)
             return EmptySurfaceGeometryPlan(cells);
 
+        var (valueAxisMin, valueAxisMax, _) = ComputePrimaryValueAxisRange(chart);
+        double valueAxisRange = valueAxisMax - valueAxisMin;
         var pointsByKey = new Dictionary<(int Series, int Category), ChartSurfacePointPrimitive>();
         foreach (var cell in cells)
         {
+            double heightNormalized = valueAxisRange > 0
+                ? Math.Clamp((cell.Value - valueAxisMin) / valueAxisRange, 0, 1)
+                : cell.NormalizedValue;
             var point = new ChartSurfacePointPrimitive(
                 cell.SeriesIndex,
                 cell.CategoryIndex,
@@ -2102,7 +2107,7 @@ public static partial class ChartRenderPlanner
                     categoryCount,
                     cell.SeriesIndex,
                     cell.CategoryIndex,
-                    cell.NormalizedValue,
+                    heightNormalized,
                     chart.ChartType == ChartType.Surface3D),
                 cell.Value,
                 cell.NormalizedValue);
