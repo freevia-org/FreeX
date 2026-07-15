@@ -12835,21 +12835,37 @@ public sealed class DocumentView : RichTextBox
     /// </list>
     /// </summary>
     /// <summary>Current Display for Review setting. Defaults to All Markup (today's behaviour).</summary>
-    public ReviewDisplayMode DisplayForReview { get; set; } = ReviewDisplayMode.AllMarkup;
+    private ReviewDisplayState _reviewDisplayState = ReviewDisplayState.Default;
+
+    public ReviewDisplayState CurrentReviewDisplayState => _reviewDisplayState;
+
+    public ReviewDisplayMode DisplayForReview
+    {
+        get => _reviewDisplayState.DisplayMode;
+        set => _reviewDisplayState = _reviewDisplayState.WithDisplayMode(value);
+    }
 
     /// <summary>
     /// When false, revision colour and strikethrough/underline decoration are suppressed in the
     /// rendered view. The <see cref="RevisionMarker"/> tag is still applied so the revision
     /// round-trips on commit. Default is true (current unconditional behaviour).
     /// </summary>
-    public bool ShowMarkupInsertionsAndDeletions { get; set; } = true;
+    public bool ShowMarkupInsertionsAndDeletions
+    {
+        get => _reviewDisplayState.ShowInsertionsAndDeletions;
+        set => _reviewDisplayState = _reviewDisplayState.WithShowInsertionsAndDeletions(value);
+    }
 
     /// <summary>
     /// When false, comment background highlight is suppressed in the rendered view. The
     /// <see cref="CommentMarker"/> tag is still applied so the comment id round-trips on commit.
     /// Default is true (current unconditional behaviour).
     /// </summary>
-    public bool ShowMarkupComments { get; set; } = true;
+    public bool ShowMarkupComments
+    {
+        get => _reviewDisplayState.ShowComments;
+        set => _reviewDisplayState = _reviewDisplayState.WithShowComments(value);
+    }
 
     /// <summary>
     /// When true (default), runs whose <c>FormatRevision</c> is non-null receive a distinct visual
@@ -12858,10 +12874,14 @@ public sealed class DocumentView : RichTextBox
     /// written unconditionally so <c>CommitToModel</c> can round-trip the <c>FormatRevision</c> safely.
     /// Most documents have no format revisions so this is visually quiet by default even when ON.
     /// </summary>
-    public bool ShowMarkupFormatting { get; set; } = true;
+    public bool ShowMarkupFormatting
+    {
+        get => _reviewDisplayState.ShowFormatting;
+        set => _reviewDisplayState = _reviewDisplayState.WithShowFormatting(value);
+    }
 
     public ReviewDisplayPolicy CurrentReviewDisplayPolicy =>
-        new(DisplayForReview, ShowMarkupInsertionsAndDeletions, ShowMarkupComments, ShowMarkupFormatting);
+        _reviewDisplayState.ToPolicy();
 
     public ReviewWorkflowStatus CurrentReviewWorkflowStatus
     {
@@ -12885,7 +12905,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyShowMarkupInsertionsAndDeletions(bool show)
     {
         CommitToModel();
-        ShowMarkupInsertionsAndDeletions = show;
+        _reviewDisplayState = _reviewDisplayState.WithShowInsertionsAndDeletions(show);
         Render();
     }
 
@@ -12896,7 +12916,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyShowMarkupComments(bool show)
     {
         CommitToModel();
-        ShowMarkupComments = show;
+        _reviewDisplayState = _reviewDisplayState.WithShowComments(show);
         Render();
     }
 
@@ -12908,7 +12928,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyDisplayForReview(ReviewDisplayMode mode)
     {
         CommitToModel();
-        DisplayForReview = mode;
+        _reviewDisplayState = _reviewDisplayState.WithDisplayMode(mode);
         Render();
     }
 
@@ -12919,7 +12939,7 @@ public sealed class DocumentView : RichTextBox
     public void ApplyShowMarkupFormatting(bool show)
     {
         CommitToModel();
-        ShowMarkupFormatting = show;
+        _reviewDisplayState = _reviewDisplayState.WithShowFormatting(show);
         Render();
     }
 

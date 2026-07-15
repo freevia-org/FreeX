@@ -9825,43 +9825,47 @@ public sealed class DocumentView : Control
     /// <summary>The default revision author stamped on tracked changes this editor records.</summary>
     public string RevisionAuthor { get; set; } = "FreeW User";
 
-    public ReviewDisplayMode DisplayForReview { get; private set; } = ReviewDisplayMode.AllMarkup;
+    private ReviewDisplayState _reviewDisplayState = ReviewDisplayState.Default;
 
-    public bool ShowMarkupInsertionsAndDeletions { get; private set; } = true;
+    public ReviewDisplayState CurrentReviewDisplayState => _reviewDisplayState;
 
-    public bool ShowMarkupComments { get; private set; } = true;
+    public ReviewDisplayMode DisplayForReview => _reviewDisplayState.DisplayMode;
 
-    public bool ShowMarkupFormatting { get; private set; } = true;
+    public bool ShowMarkupInsertionsAndDeletions => _reviewDisplayState.ShowInsertionsAndDeletions;
+
+    public bool ShowMarkupComments => _reviewDisplayState.ShowComments;
+
+    public bool ShowMarkupFormatting => _reviewDisplayState.ShowFormatting;
 
     public bool ShowMarkupBalloons { get; private set; }
 
     public ReviewDisplayPolicy CurrentReviewDisplayPolicy =>
-        new(DisplayForReview, ShowMarkupInsertionsAndDeletions, ShowMarkupComments, ShowMarkupFormatting);
+        _reviewDisplayState.ToPolicy();
 
     public ReviewWorkflowStatus CurrentReviewWorkflowStatus =>
         ReviewWorkflowStatusPlanner.Build(_doc, CurrentReviewDisplayPolicy, TrackChangesEnabled);
 
     public void ApplyDisplayForReview(ReviewDisplayMode mode)
     {
-        DisplayForReview = mode;
+        _reviewDisplayState = _reviewDisplayState.WithDisplayMode(mode);
         InvalidateLayoutAndVisual();
     }
 
     public void ApplyShowMarkupInsertionsAndDeletions(bool show)
     {
-        ShowMarkupInsertionsAndDeletions = show;
+        _reviewDisplayState = _reviewDisplayState.WithShowInsertionsAndDeletions(show);
         InvalidateLayoutAndVisual();
     }
 
     public void ApplyShowMarkupComments(bool show)
     {
-        ShowMarkupComments = show;
+        _reviewDisplayState = _reviewDisplayState.WithShowComments(show);
         InvalidateLayoutAndVisual();
     }
 
     public void ApplyShowMarkupFormatting(bool show)
     {
-        ShowMarkupFormatting = show;
+        _reviewDisplayState = _reviewDisplayState.WithShowFormatting(show);
         InvalidateLayoutAndVisual();
     }
 

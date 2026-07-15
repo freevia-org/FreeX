@@ -9,11 +9,6 @@ using FreeW.Core.Model;
 
 namespace FreeW.App.Avalonia;
 
-internal sealed record InspectorRemovalChoice(bool Comments, bool Revisions, bool Properties, bool Bookmarks)
-{
-    public bool HasAnySelection => Comments || Revisions || Properties || Bookmarks;
-}
-
 internal sealed class RestrictEditingDialog : Window
 {
     private static readonly AvaloniaCompactDialogChromeStyle DialogChromeStyle = new(FontFamily.Default);

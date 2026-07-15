@@ -1,21 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Host;
-
-/// <summary>
-/// The paste option chosen in <see cref="PasteSpecialDialog"/>. Only options whose clipboard format is
-/// available are offered; unavailable formats are omitted rather than faked.
-/// </summary>
-internal enum PasteSpecialOption
-{
-    /// <summary>Keep Source Formatting — paste with the source document's run and paragraph formatting.</summary>
-    KeepSourceFormatting,
-    /// <summary>Merge Formatting — paste text with destination formatting (match destination).</summary>
-    MergeFormatting,
-    /// <summary>Keep Text Only — paste as unformatted plain text (strip all character formatting).</summary>
-    KeepTextOnly,
-}
 
 /// <summary>
 /// A small modal Paste Special dialog matching the subset of Word's "Paste Special" that FreeW can
@@ -30,8 +17,6 @@ internal enum PasteSpecialOption
 /// </summary>
 internal static class PasteSpecialDialog
 {
-    private sealed record OptionRow(string Label, string Description, PasteSpecialOption Option);
-
     public static PasteSpecialOption? Prompt(Window? owner)
     {
         // Check the clipboard before showing any UI; no usable text → nothing to offer.
@@ -54,12 +39,7 @@ internal static class PasteSpecialDialog
         }
 
         // Build the list of backed options; order matches Word's Paste Special dialog.
-        var options = new List<OptionRow>
-        {
-            new("Keep Source Formatting", "Paste with the source's character and paragraph formatting.", PasteSpecialOption.KeepSourceFormatting),
-            new("Merge Formatting",       "Paste text with the destination's formatting.",               PasteSpecialOption.MergeFormatting),
-            new("Keep Text Only",         "Paste as unformatted plain text.",                            PasteSpecialOption.KeepTextOnly),
-        };
+        var options = PasteSpecialOptionCatalog.Options;
 
         PasteSpecialOption? result = null;
 
