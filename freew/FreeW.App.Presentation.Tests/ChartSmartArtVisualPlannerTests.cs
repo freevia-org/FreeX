@@ -57,6 +57,20 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartScene_Categories_PreserveRenderedText()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["  North | East: Q1; retail  "], [1.0]);
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 240, 180);
+
+        scene.Categories.Should().ContainSingle()
+            .Which.Should().Be("  North | East: Q1; retail  ");
+        scene.Texts.Should().Contain(text =>
+            text.Kind == ChartSceneTextKind.CategoryAxis &&
+            text.Text == "  North | East: Q1; retail  ");
+    }
+
+    [Fact]
     public void ChartScene_LineAreaAndScatter_UseSharedPointAndMarkerPrimitives()
     {
         var area = Chart.Create(ChartKind.Area, ["A", "B", "C"], [1.0, 3.0, 2.0]);

@@ -685,7 +685,7 @@ public static class ChartSmartArtVisualPlanner
 
         return new ChartScene(chart.Kind, plan.GeometryKind, frame, plot,
             plan.PlotAreaFill && !isPie ? "#D9E2F3" : null,
-            plan.PaletteHex, plan.Categories, plan.Series.Count,
+            plan.PaletteHex, chart.Categories.ToList(), plan.Series.Count,
             gridLines, axisLines, bars, lineSeries, markers, slices, texts, legend);
     }
 
