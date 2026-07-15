@@ -15898,6 +15898,7 @@ public sealed class DocumentView : Control
         // Render the text centred in the rect at the WordArt font size.
         var textFmt = new RunFormatting
         {
+            FontFamily = "Calibri",
             FontSizePt = Math.Max(8, wd.FontSizePt),
             Bold       = wd.Bold,
             ColorHex   = ContrastingWordArtTextColor(wd.Fill),
