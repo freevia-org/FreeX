@@ -7076,6 +7076,17 @@ public sealed class DocumentView : RichTextBox
                         rowHeightPx,
                         cellBorderPlan)));
                 }
+                else if (rowHeightPx is not null)
+                {
+                    // Keep the authored row height around its content. Appending a separate spacer
+                    // below the content makes WPF add the two heights together.
+                    wpfCell.Blocks.Add(new BlockUIContainer(BuildCellContentHost(
+                        modelCell,
+                        document,
+                        vAlign,
+                        rowHeightPx,
+                        cellBorderPlan)));
+                }
                 else if (modelCell.TextDirection != CellTextDirection.Horizontal)
                 {
                     // Rotated cell: wrap all paragraphs in a StackPanel with a LayoutTransform so the
@@ -7152,17 +7163,6 @@ public sealed class DocumentView : RichTextBox
                 {
                     foreach (var cellParagraph in modelCell.Paragraphs)
                         wpfCell.Blocks.Add(BuildParagraph(cellParagraph, document, inTableCell: true));
-                }
-                // Row height enforcement: inject a zero-width Border spacer as the first block in the
-                // cell so WPF is forced to allocate at least the requested height. WPF TableRow is a
-                // TextElement, not a FrameworkElement, so it has no MinHeight property of its own.
-                // Placing the spacer in every cell in the row ensures the tallest-cell measurement
-                // (which drives the row) respects the minimum. The Border has zero Padding and is
-                // not visible; it simply prevents the row from collapsing below the authored height.
-                if (!hasPlannedCellBorders && rowHeightPx is { } minH && modelCell.VerticalMerge != VerticalMergeState.Continue)
-                {
-                    var spacer = new System.Windows.Controls.Border { MinHeight = minH };
-                    wpfCell.Blocks.Add(new BlockUIContainer(spacer));
                 }
                 wpfRow.Cells.Add(wpfCell);
                 gridColumn += span;

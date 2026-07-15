@@ -142,7 +142,7 @@ function Rasterize-Pdf($pdf, $outPrefix) {
         $tmpOut = Join-Path ([IO.Path]::GetTempPath()) ([IO.Path]::GetRandomFileName())
         $null = New-Item -ItemType Directory -Force $tmpOut
         $stem = [IO.Path]::GetFileNameWithoutExtension($pdf)
-        dotnet $rasterizeDll $pdf $tmpOut 816 1056 | Out-Null
+        dotnet $rasterizeDll $pdf $tmpOut | Out-Null
         # FreeW.PdfRasterize emits <stem>_pN.png (1-based).
         # Copy them to <outPrefix>-N.png (pdftoppm-style, 1-based) so pairing logic
         # finds them via the $baseDir wildcard filter "*.png".

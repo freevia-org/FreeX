@@ -395,6 +395,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("[type]::GetTypeFromProgID('Word.Application', $false)");
         source.Should().Contain("Word COM is not available: COM ProgID 'Word.Application' is not registered");
         source.Should().Contain("Word baseline mode: real-word-png-render");
+        source.Should().Contain("-Width and -Height must be supplied together when requesting fixed raster dimensions.");
     }
 
     private static string RepositoryFile(params string[] parts)

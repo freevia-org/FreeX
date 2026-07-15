@@ -3,27 +3,40 @@
 //
 // Usage: FreeW.PdfRasterize <input.pdf> <outDir> [width [height]]
 //
-// Defaults: width=816, height=1056  (8.5×11 in @ 96 dpi — matches FreeW.FidelityRender)
+// Defaults to each PDF page's 96-DPI geometry; supply width and height to use a fixed surface.
 // Output:   <outDir>/<pdfname>_pN.png   (N = 1-based page index)
+// When dimensions are omitted, output dimensions follow each PDF page's native 96-DPI size.
+// Supply both dimensions only when a fixed output surface is intentional.
 //
-// The rasterizer sets PdfPageRenderOptions.DestinationWidth/Height so the output
-// pixel dimensions are deterministic regardless of the PDF's internal DPI.
+// Explicit dimensions override the page-derived output surface.
 
 using System.IO;
 using Windows.Data.Pdf;
 using Windows.Storage;
 using Windows.Storage.Streams;
 
-if (args.Length < 2)
+if (args.Length < 2 || args.Length == 3 || args.Length > 4)
 {
-    Console.Error.WriteLine("usage: FreeW.PdfRasterize <input.pdf> <outDir> [width [height]]");
+    Console.Error.WriteLine("usage: FreeW.PdfRasterize <input.pdf> <outDir> [width height]");
     return 2;
 }
 
 string pdfPath = Path.GetFullPath(args[0]);
 string outDir  = Path.GetFullPath(args[1]);
-uint   width   = args.Length > 2 && uint.TryParse(args[2], out var w) ? w : 816u;
-uint   height  = args.Length > 3 && uint.TryParse(args[3], out var h) ? h : 1056u;
+uint? width = null;
+uint? height = null;
+if (args.Length == 4)
+{
+    if (!uint.TryParse(args[2], out var parsedWidth) || parsedWidth == 0 ||
+        !uint.TryParse(args[3], out var parsedHeight) || parsedHeight == 0)
+    {
+        Console.Error.WriteLine("width and height must both be positive integers");
+        return 2;
+    }
+
+    width = parsedWidth;
+    height = parsedHeight;
+}
 
 if (!File.Exists(pdfPath))
 {
@@ -61,17 +74,26 @@ int exitCode = await Task.Run(async () =>
     }
 
     uint pageCount = pdf.PageCount;
-    Console.WriteLine($"PDF has {pageCount} page(s); rendering at {width}x{height} px");
-
-    var opts = new PdfPageRenderOptions
-    {
-        DestinationWidth  = width,
-        DestinationHeight = height,
-    };
+    Console.WriteLine(width is { } fixedWidth
+        ? $"PDF has {pageCount} page(s); rendering at {fixedWidth}x{height!.Value} px"
+        : $"PDF has {pageCount} page(s); rendering at native page dimensions");
 
     for (uint i = 0; i < pageCount; i++)
     {
         using PdfPage page = pdf.GetPage(i);
+        // PdfPageRenderOptions applies dimensions at a 120-DPI scale. Convert either the page's
+        // 96-DPI geometry or an explicit requested output size before rendering.
+        const double PdfRenderOptionsDpi = 120.0;
+        const double TargetDpi = 96.0;
+        var outputWidth = width ?? Math.Max(1u, (uint)Math.Round(page.Size.Width));
+        var outputHeight = height ?? Math.Max(1u, (uint)Math.Round(page.Size.Height));
+        var destinationWidth = Math.Max(1u, (uint)Math.Round(outputWidth * TargetDpi / PdfRenderOptionsDpi));
+        var destinationHeight = Math.Max(1u, (uint)Math.Round(outputHeight * TargetDpi / PdfRenderOptionsDpi));
+        var opts = new PdfPageRenderOptions
+        {
+            DestinationWidth = destinationWidth,
+            DestinationHeight = destinationHeight
+        };
         using var stream   = new InMemoryRandomAccessStream();
 
         await page.RenderToStreamAsync(stream, opts);

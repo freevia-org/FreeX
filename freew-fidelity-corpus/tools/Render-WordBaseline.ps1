@@ -6,8 +6,8 @@
 .DESCRIPTION
     The companion to FreeW.FidelityRender (which renders the FreeW side). Run both against the same
     corpus, then compare the freew/<doc>_pN.png and word/<doc>_pN.png page pairs (open them and eyeball,
-    or pixel-diff if a differ is available). Pages are rendered at 816x1056 (8.5x11 @ 96dpi) to match
-    FreeW.FidelityRender 1:1.
+    or pixel-diff if a differ is available). By default, pages retain the dimensions Word exported at
+    96 dpi, so custom paper sizes compare against FreeW's authored page surface without distortion.
 
     Robustness (learned the hard way): Word COM hangs headless if a modal dialog appears. This script
       * clears HKCU\...\Word\Resiliency\StartupItems first, so a prior crash's Document-Recovery pane
@@ -22,8 +22,8 @@
 .PARAMETER FilesDir   Folder of input .docx (default: ../files next to this script).
 .PARAMETER OutDir     Output folder for word/ PNGs (default: ../runs/word-<n>). Created if absent.
 .PARAMETER Docs       Optional explicit file names; default: all *.docx in FilesDir.
-.PARAMETER Width      Page width px  (default 816).
-.PARAMETER Height     Page height px (default 1056).
+.PARAMETER Width      Optional fixed page width px. Supply both Width and Height to intentionally rescale pages.
+.PARAMETER Height     Optional fixed page height px. Supply both Width and Height to intentionally rescale pages.
 .EXAMPLE
     powershell -File freew-fidelity-corpus\tools\Render-WordBaseline.ps1 -FilesDir .\mycorpus -OutDir .\out\word
 #>
@@ -32,8 +32,8 @@ param(
     [string]$FilesDir,
     [string]$OutDir,
     [string[]]$Docs,
-    [int]$Width = 816,
-    [int]$Height = 1056
+    [int]$Width = 0,
+    [int]$Height = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -66,6 +66,9 @@ $files =
 if ($Docs) { $Docs | ForEach-Object { Join-Path $FilesDir $_ } | Where-Object { Test-Path $_ } }
 else { Get-ChildItem $FilesDir -Filter *.docx | Where-Object { $_.Name -notlike '~$*' } | Select-Object -ExpandProperty FullName }
 if (-not $files) { throw "No .docx found under $FilesDir" }
+if (($Width -gt 0) -ne ($Height -gt 0)) {
+    throw "-Width and -Height must be supplied together when requesting fixed raster dimensions."
+}
 
 $wordType = [type]::GetTypeFromProgID('Word.Application', $false)
 if ($null -eq $wordType) {
@@ -106,7 +109,11 @@ try {
             $d = $word.Documents.Open($docx, $false, $true)   # ConfirmConversions=$false, ReadOnly=$true
             $d.ExportAsFixedFormat($pdf, 17)                  # wdExportFormatPDF
             $d.Close($false)
-            & $dotnet $rasterDll.FullName $pdf $wordDir $Width $Height | Out-Null
+            $rasterArgs = @($rasterDll.FullName, $pdf, $wordDir)
+            if ($Width -gt 0) {
+                $rasterArgs += @($Width, $Height)
+            }
+            & $dotnet @rasterArgs | Out-Null
             Write-Host "  ok   $name"
             $ok++
         }

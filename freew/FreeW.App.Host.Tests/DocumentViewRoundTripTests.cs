@@ -885,7 +885,7 @@ public sealed class DocumentViewRoundTripTests
     /// FlowDocument row is at least that tall.
     /// </summary>
     [StaFact]
-    public void TableRow_ExplicitHeight_SpacerInjected()
+    public void TableRow_ExplicitHeight_UsesSingleMinHeightContentHost()
     {
         const double heightPt = 60.0;
         const double pxPerPt = 96.0 / 72.0;
@@ -904,13 +904,13 @@ public sealed class DocumentViewRoundTripTests
         var wpfTable = (System.Windows.Documents.Table)view.Document.Blocks.First();
         var wpfCell = wpfTable.RowGroups[0].Rows[0].Cells[0];
 
-        // A BlockUIContainer containing a Border with MinHeight must be present.
-        var spacerContainer = wpfCell.Blocks.OfType<BlockUIContainer>()
-            .FirstOrDefault(b => b.Child is System.Windows.Controls.Border);
-        spacerContainer.Should().NotBeNull("height-enforcer spacer must be injected into the cell");
+        // The one content host holds the authored minimum height.
+        var host = wpfCell.Blocks.OfType<BlockUIContainer>()
+            .Should().ContainSingle().Subject;
+        host.Child.Should().BeOfType<System.Windows.Controls.Grid>();
 
-        var border = (System.Windows.Controls.Border)spacerContainer!.Child;
-        border.MinHeight.Should().BeApproximately(heightPt * pxPerPt, 0.01,
+        var grid = (System.Windows.Controls.Grid)host.Child;
+        grid.MinHeight.Should().BeApproximately(heightPt * pxPerPt, 0.01,
             "spacer MinHeight must equal HeightPt × PxPerPoint");
     }
 
