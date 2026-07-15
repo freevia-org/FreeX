@@ -10,6 +10,7 @@ using FreeW.App.Avalonia;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Ribbon;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Proofing;
 using FreeW.Core.Model;
 using Free.Shared.Ribbon;
 using Xunit;

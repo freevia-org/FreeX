@@ -117,6 +117,33 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartPlan_SharesSignedValueAxisGeometryForMixedNegativeSeries()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A", "B", "C"], [-4.0, 6.0, -2.0]);
+
+        var axis = ChartSmartArtVisualPlanner.BuildChartPlan(chart).ValueAxis;
+
+        axis.Minimum.Should().Be(-4);
+        axis.Maximum.Should().Be(6);
+        axis.Range.Should().Be(10);
+        axis.ZeroFraction.Should().BeApproximately(0.4, 0.001);
+        axis.ValueFraction(-4).Should().Be(0);
+        axis.ValueFraction(6).Should().Be(1);
+    }
+
+    [Fact]
+    public void ChartPlan_AllNegativeValueAxisStillIncludesZero()
+    {
+        var chart = Chart.Create(ChartKind.Line, ["A", "B"], [-8.0, -2.0]);
+
+        var axis = ChartSmartArtVisualPlanner.BuildChartPlan(chart).ValueAxis;
+
+        axis.Minimum.Should().Be(-8);
+        axis.Maximum.Should().Be(0);
+        axis.ZeroFraction.Should().Be(1);
+    }
+
+    [Fact]
     public void ChartPlan_PieFamilySuppressesAxisTitles()
     {
         var chart = Chart.Create(ChartKind.Pie, ["A", "B"], [1.0, 2.0]);

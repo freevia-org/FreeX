@@ -11,6 +11,7 @@ using Free.Shared.Ribbon;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Proofing;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
@@ -1256,7 +1257,7 @@ internal static class FreeWRibbonCommands
         // misspelled word at the caret, adds it to the dictionary (+ persists), and re-reads the file so
         // it is no longer underlined. "Spell Check" is a stateful toggle over SpellCheck.IsEnabled.
         var customDictionary = CustomDictionaryStore.Load();
-        editor.RegisterCustomDictionary(customDictionary.EnsureFileExists());
+            editor.RegisterCustomDictionary(customDictionary.EnsurePersisted());
         registry.Register("freew.add-to-dictionary", new AddToDictionaryCommand(editor, customDictionary));
         var spellCheckToggle = new SpellCheckToggleCommand(editor);
         registry.Register("freew.spellcheck-toggle", spellCheckToggle);

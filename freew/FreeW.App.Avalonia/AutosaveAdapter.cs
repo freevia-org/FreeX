@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia.Editing;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 
 namespace FreeW.App.Avalonia;
@@ -84,11 +85,11 @@ internal sealed class AutosaveAdapter : IDisposable
             if (candidates.Count == 0)
                 return;
 
-            var candidate = SelectLatest(candidates);
+            var candidate = AutosaveRecoveryPlanner.SelectLatest(candidates);
             if (candidate is null)
                 return;
 
-            var name = CandidateDisplayName(candidate);
+            var name = AutosaveRecoveryPlanner.DisplayName(candidate);
             var recover = await RecoveryPromptDialog.ShowAsync(
                 owner,
                 $"FreeW found unsaved changes to \"{name}\" from a previous session. Recover them?");
@@ -100,11 +101,13 @@ internal sealed class AutosaveAdapter : IDisposable
             {
                 var doc = DocxReader.Read(candidate.SnapshotPath);
                 _source.LoadRecoveredSnapshot(doc, candidate.Sidecar.OriginalFilePath);
-                AutosaveSnapshotStore.DeleteCandidate(candidate);
+                ApplyRecoveryDisposition(candidate,
+                    AutosaveRecoveryPlanner.ResolveDisposition(accepted: true, recovered: true));
             }
             catch
             {
-                // Corrupt snapshot: leave on disk rather than deleting it.
+                ApplyRecoveryDisposition(candidate,
+                    AutosaveRecoveryPlanner.ResolveDisposition(accepted: true, recovered: false));
             }
         }
         catch
@@ -138,18 +141,20 @@ internal sealed class AutosaveAdapter : IDisposable
         }
     }
 
-    private static AutosaveRecoveryCandidate? SelectLatest(IReadOnlyList<AutosaveRecoveryCandidate> candidates) =>
-        candidates
-            .OrderByDescending(c => ParseTimestamp(c.Sidecar.TimestampUtc))
-            .FirstOrDefault();
-
-    private static string CandidateDisplayName(AutosaveRecoveryCandidate candidate) =>
-        string.IsNullOrWhiteSpace(candidate.Sidecar.DisplayName)
-            ? "a document"
-            : candidate.Sidecar.DisplayName!;
-
-    private static DateTimeOffset ParseTimestamp(string? ts) =>
-        DateTimeOffset.TryParse(ts, out var dt) ? dt : DateTimeOffset.MinValue;
+    private static void ApplyRecoveryDisposition(
+        AutosaveRecoveryCandidate candidate,
+        AutosaveRecoveryDisposition disposition)
+    {
+        switch (disposition)
+        {
+            case AutosaveRecoveryDisposition.Delete:
+                AutosaveSnapshotStore.DeleteCandidate(candidate);
+                break;
+            case AutosaveRecoveryDisposition.Quarantine:
+                AutosaveSnapshotStore.QuarantineCandidate(candidate);
+                break;
+        }
+    }
 
     // ── IAutosaveSnapshotSource adapter ─────────────────────────────────────
 

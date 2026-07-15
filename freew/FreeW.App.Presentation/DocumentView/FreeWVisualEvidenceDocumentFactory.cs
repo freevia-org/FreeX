@@ -1165,6 +1165,70 @@ public static class FreeWVisualEvidenceDocumentFactory
         return doc;
     }
 
+    public static TextDocument BuildFloatingImageEvidenceDocument()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+
+        var inFront = new Paragraph();
+        inFront.Runs.Add(new Run("Avalonia floating image evidence: in-front image."));
+        inFront.Runs.Add(Run.FromImage(new InlineImage([1, 2, 3, 4], widthPt: 96, heightPt: 48)
+        {
+            Wrapping = ImageWrapping.InFront,
+            HorizontalOffsetPt = 24,
+            VerticalOffsetPt = 12,
+            ZOrderIndex = 10
+        }));
+        document.Blocks.Add(inFront);
+
+        var behind = new Paragraph();
+        behind.Runs.Add(new Run("Avalonia floating image evidence: behind-text image."));
+        behind.Runs.Add(Run.FromImage(new InlineImage([4, 3, 2, 1], widthPt: 120, heightPt: 54)
+        {
+            Wrapping = ImageWrapping.Behind,
+            HorizontalOffsetPt = 36,
+            VerticalOffsetPt = 8,
+            ZOrderIndex = 1
+        }));
+        document.Blocks.Add(behind);
+
+        var topBottom = new Paragraph();
+        topBottom.Runs.Add(new Run("Avalonia floating image evidence: top-and-bottom page placement."));
+        topBottom.Runs.Add(Run.FromImage(new InlineImage([9, 8, 7, 6], widthPt: 72, heightPt: 42)
+        {
+            Wrapping = ImageWrapping.TopAndBottom,
+            HorizontalOffsetPt = 180,
+            VerticalOffsetPt = 80,
+            ZOrderIndex = 5
+        }));
+        document.Blocks.Add(topBottom);
+        return document;
+    }
+
+    public static TextDocument BuildFloatingWrapDocument()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(new Run("WPF floating wrap evidence: square image plus tight image."));
+        paragraph.Runs.Add(Run.FromImage(new InlineImage([1, 2, 3, 4], widthPt: 96, heightPt: 48)
+        {
+            Wrapping = ImageWrapping.Square,
+            HorizontalOffsetPt = 24,
+            VerticalOffsetPt = 12,
+            ZOrderIndex = 2
+        }));
+        paragraph.Runs.Add(Run.FromImage(new InlineImage([4, 3, 2, 1], widthPt: 84, heightPt: 42)
+        {
+            Wrapping = ImageWrapping.Tight,
+            HorizontalOffsetPt = 160,
+            VerticalOffsetPt = 20,
+            ZOrderIndex = 3
+        }));
+        document.Blocks.Add(paragraph);
+        return document;
+    }
+
     private static Paragraph StyledParagraph(string text, string styleId) =>
         new(text) { StyleId = styleId };
 

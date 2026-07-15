@@ -2,6 +2,7 @@ using System.IO;
 using System.IO.Compression;
 using Free.Shared.AppServices;
 using FreeW.App.Host;
+using FreeW.App.Presentation.Shell;
 
 namespace FreeW.App.Host.Tests;
 
@@ -98,7 +99,7 @@ public class AutosaveRecoveryDeletionTests : IDisposable
         candidates.Should().HaveCount(2);
 
         // Act: simulate the fixed OfferRecovery — select the latest, user accepts, delete only it
-        var offered = AutosaveRecoveryCandidatePlanner.SelectLatest(candidates)!;
+        var offered = AutosaveRecoveryPlanner.SelectLatest(candidates)!;
         offered.SnapshotPath.Should().Be(newer.SnapshotPath, "SelectLatest must return the newer candidate");
 
         // Only delete the offered candidate (as the fixed code does on successful recovery)
@@ -125,7 +126,7 @@ public class AutosaveRecoveryDeletionTests : IDisposable
         var candidates = store.EnumerateCandidates();
 
         // Act: simulate the fixed OfferRecovery — user declines ("No"), no deletion occurs
-        _ = AutosaveRecoveryCandidatePlanner.SelectLatest(candidates)!;
+        _ = AutosaveRecoveryPlanner.SelectLatest(candidates)!;
         // On decline the fixed code does NOT call DeleteCandidate — nothing is deleted here.
 
         // Assert: both candidates still exist
@@ -146,7 +147,7 @@ public class AutosaveRecoveryDeletionTests : IDisposable
         var candidates = store.EnumerateCandidates();
         candidates.Should().HaveCount(3);
 
-        var offered = AutosaveRecoveryCandidatePlanner.SelectLatest(candidates)!;
+        var offered = AutosaveRecoveryPlanner.SelectLatest(candidates)!;
         offered.SnapshotPath.Should().Be(c3.SnapshotPath);
 
         // Fixed OfferRecovery: delete only the offered one on successful load

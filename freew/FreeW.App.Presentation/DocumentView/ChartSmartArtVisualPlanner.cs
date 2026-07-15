@@ -18,6 +18,35 @@ public sealed record ChartSeriesVisualPlan(
     string Name,
     IReadOnlyList<double> Values);
 
+public sealed record ChartValueAxisPlan(double Minimum, double Maximum)
+{
+    public double Range => Maximum - Minimum;
+    public double ZeroFraction => -Minimum / Range;
+
+    public double ValueFraction(double value) => (value - Minimum) / Range;
+
+    public static ChartValueAxisPlan FromSeries(IEnumerable<ChartSeriesVisualPlan> series)
+    {
+        ArgumentNullException.ThrowIfNull(series);
+
+        var minimum = 0.0;
+        var maximum = 0.0;
+        foreach (var value in series.SelectMany(item => item.Values))
+        {
+            if (!double.IsFinite(value))
+                continue;
+
+            minimum = Math.Min(minimum, value);
+            maximum = Math.Max(maximum, value);
+        }
+
+        if (maximum <= minimum)
+            maximum = minimum + 1;
+
+        return new ChartValueAxisPlan(minimum, maximum);
+    }
+}
+
 public sealed record ChartVisualPlan(
     ChartKind Kind,
     ChartVisualGeometryKind GeometryKind,
@@ -35,7 +64,8 @@ public sealed record ChartVisualPlan(
     string? ValueAxisTitle,
     IReadOnlyList<string> PaletteHex,
     IReadOnlyList<string> Categories,
-    IReadOnlyList<ChartSeriesVisualPlan> Series);
+    IReadOnlyList<ChartSeriesVisualPlan> Series,
+    ChartValueAxisPlan ValueAxis);
 
 public sealed record ChartElementCommandState(
     bool CanToggleLegend,
@@ -212,6 +242,12 @@ public static class ChartSmartArtVisualPlanner
         if (isPieFamily)
             showAxisTitles = false;
 
+        var series = chart.Series
+            .Select(item => new ChartSeriesVisualPlan(
+                NormalizeSignatureText(item.Name),
+                item.Values.ToList()))
+            .ToList();
+
         return new ChartVisualPlan(
             chart.Kind,
             ToGeometryKind(chart.Kind),
@@ -229,11 +265,8 @@ public static class ChartSmartArtVisualPlanner
             showAxisTitles ? chart.ValueAxisTitle : null,
             scheme.Colors.Select(NormalizeHex).ToList(),
             chart.Categories.Select(NormalizeSignatureText).ToList(),
-            chart.Series
-                .Select(series => new ChartSeriesVisualPlan(
-                    NormalizeSignatureText(series.Name),
-                    series.Values.ToList()))
-                .ToList());
+            series,
+            ChartValueAxisPlan.FromSeries(series));
     }
 
     public static IReadOnlyList<string> BuildChartVisualSignatures(IEnumerable<ChartVisualPlan> charts)

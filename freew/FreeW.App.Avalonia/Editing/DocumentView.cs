@@ -9,6 +9,7 @@ using Avalonia.Media.Imaging;
 using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.App.Presentation.Links;
+using FreeW.App.Presentation.Proofing;
 using FreeW.App.Presentation.Ribbon;
 using FreeW.App.Presentation.Shell;
 using FreeW.Core.Model;
@@ -534,6 +535,24 @@ public sealed class DocumentView : Control
         return true;
     }
 
+    public bool FindNext(string query, FindReplaceSearchOptions options)
+    {
+        if (FindReplaceDialogPlanner.FindNextMatch(
+                _doc,
+                query,
+                options,
+                _caret.Block,
+                _caret.Offset) is not { } hit)
+            return false;
+
+        _selectionAnchor = new DocPosition(hit.Block, hit.Start);
+        _caret = new DocPosition(hit.Block, hit.Start + hit.Length);
+        Focus();
+        InvalidateVisual();
+        ScrollToCaretRequested?.Invoke();
+        return true;
+    }
+
     /// <summary>
     /// Number of discrete pages in the current layout (at least 1).
     /// Always 1 in <see cref="DocumentViewMode.WebLayout"/> and <see cref="DocumentViewMode.Draft"/> modes
@@ -601,6 +620,20 @@ public sealed class DocumentView : Control
         return FindNext(query);
     }
 
+    public bool ReplaceNext(
+        string query,
+        string replacement,
+        FindReplaceSearchOptions options)
+    {
+        if (string.IsNullOrEmpty(query))
+            return false;
+
+        if (FindReplaceDialogPlanner.MatchesExactly(SelectedText, query, options))
+            ReplaceSelectionWith(replacement);
+
+        return FindNext(query, options);
+    }
+
     /// <summary>Replace every occurrence of <paramref name="query"/> from the document start. Returns the count.</summary>
     public int ReplaceAll(string query, string replacement)
     {
@@ -611,6 +644,27 @@ public sealed class DocumentView : Control
         _selectionAnchor = _caret;
         var count = 0;
         while (count < 10000 && FindNext(query))
+        {
+            ReplaceSelectionWith(replacement);
+            count++;
+        }
+
+        InvalidateVisual();
+        return count;
+    }
+
+    public int ReplaceAll(
+        string query,
+        string replacement,
+        FindReplaceSearchOptions options)
+    {
+        if (string.IsNullOrEmpty(query))
+            return 0;
+
+        _caret = new DocPosition(FirstEditableBlock(), 0);
+        _selectionAnchor = _caret;
+        var count = 0;
+        while (count < 10000 && FindNext(query, options))
         {
             ReplaceSelectionWith(replacement);
             count++;
@@ -14378,6 +14432,7 @@ public sealed class DocumentView : Control
         public bool    ShowDataLabels;
         public string? CategoryAxisTitle;
         public string? ValueAxisTitle;
+        public ChartValueAxisPlan ValueAxis = new(0, 1);
         public List<Color> Palette = [];
     }
 
@@ -14653,6 +14708,7 @@ public sealed class DocumentView : Control
             ShowDataLabels    = plan.ShowDataLabels,
             CategoryAxisTitle = plan.CategoryAxisTitle,
             ValueAxisTitle    = plan.ValueAxisTitle,
+            ValueAxis         = plan.ValueAxis,
             Palette           = plan.PaletteHex.Select(ToAvaloniaChartColor).ToList(),
         };
     }
@@ -14744,8 +14800,7 @@ public sealed class DocumentView : Control
                 new Rect(plotLeft, plotTop, plotW, plotH));
 
         // BC3: Compute the axis range for non-pie charts (used for gridline labels and data drawing).
-        var (axisMin, axisMax, axisRange) = ComputeAxisRange(cd);
-        var zeroFraction = -axisMin / axisRange;
+        var axis = cd.ValueAxis;
 
         // ── Gridlines + BC1: Y-axis tick labels ──
         const int gridLines = 4;
@@ -14759,7 +14814,7 @@ public sealed class DocumentView : Control
             // BC1: Draw value-axis tick label in the reserved left strip.
             if (!isPieFamily && (cd.ShowGridlines || g == 0))
             {
-                var tickVal = axisMin + (g * axisRange / gridLines);
+                var tickVal = axis.Minimum + (g * axis.Range / gridLines);
                 var tickLabel = tickVal.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
                 var tickFt = Build(tickLabel, annotFmt);
                 var tx = plotLeft - tickFt.WidthIncludingTrailingWhitespace - 2;
@@ -14937,35 +14992,14 @@ public sealed class DocumentView : Control
     /// For pie/doughnut: percentage text at the slice midpoint angle.
     /// Approximation: text is positioned geometrically; no collision avoidance.
     /// </summary>
-    /// <summary>
-    /// Shared helper: compute the axis [axisMin, axisMax] range for bar/line data labels and axis labels.
-    /// Ensures the range includes 0, guards degenerate all-zero data.
-    /// </summary>
-    private static (double axisMin, double axisMax, double axisRange) ComputeAxisRange(FloatingChartData cd)
-    {
-        var minVal = 0.0;
-        var maxVal = 0.0;
-        foreach (var (_, vals) in cd.Series)
-            foreach (var v in vals)
-            {
-                if (v < minVal) minVal = v;
-                if (v > maxVal) maxVal = v;
-            }
-        var axisMin   = Math.Min(0, minVal);
-        var axisMax   = Math.Max(0, maxVal);
-        if (axisMax <= axisMin) axisMax = axisMin + 1;
-        return (axisMin, axisMax, axisMax - axisMin);
-    }
-
     private void DrawChartDataLabels(DrawingContext context, FloatingChartData cd,
         double plotLeft, double plotTop, double plotW, double plotH, double plotBottom,
         RunFormatting fmt)
     {
         // BC3: Use axis range that includes negative values.
-        var (axisMin, axisMax, axisRange) = ComputeAxisRange(cd);
-        var zeroFraction = -axisMin / axisRange;
-        var zeroY = plotBottom - zeroFraction * plotH;
-        var zeroX = plotLeft   + zeroFraction * plotW;
+        var axis = cd.ValueAxis;
+        var zeroY = plotBottom - axis.ZeroFraction * plotH;
+        var zeroX = plotLeft   + axis.ZeroFraction * plotW;
 
         switch (cd.Kind)
         {
@@ -14986,7 +15020,7 @@ public sealed class DocumentView : Control
                         var val     = ci < vals.Count ? vals[ci] : 0;
                         var bw      = Math.Max(1, seriesW - 1);
                         var bx      = plotLeft + barPad + ci * groupW + si * seriesW;
-                        var valFrac = val / axisRange;
+                        var valFrac = axis.ValueFraction(val);
                         var barH    = Math.Abs(valFrac) * plotH;
                         var barTopY = val >= 0 ? zeroY - barH : zeroY;
 
@@ -15025,7 +15059,7 @@ public sealed class DocumentView : Control
                     for (var ci = 0; ci < cats; ci++)
                     {
                         var val   = ci < vals.Count ? vals[ci] : 0;
-                        var barW  = Math.Abs(val / axisRange) * plotW;
+                        var barW  = Math.Abs(axis.ValueFraction(val)) * plotW;
                         var bx    = val >= 0 ? zeroX : zeroX - barW;
                         var by    = plotTop + (ci * (barGroupH + 2 * barPad) + barPad + si * seriesH);
 
@@ -15051,7 +15085,7 @@ public sealed class DocumentView : Control
                     {
                         var val = vals[ci];
                         var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
-                        var py  = plotBottom - ((val - axisMin) / axisRange * plotH);
+                        var py  = plotBottom - axis.ValueFraction(val) * plotH;
 
                         var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
                         var ft = Build(label, fmt);
@@ -15101,25 +15135,8 @@ public sealed class DocumentView : Control
         var nSeries = cd.Series.Count;
         var nBars   = cats;
 
-        // BC3: Compute axis range that includes negative values and anchors the zero baseline.
-        var minVal = 0.0;
-        var maxVal = 0.0;
-        foreach (var (_, vals) in cd.Series)
-            foreach (var v in vals)
-            {
-                if (v < minVal) minVal = v;
-                if (v > maxVal) maxVal = v;
-            }
-        var axisMin = Math.Min(0, minVal);
-        var axisMax = Math.Max(0, maxVal);
-        // Guard degenerate all-zero data.
-        if (axisMax <= axisMin) axisMax = axisMin + 1;
-        var axisRange = axisMax - axisMin;
-
-        // Zero baseline position within the plot area.
-        // In vertical bars:  zeroY   = plotBottom - (0 - axisMin)/axisRange * plotH
-        // In horizontal bars: zeroX  = plotLeft   + (0 - axisMin)/axisRange * plotW
-        var zeroFraction = -axisMin / axisRange; // fraction of plotH/plotW at which y=0 lives
+        var axis = cd.ValueAxis;
+        var zeroFraction = axis.ZeroFraction;
         var zeroY = plotBottom - zeroFraction * plotH;
         var zeroX = plotLeft   + zeroFraction * plotW;
 
@@ -15142,7 +15159,7 @@ public sealed class DocumentView : Control
                 {
                     var bh       = Math.Max(1, seriesW - 1);
                     var by       = plotTop + (ci * (barGroupW + 2 * barPad) + barPad + si * seriesW);
-                    var valFrac  = val / axisRange;
+                    var valFrac  = axis.ValueFraction(val);
                     var barW     = Math.Abs(valFrac) * plotW;
                     double bx;
                     if (val >= 0)
@@ -15159,7 +15176,7 @@ public sealed class DocumentView : Control
                 {
                     var bw      = Math.Max(1, seriesW - 1);
                     var bx      = plotLeft + barPad + ci * groupW + si * seriesW;
-                    var valFrac = val / axisRange;
+                    var valFrac = axis.ValueFraction(val);
                     var barH    = Math.Abs(valFrac) * plotH;
                     double barTop;
                     if (val >= 0)
@@ -15185,26 +15202,12 @@ public sealed class DocumentView : Control
     {
         var cats = Math.Max(2, cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count));
 
-        // BC3: Compute axis range including negative values.
-        var minVal = 0.0;
-        var maxVal = 0.0;
-        foreach (var (_, vals) in cd.Series)
-            foreach (var v in vals)
-            {
-                if (v < minVal) minVal = v;
-                if (v > maxVal) maxVal = v;
-            }
-        var axisMin   = Math.Min(0, minVal);
-        var axisMax   = Math.Max(0, maxVal);
-        if (axisMax <= axisMin) axisMax = axisMin + 1;
-        var axisRange = axisMax - axisMin;
-
-        // Zero baseline Y position within the plot.
-        var zeroFraction = -axisMin / axisRange;
+        var axis = cd.ValueAxis;
+        var zeroFraction = axis.ZeroFraction;
         var zeroY = plotBottom - zeroFraction * plotH;
 
         // Map a data value to a pixel Y within the plot.
-        double ValToY(double v) => plotBottom - ((v - axisMin) / axisRange) * plotH;
+        double ValToY(double v) => plotBottom - axis.ValueFraction(v) * plotH;
 
         for (var si = 0; si < cd.Series.Count; si++)
         {
@@ -15254,7 +15257,7 @@ public sealed class DocumentView : Control
         var xMax = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max();
         if (xMax <= xMin) xMax = xMin + 1;
 
-        var yMax = Math.Max(1.0, cd.Series.SelectMany(s => s.Values).DefaultIfEmpty(1).Max());
+        var axis = cd.ValueAxis;
 
         double Px(int c)
         {
@@ -15262,7 +15265,7 @@ public sealed class DocumentView : Control
             return plotLeft + (x - xMin) / (xMax - xMin) * plotW;
         }
 
-        double Py(double value) => plotBottom - plotH * (Math.Max(0, value) / yMax);
+        double Py(double value) => plotBottom - plotH * axis.ValueFraction(value);
 
         for (var si = 0; si < cd.Series.Count; si++)
         {

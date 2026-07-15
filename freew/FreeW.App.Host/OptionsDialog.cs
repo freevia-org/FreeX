@@ -26,6 +26,7 @@ namespace FreeW.App.Host;
 internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 {
     private readonly FreeWOptions _options;
+    private readonly OptionsDialogSurfaceSpec _surface;
 
     private readonly TextBox _recentFilesCap = new() { MinWidth = 80, HorizontalAlignment = HorizontalAlignment.Left };
     private readonly ComboBox _defaultFormat = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Left };
@@ -67,10 +68,11 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     public OptionsDialog(Window owner, FreeWOptions options)
     {
         _options = options ?? new FreeWOptions();
+        _surface = OptionsDialogPlanner.BuildSurface(_options, SystemLanguageLabel());
         Result = _options;
 
         Owner = owner;
-        Title = "FreeW Options";
+        Title = _surface.Title;
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -79,16 +81,17 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         // The single .docx format FreeW ships today, surfaced as a (currently single-entry) picker so the
         // setting reads honestly and is ready to grow. The Tag carries the persisted extension value.
-        _defaultFormat.Items.Add(new ComboBoxItem { Content = "Word Document (*.docx)", Tag = FreeWOptions.DocxDefaultFormat });
+        foreach (var choice in _surface.General.FormatChoices)
+            _defaultFormat.Items.Add(new ComboBoxItem { Content = choice.Label, Tag = choice.Extension });
         _defaultFormat.SelectedIndex = 0;
 
         _recentFilesCap.Text = _options.RecentFilesCap.ToString(CultureInfo.CurrentCulture);
         _uiLanguage.Text = _options.UiLanguage;
 
         var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
-        tabs.Items.Add(new TabItem { Header = "General", Content = BuildGeneralTab() });
-        tabs.Items.Add(new TabItem { Header = "AutoCorrect", Content = BuildAutoCorrectTab() });
-        tabs.Items.Add(new TabItem { Header = "AutoFormat As You Type", Content = BuildAutoFormatTab() });
+        tabs.Items.Add(new TabItem { Header = _surface.Tabs[0].Header, Content = BuildGeneralTab() });
+        tabs.Items.Add(new TabItem { Header = _surface.AutoCorrect.Header, Content = BuildAutoCorrectTab() });
+        tabs.Items.Add(new TabItem { Header = _surface.AutoFormat.Header, Content = BuildAutoFormatTab() });
 
         var buttons = DialogButtonRowFactory.Create(Commit, buttonWidth: 84, rowMargin: new Thickness(16, 8, 16, 12));
 
@@ -108,15 +111,18 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         for (var i = 0; i < 3; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-        AddRow(grid, 0, "Recent files to keep:", _recentFilesCap);
-        AddRow(grid, 1, "Default save format:", _defaultFormat);
-        AddRow(grid, 2, "UI language:", _uiLanguage, hint: $"Empty = follow the system culture (currently {SystemLanguageLabel()}).");
+        AddRow(grid, 0, _surface.General.RecentFilesLabel, _recentFilesCap);
+        AddRow(grid, 1, _surface.General.DefaultSaveFormatLabel, _defaultFormat);
+        AddRow(grid, 2, _surface.General.UiLanguageLabel, _uiLanguage, hint: _surface.General.UiLanguageHint);
         return grid;
     }
 
     private FrameworkElement BuildAutoFormatTab()
     {
         var af = _options.AutoFormat ?? AutoFormatOptions.Default;
+        ConfigureToggle(_autoCorrectEnabled, _surface.AutoFormat.MasterToggle);
+        foreach (var spec in _surface.AutoFormat.RuleToggles)
+            ConfigureToggle(ToggleFor(spec.Kind), spec);
         _autoCorrectEnabled.IsChecked = _options.AutoCorrectEnabled;
         _smartQuotes.IsChecked = af.SmartQuotes;
         _dashes.IsChecked = af.Dashes;
@@ -157,7 +163,7 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         panel.Children.Add(_autoCorrectEnabled);
         panel.Children.Add(new TextBlock
         {
-            Text = "Apply as you type:",
+            Text = _surface.AutoFormat.RuleSectionLabel,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 4, 0, 0)
         });
@@ -169,6 +175,8 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private FrameworkElement BuildAutoCorrectTab()
     {
         var ac = _options.AutoCorrect ?? AutoCorrectOptions.Default;
+        foreach (var spec in _surface.AutoCorrect.Toggles)
+            ConfigureToggle(ToggleFor(spec.Kind), spec);
         _correctTwoInitialCaps.IsChecked = ac.CorrectTwoInitialCapitals;
         _capitalizeDayNames.IsChecked = ac.CapitalizeDayNames;
         _replaceText.IsChecked = ac.ReplaceText;
@@ -200,14 +208,14 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         }
         panel.Children.Add(new TextBlock
         {
-            Text = "Replace text as you type:",
+            Text = _surface.AutoCorrect.ReplacementsLabel,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 12, 0, 0),
         });
         panel.Children.Add(_replacements);
         panel.Children.Add(new TextBlock
         {
-            Text = "Type the misspelling/abbreviation under \"Replace\" and its replacement under \"With\". Blank rows are ignored; matching is case-insensitive on a word boundary.",
+            Text = _surface.AutoCorrect.ReplacementsHelpText,
             FontSize = 11,
             Foreground = System.Windows.Media.Brushes.Gray,
             TextWrapping = TextWrapping.Wrap,
@@ -281,6 +289,32 @@ internal sealed class OptionsDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         var name = CultureInfo.CurrentCulture.Name;
         return string.IsNullOrEmpty(name) ? "invariant" : name;
     }
+
+    private static void ConfigureToggle(CheckBox box, OptionsDialogToggleSpec spec)
+    {
+        box.Content = spec.Label;
+        box.IsChecked = spec.IsChecked;
+    }
+
+    private CheckBox ToggleFor(OptionsDialogToggleKind kind) =>
+        kind switch
+        {
+            OptionsDialogToggleKind.AutoCorrectEnabled => _autoCorrectEnabled,
+            OptionsDialogToggleKind.SmartQuotes => _smartQuotes,
+            OptionsDialogToggleKind.Dashes => _dashes,
+            OptionsDialogToggleKind.Ellipsis => _ellipsis,
+            OptionsDialogToggleKind.Symbols => _symbols,
+            OptionsDialogToggleKind.Capitalization => _capitalization,
+            OptionsDialogToggleKind.BulletedLists => _bulletedLists,
+            OptionsDialogToggleKind.NumberedLists => _numberedLists,
+            OptionsDialogToggleKind.Ordinals => _ordinals,
+            OptionsDialogToggleKind.Fractions => _fractions,
+            OptionsDialogToggleKind.Hyperlinks => _hyperlinks,
+            OptionsDialogToggleKind.CorrectTwoInitialCapitals => _correctTwoInitialCaps,
+            OptionsDialogToggleKind.CapitalizeDayNames => _capitalizeDayNames,
+            OptionsDialogToggleKind.ReplaceText => _replaceText,
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
+        };
 
     private static void AddRow(Grid grid, int row, string label, FrameworkElement field, string? hint = null)
     {

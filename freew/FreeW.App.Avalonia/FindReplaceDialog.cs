@@ -280,17 +280,11 @@ public sealed class FindReplaceDialog : Window
     }
 
     /// <summary>
-    /// Keeps the existing Avalonia editor behavior: plain searches delegate directly to the editor;
-    /// option-aware searches first ask the presentation planner whether any document match exists,
-    /// then let the editor perform its current plain selection/scroll behavior.
+    /// The editor executes the same option-aware planner contract for every search mode.
     /// </summary>
     private bool FindNextWithOptions(FindReplaceSearchRequest request)
     {
-        if (FindReplaceDialogPlanner.ShouldUsePlainEditorSearch(request.Options))
-            return _editor.FindNext(request.Term);
-
-        return FindReplaceDialogPlanner.DocumentContains(_editor.Document, request) &&
-               _editor.FindNext(request.Term);
+        return _editor.FindNext(request.Term, request.Options);
     }
 
     private void Replace()
@@ -306,7 +300,7 @@ public sealed class FindReplaceDialog : Window
             return;
         }
 
-        var replaced = _editor.ReplaceNext(request!.Term, request.Replacement);
+        var replaced = _editor.ReplaceNext(request!.Term, request.Replacement, request.Options);
         _status.Text = FindReplaceDialogPlanner.BuildReplaceStatus(request, replaced);
     }
 
@@ -323,7 +317,7 @@ public sealed class FindReplaceDialog : Window
             return;
         }
 
-        var count = _editor.ReplaceAll(request!.Term, request.Replacement);
+        var count = _editor.ReplaceAll(request!.Term, request.Replacement, request.Options);
         _status.Text = FindReplaceDialogPlanner.BuildReplaceAllStatus(request, count);
     }
 
