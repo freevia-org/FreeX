@@ -15892,12 +15892,6 @@ public sealed class DocumentView : Control
         var rect = wd.Rect;
         DrawFloatingWordArtEffects(context, wd, rect);
 
-        // Draw a light background frame so the WordArt region is visible even without warp geometry.
-        context.DrawRectangle(null,
-            new Pen(new SolidColorBrush(Color.FromArgb(0x44, 0x44, 0x72, 0xC4)), 1.0,
-                new DashStyle([3, 3], 0)),
-            rect);
-
         if (BuildWordArtFillBrush(wd.Fill) is { } fillBrush)
             context.FillRectangle(fillBrush, rect);
 
@@ -15906,11 +15900,11 @@ public sealed class DocumentView : Control
         {
             FontSizePt = Math.Max(8, wd.FontSizePt),
             Bold       = wd.Bold,
-            ColorHex   = PrimaryWordArtColorHex(wd.Fill),
+            ColorHex   = ContrastingWordArtTextColor(wd.Fill),
         };
 
-        // Warp hint: for non-None warps add a "(warp)" note since path-deform is not supported in
-        // Avalonia immediate-mode. The text is still at the right position and size.
+        // Path deformation is not supported in Avalonia immediate-mode yet, so
+        // render the unwarped text as the closest readable fallback.
         var displayText = wd.Text;
 
         var ft = Build(displayText, textFmt);
@@ -15928,20 +15922,13 @@ public sealed class DocumentView : Control
             using (context.PushClip(rect))
                 context.DrawText(outlineFt, new Point(tx + 1, ty + 1));
         }
-
-        // Warp indicator (small label in corner if warp is set).
-        if (wd.Warp != WordArtWarp.None)
-        {
-            var warpFmt = new RunFormatting { FontSizePt = 7, ColorHex = "#888888" };
-            var warpFt  = Build($"~{wd.Warp}", warpFmt);
-            context.DrawText(warpFt, new Point(rect.X + 2, rect.Bottom - warpFt.Height));
-        }
     }
 
     private static IBrush? BuildWordArtFillBrush(DrawingObjectFillPlan fill)
     {
         return fill.Kind switch
         {
+            DrawingObjectFillKind.Solid when TryParseAvaloniaColor(fill.ColorHex, out var color) => new SolidColorBrush(color),
             DrawingObjectFillKind.Gradient => BuildWordArtGradientBrush(fill),
             DrawingObjectFillKind.Pattern => BuildWordArtPatternBrush(fill),
             _ => null
@@ -15977,11 +15964,18 @@ public sealed class DocumentView : Control
         return new SolidColorBrush(Color.FromArgb(0x22, foreground.R, foreground.G, foreground.B));
     }
 
-    private static string PrimaryWordArtColorHex(DrawingObjectFillPlan fill) =>
-        fill.ColorHex
-        ?? fill.GradientStops.FirstOrDefault()?.ColorHex
-        ?? fill.PatternForegroundColorHex
-        ?? "#1F4E79";
+    private static string ContrastingWordArtTextColor(DrawingObjectFillPlan fill)
+    {
+        var backgroundHex = fill.ColorHex
+            ?? fill.GradientStops.FirstOrDefault()?.ColorHex
+            ?? fill.PatternBackgroundColorHex
+            ?? fill.PatternForegroundColorHex;
+        if (!TryParseAvaloniaColor(backgroundHex, out var background))
+            return "#FFFFFF";
+
+        var luminance = (0.2126 * background.R + 0.7152 * background.G + 0.0722 * background.B) / 255.0;
+        return luminance < 0.42 ? "#FFFFFF" : "#000000";
+    }
 
     private static string? BuildFloatingGroupChildEffectSummary(FloatingGroupChildData child)
     {
@@ -16025,19 +16019,6 @@ public sealed class DocumentView : Control
                 OffsetAndInflate(rect, offsetX, offsetY, spread));
         }
 
-        if (effects.HasGlow)
-        {
-            var glowColor = TryParseAvaloniaColor(effects.GlowColorHex, out var parsed)
-                ? parsed
-                : Color.FromRgb(0x44, 0x72, 0xC4);
-            var radius = Math.Max(2.0, effects.GlowRadiusDip);
-            context.FillRectangle(
-                EffectBrush(glowColor, effects.GlowOpacity * 0.18),
-                OffsetAndInflate(rect, 0, 0, radius * 0.7));
-            context.FillRectangle(
-                EffectBrush(glowColor, effects.GlowOpacity * 0.28),
-                OffsetAndInflate(rect, 0, 0, radius * 0.35));
-        }
     }
 
     /// <summary>

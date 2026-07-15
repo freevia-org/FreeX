@@ -168,6 +168,18 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
+    public void AvaloniaDocumentView_UsesWordArtFillAsFieldAndContrastingText()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
+
+        source.Should().Contain("DrawingObjectFillKind.Solid when TryParseAvaloniaColor(fill.ColorHex, out var color)");
+        source.Should().Contain("ContrastingWordArtTextColor(wd.Fill)");
+        source.Should().NotContain("effects.GlowOpacity * 0.18");
+        source.Should().NotContain("DashStyle([3, 3], 0)");
+        source.Should().NotContain("$\"~{wd.Warp}\"");
+    }
+
+    [Fact]
     public void WordBaselineEvidenceScript_CanForceDeterministicNoWordSummary()
     {
         var source = File.ReadAllText(RepositoryFile("tools", "Run-FreeWWordBaselineEvidence.ps1"));
