@@ -1100,10 +1100,16 @@ static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase);
 
-static int WordComparableContentOffsetY(string scenarioId, int pageNumber) =>
-    string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase) ||
-    string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase) ||
-    (string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase) && pageNumber == 1) ? 2 : 0;
+static int WordComparableContentOffsetY(string scenarioId, int pageNumber)
+{
+    if (string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase))
+        return 2;
+
+    return string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase) ||
+           (string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase) && pageNumber == 1)
+        ? 1
+        : 0;
+}
 
 static (byte[] PngBytes, int PixelWidth, int PixelHeight) CropToDocumentPageSurface(
     byte[] pngBytes,
