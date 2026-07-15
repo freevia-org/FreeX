@@ -2,19 +2,10 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
-
-/// <summary>
-/// The selective removals a user chose in the <see cref="DocumentInspectorDialog"/>. Each flag is true
-/// when the user ticked that category's checkbox and clicked Remove.
-/// </summary>
-internal sealed record InspectorRemovalChoice(bool Comments, bool Revisions, bool Properties, bool Bookmarks)
-{
-    /// <summary>True when at least one category was selected for removal.</summary>
-    public bool Any => Comments || Revisions || Properties || Bookmarks;
-}
 
 /// <summary>
 /// The Document Inspector modal: runs the pure <see cref="DocumentInspector.Inspect(TextDocument)"/>

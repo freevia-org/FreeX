@@ -3,25 +3,12 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using FreeW.App.Presentation.Dialogs;
 
 namespace FreeW.App.Avalonia;
 
-internal enum PasteSpecialOption
-{
-    KeepSourceFormatting,
-    MergeFormatting,
-    KeepTextOnly,
-}
-
 internal sealed class PasteSpecialDialog : Window
 {
-    private static readonly OptionRow[] Options =
-    [
-        new("Keep Source Formatting", "Paste with the source's character and paragraph formatting.", PasteSpecialOption.KeepSourceFormatting),
-        new("Merge Formatting", "Paste text with the destination's formatting.", PasteSpecialOption.MergeFormatting),
-        new("Keep Text Only", "Paste as unformatted plain text.", PasteSpecialOption.KeepTextOnly),
-    ];
-
     private readonly ListBox _list = new()
     {
         MinWidth = 340,
@@ -48,9 +35,9 @@ internal sealed class PasteSpecialDialog : Window
         CanResize = false;
         ShowInTaskbar = false;
 
-        _list.ItemsSource = Options;
+        _list.ItemsSource = PasteSpecialOptionCatalog.Options;
         _list.SelectedIndex = 0;
-        _description.Text = Options[0].Description;
+        _description.Text = PasteSpecialOptionCatalog.Options[0].Description;
         _list.SelectionChanged += (_, _) => RefreshDescription();
         _list.DoubleTapped += (_, _) => Accept();
 
@@ -95,13 +82,13 @@ internal sealed class PasteSpecialDialog : Window
 
     private void RefreshDescription()
     {
-        if (_list.SelectedItem is OptionRow row)
+        if (_list.SelectedItem is PasteSpecialOptionChoice row)
             _description.Text = row.Description;
     }
 
     private void Accept()
     {
-        if (_list.SelectedItem is OptionRow row)
+        if (_list.SelectedItem is PasteSpecialOptionChoice row)
             Close(row.Option);
     }
 
@@ -114,8 +101,4 @@ internal sealed class PasteSpecialDialog : Window
         IsCancel = isCancel,
     };
 
-    private sealed record OptionRow(string Label, string Description, PasteSpecialOption Option)
-    {
-        public override string ToString() => Label;
-    }
 }

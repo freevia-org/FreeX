@@ -2182,10 +2182,10 @@ public sealed class MainWindow : Window
         if (dialog.Choice is not { } choice)
             return;
 
-        if (choice.HasAnySelection)
+        if (choice.Any)
             _editor.ApplyInspectorRemovals(choice.Comments, choice.Revisions, choice.Properties, choice.Bookmarks);
 
-        _status.Text = choice.HasAnySelection
+        _status.Text = choice.Any
             ? "Selected document data removed."
             : "Document Inspector completed.";
         _editor.Focus();
