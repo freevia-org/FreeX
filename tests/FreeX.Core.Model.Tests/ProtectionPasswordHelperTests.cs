@@ -53,4 +53,14 @@ public sealed class ProtectionPasswordHelperTests
     {
         ProtectionPasswordHelper.VerifyStoredPassword("ABCD", "ABCD").Should().BeTrue();
     }
+
+    [Theory]
+    [InlineData("ABCD", true)]
+    [InlineData("0000", true)]
+    [InlineData("abc", false)]
+    [InlineData(null, false)]
+    public void IsLegacyPasswordHash_UsesExactFourHexShape(string? value, bool expected)
+    {
+        ProtectionPasswordHelper.IsLegacyPasswordHash(value).Should().Be(expected);
+    }
 }

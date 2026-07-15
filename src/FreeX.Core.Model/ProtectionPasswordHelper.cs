@@ -269,7 +269,8 @@ public static class ProtectionPasswordHelper
     /// password is never rejected because of the ambiguity.
     /// </para>
     /// </summary>
-    private static bool IsLegacyPasswordHash(string value) =>
+    public static bool IsLegacyPasswordHash(string? value) =>
+        value is not null &&
         value.Length == 4 &&
         value.All(ch =>
             ch is >= '0' and <= '9' ||

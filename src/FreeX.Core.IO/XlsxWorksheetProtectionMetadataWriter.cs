@@ -105,7 +105,7 @@ internal static class XlsxWorksheetProtectionMetadataWriter
             {
                 protection.SetAttributeValue(
                     "password",
-                    XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(sheet.ProtectionPassword!));
+                    ProtectionPasswordHelper.ToLegacyPasswordHash(sheet.ProtectionPassword!));
             }
 
             XlsxWorksheetProtectionNormalizer.NormalizeElement(protection);

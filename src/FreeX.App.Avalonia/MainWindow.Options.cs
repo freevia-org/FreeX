@@ -527,14 +527,14 @@ public sealed partial class MainWindow
             }
 
             var iterativeEnabled = iterativeBox.IsChecked == true;
-            if (!TryParseMaxIterations(maxIterationsBox.Text, out var maxIterations))
+            if (!CalculationOptionsInputParser.TryParseMaxIterations(maxIterationsBox.Text, out var maxIterations))
             {
                 warningText.Text = UiText.Get("Options_InvalidMaxIterationsMessage");
                 warningText.IsVisible = true;
                 return false;
             }
 
-            if (!TryParseMaxChange(maxChangeBox.Text, out var maxChange))
+            if (!CalculationOptionsInputParser.TryParseMaxChange(maxChangeBox.Text, out var maxChange))
             {
                 warningText.Text = UiText.Get("Options_InvalidMaxChangeMessage");
                 warningText.IsVisible = true;
@@ -669,32 +669,6 @@ public sealed partial class MainWindow
         // (Excel re-evaluates them the moment the setting changes), so any existing #CIRCULAR!
         // cells would otherwise stay stale until an unrelated edit forces a recalc.
         _session.RecalculateWorkbook();
-    }
-
-    private static bool TryParseMaxIterations(string? text, out int maxIterations)
-    {
-        maxIterations = 0;
-        if (!int.TryParse((text ?? string.Empty).Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
-            || parsed <= 0)
-        {
-            return false;
-        }
-
-        maxIterations = parsed;
-        return true;
-    }
-
-    private static bool TryParseMaxChange(string? text, out double maxChange)
-    {
-        maxChange = 0;
-        if (!double.TryParse((text ?? string.Empty).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
-            || parsed < 0)
-        {
-            return false;
-        }
-
-        maxChange = parsed;
-        return true;
     }
 
     private static void ApplyOptionsButtonChrome(Button button, double minWidth, bool isDefault = false)

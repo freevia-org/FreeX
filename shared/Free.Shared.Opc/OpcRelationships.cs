@@ -87,6 +87,56 @@ public static class OpcRelationships
     public static IReadOnlyList<OpcRelationship> Load(XDocument relationshipsXml) =>
         Load(relationshipsXml, Namespace);
 
+    /// <summary>
+    /// Enumerates internal relationship targets after filtering external/absolute targets and
+    /// retaining the first occurrence of each relationship ID.
+    /// </summary>
+    public static IEnumerable<KeyValuePair<string, string>> EnumerateInternalTargetMap(
+        XDocument relationshipsXml,
+        XNamespace relationshipsNamespace,
+        Func<string, string> resolveTarget,
+        IEqualityComparer<string>? idComparer = null)
+    {
+        ArgumentNullException.ThrowIfNull(relationshipsXml);
+        ArgumentNullException.ThrowIfNull(resolveTarget);
+
+        var seenIds = new HashSet<string>(idComparer ?? StringComparer.OrdinalIgnoreCase);
+        foreach (var relationship in Load(relationshipsXml, relationshipsNamespace))
+        {
+            if (string.IsNullOrWhiteSpace(relationship.Target) ||
+                IsExternalRelationship(relationship) ||
+                !seenIds.Add(relationship.Id))
+            {
+                continue;
+            }
+
+            yield return new KeyValuePair<string, string>(
+                relationship.Id,
+                resolveTarget(relationship.Target));
+        }
+    }
+
+    /// <summary>Loads <see cref="EnumerateInternalTargetMap"/> into a reusable ID-to-path map.</summary>
+    public static Dictionary<string, string> LoadInternalTargetMap(
+        XDocument relationshipsXml,
+        XNamespace relationshipsNamespace,
+        Func<string, string> resolveTarget,
+        IEqualityComparer<string>? idComparer = null)
+    {
+        var comparer = idComparer ?? StringComparer.OrdinalIgnoreCase;
+        var map = new Dictionary<string, string>(comparer);
+        foreach (var pair in EnumerateInternalTargetMap(
+                     relationshipsXml,
+                     relationshipsNamespace,
+                     resolveTarget,
+                     comparer))
+        {
+            map.Add(pair.Key, pair.Value);
+        }
+
+        return map;
+    }
+
     public static List<OpcRelationshipTarget> LoadTargets(
         ZipArchive archive,
         string relsPath,
@@ -126,6 +176,15 @@ public static class OpcRelationships
         }
 
         return map;
+    }
+
+    private static bool IsExternalRelationship(OpcRelationship relationship)
+    {
+        if (relationship.IsExternal)
+            return true;
+
+        return Uri.TryCreate(relationship.Target, UriKind.Absolute, out var uri) &&
+               !string.IsNullOrWhiteSpace(uri.Scheme);
     }
 
     public static Dictionary<string, string> LoadTargetMap(
