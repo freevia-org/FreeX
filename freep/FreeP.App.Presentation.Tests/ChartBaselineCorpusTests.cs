@@ -278,6 +278,22 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartsCorpusDeck_UsesPowerPointImportedPieFrame()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "06-charts.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var pie = presentation.Slides[2].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        pie.ChartType.Should().Be(ChartType.Pie);
+        pie.HasAutomaticTitle.Should().BeTrue();
+        pie.DataLabels.Should().BeNull();
+
+        ChartRenderPlanner.BuildFramePlan(pie, new ChartPlanRect(0, 0, 480, 288)).Plot
+            .Should().Be(new ChartPlanRect(24, 20, 382.4, 285),
+                "PowerPoint gives an imported automatic-title pie a larger lower plot frame");
+    }
+
+    [Fact]
     public void FillsCorpusDeck_MaterializesInheritedLineAndFontReferences()
     {
         var presentation = PptxPackageReader.Read(Path.Combine(FindCorpusDirectory(), "12-fills.pptx"));
