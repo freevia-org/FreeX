@@ -93,10 +93,11 @@ public class BackstageViewTests
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
+        source.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
+        source.Should().Contain("BackstageInfoPaneSpec plan");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
         source.Should().Contain("ApplicationOptionsSummaryPlanner.Build(");
-        source.Should().Contain("document: _callbacks.GetDocument()");
+        source.Should().Contain("var document = _callbacks.GetDocument()");
         source.Should().Contain("_callbacks.MarkAsFinal()");
         source.Should().Contain("_callbacks.RestrictEditing()");
         source.Should().Contain("_callbacks.InspectDocument()");
@@ -130,7 +131,7 @@ public class BackstageViewTests
         source.Should().NotContain("ColumnDefinitions = new ColumnDefinitions(\"Auto,*\")");
         source.Should().NotContain("BackstagePaneSurfacePlanner.BuildOpenActionPane(");
         source.Should().NotContain("BackstagePrintPanePlanner.Build(");
-        source.Should().NotContain("BackstageInfoSafetyPanePlanner.Build(");
+        source.Should().Contain("BackstageInfoSafetyPanePlanner.Build(document)");
         source.Should().NotContain("SisterBackstageAccountPanePlanner.Build(");
         source.Should().NotContain("markAsFinal: null");
         source.Should().NotContain("restrictEditing: null");

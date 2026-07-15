@@ -1,6 +1,4 @@
-using Free.Shared.Shell;
-
-namespace Free.Shared.Shell.Wpf;
+namespace Free.Shared.Shell;
 
 public sealed record BackstageCoreProperties(
     string? Title,
@@ -20,10 +18,13 @@ public static class BackstageCorePropertiesPlanner
         ArgumentNullException.ThrowIfNull(properties);
 
         return [
-            new(TitleLabel, BackstageVisualKit.Or(properties.Title)),
-            new(AuthorLabel, BackstageVisualKit.Or(properties.Author)),
-            new(SubjectLabel, BackstageVisualKit.Or(properties.Subject)),
-            new(KeywordsLabel, BackstageVisualKit.Or(properties.Keywords)),
+            new(TitleLabel, ValueOrDash(properties.Title)),
+            new(AuthorLabel, ValueOrDash(properties.Author)),
+            new(SubjectLabel, ValueOrDash(properties.Subject)),
+            new(KeywordsLabel, ValueOrDash(properties.Keywords)),
         ];
     }
+
+    private static string ValueOrDash(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "—" : value;
 }

@@ -438,30 +438,68 @@ internal sealed class BackstageView : Window
 
     private Control BuildInfoPane()
     {
-        var surface = BackstagePaneSurfacePlanner.BuildInfoPane(
-            BuildInfoDocumentFields(),
-            markAsFinal: () => { Close(); _callbacks.MarkAsFinal(); },
-            restrictEditing: () => { Close(); _callbacks.RestrictEditing(); },
-            inspectDocument: () => { Close(); _callbacks.InspectDocument(); },
-            checkAccessibility: () => { Close(); _callbacks.CheckAccessibility(); },
-            document: _callbacks.GetDocument());
+        var document = _callbacks.GetDocument();
+        var safetyGroups = BackstageInfoSafetyPanePlanner.Build(document);
+        var plan = SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
+            DocumentKindLabel: BackstageViewTextResources.DocumentLabel,
+            DisplayName: string.IsNullOrWhiteSpace(_callbacks.DisplayName)
+                ? BackstageViewTextResources.UntitledValue
+                : _callbacks.DisplayName,
+            IsDirty: false,
+            Location: _callbacks.CurrentPath,
+            CoreProperties: new BackstageCoreProperties(
+                document.Properties.Title,
+                document.Properties.Author,
+                document.Properties.Subject,
+                document.Properties.Keywords),
+            Statistics: BuildInfoDocumentStatistics(),
+            ActionGroups: ToInfoActionGroups(safetyGroups)));
+
+        return BuildInfoPane(plan);
+    }
+
+    private Control BuildInfoPane(BackstageInfoPaneSpec plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
 
         var content = new StackPanel { Spacing = 16 };
-        content.Children.Add(BuildPaneHeader(surface.Title, surface.Description));
+        content.Children.Add(BuildPaneHeader(
+            BackstageViewTextResources.Info.Title,
+            BackstageViewTextResources.Info.Description));
 
-        // Document properties
+        var documentGrid = CreateDetailGrid();
+        AddDetailRow(
+            documentGrid,
+            plan.DocumentKindLabel,
+            plan.DisplayName,
+            "InfoDocumentName");
+        AddDetailRow(
+            documentGrid,
+            BackstageViewTextResources.PathLabel,
+            plan.Location ?? BackstageViewTextResources.NotSavedValue,
+            "InfoDocumentPath");
+        content.Children.Add(documentGrid);
+
         content.Children.Add(BuildSectionHeader(BackstageViewTextResources.DocumentPropertiesSection));
         var propsGrid = CreateDetailGrid();
-        foreach (var field in surface.DocumentFields)
-            AddDetailRow(propsGrid, field.Label, field.Value, InfoDocumentFieldAutomationId(field.Label));
+        foreach (var field in plan.Properties)
+            AddDetailRow(propsGrid, field.Label, field.Value, $"InfoProperty_{field.Label}");
         content.Children.Add(propsGrid);
 
-        // Safety groups
-        foreach (var group in surface.SafetyGroups)
+        if (plan.Statistics.Count > 0)
+        {
+            content.Children.Add(BuildSectionHeader("Statistics"));
+            var statsGrid = CreateDetailGrid();
+            foreach (var field in plan.Statistics)
+                AddDetailRow(statsGrid, field.Label, field.Value, $"InfoStatistic_{field.Label}");
+            content.Children.Add(statsGrid);
+        }
+
+        foreach (var group in plan.ActionGroups ?? [])
         {
             content.Children.Add(BuildSectionHeader(group.Heading));
             foreach (var action in group.Actions)
-                content.Children.Add(BuildSurfaceActionRow(action));
+                content.Children.Add(BuildActionRow(action));
         }
 
         return content;
@@ -619,19 +657,9 @@ internal sealed class BackstageView : Window
             },
             BackstageChromeStyle);
 
-    private IReadOnlyList<BackstageFieldRow> BuildInfoDocumentFields()
+    private IReadOnlyList<BackstageFieldRow> BuildInfoDocumentStatistics()
     {
-        var fields = new List<BackstageFieldRow>
-        {
-            new(
-                BackstageViewTextResources.DocumentLabel,
-                string.IsNullOrWhiteSpace(_callbacks.DisplayName)
-                    ? BackstageViewTextResources.UntitledValue
-                    : _callbacks.DisplayName),
-            new(
-                BackstageViewTextResources.PathLabel,
-                _callbacks.CurrentPath ?? BackstageViewTextResources.NotSavedValue),
-        };
+        var fields = new List<BackstageFieldRow>();
 
         if (_callbacks.CurrentPath is { } path && File.Exists(path))
         {
@@ -652,14 +680,23 @@ internal sealed class BackstageView : Window
         return fields;
     }
 
-    private static string InfoDocumentFieldAutomationId(string label) =>
-        label switch
+    private IReadOnlyList<BackstageActionGroup> ToInfoActionGroups(
+        IReadOnlyList<BackstageInfoSafetyGroup> groups) =>
+        groups.Select(group => new BackstageActionGroup(
+            group.Heading,
+            group.Actions.Select(action => new BackstageActionRow(
+                action.Label,
+                action.Description,
+                InfoSafetyAction(action.Kind))).ToArray())).ToArray();
+
+    private Action InfoSafetyAction(BackstageInfoSafetyActionKind kind) =>
+        kind switch
         {
-            BackstageViewTextResources.DocumentLabel => "InfoDocumentName",
-            BackstageViewTextResources.PathLabel => "InfoDocumentPath",
-            BackstageViewTextResources.SizeLabel => "InfoFileSize",
-            BackstageViewTextResources.ModifiedLabel => "InfoLastModified",
-            _ => "Info_" + label.Replace(' ', '_')
+            BackstageInfoSafetyActionKind.MarkAsFinal => () => { Close(); _callbacks.MarkAsFinal(); },
+            BackstageInfoSafetyActionKind.RestrictEditing => () => { Close(); _callbacks.RestrictEditing(); },
+            BackstageInfoSafetyActionKind.InspectDocument => () => { Close(); _callbacks.InspectDocument(); },
+            BackstageInfoSafetyActionKind.CheckAccessibility => () => { Close(); _callbacks.CheckAccessibility(); },
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
         };
 
     private static Control BuildPaneHeader(string title, string description) =>

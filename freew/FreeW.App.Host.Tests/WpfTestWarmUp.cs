@@ -21,7 +21,7 @@ namespace FreeW.App.Host.Tests;
 //       'System.Windows.ResourceReferenceExpression' is not a valid value for
 //       property 'Foreground'.
 //
-//     Cause: BackstageFrame.ctor() self-merges SharedChromeResources.xaml into its
+//     Cause: BackstageFrame.ctor() self-merges BackstageChromeResources.xaml into its
 //     own Resources.  That XAML was defining its neutral-color Chrome*Brush entries
 //     as DynamicResource aliases (e.g. <DynamicResource x:Key="ChromeWhiteBrush"
 //     ResourceKey="ThemeNeutralWhiteBrush"/>).  Styles in the same XAML bound to
@@ -33,7 +33,7 @@ namespace FreeW.App.Host.Tests;
 //     the chain terminates unresolved and GetEffectiveValue() throws when
 //     TextBlock.MeasureOverride() evaluates the Foreground property.
 //
-//     Fix: SharedChromeResources.xaml (shared/Free.Shared.Ribbon.Wpf) now defines
+//     Fix: BackstageChromeResources.xaml (shared/Free.Shared.Shell.Wpf) now defines
 //     the four neutral Chrome*Brush keys as concrete SolidColorBrush values whose
 //     colors are byte-identical across FreeX/FreeW/FreeP.  {StaticResource
 //     ChromeWhiteBrush} in style setters now resolves to a real Brush at XAML-parse

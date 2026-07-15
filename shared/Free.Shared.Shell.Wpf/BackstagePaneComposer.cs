@@ -267,17 +267,6 @@ public sealed class BackstagePaneComposer
     }
 }
 
-public sealed record BackstageInfoPaneSpec(
-    string DocumentKindLabel,
-    string DisplayName,
-    bool IsDirty,
-    string? Location,
-    IReadOnlyList<BackstageFieldRow> Properties,
-    IReadOnlyList<BackstageFieldRow> Statistics,
-    string? EditPropertiesText = null,
-    Action? EditProperties = null,
-    IReadOnlyList<BackstageActionGroup>? ActionGroups = null);
-
 public sealed record BackstageRecentPaneSpec(
     IReadOnlyList<string> Paths,
     string EmptyText,

@@ -1,6 +1,4 @@
-using Free.Shared.Shell;
-
-namespace Free.Shared.Shell.Wpf;
+namespace Free.Shared.Shell;
 
 public sealed record SisterBackstageInfoPaneContext(
     string DocumentKindLabel,
