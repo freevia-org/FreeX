@@ -52,16 +52,11 @@ public sealed class SlideShowWindow : Window
     private readonly Presentation    _presentation;
     private readonly SlideShowPlaybackRoute _playbackRoute;
     private readonly SlideShowController _controller;
-    private readonly DateTimeOffset _presenterStartedAtUtc;
+    private readonly SlideShowSessionController _session;
     private readonly DispatcherTimer  _autoAdvanceTimer;
-    private SlideShowPresenterToolPlan _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan();
-    private SlideShowTimingRecorderState _timingRecorderState;
-    private SlideShowRecordingExecutionState _recordingExecutionState;
-    private SlideShowInkExecutionState _inkExecutionState;
     private SlideShowShapeAnimationVisualFramePlan? _lastAnimationFramePlan;
     private IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> _lastAnimationStepFrameEvidence = Array.Empty<SlideShowAnimationStepVisualCheckpointPlan>();
     private SlideShowAnimationStepPlaybackReadinessPlan? _lastAnimationStepPlaybackReadinessPlan;
-    private bool _isTornDown;
 
     // ── Visual tree ───────────────────────────────────────────────────────────────
 
@@ -134,18 +129,11 @@ public sealed class SlideShowWindow : Window
         _presentation = presentation ?? throw new ArgumentNullException(nameof(presentation));
         _playbackRoute = playbackRoute ?? throw new ArgumentNullException(nameof(playbackRoute));
         _controller   = new SlideShowController(_playbackRoute.Slides, _playbackRoute.StartIndex);
-        _presenterStartedAtUtc = DateTimeOffset.UtcNow;
-        _timingRecorderState = SlideShowTimingRecorderPlanner.CreateState(
-            CurrentPresentationSlideIndex,
-            _presenterStartedAtUtc);
-        _recordingExecutionState = SlideShowRecordingExecutionPlanner.CreateState(
-            _presenterToolPlan,
-            CurrentPresentationSlideIndex,
-            _presenterStartedAtUtc,
+        _session = new SlideShowSessionController(
+            _presentation,
+            _playbackRoute,
+            DateTimeOffset.UtcNow,
             captureBackend ?? CreateDefaultRecordingCaptureBackend());
-        _inkExecutionState = SlideShowInkExecutionPlanner.CreateState(
-            _controller.CurrentSlideIndex,
-            _presenterToolPlan.PointerInk);
 
         // Pre-compute slide DIP dimensions so HitTestHyperlink works even before the first
         // DisplayCurrentSlide call (e.g. in unit tests that construct but don't show the window).
@@ -262,45 +250,45 @@ public sealed class SlideShowWindow : Window
     /// <summary>The underlying state machine (for test assertions).</summary>
     public SlideShowController Controller => _controller;
 
-    public DateTimeOffset PresenterStartedAtUtc => _presenterStartedAtUtc;
+    public DateTimeOffset PresenterStartedAtUtc => _session.StartedAtUtc;
 
-    public SlideShowPresenterToolPlan PresenterToolPlan => _presenterToolPlan;
+    public SlideShowPresenterToolPlan PresenterToolPlan => _session.ToolPlan;
 
     public IReadOnlyList<SlideShowPresenterWorkflowAction> PresenterWorkflowActions =>
-        _presenterToolPlan.WorkflowActions;
+        _session.ToolPlan.WorkflowActions;
 
     public IReadOnlyList<SlideShowPresenterCommandState> PresenterCommandStates =>
-        _presenterToolPlan.CommandStates;
+        _session.ToolPlan.CommandStates;
 
-    public SlideShowTimingRecorderState TimingRecorderState => _timingRecorderState;
+    public SlideShowTimingRecorderState TimingRecorderState => _session.TimingRecorderState;
 
-    public SlideShowRecordingExecutionState RecordingExecutionState => _recordingExecutionState;
+    public SlideShowRecordingExecutionState RecordingExecutionState => _session.RecordingExecutionState;
 
     public SlideShowRecordingCaptureAdapterReadiness RecordingCaptureAdapterReadiness =>
-        _recordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness;
+        _session.RecordingExecutionState.HostCapabilities.EffectiveCaptureAdapterReadiness;
 
     public IReadOnlyList<SlideShowRecordingExecutionAction> RecordingExecutionActions =>
-        _recordingExecutionState.LastActions;
+        _session.RecordingExecutionState.LastActions;
 
-    public bool IsPresenterSessionClosed => _isTornDown;
+    public bool IsPresenterSessionClosed => _session.IsClosed;
 
-    public SlideShowInkExecutionState InkExecutionState => _inkExecutionState;
+    public SlideShowInkExecutionState InkExecutionState => _session.InkExecutionState;
     public SlideShowPresenterSessionSummary PresenterSessionSummary =>
         SlideShowPresenterSessionSummaryPlanner.BuildSummary(
-            _recordingExecutionState,
-            _inkExecutionState,
+            _session.RecordingExecutionState,
+            _session.InkExecutionState,
             _presentation,
             _playbackRoute.GetSourceSlideIndex);
 
     public SlideShowRecordingReviewPlan RecordingReviewPlan =>
-        SlideShowRecordingReviewPlanner.BuildPlan(_presentation, _recordingExecutionState);
+        _session.RecordingReviewPlan;
 
     internal int PresenterInkOverlayVisualCount => _inkOverlay.Children.Count;
     internal SlideShowShapeAnimationVisualFramePlan? LastAnimationFramePlanForTest => _lastAnimationFramePlan;
     internal IReadOnlyList<SlideShowAnimationStepVisualCheckpointPlan> LastAnimationStepFrameEvidenceForTest => _lastAnimationStepFrameEvidence;
     internal SlideShowAnimationStepPlaybackReadinessPlan? LastAnimationStepPlaybackReadinessPlanForTest => _lastAnimationStepPlaybackReadinessPlan;
     internal SlideShowPlaybackRoute PlaybackRoute => _playbackRoute;
-    internal int CurrentPresentationSlideIndex => _playbackRoute.GetSourceSlideIndex(_controller.CurrentSlideIndex);
+    internal int CurrentPresentationSlideIndex => _session.CurrentPresentationSlideIndex;
 
     public SlideShowPresenterState CreatePresenterState(
         DateTimeOffset nowUtc,
@@ -309,10 +297,10 @@ public sealed class SlideShowWindow : Window
             _presentation,
             _controller,
             _playbackRoute.Slides,
-            _presenterStartedAtUtc,
+            _session.StartedAtUtc,
             nowUtc,
             displayIntent,
-            _presenterToolPlan);
+            _session.ToolPlan);
 
     public SlideShowPresenterToolPlan ApplyPresenterToolIntent(
         SlideShowTimingIntent timingIntent = SlideShowTimingIntent.None,
@@ -324,59 +312,34 @@ public sealed class SlideShowWindow : Window
         DateTimeOffset? nowUtc = null)
     {
         var now = nowUtc ?? DateTimeOffset.UtcNow;
-        var timingIntentChanged = _presenterToolPlan.Recording.TimingIntent != timingIntent;
-        if (timingIntentChanged)
-        {
-            FinalizePresenterTiming(now);
-        }
-
-        _presenterToolPlan = SlideShowPresenterToolPlanner.BuildPlan(
+        var plan = _session.ApplyPresenterToolIntent(
             timingIntent,
             mediaIntent,
             pointerMode,
             inkColorHex,
             inkThicknessDip,
-            inkRetentionDecision);
-        _recordingExecutionState = SlideShowRecordingExecutionPlanner.ApplyToolPlan(
-            _recordingExecutionState,
-            _presenterToolPlan,
-            CurrentPresentationSlideIndex,
+            inkRetentionDecision,
+            _controller.CurrentSlideIndex,
             now);
-        _inkExecutionState = SlideShowInkExecutionPlanner.SelectPointerInk(
-            _inkExecutionState,
-            _presenterToolPlan.PointerInk);
-        if (timingIntentChanged)
-        {
-            _timingRecorderState = SlideShowTimingRecorderPlanner.EnterSlide(
-                _timingRecorderState,
-                CurrentPresentationSlideIndex,
-                now).State;
-        }
 
         RefreshInkOverlay();
-        return _presenterToolPlan;
+        return plan;
     }
 
     public SlideShowInkExecutionResult BeginPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(SlideShowInkExecutionPlanner.Begin(
-            _inkExecutionState,
-            MapPresenterInkPoint(canvasX, canvasY)));
+        ApplyInkExecution(_session.BeginInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
 
     public SlideShowInkExecutionResult AppendPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(SlideShowInkExecutionPlanner.Append(
-            _inkExecutionState,
-            MapPresenterInkPoint(canvasX, canvasY)));
+        ApplyInkExecution(_session.AppendInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
 
     public SlideShowInkExecutionResult EndPresenterInkStroke(double canvasX, double canvasY) =>
-        ApplyInkExecution(SlideShowInkExecutionPlanner.End(
-            _inkExecutionState,
-            MapPresenterInkPoint(canvasX, canvasY)));
+        ApplyInkExecution(_session.EndInkStroke(MapPresenterInkPoint(canvasX, canvasY)));
 
     public SlideShowInkExecutionResult ClearPresenterInkStrokes() =>
-        ApplyInkExecution(SlideShowInkExecutionPlanner.ClearCurrentSlide(_inkExecutionState));
+        ApplyInkExecution(_session.ClearInkStrokes());
 
     public SlideShowInkExecutionResult UndoLastPresenterInkStroke() =>
-        ApplyInkExecution(SlideShowInkExecutionPlanner.UndoLastStroke(_inkExecutionState));
+        ApplyInkExecution(_session.UndoLastInkStroke());
 
     private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend() =>
         new WindowsRecordingCaptureBackend(
@@ -555,7 +518,6 @@ public sealed class SlideShowWindow : Window
 
     private SlideShowInkExecutionResult ApplyInkExecution(SlideShowInkExecutionResult result)
     {
-        _inkExecutionState = result.State;
         RefreshInkOverlay();
         return result;
     }
@@ -567,7 +529,7 @@ public sealed class SlideShowWindow : Window
         var canvasWidth = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : _slideDipW;
         var canvasHeight = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : _slideDipH;
         var plan = SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(
-            _inkExecutionState,
+            _session.InkExecutionState,
             canvasWidth,
             canvasHeight,
             CurrentSlideMetrics());
@@ -664,7 +626,7 @@ public sealed class SlideShowWindow : Window
     }
 
     private Cursor CursorForPresenterInk() =>
-        _inkExecutionState.ActivePointerMode switch
+        _session.InkExecutionState.ActivePointerMode switch
         {
             SlideShowPresenterPointerMode.Pen or SlideShowPresenterPointerMode.Highlighter => Cursors.Pen,
             SlideShowPresenterPointerMode.Eraser => Cursors.Cross,
@@ -727,25 +689,7 @@ public sealed class SlideShowWindow : Window
 
     private void MovePresenterTimingToSlide(int slideIndex, DateTimeOffset nowUtc)
     {
-        FinalizePresenterTiming(nowUtc);
-        _timingRecorderState = SlideShowTimingRecorderPlanner.EnterSlide(
-            _timingRecorderState,
-            _playbackRoute.GetSourceSlideIndex(slideIndex),
-            nowUtc).State;
-        _recordingExecutionState = SlideShowRecordingExecutionPlanner.MoveToSlide(
-            _recordingExecutionState,
-            _playbackRoute.GetSourceSlideIndex(slideIndex),
-            nowUtc);
-    }
-
-    private void FinalizePresenterTiming(DateTimeOffset nowUtc)
-    {
-        var result = SlideShowTimingRecorderPlanner.LeaveCurrentSlide(
-            _timingRecorderState,
-            _presenterToolPlan,
-            nowUtc);
-        _timingRecorderState = result.State;
-        SlideShowTimingRecorderPlanner.ApplyTimings(_presentation, result.Mutations);
+        _session.MoveToSlide(slideIndex, nowUtc);
     }
 
     // ── Slide display + transitions ───────────────────────────────────────────────
@@ -759,9 +703,7 @@ public sealed class SlideShowWindow : Window
         var plan = SlideShowHostPlanner.BuildDisplayPlan(_presentation, _controller, animated);
         _slideDipW = plan.Metrics.WidthDip;
         _slideDipH = plan.Metrics.HeightDip;
-        _inkExecutionState = SlideShowInkExecutionPlanner.MoveToSlide(
-            _inkExecutionState,
-            _controller.CurrentSlideIndex);
+        // Ink state follows the route through the shared session controller.
         RefreshInkOverlay();
 
         var slide = plan.Slide;
@@ -1486,7 +1428,10 @@ public sealed class SlideShowWindow : Window
 
         for (var i = 0; i < bandCount; i++)
         {
-            var (closed, open) = BuildBlindsBand(w, h, bandCount, i, plan.BlindsHorizontal);
+            var bandPlan = SlideShowMaskGeometryPlanner.BuildBlindsBand(
+                w, h, bandCount, i, plan.BlindsHorizontal);
+            var closed = ToRect(bandPlan.Closed);
+            var open = ToRect(bandPlan.Open);
             var from = opens ? closed : open;
             var to = opens ? open : closed;
             var band = new RectangleGeometry(from);
@@ -1501,29 +1446,6 @@ public sealed class SlideShowWindow : Window
             Storyboard.SetTargetProperty(anim, new PropertyPath(RectangleGeometry.RectProperty));
             sb.Children.Add(anim);
         }
-    }
-
-    private static (Rect Closed, Rect Open) BuildBlindsBand(
-        double width,
-        double height,
-        int bandCount,
-        int index,
-        bool horizontal)
-    {
-        if (horizontal)
-        {
-            var y = height * index / bandCount;
-            var nextY = height * (index + 1) / bandCount;
-            return (
-                new Rect(0, y, width, 0),
-                new Rect(0, y, width, Math.Max(0, nextY - y)));
-        }
-
-        var x = width * index / bandCount;
-        var nextX = width * (index + 1) / bandCount;
-        return (
-            new Rect(x, 0, 0, height),
-            new Rect(x, 0, Math.Max(0, nextX - x), height));
     }
 
     private static void CheckerboardEffect(Storyboard sb, FrameworkElement el,
@@ -1548,7 +1470,7 @@ public sealed class SlideShowWindow : Window
         {
             for (var column = 0; column < columnCount; column++)
             {
-                var (closed, open) = BuildCheckerboardCell(
+                var cellPlan = SlideShowMaskGeometryPlanner.BuildCheckerboardCell(
                     w,
                     h,
                     rowCount,
@@ -1556,6 +1478,8 @@ public sealed class SlideShowWindow : Window
                     row,
                     column,
                     plan.CheckerboardHorizontal);
+                var closed = ToRect(cellPlan.Closed);
+                var open = ToRect(cellPlan.Open);
                 var from = opens ? closed : open;
                 var to = opens ? open : closed;
                 var cell = new RectangleGeometry(from);
@@ -1564,7 +1488,7 @@ public sealed class SlideShowWindow : Window
                 var anim = new RectAnimation(from, to, dur)
                 {
                     BeginTime = TimeSpan.FromMilliseconds(
-                        plan.DelayMs + (IsSecondCheckerboardPhase(row, column) ? phaseDelayMs : 0)),
+                        plan.DelayMs + (SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(row, column) ? phaseDelayMs : 0)),
                     EasingFunction = ease
                 };
                 Storyboard.SetTarget(anim, cell);
@@ -1573,30 +1497,6 @@ public sealed class SlideShowWindow : Window
             }
         }
     }
-
-    private static (Rect Closed, Rect Open) BuildCheckerboardCell(
-        double width,
-        double height,
-        int rowCount,
-        int columnCount,
-        int row,
-        int column,
-        bool horizontal)
-    {
-        var x = width * column / columnCount;
-        var nextX = width * (column + 1) / columnCount;
-        var y = height * row / rowCount;
-        var nextY = height * (row + 1) / rowCount;
-        var cellWidth = Math.Max(0, nextX - x);
-        var cellHeight = Math.Max(0, nextY - y);
-
-        return horizontal
-            ? (new Rect(x, y, 0, cellHeight), new Rect(x, y, cellWidth, cellHeight))
-            : (new Rect(x, y, cellWidth, 0), new Rect(x, y, cellWidth, cellHeight));
-    }
-
-    private static bool IsSecondCheckerboardPhase(int row, int column) =>
-        ((row + column) & 1) == 1;
 
     private static void BoxEffect(Storyboard sb, FrameworkElement el,
         SlideShowShapeAnimationPlaybackPlan plan)
@@ -1669,11 +1569,11 @@ public sealed class SlideShowWindow : Window
 
         var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
         var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
-        var center = new Point(w / 2, h / 2);
+        var circlePlan = SlideShowMaskGeometryPlanner.BuildCircle(w, h, fromProgress);
         var clip = new EllipseGeometry(
-            center,
-            w / 2 * fromProgress,
-            h / 2 * fromProgress);
+            ToPoint(circlePlan.Center),
+            circlePlan.RadiusX,
+            circlePlan.RadiusY);
 
         el.Clip = clip;
         el.Opacity = 1;
@@ -1726,8 +1626,8 @@ public sealed class SlideShowWindow : Window
             sb,
             figure,
             PathFigure.StartPointProperty,
-            BuildDiamondPoint(w, h, vertexIndex: 0, progress: fromProgress),
-            BuildDiamondPoint(w, h, vertexIndex: 0, progress: toProgress),
+            ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(w, h, vertexIndex: 0, progress: fromProgress)),
+            ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(w, h, vertexIndex: 0, progress: toProgress)),
             dur,
             ease,
             plan.DelayMs);
@@ -1735,8 +1635,8 @@ public sealed class SlideShowWindow : Window
             sb,
             rightSegment,
             LineSegment.PointProperty,
-            BuildDiamondPoint(w, h, vertexIndex: 1, progress: fromProgress),
-            BuildDiamondPoint(w, h, vertexIndex: 1, progress: toProgress),
+            ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(w, h, vertexIndex: 1, progress: fromProgress)),
+            ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(w, h, vertexIndex: 1, progress: toProgress)),
             dur,
             ease,
             plan.DelayMs);
@@ -1744,8 +1644,8 @@ public sealed class SlideShowWindow : Window
             sb,
             bottomSegment,
             LineSegment.PointProperty,
-            BuildDiamondPoint(w, h, vertexIndex: 2, progress: fromProgress),
-            BuildDiamondPoint(w, h, vertexIndex: 2, progress: toProgress),
+            ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(w, h, vertexIndex: 2, progress: fromProgress)),
+            ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(w, h, vertexIndex: 2, progress: toProgress)),
             dur,
             ease,
             plan.DelayMs);
@@ -1753,8 +1653,8 @@ public sealed class SlideShowWindow : Window
             sb,
             leftSegment,
             LineSegment.PointProperty,
-            BuildDiamondPoint(w, h, vertexIndex: 3, progress: fromProgress),
-            BuildDiamondPoint(w, h, vertexIndex: 3, progress: toProgress),
+            ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(w, h, vertexIndex: 3, progress: fromProgress)),
+            ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(w, h, vertexIndex: 3, progress: toProgress)),
             dur,
             ease,
             plan.DelayMs);
@@ -1771,13 +1671,13 @@ public sealed class SlideShowWindow : Window
     {
         figure = new PathFigure
         {
-            StartPoint = BuildDiamondPoint(width, height, vertexIndex: 0, progress: progress),
+            StartPoint = ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(width, height, vertexIndex: 0, progress: progress)),
             IsClosed = true,
             IsFilled = true
         };
-        rightSegment = new LineSegment(BuildDiamondPoint(width, height, vertexIndex: 1, progress: progress), true);
-        bottomSegment = new LineSegment(BuildDiamondPoint(width, height, vertexIndex: 2, progress: progress), true);
-        leftSegment = new LineSegment(BuildDiamondPoint(width, height, vertexIndex: 3, progress: progress), true);
+        rightSegment = new LineSegment(ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(width, height, vertexIndex: 1, progress: progress)), true);
+        bottomSegment = new LineSegment(ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(width, height, vertexIndex: 2, progress: progress)), true);
+        leftSegment = new LineSegment(ToPoint(SlideShowMaskGeometryPlanner.BuildDiamondPoint(width, height, vertexIndex: 3, progress: progress)), true);
         figure.Segments.Add(rightSegment);
         figure.Segments.Add(bottomSegment);
         figure.Segments.Add(leftSegment);
@@ -1785,22 +1685,6 @@ public sealed class SlideShowWindow : Window
         var geometry = new PathGeometry();
         geometry.Figures.Add(figure);
         return geometry;
-    }
-
-    private static Point BuildDiamondPoint(double width, double height, int vertexIndex, double progress)
-    {
-        var center = new Point(width / 2, height / 2);
-        var full = vertexIndex switch
-        {
-            0 => new Point(width / 2, 0),
-            1 => new Point(width, height / 2),
-            2 => new Point(width / 2, height),
-            _ => new Point(0, height / 2)
-        };
-
-        return new Point(
-            center.X + (full.X - center.X) * progress,
-            center.Y + (full.Y - center.Y) * progress);
     }
 
     private static void PlusEffect(Storyboard sb, FrameworkElement el,
@@ -1811,8 +1695,12 @@ public sealed class SlideShowWindow : Window
 
         var fromProgress = plan.GeometricMaskExpandsFromCenter ? 0.0 : 1.0;
         var toProgress = plan.GeometricMaskExpandsFromCenter ? 1.0 : 0.0;
-        var (fromVertical, fromHorizontal) = BuildPlusRects(w, h, fromProgress);
-        var (toVertical, toHorizontal) = BuildPlusRects(w, h, toProgress);
+        var fromPlan = SlideShowMaskGeometryPlanner.BuildPlusRects(w, h, fromProgress);
+        var toPlan = SlideShowMaskGeometryPlanner.BuildPlusRects(w, h, toProgress);
+        var fromVertical = ToRect(fromPlan.Closed);
+        var fromHorizontal = ToRect(fromPlan.Open);
+        var toVertical = ToRect(toPlan.Closed);
+        var toHorizontal = ToRect(toPlan.Open);
 
         var clip = new GeometryGroup { FillRule = FillRule.Nonzero };
         var vertical = new RectangleGeometry(fromVertical);
@@ -1827,16 +1715,6 @@ public sealed class SlideShowWindow : Window
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
         AddRectAnimation(sb, vertical, fromVertical, toVertical, dur, ease, plan.DelayMs);
         AddRectAnimation(sb, horizontal, fromHorizontal, toHorizontal, dur, ease, plan.DelayMs);
-    }
-
-    private static (Rect Vertical, Rect Horizontal) BuildPlusRects(double width, double height, double progress)
-    {
-        progress = Math.Clamp(progress, 0, 1);
-        var verticalWidth = width * progress;
-        var horizontalHeight = height * progress;
-        return (
-            new Rect((width - verticalWidth) / 2, 0, verticalWidth, height),
-            new Rect(0, (height - horizontalHeight) / 2, width, horizontalHeight));
     }
 
     private static void StripsEffect(Storyboard sb, FrameworkElement el,
@@ -1888,48 +1766,28 @@ public sealed class SlideShowWindow : Window
         int stripCount,
         bool slopeDown)
     {
-        progress = Math.Clamp(progress, 0, 1);
-        if (progress >= 0.999)
+        var stripPlan = SlideShowMaskGeometryPlanner.BuildStrips(
+            width,
+            height,
+            progress,
+            stripCount,
+            slopeDown);
+        if (stripPlan.IsFullyOpen)
             return new RectangleGeometry(new Rect(0, 0, width, height));
 
-        var bands = Math.Max(1, stripCount);
-        var bandWidth = width / bands;
-        var diagonalShift = height;
-        var openWidth = bandWidth + diagonalShift;
         var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
-
-        for (var band = 0; band < bands; band++)
+        foreach (var polygon in stripPlan.Polygons)
         {
-            var x0 = band * bandWidth - diagonalShift;
-            var x1 = x0 + openWidth * progress;
-            geometry.Children.Add(BuildStripGeometry(x0, x1, height, diagonalShift, slopeDown));
+            geometry.Children.Add(BuildStripGeometry(polygon.Points));
         }
 
         return geometry;
     }
 
     private static PathGeometry BuildStripGeometry(
-        double x0,
-        double x1,
-        double height,
-        double diagonalShift,
-        bool slopeDown)
+        IReadOnlyList<SlideShowMaskPoint> maskPoints)
     {
-        var points = slopeDown
-            ? new[]
-            {
-                new Point(x0, 0),
-                new Point(x1, 0),
-                new Point(x1 + diagonalShift, height),
-                new Point(x0 + diagonalShift, height)
-            }
-            : new[]
-            {
-                new Point(x0 + diagonalShift, 0),
-                new Point(x1 + diagonalShift, 0),
-                new Point(x1, height),
-                new Point(x0, height)
-            };
+        var points = maskPoints.Select(ToPoint).ToArray();
 
         var figure = new PathFigure
         {
@@ -1980,46 +1838,39 @@ public sealed class SlideShowWindow : Window
 
     private static Geometry BuildWedgeGeometry(double width, double height, double progress)
     {
-        progress = Math.Clamp(progress, 0, 1);
-        if (progress >= 0.999)
+        var wedgePlan = SlideShowMaskGeometryPlanner.BuildWedge(width, height, progress);
+        if (wedgePlan.IsFullyOpen)
             return new RectangleGeometry(new Rect(0, 0, width, height));
 
-        var center = new Point(width / 2, height / 2);
-        if (progress <= 0)
+        if (wedgePlan.IsCollapsed)
+        {
+            var center = ToPoint(new SlideShowMaskPoint(width / 2, height / 2));
             return new PathGeometry(new[]
             {
                 new PathFigure(center, new PathSegment[] { new LineSegment(center, true) }, closed: true)
             });
+        }
 
-        var radius = Math.Sqrt(width * width + height * height) / 2;
-        var start = PointOnWedgeRadius(center, radius, -90);
-        var end = PointOnWedgeRadius(center, radius, -90 + 360 * progress);
+        var arc = wedgePlan.Arcs[0];
+        var centerPoint = ToPoint(arc.Center);
         var figure = new PathFigure
         {
-            StartPoint = center,
+            StartPoint = centerPoint,
             IsClosed = true,
             IsFilled = true
         };
-        figure.Segments.Add(new LineSegment(start, true));
+        figure.Segments.Add(new LineSegment(ToPoint(arc.Start), true));
         figure.Segments.Add(new ArcSegment(
-            end,
-            new Size(radius, radius),
+            ToPoint(arc.End),
+            new Size(arc.Radius, arc.Radius),
             rotationAngle: 0,
-            isLargeArc: progress > 0.5,
+            isLargeArc: arc.IsLargeArc,
             sweepDirection: SweepDirection.Clockwise,
             isStroked: true));
 
         var geometry = new PathGeometry();
         geometry.Figures.Add(figure);
         return geometry;
-    }
-
-    private static Point PointOnWedgeRadius(Point center, double radius, double degrees)
-    {
-        var radians = degrees * Math.PI / 180;
-        return new Point(
-            center.X + radius * Math.Cos(radians),
-            center.Y + radius * Math.Sin(radians));
     }
 
     private static void WheelEffect(Storyboard sb, FrameworkElement el,
@@ -2056,52 +1907,45 @@ public sealed class SlideShowWindow : Window
 
     private static Geometry BuildWheelGeometry(double width, double height, double progress, int spokeCount)
     {
-        progress = Math.Clamp(progress, 0, 1);
-        if (progress >= 0.999)
+        var wheelPlan = SlideShowMaskGeometryPlanner.BuildWheel(width, height, progress, spokeCount);
+        if (wheelPlan.IsFullyOpen)
             return new RectangleGeometry(new Rect(0, 0, width, height));
 
-        var center = new Point(width / 2, height / 2);
-        if (progress <= 0)
+        if (wheelPlan.IsCollapsed)
+        {
+            var center = ToPoint(new SlideShowMaskPoint(width / 2, height / 2));
             return new PathGeometry(new[]
             {
                 new PathFigure(center, new PathSegment[] { new LineSegment(center, true) }, closed: true)
             });
+        }
 
-        var radius = Math.Sqrt(width * width + height * height) / 2;
-        var spokes = Math.Max(1, spokeCount);
-        var spokeSweep = 360.0 / spokes;
         var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
 
-        for (var spoke = 0; spoke < spokes; spoke++)
+        foreach (var arc in wheelPlan.Arcs)
         {
-            var startDegrees = -90 + spoke * spokeSweep;
-            var sweepDegrees = spokeSweep * progress;
-            geometry.Children.Add(BuildWheelSpokeGeometry(center, radius, startDegrees, sweepDegrees));
+            geometry.Children.Add(BuildWheelSpokeGeometry(arc));
         }
 
         return geometry;
     }
 
     private static PathGeometry BuildWheelSpokeGeometry(
-        Point center,
-        double radius,
-        double startDegrees,
-        double sweepDegrees)
+        SlideShowMaskArc arc)
     {
-        var start = PointOnWedgeRadius(center, radius, startDegrees);
-        var end = PointOnWedgeRadius(center, radius, startDegrees + sweepDegrees);
+        var center = ToPoint(arc.Center);
         var figure = new PathFigure
         {
             StartPoint = center,
             IsClosed = true,
             IsFilled = true
         };
-        figure.Segments.Add(new LineSegment(start, true));
+        figure.Segments.Add(new LineSegment(ToPoint(arc.Start), true));
         figure.Segments.Add(new ArcSegment(
-            end,
-            new Size(radius, radius),
+            ToPoint(arc.End),
+            new Size(arc.Radius, arc.Radius),
             rotationAngle: 0,
-            isLargeArc: sweepDegrees > 180,
+            isLargeArc: arc.IsLargeArc,
             sweepDirection: SweepDirection.Clockwise,
             isStroked: true));
 
@@ -2109,6 +1953,12 @@ public sealed class SlideShowWindow : Window
         geometry.Figures.Add(figure);
         return geometry;
     }
+
+    private static Rect ToRect(SlideShowMaskRect rect) =>
+        new(rect.X, rect.Y, rect.Width, rect.Height);
+
+    private static Point ToPoint(SlideShowMaskPoint point) =>
+        new(point.X, point.Y);
 
     private static void AddRectAnimation(
         Storyboard storyboard,
@@ -2369,24 +2219,13 @@ public sealed class SlideShowWindow : Window
 
     private void Teardown(DateTimeOffset? nowUtc = null)
     {
-        if (_isTornDown)
+        if (_session.IsClosed)
         {
             return;
         }
 
-        _isTornDown = true;
         var now = nowUtc ?? DateTimeOffset.UtcNow;
-        FinalizePresenterTiming(now);
-        _recordingExecutionState = SlideShowRecordingExecutionPlanner.EndSession(
-            _recordingExecutionState,
-            now);
-        SlideShowRecordingReviewPlanner.ApplyPersistableArtifacts(
-            _presentation,
-            RecordingReviewPlan);
-        _inkExecutionState = SlideShowInkPersistencePlanner.ApplyRetentionOnExit(
-            _presentation,
-            _inkExecutionState,
-            _playbackRoute).State;
+        _session.Close(now);
         _autoAdvanceTimer.Stop();
         foreach (var sb in _pendingStoryboards)
         {

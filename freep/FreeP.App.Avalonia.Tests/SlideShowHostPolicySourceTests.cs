@@ -20,19 +20,26 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowHostPlanner.PlanInternalSlideJump(");
         source.Should().Contain("SlideShowHostPlanner.BuildDisplayPlan(");
         source.Should().Contain("SlideShowHostPlanner.BuildPresenterState(");
-        source.Should().Contain("SlideShowPresenterToolPlanner.BuildPlan(");
         source.Should().Contain("SlideShowPresenterSessionSummaryPlanner.BuildSummary(");
-        source.Should().Contain("SlideShowRecordingReviewPlanner.ApplyPersistableArtifacts(");
-        source.Should().Contain("SlideShowInkExecutionPlanner.CreateState(");
-        source.Should().Contain("SlideShowInkExecutionPlanner.SelectPointerInk(");
-        source.Should().Contain("SlideShowInkExecutionPlanner.Begin(");
-        source.Should().Contain("SlideShowInkExecutionPlanner.Append(");
-        source.Should().Contain("SlideShowInkExecutionPlanner.End(");
-        source.Should().Contain("SlideShowInkExecutionPlanner.ClearCurrentSlide(");
-        source.Should().Contain("SlideShowInkExecutionPlanner.UndoLastStroke(");
-        source.Should().Contain("SlideShowInkPersistencePlanner.ApplyRetentionOnExit(");
-        source.Should().Contain("_playbackRoute).State");
         source.Should().Contain("SlideShowInkExecutionPlanner.BuildOverlayRenderPlan(");
+        source.Should().Contain("SlideShowSessionController");
+        source.Should().Contain("_session.ApplyPresenterToolIntent(");
+        source.Should().Contain("_session.MoveToSlide(");
+        source.Should().Contain("_session.Close(");
+        source.Should().Contain("_session.BeginInkStroke(");
+        source.Should().Contain("_session.AppendInkStroke(");
+        source.Should().Contain("_session.EndInkStroke(");
+        source.Should().Contain("_session.ClearInkStrokes(");
+        source.Should().Contain("_session.UndoLastInkStroke(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildBlindsBand(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildCheckerboardCell(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildCircle(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildDiamondPoint(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildPlusRects(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildStrips(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildWedge(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildWheel(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.IsSecondCheckerboardPhase(");
         source.Should().Contain("SlideShowHostPlanner.MapCanvasPointToSlide(");
         source.Should().Contain("SlideShowHostPlanner.HitTestHyperlink(");
         source.Should().Contain("SlideShowHostPlanner.HitTestTriggerShape(");
@@ -60,6 +67,35 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().NotContain("new SlideShowPresenterToolPlan(");
         source.Should().NotContain("BuildOverlayPlan(_inkExecutionState)");
         source.Should().NotContain("stroke.InkState.ThicknessDip * scale");
+        source.Should().NotContain("private static (Rect Closed, Rect Open) BuildBlindsBand");
+        source.Should().NotContain("private static (Rect Closed, Rect Open) BuildCheckerboardCell");
+        source.Should().NotContain("private static Point BuildDiamondPoint");
+        source.Should().NotContain("private static (Rect Vertical, Rect Horizontal) BuildPlusRects");
+        source.Should().NotContain("private static Point PointOnWedgeRadius");
+        source.Should().NotContain("private SlideShowTimingRecorderState _timingRecorderState");
+        source.Should().NotContain("private SlideShowRecordingExecutionState _recordingExecutionState");
+        source.Should().NotContain("private SlideShowInkExecutionState _inkExecutionState");
+    }
+
+    [Fact]
+    public void AvaloniaSlideShowWindow_cancels_timers_before_preparing_next_slide_overlay()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "freep",
+            "FreeP.App.Avalonia",
+            "SlideShowWindow.cs"));
+
+        var displayStart = source.IndexOf("private void DisplayCurrentSlide(bool animated)", StringComparison.Ordinal);
+        displayStart.Should().BeGreaterThanOrEqualTo(0);
+        var displaySource = source[displayStart..];
+        var cancelIndex = displaySource.IndexOf("CancelActiveTimers();", StringComparison.Ordinal);
+        var overlayIndex = displaySource.IndexOf("PrepareAnimationOverlay(slide);", StringComparison.Ordinal);
+
+        cancelIndex.Should().BeGreaterThanOrEqualTo(0);
+        overlayIndex.Should().BeGreaterThanOrEqualTo(0);
+        cancelIndex.Should().BeLessThan(overlayIndex,
+            "navigation must stop stale animation timers before preparing the new slide overlay");
     }
 
     [Fact]
