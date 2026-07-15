@@ -66,6 +66,127 @@ public sealed record ChartValueAxisPlan(double Minimum, double Maximum)
     }
 }
 
+public enum ChartSceneTextAnchor
+{
+    TopLeft,
+    TopCenter,
+    Center,
+    CenterRight
+}
+
+public enum ChartSceneTextKind
+{
+    Title,
+    CategoryAxis,
+    ValueAxis,
+    AxisTitle,
+    DataLabel,
+    Legend
+}
+
+public enum ChartSceneMarkerKind
+{
+    Diamond,
+    Square,
+    Triangle,
+    Cross,
+    Circle
+}
+
+public sealed record ChartSceneRect(
+    double X,
+    double Y,
+    double Width,
+    double Height)
+{
+    public double Right => X + Width;
+    public double Bottom => Y + Height;
+    public double CenterX => X + Width / 2;
+    public double CenterY => Y + Height / 2;
+}
+
+public sealed record ChartSceneLine(
+    double X1,
+    double Y1,
+    double X2,
+    double Y2,
+    string StrokeHex,
+    double StrokeWidth);
+
+public sealed record ChartSceneBar(
+    ChartSceneRect Bounds,
+    string FillHex,
+    double FillOpacity = 1);
+
+public sealed record ChartSceneLineSeries(
+    IReadOnlyList<(double X, double Y)> Points,
+    string StrokeHex,
+    double StrokeWidth,
+    bool FillArea,
+    double AreaBaselineY,
+    double AreaOpacity = 0.33);
+
+public sealed record ChartSceneMarker(
+    double CenterX,
+    double CenterY,
+    double Radius,
+    ChartSceneMarkerKind Kind,
+    string FillHex,
+    double FillOpacity = 1,
+    string? StrokeHex = null,
+    double StrokeWidth = 1);
+
+public sealed record ChartSceneSlice(
+    double CenterX,
+    double CenterY,
+    double OuterRadius,
+    double InnerRadius,
+    double StartAngleRadians,
+    double SweepAngleRadians,
+    string FillHex,
+    string StrokeHex,
+    double StrokeWidth = 1);
+
+public sealed record ChartSceneText(
+    string Text,
+    double X,
+    double Y,
+    ChartSceneTextAnchor Anchor,
+    ChartSceneTextKind Kind,
+    string ColorHex,
+    double FontSize,
+    double RotationDegrees = 0);
+
+public sealed record ChartSceneLegendEntry(
+    string Text,
+    double SwatchX,
+    double SwatchY,
+    double SwatchSize,
+    double TextX,
+    double TextY);
+
+/// <summary>
+/// Renderer-neutral chart scene. Coordinates are local to <see cref="FrameBounds"/>;
+/// renderers only translate these primitives into their native drawing and text APIs.
+/// </summary>
+public sealed record ChartScene(
+    ChartKind Kind,
+    ChartVisualGeometryKind GeometryKind,
+    ChartSceneRect FrameBounds,
+    ChartSceneRect PlotBounds,
+    string? PlotFillHex,
+    IReadOnlyList<string> PaletteHex,
+    IReadOnlyList<string> Categories,
+    int SeriesCount,
+    IReadOnlyList<ChartSceneLine> GridLines,
+    IReadOnlyList<ChartSceneLine> AxisLines,
+    IReadOnlyList<ChartSceneBar> Bars,
+    IReadOnlyList<ChartSceneLineSeries> LineSeries,
+    IReadOnlyList<ChartSceneMarker> Markers,
+    IReadOnlyList<ChartSceneSlice> Slices,
+    IReadOnlyList<ChartSceneText> Texts,
+    IReadOnlyList<ChartSceneLegendEntry> Legend);
+
 public sealed record ChartVisualPlan(
     ChartKind Kind,
     ChartVisualGeometryKind GeometryKind,
@@ -287,6 +408,311 @@ public static class ChartSmartArtVisualPlanner
             series,
             ChartValueAxisPlan.FromSeries(series));
     }
+
+    public static ChartScene BuildChartScene(Chart chart, double width, double height)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+
+        var plan = BuildChartPlan(chart);
+        var frame = new ChartSceneRect(0, 0, Math.Max(24, width), Math.Max(24, height));
+        var isPie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
+        var categoryCount = Math.Max(
+            chart.Categories.Count,
+            chart.Series.Select(series => series.Values.Count).DefaultIfEmpty().Max());
+        var legendCount = plan.ShowLegend
+            ? isPie
+                ? Math.Max(categoryCount, chart.Series.Select(series => series.Values.Count).DefaultIfEmpty().Max())
+                : chart.Series.Count
+            : 0;
+        var titleHeight = plan.ShowTitle && !string.IsNullOrEmpty(chart.Title) ? 46 : 0;
+        var legendHeight = legendCount > 0 ? 18 : 0;
+        var categoryTitleHeight = !isPie && plan.ShowAxisTitles && !string.IsNullOrEmpty(plan.CategoryAxisTitle) ? 20 : 0;
+        var valueTitleWidth = !isPie && plan.ShowAxisTitles && !string.IsNullOrEmpty(plan.ValueAxisTitle) ? 24 : 0;
+        var plot = new ChartSceneRect(
+            32 + valueTitleWidth,
+            titleHeight + 8,
+            Math.Max(10, frame.Width - 40 - valueTitleWidth),
+            Math.Max(10, frame.Height - titleHeight - legendHeight - categoryTitleHeight - 30));
+
+        var gridLines = new List<ChartSceneLine>();
+        var axisLines = new List<ChartSceneLine>();
+        var bars = new List<ChartSceneBar>();
+        var lineSeries = new List<ChartSceneLineSeries>();
+        var markers = new List<ChartSceneMarker>();
+        var slices = new List<ChartSceneSlice>();
+        var texts = new List<ChartSceneText>();
+        var legend = new List<ChartSceneLegendEntry>();
+        var axis = plan.ValueAxis;
+        var axisStroke = "#BFBFBF";
+        var gridStroke = "#E6E6E6";
+        var textColor = "#000000";
+
+        if (!isPie)
+        {
+            var horizontalGrid = chart.Kind == ChartKind.Bar;
+            for (var tick = 0; tick <= 4; tick++)
+            {
+                var fraction = tick / 4.0;
+                var value = axis.Minimum + axis.Range * fraction;
+                if (plan.ShowGridlines && tick > 0)
+                {
+                    if (horizontalGrid)
+                    {
+                        var x = plot.X + fraction * plot.Width;
+                        gridLines.Add(new ChartSceneLine(x, plot.Y, x, plot.Bottom, gridStroke, 1));
+                    }
+                    else
+                    {
+                        var y = plot.Bottom - fraction * plot.Height;
+                        gridLines.Add(new ChartSceneLine(plot.X, y, plot.Right, y, gridStroke, 1));
+                    }
+                }
+
+                var labelX = horizontalGrid ? plot.X + fraction * plot.Width : plot.X - 2;
+                var labelY = horizontalGrid ? plot.Bottom + 2 : plot.Bottom - fraction * plot.Height;
+                texts.Add(new ChartSceneText(
+                    value.ToString("G3", CultureInfo.InvariantCulture),
+                    labelX,
+                    labelY,
+                    horizontalGrid ? ChartSceneTextAnchor.TopCenter : ChartSceneTextAnchor.CenterRight,
+                    ChartSceneTextKind.ValueAxis,
+                    textColor,
+                    9));
+            }
+
+            if (chart.Kind == ChartKind.Bar)
+            {
+                var zeroX = plot.X + axis.ZeroFraction * plot.Width;
+                axisLines.Add(new ChartSceneLine(zeroX, plot.Y, zeroX, plot.Bottom, axisStroke, 1));
+            }
+            else
+            {
+                var zeroY = plot.Bottom - axis.ZeroFraction * plot.Height;
+                axisLines.Add(new ChartSceneLine(plot.X, zeroY, plot.Right, zeroY, axisStroke, 1));
+            }
+        }
+
+        if (chart.Kind is ChartKind.Column or ChartKind.Bar)
+        {
+            var cats = Math.Max(1, categoryCount);
+            var seriesCount = Math.Max(1, plan.Series.Count);
+            if (chart.Kind == ChartKind.Column)
+            {
+                var groupWidth = plot.Width / cats;
+                var pad = Math.Max(1, groupWidth * 0.1);
+                var seriesWidth = Math.Max(1, (groupWidth - 2 * pad) / seriesCount);
+                var zeroY = plot.Bottom - axis.ZeroFraction * plot.Height;
+                for (var category = 0; category < cats; category++)
+                {
+                    for (var series = 0; series < plan.Series.Count; series++)
+                    {
+                        if (category >= plan.Series[series].Values.Count)
+                            continue;
+                        var value = plan.Series[series].Values[category];
+                        var barHeight = Math.Abs(axis.ValueFraction(value)) * plot.Height;
+                        var x = plot.X + category * groupWidth + pad + series * seriesWidth;
+                        var y = value >= 0 ? zeroY - barHeight : zeroY;
+                        bars.Add(new ChartSceneBar(
+                            new ChartSceneRect(x, y, Math.Max(1, seriesWidth - 1), Math.Max(1, barHeight)),
+                            plan.PaletteHex[(seriesCount == 1 ? category : series) % plan.PaletteHex.Count]));
+                        if (plan.ShowDataLabels)
+                        {
+                            texts.Add(new ChartSceneText(
+                                FormatChartValue(value),
+                                x + seriesWidth / 2,
+                                value >= 0 ? Math.Max(plot.Y, y - 2) : Math.Min(plot.Bottom, y + barHeight + 2),
+                                ChartSceneTextAnchor.TopCenter,
+                                ChartSceneTextKind.DataLabel,
+                                textColor,
+                                8));
+                        }
+                    }
+
+                    AddCategoryText(texts, chart, category, plot.X + category * groupWidth + groupWidth / 2,
+                        plot.Bottom + 2, ChartSceneTextAnchor.TopCenter);
+                }
+            }
+            else
+            {
+                var groupHeight = plot.Height / cats;
+                var pad = Math.Max(1, groupHeight * 0.1);
+                var seriesHeight = Math.Max(1, (groupHeight - 2 * pad) / seriesCount);
+                var zeroX = plot.X + axis.ZeroFraction * plot.Width;
+                for (var category = 0; category < cats; category++)
+                {
+                    for (var series = 0; series < plan.Series.Count; series++)
+                    {
+                        if (category >= plan.Series[series].Values.Count)
+                            continue;
+                        var value = plan.Series[series].Values[category];
+                        var barWidth = Math.Abs(axis.ValueFraction(value)) * plot.Width;
+                        var x = value >= 0 ? zeroX : zeroX - barWidth;
+                        var y = plot.Y + category * groupHeight + pad + series * seriesHeight;
+                        bars.Add(new ChartSceneBar(
+                            new ChartSceneRect(x, y, Math.Max(1, barWidth), Math.Max(1, seriesHeight - 1)),
+                            plan.PaletteHex[(seriesCount == 1 ? category : series) % plan.PaletteHex.Count]));
+                        if (plan.ShowDataLabels)
+                        {
+                            texts.Add(new ChartSceneText(
+                                FormatChartValue(value),
+                                value >= 0 ? x + barWidth + 2 : x - 2,
+                                y + seriesHeight / 2,
+                                value >= 0 ? ChartSceneTextAnchor.TopLeft : ChartSceneTextAnchor.CenterRight,
+                                ChartSceneTextKind.DataLabel,
+                                textColor,
+                                8));
+                        }
+                    }
+
+                    AddCategoryText(texts, chart, category, plot.X - 2,
+                        plot.Y + category * groupHeight + groupHeight / 2,
+                        ChartSceneTextAnchor.CenterRight);
+                }
+            }
+        }
+        else if (chart.Kind is ChartKind.Line or ChartKind.Area or ChartKind.Scatter)
+        {
+            var cats = Math.Max(2, categoryCount > 0 ? categoryCount : plan.Series.Select(series => series.Values.Count).DefaultIfEmpty().Max());
+            var zeroY = plot.Bottom - axis.ZeroFraction * plot.Height;
+            if (chart.Kind == ChartKind.Scatter)
+            {
+                var xValues = chart.Categories
+                    .Select(value => double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed) ? parsed : double.NaN)
+                    .ToList();
+                var xMin = xValues.Where(value => !double.IsNaN(value)).DefaultIfEmpty(1).Min();
+                var xMax = xValues.Where(value => !double.IsNaN(value)).DefaultIfEmpty(1).Max();
+                if (xMax <= xMin) xMax = xMin + 1;
+                for (var series = 0; series < plan.Series.Count; series++)
+                {
+                    for (var category = 0; category < plan.Series[series].Values.Count; category++)
+                    {
+                        var xValue = category < xValues.Count && !double.IsNaN(xValues[category]) ? xValues[category] : category + 1;
+                        var x = plot.X + (xValue - xMin) / (xMax - xMin) * plot.Width;
+                        var y = plot.Bottom - axis.ValueFraction(plan.Series[series].Values[category]) * plot.Height;
+                        var paletteIndex = plan.Series.Count == 1 ? category : series;
+                        markers.Add(new ChartSceneMarker(x, y, 4, (ChartSceneMarkerKind)(category % 4),
+                            plan.PaletteHex[paletteIndex % plan.PaletteHex.Count]));
+                        if (plan.ShowDataLabels)
+                            AddDataText(texts, plan.Series[series].Values[category], x + 6, y - 10);
+                    }
+                }
+                AddCategoryLabels(texts, chart, plot, xValues);
+            }
+            else
+            {
+                for (var series = 0; series < plan.Series.Count; series++)
+                {
+                    var points = new List<(double X, double Y)>();
+                    for (var category = 0; category < plan.Series[series].Values.Count; category++)
+                    {
+                        var x = plot.X + category * plot.Width / Math.Max(1, cats - 1);
+                        var y = plot.Bottom - axis.ValueFraction(plan.Series[series].Values[category]) * plot.Height;
+                        points.Add((x, y));
+                        if (plan.ShowMarkers)
+                            markers.Add(new ChartSceneMarker(x, y, 3, ChartSceneMarkerKind.Circle,
+                                plan.PaletteHex[series % plan.PaletteHex.Count]));
+                        if (plan.ShowDataLabels)
+                            AddDataText(texts, plan.Series[series].Values[category], x + 2, y - 12);
+                    }
+                    if (points.Count > 0)
+                        lineSeries.Add(new ChartSceneLineSeries(points, plan.PaletteHex[series % plan.PaletteHex.Count], 2,
+                            chart.Kind == ChartKind.Area, zeroY));
+                }
+                AddCategoryLabels(texts, chart, plot, []);
+            }
+        }
+        else if (isPie)
+        {
+            var values = plan.Series.FirstOrDefault()?.Values ?? [];
+            var total = values.Where(value => value > 0).Sum();
+            if (total > 0)
+            {
+                var centerX = plot.CenterX;
+                var centerY = plot.CenterY;
+                var radius = Math.Max(4, Math.Min(plot.Width, plot.Height) / 2 - 4);
+                var innerRadius = chart.Kind == ChartKind.Doughnut ? radius * 0.5 : 0;
+                var start = -Math.PI / 2;
+                for (var index = 0; index < values.Count; index++)
+                {
+                    if (values[index] <= 0) continue;
+                    var sweep = values[index] / total * 2 * Math.PI;
+                    slices.Add(new ChartSceneSlice(centerX, centerY, radius, innerRadius, start, sweep,
+                        plan.PaletteHex[index % plan.PaletteHex.Count], "#FFFFFF"));
+                    if (plan.ShowDataLabels)
+                    {
+                        var labelRadius = radius * (chart.Kind == ChartKind.Doughnut ? 0.75 : 0.65);
+                        var midpoint = start + sweep / 2;
+                        texts.Add(new ChartSceneText(
+                            (values[index] / total * 100).ToString("F0", CultureInfo.InvariantCulture) + "%",
+                            centerX + labelRadius * Math.Cos(midpoint),
+                            centerY + labelRadius * Math.Sin(midpoint),
+                            ChartSceneTextAnchor.Center,
+                            ChartSceneTextKind.DataLabel,
+                            "#FFFFFF",
+                            8));
+                    }
+                    start += sweep;
+                }
+            }
+        }
+
+        if (plan.ShowTitle && !string.IsNullOrEmpty(chart.Title))
+            texts.Add(new ChartSceneText(chart.Title!, frame.CenterX, 8, ChartSceneTextAnchor.TopCenter,
+                ChartSceneTextKind.Title, textColor, 24));
+        if (!isPie && plan.ShowAxisTitles)
+        {
+            if (!string.IsNullOrEmpty(plan.ValueAxisTitle))
+                texts.Add(new ChartSceneText(plan.ValueAxisTitle!, 12, plot.CenterY, ChartSceneTextAnchor.Center,
+                    ChartSceneTextKind.AxisTitle, textColor, 20, -90));
+            if (!string.IsNullOrEmpty(plan.CategoryAxisTitle))
+                texts.Add(new ChartSceneText(plan.CategoryAxisTitle!, plot.CenterX, frame.Height - legendHeight - categoryTitleHeight + 1,
+                    ChartSceneTextAnchor.TopCenter, ChartSceneTextKind.AxisTitle, textColor, 20));
+        }
+
+        if (legendCount > 0)
+        {
+            var entryWidth = Math.Max(48, plot.Width / legendCount);
+            for (var index = 0; index < legendCount; index++)
+            {
+                var label = isPie
+                    ? index < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[index]) ? chart.Categories[index] : $"Item {index + 1}"
+                    : index < chart.Series.Count && !string.IsNullOrEmpty(chart.Series[index].Name) ? chart.Series[index].Name! : $"Series {index + 1}";
+                var x = plot.X + index * entryWidth;
+                var y = frame.Height - legendHeight + 3;
+                legend.Add(new ChartSceneLegendEntry(label, x, y, 8, x + 11, y));
+            }
+        }
+
+        return new ChartScene(chart.Kind, plan.GeometryKind, frame, plot,
+            plan.PlotAreaFill && !isPie ? "#D9E2F3" : null,
+            plan.PaletteHex, chart.Categories.ToList(), plan.Series.Count,
+            gridLines, axisLines, bars, lineSeries, markers, slices, texts, legend);
+    }
+
+    private static void AddCategoryText(List<ChartSceneText> texts, Chart chart, int index, double x, double y, ChartSceneTextAnchor anchor)
+    {
+        if (index < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[index]))
+            texts.Add(new ChartSceneText(chart.Categories[index], x, y, anchor, ChartSceneTextKind.CategoryAxis, "#000000", 9));
+    }
+
+    private static void AddCategoryLabels(List<ChartSceneText> texts, Chart chart, ChartSceneRect plot, IReadOnlyList<double> xValues)
+    {
+        var count = Math.Max(1, chart.Categories.Count);
+        for (var index = 0; index < chart.Categories.Count; index++)
+        {
+            var x = xValues.Count > index && !double.IsNaN(xValues[index])
+                ? plot.X + (xValues[index] - xValues.Where(value => !double.IsNaN(value)).DefaultIfEmpty(1).Min()) /
+                    Math.Max(1, xValues.Where(value => !double.IsNaN(value)).DefaultIfEmpty(1).Max() - xValues.Where(value => !double.IsNaN(value)).DefaultIfEmpty(1).Min()) * plot.Width
+                : count == 1 ? plot.CenterX : plot.X + index * plot.Width / Math.Max(1, count - 1);
+            AddCategoryText(texts, chart, index, x, plot.Bottom + 2, ChartSceneTextAnchor.TopCenter);
+        }
+    }
+
+    private static void AddDataText(List<ChartSceneText> texts, double value, double x, double y) =>
+        texts.Add(new ChartSceneText(FormatChartValue(value), x, y, ChartSceneTextAnchor.TopLeft,
+            ChartSceneTextKind.DataLabel, "#000000", 8));
+
+    private static string FormatChartValue(double value) => value.ToString("G4", CultureInfo.InvariantCulture);
 
     public static IReadOnlyList<string> BuildChartVisualSignatures(IEnumerable<ChartVisualPlan> charts)
     {

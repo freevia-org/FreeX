@@ -2481,7 +2481,8 @@ public sealed class DocumentView : Control
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            return _floatingCharts.Select(c => (c.Rect, c.BehindText, c.ZOrder, c.Kind, c.Title)).ToList();
+            return _floatingCharts.Select(c => (c.Rect, c.BehindText, c.ZOrder, c.Scene.Kind,
+                c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.Title)?.Text)).ToList();
         }
     }
 
@@ -2496,9 +2497,10 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _floatingCharts.Select(c =>
-                (c.Rect, c.BehindText, c.ZOrder, c.Kind, c.Title,
-                 (IReadOnlyList<string>)c.Categories.AsReadOnly(),
-                 c.Series.Count)).ToList();
+                (c.Rect, c.BehindText, c.ZOrder, c.Scene.Kind,
+                 c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.Title)?.Text,
+                 c.Scene.Categories,
+                 c.Scene.SeriesCount)).ToList();
         }
     }
 
@@ -2615,7 +2617,8 @@ public sealed class DocumentView : Control
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            return _inlineCharts.Select(c => (c.Rect, c.Kind, c.Title)).ToList();
+            return _inlineCharts.Select(c => (c.Rect, c.Scene.Kind,
+                c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.Title)?.Text)).ToList();
         }
     }
 
@@ -2885,7 +2888,10 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _floatingCharts.Select(c =>
-                (c.ShowLegend, c.ShowDataLabels, c.CategoryAxisTitle, c.ValueAxisTitle)).ToList();
+                (c.Scene.Legend.Count > 0,
+                 c.Scene.Texts.Any(text => text.Kind == ChartSceneTextKind.DataLabel),
+                 c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.AxisTitle && text.RotationDegrees == 0)?.Text,
+                 c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.AxisTitle && text.RotationDegrees != 0)?.Text)).ToList();
         }
     }
 
@@ -2899,7 +2905,10 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _inlineCharts.Select(c =>
-                (c.ShowLegend, c.ShowDataLabels, c.CategoryAxisTitle, c.ValueAxisTitle)).ToList();
+                (c.Scene.Legend.Count > 0,
+                 c.Scene.Texts.Any(text => text.Kind == ChartSceneTextKind.DataLabel),
+                 c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.AxisTitle && text.RotationDegrees == 0)?.Text,
+                 c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.AxisTitle && text.RotationDegrees != 0)?.Text)).ToList();
         }
     }
 
@@ -2909,7 +2918,7 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _inlineCharts.Select(c =>
-                (c.GeometryKind, (IReadOnlyList<string>)c.Palette.Select(ToHex).ToList())).ToList();
+                (c.Scene.GeometryKind, c.Scene.PaletteHex)).ToList();
         }
     }
 
@@ -2936,8 +2945,6 @@ public sealed class DocumentView : Control
             return _equationVisualElements.ToList();
         }
     }
-
-    private static string ToHex(Color color) => $"#{color.R:X2}{color.G:X2}{color.B:X2}";
 
     // ---- PDF export ------------------------------------------------------------------------------
 
@@ -5474,8 +5481,7 @@ public sealed class DocumentView : Control
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
                 // Build inline chart data (reuses the same struct as floating charts).
-                var series = chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList();
-                _inlineCharts.Add(BuildChartData(chart, rect, behindText: false, zOrder: 0, series));
+                _inlineCharts.Add(BuildChartData(chart, rect, behindText: false, zOrder: 0));
 
                 // ZZ1 fix: use the FULL object box as the hit-test band so TryHitTest/MoveCaretVertical
                 // can reach a tall inline chart from above (pressing Down) or via a click in the upper
@@ -5641,12 +5647,7 @@ public sealed class DocumentView : Control
                     break;
 
                 case DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart:
-                    var chartData = BuildChartData(
-                        chart,
-                        rect,
-                        snapshot.BehindText,
-                        snapshot.ZOrderIndex,
-                        chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
+                    var chartData = BuildChartData(chart, rect, snapshot.BehindText, snapshot.ZOrderIndex);
                     chartData.BlockIndex = snapshot.BlockIndex;
                     chartData.RunIndex = snapshot.RunIndex;
                     _floatingCharts.Add(chartData);
@@ -14955,20 +14956,10 @@ public sealed class DocumentView : Control
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
         public int RunIndex;
-        public ChartKind    Kind;
-        public string?      Title;
-        public List<string> Categories = [];
-        public List<(string? Name, List<double> Values)> Series = [];
-        // AV-POLISH: chart annotation fields
-        public ChartVisualGeometryKind GeometryKind;
-        public bool    ShowLegend;
-        public bool    ShowGridlines;
-        public bool    PlotAreaFill;
-        public bool    ShowDataLabels;
-        public string? CategoryAxisTitle;
-        public string? ValueAxisTitle;
-        public ChartValueAxisPlan ValueAxis = new(0, 1);
-        public List<Color> Palette = [];
+        public ChartScene Scene = new(
+            ChartKind.Column, ChartVisualGeometryKind.Bars,
+            new ChartSceneRect(0, 0, 1, 1), new ChartSceneRect(0, 0, 1, 1),
+            null, [], [], 0, [], [], [], [], [], [], [], []);
     }
 
     private sealed class FloatingWordArtData
@@ -15160,12 +15151,7 @@ public sealed class DocumentView : Control
 
                 case DocumentFloatingObjectKind.Chart when child is Chart chart:
                     childData.Kind = FloatingGroupChildData.ChildKind.Chart;
-                    childData.Chart = BuildChartData(
-                        chart,
-                        childRect,
-                        snapshot.BehindText,
-                        snapshot.ZOrderIndex,
-                        chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
+                    childData.Chart = BuildChartData(chart, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
                     break;
 
                 case DocumentFloatingObjectKind.WordArt when child is WordArt:
@@ -15201,14 +15187,9 @@ public sealed class DocumentView : Control
     // Colour palette for chart series — matches Word's default colorful1 scheme.
     private static readonly IBrush ChartFrameFill    = new SolidColorBrush(Color.FromArgb(0xFF, 0xF9, 0xF9, 0xF9));
     private static readonly Pen    ChartFramePen     = new Pen(new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)), 1.0);
-    private static readonly IBrush ChartGridlineBrush = new SolidColorBrush(Color.FromArgb(0x40, 0x00, 0x00, 0x00));
-    private static readonly IBrush ChartLegendBg    = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF));
 
     private static Color ToAvaloniaChartColor(string? hex) =>
         TryParseAvaloniaColor(hex, out var color) ? color : Color.FromRgb(0x44, 0x72, 0xC4);
-
-    private static Color ChartColorAt(FloatingChartData chart, int index) =>
-        chart.Palette.Count > 0 ? chart.Palette[index % chart.Palette.Count] : ToAvaloniaChartColor("#4472C4");
 
     private static Color SmartArtFillAt(FloatingSmartArtData smartArt, int index) =>
         smartArt.NodeFills.Count > 0 ? smartArt.NodeFills[index % smartArt.NodeFills.Count] : ToAvaloniaChartColor("#4E81BD");
@@ -15218,33 +15199,19 @@ public sealed class DocumentView : Control
 
     /// <summary>
     /// Centralised factory for <see cref="FloatingChartData"/> — shared by the floating chart collector,
-    /// the inline chart layout, and the drawing-group child collector. Resolves QuickLayout / StyleId
-    /// to determine which annotation flags are active, then copies chart model data into the data struct.
+    /// the inline chart layout, and the drawing-group child collector. The renderer consumes the shared
+    /// scene directly; no duplicate chart plan or model-data copy is retained here.
     /// </summary>
-    private static FloatingChartData BuildChartData(
-        Chart chart, Rect rect, bool behindText, int zOrder,
-        List<(string? Name, List<double> Values)> series)
+    private static FloatingChartData BuildChartData(Chart chart, Rect rect, bool behindText, int zOrder)
     {
-        var plan = ChartSmartArtVisualPlanner.BuildChartPlan(chart);
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, rect.Width, rect.Height);
 
         return new FloatingChartData
         {
             Rect              = rect,
             BehindText        = behindText,
             ZOrder            = zOrder,
-            Kind              = chart.Kind,
-            GeometryKind      = plan.GeometryKind,
-            Title             = plan.ShowTitle ? chart.Title : null,
-            Categories        = new List<string>(chart.Categories),
-            Series            = series,
-            ShowLegend        = plan.ShowLegend,
-            ShowGridlines     = plan.ShowGridlines,
-            PlotAreaFill      = plan.PlotAreaFill,
-            ShowDataLabels    = plan.ShowDataLabels,
-            CategoryAxisTitle = plan.CategoryAxisTitle,
-            ValueAxisTitle    = plan.ValueAxisTitle,
-            ValueAxis         = plan.ValueAxis,
-            Palette           = plan.PaletteHex.Select(ToAvaloniaChartColor).ToList(),
+            Scene             = scene,
         };
     }
 
@@ -15257,682 +15224,173 @@ public sealed class DocumentView : Control
     /// </summary>
     private void DrawFloatingChart(DrawingContext context, FloatingChartData cd)
     {
-        var rect = cd.Rect;
-        // Frame.
-        context.FillRectangle(ChartFrameFill, rect);
-        context.DrawRectangle(null, ChartFramePen, rect);
+        context.FillRectangle(ChartFrameFill, cd.Rect);
+        context.DrawRectangle(null, ChartFramePen, cd.Rect);
+        using var translation = context.PushTransform(Matrix.CreateTranslation(cd.Rect.X, cd.Rect.Y));
+        RenderChartScene(context, cd.Scene);
+    }
 
-        // ── Title bar ──
-        const double titleH = 46;
-        var titleY = rect.Y + 10;
-        if (!string.IsNullOrEmpty(cd.Title))
+    private void RenderChartScene(DrawingContext context, ChartScene scene)
+    {
+        if (scene.PlotFillHex is not null)
+            context.FillRectangle(new SolidColorBrush(ToAvaloniaChartColor(scene.PlotFillHex)), new Rect(
+                scene.PlotBounds.X, scene.PlotBounds.Y, scene.PlotBounds.Width, scene.PlotBounds.Height));
+
+        foreach (var line in scene.GridLines.Concat(scene.AxisLines))
+            context.DrawLine(new Pen(new SolidColorBrush(ToAvaloniaChartColor(line.StrokeHex)), line.StrokeWidth),
+                new Point(line.X1, line.Y1), new Point(line.X2, line.Y2));
+        foreach (var bar in scene.Bars)
+            context.FillRectangle(new SolidColorBrush(ToAvaloniaChartColor(bar.FillHex), bar.FillOpacity),
+                new Rect(bar.Bounds.X, bar.Bounds.Y, bar.Bounds.Width, bar.Bounds.Height));
+
+        foreach (var series in scene.LineSeries)
         {
-            var titleFmt = new RunFormatting { FontSizePt = 18 };
-            var ft = Build(cd.Title, titleFmt);
-            var tx = rect.X + (rect.Width - ft.WidthIncludingTrailingWhitespace) / 2;
-            context.DrawText(ft, new Point(Math.Max(rect.X + 2, tx), titleY));
+            if (series.FillArea && series.Points.Count > 1)
+            {
+                var geometry = new StreamGeometry();
+                using (var path = geometry.Open())
+                {
+                    path.BeginFigure(new Point(series.Points[0].X, series.AreaBaselineY), true);
+                    foreach (var point in series.Points)
+                        path.LineTo(new Point(point.X, point.Y));
+                    path.LineTo(new Point(series.Points[^1].X, series.AreaBaselineY));
+                    path.EndFigure(true);
+                }
+                var color = ToAvaloniaChartColor(series.StrokeHex);
+                context.DrawGeometry(new SolidColorBrush(Color.FromArgb(
+                    (byte)Math.Clamp(series.AreaOpacity * 255, 0, 255), color.R, color.G, color.B)), null, geometry);
+            }
+            var pen = new Pen(new SolidColorBrush(ToAvaloniaChartColor(series.StrokeHex)), series.StrokeWidth);
+            for (var index = 1; index < series.Points.Count; index++)
+                context.DrawLine(pen, new Point(series.Points[index - 1].X, series.Points[index - 1].Y),
+                    new Point(series.Points[index].X, series.Points[index].Y));
         }
 
-        var annotFmt = new RunFormatting { FontSizePt = 9 };
-
-        // BC2: Legend is placed at the BOTTOM (matches WPF). Build legend entries for ALL series
-        // with "Series N" fallback; for Pie/Doughnut use categories with "Item N" fallback.
-        var isPieFamily = cd.Kind is ChartKind.Pie or ChartKind.Doughnut;
-        List<(string label, int colorIdx)> legendEntries = [];
-        if (cd.ShowLegend)
+        foreach (var marker in scene.Markers)
+            DrawSceneMarker(context, marker);
+        foreach (var slice in scene.Slices)
+            DrawSceneSlice(context, slice);
+        foreach (var text in scene.Texts)
+            DrawSceneText(context, text);
+        for (var index = 0; index < scene.Legend.Count; index++)
         {
-            if (isPieFamily)
+            var entry = scene.Legend[index];
+            context.FillRectangle(new SolidColorBrush(ToAvaloniaChartColor(
+                scene.PaletteHex[index % scene.PaletteHex.Count])),
+                new Rect(entry.SwatchX, entry.SwatchY, entry.SwatchSize, entry.SwatchSize));
+            DrawSceneText(context, new ChartSceneText(entry.Text, entry.TextX, entry.TextY,
+                ChartSceneTextAnchor.TopLeft, ChartSceneTextKind.Legend, "#000000", 9));
+        }
+    }
+
+    private void DrawSceneText(DrawingContext context, ChartSceneText text)
+    {
+        var formatted = Build(text.Text, new RunFormatting { FontSizePt = text.FontSize, ColorHex = text.ColorHex });
+        if (text.RotationDegrees != 0)
+        {
+            using var rotation = context.PushTransform(Matrix.CreateTranslation(text.X, text.Y) *
+                Matrix.CreateRotation(text.RotationDegrees * Math.PI / 180));
+            context.DrawText(formatted, new Point(-formatted.WidthIncludingTrailingWhitespace / 2, -formatted.Height / 2));
+            return;
+        }
+
+        var x = text.Anchor switch
+        {
+            ChartSceneTextAnchor.TopCenter or ChartSceneTextAnchor.Center =>
+                text.X - formatted.WidthIncludingTrailingWhitespace / 2,
+            ChartSceneTextAnchor.CenterRight => text.X - formatted.WidthIncludingTrailingWhitespace,
+            _ => text.X
+        };
+        var y = text.Anchor switch
+        {
+            ChartSceneTextAnchor.Center or ChartSceneTextAnchor.CenterRight => text.Y - formatted.Height / 2,
+            _ => text.Y
+        };
+        context.DrawText(formatted, new Point(x, y));
+    }
+
+    private static void DrawSceneMarker(DrawingContext context, ChartSceneMarker marker)
+    {
+        var color = ToAvaloniaChartColor(marker.FillHex);
+        var brush = new SolidColorBrush(Color.FromArgb(
+            (byte)Math.Clamp(marker.FillOpacity * 255, 0, 255), color.R, color.G, color.B));
+        var radius = marker.Radius;
+        switch (marker.Kind)
+        {
+            case ChartSceneMarkerKind.Diamond:
+            case ChartSceneMarkerKind.Triangle:
             {
-                // Pie/doughnut: one entry per slice from Categories (or "Item N").
-                var sliceCount = cd.Series.Count > 0 ? cd.Series[0].Values.Count : cd.Categories.Count;
-                for (var i = 0; i < sliceCount; i++)
+                var geometry = new StreamGeometry();
+                using (var path = geometry.Open())
                 {
-                    var lbl = i < cd.Categories.Count && !string.IsNullOrEmpty(cd.Categories[i])
-                        ? cd.Categories[i] : $"Item {i + 1}";
-                    legendEntries.Add((lbl, i));
+                    if (marker.Kind == ChartSceneMarkerKind.Diamond)
+                    {
+                        path.BeginFigure(new Point(marker.CenterX, marker.CenterY - radius), true);
+                        path.LineTo(new Point(marker.CenterX + radius, marker.CenterY));
+                        path.LineTo(new Point(marker.CenterX, marker.CenterY + radius));
+                        path.LineTo(new Point(marker.CenterX - radius, marker.CenterY));
+                    }
+                    else
+                    {
+                        path.BeginFigure(new Point(marker.CenterX, marker.CenterY - radius), true);
+                        path.LineTo(new Point(marker.CenterX + radius, marker.CenterY + radius));
+                        path.LineTo(new Point(marker.CenterX - radius, marker.CenterY + radius));
+                    }
+                    path.EndFigure(true);
                 }
+                context.DrawGeometry(brush, null, geometry);
+                break;
+            }
+            case ChartSceneMarkerKind.Square:
+                context.FillRectangle(brush, new Rect(marker.CenterX - radius, marker.CenterY - radius, radius * 2, radius * 2));
+                break;
+            case ChartSceneMarkerKind.Cross:
+                context.DrawLine(new Pen(brush, marker.StrokeWidth),
+                    new Point(marker.CenterX - radius, marker.CenterY - radius),
+                    new Point(marker.CenterX + radius, marker.CenterY + radius));
+                context.DrawLine(new Pen(brush, marker.StrokeWidth),
+                    new Point(marker.CenterX + radius, marker.CenterY - radius),
+                    new Point(marker.CenterX - radius, marker.CenterY + radius));
+                break;
+            default:
+                context.DrawEllipse(brush, null, new Point(marker.CenterX, marker.CenterY), radius, radius);
+                break;
+        }
+    }
+
+    private static void DrawSceneSlice(DrawingContext context, ChartSceneSlice slice)
+    {
+        var geometry = new StreamGeometry();
+        var start = slice.StartAngleRadians;
+        var end = start + slice.SweepAngleRadians;
+        using (var path = geometry.Open())
+        {
+            var outerStart = new Point(slice.CenterX + slice.OuterRadius * Math.Cos(start),
+                slice.CenterY + slice.OuterRadius * Math.Sin(start));
+            var outerEnd = new Point(slice.CenterX + slice.OuterRadius * Math.Cos(end),
+                slice.CenterY + slice.OuterRadius * Math.Sin(end));
+            path.BeginFigure(outerStart, true);
+            path.ArcTo(outerEnd, new Size(slice.OuterRadius, slice.OuterRadius), 0,
+                slice.SweepAngleRadians > Math.PI, SweepDirection.Clockwise);
+            if (slice.InnerRadius > 0)
+            {
+                var innerEnd = new Point(slice.CenterX + slice.InnerRadius * Math.Cos(end),
+                    slice.CenterY + slice.InnerRadius * Math.Sin(end));
+                var innerStart = new Point(slice.CenterX + slice.InnerRadius * Math.Cos(start),
+                    slice.CenterY + slice.InnerRadius * Math.Sin(start));
+                path.LineTo(innerEnd);
+                path.ArcTo(innerStart, new Size(slice.InnerRadius, slice.InnerRadius), 0,
+                    slice.SweepAngleRadians > Math.PI, SweepDirection.CounterClockwise);
             }
             else
-            {
-                // Non-pie: one entry per series, "Series N" fallback.
-                for (var si = 0; si < cd.Series.Count; si++)
-                {
-                    var name = string.IsNullOrEmpty(cd.Series[si].Name) ? $"Series {si + 1}" : cd.Series[si].Name!;
-                    legendEntries.Add((name, si));
-                }
-            }
+                path.LineTo(new Point(slice.CenterX, slice.CenterY));
+            path.EndFigure(true);
         }
-
-        // Legend height: reserve at bottom when entries exist.
-        const double legendRowH  = 11;
-        const double legendSwSz  = 8;
-        const double legendPad   = 2;
-        var legendH = legendEntries.Count > 0 ? legendRowH + legendPad * 2 : 0.0;
-
-        // ── Value-axis (Y) title — left strip ──
-        const double valAxisTitleW = 24; // width of rotated text strip
-        var hasValTitle = !string.IsNullOrEmpty(cd.ValueAxisTitle);
-        var valTitleW = hasValTitle ? valAxisTitleW : 0.0;
-
-        // ── Category-axis (X) title — bottom strip ──
-        const double catAxisTitleH = 24;
-        var hasCatTitle = !string.IsNullOrEmpty(cd.CategoryAxisTitle);
-        var catTitleH = hasCatTitle ? catAxisTitleH : 0.0;
-
-        // ── Plot area bounds after reserving annotation strips ──
-        var plotTop    = rect.Y + (string.IsNullOrEmpty(cd.Title) ? 12 : titleH + 8);
-        var plotBottom = rect.Bottom - 55 - catTitleH - legendH; // x-axis labels + optional cat title + legend
-        var plotLeft   = rect.X + 32 + valTitleW;      // y-axis labels + optional val title
-        var plotRight  = rect.Right - 8;
-        var plotW      = Math.Max(10, plotRight - plotLeft);
-        var plotH      = Math.Max(10, plotBottom - plotTop);
-
-        if (cd.Series.Count == 0 || plotW < 5 || plotH < 5)
-            return;
-
-        if (cd.PlotAreaFill && !isPieFamily)
-            context.FillRectangle(new SolidColorBrush(Color.FromRgb(0xD9, 0xE2, 0xF3)),
-                new Rect(plotLeft, plotTop, plotW, plotH));
-
-        // BC3: Compute the axis range for non-pie charts (used for gridline labels and data drawing).
-        var axis = cd.ValueAxis;
-
-        // ── Gridlines + BC1: Y-axis tick labels ──
-        const int gridLines = 4;
-        var gridPen = new Pen(ChartGridlineBrush, 0.5);
-        for (var g = 0; g <= gridLines; g++)
-        {
-            var gy = plotBottom - g * plotH / gridLines;
-            if (cd.ShowGridlines || g == 0)
-                context.DrawLine(gridPen, new Point(plotLeft, gy), new Point(plotRight, gy));
-
-            // BC1: Draw value-axis tick label in the reserved left strip.
-            if (!isPieFamily && (cd.ShowGridlines || g == 0))
-            {
-                var tickVal = axis.Minimum + (g * axis.Range / gridLines);
-                var tickLabel = tickVal.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
-                var tickFt = Build(tickLabel, annotFmt);
-                var tx = plotLeft - tickFt.WidthIncludingTrailingWhitespace - 2;
-                var ty = gy - tickFt.Height / 2;
-                if (tx >= rect.X)
-                    context.DrawText(tickFt, new Point(tx, ty));
-            }
-        }
-
-        // ── Chart geometry ──
-        switch (cd.Kind)
-        {
-            case ChartKind.Column:
-            case ChartKind.Bar:
-                DrawChartBars(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom,
-                    horizontal: cd.Kind == ChartKind.Bar);
-                break;
-
-            case ChartKind.Line:
-            case ChartKind.Area:
-                DrawChartLines(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom,
-                    fillArea: cd.Kind == ChartKind.Area);
-                break;
-
-            case ChartKind.Scatter:
-                DrawChartScatterMarkers(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom);
-                break;
-
-            case ChartKind.Pie:
-                DrawChartPie(context, cd, plotLeft, plotTop, plotW, plotH, doughnut: false);
-                break;
-
-            case ChartKind.Doughnut:
-                DrawChartPie(context, cd, plotLeft, plotTop, plotW, plotH, doughnut: true);
-                break;
-        }
-
-        // BC1: Draw category-axis (X) labels under each bar/point group (mirrors WPF AddCategoryLabel).
-        if (!isPieFamily && cd.Categories.Count > 0)
-        {
-            var cats = cd.Categories.Count;
-            switch (cd.Kind)
-            {
-                case ChartKind.Column:
-                {
-                    var groupW = plotW / Math.Max(1, cats);
-                    for (var ci = 0; ci < cats; ci++)
-                    {
-                        var cat = cd.Categories[ci];
-                        if (string.IsNullOrEmpty(cat)) continue;
-                        var ft  = Build(cat, annotFmt);
-                        var cx  = plotLeft + ci * groupW + groupW / 2;
-                        var tx  = cx - ft.WidthIncludingTrailingWhitespace / 2;
-                        var ty  = plotBottom + 2;
-                        context.DrawText(ft, new Point(Math.Clamp(tx, plotLeft, plotRight - ft.WidthIncludingTrailingWhitespace), ty));
-                    }
-                    break;
-                }
-                case ChartKind.Bar:
-                {
-                    var groupH = plotH / Math.Max(1, cats);
-                    for (var ci = 0; ci < cats; ci++)
-                    {
-                        var cat = cd.Categories[ci];
-                        if (string.IsNullOrEmpty(cat)) continue;
-                        var ft  = Build(cat, annotFmt);
-                        var cy  = plotTop + ci * groupH + groupH / 2;
-                        var ty  = cy - ft.Height / 2;
-                        // Label on the left side of the bar chart.
-                        var tx  = rect.X + 2;
-                        context.DrawText(ft, new Point(tx, ty));
-                    }
-                    break;
-                }
-                case ChartKind.Line:
-                case ChartKind.Scatter:
-                case ChartKind.Area:
-                {
-                    for (var ci = 0; ci < cats; ci++)
-                    {
-                        var cat = cd.Categories[ci];
-                        if (string.IsNullOrEmpty(cat)) continue;
-                        var ft  = Build(cat, annotFmt);
-                        var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
-                        var tx  = px - ft.WidthIncludingTrailingWhitespace / 2;
-                        var ty  = plotBottom + 2;
-                        context.DrawText(ft, new Point(Math.Clamp(tx, plotLeft, plotRight - ft.WidthIncludingTrailingWhitespace), ty));
-                    }
-                    break;
-                }
-            }
-        }
-
-        // ── Data labels ──
-        if (cd.ShowDataLabels && cd.Series.Count > 0)
-        {
-            DrawChartDataLabels(context, cd, plotLeft, plotTop, plotW, plotH, plotBottom, annotFmt);
-        }
-
-        // ── Value-axis title (rotated 90° counter-clockwise, centred on left of y-axis) ──
-        if (hasValTitle)
-        {
-            var valTitleFt = Build(cd.ValueAxisTitle!, annotFmt);
-            var titleCentreY = (plotTop + plotBottom) / 2;
-            var titleX = rect.X + 2; // far-left strip
-            // Draw rotated: push transform, draw, pop.
-            var rotState = context.PushTransform(
-                Matrix.CreateTranslation(titleX + valTitleFt.Height / 2, titleCentreY) *
-                Matrix.CreateRotation(-Math.PI / 2));
-            context.DrawText(valTitleFt, new Point(-valTitleFt.WidthIncludingTrailingWhitespace / 2, -valTitleFt.Height / 2));
-            rotState.Dispose();
-        }
-
-        // ── Category-axis title (below x-axis labels, horizontally centred) ──
-        if (hasCatTitle)
-        {
-            var catTitleFt = Build(cd.CategoryAxisTitle!, annotFmt);
-            var catTitleX = plotLeft + (plotW - catTitleFt.WidthIncludingTrailingWhitespace) / 2;
-            var catTitleY = rect.Bottom - legendH - catTitleFt.Height - 1;
-            context.DrawText(catTitleFt, new Point(Math.Max(rect.X + 2, catTitleX), catTitleY));
-        }
-
-        // BC2: Legend (BOTTOM, matches WPF) — all series with "Series N" fallback; pie uses categories.
-        if (legendEntries.Count > 0)
-        {
-            const double swatchSz = legendSwSz;
-            const double rowH     = legendRowH;
-            const double pad      = legendPad;
-
-            // Lay the entries out horizontally centred, wrapping if needed.
-            var legendY  = rect.Bottom - legendH + pad;
-            var legendX0 = plotLeft;
-            var curX     = legendX0;
-            // Measure total width to centre.
-            var totalLegendW = 0.0;
-            foreach (var (lbl, _) in legendEntries)
-            {
-                var w = Build(lbl, annotFmt).WidthIncludingTrailingWhitespace;
-                totalLegendW += swatchSz + 3 + w + 12;
-            }
-            curX = plotLeft + Math.Max(0, (plotW - totalLegendW) / 2);
-
-            // Semi-transparent background.
-            context.FillRectangle(ChartLegendBg,
-                new Rect(rect.X, rect.Bottom - legendH, rect.Width, legendH));
-
-            foreach (var (lbl, colorIdx) in legendEntries)
-            {
-                var color = ChartColorAt(cd, colorIdx);
-                var brush = new SolidColorBrush(color);
-                var nameFt = Build(lbl, annotFmt);
-                var entryW = swatchSz + 3 + nameFt.WidthIncludingTrailingWhitespace + 12;
-
-                if (curX + entryW > plotRight)
-                    break; // stop if no room
-
-                // Swatch.
-                context.FillRectangle(brush, new Rect(curX, legendY + (rowH - swatchSz) / 2, swatchSz, swatchSz));
-                // Name.
-                context.DrawText(nameFt, new Point(curX + swatchSz + 3, legendY + (rowH - nameFt.Height) / 2));
-                curX += entryW;
-            }
-        }
-
+        context.DrawGeometry(new SolidColorBrush(ToAvaloniaChartColor(slice.FillHex)),
+            new Pen(new SolidColorBrush(ToAvaloniaChartColor(slice.StrokeHex)), slice.StrokeWidth), geometry);
     }
 
-    /// <summary>
-    /// Draws data-value labels for bar/column, line/scatter/area, and pie/doughnut charts.
-    /// For bars: value text above (column) or at end (bar) of each bar.
-    /// For lines: value text above each data point.
-    /// For pie/doughnut: percentage text at the slice midpoint angle.
-    /// Approximation: text is positioned geometrically; no collision avoidance.
-    /// </summary>
-    private void DrawChartDataLabels(DrawingContext context, FloatingChartData cd,
-        double plotLeft, double plotTop, double plotW, double plotH, double plotBottom,
-        RunFormatting fmt)
-    {
-        // BC3: Use axis range that includes negative values.
-        var axis = cd.ValueAxis;
-        var zeroY = plotBottom - axis.ZeroFraction * plotH;
-        var zeroX = plotLeft   + axis.ZeroFraction * plotW;
 
-        switch (cd.Kind)
-        {
-            case ChartKind.Column:
-            {
-                var cats    = cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count > 0 ? cd.Series[0].Values.Count : 1);
-                var nSeries = cd.Series.Count;
-                var groupW  = plotW / Math.Max(1, cats);
-                var barPad  = Math.Max(1, groupW * 0.1);
-                var barGroupW = groupW - 2 * barPad;
-                var seriesW = barGroupW / Math.Max(1, nSeries);
-
-                for (var si = 0; si < nSeries; si++)
-                {
-                    var (_, vals) = cd.Series[si];
-                    for (var ci = 0; ci < cats; ci++)
-                    {
-                        var val     = ci < vals.Count ? vals[ci] : 0;
-                        var bw      = Math.Max(1, seriesW - 1);
-                        var bx      = plotLeft + barPad + ci * groupW + si * seriesW;
-                        var valFrac = axis.ValueFraction(val);
-                        var barH    = Math.Abs(valFrac) * plotH;
-                        var barTopY = val >= 0 ? zeroY - barH : zeroY;
-
-                        var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
-                        var ft = Build(label, fmt);
-                        var lx = bx + (bw - ft.WidthIncludingTrailingWhitespace) / 2;
-                        double ly;
-                        if (val >= 0)
-                        {
-                            ly = barTopY - ft.Height - 1;
-                            if (ly < plotTop) ly = barTopY + 1;
-                        }
-                        else
-                        {
-                            ly = barTopY + barH + 1; // below the bar for negative
-                            if (ly + ft.Height > plotBottom) ly = barTopY - ft.Height - 1;
-                        }
-                        context.DrawText(ft, new Point(Math.Max(plotLeft, lx), ly));
-                    }
-                }
-                break;
-            }
-
-            case ChartKind.Bar:
-            {
-                var cats    = cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count > 0 ? cd.Series[0].Values.Count : 1);
-                var nSeries = cd.Series.Count;
-                var groupW  = plotH / Math.Max(1, cats);  // horizontal: groups along Y
-                var barPad  = Math.Max(1, groupW * 0.1);
-                var barGroupH = groupW - 2 * barPad;
-                var seriesH = barGroupH / Math.Max(1, nSeries);
-
-                for (var si = 0; si < nSeries; si++)
-                {
-                    var (_, vals) = cd.Series[si];
-                    for (var ci = 0; ci < cats; ci++)
-                    {
-                        var val   = ci < vals.Count ? vals[ci] : 0;
-                        var barW  = Math.Abs(axis.ValueFraction(val)) * plotW;
-                        var bx    = val >= 0 ? zeroX : zeroX - barW;
-                        var by    = plotTop + (ci * (barGroupH + 2 * barPad) + barPad + si * seriesH);
-
-                        var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
-                        var ft = Build(label, fmt);
-                        var lx = val >= 0 ? bx + barW + 1 : bx - ft.WidthIncludingTrailingWhitespace - 1;
-                        var ly = by + (Math.Max(1, seriesH - 1) - ft.Height) / 2;
-                        context.DrawText(ft, new Point(Math.Clamp(lx, plotLeft, plotLeft + plotW - ft.WidthIncludingTrailingWhitespace), ly));
-                    }
-                }
-                break;
-            }
-
-            case ChartKind.Line:
-            case ChartKind.Scatter:
-            case ChartKind.Area:
-            {
-                var cats = Math.Max(2, cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count));
-                for (var si = 0; si < cd.Series.Count; si++)
-                {
-                    var (_, vals) = cd.Series[si];
-                    for (var ci = 0; ci < vals.Count; ci++)
-                    {
-                        var val = vals[ci];
-                        var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
-                        var py  = plotBottom - axis.ValueFraction(val) * plotH;
-
-                        var label = val.ToString("G3", System.Globalization.CultureInfo.InvariantCulture);
-                        var ft = Build(label, fmt);
-                        var lx = px - ft.WidthIncludingTrailingWhitespace / 2;
-                        var ly = py - ft.Height - 2;
-                        if (ly < plotTop) ly = py + 2;
-                        context.DrawText(ft, new Point(Math.Clamp(lx, plotLeft, plotLeft + plotW - ft.WidthIncludingTrailingWhitespace), ly));
-                    }
-                }
-                break;
-            }
-
-            case ChartKind.Pie:
-            case ChartKind.Doughnut:
-            {
-                if (cd.Series.Count == 0) break;
-                var vals  = cd.Series[0].Values;
-                var total = vals.Sum();
-                if (total <= 0) break;
-
-                var cx = plotLeft + plotW / 2;
-                var cy = plotTop  + plotH / 2;
-                var r  = Math.Min(plotW, plotH) / 2 - 4;
-                var labelR = r * (cd.Kind == ChartKind.Doughnut ? 0.75 : 0.65); // place at midpoint radius
-
-                var startAngle = -Math.PI / 2;
-                for (var si = 0; si < vals.Count; si++)
-                {
-                    var sweep = vals[si] / total * 2 * Math.PI;
-                    var midAngle = startAngle + sweep / 2;
-                    var pct = (vals[si] / total * 100).ToString("F0", System.Globalization.CultureInfo.InvariantCulture) + "%";
-                    var ft = Build(pct, fmt);
-                    var lx = cx + labelR * Math.Cos(midAngle) - ft.WidthIncludingTrailingWhitespace / 2;
-                    var ly = cy + labelR * Math.Sin(midAngle) - ft.Height / 2;
-                    context.DrawText(ft, new Point(lx, ly));
-                    startAngle += sweep;
-                }
-                break;
-            }
-        }
-    }
-
-    private void DrawChartBars(DrawingContext context, FloatingChartData cd,
-        double plotLeft, double plotTop, double plotW, double plotH, double plotBottom, bool horizontal)
-    {
-        var cats    = cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count > 0 ? cd.Series[0].Values.Count : 1);
-        var nSeries = cd.Series.Count;
-        var nBars   = cats;
-
-        var axis = cd.ValueAxis;
-        var zeroFraction = axis.ZeroFraction;
-        var zeroY = plotBottom - zeroFraction * plotH;
-        var zeroX = plotLeft   + zeroFraction * plotW;
-
-        var groupW    = plotW / Math.Max(1, nBars);
-        var barPad    = Math.Max(1, groupW * 0.1);
-        var barGroupW = groupW - 2 * barPad;
-        var seriesW   = barGroupW / Math.Max(1, nSeries);
-
-        for (var si = 0; si < nSeries; si++)
-        {
-            var (_, vals) = cd.Series[si];
-            for (var ci = 0; ci < nBars; ci++)
-            {
-                var val = ci < vals.Count ? vals[ci] : 0;
-                // Word's single-series column charts shade individual points;
-                // grouped charts remain series-colored.
-                var color = ChartColorAt(cd, nSeries == 1 ? ci : si);
-                var brush = new SolidColorBrush(color);
-
-                if (horizontal)
-                {
-                    var bh       = Math.Max(1, seriesW - 1);
-                    var by       = plotTop + (ci * (barGroupW + 2 * barPad) + barPad + si * seriesW);
-                    var valFrac  = axis.ValueFraction(val);
-                    var barW     = Math.Abs(valFrac) * plotW;
-                    double bx;
-                    if (val >= 0)
-                        bx = zeroX;
-                    else
-                    {
-                        bx   = zeroX - barW;
-                        barW = Math.Abs(barW);
-                    }
-                    if (barW < 1) barW = 1;
-                    context.FillRectangle(brush, new Rect(bx, by, barW, bh));
-                }
-                else
-                {
-                    var bw      = Math.Max(1, seriesW - 1);
-                    var bx      = plotLeft + barPad + ci * groupW + si * seriesW;
-                    var valFrac = axis.ValueFraction(val);
-                    var barH    = Math.Abs(valFrac) * plotH;
-                    double barTop;
-                    if (val >= 0)
-                        barTop = zeroY - barH;
-                    else
-                        barTop = zeroY;
-                    if (barH < 1) barH = 1;
-                    context.FillRectangle(brush, new Rect(bx, barTop, bw, barH));
-                }
-            }
-        }
-
-        // Draw zero-baseline axis line.
-        var axisLinePen = new Pen(ChartGridlineBrush, 1.0);
-        if (!horizontal)
-            context.DrawLine(axisLinePen, new Point(plotLeft, zeroY), new Point(plotLeft + plotW, zeroY));
-        else
-            context.DrawLine(axisLinePen, new Point(zeroX, plotTop), new Point(zeroX, plotBottom));
-    }
-
-    private void DrawChartLines(DrawingContext context, FloatingChartData cd,
-        double plotLeft, double plotTop, double plotW, double plotH, double plotBottom, bool fillArea)
-    {
-        var cats = Math.Max(2, cd.Categories.Count > 0 ? cd.Categories.Count : (cd.Series[0].Values.Count));
-
-        var axis = cd.ValueAxis;
-        var zeroFraction = axis.ZeroFraction;
-        var zeroY = plotBottom - zeroFraction * plotH;
-
-        // Map a data value to a pixel Y within the plot.
-        double ValToY(double v) => plotBottom - axis.ValueFraction(v) * plotH;
-
-        for (var si = 0; si < cd.Series.Count; si++)
-        {
-            var (_, vals) = cd.Series[si];
-            if (vals.Count == 0) continue;
-
-            var color = ChartColorAt(cd, si);
-            var pen   = new Pen(new SolidColorBrush(color), 1.5);
-
-            var pts = new List<Point>();
-            for (var ci = 0; ci < Math.Max(cats, vals.Count); ci++)
-            {
-                var val = ci < vals.Count ? vals[ci] : 0;
-                var px  = plotLeft + ci * plotW / Math.Max(1, cats - 1);
-                var py  = ValToY(val);
-                pts.Add(new Point(px, py));
-            }
-
-            for (var pi = 0; pi < pts.Count - 1; pi++)
-                context.DrawLine(pen, pts[pi], pts[pi + 1]);
-
-            if (fillArea && pts.Count >= 2)
-            {
-                var geo = new StreamGeometry();
-                using var ctx = geo.Open();
-                ctx.BeginFigure(new Point(pts[0].X, zeroY), isFilled: true);
-                foreach (var p in pts) ctx.LineTo(p);
-                ctx.LineTo(new Point(pts[^1].X, zeroY));
-                ctx.EndFigure(true);
-                context.DrawGeometry(new SolidColorBrush(Color.FromArgb(0x55, color.R, color.G, color.B)), null, geo);
-            }
-        }
-
-        // Draw zero-baseline axis line.
-        context.DrawLine(new Pen(ChartGridlineBrush, 1.0),
-            new Point(plotLeft, zeroY), new Point(plotLeft + plotW, zeroY));
-    }
-
-    private void DrawChartScatterMarkers(DrawingContext context, FloatingChartData cd,
-        double plotLeft, double plotTop, double plotW, double plotH, double plotBottom)
-    {
-        var xVals = cd.Categories
-            .Select(c => double.TryParse(c, System.Globalization.NumberStyles.Any,
-                System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : double.NaN)
-            .ToList();
-        var xMin = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Min();
-        var xMax = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max();
-        if (xMax <= xMin) xMax = xMin + 1;
-
-        var axis = cd.ValueAxis;
-
-        double Px(int c)
-        {
-            var x = c < xVals.Count && !double.IsNaN(xVals[c]) ? xVals[c] : c + 1;
-            return plotLeft + (x - xMin) / (xMax - xMin) * plotW;
-        }
-
-        double Py(double value) => plotBottom - plotH * axis.ValueFraction(value);
-
-        for (var si = 0; si < cd.Series.Count; si++)
-        {
-            var (_, values) = cd.Series[si];
-            for (var ci = 0; ci < values.Count; ci++)
-            {
-                var px = Px(ci);
-                var py = Py(values[ci]);
-                var color = ChartColorAt(cd, cd.Series.Count == 1 ? ci : si);
-                DrawScatterMarker(context, color, ci % 4, new Point(px, py), 3.5);
-            }
-        }
-
-        context.DrawLine(new Pen(ChartGridlineBrush, 1.0),
-            new Point(plotLeft, plotBottom), new Point(plotLeft + plotW, plotBottom));
-    }
-
-    private static void DrawScatterMarker(
-        DrawingContext context,
-        Color color,
-        int markerIndex,
-        Point center,
-        double radius)
-    {
-        var brush = new SolidColorBrush(color);
-        switch (markerIndex)
-        {
-            case 0:
-            {
-                var geometry = new StreamGeometry();
-                using (var path = geometry.Open())
-                {
-                    path.BeginFigure(new Point(center.X, center.Y - radius), true);
-                    path.LineTo(new Point(center.X + radius, center.Y));
-                    path.LineTo(new Point(center.X, center.Y + radius));
-                    path.LineTo(new Point(center.X - radius, center.Y));
-                    path.EndFigure(true);
-                }
-                context.DrawGeometry(brush, null, geometry);
-                break;
-            }
-            case 1:
-                context.FillRectangle(brush, new Rect(center.X - radius, center.Y - radius, radius * 2, radius * 2));
-                break;
-            case 2:
-            {
-                var geometry = new StreamGeometry();
-                using (var path = geometry.Open())
-                {
-                    path.BeginFigure(new Point(center.X, center.Y - radius), true);
-                    path.LineTo(new Point(center.X + radius, center.Y + radius));
-                    path.LineTo(new Point(center.X - radius, center.Y + radius));
-                    path.EndFigure(true);
-                }
-                context.DrawGeometry(brush, null, geometry);
-                break;
-            }
-            default:
-                context.DrawLine(new Pen(brush, 1.5),
-                    new Point(center.X - radius, center.Y - radius),
-                    new Point(center.X + radius, center.Y + radius));
-                context.DrawLine(new Pen(brush, 1.5),
-                    new Point(center.X + radius, center.Y - radius),
-                    new Point(center.X - radius, center.Y + radius));
-                break;
-        }
-    }
-
-    private static void DrawChartPie(DrawingContext context, FloatingChartData cd,
-        double plotLeft, double plotTop, double plotW, double plotH, bool doughnut)
-    {
-        if (cd.Series.Count == 0) return;
-        var vals = cd.Series[0].Values;
-        if (vals.Count == 0) return;
-
-        var total = vals.Sum();
-        if (total <= 0) return;
-
-        var cx = plotLeft + plotW / 2;
-        var cy = plotTop  + plotH / 2;
-        var r  = Math.Min(plotW, plotH) / 2 - 4;
-        var innerR = doughnut ? r * 0.5 : 0;
-
-        var startAngle = -Math.PI / 2; // start at top
-        for (var si = 0; si < vals.Count; si++)
-        {
-            var sweep     = vals[si] / total * 2 * Math.PI;
-            var color     = ChartColorAt(cd, si);
-            var brush     = new SolidColorBrush(color);
-
-            var geo = new StreamGeometry();
-            using (var ctx = geo.Open())
-            {
-                if (doughnut)
-                {
-                    // Outer arc start.
-                    var ox1 = cx + r * Math.Cos(startAngle);
-                    var oy1 = cy + r * Math.Sin(startAngle);
-                    var ox2 = cx + r * Math.Cos(startAngle + sweep);
-                    var oy2 = cy + r * Math.Sin(startAngle + sweep);
-                    // Inner arc end (reversed).
-                    var ix1 = cx + innerR * Math.Cos(startAngle + sweep);
-                    var iy1 = cy + innerR * Math.Sin(startAngle + sweep);
-                    var ix2 = cx + innerR * Math.Cos(startAngle);
-                    var iy2 = cy + innerR * Math.Sin(startAngle);
-
-                    var isLarge = sweep > Math.PI;
-                    ctx.BeginFigure(new Point(ox1, oy1), isFilled: true);
-                    ctx.ArcTo(new Point(ox2, oy2), new Size(r, r), 0, isLarge, SweepDirection.Clockwise);
-                    ctx.LineTo(new Point(ix1, iy1));
-                    ctx.ArcTo(new Point(ix2, iy2), new Size(innerR, innerR), 0, isLarge, SweepDirection.CounterClockwise);
-                    ctx.EndFigure(true);
-                }
-                else
-                {
-                    var ex = cx + r * Math.Cos(startAngle + sweep);
-                    var ey = cy + r * Math.Sin(startAngle + sweep);
-                    var isLarge = sweep > Math.PI;
-                    ctx.BeginFigure(new Point(cx, cy), isFilled: true);
-                    ctx.LineTo(new Point(cx + r * Math.Cos(startAngle), cy + r * Math.Sin(startAngle)));
-                    ctx.ArcTo(new Point(ex, ey), new Size(r, r), 0, isLarge, SweepDirection.Clockwise);
-                    ctx.EndFigure(true);
-                }
-            }
-            context.DrawGeometry(brush, new Pen(Brushes.White, 0.5), geo);
-            startAngle += sweep;
-        }
-    }
-
-    /// <summary>
-    /// Renders a floating WordArt at its page-space rect.
-    /// Fully rendered: styled text with fill colour (and outline when preset uses one) at correct size,
-    /// position, and z-order. Text warp (WordArtWarp) approximated with a skew/arc label — no actual
-    /// path deformation (Avalonia immediate-mode has no text-on-path API); this is noted as a follow-up.
-    /// </summary>
     private void DrawFloatingWordArt(DrawingContext context, FloatingWordArtData wd)
     {
         if (string.IsNullOrEmpty(wd.Text)) return;

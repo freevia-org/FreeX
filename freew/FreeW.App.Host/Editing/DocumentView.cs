@@ -10809,9 +10809,6 @@ public sealed class DocumentView : RichTextBox
         return CreateObjectEffect(effectSet);
     }
 
-    // ChartPalette removed: the palette is now resolved per-chart from ChartColorScheme.Default/FindById.
-    // Use ResolveChartRenderSettings(chart).Palette at render time.
-
     /// <summary>
     /// Renders an inline chart as an InlineUIContainer hosting a Border that carries the model
     /// <see cref="Chart"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). Renders **all**
@@ -10822,45 +10819,6 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     // ── Chart Design render helpers ───────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Resolved render settings derived from a chart's StyleId, ColorSchemeId and QuickLayoutId
-    /// selections. The Quick Layout (when non-zero) overrides the ShowTitle/ShowLegend flags so
-    /// the render reflects the gallery choice without mutating the model's own toggle fields.
-    /// </summary>
-    private readonly record struct ChartRenderSettings(
-        ChartVisualGeometryKind GeometryKind,
-        bool ShowTitle,
-        bool ShowLegend,
-        bool ShowGridlines,
-        bool PlotAreaFill,
-        bool ShowMarkers,
-        bool ShowDataLabels,
-        bool ShowAxisTitles,
-        string? CategoryAxisTitle,
-        string? ValueAxisTitle,
-        ChartValueAxisPlan ValueAxis,
-        Color[] Palette);
-
-    /// <summary>Resolves the effective render settings for a chart from its three gallery ids.</summary>
-    private static ChartRenderSettings ResolveChartRenderSettings(Chart chart)
-    {
-        var plan = ChartSmartArtVisualPlanner.BuildChartPlan(chart);
-
-        return new ChartRenderSettings(
-            plan.GeometryKind,
-            plan.ShowTitle,
-            plan.ShowLegend,
-            plan.ShowGridlines,
-            plan.PlotAreaFill,
-            plan.ShowMarkers,
-            plan.ShowDataLabels,
-            plan.ShowAxisTitles,
-            plan.CategoryAxisTitle,
-            plan.ValueAxisTitle,
-            plan.ValueAxis,
-            plan.PaletteHex.Select(ParseHexColor).ToArray());
-    }
-
     /// <summary>Parse a #RRGGBB hex colour string to a WPF Color, falling back to the Office blue.</summary>
     private static Color ParseHexColor(string hex)
     {
@@ -10870,101 +10828,12 @@ public sealed class DocumentView : RichTextBox
 
     private static InlineUIContainer BuildChartRun(Chart chart, DocumentEffectSet effectSet)
     {
-        var settings = ResolveChartRenderSettings(chart);
         var widthPx = chart.WidthPt * PxPerPoint;
         var heightPx = chart.HeightPt * PxPerPoint;
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, widthPx, heightPx);
         var strokeThickness = EffectLineThickness(effectSet);
 
-        var root = new DockPanel { Margin = new Thickness(6), LastChildFill = true };
-
-        if (settings.ShowTitle && !string.IsNullOrEmpty(chart.Title))
-        {
-            var title = new TextBlock
-            {
-                Text = chart.Title,
-                FontSize = 24,
-                FontWeight = FontWeights.Normal,
-                Margin = new Thickness(0, 0, 0, 10),
-                HorizontalAlignment = HorizontalAlignment.Center
-            };
-            DockPanel.SetDock(title, Dock.Top);
-            root.Children.Add(title);
-        }
-
-        if (settings.ShowLegend)
-        {
-            var legend = BuildChartLegend(chart, settings.Palette);
-            DockPanel.SetDock(legend, Dock.Bottom);
-            root.Children.Add(legend);
-        }
-
-        var actualShowTitle = settings.ShowTitle && !string.IsNullOrEmpty(chart.Title);
-        var titleH = actualShowTitle ? 46 : 0;
-        var legendH = settings.ShowLegend ? 18 : 0;
-
-        // Plot-area background fill (Style 2/3/7/8 use a coloured background).
-        var plotBg = settings.PlotAreaFill
-            ? new SolidColorBrush(Color.FromRgb(0xD9, 0xE2, 0xF3))
-            : System.Windows.Media.Brushes.Transparent;
-
-        // Axis titles (for non-pie charts): value-axis title on the left (rotated), category-axis title at the bottom.
-        // These are added to the root DockPanel before the plot so they dock outside the plot area.
-        var isPie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
-        var showAxisTitles = !isPie && settings.ShowAxisTitles;
-        var axisReserve = showAxisTitles ? 78 : 0;
-        var plotW = Math.Max(24, widthPx - 12 - (showAxisTitles ? 44 : 0));
-        var plotH = Math.Max(24, heightPx - 12 - titleH - legendH - axisReserve);
-        if (showAxisTitles && !string.IsNullOrEmpty(settings.ValueAxisTitle))
-        {
-            var valueLabel = new TextBlock
-            {
-                Text = settings.ValueAxisTitle,
-                FontSize = 20,
-                Foreground = System.Windows.Media.Brushes.Black,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                LayoutTransform = new RotateTransform(-90)
-            };
-            var valueHost = new Border { Child = valueLabel, Padding = new Thickness(2), Width = 44 };
-            DockPanel.SetDock(valueHost, Dock.Left);
-            root.Children.Add(valueHost);
-        }
-        if (showAxisTitles && !string.IsNullOrEmpty(settings.CategoryAxisTitle))
-        {
-            var catLabel = new TextBlock
-            {
-                Text = settings.CategoryAxisTitle,
-                FontSize = 20,
-                Foreground = System.Windows.Media.Brushes.Black,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                Margin = new Thickness(0, 2, 0, 0)
-            };
-            DockPanel.SetDock(catLabel, Dock.Bottom);
-            root.Children.Add(catLabel);
-        }
-
-        var plot = new Canvas { Width = plotW, Height = plotH, Background = plotBg };
-        switch (chart.Kind)
-        {
-            case ChartKind.Pie:
-            case ChartKind.Doughnut:
-                DrawPieChart(plot, chart, plotW, plotH, doughnut: chart.Kind == ChartKind.Doughnut, settings: settings);
-                break;
-            case ChartKind.Line:
-            case ChartKind.Area:
-                DrawLineChart(plot, chart, plotW, plotH, settings: settings);
-                break;
-            case ChartKind.Scatter:
-                DrawScatterChart(plot, chart, plotW, plotH, settings: settings);
-                break;
-            case ChartKind.Bar:
-                DrawBarChart(plot, chart, plotW, plotH, horizontal: true, settings: settings);
-                break;
-            default: // Column
-                DrawBarChart(plot, chart, plotW, plotH, horizontal: false, settings: settings);
-                break;
-        }
-        root.Children.Add(plot);
-
+        var root = BuildChartSceneCanvas(scene);
         var element = new Border
         {
             Width = widthPx,
@@ -10980,313 +10849,174 @@ public sealed class DocumentView : RichTextBox
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 
-    private static int ChartCategoryCount(Chart chart)
+    internal static Canvas BuildChartSceneCanvas(ChartScene scene)
     {
-        var n = chart.Categories.Count;
-        foreach (var s in chart.Series)
-            n = Math.Max(n, s.Values.Count);
-        return n;
-    }
-
-    /// <summary>A centred horizontal legend: a colour swatch + label per series (or per slice for pie).</summary>
-    private static FrameworkElement BuildChartLegend(Chart chart, Color[] palette)
-    {
-        var pie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
-        var labels = pie
-            ? Enumerable.Range(0, ChartCategoryCount(chart))
-                .Select(i => i < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[i]) ? chart.Categories[i] : $"Item {i + 1}")
-                .ToList()
-            : chart.Series.Select((s, i) => string.IsNullOrEmpty(s.Name) ? $"Series {i + 1}" : s.Name!).ToList();
-
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center };
-        for (var i = 0; i < labels.Count; i++)
+        var canvas = new Canvas
         {
-            var item = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(6, 0, 6, 0) };
-            item.Children.Add(new System.Windows.Shapes.Rectangle
-            {
-                Width = 10,
-                Height = 10,
-                VerticalAlignment = VerticalAlignment.Center,
-                Fill = new SolidColorBrush(palette[i % palette.Length])
-            });
-            item.Children.Add(new TextBlock { Text = labels[i], FontSize = 10, Margin = new Thickness(3, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center });
-            panel.Children.Add(item);
-        }
-        return panel;
-    }
-
-    private static System.Windows.Shapes.Line ChartAxisLine(double x1, double y1, double x2, double y2) => new()
-    {
-        X1 = x1,
-        Y1 = y1,
-        X2 = x2,
-        Y2 = y2,
-        Stroke = new SolidColorBrush(Color.FromRgb(0xBF, 0xBF, 0xBF)),
-        StrokeThickness = 1
-    };
-
-    /// <summary>Faint horizontal value gridlines across the plot (matching Word), drawn behind the data.</summary>
-    private static void DrawChartGridlines(Canvas plot, double plotH, double w)
-    {
-        var brush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
-        for (var i = 1; i <= 4; i++)
-        {
-            var y = plotH - plotH * i / 4.0;
-            plot.Children.Add(new System.Windows.Shapes.Line { X1 = 0, Y1 = y, X2 = w, Y2 = y, Stroke = brush, StrokeThickness = 1 });
-        }
-    }
-
-    /// <summary>Adds a small data-value label above (column) or to the right (bar) of a bar.</summary>
-    private static void AddDataLabel(Canvas plot, double value, double x, double y)
-    {
-        var tb = new TextBlock
-        {
-            Text = value.ToString("G4", System.Globalization.CultureInfo.InvariantCulture),
-            FontSize = 8,
-            Foreground = System.Windows.Media.Brushes.Black
+            Width = scene.FrameBounds.Width,
+            Height = scene.FrameBounds.Height,
+            Background = System.Windows.Media.Brushes.Transparent
         };
-        Canvas.SetLeft(tb, x);
-        Canvas.SetTop(tb, y);
-        plot.Children.Add(tb);
+        RenderChartScene(canvas, scene);
+        return canvas;
     }
 
-    /// <summary>Grouped column (vertical) or bar (horizontal) chart over all series, with category labels.</summary>
-    private static void DrawBarChart(Canvas plot, Chart chart, double w, double h, bool horizontal, ChartRenderSettings settings)
+    private static void RenderChartScene(Canvas canvas, ChartScene scene)
     {
-        var cats = ChartCategoryCount(chart);
-        if (cats == 0 || chart.Series.Count == 0)
-            return;
-        var seriesCount = chart.Series.Count;
-        var axis = settings.ValueAxis;
-
-        if (!horizontal)
+        if (scene.PlotFillHex is not null)
         {
-            const double labelStrip = 14;
-            var plotH = Math.Max(8, h - labelStrip);
-            var zeroY = plotH - axis.ZeroFraction * plotH;
-            var groupW = w / cats;
-            var gap = groupW * 0.15;
-            var barW = Math.Max(1, (groupW - 2 * gap) / seriesCount);
-            if (settings.ShowGridlines)
-                DrawChartGridlines(plot, plotH, w);
-            AddValueAxisLabels(plot, axis, plotH);
-            plot.Children.Add(ChartAxisLine(0, zeroY, w, zeroY));
-            for (var c = 0; c < cats; c++)
+            var plotFill = new Border
             {
-                for (var s = 0; s < seriesCount; s++)
-                {
-                    var vals = chart.Series[s].Values;
-                    if (c >= vals.Count)
-                        continue;
-                    var barH = plotH * Math.Abs(axis.ValueFraction(vals[c]));
-                    var rectLeft = c * groupW + gap + s * barW;
-                    var rectTop = vals[c] >= 0 ? zeroY - barH : zeroY;
-                    var rect = new System.Windows.Shapes.Rectangle
-                    {
-                        Width = barW * 0.92,
-                        Height = Math.Max(1, barH),
-                        Fill = ChartDataBrush(settings, s, c, seriesCount)
-                    };
-                    Canvas.SetLeft(rect, rectLeft);
-                    Canvas.SetTop(rect, rectTop);
-                    plot.Children.Add(rect);
-                    if (settings.ShowDataLabels)
-                        AddDataLabel(plot, vals[c], rectLeft,
-                            vals[c] >= 0 ? Math.Max(0, rectTop - 12) : Math.Min(plotH - 12, rectTop + barH + 2));
-                }
-                AddCategoryLabel(plot, chart, c, c * groupW, plotH + 1, groupW, System.Windows.TextAlignment.Center);
-            }
+                Width = scene.PlotBounds.Width,
+                Height = scene.PlotBounds.Height,
+                Background = new SolidColorBrush(ParseSceneColor(scene.PlotFillHex))
+            };
+            Canvas.SetLeft(plotFill, scene.PlotBounds.X);
+            Canvas.SetTop(plotFill, scene.PlotBounds.Y);
+            canvas.Children.Add(plotFill);
         }
-        else
+
+        foreach (var line in scene.GridLines.Concat(scene.AxisLines))
         {
-            const double gutter = 42;
-            var plotW = Math.Max(8, w - gutter);
-            var zeroX = gutter + axis.ZeroFraction * plotW;
-            var groupH = h / cats;
-            var gap = groupH * 0.15;
-            var barH = Math.Max(1, (groupH - 2 * gap) / seriesCount);
-            plot.Children.Add(ChartAxisLine(zeroX, 0, zeroX, h));
-            AddValueAxisLabels(plot, axis, h);
-            for (var c = 0; c < cats; c++)
+            canvas.Children.Add(new System.Windows.Shapes.Line
             {
-                for (var s = 0; s < seriesCount; s++)
-                {
-                    var vals = chart.Series[s].Values;
-                    if (c >= vals.Count)
-                        continue;
-                    var barW = plotW * Math.Abs(axis.ValueFraction(vals[c]));
-                    var barTop = c * groupH + gap + s * barH;
-                    var barLeft = vals[c] >= 0 ? zeroX : zeroX - barW;
-                    var rect = new System.Windows.Shapes.Rectangle
-                    {
-                        Width = Math.Max(1, barW),
-                        Height = barH * 0.92,
-                        Fill = ChartDataBrush(settings, s, c, seriesCount)
-                    };
-                    Canvas.SetLeft(rect, barLeft);
-                    Canvas.SetTop(rect, barTop);
-                    plot.Children.Add(rect);
-                    if (settings.ShowDataLabels)
-                        AddDataLabel(plot, vals[c],
-                            vals[c] >= 0 ? barLeft + barW + 2 : Math.Max(gutter, barLeft - 18), barTop);
-                }
-                AddCategoryLabel(plot, chart, c, 0, c * groupH + groupH / 2 - 7, gutter - 3, System.Windows.TextAlignment.Right);
-            }
+                X1 = line.X1, Y1 = line.Y1, X2 = line.X2, Y2 = line.Y2,
+                Stroke = new SolidColorBrush(ParseSceneColor(line.StrokeHex)),
+                StrokeThickness = line.StrokeWidth
+            });
         }
-    }
 
-    /// <summary>Multi-series line chart (also used for area/scatter): one polyline per series.</summary>
-    private static void DrawLineChart(Canvas plot, Chart chart, double w, double h, ChartRenderSettings settings)
-    {
-        var cats = ChartCategoryCount(chart);
-        if (cats == 0 || chart.Series.Count == 0)
-            return;
-        var axis = settings.ValueAxis;
-        const double labelStrip = 14;
-        var plotH = Math.Max(8, h - labelStrip);
-        if (settings.ShowGridlines)
-            DrawChartGridlines(plot, plotH, w);
-        AddValueAxisLabels(plot, axis, plotH);
-        var zeroY = plotH - axis.ZeroFraction * plotH;
-        plot.Children.Add(ChartAxisLine(0, zeroY, w, zeroY));
-
-        double X(int c) => cats == 1 ? w / 2 : (c + 0.5) * (w / cats);
-
-        for (var s = 0; s < chart.Series.Count; s++)
+        foreach (var bar in scene.Bars)
         {
-            var vals = chart.Series[s].Values;
-            var color = new SolidColorBrush(settings.Palette[s % settings.Palette.Length]);
-            var poly = new System.Windows.Shapes.Polyline
+            var shape = new System.Windows.Shapes.Rectangle
             {
-                Stroke = color,
-                StrokeThickness = 2,
+                Width = bar.Bounds.Width,
+                Height = bar.Bounds.Height,
+                Fill = new SolidColorBrush(ParseSceneColor(bar.FillHex, bar.FillOpacity))
+            };
+            Canvas.SetLeft(shape, bar.Bounds.X);
+            Canvas.SetTop(shape, bar.Bounds.Y);
+            canvas.Children.Add(shape);
+        }
+
+        foreach (var series in scene.LineSeries)
+        {
+            if (series.FillArea && series.Points.Count > 1)
+            {
+                var figure = new PathFigure
+                {
+                    StartPoint = new Point(series.Points[0].X, series.AreaBaselineY),
+                    IsClosed = true
+                };
+                foreach (var point in series.Points)
+                    figure.Segments.Add(new LineSegment(new Point(point.X, point.Y), true));
+                figure.Segments.Add(new LineSegment(
+                    new Point(series.Points[^1].X, series.AreaBaselineY), true));
+                var area = new PathGeometry();
+                area.Figures.Add(figure);
+                canvas.Children.Add(new System.Windows.Shapes.Path
+                {
+                    Data = area,
+                    Fill = new SolidColorBrush(ParseSceneColor(series.StrokeHex, series.AreaOpacity))
+                });
+            }
+
+            var polyline = new System.Windows.Shapes.Polyline
+            {
+                Stroke = new SolidColorBrush(ParseSceneColor(series.StrokeHex)),
+                StrokeThickness = series.StrokeWidth,
                 StrokeLineJoin = PenLineJoin.Round
             };
-            for (var c = 0; c < vals.Count; c++)
+            foreach (var point in series.Points)
+                polyline.Points.Add(new Point(point.X, point.Y));
+            canvas.Children.Add(polyline);
+        }
+
+        foreach (var marker in scene.Markers)
+            AddSceneMarker(canvas, marker);
+        foreach (var slice in scene.Slices)
+            AddSceneSlice(canvas, slice);
+        foreach (var text in scene.Texts)
+            AddSceneText(canvas, text);
+
+        for (var index = 0; index < scene.Legend.Count; index++)
+        {
+            var entry = scene.Legend[index];
+            var swatch = new System.Windows.Shapes.Rectangle
             {
-                var px = X(c);
-                var py = plotH - plotH * axis.ValueFraction(vals[c]);
-                poly.Points.Add(new System.Windows.Point(px, py));
-                // Markers (Style 4/7/8): small filled circle at each data point.
-                if (settings.ShowMarkers)
-                {
-                    var dot = new System.Windows.Shapes.Ellipse
-                    {
-                        Width = 6, Height = 6,
-                        Fill = color
-                    };
-                    Canvas.SetLeft(dot, px - 3);
-                    Canvas.SetTop(dot, py - 3);
-                    plot.Children.Add(dot);
-                }
-                if (settings.ShowDataLabels && c < vals.Count)
-                    AddDataLabel(plot, vals[c], px + 2, py - 12);
-            }
-            plot.Children.Add(poly);
-        }
-
-        for (var c = 0; c < cats; c++)
-            AddCategoryLabel(plot, chart, c, X(c) - (w / cats) / 2, plotH + 1, w / cats, System.Windows.TextAlignment.Center);
-    }
-
-    /// <summary>
-    /// XY scatter chart: discrete point markers at each (x, y) coordinate with NO connecting line.
-    /// X values come from <see cref="Chart.Categories"/> (parsed as numbers; index used as fallback).
-    /// Each series gets distinct coloured markers (Ellipse). Data labels are placed to the upper-right.
-    /// </summary>
-    private static void DrawScatterChart(Canvas plot, Chart chart, double w, double h, ChartRenderSettings settings)
-    {
-        if (chart.Series.Count == 0)
-            return;
-
-        const double labelStrip = 14;
-        var plotH = Math.Max(8, h - labelStrip);
-        if (settings.ShowGridlines)
-            DrawChartGridlines(plot, plotH, w);
-        var axis = settings.ValueAxis;
-        AddValueAxisLabels(plot, axis, plotH);
-        var zeroY = plotH - axis.ZeroFraction * plotH;
-        plot.Children.Add(ChartAxisLine(0, zeroY, w, zeroY));
-
-        // Determine X range from categories (numeric) or fall back to 1..N.
-        var xVals = chart.Categories
-            .Select(c => double.TryParse(c, System.Globalization.NumberStyles.Any,
-                                         System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : double.NaN)
-            .ToList();
-        var xMin = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Min();
-        var xMax = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max();
-        if (xMax <= xMin) xMax = xMin + 1;
-
-        double Px(int c)
-        {
-            var xv = c < xVals.Count && !double.IsNaN(xVals[c]) ? xVals[c] : c + 1;
-            return (xv - xMin) / (xMax - xMin) * w;
-        }
-        double Py(double val) => plotH - plotH * axis.ValueFraction(val);
-
-        const double markerR = 4; // radius in pixels
-
-        for (var s = 0; s < chart.Series.Count; s++)
-        {
-            var vals = chart.Series[s].Values;
-
-            for (var c = 0; c < vals.Count; c++)
-            {
-                var px = Px(c);
-                var py = Py(vals[c]);
-                var color = new SolidColorBrush(
-                    settings.Palette[(chart.Series.Count == 1 ? c : s) % settings.Palette.Length]);
-
-                // Word's colorful scatter style cycles marker geometry as well as color.
-                var marker = BuildScatterMarker(color, c % 4, markerR);
-                Canvas.SetLeft(marker, px - markerR);
-                Canvas.SetTop(marker, py - markerR);
-                plot.Children.Add(marker);
-
-                if (settings.ShowDataLabels)
-                    AddDataLabel(plot, vals[c], px + markerR + 2, py - 10);
-            }
-        }
-
-        // X-axis category labels at bottom.
-        for (var c = 0; c < chart.Categories.Count; c++)
-        {
-            if (string.IsNullOrEmpty(chart.Categories[c]))
-                continue;
-            var px = Px(c);
-            var catW = w / Math.Max(1, chart.Categories.Count);
-            AddCategoryLabel(plot, chart, c, px - catW / 2, plotH + 1, catW, System.Windows.TextAlignment.Center);
+                Width = entry.SwatchSize,
+                Height = entry.SwatchSize,
+                Fill = new SolidColorBrush(ParseSceneColor(scene.PaletteHex[index % scene.PaletteHex.Count]))
+            };
+            Canvas.SetLeft(swatch, entry.SwatchX);
+            Canvas.SetTop(swatch, entry.SwatchY);
+            canvas.Children.Add(swatch);
+            AddSceneText(canvas, new ChartSceneText(entry.Text, entry.TextX, entry.TextY,
+                ChartSceneTextAnchor.TopLeft, ChartSceneTextKind.Legend, "#000000", 9));
         }
     }
 
-    private static FrameworkElement BuildScatterMarker(SolidColorBrush fill, int markerIndex, double radius)
+    private static void AddSceneText(Canvas canvas, ChartSceneText text)
     {
-        var diameter = radius * 2;
-        return markerIndex switch
+        var label = new TextBlock
         {
-            0 => new System.Windows.Shapes.Polygon
+            Text = text.Text,
+            FontSize = Math.Max(1, text.FontSize),
+            Foreground = new SolidColorBrush(ParseSceneColor(text.ColorHex)),
+            TextTrimming = TextTrimming.CharacterEllipsis
+        };
+        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        var width = label.DesiredSize.Width;
+        var height = label.DesiredSize.Height;
+        var x = text.Anchor switch
+        {
+            ChartSceneTextAnchor.TopCenter or ChartSceneTextAnchor.Center => text.X - width / 2,
+            ChartSceneTextAnchor.CenterRight => text.X - width,
+            _ => text.X
+        };
+        var y = text.Anchor switch
+        {
+            ChartSceneTextAnchor.Center or ChartSceneTextAnchor.CenterRight => text.Y - height / 2,
+            _ => text.Y
+        };
+        Canvas.SetLeft(label, x);
+        Canvas.SetTop(label, y);
+        if (text.RotationDegrees != 0)
+        {
+            label.RenderTransformOrigin = new Point(0.5, 0.5);
+            label.RenderTransform = new RotateTransform(text.RotationDegrees);
+        }
+        canvas.Children.Add(label);
+    }
+
+    private static void AddSceneMarker(Canvas canvas, ChartSceneMarker marker)
+    {
+        var fill = new SolidColorBrush(ParseSceneColor(marker.FillHex, marker.FillOpacity));
+        var diameter = marker.Radius * 2;
+        FrameworkElement shape = marker.Kind switch
+        {
+            ChartSceneMarkerKind.Diamond => new System.Windows.Shapes.Polygon
             {
                 Points = new PointCollection
                 {
-                    new(radius, 0), new(diameter, radius), new(radius, diameter), new(0, radius)
+                    new(marker.Radius, 0), new(diameter, marker.Radius),
+                    new(marker.Radius, diameter), new(0, marker.Radius)
                 },
                 Fill = fill
             },
-            1 => new System.Windows.Shapes.Rectangle
+            ChartSceneMarkerKind.Square => new System.Windows.Shapes.Rectangle
             {
-                Width = diameter,
-                Height = diameter,
-                Fill = fill
+                Width = diameter, Height = diameter, Fill = fill
             },
-            2 => new System.Windows.Shapes.Polygon
+            ChartSceneMarkerKind.Triangle => new System.Windows.Shapes.Polygon
             {
                 Points = new PointCollection
                 {
-                    new(radius, 0), new(diameter, diameter), new(0, diameter)
+                    new(marker.Radius, 0), new(diameter, diameter), new(0, diameter)
                 },
                 Fill = fill
             },
-            _ => new Canvas
+            ChartSceneMarkerKind.Cross => new Canvas
             {
                 Width = diameter,
                 Height = diameter,
@@ -11303,119 +11033,60 @@ public sealed class DocumentView : RichTextBox
                         Stroke = fill, StrokeThickness = 1.5
                     }
                 }
+            },
+            _ => new System.Windows.Shapes.Ellipse
+            {
+                Width = diameter, Height = diameter, Fill = fill
             }
         };
+        Canvas.SetLeft(shape, marker.CenterX - marker.Radius);
+        Canvas.SetTop(shape, marker.CenterY - marker.Radius);
+        canvas.Children.Add(shape);
     }
 
-    /// <summary>Pie (or doughnut) chart over the first series' values, one slice per category.</summary>
-    private static void DrawPieChart(Canvas plot, Chart chart, double w, double h, bool doughnut, ChartRenderSettings settings)
+    private static void AddSceneSlice(Canvas canvas, ChartSceneSlice slice)
     {
-        if (chart.Series.Count == 0)
-            return;
-        var vals = chart.Series[0].Values;
-        var total = vals.Where(v => v > 0).Sum();
-        if (total <= 0)
-            return;
-
-        var cx = w / 2;
-        var cy = h / 2;
-        var r = Math.Max(4, Math.Min(w, h) / 2 - 4);
-        var start = -Math.PI / 2; // 12 o'clock
-        for (var i = 0; i < vals.Count; i++)
+        var start = slice.StartAngleRadians;
+        var end = start + slice.SweepAngleRadians;
+        var outerStart = new Point(slice.CenterX + slice.OuterRadius * Math.Cos(start),
+            slice.CenterY + slice.OuterRadius * Math.Sin(start));
+        var outerEnd = new Point(slice.CenterX + slice.OuterRadius * Math.Cos(end),
+            slice.CenterY + slice.OuterRadius * Math.Sin(end));
+        var figure = new PathFigure { StartPoint = outerStart, IsClosed = true };
+        figure.Segments.Add(new ArcSegment(outerEnd,
+            new Size(slice.OuterRadius, slice.OuterRadius), 0,
+            slice.SweepAngleRadians > Math.PI, SweepDirection.Clockwise, true));
+        if (slice.InnerRadius > 0)
         {
-            if (vals[i] <= 0)
-                continue;
-            var sweep = (vals[i] / total) * 2 * Math.PI;
-            var end = start + sweep;
-            var fig = new PathFigure { StartPoint = new System.Windows.Point(cx, cy), IsClosed = true };
-            fig.Segments.Add(new LineSegment(new System.Windows.Point(cx + r * Math.Cos(start), cy + r * Math.Sin(start)), true));
-            fig.Segments.Add(new ArcSegment(
-                new System.Windows.Point(cx + r * Math.Cos(end), cy + r * Math.Sin(end)),
-                new System.Windows.Size(r, r), 0, sweep > Math.PI, SweepDirection.Clockwise, true));
-            var geo = new PathGeometry();
-            geo.Figures.Add(fig);
-            plot.Children.Add(new System.Windows.Shapes.Path
-            {
-                Fill = new SolidColorBrush(settings.Palette[i % settings.Palette.Length]),
-                Stroke = System.Windows.Media.Brushes.White,
-                StrokeThickness = 1,
-                Data = geo
-            });
-            // Data labels: percentage of total at the slice midpoint.
-            if (settings.ShowDataLabels)
-            {
-                var midAngle = start + sweep / 2;
-                var lx = cx + r * 0.65 * Math.Cos(midAngle);
-                var ly = cy + r * 0.65 * Math.Sin(midAngle);
-                var pct = vals[i] / total * 100;
-                var tb = new TextBlock
-                {
-                    Text = $"{pct:F0}%",
-                    FontSize = 8,
-                    Foreground = System.Windows.Media.Brushes.White
-                };
-                Canvas.SetLeft(tb, lx - 10);
-                Canvas.SetTop(tb, ly - 6);
-                plot.Children.Add(tb);
-            }
-            start = end;
+            var innerEnd = new Point(slice.CenterX + slice.InnerRadius * Math.Cos(end),
+                slice.CenterY + slice.InnerRadius * Math.Sin(end));
+            var innerStart = new Point(slice.CenterX + slice.InnerRadius * Math.Cos(start),
+                slice.CenterY + slice.InnerRadius * Math.Sin(start));
+            figure.Segments.Add(new LineSegment(innerEnd, true));
+            figure.Segments.Add(new ArcSegment(innerStart,
+                new Size(slice.InnerRadius, slice.InnerRadius), 0,
+                slice.SweepAngleRadians > Math.PI, SweepDirection.Counterclockwise, true));
         }
+        else
+            figure.Segments.Add(new LineSegment(new Point(slice.CenterX, slice.CenterY), true));
 
-        if (doughnut)
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        canvas.Children.Add(new System.Windows.Shapes.Path
         {
-            var hole = new System.Windows.Shapes.Ellipse { Width = r, Height = r, Fill = System.Windows.Media.Brushes.White };
-            Canvas.SetLeft(hole, cx - r / 2);
-            Canvas.SetTop(hole, cy - r / 2);
-            plot.Children.Add(hole);
-        }
+            Data = geometry,
+            Fill = new SolidColorBrush(ParseSceneColor(slice.FillHex)),
+            Stroke = new SolidColorBrush(ParseSceneColor(slice.StrokeHex)),
+            StrokeThickness = slice.StrokeWidth
+        });
     }
 
-    private static void AddCategoryLabel(Canvas plot, Chart chart, int index, double left, double top, double width, System.Windows.TextAlignment align)
+    private static Color ParseSceneColor(string hex, double opacity = 1)
     {
-        if (index >= chart.Categories.Count || string.IsNullOrEmpty(chart.Categories[index]))
-            return;
-        var label = new TextBlock
-        {
-            Text = chart.Categories[index],
-            FontSize = 10,
-            Width = Math.Max(1, width),
-            TextAlignment = align,
-            TextTrimming = TextTrimming.CharacterEllipsis
-        };
-        Canvas.SetLeft(label, left);
-        Canvas.SetTop(label, top);
-        plot.Children.Add(label);
+        var color = ParseHexColor(hex);
+        return Color.FromArgb((byte)Math.Clamp(opacity * 255, 0, 255), color.R, color.G, color.B);
     }
 
-    private static SolidColorBrush ChartDataBrush(ChartRenderSettings settings, int seriesIndex, int categoryIndex, int seriesCount)
-    {
-        // Word's monochromatic single-series column/bar charts shade individual points. Preserve
-        // series-based colours for grouped/multi-series charts, but cycle the selected palette for
-        // a single series so a mono-blue chart keeps the native per-category progression.
-        var paletteIndex = seriesCount == 1 ? categoryIndex : seriesIndex;
-        return new SolidColorBrush(settings.Palette[paletteIndex % settings.Palette.Length]);
-    }
-
-    private static void AddValueAxisLabels(Canvas plot, ChartValueAxisPlan axis, double plotHeight)
-    {
-        const int tickCount = 4;
-        for (var tick = 0; tick <= tickCount; tick++)
-        {
-            var fraction = tick / (double)tickCount;
-            var value = axis.Minimum + axis.Range * fraction;
-            var label = new TextBlock
-            {
-                Text = value.ToString("G4", System.Globalization.CultureInfo.InvariantCulture),
-                FontSize = 10,
-                Width = 28,
-                TextAlignment = System.Windows.TextAlignment.Right,
-                Foreground = System.Windows.Media.Brushes.Black
-            };
-            Canvas.SetLeft(label, -31);
-            Canvas.SetTop(label, Math.Clamp(plotHeight - plotHeight * fraction - 7, -2, plotHeight - 12));
-            plot.Children.Add(label);
-        }
-    }
 
     /// <summary>Inserts an inline shape / text box at the caret. Size in points; preserved on save.</summary>
     public void InsertShape(Shape shape)

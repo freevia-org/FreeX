@@ -64,9 +64,9 @@ public sealed class DocumentViewFloatingFO3Tests
             "Editing",
             "DocumentView.cs"));
 
-        source.Should().Contain("ChartSmartArtVisualPlanner.BuildChartPlan(chart)");
+        source.Should().Contain("ChartSmartArtVisualPlanner.BuildChartScene(chart, rect.Width, rect.Height)");
         source.Should().Contain("ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt)");
-        source.Should().Contain("DrawFloatingChart(context, chart)");
+        source.Should().Contain("RenderChartScene(context, cd.Scene)");
         source.Should().Contain("DrawFloatingSmartArt(context, smartArt)");
     }
 
