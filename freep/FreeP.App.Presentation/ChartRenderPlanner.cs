@@ -500,6 +500,33 @@ public static partial class ChartRenderPlanner
         new(0xF7, 0x96, 0x46)
     ];
 
+    // Office charts commonly carry an 18pt default c:chartSpace/c:txPr. Their
+    // in-frame auto-layout reserves substantially more room for that text than
+    // the compact FreeP-created chart defaults below.
+    private static bool UsesImportedTextMetrics(ChartShape chart) =>
+        chart.TextStyle?.FontSizePt is >= 12.0;
+
+    public static double ResolveTextFontSize(ChartShape chart, double fallback) =>
+        chart.TextStyle?.FontSizePt is > 0 ? chart.TextStyle.FontSizePt.Value : fallback;
+
+    private static double ResolveFrameMargin(ChartShape chart) =>
+        UsesImportedTextMetrics(chart) ? 20.0 : Margin;
+
+    private static double ResolveAxisLabelWidth(ChartShape chart) =>
+        UsesImportedTextMetrics(chart) ? 48.0 : AxisLabelWidth;
+
+    private static double ResolveCategoryLabelHeight(ChartShape chart) =>
+        UsesImportedTextMetrics(chart) ? 32.0 : CategoryLabelHeight;
+
+    private static double ResolveBarCategoryLabelWidth(ChartShape chart) =>
+        UsesImportedTextMetrics(chart) ? 60.0 : BarCategoryLabelWidth;
+
+    private static double ResolveLegendLineHeight(ChartShape chart) =>
+        UsesImportedTextMetrics(chart) ? 28.0 : LegendHeight;
+
+    private static double ResolveDataLabelHeight(ChartShape chart) =>
+        UsesImportedTextMetrics(chart) ? 26.0 : 11.0;
+
     public static SrgbColor ResolveSeriesColor(
         int seriesIndex,
         IReadOnlyList<SrgbColor>? seriesColors)
@@ -685,18 +712,32 @@ public static partial class ChartRenderPlanner
 
     public static ChartFramePlan BuildFramePlan(ChartShape chart, ChartPlanRect bounds)
     {
-        double titleAreaHeight = chart.Title is not null ? TitleHeight + Margin : 0;
+        double margin = ResolveFrameMargin(chart);
+        double axisLabelWidth = ResolveAxisLabelWidth(chart);
+        double categoryLabelHeight = ResolveCategoryLabelHeight(chart);
+        double barCategoryLabelWidth = ResolveBarCategoryLabelWidth(chart);
+        double legendLineHeight = ResolveLegendLineHeight(chart);
+        double titleHeight = UsesImportedTextMetrics(chart) ? 28.0 : TitleHeight;
+        double titleAreaHeight = chart.Title is not null ? titleHeight + margin : 0;
+        var family = GetRenderFamily(chart.ChartType);
+        bool hasSecondaryValueAxis = family is not (ChartRenderFamily.Pie
+            or ChartRenderFamily.ScatterLike
+            or ChartRenderFamily.Radar) &&
+            chart.SecondaryValueAxis is { Delete: false };
         bool hasLegend = chart.Legend.HasValue;
         bool legendReservesPlotSpace = hasLegend && chart.LegendOverlay != true;
         bool legendRight = chart.Legend is LegendPosition.Right or LegendPosition.Left;
         double legendAreaWidth = legendReservesPlotSpace && legendRight
-            ? Math.Min(90, bounds.Width * 0.20)
+            ? UsesImportedTextMetrics(chart)
+                ? family == ChartRenderFamily.Pie
+                    ? Math.Min(137, bounds.Width * 0.12)
+                    : Math.Min(120, bounds.Width * 0.11)
+                : Math.Min(90, bounds.Width * 0.20)
             : 0;
         double legendAreaHeight = legendReservesPlotSpace && !legendRight
-            ? LegendHeight + Margin
+            ? legendLineHeight + margin
             : 0;
 
-        var family = GetRenderFamily(chart.ChartType);
         bool reservesAxes = family is not (ChartRenderFamily.Pie
             or ChartRenderFamily.ScatterLike
             or ChartRenderFamily.Radar);
@@ -707,26 +748,26 @@ public static partial class ChartRenderPlanner
         bool hasValueAxisTitle = reservesAxes &&
             !chart.ValueAxis.Delete &&
             !string.IsNullOrWhiteSpace(chart.ValueAxis.Title);
-        bool hasSecondaryValueAxis = reservesAxes &&
-            !isBar &&
-            chart.SecondaryValueAxis is { Delete: false };
+        hasSecondaryValueAxis = hasSecondaryValueAxis && !isBar;
         bool hasSecondaryValueAxisTitle = hasSecondaryValueAxis &&
             !string.IsNullOrWhiteSpace(chart.SecondaryValueAxis?.Title);
         double secondaryAxisAreaWidth = hasSecondaryValueAxis
-            ? AxisLabelWidth + (hasSecondaryValueAxisTitle ? SecondaryAxisTitleGap + AxisTitleBand : 0)
+            ? UsesImportedTextMetrics(chart)
+                ? 104.0
+                : axisLabelWidth + (hasSecondaryValueAxisTitle ? SecondaryAxisTitleGap + AxisTitleBand : 0)
             : 0;
         bool hasDataTable = HasSupportedDataTable(chart, family);
         double categoryBandHeight = hasDataTable
             ? ComputeDataTableReservedHeight(chart)
-            : CategoryLabelHeight;
-        double plotLeft = bounds.X + Margin
-            + (reservesAxes ? (isBar ? BarCategoryLabelWidth : AxisLabelWidth) : 0)
+            : categoryLabelHeight;
+        double plotLeft = bounds.X + margin
+            + (reservesAxes ? (isBar ? barCategoryLabelWidth : axisLabelWidth) : 0)
             + (hasValueAxisTitle && !isBar ? AxisTitleBand : 0)
             + (hasCategoryAxisTitle && isBar ? AxisTitleBand : 0);
-        double plotTop = bounds.Y + Margin + titleAreaHeight;
-        double plotRight = bounds.X + bounds.Width - Margin - legendAreaWidth - secondaryAxisAreaWidth;
-        double plotBottom = bounds.Y + bounds.Height - Margin - legendAreaHeight
-            - (reservesAxes ? (isBar ? AxisLabelWidth : categoryBandHeight) : 0)
+        double plotTop = bounds.Y + margin + titleAreaHeight;
+        double plotRight = bounds.X + bounds.Width - margin - legendAreaWidth - secondaryAxisAreaWidth;
+        double plotBottom = bounds.Y + bounds.Height - margin - legendAreaHeight
+            - (reservesAxes ? (isBar ? axisLabelWidth : categoryBandHeight) : 0)
             - (hasValueAxisTitle && isBar ? AxisTitleBand : 0)
             - (hasCategoryAxisTitle && !isBar ? AxisTitleBand : 0);
 
@@ -748,10 +789,10 @@ public static partial class ChartRenderPlanner
             plot = manualPlot;
         ChartPlanRect? titleBounds = chart.Title is not null
             ? new ChartPlanRect(
-                bounds.X + Margin,
-                bounds.Y + Margin,
-                bounds.Width - 2 * Margin,
-                TitleHeight)
+                bounds.X + margin,
+                bounds.Y + margin,
+                bounds.Width - 2 * margin,
+                titleHeight)
             : null;
         return new ChartFramePlan(
             bounds,
@@ -805,7 +846,8 @@ public static partial class ChartRenderPlanner
                     ? chart.Series[0].Values.Count
                     : 0
             : chart.Series.Count;
-        int maxItems = (int)Math.Max(1, verticalLegend ? legendBounds.Height / LegendHeight : legendWidth / 80);
+        double legendLineHeight = ResolveLegendLineHeight(chart);
+        int maxItems = (int)Math.Max(1, verticalLegend ? legendBounds.Height / legendLineHeight : legendWidth / 80);
         int itemsToShow = Math.Min(itemCount, maxItems);
         if (itemsToShow == 0)
             return Array.Empty<ChartLegendItemPlan>();
@@ -814,7 +856,7 @@ public static partial class ChartRenderPlanner
         for (int itemIndex = 0; itemIndex < itemsToShow; itemIndex++)
         {
             double itemX = verticalLegend ? legendBounds.X : legendBounds.X + itemIndex * 80.0;
-            double itemY = verticalLegend ? legendBounds.Y + itemIndex * LegendHeight : legendBounds.Y;
+            double itemY = verticalLegend ? legendBounds.Y + itemIndex * legendLineHeight : legendBounds.Y;
             double textWidth = verticalLegend
                 ? Math.Max(0, legendWidth - 10)
                 : Math.Min(70, Math.Max(0, legendBounds.Right - itemX - 10));
@@ -831,12 +873,15 @@ public static partial class ChartRenderPlanner
                 new ChartPlanRect(itemX, itemY + 3, 8, 8),
                 new ChartTextPlan(
                     text,
-                    new ChartPlanRect(itemX + 10, itemY, textWidth, LegendHeight),
+                    new ChartPlanRect(itemX + 10, itemY, textWidth, legendLineHeight),
                     IsBold: false,
-                    FontSize: 7.0,
+                    FontSize: ResolveTextFontSize(chart, 7.0),
                     Alignment: ChartPlanTextAlignment.Left),
                 fillPlans is not null
-                    ? ResolveSeriesFill(itemIndex, seriesColors, alpha: 255, fillPlans)
+                    ? frame.IsPie
+                        ? ResolvePointFill(chart.Series[0], 0, itemIndex, seriesColors, alpha: 255, fillPlans,
+                            ShouldVaryPointColors(chart))
+                        : ResolveSeriesFill(itemIndex, seriesColors, alpha: 255, fillPlans)
                     : new ChartFillPlan(color, Alpha: 255)));
         }
 
@@ -854,9 +899,25 @@ public static partial class ChartRenderPlanner
             double legendAreaWidth = frame.LegendAreaWidth > 0
                 ? frame.LegendAreaWidth
                 : Math.Min(90, frame.Bounds.Width * 0.20);
-            double legendWidth = Math.Max(0, legendAreaWidth - Margin / 2);
+            bool importedTextMetrics = UsesImportedTextMetrics(chart);
+            if (importedTextMetrics && chart.SecondaryValueAxis is { Delete: false })
+            {
+                double legendX = Math.Min(frame.Bounds.Right, plot.Right + 50.0);
+                return new ChartPlanRect(
+                    legendX,
+                    plot.Y,
+                    Math.Max(0, frame.Bounds.Right - legendX),
+                    plot.Height);
+            }
+
+            double legendInset = importedTextMetrics
+                ? frame.IsPie ? 0.0 : Math.Min(6.0, legendAreaWidth * 0.05)
+                : Margin / 2;
+            double legendWidth = Math.Max(0, legendAreaWidth - legendInset);
             return new ChartPlanRect(
-                frame.Bounds.X + frame.Bounds.Width - legendAreaWidth - Margin / 2,
+                importedTextMetrics
+                    ? frame.Bounds.X + frame.Bounds.Width - legendAreaWidth + legendInset
+                    : frame.Bounds.X + frame.Bounds.Width - legendAreaWidth - legendInset,
                 plot.Y,
                 legendWidth,
                 plot.Height);
@@ -864,12 +925,12 @@ public static partial class ChartRenderPlanner
 
         double legendAreaHeight = frame.LegendAreaHeight > 0
             ? frame.LegendAreaHeight
-            : LegendHeight + Margin;
+            : ResolveLegendLineHeight(chart) + ResolveFrameMargin(chart);
         return new ChartPlanRect(
             plot.X,
             frame.Bounds.Y + frame.Bounds.Height - legendAreaHeight - Margin / 2,
             plot.Width,
-            LegendHeight);
+            ResolveLegendLineHeight(chart));
     }
 
     private static bool TryResolveManualLayoutRect(
@@ -1013,9 +1074,9 @@ public static partial class ChartRenderPlanner
                 double y = plot.Y + renderRow * categoryStep;
                 labels.Add(new ChartTextPlan(
                     FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
-                    new ChartPlanRect(plot.X - BarCategoryLabelWidth, y, BarCategoryLabelWidth - 4, categoryStep),
+                    new ChartPlanRect(plot.X - ResolveBarCategoryLabelWidth(chart), y, ResolveBarCategoryLabelWidth(chart) - 4, categoryStep),
                     IsBold: false,
-                    FontSize: 6.5,
+                    FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Right,
                     AxisLabelFormat: BuildAxisLabelFormatPlan(chart.CategoryAxis)));
             }
@@ -1028,9 +1089,9 @@ public static partial class ChartRenderPlanner
                 double x = plot.X + categoryIndex * categoryStep;
                 labels.Add(new ChartTextPlan(
                     FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
-                    new ChartPlanRect(x, plot.Bottom + 2, categoryStep, CategoryLabelHeight),
+                    new ChartPlanRect(x, plot.Bottom + 2, categoryStep, ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
-                    FontSize: 7.0,
+                    FontSize: ResolveTextFontSize(chart, 7.0),
                     Alignment: ChartPlanTextAlignment.Center,
                     AxisLabelFormat: BuildAxisLabelFormatPlan(chart.CategoryAxis)));
             }
@@ -1062,9 +1123,9 @@ public static partial class ChartRenderPlanner
                 double x = plot.X + plot.Width * tickIndex / steps;
                 labels.Add(new ChartTextPlan(
                     FormatAxisValue(value, chart.ValueAxis.NumberFormatCode),
-                    new ChartPlanRect(x - AxisLabelWidth / 2, plot.Bottom + 2, AxisLabelWidth, CategoryLabelHeight),
+                    new ChartPlanRect(x - ResolveAxisLabelWidth(chart) / 2, plot.Bottom + 2, ResolveAxisLabelWidth(chart), ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
-                    FontSize: 6.5,
+                    FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Center,
                     AxisLabelFormat: BuildAxisLabelFormatPlan(chart.ValueAxis)));
             }
@@ -1073,9 +1134,9 @@ public static partial class ChartRenderPlanner
                 double y = plot.Bottom - plot.Height * tickIndex / steps;
                 labels.Add(new ChartTextPlan(
                     FormatAxisValue(value, chart.ValueAxis.NumberFormatCode),
-                    new ChartPlanRect(plot.X - AxisLabelWidth, y - 6, AxisLabelWidth - GridlinePad, 12),
+                    new ChartPlanRect(plot.X - ResolveAxisLabelWidth(chart), y - 6, ResolveAxisLabelWidth(chart) - GridlinePad, ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
-                    FontSize: 6.5,
+                    FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Right,
                     AxisLabelFormat: BuildAxisLabelFormatPlan(chart.ValueAxis)));
             }
@@ -1428,9 +1489,9 @@ public static partial class ChartRenderPlanner
                 new ChartPlanPoint(plot.Right + AxisMajorTickLength, y)));
             labels.Add(new ChartTextPlan(
                 FormatAxisValue(value, chart.SecondaryValueAxis.NumberFormatCode),
-                new ChartPlanRect(labelX, y - 6, labelWidth, 12),
+                new ChartPlanRect(labelX, y - 6, labelWidth, UsesImportedTextMetrics(chart) ? 32.0 : 12.0),
                 IsBold: false,
-                FontSize: 6.5,
+                FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Left,
                 AxisLabelFormat: BuildAxisLabelFormatPlan(chart.SecondaryValueAxis)));
         }
@@ -3179,9 +3240,9 @@ public static partial class ChartRenderPlanner
             double labelY = center.Y + (radius + 6) * Math.Sin(angle);
             labels.Add(new ChartTextPlan(
                 chart.Categories[categoryIndex],
-                new ChartPlanRect(labelX - 20, labelY - 6, 40, 12),
+                new ChartPlanRect(labelX - 20, labelY - 6, 40, ResolveCategoryLabelHeight(chart)),
                 IsBold: false,
-                FontSize: 6.5,
+                FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Center));
         }
 
@@ -4545,7 +4606,7 @@ public static partial class ChartRenderPlanner
                 text,
                 PlanScatterDataLabelBounds(point.Value, labels.Position ?? DataLabelPosition.Above),
                 IsBold: false,
-                FontSize: 6.5,
+                FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Center));
         }
 
@@ -4692,7 +4753,7 @@ public static partial class ChartRenderPlanner
             if (string.IsNullOrEmpty(text))
                 continue;
 
-            const double labelHeight = 11.0;
+            double labelHeight = ResolveDataLabelHeight(chart);
             double labelY = value < 0
                 ? position switch
                 {
@@ -4709,13 +4770,19 @@ public static partial class ChartRenderPlanner
                     _ => barY - labelHeight - 1
                 };
 
+            double labelWidth = UsesImportedTextMetrics(chart)
+                ? Math.Max(50.0, slot.SeriesSize)
+                : slot.SeriesSize;
+            double labelX = UsesImportedTextMetrics(chart)
+                ? barX + slot.SeriesSize / 2.0 - labelWidth / 2.0
+                : barX;
             plans.Add(new ChartDataLabelPlan(
                 seriesIndex,
                 categoryIndex,
                 text,
-                new ChartPlanRect(barX, labelY, slot.SeriesSize, labelHeight),
+                new ChartPlanRect(labelX, labelY, labelWidth, labelHeight),
                 IsBold: false,
-                FontSize: 6.5,
+                FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Center));
         }
 
@@ -4770,9 +4837,9 @@ public static partial class ChartRenderPlanner
                 seriesIndex,
                 categoryIndex,
                 text,
-                new ChartPlanRect(x - 20, y - 14, 40, 11),
+                new ChartPlanRect(x - 20, y - ResolveDataLabelHeight(chart) - 3, 40, ResolveDataLabelHeight(chart)),
                 IsBold: false,
-                FontSize: 6.5,
+                FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Center));
         }
 
@@ -4877,7 +4944,7 @@ public static partial class ChartRenderPlanner
             if (string.IsNullOrEmpty(text))
                 continue;
 
-            const double labelHeight = 11.0;
+            double labelHeight = ResolveDataLabelHeight(chart);
             double labelX = position switch
             {
                 DataLabelPosition.InsideEnd => barX + barWidth - 22 - 2,
@@ -4893,7 +4960,7 @@ public static partial class ChartRenderPlanner
                 text,
                 new ChartPlanRect(labelX, labelY, 44, labelHeight),
                 IsBold: false,
-                FontSize: 6.5,
+                FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Center));
         }
 
@@ -4943,9 +5010,9 @@ public static partial class ChartRenderPlanner
                     SeriesIndex: 0,
                     CategoryIndex: visibleValue.PointIndex,
                     Text: text,
-                    Bounds: new ChartPlanRect(labelX - 22, labelY - 6, 44, 12),
+                    Bounds: new ChartPlanRect(labelX - 32, labelY - ResolveDataLabelHeight(chart) / 2, 64, ResolveDataLabelHeight(chart)),
                     IsBold: false,
-                    FontSize: 6.5,
+                    FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Center));
             }
 

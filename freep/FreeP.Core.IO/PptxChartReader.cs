@@ -46,6 +46,7 @@ internal static class PptxChartReader
         if (chartEl is null) return null;
 
         var shape = new ChartShape();
+        shape.TextStyle = ReadChartTextStyle(chartSpace.Element(C + "txPr"), scheme);
 
         // Title
         shape.Title = ReadTitle(chartEl.Element(C + "title"));
@@ -636,10 +637,14 @@ internal static class PptxChartReader
         series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
         series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
 
-        // Fall back to theme accent cycle
+        // Fall back to the OOXML series index in the theme accent cycle. Combo-chart
+        // plot groups can arrive out of visual order, so the group-local index would
+        // restart the palette and assign a duplicate color.
         if (series.FillColor is null)
         {
-            var slot = AccentSlots[seriesIndex % AccentSlots.Length];
+            int fallbackIndex = ParseNullableInt(serEl.Element(C + "idx")?.Attribute("val")?.Value)
+                ?? seriesIndex;
+            var slot = AccentSlots[Math.Abs(fallbackIndex) % AccentSlots.Length];
             series.FillColor = new ThemeAwareColor(
                 new SrgbColor(0x4F, 0x81, 0xBD),
                 new SchemeColorRef { Slot = slot, LumMod = 1.0, LumOff = 0.0 });
@@ -685,10 +690,13 @@ internal static class PptxChartReader
             series.MarkerStyle = ReadMarkerStyle(serEl.Element(C + "marker"), scheme);
             series.SmoothLine = ParseNullableBoolElement(serEl.Element(C + "smooth"));
 
-            // Fall back to theme accent cycle if no explicit color
+            // Combo-chart plot groups can arrive out of visual order. Use c:idx
+            // rather than the group-local position so their theme accent is stable.
             if (series.FillColor is null)
             {
-                var slot = AccentSlots[seriesIndex % AccentSlots.Length];
+                int fallbackIndex = ParseNullableInt(serEl.Element(C + "idx")?.Attribute("val")?.Value)
+                    ?? seriesIndex;
+                var slot = AccentSlots[Math.Abs(fallbackIndex) % AccentSlots.Length];
                 series.FillColor = new ThemeAwareColor(
                     new SrgbColor(0x4F, 0x81, 0xBD),  // sRGB fallback
                     new SchemeColorRef { Slot = slot, LumMod = 1.0, LumOff = 0.0 });
@@ -1202,8 +1210,12 @@ internal static class PptxChartReader
 
     private static ChartTextStyle? ReadDataTableTextStyle(XElement dTableEl, PresentationColorScheme scheme)
     {
-        var defRPr = dTableEl
-            .Element(C + "txPr")
+        return ReadChartTextStyle(dTableEl.Element(C + "txPr"), scheme);
+    }
+
+    private static ChartTextStyle? ReadChartTextStyle(XElement? txPrEl, PresentationColorScheme scheme)
+    {
+        var defRPr = txPrEl
             ?.Element(A + "p")
             ?.Element(A + "pPr")
             ?.Element(A + "defRPr");

@@ -400,6 +400,13 @@ public sealed class ChartShape
     /// <summary>Chart title text, or null if no title.</summary>
     public string? Title { get; set; }
 
+    /// <summary>
+    /// Default chart text properties from <c>c:chartSpace/c:txPr</c>. These apply to
+    /// chart-owned text such as axes, legends, and data labels when no more-specific
+    /// text properties are authored.
+    /// </summary>
+    public ChartTextStyle? TextStyle { get; set; }
+
     /// <summary>Category labels, one per data point position.</summary>
     public List<string> Categories { get; } = new();
 

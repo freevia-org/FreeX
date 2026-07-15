@@ -332,6 +332,22 @@ public sealed class ChartRenderPlannerTests
         plan.Plot.Should().Be(new ChartPlanRect(52, 8, 340, 244));
     }
 
+    [Fact]
+    public void BuildFramePlan_ImportedChartTextStyle_UsesPowerPointSizedSpacing()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            Legend = LegendPosition.Right,
+            TextStyle = new ChartTextStyle { FontSizePt = 18.0 }
+        };
+
+        var plan = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(80, 73, 1146, 613));
+
+        plan.Plot.Should().Be(new ChartPlanRect(148, 93, 938, 541));
+        ChartRenderPlanner.ResolveTextFontSize(chart, 6.5).Should().Be(18.0);
+    }
+
     [Theory]
     [InlineData(ChartType.Stock)]
     [InlineData(ChartType.Surface)]
@@ -1022,6 +1038,35 @@ public sealed class ChartRenderPlannerTests
         items[1].SwatchBounds.Should().Be(new ChartPlanRect(316, 25, 8, 8));
         items[1].Label.Text.Should().Be("Point 2");
         items[1].Fill.Should().Be(new ChartFillPlan(new SrgbColor(0x4F, 0x81, 0xBD), Alpha: 255));
+    }
+
+    [Fact]
+    public void BuildLegendItemPlans_VaryColorPie_UsesPerPointFillPlans()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 1, 2 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            Legend = LegendPosition.Right,
+            VaryColors = true
+        };
+        chart.Series.Add(series);
+        var first = new SrgbColor(0x10, 0x20, 0x30);
+        var second = new SrgbColor(0x40, 0x50, 0x60);
+        var fills = new ChartFillPlanSet
+        {
+            PointFills = new Dictionary<ChartFillKey, ChartFillPlan>
+            {
+                [new ChartFillKey(0, 0)] = new ChartFillPlan(first, 255),
+                [new ChartFillKey(0, 1)] = new ChartFillPlan(second, 255)
+            }
+        };
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        var items = ChartRenderPlanner.BuildLegendItemPlans(chart, frame, new[] { first, second }, fills);
+
+        items.Select(item => item.Fill.Color).Should().Equal(first, second);
     }
 
     [Fact]

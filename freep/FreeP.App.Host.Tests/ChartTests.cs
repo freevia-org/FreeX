@@ -1422,6 +1422,29 @@ public sealed class ChartTests : IDisposable
             imported.Should().Contain(false, $"{deckName} should expose authored c:varyColors val=0/default");
     }
 
+    [Fact]
+    public void RenderCompareChartCorpus_ImportsDefaultTextStyleAndComboColorsBySeriesIndex()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
+        var charts = PptxPackageReader.Read(deckPath)
+            .Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .ToArray();
+
+        var textStyles = charts.Select(chart => chart.TextStyle).ToArray();
+        textStyles.Should().NotContainNulls();
+        textStyles.Cast<ChartTextStyle>().Select(style => style.FontSizePt)
+            .Should().OnlyContain(fontSize => fontSize == 18.0);
+        var combo = charts.Should().ContainSingle(chart =>
+            chart.Series.Any(series => series.Name == "Units")).Subject;
+        combo.Series.Select(series => series.FillColor!.SchemeColor!.Slot).Should().Equal(
+            ThemeColorSlot.Accent1,
+            ThemeColorSlot.Accent3,
+            ThemeColorSlot.Accent2);
+    }
+
     private static readonly XNamespace ChartNs =
         "http://schemas.openxmlformats.org/drawingml/2006/chart";
     private static readonly XNamespace DrawingNs =

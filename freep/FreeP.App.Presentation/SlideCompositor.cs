@@ -768,13 +768,14 @@ public static class SlideCompositor
         if (pieLike && chart.Series.Count > 0)
         {
             var firstSeries = chart.Series[0];
+            bool varyPointColors = chart.VaryColors;
             for (int pointIndex = 0; pointIndex < seriesColors.Count; pointIndex++)
             {
                 var pointFill = GetPointFill(firstSeries, pointIndex);
                 var pointColor = GetPointFillColor(firstSeries, pointIndex);
                 var fill = ResolveChartFillPlan(
-                    pointFill ?? firstSeries.Fill,
-                    pointColor ?? firstSeries.FillColor,
+                    pointFill ?? (varyPointColors ? null : firstSeries.Fill),
+                    pointColor ?? (varyPointColors ? null : firstSeries.FillColor),
                     seriesColors[pointIndex],
                     theme,
                     effectiveClrMap);

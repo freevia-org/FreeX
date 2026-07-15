@@ -96,7 +96,8 @@ internal static class PptxChartWriter
                     legendEl,
                     new XElement(C + "plotVisOnly", new XAttribute("val", "1")),
                     BuildDisplayBlanksAsEl(chart),
-                    BuildShowDataLabelsOverMaximumEl(chart))));
+                    BuildShowDataLabelsOverMaximumEl(chart)),
+                BuildChartTextPropertiesEl(chart.TextStyle)));
     }
 
     private static XElement BuildTitleEl(string title) =>
@@ -580,7 +581,7 @@ internal static class PptxChartWriter
             new XElement(C + "showOutline",    new XAttribute("val", BoolValue(dataTable.ShowOutlineBorder))),
             new XElement(C + "showKeys",       new XAttribute("val", BoolValue(dataTable.ShowLegendKeys))),
             BuildDataTableShapePropertiesEl(dataTable.BackgroundFill, dataTable.BorderOutline),
-            BuildDataTableTextPropertiesEl(dataTable.TextStyle));
+            BuildChartTextPropertiesEl(dataTable.TextStyle));
     }
 
     private static XElement? BuildDataTableShapePropertiesEl(ShapeFill? fill, ShapeOutline? outline)
@@ -687,9 +688,9 @@ internal static class PptxChartWriter
         return new XElement(A + "gradFill", gsLst, kindEl);
     }
 
-    private static XElement? BuildDataTableTextPropertiesEl(ChartTextStyle? style)
+    private static XElement? BuildChartTextPropertiesEl(ChartTextStyle? style)
     {
-        var defRPr = BuildDataTableDefaultRunPropertiesEl(style);
+        var defRPr = BuildChartDefaultRunPropertiesEl(style);
         if (defRPr is null)
             return null;
 
@@ -701,7 +702,7 @@ internal static class PptxChartWriter
                 new XElement(A + "endParaRPr")));
     }
 
-    private static XElement? BuildDataTableDefaultRunPropertiesEl(ChartTextStyle? style)
+    private static XElement? BuildChartDefaultRunPropertiesEl(ChartTextStyle? style)
     {
         if (style is null)
             return null;

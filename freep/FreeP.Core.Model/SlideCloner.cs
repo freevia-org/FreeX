@@ -114,6 +114,7 @@ public static class SlideCloner
         {
             ChartType    = src.ChartType,
             Title        = src.Title,
+            TextStyle    = CloneChartTextStyle(src.TextStyle),
             Legend       = src.Legend,
             CategoryAxis = CloneChartAxis(src.CategoryAxis),
             ValueAxis    = CloneChartAxis(src.ValueAxis),
