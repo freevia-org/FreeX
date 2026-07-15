@@ -10484,6 +10484,7 @@ public sealed class DocumentView : RichTextBox
         bool ShowAxisTitles,
         string? CategoryAxisTitle,
         string? ValueAxisTitle,
+        ChartValueAxisPlan ValueAxis,
         Color[] Palette);
 
     /// <summary>Resolves the effective render settings for a chart from its three gallery ids.</summary>
@@ -10502,6 +10503,7 @@ public sealed class DocumentView : RichTextBox
             plan.ShowAxisTitles,
             plan.CategoryAxisTitle,
             plan.ValueAxisTitle,
+            plan.ValueAxis,
             plan.PaletteHex.Select(ParseHexColor).ToArray());
     }
 
@@ -10629,15 +10631,6 @@ public sealed class DocumentView : RichTextBox
         return n;
     }
 
-    private static double ChartMax(Chart chart)
-    {
-        var max = 0.0;
-        foreach (var s in chart.Series)
-            foreach (var v in s.Values)
-                max = Math.Max(max, v);
-        return Math.Max(1.0, max);
-    }
-
     /// <summary>A centred horizontal legend: a colour swatch + label per series (or per slice for pie).</summary>
     private static FrameworkElement BuildChartLegend(Chart chart, Color[] palette)
     {
@@ -10707,18 +10700,19 @@ public sealed class DocumentView : RichTextBox
         if (cats == 0 || chart.Series.Count == 0)
             return;
         var seriesCount = chart.Series.Count;
-        var max = ChartMax(chart);
+        var axis = settings.ValueAxis;
 
         if (!horizontal)
         {
             const double labelStrip = 14;
             var plotH = Math.Max(8, h - labelStrip);
+            var zeroY = plotH - axis.ZeroFraction * plotH;
             var groupW = w / cats;
             var gap = groupW * 0.15;
             var barW = Math.Max(1, (groupW - 2 * gap) / seriesCount);
             if (settings.ShowGridlines)
                 DrawChartGridlines(plot, plotH, w);
-            plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
+            plot.Children.Add(ChartAxisLine(0, zeroY, w, zeroY));
             for (var c = 0; c < cats; c++)
             {
                 for (var s = 0; s < seriesCount; s++)
@@ -10726,9 +10720,9 @@ public sealed class DocumentView : RichTextBox
                     var vals = chart.Series[s].Values;
                     if (c >= vals.Count)
                         continue;
-                    var barH = plotH * (Math.Max(0, vals[c]) / max);
+                    var barH = plotH * Math.Abs(axis.ValueFraction(vals[c]));
                     var rectLeft = c * groupW + gap + s * barW;
-                    var rectTop = plotH - barH;
+                    var rectTop = vals[c] >= 0 ? zeroY - barH : zeroY;
                     var rect = new System.Windows.Shapes.Rectangle
                     {
                         Width = barW * 0.92,
@@ -10739,7 +10733,8 @@ public sealed class DocumentView : RichTextBox
                     Canvas.SetTop(rect, rectTop);
                     plot.Children.Add(rect);
                     if (settings.ShowDataLabels)
-                        AddDataLabel(plot, vals[c], rectLeft, Math.Max(0, rectTop - 12));
+                        AddDataLabel(plot, vals[c], rectLeft,
+                            vals[c] >= 0 ? Math.Max(0, rectTop - 12) : Math.Min(plotH - 12, rectTop + barH + 2));
                 }
                 AddCategoryLabel(plot, chart, c, c * groupW, plotH + 1, groupW, System.Windows.TextAlignment.Center);
             }
@@ -10748,10 +10743,11 @@ public sealed class DocumentView : RichTextBox
         {
             const double gutter = 42;
             var plotW = Math.Max(8, w - gutter);
+            var zeroX = gutter + axis.ZeroFraction * plotW;
             var groupH = h / cats;
             var gap = groupH * 0.15;
             var barH = Math.Max(1, (groupH - 2 * gap) / seriesCount);
-            plot.Children.Add(ChartAxisLine(gutter, 0, gutter, h));
+            plot.Children.Add(ChartAxisLine(zeroX, 0, zeroX, h));
             for (var c = 0; c < cats; c++)
             {
                 for (var s = 0; s < seriesCount; s++)
@@ -10759,19 +10755,21 @@ public sealed class DocumentView : RichTextBox
                     var vals = chart.Series[s].Values;
                     if (c >= vals.Count)
                         continue;
-                    var barW = plotW * (Math.Max(0, vals[c]) / max);
+                    var barW = plotW * Math.Abs(axis.ValueFraction(vals[c]));
                     var barTop = c * groupH + gap + s * barH;
+                    var barLeft = vals[c] >= 0 ? zeroX : zeroX - barW;
                     var rect = new System.Windows.Shapes.Rectangle
                     {
                         Width = Math.Max(1, barW),
                         Height = barH * 0.92,
                         Fill = new SolidColorBrush(settings.Palette[s % settings.Palette.Length])
                     };
-                    Canvas.SetLeft(rect, gutter);
+                    Canvas.SetLeft(rect, barLeft);
                     Canvas.SetTop(rect, barTop);
                     plot.Children.Add(rect);
                     if (settings.ShowDataLabels)
-                        AddDataLabel(plot, vals[c], gutter + barW + 2, barTop);
+                        AddDataLabel(plot, vals[c],
+                            vals[c] >= 0 ? barLeft + barW + 2 : Math.Max(gutter, barLeft - 18), barTop);
                 }
                 AddCategoryLabel(plot, chart, c, 0, c * groupH + groupH / 2 - 7, gutter - 3, System.Windows.TextAlignment.Right);
             }
@@ -10784,12 +10782,13 @@ public sealed class DocumentView : RichTextBox
         var cats = ChartCategoryCount(chart);
         if (cats == 0 || chart.Series.Count == 0)
             return;
-        var max = ChartMax(chart);
+        var axis = settings.ValueAxis;
         const double labelStrip = 14;
         var plotH = Math.Max(8, h - labelStrip);
         if (settings.ShowGridlines)
             DrawChartGridlines(plot, plotH, w);
-        plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
+        var zeroY = plotH - axis.ZeroFraction * plotH;
+        plot.Children.Add(ChartAxisLine(0, zeroY, w, zeroY));
 
         double X(int c) => cats == 1 ? w / 2 : (c + 0.5) * (w / cats);
 
@@ -10806,7 +10805,7 @@ public sealed class DocumentView : RichTextBox
             for (var c = 0; c < vals.Count; c++)
             {
                 var px = X(c);
-                var py = plotH - plotH * (Math.Max(0, vals[c]) / max);
+                var py = plotH - plotH * axis.ValueFraction(vals[c]);
                 poly.Points.Add(new System.Windows.Point(px, py));
                 // Markers (Style 4/7/8): small filled circle at each data point.
                 if (settings.ShowMarkers)
@@ -10844,7 +10843,9 @@ public sealed class DocumentView : RichTextBox
         var plotH = Math.Max(8, h - labelStrip);
         if (settings.ShowGridlines)
             DrawChartGridlines(plot, plotH, w);
-        plot.Children.Add(ChartAxisLine(0, plotH, w, plotH));
+        var axis = settings.ValueAxis;
+        var zeroY = plotH - axis.ZeroFraction * plotH;
+        plot.Children.Add(ChartAxisLine(0, zeroY, w, zeroY));
 
         // Determine X range from categories (numeric) or fall back to 1..N.
         var xVals = chart.Categories
@@ -10855,15 +10856,12 @@ public sealed class DocumentView : RichTextBox
         var xMax = xVals.Where(v => !double.IsNaN(v)).DefaultIfEmpty(1).Max();
         if (xMax <= xMin) xMax = xMin + 1;
 
-        var yMax = chart.Series.SelectMany(s => s.Values).DefaultIfEmpty(1).Max();
-        yMax = Math.Max(1.0, yMax);
-
         double Px(int c)
         {
             var xv = c < xVals.Count && !double.IsNaN(xVals[c]) ? xVals[c] : c + 1;
             return (xv - xMin) / (xMax - xMin) * w;
         }
-        double Py(double val) => plotH - plotH * (Math.Max(0, val) / yMax);
+        double Py(double val) => plotH - plotH * axis.ValueFraction(val);
 
         const double markerR = 4; // radius in pixels
 

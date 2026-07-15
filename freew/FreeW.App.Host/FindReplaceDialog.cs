@@ -5,9 +5,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
+using FreeW.App.Presentation.Dialogs;
 using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
-using TextSearch = FreeW.Core.Model.TextSearch;
 
 namespace FreeW.App.Host;
 
@@ -23,9 +23,9 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
     private readonly DocumentView _editor;
     private readonly TextBox _findBox = new() { MinWidth = 220 };
     private readonly TextBox _replaceBox = new() { MinWidth = 220 };
-    private readonly CheckBox _matchCase = new() { Content = "Match case", Margin = new Thickness(0, 6, 0, 0) };
-    private readonly CheckBox _wholeWord = new() { Content = "Whole word", Margin = new Thickness(0, 4, 0, 0) };
-    private readonly CheckBox _useWildcards = new() { Content = "Use wildcards  (* ? [ ] < >)", Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _matchCase = new() { Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.MatchCase), Margin = new Thickness(0, 6, 0, 0) };
+    private readonly CheckBox _wholeWord = new() { Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.WholeWord), Margin = new Thickness(0, 4, 0, 0) };
+    private readonly CheckBox _useWildcards = new() { Content = FindReplaceDialogPlanner.LabelFor(FindReplaceOptionKind.UseWildcards), Margin = new Thickness(0, 4, 0, 0) };
     private readonly ComboBox _goToTarget = new() { MinWidth = 220, Margin = new Thickness(0, 6, 0, 0) };
     private readonly TextBlock _status = new() { Foreground = Brushes.Gray, Margin = new Thickness(0, 6, 0, 0) };
 
@@ -76,8 +76,9 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         grid.Children.Add(_useWildcards);
 
         // "Use Wildcards" disables "Whole word" (incompatible, mirrors Word).
-        _useWildcards.Checked += (_, _) => _wholeWord.IsEnabled = false;
-        _useWildcards.Unchecked += (_, _) => _wholeWord.IsEnabled = true;
+        _useWildcards.Checked += (_, _) => ApplyOptionPolicy();
+        _useWildcards.Unchecked += (_, _) => ApplyOptionPolicy();
+        ApplyOptionPolicy();
 
         // Special ▾ button — inserts a special character into whichever box last had focus.
         var specialButton = BuildSpecialButton();
@@ -246,56 +247,68 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
         return button;
     }
 
-    private bool MatchCase => _matchCase.IsChecked == true;
-
-    private bool WholeWord => _wholeWord.IsChecked == true;
-
-    private bool UseWildcards => _useWildcards.IsChecked == true;
-
     private void FindNext()
     {
-        var term = _findBox.Text;
-        if (term.Length == 0)
+        if (!FindReplaceDialogPlanner.TryCreateSearchRequest(
+                _findBox.Text,
+                CurrentOptions(),
+                out var request,
+                out var error))
+        {
+            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
             return;
+        }
 
         var start = _editor.Selection.IsEmpty ? _editor.CaretPosition : _editor.Selection.End;
-        if (!SelectFrom(start, term) && !SelectFrom(_editor.Document.ContentStart, term))
-            _status.Text = $"\"{term}\" not found.";
-        else
-            _status.Text = string.Empty;
+        var found = SelectFrom(start, request!) || SelectFrom(_editor.Document.ContentStart, request!);
+        _status.Text = FindReplaceDialogPlanner.BuildFindStatus(request!, found);
     }
 
     private void Replace()
     {
-        var term = _findBox.Text;
-        if (term.Length > 0 && !_editor.Selection.IsEmpty && IsTermSelected(term))
+        if (!FindReplaceDialogPlanner.TryCreateReplaceRequest(
+                _findBox.Text,
+                _replaceBox.Text,
+                CurrentOptions(),
+                out var request,
+                out var error))
         {
-            _editor.Selection.Text = _replaceBox.Text;
+            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
+            return;
         }
-        FindNext();
+
+        var replaced = !_editor.Selection.IsEmpty && IsTermSelected(request!);
+        if (replaced)
+        {
+            _editor.Selection.Text = request!.Replacement;
+        }
+
+        var searchRequest = new FindReplaceSearchRequest(request!.Term, request.Options);
+        var start = _editor.Selection.IsEmpty ? _editor.CaretPosition : _editor.Selection.End;
+        var found = SelectFrom(start, searchRequest)
+            || SelectFrom(_editor.Document.ContentStart, searchRequest);
+        _status.Text = FindReplaceDialogPlanner.BuildReplaceStatus(request!, found);
     }
 
     // True when the current selection is exactly an occurrence of term under the active match options.
-    private bool IsTermSelected(string term)
-    {
-        var selected = _editor.Selection.Text;
-        if (UseWildcards)
-        {
-            // In wildcard mode we check whether the selected text matches the pattern.
-            return TextSearch.FindAll(selected, term, MatchCase, wholeWord: false, useWildcards: true)
-                             .Any(m => m.Start == 0 && m.Length == selected.Length);
-        }
-        if (selected.Length != term.Length)
-            return false;
-        var comparison = MatchCase ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-        return string.Equals(selected, term, comparison);
-    }
+    private bool IsTermSelected(FindReplaceReplaceRequest request) =>
+        FindReplaceDialogPlanner.MatchesExactly(
+            _editor.Selection.Text,
+            request.Term,
+            request.Options);
 
     private void ReplaceAll()
     {
-        var term = _findBox.Text;
-        if (term.Length == 0)
+        if (!FindReplaceDialogPlanner.TryCreateReplaceRequest(
+                _findBox.Text,
+                _replaceBox.Text,
+                CurrentOptions(),
+                out var request,
+                out var error))
+        {
+            _status.Text = FindReplaceDialogPlanner.ValidationMessageFor(error);
             return;
+        }
 
         // Restrict to the current selection when there is one; otherwise sweep the whole document.
         var restrictToSelection = !_editor.Selection.IsEmpty;
@@ -305,25 +318,25 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
         var count = 0;
         var pointer = from;
-        while (TryFind(pointer, term, out var matchStart, out var matchEnd))
+        var searchRequest = new FindReplaceSearchRequest(request!.Term, request.Options);
+        while (TryFind(pointer, searchRequest, out var matchStart, out var matchEnd))
         {
             // When restricted to a selection, stop once a match would start past the selection end.
             if (restrictToSelection && matchStart.CompareTo(limit) >= 0)
                 break;
 
             _editor.Selection.Select(matchStart, matchEnd);
-            _editor.Selection.Text = _replaceBox.Text;
+            _editor.Selection.Text = request!.Replacement;
             pointer = _editor.Selection.End;
             count++;
         }
 
-        var scope = restrictToSelection ? " in selection" : string.Empty;
-        _status.Text = count == 0 ? $"\"{term}\" not found." : $"Replaced {count} occurrence(s){scope}.";
+        _status.Text = FindReplaceDialogPlanner.BuildReplaceAllStatus(request!, count, restrictToSelection);
     }
 
-    private bool SelectFrom(TextPointer from, string term)
+    private bool SelectFrom(TextPointer from, FindReplaceSearchRequest request)
     {
-        if (!TryFind(from, term, out var matchStart, out var matchEnd))
+        if (!TryFind(from, request, out var matchStart, out var matchEnd))
             return false;
         _editor.Selection.Select(matchStart, matchEnd);
         _editor.Focus();
@@ -332,7 +345,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
 
     // Finds the first match of term at or after `from`, scanning text runs in document order. Match
     // decisions (case, whole-word boundaries within the run text) come from the pure TextSearch helper.
-    private bool TryFind(TextPointer from, string term, out TextPointer matchStart, out TextPointer matchEnd)
+    private bool TryFind(TextPointer from, FindReplaceSearchRequest request, out TextPointer matchStart, out TextPointer matchEnd)
     {
         matchStart = matchEnd = _editor.Document.ContentStart;
         for (var pointer = from; pointer is not null; pointer = pointer.GetNextContextPosition(LogicalDirection.Forward))
@@ -341,7 +354,7 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
                 continue;
 
             var runText = pointer.GetTextInRun(LogicalDirection.Forward);
-            foreach (var (index, length) in TextSearch.FindAll(runText, term, MatchCase, WholeWord, UseWildcards))
+            foreach (var (index, length) in FindReplaceDialogPlanner.FindAll(runText, request.Term, request.Options))
             {
                 var start = pointer.GetPositionAtOffset(index);
                 var end = start?.GetPositionAtOffset(length);
@@ -354,5 +367,21 @@ internal sealed class FindReplaceDialog : Free.Shared.Ribbon.Wpf.DialogWindow
             }
         }
         return false;
+    }
+
+    private FindReplaceSearchOptions CurrentOptions() =>
+        FindReplaceDialogPlanner.NormalizeOptions(new FindReplaceSearchOptions(
+            _matchCase.IsChecked == true,
+            _wholeWord.IsChecked == true,
+            _useWildcards.IsChecked == true));
+
+    private void ApplyOptionPolicy()
+    {
+        var options = CurrentOptions();
+        _wholeWord.IsEnabled = FindReplaceDialogPlanner.IsOptionEnabled(
+            FindReplaceOptionKind.WholeWord,
+            options);
+        if (!_wholeWord.IsEnabled)
+            _wholeWord.IsChecked = false;
     }
 }

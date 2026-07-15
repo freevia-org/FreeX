@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Free.Shared.AppServices;
+using FreeW.App.Presentation.Shell;
 using FreeW.App.Avalonia;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -65,10 +66,7 @@ public sealed class AutosaveAdapterTests
             new AutosaveRecoveryCandidate("snap2.docx", "snap2.sidecar", later),
         };
 
-        var selected = candidates
-            .OrderByDescending(c =>
-                DateTimeOffset.TryParse(c.Sidecar.TimestampUtc, out var dt) ? dt : DateTimeOffset.MinValue)
-            .FirstOrDefault();
+        var selected = AutosaveRecoveryPlanner.SelectLatest(candidates);
 
         selected.Should().NotBeNull();
         selected!.Sidecar.DisplayName.Should().Be("newer");

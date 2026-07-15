@@ -1,13 +1,14 @@
 using FluentAssertions;
 using FreeW.App.Avalonia;
+using FreeW.App.Presentation.Proofing;
 using Xunit;
 
 namespace FreeW.App.Avalonia.Tests;
 
 /// <summary>
-/// GB2: <see cref="CustomDictionaryStore"/> persists added words to a .lex file (same location/format as
-/// the WPF host's CustomDictionaryStore) instead of the old plain in-memory dictionary that lost every
-/// added word on restart. These tests use an in-memory <see cref="IFileSystem"/> fake so persistence is
+/// GB2: <see cref="CustomDictionaryStore"/> persists added words to a .lex file shared by both shells
+/// instead of the old plain in-memory dictionary that lost every
+/// added word on restart. These tests use an in-memory file-system fake so persistence is
 /// verifiable without touching the real user data folder.
 /// </summary>
 public sealed class CustomDictionaryStoreTests
@@ -94,7 +95,7 @@ public sealed class CustomDictionaryStoreTests
     // ── Real-disk round trip (temp dir — never the real user data folder) ──────────────────────────
 
     /// <summary>
-    /// End-to-end with the real <see cref="RealFileSystem"/>: a word added by one store instance is
+    /// End-to-end with the real <see cref="RealCustomDictionaryFileSystem"/>: a word added by one store instance is
     /// readable by a fresh instance over the same path (simulating an app restart), and the file on disk
     /// is UTF-8 without a BOM, word-per-line — the same .lex format the WPF host's spell checker consumes,
     /// so the two shells can share a dictionary file.
@@ -106,7 +107,7 @@ public sealed class CustomDictionaryStoreTests
         var path = System.IO.Path.Combine(dir, "customdictionary.lex");
         try
         {
-            var first = new CustomDictionaryStore(path, RealFileSystem.Instance);
+            var first = new CustomDictionaryStore(path, RealCustomDictionaryFileSystem.Instance);
             first.Add("gonna").Should().BeTrue();
 
             File.Exists(path).Should().BeTrue();
@@ -115,7 +116,7 @@ public sealed class CustomDictionaryStoreTests
                 .Should().BeFalse("the .lex file must have no BOM, matching the WPF host's format");
 
             // Simulate restart: a fresh store instance over the same on-disk file.
-            var second = new CustomDictionaryStore(path, RealFileSystem.Instance);
+            var second = new CustomDictionaryStore(path, RealCustomDictionaryFileSystem.Instance);
             second.Words.Should().Contain("gonna");
         }
         finally
@@ -125,9 +126,9 @@ public sealed class CustomDictionaryStoreTests
         }
     }
 
-    /// <summary>In-memory fake for <see cref="IFileSystem"/> — a dictionary of path → lines, so tests can
+    /// <summary>In-memory fake for <see cref="ICustomDictionaryFileSystem"/> — a dictionary of path → lines, so tests can
     /// assert exactly what would have been written to disk and simulate a fresh process reading it back.</summary>
-    private sealed class FakeFileSystem : IFileSystem
+    private sealed class FakeFileSystem : ICustomDictionaryFileSystem
     {
         public Dictionary<string, List<string>> Files { get; } = new();
         public int WriteCount { get; private set; }

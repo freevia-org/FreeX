@@ -1,10 +1,18 @@
 using Free.Shared.AppServices;
 
-namespace FreeW.App.Host;
+namespace FreeW.App.Presentation.Shell;
 
-internal static class AutosaveRecoveryCandidatePlanner
+public enum AutosaveRecoveryDisposition
 {
-    public static AutosaveRecoveryCandidate? SelectLatest(IEnumerable<AutosaveRecoveryCandidate> candidates)
+    Keep,
+    Delete,
+    Quarantine
+}
+
+public static class AutosaveRecoveryPlanner
+{
+    public static AutosaveRecoveryCandidate? SelectLatest(
+        IEnumerable<AutosaveRecoveryCandidate> candidates)
     {
         ArgumentNullException.ThrowIfNull(candidates);
 
@@ -21,6 +29,13 @@ internal static class AutosaveRecoveryCandidatePlanner
             ? "a document"
             : candidate.Sidecar.DisplayName!;
     }
+
+    public static AutosaveRecoveryDisposition ResolveDisposition(bool accepted, bool recovered) =>
+        !accepted
+            ? AutosaveRecoveryDisposition.Keep
+            : recovered
+                ? AutosaveRecoveryDisposition.Delete
+                : AutosaveRecoveryDisposition.Quarantine;
 
     private static DateTimeOffset ParseTimestamp(string? timestampUtc) =>
         DateTimeOffset.TryParse(timestampUtc, out var timestamp)

@@ -19,8 +19,9 @@ public sealed class FindReplaceDialogPolicySourceGuardTests
         source.Should().Contain("FindReplaceDialogPlanner.BuildFindStatus(");
         source.Should().Contain("FindReplaceDialogPlanner.BuildReplaceStatus(");
         source.Should().Contain("FindReplaceDialogPlanner.BuildReplaceAllStatus(");
-        source.Should().Contain("FindReplaceDialogPlanner.ShouldUsePlainEditorSearch(");
-        source.Should().Contain("FindReplaceDialogPlanner.DocumentContains(");
+        source.Should().Contain("_editor.FindNext(request.Term, request.Options)");
+        source.Should().Contain("_editor.ReplaceNext(request!.Term, request.Replacement, request.Options)");
+        source.Should().Contain("_editor.ReplaceAll(request!.Term, request.Replacement, request.Options)");
         source.Should().NotContain("TextSearch.FindAll(");
         source.Should().NotContain("internal static int CountMatches(");
         source.Should().NotContain("Content = \"Match case\"");

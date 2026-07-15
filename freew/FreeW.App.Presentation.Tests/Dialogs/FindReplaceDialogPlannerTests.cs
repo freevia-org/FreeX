@@ -95,6 +95,8 @@ public sealed class FindReplaceDialogPlannerTests
         FindReplaceDialogPlanner.BuildReplaceAllStatus(replace, replacementCount: 0).Should().Be("\"fox\" not found.");
         FindReplaceDialogPlanner.BuildReplaceAllStatus(replace, replacementCount: 1).Should().Be("Replaced 1 occurrence.");
         FindReplaceDialogPlanner.BuildReplaceAllStatus(replace, replacementCount: 2).Should().Be("Replaced 2 occurrences.");
+        FindReplaceDialogPlanner.BuildReplaceAllStatus(replace, replacementCount: 1, inSelection: true)
+            .Should().Be("Replaced 1 occurrence in selection.");
     }
 
     [Fact]
@@ -196,6 +198,46 @@ public sealed class FindReplaceDialogPlannerTests
             new FindReplaceSearchOptions(MatchCase: true, WholeWord: true, UseWildcards: false));
 
         FindReplaceDialogPlanner.DocumentContains(doc, request).Should().BeTrue();
+    }
+
+    [Fact]
+    public void FindAllAndMatchesExactly_UseTheNormalizedOptionPolicy()
+    {
+        var options = new FindReplaceSearchOptions(MatchCase: true, WholeWord: true, UseWildcards: true);
+
+        FindReplaceDialogPlanner.FindAll("cat bat hat", "[cbh]at", options)
+            .Should().HaveCount(3);
+        FindReplaceDialogPlanner.MatchesExactly("BAT", "[cbh]at", options)
+            .Should().BeFalse();
+        FindReplaceDialogPlanner.MatchesExactly("bat", "[cbh]at", options)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void MatchesExactly_UsesAnyFullSpanForWildcardSelection()
+    {
+        var options = new FindReplaceSearchOptions(MatchCase: true, WholeWord: false, UseWildcards: true);
+
+        FindReplaceDialogPlanner.MatchesExactly("xbar", "*bar", options)
+            .Should().BeTrue();
+    }
+
+    [Fact]
+    public void FindNextMatch_UsesOptionsAndWrapsAcrossParagraphs()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("first fox"));
+        doc.Blocks.Add(new Paragraph("second FOX"));
+
+        var match = FindReplaceDialogPlanner.FindNextMatch(
+            doc,
+            "fox",
+            new FindReplaceSearchOptions(MatchCase: true, WholeWord: true, UseWildcards: false),
+            fromBlock: 1,
+            fromOffset: 10);
+
+        match.Should().Be(new FindReplaceMatch(0, 6, 3));
     }
 
     private static TextDocument BuildSampleDoc(string text)

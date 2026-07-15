@@ -39,6 +39,8 @@ public sealed record FindReplaceReplaceRequest(
     string Replacement,
     FindReplaceSearchOptions Options);
 
+public readonly record struct FindReplaceMatch(int Block, int Start, int Length);
+
 public static class FindReplaceDialogPlanner
 {
     public const string SearchTermRequiredMessage = FindReplaceDialogPolicy.SearchTermRequiredMessage;
@@ -132,16 +134,85 @@ public static class FindReplaceDialogPlanner
         return FindReplaceDialogPolicy.BuildReplaceStatus(request.Term, replaced);
     }
 
-    public static string BuildReplaceAllStatus(FindReplaceReplaceRequest request, int replacementCount)
+    public static string BuildReplaceAllStatus(
+        FindReplaceReplaceRequest request,
+        int replacementCount,
+        bool inSelection = false)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return FindReplaceDialogPolicy.BuildReplaceAllOccurrenceStatus(request.Term, replacementCount);
+        var status = FindReplaceDialogPolicy.BuildReplaceAllOccurrenceStatus(request.Term, replacementCount);
+        return inSelection && replacementCount > 0
+            ? status[..^1] + " in selection."
+            : status;
     }
 
     public static bool DocumentContains(TextDocument document, FindReplaceSearchRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
         return CountMatches(document, request.Term, request.Options) > 0;
+    }
+
+    public static IReadOnlyList<(int Start, int Length)> FindAll(
+        string? text,
+        string? term,
+        FindReplaceSearchOptions options)
+    {
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(term))
+            return [];
+
+        var effective = NormalizeOptions(options);
+        return TextSearch.FindAll(
+                text,
+                term,
+                effective.MatchCase,
+                effective.WholeWord,
+                effective.UseWildcards)
+            .ToList();
+    }
+
+    public static bool MatchesExactly(
+        string? text,
+        string? term,
+        FindReplaceSearchOptions options) =>
+        text is not null
+        && FindAll(text, term, options)
+            .Any(match => match.Start == 0 && match.Length == text.Length);
+
+    public static FindReplaceMatch? FindNextMatch(
+        TextDocument document,
+        string? term,
+        FindReplaceSearchOptions options,
+        int fromBlock,
+        int fromOffset)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        if (string.IsNullOrEmpty(term) || document.Blocks.Count == 0)
+            return null;
+
+        var startBlock = Math.Clamp(fromBlock, 0, document.Blocks.Count - 1);
+        for (var step = 0; step < document.Blocks.Count; step++)
+        {
+            var blockIndex = (startBlock + step) % document.Blocks.Count;
+            if (document.Blocks[blockIndex] is not Paragraph paragraph)
+                continue;
+
+            var startAt = step == 0 ? Math.Clamp(fromOffset, 0, paragraph.PlainText.Length) : 0;
+            var match = FindAll(paragraph.PlainText, term, options)
+                .FirstOrDefault(item => item.Start >= startAt);
+            if (match.Length > 0)
+                return new FindReplaceMatch(blockIndex, match.Start, match.Length);
+        }
+
+        if (startBlock >= 0 && document.Blocks[startBlock] is Paragraph startParagraph)
+        {
+            var startAt = Math.Clamp(fromOffset, 0, startParagraph.PlainText.Length);
+            var match = FindAll(startParagraph.PlainText, term, options)
+                .FirstOrDefault(item => item.Start < startAt);
+            if (match.Length > 0)
+                return new FindReplaceMatch(startBlock, match.Start, match.Length);
+        }
+
+        return null;
     }
 
     public static int CountMatches(
@@ -160,14 +231,7 @@ public static class FindReplaceDialogPlanner
             if (block is not Paragraph paragraph)
                 continue;
 
-            count += TextSearch
-                .FindAll(
-                    paragraph.PlainText,
-                    term,
-                    effective.MatchCase,
-                    effective.WholeWord,
-                    effective.UseWildcards)
-                .Count();
+            count += FindAll(paragraph.PlainText, term, effective).Count;
         }
 
         return count;

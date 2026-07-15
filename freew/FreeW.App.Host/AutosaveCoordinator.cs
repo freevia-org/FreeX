@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Shell;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.Shell;
 using FreeW.Core.IO;
 
 namespace FreeW.App.Host;
@@ -58,8 +59,8 @@ internal sealed class AutosaveCoordinator
             if (candidates.Count == 0)
                 return;
 
-            var candidate = AutosaveRecoveryCandidatePlanner.SelectLatest(candidates)!;
-            var name = AutosaveRecoveryCandidatePlanner.DisplayName(candidate);
+            var candidate = AutosaveRecoveryPlanner.SelectLatest(candidates)!;
+            var name = AutosaveRecoveryPlanner.DisplayName(candidate);
             var recover = DialogMessageHelper.AskYesNo(owner,
                 $"FreeW found unsaved changes to {name} from a previous session. Recover them?",
                 "FreeW - Recover");
@@ -70,10 +71,8 @@ internal sealed class AutosaveCoordinator
                 // unreadable (e.g. a truncated ZIP from a crashed write) — quarantine it so it is not
                 // re-offered on every launch, which otherwise loops the "Could not recover" error.
                 var loaded = _file.OpenSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
-                if (loaded)
-                    AutosaveSnapshotStore.DeleteCandidate(candidate);
-                else
-                    AutosaveSnapshotStore.QuarantineCandidate(candidate);
+                ApplyRecoveryDisposition(candidate,
+                    AutosaveRecoveryPlanner.ResolveDisposition(accepted: true, recovered: loaded));
             }
             // On decline ("No"): leave the candidate intact so it remains available for
             // "Recover Unsaved Documents" or the next startup prompt.
@@ -89,7 +88,7 @@ internal sealed class AutosaveCoordinator
         try
         {
             var candidates = _store.EnumerateCandidates();
-            var candidate = AutosaveRecoveryCandidatePlanner.SelectLatest(candidates);
+            var candidate = AutosaveRecoveryPlanner.SelectLatest(candidates);
             if (candidate is null)
             {
                 DialogMessageHelper.ShowInfo(owner,
@@ -98,7 +97,7 @@ internal sealed class AutosaveCoordinator
                 return false;
             }
 
-            var name = AutosaveRecoveryCandidatePlanner.DisplayName(candidate);
+            var name = AutosaveRecoveryPlanner.DisplayName(candidate);
             var answer = DialogMessageHelper.ShowMessage(owner,
                 $"Recover unsaved changes to {name}?",
                 "FreeW - Recover",
@@ -108,12 +107,8 @@ internal sealed class AutosaveCoordinator
                 return false;
 
             var recovered = _file.RecoverSnapshot(candidate.SnapshotPath, candidate.Sidecar.OriginalFilePath);
-            if (recovered)
-                AutosaveSnapshotStore.DeleteCandidate(candidate);
-            else
-                // Unreadable/corrupt snapshot — quarantine so "Recover Unsaved Documents" and the next
-                // startup prompt do not keep surfacing the same failure.
-                AutosaveSnapshotStore.QuarantineCandidate(candidate);
+            ApplyRecoveryDisposition(candidate,
+                AutosaveRecoveryPlanner.ResolveDisposition(accepted: true, recovered: recovered));
 
             return recovered;
         }
@@ -123,6 +118,21 @@ internal sealed class AutosaveCoordinator
                 $"Could not recover the document.\n\n{ex.Message}",
                 "FreeW - Recover");
             return false;
+        }
+    }
+
+    private static void ApplyRecoveryDisposition(
+        AutosaveRecoveryCandidate candidate,
+        AutosaveRecoveryDisposition disposition)
+    {
+        switch (disposition)
+        {
+            case AutosaveRecoveryDisposition.Delete:
+                AutosaveSnapshotStore.DeleteCandidate(candidate);
+                break;
+            case AutosaveRecoveryDisposition.Quarantine:
+                AutosaveSnapshotStore.QuarantineCandidate(candidate);
+                break;
         }
     }
 
