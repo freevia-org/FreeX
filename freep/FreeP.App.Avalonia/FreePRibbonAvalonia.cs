@@ -13,15 +13,7 @@ internal static class FreePRibbonAvalonia
         AddVideoExportCommand(AddNotesPagePdfExportCommand(AddImageExportCommand(AddChartDataCommand(FreeP.Ribbon.Definitions.FreePRibbon.Build(FreePRibbonCapabilities.Avalonia)))));
 
     private static RibbonDefinition AddImageExportCommand(RibbonDefinition definition)
-    {
-        var tabs = definition.Tabs
-            .Select(tab => string.Equals(tab.Id, "home", StringComparison.Ordinal)
-                ? tab with { Groups = tab.Groups.Select(AddImageExportCommand).ToArray() }
-                : tab)
-            .ToArray();
-
-        return definition with { Tabs = tabs };
-    }
+        => AddCommandToGroup(definition, "home", AddImageExportCommand);
 
     private static RibbonGroup AddImageExportCommand(RibbonGroup group)
     {
@@ -51,15 +43,7 @@ internal static class FreePRibbonAvalonia
     }
 
     private static RibbonDefinition AddVideoExportCommand(RibbonDefinition definition)
-    {
-        var tabs = definition.Tabs
-            .Select(tab => string.Equals(tab.Id, "home", StringComparison.Ordinal)
-                ? tab with { Groups = tab.Groups.Select(AddVideoExportCommand).ToArray() }
-                : tab)
-            .ToArray();
-
-        return definition with { Tabs = tabs };
-    }
+        => AddCommandToGroup(definition, "home", AddVideoExportCommand);
 
     private static RibbonGroup AddVideoExportCommand(RibbonGroup group)
     {
@@ -89,15 +73,7 @@ internal static class FreePRibbonAvalonia
     }
 
     private static RibbonDefinition AddNotesPagePdfExportCommand(RibbonDefinition definition)
-    {
-        var tabs = definition.Tabs
-            .Select(tab => string.Equals(tab.Id, "home", StringComparison.Ordinal)
-                ? tab with { Groups = tab.Groups.Select(AddNotesPagePdfExportCommand).ToArray() }
-                : tab)
-            .ToArray();
-
-        return definition with { Tabs = tabs };
-    }
+        => AddCommandToGroup(definition, "home", AddNotesPagePdfExportCommand);
 
     private static RibbonGroup AddNotesPagePdfExportCommand(RibbonGroup group)
     {
@@ -127,10 +103,16 @@ internal static class FreePRibbonAvalonia
     }
 
     private static RibbonDefinition AddChartDataCommand(RibbonDefinition definition)
+        => AddCommandToGroup(definition, "insert", AddChartDataCommand);
+
+    private static RibbonDefinition AddCommandToGroup(
+        RibbonDefinition definition,
+        string tabId,
+        Func<RibbonGroup, RibbonGroup> addCommand)
     {
         var tabs = definition.Tabs
-            .Select(tab => string.Equals(tab.Id, "insert", StringComparison.Ordinal)
-                ? tab with { Groups = tab.Groups.Select(AddChartDataCommand).ToArray() }
+            .Select(tab => string.Equals(tab.Id, tabId, StringComparison.Ordinal)
+                ? tab with { Groups = tab.Groups.Select(addCommand).ToArray() }
                 : tab)
             .ToArray();
 
