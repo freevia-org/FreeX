@@ -16,99 +16,11 @@ trap {
 
     throw $_
 }
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-public class Win32c {
-    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-    [DllImport("user32.dll")] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern IntPtr SetActiveWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
-    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-    [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-    [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
-    [DllImport("gdi32.dll")]  public static extern int GetDeviceCaps(IntPtr hDC, int nIndex);
-    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT { public int Left, Top, Right, Bottom; }
-    public static IntPtr FindWindowByPid(int pid) {
-        IntPtr found = IntPtr.Zero;
-        EnumWindows((hWnd, lp) => {
-            uint wPid;
-            GetWindowThreadProcessId(hWnd, out wPid);
-            if (wPid == (uint)pid && IsWindowVisible(hWnd)) {
-                var sb = new StringBuilder(256);
-                GetWindowText(hWnd, sb, 256);
-                if (sb.Length > 0) { found = hWnd; return false; }
-            }
-            return true;
-        }, IntPtr.Zero);
-        return found;
-    }
-    public static WindowInfoC[] GetVisibleWindowsByProcess(int processId) {
-        var windows = new System.Collections.Generic.List<WindowInfoC>();
-        EnumWindows((hWnd, lp) => {
-            if (!IsWindowVisible(hWnd)) return true;
-            uint wPid;
-            GetWindowThreadProcessId(hWnd, out wPid);
-            if (wPid != (uint)processId) return true;
-            var title = new StringBuilder(512);
-            GetWindowText(hWnd, title, title.Capacity);
-            var className = new StringBuilder(256);
-            GetClassName(hWnd, className, className.Capacity);
-            var rect = new RECT();
-            if (!GetWindowRect(hWnd, ref rect)) return true;
-            if (rect.Right <= rect.Left || rect.Bottom <= rect.Top) return true;
-            windows.Add(new WindowInfoC {
-                Handle = hWnd,
-                ProcessId = (int)wPid,
-                Title = title.ToString(),
-                ClassName = className.ToString(),
-                Left = rect.Left,
-                Top = rect.Top,
-                Right = rect.Right,
-                Bottom = rect.Bottom
-            });
-            return true;
-        }, IntPtr.Zero);
-        return windows.ToArray();
-    }
-    public static int GetScreenDpi() {
-        IntPtr dc = GetDC(IntPtr.Zero);
-        int dpi = GetDeviceCaps(dc, 88); // LOGPIXELSX
-        ReleaseDC(IntPtr.Zero, dc);
-        return dpi;
-    }
-}
-public class WindowInfoC {
-    public IntPtr Handle;
-    public int ProcessId;
-    public string Title;
-    public string ClassName;
-    public int Left;
-    public int Top;
-    public int Right;
-    public int Bottom;
-}
-"@
-
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $outDir = Join-Path $PSScriptRoot "screenshots"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 . (Join-Path $PSScriptRoot "ScreenshotCaptureSupport.ps1")
+[ScreenshotWin32]::SetProcessDPIAware() | Out-Null
 $openWorkbookDialogOutDir = Join-Path $outDir "open-workbook-dialog-tour"
 $saveAsWorkbookDialogOutDir = Join-Path $outDir "save-as-workbook-dialog-tour"
 function Clear-OpenWorkbookDialogEvidenceArtifacts {
@@ -261,7 +173,7 @@ function Resolve-FreeXExecutablePath($requestedExePath) {
 }
 
 # Get screen DPI to calculate physical pixels for a 300px logical capture
-$dpi   = [Win32c]::GetScreenDpi()
+$dpi   = [ScreenshotWin32]::GetScreenDpi()
 $scale = $dpi / 96.0
 Write-Host "Screen DPI: $dpi  Scale: $scale"
 
@@ -273,7 +185,7 @@ Write-Host "Launched PID $($proc.Id)"
 $hwnd = [IntPtr]::Zero
 for ($i = 0; $i -lt 40; $i++) {
     Start-Sleep -Milliseconds 500
-    $hwnd = [Win32c]::FindWindowByPid($proc.Id)
+    $hwnd = [ScreenshotWin32]::FindWindowByPid($proc.Id)
     if ($hwnd -ne [IntPtr]::Zero) { break }
 }
 if ($hwnd -eq [IntPtr]::Zero) {
@@ -291,12 +203,12 @@ if ($hwnd -eq [IntPtr]::Zero) { Write-Error "No window"; $proc.Kill(); exit 1 }
 
 function Get-WindowTitle($windowHandle) {
     $title = New-Object System.Text.StringBuilder 512
-    [Win32c]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
+    [ScreenshotWin32]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
     return $title.ToString()
 }
 
 function Get-ForegroundWindowInfo {
-    $foreground = [Win32c]::GetForegroundWindow()
+    $foreground = [ScreenshotWin32]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
         return [pscustomobject]@{
             Handle = "0"
@@ -306,9 +218,9 @@ function Get-ForegroundWindowInfo {
     }
 
     $actualPid = 0
-    [Win32c]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
     $title = New-Object System.Text.StringBuilder 512
-    [Win32c]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+    [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
     return [pscustomobject]@{
         Handle = $foreground.ToString()
         ProcessId = $actualPid
@@ -342,7 +254,7 @@ function Write-RootCaptureBlockerManifest($operation, $expectedPid, $expectedTit
 }
 
 function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operation = "capture") {
-    $foreground = [Win32c]::GetForegroundWindow()
+    $foreground = [ScreenshotWin32]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
         Clear-ScreenshotEvidenceArtifacts
         Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle "No foreground window was available."
@@ -350,9 +262,9 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operati
     }
 
     $actualPid = 0
-    [Win32c]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
     $title = New-Object System.Text.StringBuilder 512
-    [Win32c]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+    [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
     $actualTitle = $title.ToString()
     if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
         Clear-ScreenshotEvidenceArtifacts
@@ -362,16 +274,16 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operati
 }
 
 function Assert-ForegroundProcessOwnership($expectedPid, $operation = "capture") {
-    $foreground = [Win32c]::GetForegroundWindow()
+    $foreground = [ScreenshotWin32]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
         throw "Blocked: no foreground window before $operation."
     }
 
     $actualPid = 0
-    [Win32c]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
     if ($actualPid -ne $expectedPid) {
         $title = New-Object System.Text.StringBuilder 512
-        [Win32c]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+        [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
         throw "Blocked: foreground window '$($title.ToString())' (PID $actualPid) does not belong to expected FreeX PID $expectedPid before $operation."
     }
 }
@@ -386,45 +298,45 @@ function Set-FreeXForegroundWindow($windowHandle, $expectedPid, $expectedTitle, 
     }
 
     for ($attempt = 0; $attempt -lt 16; $attempt++) {
-        [Win32c]::ShowWindow($windowHandle, 9) | Out-Null
-        [Win32c]::SetWindowPos($windowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null
+        [ScreenshotWin32]::ShowWindow($windowHandle, 9) | Out-Null
+        [ScreenshotWin32]::SetWindowPos($windowHandle, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null
         Start-Sleep -Milliseconds 40
-        [Win32c]::SetWindowPos($windowHandle, [IntPtr](-2), 0, 0, 0, 0, 0x0043) | Out-Null
+        [ScreenshotWin32]::SetWindowPos($windowHandle, [IntPtr](-2), 0, 0, 0, 0, 0x0043) | Out-Null
 
-        $foreground = [Win32c]::GetForegroundWindow()
+        $foreground = [ScreenshotWin32]::GetForegroundWindow()
         $foregroundPid = 0
         $targetPid = 0
-        $foregroundThread = if ($foreground -ne [IntPtr]::Zero) { [Win32c]::GetWindowThreadProcessId($foreground, [ref]$foregroundPid) } else { 0 }
-        $targetThread = [Win32c]::GetWindowThreadProcessId($windowHandle, [ref]$targetPid)
-        $currentThread = [Win32c]::GetCurrentThreadId()
+        $foregroundThread = if ($foreground -ne [IntPtr]::Zero) { [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$foregroundPid) } else { 0 }
+        $targetThread = [ScreenshotWin32]::GetWindowThreadProcessId($windowHandle, [ref]$targetPid)
+        $currentThread = [ScreenshotWin32]::GetCurrentThreadId()
         $attachedTarget = $false
         $attachedForeground = $false
         try {
             if ($targetThread -ne 0 -and $targetThread -ne $currentThread) {
-                $attachedTarget = [Win32c]::AttachThreadInput($currentThread, $targetThread, $true)
+                $attachedTarget = [ScreenshotWin32]::AttachThreadInput($currentThread, $targetThread, $true)
             }
             if ($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread -and $foregroundThread -ne $targetThread) {
-                $attachedForeground = [Win32c]::AttachThreadInput($currentThread, $foregroundThread, $true)
+                $attachedForeground = [ScreenshotWin32]::AttachThreadInput($currentThread, $foregroundThread, $true)
             }
 
-            [Win32c]::BringWindowToTop($windowHandle) | Out-Null
-            [Win32c]::SetActiveWindow($windowHandle) | Out-Null
-            [Win32c]::SetFocus($windowHandle) | Out-Null
-            [Win32c]::SetForegroundWindow($windowHandle) | Out-Null
+            [ScreenshotWin32]::BringWindowToTop($windowHandle) | Out-Null
+            [ScreenshotWin32]::SetActiveWindow($windowHandle) | Out-Null
+            [ScreenshotWin32]::SetFocus($windowHandle) | Out-Null
+            [ScreenshotWin32]::SetForegroundWindow($windowHandle) | Out-Null
         }
         finally {
             if ($attachedForeground) {
-                [Win32c]::AttachThreadInput($currentThread, $foregroundThread, $false) | Out-Null
+                [ScreenshotWin32]::AttachThreadInput($currentThread, $foregroundThread, $false) | Out-Null
             }
             if ($attachedTarget) {
-                [Win32c]::AttachThreadInput($currentThread, $targetThread, $false) | Out-Null
+                [ScreenshotWin32]::AttachThreadInput($currentThread, $targetThread, $false) | Out-Null
             }
         }
 
         if (($attempt % 4) -eq 3) {
-            [Win32c]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
-            [Win32c]::SetForegroundWindow($windowHandle) | Out-Null
-            [Win32c]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+            [ScreenshotWin32]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
+            [ScreenshotWin32]::SetForegroundWindow($windowHandle) | Out-Null
+            [ScreenshotWin32]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
         }
 
         if ($null -ne $shell) {
@@ -433,15 +345,15 @@ function Set-FreeXForegroundWindow($windowHandle, $expectedPid, $expectedTitle, 
 
         Start-Sleep -Milliseconds 300
 
-        $foreground = [Win32c]::GetForegroundWindow()
+        $foreground = [ScreenshotWin32]::GetForegroundWindow()
         if ($foreground -eq [IntPtr]::Zero) {
             continue
         }
 
         $actualPid = 0
-        [Win32c]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+        [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
         $title = New-Object System.Text.StringBuilder 512
-        [Win32c]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+        [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
         if ($actualPid -eq $expectedPid -and $title.ToString() -eq $expectedTitle) {
             return
         }
@@ -451,7 +363,7 @@ function Set-FreeXForegroundWindow($windowHandle, $expectedPid, $expectedTitle, 
 }
 
 function Find-FreeXOpenWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
-    $windows = [Win32c]::GetVisibleWindowsByProcess($expectedPid) |
+    $windows = [ScreenshotWin32]::GetVisibleWindowsByProcess($expectedPid) |
         Where-Object {
             $_.Handle -ne $ownerWindowHandle -and
             $_.ClassName -eq "#32770" -and
@@ -464,7 +376,7 @@ function Find-FreeXOpenWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
 }
 
 function Find-FreeXSaveAsWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
-    $windows = [Win32c]::GetVisibleWindowsByProcess($expectedPid) |
+    $windows = [ScreenshotWin32]::GetVisibleWindowsByProcess($expectedPid) |
         Where-Object {
             $_.Handle -ne $ownerWindowHandle -and
             $_.ClassName -eq "#32770" -and
@@ -492,7 +404,7 @@ function Invoke-FreeXOpenWorkbookDialogTour($expectedPid, $ownerWindowHandle, $e
         throw "FreeX native Open dialog tour did not detect a FreeX-owned '#32770' Open dialog after Ctrl+O."
     }
 
-    $dialogDpi = [Win32c]::GetDpiForWindow($dialog.Handle)
+    $dialogDpi = [ScreenshotWin32]::GetDpiForWindow($dialog.Handle)
     $dialogScale = if ($dialogDpi -gt 0) { [double]$dialogDpi / 96.0 } else { 1.0 }
     $captureSource = "native-dialog-window-rectangle"
     $captureBounds = [pscustomobject]@{
@@ -594,7 +506,7 @@ function Invoke-FreeXSaveAsWorkbookDialogTour($expectedPid, $ownerWindowHandle, 
         throw "FreeX native Save As dialog tour did not detect a FreeX-owned '#32770' Save As dialog after F12."
     }
 
-    $dialogDpi = [Win32c]::GetDpiForWindow($dialog.Handle)
+    $dialogDpi = [ScreenshotWin32]::GetDpiForWindow($dialog.Handle)
     $dialogScale = if ($dialogDpi -gt 0) { [double]$dialogDpi / 96.0 } else { 1.0 }
     $captureSource = "native-dialog-window-rectangle"
     $captureBounds = [pscustomobject]@{
@@ -683,8 +595,8 @@ function Invoke-FreeXSaveAsWorkbookDialogTour($expectedPid, $ownerWindowHandle, 
 
 Write-Host "HWND: $hwnd"
 $expectedTitle = Get-WindowTitle $hwnd
-[Win32c]::ShowWindow($hwnd, 1) | Out-Null
-[Win32c]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, 0, 0, 0x0001) | Out-Null
+[ScreenshotWin32]::ShowWindow($hwnd, 1) | Out-Null
+[ScreenshotWin32]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, 0, 0, 0x0001) | Out-Null
 Set-FreeXForegroundWindow $hwnd $proc.Id $expectedTitle "initial capture setup"
 
 if ($OpenWorkbookDialogTour -eq "1") {
@@ -703,16 +615,16 @@ if ($SaveAsWorkbookDialogTour -eq "1") {
 
 function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
     if ($null -eq $widthSpec.WindowLogicalWidth) {
-        [Win32c]::ShowWindow($windowHandle, 3) | Out-Null
+        [ScreenshotWin32]::ShowWindow($windowHandle, 3) | Out-Null
         Set-FreeXForegroundWindow $windowHandle $proc.Id $expectedTitle "window resize capture setup"
         return
     }
 
     $physicalWidth = [int]([Math]::Ceiling([double]$widthSpec.WindowLogicalWidth * $scale))
     $physicalHeight = [int]([Math]::Ceiling($windowLogicalHeight * $scale))
-    [Win32c]::ShowWindow($windowHandle, 1) | Out-Null
+    [ScreenshotWin32]::ShowWindow($windowHandle, 1) | Out-Null
     Start-Sleep -Milliseconds 200
-    [Win32c]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
+    [ScreenshotWin32]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
     Set-FreeXForegroundWindow $windowHandle $proc.Id $expectedTitle "window resize capture setup"
 }
 
@@ -796,21 +708,15 @@ function Screenshot-Tab($tabName, $widthSpec) {
     if ($selPat -ne $null) { $selPat.Select() }
     Start-Sleep -Milliseconds 800
 
-    $wrect = New-Object Win32c+RECT
-    [Win32c]::GetWindowRect($hwnd, [ref]$wrect) | Out-Null
+    $wrect = New-Object ScreenshotWin32+RECT
+    [ScreenshotWin32]::GetWindowRect($hwnd, [ref]$wrect) | Out-Null
     $w = $wrect.Right - $wrect.Left
     Assert-ForegroundWindowOwnership $proc.Id $expectedTitle "screen capture"
-
-    $bmp = New-Object System.Drawing.Bitmap($w, $captureH)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen($wrect.Left, $wrect.Top, 0, 0, [System.Drawing.Size]::new($w, $captureH))
-    $g.Dispose()
 
     $safe = $tabName -replace '[^a-zA-Z0-9_]','_'
     $fileName = "ribbon_$($widthSpec.Label)_$safe.png"
     $path = Join-Path $outDir $fileName
-    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bmp.Dispose()
+    Capture-ScreenRectangle $wrect.Left $wrect.Top $w $captureH $path
     $script:capturedFiles += [pscustomobject]@{
         CaptureSequence = $script:capturedFiles.Count + 1
         CaptureKey = "ribbon:$($widthSpec.Label):$safe"
@@ -850,8 +756,8 @@ foreach ($widthSpec in $captureWidths) {
     }
 }
 
-$finalRect = New-Object Win32c+RECT
-[Win32c]::GetWindowRect($hwnd, [ref]$finalRect) | Out-Null
+$finalRect = New-Object ScreenshotWin32+RECT
+[ScreenshotWin32]::GetWindowRect($hwnd, [ref]$finalRect) | Out-Null
 Write-ScreenshotEvidenceManifest "screenshot_ribbon.ps1" $outDir $finalRect 300 $captureH $captureWidths $script:capturedFiles $proc.Id $expectedTitle
 
 $proc.Kill()

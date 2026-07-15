@@ -9,18 +9,6 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-function ConvertTo-RepoRelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $fullRoot = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\')
-    if ($fullPath.StartsWith($fullRoot + "\", [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $fullPath.Substring($fullRoot.Length + 1).Replace('/', '\')
-    }
-
-    return $fullPath.Replace('/', '\')
-}
-
 function Test-RepoFile {
     param([Parameter(Mandatory = $true)][string]$Path)
 
@@ -38,7 +26,7 @@ foreach ($pattern in $Patterns) {
 
         $absolutePattern = Join-Path $repoRoot $pattern
         foreach ($file in @(Get-ChildItem -Path $absolutePattern -File -ErrorAction SilentlyContinue)) {
-            $matches.Add((ConvertTo-RepoRelativePath $file.FullName))
+            $matches.Add((ConvertTo-ToolRepoRelativePath -Path $file.FullName -RepoRoot $repoRoot))
         }
     }
 
@@ -68,7 +56,7 @@ function Get-CaptureAssetEvidence {
         return @()
     }
 
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $manifest = Read-ToolJson -Path $manifestPath -RepoRoot $repoRoot -MissingMessage "Dialog capture asset manifest was not found"
     $surface = @($manifest.surfaces) | Where-Object { $_.id -eq $RouteId -and $_.captured -eq $true } | Select-Object -First 1
     if ($null -eq $surface -or [string]::IsNullOrWhiteSpace($surface.png)) {
         return @()
@@ -79,7 +67,7 @@ function Get-CaptureAssetEvidence {
         return @()
     }
 
-    @((ConvertTo-RepoRelativePath $pngPath))
+    @((ConvertTo-ToolRepoRelativePath -Path $pngPath -RepoRoot $repoRoot))
 }
 
 function New-CaptureStatus {
@@ -122,16 +110,6 @@ function New-SharedStatus {
         evidence = @()
         note = $FallbackNote
     }
-}
-
-function Escape-MarkdownCell {
-    param([string]$Value)
-
-    if ($null -eq $Value -or $Value.Length -eq 0) {
-        return ""
-    }
-
-    $Value.Replace('|', '\|')
 }
 
 $routes = @(
@@ -490,7 +468,7 @@ foreach ($row in $rows) {
     $harness = if ($row.avaloniaCaptureHarnessRoute) { "yes" } else { "no" }
     $evidenceItems = @($row.wpfEvidence + $row.avaloniaEvidence + $row.sharedBackingEvidence) | Select-Object -First 3
     $evidence = if ($evidenceItems.Count -gt 0) { ($evidenceItems -join "<br>") } else { "" }
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.routeId) | $(Escape-MarkdownCell $row.displayName) | $wpf | $avalonia | $harness | $(Escape-MarkdownCell $row.sharedBackingStatus) | $(Escape-MarkdownCell $evidence) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $row.routeId) | $(ConvertTo-ToolMarkdownCell $row.displayName) | $wpf | $avalonia | $harness | $(ConvertTo-ToolMarkdownCell $row.sharedBackingStatus) | $(ConvertTo-ToolMarkdownCell $evidence) |")
 }
 
 $markdown = $md.ToString()
@@ -499,11 +477,8 @@ $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 
 if ($Check) {
-    $existingJson = if (Test-Path -LiteralPath $resolvedJsonPath -PathType Leaf) { Get-Content -LiteralPath $resolvedJsonPath -Raw } else { "" }
-    $existingMarkdown = if (Test-Path -LiteralPath $resolvedMarkdownPath -PathType Leaf) { Get-Content -LiteralPath $resolvedMarkdownPath -Raw } else { "" }
-    if ($existingJson -ne $json -or $existingMarkdown -ne $markdown) {
-        throw "Dialog parity inventory is out of date. Run tools\Generate-DialogParityInventory.ps1 to refresh it."
-    }
+    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Dialog parity inventory JSON" -GeneratorScriptName "tools\Generate-DialogParityInventory.ps1" -NormalizeNewlines
+    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Dialog parity inventory Markdown" -GeneratorScriptName "tools\Generate-DialogParityInventory.ps1" -NormalizeNewlines
 
     Write-Host "Dialog parity inventory is up to date."
     return
@@ -519,5 +494,5 @@ Write-Host "WPF captures: $($report.summary.wpfCaptures)"
 Write-Host "Avalonia captures: $($report.summary.avaloniaCaptures)"
 Write-Host "Avalonia harness routes: $($report.summary.avaloniaHarnessRoutes)"
 Write-Host "Shared/presentation-backed routes: $($report.summary.sharedOrPresentationBacked)"
-Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedJsonPath)"
-Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedMarkdownPath)"
+Write-Host "Wrote $(ConvertTo-ToolRepoRelativePath -Path $resolvedJsonPath -RepoRoot $repoRoot)"
+Write-Host "Wrote $(ConvertTo-ToolRepoRelativePath -Path $resolvedMarkdownPath -RepoRoot $repoRoot)"
