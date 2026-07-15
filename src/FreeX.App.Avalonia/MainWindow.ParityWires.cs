@@ -15,19 +15,14 @@ public sealed partial class MainWindow
     /// </summary>
     private void DeleteActiveCellThreadedComment()
     {
-        var sheet = _session.ActiveSheet;
-        var address = _session.SelectedRange.Start;
-        if (!sheet.ThreadedComments.ContainsKey(address))
+        var result = ReviewSessionController.DeleteThreadedComment();
+        if (!result.Success)
         {
             RefreshShell(UiText.Get("InsertLoc_CouldNotDeleteComment"));
             return;
         }
 
-        var result = _session.ExecuteReviewCommand(
-            new DeleteThreadedCommentCommand(sheet.Id, address));
-        RefreshShell(result.Success
-            ? UiText.Get("InsertLoc_ClearedCommentsAndNotes")
-            : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDeleteComment"));
+        ApplyReviewRefreshPlan(result.RefreshPlan, UiText.Get("InsertLoc_ClearedCommentsAndNotes"));
     }
 
     /// <summary>
@@ -38,19 +33,14 @@ public sealed partial class MainWindow
     /// </summary>
     private void DeleteActiveCellNote()
     {
-        var sheet = _session.ActiveSheet;
-        var address = _session.SelectedRange.Start;
-        if (!sheet.Comments.ContainsKey(address))
+        var result = ReviewSessionController.DeleteNote();
+        if (!result.Success)
         {
             RefreshShell(UiText.Get("InsertLoc_CouldNotDeleteComment"));
             return;
         }
 
-        var result = _session.ExecuteReviewCommand(
-            new DeleteCommentCommand(sheet.Id, address));
-        RefreshShell(result.Success
-            ? UiText.Get("InsertLoc_ClearedCommentsAndNotes")
-            : result.ErrorMessage ?? UiText.Get("InsertLoc_CouldNotDeleteComment"));
+        ApplyReviewRefreshPlan(result.RefreshPlan, UiText.Get("InsertLoc_ClearedCommentsAndNotes"));
     }
 
     /// <summary>View - Normal: leave Page Break Preview.</summary>

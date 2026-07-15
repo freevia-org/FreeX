@@ -3380,6 +3380,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresNativeReviewMenuThroughSharedWorkflowPlanAndNavigation()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var controllerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.ReviewSessionController.cs"));
         var sessionSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "WorkbookSession.cs"));
         var plannerSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Services", "ReviewWorkflowPlanner.cs"));
         var catalogSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Presentation", "Shell", "NativeMenuCatalog.cs"));
@@ -3452,12 +3453,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private static IReadOnlyList<string> FormatReviewCommentItems(");
 
         source.Should().Contain("private void NavigateReviewNote(bool previous)");
-        source.Should().Contain("() => _session.GoToNextNote(previous: previous)");
+        source.Should().Contain("() => ReviewSessionController.NavigateNote(previous)");
         source.Should().Contain("private void NavigateReviewThreadedComment(bool previous)");
-        source.Should().Contain("() => _session.GoToNextThreadedComment(previous: previous)");
+        source.Should().Contain("() => ReviewSessionController.NavigateThreadedComment(previous)");
         source.Should().Contain("private void NavigateReviewTarget(");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? fallbackMessage);");
-        source.Should().Contain("RefreshShell($\"Selected {FormatRangeReference(selectedRange)} ({statusLabel})\");");
+        source.Should().Contain("ApplyReviewRefreshPlan(");
+        controllerSource.Should().Contain("PresentationReviewSessionController");
+        controllerSource.Should().Contain("_session.ExecuteReviewCommand(plan.CreateCommand(fallbackRange))");
+        controllerSource.Should().Contain("RefreshShell(status)");
 
         sessionSource.Should().Contain("public ReviewWorkflowPlan GetReviewWorkflowPlan(");
         sessionSource.Should().Contain("ReviewWorkflowPlanner.CreatePlan(");
