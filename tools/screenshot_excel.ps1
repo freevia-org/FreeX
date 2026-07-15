@@ -19,104 +19,10 @@ trap {
 
     throw $_
 }
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-using System.Text;
-using System.Collections.Generic;
-public class Win32e {
-    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
-    [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
-    [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
-    [DllImport("user32.dll")] public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
-    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
-    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern IntPtr SetActiveWindow(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern IntPtr SetFocus(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
-    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, ref RECT lpRect);
-    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
-    [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
-    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-    [DllImport("user32.dll")] public static extern void mouse_event(int dwFlags, int dx, int dy, int dwData, int dwExtraInfo);
-    [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
-    [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hWnd);
-    [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
-    [DllImport("gdi32.dll")]  public static extern int GetDeviceCaps(IntPtr hDC, int nIndex);
-    [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT { public int Left, Top, Right, Bottom; }
-    public static IntPtr FindWindowByClass(string className) {
-        IntPtr found = IntPtr.Zero;
-        EnumWindows((hWnd, lp) => {
-            if (!IsWindowVisible(hWnd)) return true;
-            var cn = new StringBuilder(256);
-            GetClassName(hWnd, cn, 256);
-            if (cn.ToString() == className) {
-                var sb = new StringBuilder(256);
-                GetWindowText(hWnd, sb, 256);
-                if (sb.Length > 0) { found = hWnd; return false; }
-            }
-            return true;
-        }, IntPtr.Zero);
-        return found;
-    }
-    public static int GetScreenDpi() {
-        IntPtr dc = GetDC(IntPtr.Zero);
-        int dpi = GetDeviceCaps(dc, 88);
-        ReleaseDC(IntPtr.Zero, dc);
-        return dpi;
-    }
-    public static WindowInfoE[] GetVisibleWindowsByProcess(int processId) {
-        var windows = new List<WindowInfoE>();
-        EnumWindows((hWnd, lp) => {
-            if (!IsWindowVisible(hWnd)) return true;
-            uint wPid;
-            GetWindowThreadProcessId(hWnd, out wPid);
-            if (wPid != (uint)processId) return true;
-            var title = new StringBuilder(512);
-            GetWindowText(hWnd, title, title.Capacity);
-            var className = new StringBuilder(256);
-            GetClassName(hWnd, className, className.Capacity);
-            var rect = new RECT();
-            if (!GetWindowRect(hWnd, ref rect)) return true;
-            if (rect.Right <= rect.Left || rect.Bottom <= rect.Top) return true;
-            windows.Add(new WindowInfoE {
-                Handle = hWnd,
-                ProcessId = (int)wPid,
-                Title = title.ToString(),
-                ClassName = className.ToString(),
-                Left = rect.Left,
-                Top = rect.Top,
-                Right = rect.Right,
-                Bottom = rect.Bottom
-            });
-            return true;
-        }, IntPtr.Zero);
-        return windows.ToArray();
-    }
-}
-public class WindowInfoE {
-    public IntPtr Handle;
-    public int ProcessId;
-    public string Title;
-    public string ClassName;
-    public int Left;
-    public int Top;
-    public int Right;
-    public int Bottom;
-}
-"@
-
-[Win32e]::SetProcessDPIAware() | Out-Null
-
 $outDir = Join-Path $PSScriptRoot "screenshots_excel"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 . (Join-Path $PSScriptRoot "ScreenshotCaptureSupport.ps1")
+[ScreenshotWin32]::SetProcessDPIAware() | Out-Null
 $autoFilterFlyoutOutDir = Join-Path $outDir "autofilter-flyout-tour"
 $numberFormatDropdownOutDir = Join-Path $outDir "home-number-format-dropdown-tour"
 $homeBordersDropdownOutDir = Join-Path $outDir "home-borders-dropdown-tour"
@@ -271,18 +177,18 @@ $windowLogicalHeight = 768
 
 $captureWidths = @(Resolve-CaptureWidths $Widths)
 
-$dpi   = [Win32e]::GetScreenDpi()
+$dpi   = [ScreenshotWin32]::GetScreenDpi()
 $scale = $dpi / 96.0
 Write-Host "Screen DPI: $dpi  Scale: $scale"
 
 function Get-WindowTitle($windowHandle) {
     $title = New-Object System.Text.StringBuilder 512
-    [Win32e]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
+    [ScreenshotWin32]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
     return $title.ToString()
 }
 
 function Get-ForegroundWindowInfo {
-    $foreground = [Win32e]::GetForegroundWindow()
+    $foreground = [ScreenshotWin32]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
         return [pscustomobject]@{
             Handle = "0"
@@ -292,9 +198,9 @@ function Get-ForegroundWindowInfo {
     }
 
     $actualPid = 0
-    [Win32e]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
     $title = New-Object System.Text.StringBuilder 512
-    [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+    [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
     return [pscustomobject]@{
         Handle = $foreground.ToString()
         ProcessId = $actualPid
@@ -330,7 +236,7 @@ function Write-RootCaptureBlockerManifest($operation, $expectedPid, $expectedTit
 }
 
 function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operation = "capture") {
-    $foreground = [Win32e]::GetForegroundWindow()
+    $foreground = [ScreenshotWin32]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
         Clear-ScreenshotEvidenceArtifacts
         Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle "No foreground window was available."
@@ -338,9 +244,9 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operati
     }
 
     $actualPid = 0
-    [Win32e]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
     $title = New-Object System.Text.StringBuilder 512
-    [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+    [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
     $actualTitle = $title.ToString()
     if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
         Clear-ScreenshotEvidenceArtifacts
@@ -350,16 +256,16 @@ function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operati
 }
 
 function Assert-ForegroundProcessOwnership($expectedPid, $operation = "capture") {
-    $foreground = [Win32e]::GetForegroundWindow()
+    $foreground = [ScreenshotWin32]::GetForegroundWindow()
     if ($foreground -eq [IntPtr]::Zero) {
         throw "Blocked: no foreground window before $operation."
     }
 
     $actualPid = 0
-    [Win32e]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
     if ($actualPid -ne $expectedPid) {
         $title = New-Object System.Text.StringBuilder 512
-        [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+        [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
         throw "Blocked: foreground window '$($title.ToString())' (PID $actualPid) does not belong to expected Excel PID $expectedPid before $operation."
     }
 }
@@ -374,45 +280,45 @@ function Set-ExcelForegroundWindow($excelHwnd, $excelPid, $expectedTitle, $opera
     }
 
     for ($attempt = 0; $attempt -lt 16; $attempt++) {
-        [Win32e]::ShowWindow($excelHwnd, 9) | Out-Null
-        [Win32e]::SetWindowPos($excelHwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null
+        [ScreenshotWin32]::ShowWindow($excelHwnd, 9) | Out-Null
+        [ScreenshotWin32]::SetWindowPos($excelHwnd, [IntPtr](-1), 0, 0, 0, 0, 0x0043) | Out-Null
         Start-Sleep -Milliseconds 40
-        [Win32e]::SetWindowPos($excelHwnd, [IntPtr](-2), 0, 0, 0, 0, 0x0043) | Out-Null
+        [ScreenshotWin32]::SetWindowPos($excelHwnd, [IntPtr](-2), 0, 0, 0, 0, 0x0043) | Out-Null
 
-        $foreground = [Win32e]::GetForegroundWindow()
+        $foreground = [ScreenshotWin32]::GetForegroundWindow()
         $foregroundPid = 0
         $targetPid = 0
-        $foregroundThread = if ($foreground -ne [IntPtr]::Zero) { [Win32e]::GetWindowThreadProcessId($foreground, [ref]$foregroundPid) } else { 0 }
-        $targetThread = [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$targetPid)
-        $currentThread = [Win32e]::GetCurrentThreadId()
+        $foregroundThread = if ($foreground -ne [IntPtr]::Zero) { [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$foregroundPid) } else { 0 }
+        $targetThread = [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$targetPid)
+        $currentThread = [ScreenshotWin32]::GetCurrentThreadId()
         $attachedTarget = $false
         $attachedForeground = $false
         try {
             if ($targetThread -ne 0 -and $targetThread -ne $currentThread) {
-                $attachedTarget = [Win32e]::AttachThreadInput($currentThread, $targetThread, $true)
+                $attachedTarget = [ScreenshotWin32]::AttachThreadInput($currentThread, $targetThread, $true)
             }
             if ($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread -and $foregroundThread -ne $targetThread) {
-                $attachedForeground = [Win32e]::AttachThreadInput($currentThread, $foregroundThread, $true)
+                $attachedForeground = [ScreenshotWin32]::AttachThreadInput($currentThread, $foregroundThread, $true)
             }
 
-            [Win32e]::BringWindowToTop($excelHwnd) | Out-Null
-            [Win32e]::SetActiveWindow($excelHwnd) | Out-Null
-            [Win32e]::SetFocus($excelHwnd) | Out-Null
-            [Win32e]::SetForegroundWindow($excelHwnd) | Out-Null
+            [ScreenshotWin32]::BringWindowToTop($excelHwnd) | Out-Null
+            [ScreenshotWin32]::SetActiveWindow($excelHwnd) | Out-Null
+            [ScreenshotWin32]::SetFocus($excelHwnd) | Out-Null
+            [ScreenshotWin32]::SetForegroundWindow($excelHwnd) | Out-Null
         }
         finally {
             if ($attachedForeground) {
-                [Win32e]::AttachThreadInput($currentThread, $foregroundThread, $false) | Out-Null
+                [ScreenshotWin32]::AttachThreadInput($currentThread, $foregroundThread, $false) | Out-Null
             }
             if ($attachedTarget) {
-                [Win32e]::AttachThreadInput($currentThread, $targetThread, $false) | Out-Null
+                [ScreenshotWin32]::AttachThreadInput($currentThread, $targetThread, $false) | Out-Null
             }
         }
 
         if (($attempt % 4) -eq 3) {
-            [Win32e]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
-            [Win32e]::SetForegroundWindow($excelHwnd) | Out-Null
-            [Win32e]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+            [ScreenshotWin32]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
+            [ScreenshotWin32]::SetForegroundWindow($excelHwnd) | Out-Null
+            [ScreenshotWin32]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
         }
 
         if ($null -ne $shell) {
@@ -421,15 +327,15 @@ function Set-ExcelForegroundWindow($excelHwnd, $excelPid, $expectedTitle, $opera
 
         Start-Sleep -Milliseconds 300
 
-        $foreground = [Win32e]::GetForegroundWindow()
+        $foreground = [ScreenshotWin32]::GetForegroundWindow()
         if ($foreground -eq [IntPtr]::Zero) {
             continue
         }
 
         $actualPid = 0
-        [Win32e]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+        [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
         $title = New-Object System.Text.StringBuilder 512
-        [Win32e]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
+        [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
         if ($actualPid -eq $excelPid -and $title.ToString() -eq $expectedTitle) {
             return
         }
@@ -439,7 +345,7 @@ function Set-ExcelForegroundWindow($excelHwnd, $excelPid, $expectedTitle, $opera
 }
 
 function Find-ExcelPopupWindow($expectedPid, $ownerWindowHandle, $minimumWidth, $minimumHeight) {
-    $windows = [Win32e]::GetVisibleWindowsByProcess($expectedPid) |
+    $windows = [ScreenshotWin32]::GetVisibleWindowsByProcess($expectedPid) |
         Where-Object {
             $_.Handle -ne $ownerWindowHandle -and
             $_.ClassName -ne "XLMAIN" -and
@@ -456,7 +362,7 @@ function Find-ExcelAutoFilterPopupWindow($expectedPid, $ownerWindowHandle) {
 }
 
 function Find-ExcelOpenWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
-    $windows = [Win32e]::GetVisibleWindowsByProcess($expectedPid) |
+    $windows = [ScreenshotWin32]::GetVisibleWindowsByProcess($expectedPid) |
         Where-Object {
             $_.Handle -ne $ownerWindowHandle -and
             $_.ClassName -eq "#32770" -and
@@ -470,7 +376,7 @@ function Find-ExcelOpenWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
 }
 
 function Find-ExcelSaveAsWorkbookDialogWindow($expectedPid, $ownerWindowHandle) {
-    $windows = [Win32e]::GetVisibleWindowsByProcess($expectedPid) |
+    $windows = [ScreenshotWin32]::GetVisibleWindowsByProcess($expectedPid) |
         Where-Object {
             $_.Handle -ne $ownerWindowHandle -and
             ($_.ClassName -eq "NUIDialog" -or ($_.ClassName -eq "#32770" -and $_.Title -eq "Save As")) -and
@@ -554,13 +460,13 @@ function Click-ExcelAutoFilterHeaderDropdown($excelApp, $worksheet, $headerAddre
     $clickX = [int]($left + ($header.Width * $pointToScreenScale) - 12)
     $clickY = [int]($top + ($header.Height * $pointToScreenScale / 2.0))
 
-    [Win32e]::SetCursorPos($clickX, $clickY) | Out-Null
+    [ScreenshotWin32]::SetCursorPos($clickX, $clickY) | Out-Null
     Start-Sleep -Milliseconds 100
     Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel AutoFilter dropdown mouse down"
-    [Win32e]::mouse_event(2, 0, 0, 0, 0)
+    [ScreenshotWin32]::mouse_event(2, 0, 0, 0, 0)
     Start-Sleep -Milliseconds 60
     Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel AutoFilter dropdown mouse up"
-    [Win32e]::mouse_event(4, 0, 0, 0, 0)
+    [ScreenshotWin32]::mouse_event(4, 0, 0, 0, 0)
 }
 
 function Expand-ExcelNumberFormatDropdown($expectedPid, $excelElement, $expectedTitle) {
@@ -636,7 +542,7 @@ function Invoke-ExcelAutoFilterFlyoutTour {
         }
 
         $excelPid = 0
-        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel AutoFilter flyout setup"
         Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel AutoFilter flyout setup"
@@ -651,8 +557,8 @@ function Invoke-ExcelAutoFilterFlyoutTour {
             throw "Excel AutoFilter flyout tour did not detect a foreground Excel popup window after opening the header dropdown."
         }
 
-        $windowRect = New-Object Win32e+RECT
-        [Win32e]::GetWindowRect($excelHwnd, [ref]$windowRect) | Out-Null
+        $windowRect = New-Object ScreenshotWin32+RECT
+        [ScreenshotWin32]::GetWindowRect($excelHwnd, [ref]$windowRect) | Out-Null
         $captureSource = "popup-window-rectangle"
         $captureBounds = [pscustomobject]@{
             Left = $popup.Left
@@ -775,7 +681,7 @@ function Invoke-ExcelNumberFormatDropdownTour {
         }
 
         $excelPid = 0
-        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel Number Format dropdown setup"
         Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel Number Format dropdown setup"
@@ -920,7 +826,7 @@ function Invoke-ExcelHomeBordersDropdownTour {
         }
 
         $excelPid = 0
-        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel Home Borders dropdown setup"
         Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel Home Borders dropdown setup"
@@ -1044,7 +950,7 @@ function Invoke-ExcelWorksheetContextMenuTour {
         }
 
         $excelPid = 0
-        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel worksheet context menu setup"
         Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel worksheet context menu setup"
@@ -1177,7 +1083,7 @@ function Invoke-ExcelOpenWorkbookDialogTour {
             throw "Excel native Open dialog tour could not resolve the Excel window handle."
         }
 
-        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel native Open dialog setup"
         Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel native Open dialog setup"
@@ -1307,7 +1213,7 @@ function Invoke-ExcelSaveAsWorkbookDialogTour {
             throw "Excel native Save As dialog tour could not resolve the Excel window handle."
         }
 
-        [Win32e]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
+        [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel native Save As dialog setup"
         Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel native Save As dialog setup"
@@ -1473,7 +1379,7 @@ function Resolve-LaunchedExcelMainWindow($preferredProcessId, $launchStarted) {
         Sort-Object @{ Expression = { if ($_.Id -eq $preferredProcessId) { 0 } else { 1 } } }, StartTime -Descending
 
     foreach ($candidateProcess in $candidateProcesses) {
-        $windows = [Win32e]::GetVisibleWindowsByProcess($candidateProcess.Id) |
+        $windows = [ScreenshotWin32]::GetVisibleWindowsByProcess($candidateProcess.Id) |
             Where-Object { $_.ClassName -eq "XLMAIN" } |
             Sort-Object @{ Expression = { if ([string]::IsNullOrWhiteSpace($_.Title)) { 1 } else { 0 } } }
         foreach ($window in $windows) {
@@ -1511,10 +1417,10 @@ $expectedTitle = Get-WindowTitle $hwnd
 
 # Restore (not maximized), then move to primary monitor top-left. The width matrix loop
 # controls maximized and fixed-width states.
-[Win32e]::ShowWindow($hwnd, 1) | Out-Null   # SW_RESTORE
+[ScreenshotWin32]::ShowWindow($hwnd, 1) | Out-Null   # SW_RESTORE
 Start-Sleep -Milliseconds 300
 # SWP_NOSIZE=0x0001 - move to primary monitor origin without resizing
-[Win32e]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, 0, 0, 0x0001) | Out-Null
+[ScreenshotWin32]::SetWindowPos($hwnd, [IntPtr]::Zero, 0, 0, 0, 0, 0x0001) | Out-Null
 Start-Sleep -Milliseconds 300
 Set-ExcelForegroundWindow $hwnd $wpid $expectedTitle "initial capture setup"
 
@@ -1562,16 +1468,16 @@ Resolve-ExcelAvailableRibbonTabs
 
 function Set-CaptureWindowWidth($windowHandle, $widthSpec) {
     if ($null -eq $widthSpec.WindowLogicalWidth) {
-        [Win32e]::ShowWindow($windowHandle, 3) | Out-Null
+        [ScreenshotWin32]::ShowWindow($windowHandle, 3) | Out-Null
         Set-ExcelForegroundWindow $windowHandle $wpid $expectedTitle "window resize capture setup"
         return
     }
 
     $physicalWidth = [int]([Math]::Ceiling([double]$widthSpec.WindowLogicalWidth * $scale))
     $physicalHeight = [int]([Math]::Ceiling($windowLogicalHeight * $scale))
-    [Win32e]::ShowWindow($windowHandle, 1) | Out-Null
+    [ScreenshotWin32]::ShowWindow($windowHandle, 1) | Out-Null
     Start-Sleep -Milliseconds 200
-    [Win32e]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
+    [ScreenshotWin32]::SetWindowPos($windowHandle, [IntPtr]::Zero, 0, 0, $physicalWidth, $physicalHeight, 0) | Out-Null
     Set-ExcelForegroundWindow $windowHandle $wpid $expectedTitle "window resize capture setup"
 }
 
@@ -1666,30 +1572,23 @@ function Screenshot-Tab($tabName, $widthSpec) {
     Start-Sleep -Milliseconds 100
     Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab keyboard input"
     [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-    # Also try a real mouse click via mouse_event
-    Add-Type -TypeDefinition 'using System.Runtime.InteropServices; public class Clicker { [DllImport("user32.dll")] public static extern void mouse_event(int f,int x,int y,int c,int e); }' -ErrorAction SilentlyContinue
+    # Also try a real mouse click via mouse_event.
     Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab mouse down"
-    [Clicker]::mouse_event(2,0,0,0,0)
+    [ScreenshotWin32]::mouse_event(2,0,0,0,0)
     Start-Sleep -Milliseconds 50
     Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab mouse up"
-    [Clicker]::mouse_event(4,0,0,0,0)
+    [ScreenshotWin32]::mouse_event(4,0,0,0,0)
     Start-Sleep -Milliseconds 800
 
-    $wrect = New-Object Win32e+RECT
-    [Win32e]::GetWindowRect($hwnd, [ref]$wrect) | Out-Null
+    $wrect = New-Object ScreenshotWin32+RECT
+    [ScreenshotWin32]::GetWindowRect($hwnd, [ref]$wrect) | Out-Null
     $w = $wrect.Right - $wrect.Left
     Assert-ForegroundWindowOwnership $wpid $expectedTitle "screen capture"
-
-    $bmp = New-Object System.Drawing.Bitmap($w, $captureH)
-    $g   = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen($wrect.Left, $wrect.Top, 0, 0, [System.Drawing.Size]::new($w, $captureH))
-    $g.Dispose()
 
     $safe = $tabName -replace '[^a-zA-Z0-9_]','_'
     $fileName = "excel_$($widthSpec.Label)_$safe.png"
     $path = Join-Path $outDir $fileName
-    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bmp.Dispose()
+    Capture-ScreenRectangle $wrect.Left $wrect.Top $w $captureH $path
     $script:capturedFiles += [pscustomobject]@{
         CaptureSequence = $script:capturedFiles.Count + 1
         CaptureKey = "ribbon:$($widthSpec.Label):$safe"
@@ -1729,8 +1628,8 @@ foreach ($widthSpec in $captureWidths) {
     }
 }
 
-$finalRect = New-Object Win32e+RECT
-[Win32e]::GetWindowRect($hwnd, [ref]$finalRect) | Out-Null
+$finalRect = New-Object ScreenshotWin32+RECT
+[ScreenshotWin32]::GetWindowRect($hwnd, [ref]$finalRect) | Out-Null
 Write-ScreenshotEvidenceManifest "screenshot_excel.ps1" $outDir $finalRect 300 $captureH $captureWidths $script:capturedFiles $wpid $expectedTitle
 
 # Close Excel gracefully

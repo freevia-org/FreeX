@@ -200,28 +200,6 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $invariantCulture = [System.Globalization.CultureInfo]::InvariantCulture
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-function ConvertTo-RepoRelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $fullRoot = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\')
-    if ($fullPath.StartsWith($fullRoot + "\", [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $fullPath.Substring($fullRoot.Length + 1).Replace('/', '\')
-    }
-
-    return $fullPath.Replace('/', '\')
-}
-
-function Escape-MarkdownCell {
-    param([string]$Value)
-
-    if ($null -eq $Value -or $Value.Length -eq 0) {
-        return ""
-    }
-
-    $Value.Replace('|', '\|')
-}
-
 function Format-ReportNumber {
     param(
         [Parameter(Mandatory = $true)][double]$Value,
@@ -255,17 +233,6 @@ function Format-PhysicalSize {
     param([Parameter(Mandatory = $true)]$Metric)
 
     "$($Metric.Width)x$($Metric.Height) px @ $(Format-DisplayNumber $Metric.DpiX 0.05) DPI"
-}
-
-function Read-JsonFile {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $resolvedPath = Resolve-ToolRepoPath -Path $Path -RepoRoot $repoRoot
-    if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
-        throw "Required dialog evidence input was not found: $resolvedPath"
-    }
-
-    Get-Content -LiteralPath $resolvedPath -Raw | ConvertFrom-Json
 }
 
 function Resolve-ManifestPngPath {
@@ -785,7 +752,7 @@ function ConvertTo-JsonMetric {
     )
 
     $model = [ordered]@{
-        relativePath = ConvertTo-RepoRelativePath $Metric.Path
+        relativePath = ConvertTo-ToolRepoRelativePath -Path $Metric.Path -RepoRoot $repoRoot
         fileBytes = $Metric.FileBytes
         width = $Metric.Width
         height = $Metric.Height
@@ -918,9 +885,9 @@ function New-PngEvidence {
     }
 }
 
-$inventory = Read-JsonFile $InventoryPath
-$wpfManifest = Read-JsonFile $WpfManifestPath
-$avaloniaManifest = Read-JsonFile $AvaloniaManifestPath
+$inventory = Read-ToolJson -Path $InventoryPath -RepoRoot $repoRoot -MissingMessage "Required dialog evidence input was not found"
+$wpfManifest = Read-ToolJson -Path $WpfManifestPath -RepoRoot $repoRoot -MissingMessage "Required dialog evidence input was not found"
+$avaloniaManifest = Read-ToolJson -Path $AvaloniaManifestPath -RepoRoot $repoRoot -MissingMessage "Required dialog evidence input was not found"
 
 $inventoryRows = @($inventory.rows)
 $routeIds = @($inventoryRows | ForEach-Object { [string]$_.routeId })
@@ -998,12 +965,12 @@ $policyAcceptedNativeDifferenceGroups = @(
         Sort-Object -Property Name
 )
 
-$wpfManifestRelativePath = ConvertTo-RepoRelativePath (Resolve-ToolRepoPath -Path $WpfManifestPath -RepoRoot $repoRoot)
-$avaloniaManifestRelativePath = ConvertTo-RepoRelativePath (Resolve-ToolRepoPath -Path $AvaloniaManifestPath -RepoRoot $repoRoot)
-$inventoryRelativePath = ConvertTo-RepoRelativePath (Resolve-ToolRepoPath -Path $InventoryPath -RepoRoot $repoRoot)
+$wpfManifestRelativePath = ConvertTo-ToolRepoRelativePath -Path (Resolve-ToolRepoPath -Path $WpfManifestPath -RepoRoot $repoRoot) -RepoRoot $repoRoot
+$avaloniaManifestRelativePath = ConvertTo-ToolRepoRelativePath -Path (Resolve-ToolRepoPath -Path $AvaloniaManifestPath -RepoRoot $repoRoot) -RepoRoot $repoRoot
+$inventoryRelativePath = ConvertTo-ToolRepoRelativePath -Path (Resolve-ToolRepoPath -Path $InventoryPath -RepoRoot $repoRoot) -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
-$jsonRelativePath = ConvertTo-RepoRelativePath $resolvedJsonPath
+$jsonRelativePath = ConvertTo-ToolRepoRelativePath -Path $resolvedJsonPath -RepoRoot $repoRoot
 
 $jsonModel = [ordered]@{
     schemaVersion = 1
@@ -1208,7 +1175,7 @@ foreach ($group in $dimensionMismatchBucketGroups) {
             $null -ne $_.comparison.policyAcceptance -and
             $_.comparison.policyAcceptance.status -eq "policy-accepted"
         }).Count -eq $groupRows.Count
-    [void]$md.AppendLine("| $(Escape-MarkdownCell ([string]$group.Name)) | $($group.Count) | $policyAccepted | $(Escape-MarkdownCell ($topIds -join '<br>')) | $(Escape-MarkdownCell $nextAction) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell ([string]$group.Name)) | $($group.Count) | $policyAccepted | $(ConvertTo-ToolMarkdownCell ($topIds -join '<br>')) | $(ConvertTo-ToolMarkdownCell $nextAction) |")
 }
 [void]$md.AppendLine()
 
@@ -1223,7 +1190,7 @@ if ($policyAcceptedNativeDifferenceGroups.Count -gt 0) {
         $groupRows = @($group.Group | Sort-Object -Property id)
         $acceptance = $groupRows[0].comparison.policyAcceptance
         $ids = @($groupRows | ForEach-Object { $_.id })
-        [void]$md.AppendLine("| $(Escape-MarkdownCell ([string]$group.Name)) | $($group.Count) | $(Escape-MarkdownCell ($ids -join '<br>')) | $(Escape-MarkdownCell ([string]$acceptance.rationale)) | $(Escape-MarkdownCell ([string]$acceptance.clearCriteria)) |")
+        [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell ([string]$group.Name)) | $($group.Count) | $(ConvertTo-ToolMarkdownCell ($ids -join '<br>')) | $(ConvertTo-ToolMarkdownCell ([string]$acceptance.rationale)) | $(ConvertTo-ToolMarkdownCell ([string]$acceptance.clearCriteria)) |")
     }
     [void]$md.AppendLine()
 }
@@ -1248,7 +1215,7 @@ foreach ($row in $topOutlierRows) {
     $evidenceFlag = if ($row.comparison.expectedSizeMismatch) { "Expected $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) via $($row.comparison.expectedSizeSource)" } else { "" }
     $rawSizes = "$(Format-PhysicalSize $row.wpf.metrics) vs $(Format-PhysicalSize $row.avalonia.metrics)"
     $bucket = if ([string]::IsNullOrWhiteSpace([string]$row.comparison.dimensionMismatchBucket)) { "" } else { [string]$row.comparison.dimensionMismatchBucket }
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Format-LogicalSize $row.wpf.metrics) | $(Format-LogicalSize $row.avalonia.metrics) | $(Escape-MarkdownCell $rawSizes) | $(Escape-MarkdownCell $bucket) | $(Escape-MarkdownCell $evidenceFlag) | $(Format-ReportNumber $row.comparison.triageScore) | $(Format-ReportNumber $row.comparison.sampleMeanDelta) | $(Format-ReportNumber $row.comparison.lumaDelta) | $(Format-ReportNumber $row.comparison.nonBackgroundDelta) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $row.id) | $(Format-LogicalSize $row.wpf.metrics) | $(Format-LogicalSize $row.avalonia.metrics) | $(ConvertTo-ToolMarkdownCell $rawSizes) | $(ConvertTo-ToolMarkdownCell $bucket) | $(ConvertTo-ToolMarkdownCell $evidenceFlag) | $(Format-ReportNumber $row.comparison.triageScore) | $(Format-ReportNumber $row.comparison.sampleMeanDelta) | $(Format-ReportNumber $row.comparison.lumaDelta) | $(Format-ReportNumber $row.comparison.nonBackgroundDelta) |")
 }
 
 [void]$md.AppendLine()
@@ -1259,7 +1226,7 @@ foreach ($row in $topOutlierRows) {
 foreach ($row in $dimensionMismatchRows) {
     $logicalDelta = "$(Format-DisplayNumber $row.comparison.logicalWidthDelta)x$(Format-DisplayNumber $row.comparison.logicalHeightDelta)"
     $policyFamily = if ($null -eq $row.comparison.policyAcceptance) { "" } else { [string]$row.comparison.policyAcceptance.family }
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Escape-MarkdownCell $row.comparison.dimensionMismatchBucket) | $(Escape-MarkdownCell $policyFamily) | $(Format-LogicalSize $row.wpf.metrics) | $(Format-LogicalSize $row.avalonia.metrics) | $logicalDelta | $(Escape-MarkdownCell $row.comparison.dimensionMismatchReason) | $(Escape-MarkdownCell $row.comparison.dimensionMismatchNextAction) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $row.id) | $(ConvertTo-ToolMarkdownCell $row.comparison.dimensionMismatchBucket) | $(ConvertTo-ToolMarkdownCell $policyFamily) | $(Format-LogicalSize $row.wpf.metrics) | $(Format-LogicalSize $row.avalonia.metrics) | $logicalDelta | $(ConvertTo-ToolMarkdownCell $row.comparison.dimensionMismatchReason) | $(ConvertTo-ToolMarkdownCell $row.comparison.dimensionMismatchNextAction) |")
 }
 
 [void]$md.AppendLine()
@@ -1270,7 +1237,7 @@ foreach ($row in $dimensionMismatchRows) {
 [void]$md.AppendLine("| Surface id | Expected logical size | Source | WPF logical size | WPF raw PNG | WPF matches | Avalonia logical size | Avalonia raw PNG | Avalonia matches |")
 [void]$md.AppendLine("| --- | ---: | --- | ---: | ---: | --- | ---: | ---: | --- |")
 foreach ($row in $expectedSizeMismatchRows) {
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(Escape-MarkdownCell $row.comparison.expectedSizeSource) | $(Format-LogicalSize $row.wpf.metrics) | $(Escape-MarkdownCell (Format-PhysicalSize $row.wpf.metrics)) | $($row.comparison.wpfExpectedSizeMatch) | $(Format-LogicalSize $row.avalonia.metrics) | $(Escape-MarkdownCell (Format-PhysicalSize $row.avalonia.metrics)) | $($row.comparison.avaloniaExpectedSizeMatch) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $row.id) | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(ConvertTo-ToolMarkdownCell $row.comparison.expectedSizeSource) | $(Format-LogicalSize $row.wpf.metrics) | $(ConvertTo-ToolMarkdownCell (Format-PhysicalSize $row.wpf.metrics)) | $($row.comparison.wpfExpectedSizeMatch) | $(Format-LogicalSize $row.avalonia.metrics) | $(ConvertTo-ToolMarkdownCell (Format-PhysicalSize $row.avalonia.metrics)) | $($row.comparison.avaloniaExpectedSizeMatch) |")
 }
 
 if ($stalePromotedExpectedSizeRows.Count -gt 0) {
@@ -1288,7 +1255,7 @@ if ($stalePromotedExpectedSizeRows.Count -gt 0) {
         $sourcePng = if ([string]::IsNullOrWhiteSpace([string]$staleEvidence.provenance.sourcePng)) { "" } else { [string]$staleEvidence.provenance.sourcePng }
         $recaptureStatus = if ([string]::IsNullOrWhiteSpace([string]$staleEvidence.provenance.recaptureStatus)) { "" } else { [string]$staleEvidence.provenance.recaptureStatus }
         $nextAction = Get-StalePromotedExpectedSizeNextAction -SurfaceId $row.id -RecaptureStatus $recaptureStatus
-        [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $staleShell | $currentSize | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(Escape-MarkdownCell $sourcePng) | $(Escape-MarkdownCell $recaptureStatus) | $(Escape-MarkdownCell $nextAction) |")
+        [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $row.id) | $staleShell | $currentSize | $($row.comparison.expectedWidth)x$($row.comparison.expectedHeight) | $(ConvertTo-ToolMarkdownCell $sourcePng) | $(ConvertTo-ToolMarkdownCell $recaptureStatus) | $(ConvertTo-ToolMarkdownCell $nextAction) |")
     }
 }
 
@@ -1298,7 +1265,7 @@ if ($stalePromotedExpectedSizeRows.Count -gt 0) {
 [void]$md.AppendLine("| Surface id | WPF PNG | WPF logical size | WPF raw PNG | WPF nonblank | Avalonia PNG | Avalonia logical size | Avalonia raw PNG | Avalonia nonblank | Dimension match | Score |")
 [void]$md.AppendLine("| --- | --- | ---: | ---: | --- | --- | ---: | ---: | --- | --- | ---: |")
 foreach ($row in $pairedRows) {
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Escape-MarkdownCell $row.wpf.png) | $(Format-LogicalSize $row.wpf.metrics) | $(Escape-MarkdownCell (Format-PhysicalSize $row.wpf.metrics)) | $($row.wpf.metrics.IsNonBlank) | $(Escape-MarkdownCell $row.avalonia.png) | $(Format-LogicalSize $row.avalonia.metrics) | $(Escape-MarkdownCell (Format-PhysicalSize $row.avalonia.metrics)) | $($row.avalonia.metrics.IsNonBlank) | $($row.comparison.dimensionMatch) | $(Format-ReportNumber $row.comparison.triageScore) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $row.id) | $(ConvertTo-ToolMarkdownCell $row.wpf.png) | $(Format-LogicalSize $row.wpf.metrics) | $(ConvertTo-ToolMarkdownCell (Format-PhysicalSize $row.wpf.metrics)) | $($row.wpf.metrics.IsNonBlank) | $(ConvertTo-ToolMarkdownCell $row.avalonia.png) | $(Format-LogicalSize $row.avalonia.metrics) | $(ConvertTo-ToolMarkdownCell (Format-PhysicalSize $row.avalonia.metrics)) | $($row.avalonia.metrics.IsNonBlank) | $($row.comparison.dimensionMatch) | $(Format-ReportNumber $row.comparison.triageScore) |")
 }
 
 [void]$md.AppendLine()
@@ -1310,7 +1277,7 @@ foreach ($row in $pairedRows) {
 [void]$md.AppendLine("| --- | ---: | --- |")
 foreach ($group in $additionalGroups) {
     $ids = @($group.Group | Sort-Object -Property id | ForEach-Object { $_.id })
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $group.Name) | $($group.Count) | $(Escape-MarkdownCell ($ids -join '<br>')) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $group.Name) | $($group.Count) | $(ConvertTo-ToolMarkdownCell ($ids -join '<br>')) |")
 }
 
 [void]$md.AppendLine()
@@ -1319,18 +1286,14 @@ foreach ($group in $additionalGroups) {
 [void]$md.AppendLine("| Surface id | PNG | Size | Nonblank | Distinct colors | Non-bg ratio |")
 [void]$md.AppendLine("| --- | --- | ---: | --- | ---: | ---: |")
 foreach ($row in $avaloniaOnlyRows) {
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Escape-MarkdownCell $row.avalonia.png) | $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) | $($row.avalonia.metrics.IsNonBlank) | $($row.avalonia.metrics.DistinctColors) | $(Format-ReportNumber $row.avalonia.metrics.NonBackgroundRatio) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $row.id) | $(ConvertTo-ToolMarkdownCell $row.avalonia.png) | $($row.avalonia.metrics.Width)x$($row.avalonia.metrics.Height) | $($row.avalonia.metrics.IsNonBlank) | $($row.avalonia.metrics.DistinctColors) | $(Format-ReportNumber $row.avalonia.metrics.NonBackgroundRatio) |")
 }
 
 $markdown = $md.ToString()
 
 if ($Check) {
-    $existingMarkdown = if (Test-Path -LiteralPath $resolvedMarkdownPath -PathType Leaf) { Get-Content -LiteralPath $resolvedMarkdownPath -Raw } else { "" }
-    $existingJson = if (Test-Path -LiteralPath $resolvedJsonPath -PathType Leaf) { Get-Content -LiteralPath $resolvedJsonPath -Raw } else { "" }
-
-    if ($existingMarkdown -ne $markdown -or $existingJson -ne $json) {
-        throw "Dialog visual evidence summary is out of date. Run tools\Generate-DialogVisualEvidenceSummary.ps1 to refresh it."
-    }
+    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Dialog visual evidence summary Markdown" -GeneratorScriptName "tools\Generate-DialogVisualEvidenceSummary.ps1"
+    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Dialog visual evidence summary JSON" -GeneratorScriptName "tools\Generate-DialogVisualEvidenceSummary.ps1"
 
     Write-Host "Dialog visual evidence summary is up to date."
     return
@@ -1356,5 +1319,5 @@ Write-Host "Policy-accepted native/control differences: $($policyAcceptedNativeD
 foreach ($group in $dimensionMismatchBucketGroups) {
     Write-Host "Dimension mismatch bucket '$($group.Name)': $($group.Count)"
 }
-Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedMarkdownPath)"
-Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedJsonPath)"
+Write-Host "Wrote $(ConvertTo-ToolRepoRelativePath -Path $resolvedMarkdownPath -RepoRoot $repoRoot)"
+Write-Host "Wrote $(ConvertTo-ToolRepoRelativePath -Path $resolvedJsonPath -RepoRoot $repoRoot)"

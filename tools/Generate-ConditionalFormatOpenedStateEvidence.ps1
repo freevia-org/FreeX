@@ -9,39 +9,6 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-function ConvertTo-RepoRelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $fullRoot = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\')
-    if ($fullPath.StartsWith($fullRoot + "\", [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $fullPath.Substring($fullRoot.Length + 1).Replace('/', '\')
-    }
-
-    return $fullPath.Replace('/', '\')
-}
-
-function Read-JsonFile {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $resolvedPath = Resolve-ToolRepoPath -Path $Path -RepoRoot $repoRoot
-    if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
-        throw "Required generated parity input is missing: $resolvedPath"
-    }
-
-    Get-Content -LiteralPath $resolvedPath -Raw | ConvertFrom-Json
-}
-
-function Escape-MarkdownCell {
-    param([string]$Value)
-
-    if ($null -eq $Value -or $Value.Length -eq 0) {
-        return ""
-    }
-
-    $Value.Replace('|', '\|')
-}
-
 function Resolve-ScreenshotPath {
     param(
         [Parameter(Mandatory = $true)]$Manifest,
@@ -53,13 +20,13 @@ function Resolve-ScreenshotPath {
     }
 
     if (Test-Path -LiteralPath $Manifest.ScreenshotPath -PathType Leaf) {
-        return ConvertTo-RepoRelativePath $Manifest.ScreenshotPath
+        return ConvertTo-ToolRepoRelativePath -Path $Manifest.ScreenshotPath -RepoRoot $repoRoot
     }
 
     $manifestDirectory = Split-Path -Parent $ManifestPath
     $localCandidate = Join-Path $manifestDirectory ([System.IO.Path]::GetFileName($Manifest.ScreenshotPath))
     if (Test-Path -LiteralPath $localCandidate -PathType Leaf) {
-        return ConvertTo-RepoRelativePath $localCandidate
+        return ConvertTo-ToolRepoRelativePath -Path $localCandidate -RepoRoot $repoRoot
     }
 
     return $Manifest.ScreenshotPath
@@ -261,7 +228,7 @@ function Get-CaptureTargetStatus {
     if (-not [string]::IsNullOrWhiteSpace($FallbackEvidencePath)) {
         $resolvedFallbackPath = Resolve-ToolRepoPath -Path $FallbackEvidencePath -RepoRoot $repoRoot
         if (Test-Path -LiteralPath $resolvedFallbackPath -PathType Leaf) {
-            $fallbackEvidence += ConvertTo-RepoRelativePath $resolvedFallbackPath
+            $fallbackEvidence += ConvertTo-ToolRepoRelativePath -Path $resolvedFallbackPath -RepoRoot $repoRoot
         }
     }
 
@@ -294,7 +261,7 @@ function Get-CaptureTargetStatus {
         }
     }
 
-    $manifest = Get-Content -LiteralPath $resolvedManifestPath -Raw | ConvertFrom-Json
+    $manifest = Read-ToolJson -Path $resolvedManifestPath -RepoRoot $repoRoot -MissingMessage "Capture manifest was not found"
     $expectedManifestSubject = if ([string]::IsNullOrWhiteSpace($ManifestSubject)) { $Subject } else { $ManifestSubject }
     $manifestSubject = Get-ManifestString -Manifest $manifest -PropertyName "Subject"
     $manifestScenario = Get-ManifestString -Manifest $manifest -PropertyName "Scenario"
@@ -354,7 +321,7 @@ function Get-CaptureTargetStatus {
         expectedOpenedState = $ExpectedOpenedState
         runnerCommand = $RunnerCommand
         requiredEnvironment = $RequiredEnvironment
-        manifestPath = ConvertTo-RepoRelativePath $resolvedManifestPath
+        manifestPath = ConvertTo-ToolRepoRelativePath -Path $resolvedManifestPath -RepoRoot $repoRoot
         captureStatus = $captureStatus
         screenshotPath = $resolvedScreenshot
         screenshotExists = [bool]$screenshotExists
@@ -418,25 +385,7 @@ function Get-OperatorChecklist {
     return @($items)
 }
 
-function Test-FileContentMatches {
-    param(
-        [Parameter(Mandatory = $true)][string]$ExpectedContent,
-        [Parameter(Mandatory = $true)][string]$ActualPath,
-        [Parameter(Mandatory = $true)][string]$Label
-    )
-
-    if (-not (Test-Path -LiteralPath $ActualPath -PathType Leaf)) {
-        throw "$Label is missing. Run tools\Generate-ConditionalFormatOpenedStateEvidence.ps1 to create it."
-    }
-
-    $actual = (Get-Content -LiteralPath $ActualPath -Raw) -replace "`r`n", "`n"
-    $expected = $ExpectedContent -replace "`r`n", "`n"
-    if ($expected -cne $actual) {
-        throw "$Label is out of date. Run tools\Generate-ConditionalFormatOpenedStateEvidence.ps1 to refresh it."
-    }
-}
-
-$classification = Read-JsonFile "docs\parity\functional-parity-classification.json"
+$classification = Read-ToolJson -Path "docs\parity\functional-parity-classification.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
 $conditionalRows = @($classification.rows | Where-Object {
         $_.classification -eq "pseudo-command-gallery-item" -and
         $_.tab -eq "Home" -and
@@ -557,7 +506,7 @@ $md = New-Object System.Text.StringBuilder
 [void]$md.AppendLine("| Category | Count |")
 [void]$md.AppendLine("|---|---:|")
 foreach ($category in $blockerCategories) {
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $category.category) | $($category.count) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $category.category) | $($category.count) |")
 }
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Capture Targets")
@@ -571,7 +520,7 @@ foreach ($target in $captureTargets) {
         $validation = "$validation ($($target.manifestValidationErrors -join ', '))"
     }
 
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | $(Escape-MarkdownCell $target.subject) | $(Escape-MarkdownCell $target.scenario) | $(Escape-MarkdownCell $target.retentionStatus) | $(Escape-MarkdownCell $target.blockerCategory) | $(Escape-MarkdownCell $validation) | $(Escape-MarkdownCell $target.environmentSummary) | $(Escape-MarkdownCell $target.lastAttemptedAtUtc) | $(Escape-MarkdownCell $png) | $(Escape-MarkdownCell $target.blockReason) | $(Escape-MarkdownCell $target.nextCaptureAction) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $target.id) | $(ConvertTo-ToolMarkdownCell $target.subject) | $(ConvertTo-ToolMarkdownCell $target.scenario) | $(ConvertTo-ToolMarkdownCell $target.retentionStatus) | $(ConvertTo-ToolMarkdownCell $target.blockerCategory) | $(ConvertTo-ToolMarkdownCell $validation) | $(ConvertTo-ToolMarkdownCell $target.environmentSummary) | $(ConvertTo-ToolMarkdownCell $target.lastAttemptedAtUtc) | $(ConvertTo-ToolMarkdownCell $png) | $(ConvertTo-ToolMarkdownCell $target.blockReason) | $(ConvertTo-ToolMarkdownCell $target.nextCaptureAction) |")
 }
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Capture Commands")
@@ -579,8 +528,8 @@ foreach ($target in $captureTargets) {
 [void]$md.AppendLine("| Target | Command | Required environment |")
 [void]$md.AppendLine("|---|---|---|")
 foreach ($target in $captureTargets) {
-    $command = Escape-MarkdownCell $target.runnerCommand
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $target.id) | ``$command`` | $(Escape-MarkdownCell $target.requiredEnvironment) |")
+    $command = ConvertTo-ToolMarkdownCell $target.runnerCommand
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $target.id) | ``$command`` | $(ConvertTo-ToolMarkdownCell $target.requiredEnvironment) |")
 }
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Operator Checklist")
@@ -588,8 +537,8 @@ foreach ($target in $captureTargets) {
 [void]$md.AppendLine("| Phase | Command | Purpose |")
 [void]$md.AppendLine("|---|---|---|")
 foreach ($item in $operatorChecklist) {
-    $command = Escape-MarkdownCell $item.command
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $item.phase) | ``$command`` | $(Escape-MarkdownCell $item.purpose) |")
+    $command = ConvertTo-ToolMarkdownCell $item.command
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $item.phase) | ``$command`` | $(ConvertTo-ToolMarkdownCell $item.purpose) |")
 }
 [void]$md.AppendLine()
 [void]$md.AppendLine("## Classifier Rows")
@@ -599,7 +548,7 @@ foreach ($item in $operatorChecklist) {
 [void]$md.AppendLine("| Command | Status |")
 [void]$md.AppendLine("|---|---|")
 foreach ($row in $rows) {
-    [void]$md.AppendLine("| $(Escape-MarkdownCell $row.id) | $(Escape-MarkdownCell $row.openedStateEvidenceStatus) |")
+    [void]$md.AppendLine("| $(ConvertTo-ToolMarkdownCell $row.id) | $(ConvertTo-ToolMarkdownCell $row.openedStateEvidenceStatus) |")
 }
 
 $markdown = $md.ToString()
@@ -608,8 +557,8 @@ $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 
 if ($Check) {
-    Test-FileContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Conditional-format opened-state evidence JSON"
-    Test-FileContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Conditional-format opened-state evidence Markdown"
+    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Conditional-format opened-state evidence JSON" -GeneratorScriptName "tools\Generate-ConditionalFormatOpenedStateEvidence.ps1"
+    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Conditional-format opened-state evidence Markdown" -GeneratorScriptName "tools\Generate-ConditionalFormatOpenedStateEvidence.ps1"
     Write-Host "Conditional-format opened-state evidence is up to date."
     return
 }
@@ -621,5 +570,5 @@ Set-Content -LiteralPath $resolvedMarkdownPath -Value $markdown -Encoding utf8 -
 
 Write-Host "Conditional-format popup/gallery rows: $($conditionalRows.Count)"
 Write-Host "Complete opened-state capture targets: $completeOpenedStateTargets/$($captureTargets.Count)"
-Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedJsonPath)"
-Write-Host "Wrote $(ConvertTo-RepoRelativePath $resolvedMarkdownPath)"
+Write-Host "Wrote $(ConvertTo-ToolRepoRelativePath -Path $resolvedJsonPath -RepoRoot $repoRoot)"
+Write-Host "Wrote $(ConvertTo-ToolRepoRelativePath -Path $resolvedMarkdownPath -RepoRoot $repoRoot)"

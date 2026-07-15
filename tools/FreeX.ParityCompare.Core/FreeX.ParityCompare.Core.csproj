@@ -4,9 +4,8 @@
     <!-- Portable: no WPF, no Avalonia, no platform RID. Image diff + pairing + report
          generation run anywhere net10.0 runs, so this assembly can join the DefaultTests gate. -->
     <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
+  <Import Project="..\ToolProjects.props" />
 
 </Project>

@@ -10,17 +10,6 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-function Read-GeneratedJson {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $resolvedPath = Resolve-ToolRepoPath -Path $Path -RepoRoot $repoRoot
-    if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
-        throw "Required generated parity input is missing: $resolvedPath"
-    }
-
-    Get-Content -LiteralPath $resolvedPath -Raw | ConvertFrom-Json
-}
-
 function Get-JsonPropertyValue {
     param(
         [Parameter(Mandatory = $true)]$InputObject,
@@ -105,24 +94,6 @@ function Get-FreeXNextSlice {
     return "Refresh paired WPF/Avalonia dialog evidence until every generated dialog route has current captures."
 }
 
-function Test-FileContentMatches {
-    param(
-        [Parameter(Mandatory = $true)][string]$ExpectedPath,
-        [Parameter(Mandatory = $true)][string]$ActualPath,
-        [Parameter(Mandatory = $true)][string]$Label
-    )
-
-    if (-not (Test-Path -LiteralPath $ActualPath -PathType Leaf)) {
-        throw "$Label is missing. Run tools\Generate-CrossAppParityDashboard.ps1 to create it."
-    }
-
-    $expected = (Get-Content -LiteralPath $ExpectedPath -Raw) -replace "`r`n", "`n"
-    $actual = (Get-Content -LiteralPath $ActualPath -Raw) -replace "`r`n", "`n"
-    if ($expected -cne $actual) {
-        throw "$Label is out of date. Run tools\Generate-CrossAppParityDashboard.ps1 to refresh it."
-    }
-}
-
 $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-cross-app-parity-dashboard-" + [System.Guid]::NewGuid().ToString("N"))
@@ -132,13 +103,13 @@ $tempMarkdownPath = Join-Path $tempRoot "avalonia-wpf-cross-app-dashboard.md"
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
 
 try {
-    $commandInventory = Read-GeneratedJson "docs\parity\command-inventory.json"
-    $functional = Read-GeneratedJson "docs\parity\functional-parity.json"
-    $functionalClassification = Read-GeneratedJson "docs\parity\functional-parity-classification.json"
-    $dialogInventory = Read-GeneratedJson "docs\parity\dialog-parity-inventory.json"
-    $dialogVisualEvidence = Read-GeneratedJson "docs\parity\dialog-visual-evidence-summary.json"
-    $freew = Read-GeneratedJson "docs\parity\freew-command-inventory.json"
-    $freep = Read-GeneratedJson "docs\parity\freep-command-parity-inventory.json"
+    $commandInventory = Read-ToolJson -Path "docs\parity\command-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $functional = Read-ToolJson -Path "docs\parity\functional-parity.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $functionalClassification = Read-ToolJson -Path "docs\parity\functional-parity-classification.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $dialogInventory = Read-ToolJson -Path "docs\parity\dialog-parity-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $dialogVisualEvidence = Read-ToolJson -Path "docs\parity\dialog-visual-evidence-summary.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freew = Read-ToolJson -Path "docs\parity\freew-command-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
+    $freep = Read-ToolJson -Path "docs\parity\freep-command-parity-inventory.json" -RepoRoot $repoRoot -MissingMessage "Required generated parity input is missing"
 
     $commandRows = Get-CommandSurfaceRows $commandInventory.commandSurfaceRows
     $freeXFunctionalMatrix = [ordered]@{
@@ -286,8 +257,8 @@ try {
     Set-Content -LiteralPath $tempMarkdownPath -Value ($md + "`n") -NoNewline -Encoding UTF8
 
     if ($Check) {
-        Test-FileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedJsonPath -Label "Cross-app parity dashboard JSON"
-        Test-FileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label "Cross-app parity dashboard Markdown"
+        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedJsonPath -Label "Cross-app parity dashboard JSON" -GeneratorScriptName "tools\Generate-CrossAppParityDashboard.ps1" -NormalizeNewlines
+        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label "Cross-app parity dashboard Markdown" -GeneratorScriptName "tools\Generate-CrossAppParityDashboard.ps1" -NormalizeNewlines
     }
     else {
         Copy-Item -LiteralPath $tempJsonPath -Destination $resolvedJsonPath -Force

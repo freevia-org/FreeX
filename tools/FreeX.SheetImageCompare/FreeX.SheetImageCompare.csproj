@@ -20,11 +20,10 @@
     <!-- Match App.Host's TFM so WPF types resolve correctly -->
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
     <!-- Suppress WinForms obsolete warning inherited from App.Host chain -->
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
   </PropertyGroup>
+  <Import Project="..\ToolProjects.props" />
 
 </Project>
