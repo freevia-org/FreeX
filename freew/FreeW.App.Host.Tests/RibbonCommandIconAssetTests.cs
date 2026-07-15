@@ -1,6 +1,7 @@
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.Ribbon;
@@ -61,12 +62,20 @@ public sealed class RibbonCommandIconAssetTests
     }
 
     [Fact]
-    public void FreeW_project_links_canonical_FreeX_assets_for_removed_alias_files()
+    public void FreeW_project_links_canonical_FreeX_assets_for_output_and_publish()
     {
         var root = FindRepositoryRoot();
-        var project = File.ReadAllText(Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"));
-        project.Should().Contain("..\\..\\src\\FreeX.Ribbon.Definitions\\Resources\\CommandIconsSvg\\**\\*.svg");
-        project.Should().Contain("Link=\"Resources\\CommandIconsSvg\\%(RecursiveDir)%(Filename)%(Extension)\"");
+        var projectPath = Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
+        var project = XDocument.Load(projectPath);
+        var canonicalIcons = project
+            .Descendants("Content")
+            .Single(item => (string?)item.Attribute("Include") ==
+                @"..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg");
+
+        ((string?)canonicalIcons.Attribute("Link")).Should().Be(
+            @"Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
+        ((string?)canonicalIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
+        ((string?)canonicalIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
 
         foreach (var alias in new[] { "align-center.svg", "chart.svg", "datetime.svg", "font-dialog.svg", "highlight.svg", "zoom-dialog.svg" })
             File.Exists(Path.Combine(root, "freew", "FreeW.App.Host", "Resources", "CommandIconsSvg", alias)).Should().BeFalse();
