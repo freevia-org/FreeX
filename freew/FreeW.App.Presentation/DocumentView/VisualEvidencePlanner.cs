@@ -689,7 +689,7 @@ public static class FreeWVisualEvidencePlanner
         new(
             "f2-endnotes",
             "F2 endnote page composition.",
-            ["f2", "page-composition", "print-layout", "endnotes", "synthetic-endnotes-page", "body-text"],
+            ["f2", "page-composition", "print-layout", "endnotes", "final-body-page", "body-text"],
             "f2-endnotes_p{page}.png",
             2,
             DocumentViewLayoutKind.PrintLayout,

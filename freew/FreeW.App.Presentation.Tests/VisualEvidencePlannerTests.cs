@@ -459,11 +459,10 @@ public sealed class VisualEvidencePlannerTests
             pageCount: 2,
             outputName: "f2-endnotes_p2.png",
             hasEndnotes: true,
-            isSyntheticPage: true,
             document: endnotes);
         endnoteExpectation.ExpectedOutputName.Should().Be("f2-endnotes_p2.png");
         endnoteExpectation.HasEndnotes.Should().BeTrue();
-        endnoteExpectation.IsSyntheticPage.Should().BeTrue();
+        endnoteExpectation.IsSyntheticPage.Should().BeFalse();
         endnoteExpectation.Composition.ExpectsEndnotes.Should().BeTrue();
     }
 
@@ -7810,7 +7809,8 @@ public sealed class VisualEvidencePlannerTests
                 .Should().Contain(row =>
                     row.PageNumber == 2 &&
                     row.SemanticEvidence.Contains("endnotes", StringComparison.Ordinal) &&
-                    row.SemanticEvidence.Contains("synthetic page", StringComparison.Ordinal));
+                    row.SemanticEvidence.Contains("body page", StringComparison.Ordinal) &&
+                    !row.SemanticEvidence.Contains("synthetic page", StringComparison.Ordinal));
             withBaseline.RemainingEvidenceBlockers
                 .Where(blocker => blocker.Area == "Note placement visual fidelity")
                 .Should().HaveCount(scenarios.Count)
@@ -7833,7 +7833,7 @@ public sealed class VisualEvidencePlannerTests
                 .Should().Contain(row =>
                     row.GetProperty("scenarioId").GetString() == "f2-endnotes" &&
                     row.GetProperty("hasEndnotes").GetBoolean() &&
-                    row.GetProperty("isSyntheticPage").GetBoolean());
+                    !row.GetProperty("isSyntheticPage").GetBoolean());
 
             var markdown = FreeWVisualEvidenceManifestNormalizer.ToMarkdown(withBaseline);
             markdown.Should().Contain("## Note Placement Visual Proof Readiness");
@@ -8750,8 +8750,6 @@ public sealed class VisualEvidencePlannerTests
             scenario.LayoutKind,
             hasFootnotes: string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase),
             hasEndnotes: string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
-                && pageNumber == pageCount,
-            isSyntheticPage: string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase)
                 && pageNumber == pageCount,
             sectionOrdinal: sectionPage?.SectionOrdinal,
             sectionRelativePageNumber: sectionPage?.SectionRelativePageNumber,

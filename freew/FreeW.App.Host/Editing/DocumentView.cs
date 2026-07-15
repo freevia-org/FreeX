@@ -7396,6 +7396,11 @@ public sealed class DocumentView : RichTextBox
             if (!paraFmt.LineSpacingIsSet)
                 paraFmt = paraFmt with { LineSpacing = 1.0, LineRule = LineSpacingRule.Multiple, LineHeightPt = 0 };
         }
+        // A missing w:spacing/@w:line uses Word's natural single-line layout. ParagraphFormatting
+        // carries 1.15 as a convenient model default, but that value is not an explicit OOXML line
+        // rule and must not force WPF's LineHeight on a document that omitted it.
+        var hasExplicitMultipleLineSpacing = paraFmt.LineSpacingIsSet ||
+            Math.Abs(paraFmt.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
         var wpf = new WpfParagraph
         {
             // Right-to-left paragraph direction (w:bidi). WPF lays the inline content out RTL and, because
@@ -7429,7 +7434,7 @@ public sealed class DocumentView : RichTextBox
             // height in points; WPF only does absolute LineHeight, so both map to that height — and Exact
             // additionally forces BlockLineHeight so the height is honoured even for taller content (AtLeast is
             // approximated as exact, the closest FlowDocument behaviour).
-            LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple
+            LineHeight = paraFmt.LineRule == LineSpacingRule.Multiple && hasExplicitMultipleLineSpacing
                 ? (paraFmt.LineSpacing > 0
                     ? paraFmt.LineSpacing * DefaultLineHeightRatio(document) * (document.DefaultRun.FontSizePt ?? 11) * PxPerPoint
                     : double.NaN)

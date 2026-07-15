@@ -23,7 +23,12 @@ public sealed class LineHeightMultipleTests
         doc.Blocks.Clear();
         doc.Blocks.Add(new Paragraph("body text")
         {
-            Formatting = ParagraphFormatting.Default with { LineSpacing = 1.5, LineRule = LineSpacingRule.Multiple },
+            Formatting = ParagraphFormatting.Default with
+            {
+                LineSpacing = 1.5,
+                LineRule = LineSpacingRule.Multiple,
+                LineSpacingIsSet = true,
+            },
         });
 
         var view = new DocumentView();
@@ -35,5 +40,24 @@ public sealed class LineHeightMultipleTests
         Assert.Equal(expected, wpf.LineHeight, 1);
         // Regression guard: the old formula (multiple x em, no ratio) would be ~22% shorter.
         Assert.True(wpf.LineHeight > 1.5 * 11 * PxPerPoint + 1, "line height must include the natural-line ratio");
+    }
+
+    [StaFact]
+    public void ImplicitDefaultMultiple_DoesNotForceWpfLineHeight()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("body text")
+        {
+            // This is the model's convenience default, not an explicit w:spacing/@w:line.
+            Formatting = ParagraphFormatting.Default,
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpf = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        Assert.True(double.IsNaN(wpf.LineHeight));
     }
 }

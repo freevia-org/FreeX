@@ -2589,13 +2589,12 @@ public static class FreeWVisualEvidenceManifestNormalizer
                 failures.Add($"{rowName} should not report footnote evidence for the endnote fixture");
             if (!row.ExpectedFeatureTags.Contains("endnotes", StringComparer.OrdinalIgnoreCase))
                 failures.Add($"{rowName} expected the endnotes feature tag");
-            if (row.IsSyntheticPage || row.HasEndnotes)
-            {
-                if (!row.HasEndnotes)
-                    failures.Add($"{rowName} expected endnote placement evidence on the synthetic endnote page");
-                if (!row.IsSyntheticPage)
-                    failures.Add($"{rowName} should not report endnote placement on a normal body page");
-            }
+            if (row.IsSyntheticPage)
+                failures.Add($"{rowName} should attach endnotes to the final body page, not a synthetic page");
+            if (row.PageNumber == row.PageCount && !row.HasEndnotes)
+                failures.Add($"{rowName} expected endnote placement evidence on the final body page");
+            if (row.PageNumber != row.PageCount && row.HasEndnotes)
+                failures.Add($"{rowName} should only report endnote placement on the final body page");
         }
     }
 

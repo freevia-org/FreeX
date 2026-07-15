@@ -185,8 +185,7 @@ static int RenderAll(string outDir)
         pageNumber: 2,
         pageCount: 2,
         viewportOffsetY: 1100,
-        hasEndnotes: true,
-        isSyntheticPage: true);
+        hasEndnotes: true);
     if (rc != 0) return rc;
 
     rc = RenderMode(DocumentViewMode.PrintLayout, fieldPageNumberP1Path,
@@ -777,10 +776,15 @@ static int RenderMode(
     using var stream = new MemoryStream();
     bitmap.Save(stream);
     var bytes = stream.ToArray();
+    var capturesWordComparablePageSurface = ShouldCaptureWordComparablePageSurface(scenarioId);
+    var captureWidth = width;
+    var captureHeight = height;
+    if (capturesWordComparablePageSurface)
+        (bytes, captureWidth, captureHeight) = CropToDocumentPageSurface(bytes, evidencePage, width, height);
     bytes = AddNoteRegionOverlayIfNeeded(
         bytes,
-        width,
-        height,
+        captureWidth,
+        captureHeight,
         evidencePage,
         doc,
         pageNumber,
@@ -796,11 +800,13 @@ static int RenderMode(
             scenarioId,
             outPath,
             bytes,
-            width,
-            height,
+            captureWidth,
+            captureHeight,
             evidencePage,
             LayoutKindFor(mode),
-            captureSource: sectionPageSurface is null
+            captureSource: capturesWordComparablePageSurface
+                ? "avalonia-word-page-surface"
+                : sectionPageSurface is null
                 ? "avalonia-render-target"
                 : "avalonia-section-page-surface",
             viewMode: mode.ToString(),
@@ -833,10 +839,14 @@ static int RenderMode(
     var pngBytes = TryEncodeViaSkia(renderTarget, width, height, label);
     if (pngBytes is { Length: > 0 })
     {
+        var fallbackWidth = width;
+        var fallbackHeight = height;
+        if (ShouldCaptureWordComparablePageSurface(scenarioId))
+            (pngBytes, fallbackWidth, fallbackHeight) = CropToDocumentPageSurface(pngBytes, evidencePage, width, height);
         pngBytes = AddNoteRegionOverlayIfNeeded(
             pngBytes,
-            width,
-            height,
+            fallbackWidth,
+            fallbackHeight,
             evidencePage,
             doc,
             pageNumber,
@@ -849,11 +859,13 @@ static int RenderMode(
             scenarioId,
             outPath,
             pngBytes,
-            width,
-            height,
+            fallbackWidth,
+            fallbackHeight,
             evidencePage,
             LayoutKindFor(mode),
-            captureSource: sectionPageSurface is null
+            captureSource: ShouldCaptureWordComparablePageSurface(scenarioId)
+                ? "skia-fallback-word-page-surface"
+                : sectionPageSurface is null
                 ? "skia-fallback-placeholder"
                 : "skia-fallback-section-page-surface",
             viewMode: mode.ToString(),
@@ -1060,15 +1072,54 @@ static DocumentNoteRegionPlan? BuildEvidenceNoteRegionPlan(
             : DocumentNoteRegionPlanner.BuildFootnoteRegion(document, ids, pageNumber, contentWidth);
     }
 
-    if (hasEndnotes && isSyntheticPage)
+    if (hasEndnotes)
     {
         var ids = DocumentNoteRegionPlanner.EndnoteIdsForSyntheticPage(document);
         return ids.Count == 0
             ? null
-            : DocumentNoteRegionPlanner.BuildEndnoteRegion(document, ids, pageNumber, contentWidth, isSyntheticPage: true);
+            : DocumentNoteRegionPlanner.BuildEndnoteRegion(document, ids, pageNumber, contentWidth, isSyntheticPage: false);
     }
 
     return null;
+}
+
+static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
+    string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase);
+
+static (byte[] PngBytes, int PixelWidth, int PixelHeight) CropToDocumentPageSurface(
+    byte[] pngBytes,
+    PageSettings page,
+    int fallbackWidth,
+    int fallbackHeight)
+{
+    using var source = SKBitmap.Decode(pngBytes);
+    if (source is null)
+        return (pngBytes, fallbackWidth, fallbackHeight);
+
+    var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(page);
+    var pixelWidth = Math.Max(1, (int)Math.Round(pageWidthDip));
+    var pixelHeight = Math.Max(1, (int)Math.Round(pageHeightDip));
+    if (source.Width < pixelWidth || source.Height < pixelHeight)
+        return (pngBytes, source.Width, source.Height);
+
+    // Print Layout centers the white page horizontally in the viewport and starts the first page at y=0.
+    var sourceX = Math.Clamp((source.Width - pixelWidth) / 2, 0, source.Width - pixelWidth);
+    var sourceY = 0;
+    using var surface = SKSurface.Create(new SKImageInfo(pixelWidth, pixelHeight, SKColorType.Bgra8888, SKAlphaType.Premul));
+    if (surface is null)
+        return (pngBytes, source.Width, source.Height);
+
+    surface.Canvas.Clear(SKColors.White);
+    surface.Canvas.DrawBitmap(
+        source,
+        new SKRect(sourceX, sourceY, sourceX + pixelWidth, sourceY + pixelHeight),
+        new SKRect(0, 0, pixelWidth, pixelHeight));
+    using var image = surface.Snapshot();
+    using var data = image.Encode(SKEncodedImageFormat.Png, 95);
+    return data is null
+        ? (pngBytes, source.Width, source.Height)
+        : (data.ToArray(), pixelWidth, pixelHeight);
 }
 
 static byte[] AddNoteRegionOverlayIfNeeded(
@@ -1111,6 +1162,8 @@ static byte[] AddNoteRegionOverlayIfNeeded(
     var y = plan.IsSyntheticPage
         ? (float)Math.Max(48, marginTopDip + 24)
         : (float)Math.Max(48, pixelHeight - marginBottomDip - plan.EstimatedHeightDip - 36);
+    if (plan.Kind == DocumentNoteRegionKind.Endnotes && !plan.IsSyntheticPage)
+        y = Math.Max((float)marginTopDip, FindLastPaintedRow(bitmap) + 16);
 
     if (plan.Heading is not null)
     {
@@ -1142,6 +1195,23 @@ static byte[] AddNoteRegionOverlayIfNeeded(
     using var image = SKImage.FromBitmap(bitmap);
     using var data = image.Encode(SKEncodedImageFormat.Png, 95);
     return data?.ToArray() ?? pngBytes;
+}
+
+static int FindLastPaintedRow(SKBitmap bitmap)
+{
+    for (var y = bitmap.Height - 2; y >= 0; y--)
+    {
+        // The captured Print Layout page has a one-pixel sheet border. Ignore page chrome so the
+        // final body line, rather than that border, determines where endnotes begin.
+        for (var x = 24; x < bitmap.Width - 24; x++)
+        {
+            var color = bitmap.GetPixel(x, y);
+            if (color.Red < 245 || color.Green < 245 || color.Blue < 245)
+                return y;
+        }
+    }
+
+    return 0;
 }
 
 static IEnumerable<string> WrapNoteText(string text, SKFont font, float maxWidth)

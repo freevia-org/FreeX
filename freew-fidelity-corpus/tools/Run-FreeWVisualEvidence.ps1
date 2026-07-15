@@ -3478,13 +3478,14 @@ function Assert-NotePlacementVisualProofReadiness {
             }
         }
         elseif ($scenarioId -eq 'f2-endnotes') {
-            $syntheticRows = @($proofRows | Where-Object {
-                [int]$_.pageNumber -eq 3 -and
+            $finalBodyRows = @($proofRows | Where-Object {
+                [int]$_.pageNumber -eq 2 -and
                 [string]$_.semanticEvidence -match 'endnotes' -and
-                [string]$_.semanticEvidence -match 'synthetic page'
+                [string]$_.semanticEvidence -match 'body page' -and
+                [string]$_.semanticEvidence -notmatch 'synthetic page'
             })
-            if ($syntheticRows.Count -eq 0) {
-                $failures.Add("${scenarioId}: missing synthetic endnote page semantic evidence")
+            if ($finalBodyRows.Count -eq 0) {
+                $failures.Add("${scenarioId}: missing final body-page endnote semantic evidence")
             }
         }
 

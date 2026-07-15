@@ -339,7 +339,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Assert-NotePlacementVisualProofReadiness $summaryJson $effectiveScenarioIds");
         source.Should().Contain("Note placement visual proof readiness requires FreeW visual evidence summary schema v44 or newer");
         source.Should().Contain("$readinessRows = @($summary.notePlacementProofReadiness)");
-        source.Should().Contain("missing synthetic endnote page semantic evidence");
+        source.Should().Contain("missing final body-page endnote semantic evidence");
         source.Should().Contain("missing honest word-baseline-unavailable note placement blocker");
         source.Should().Contain("Note placement visual proof readiness: trusted scenario rows=");
         source.Should().Contain("Note placement semantic rows: verified rows=");
