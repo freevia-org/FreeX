@@ -256,14 +256,14 @@ public sealed class ChartBaselineCorpusTests
             .Select(facet => facet.Fill.Color)
             .Should()
             .Equal(
-                new SrgbColor(0x44, 0x72, 0xC4),
-                new SrgbColor(0xED, 0x7D, 0x31),
-                new SrgbColor(0xED, 0x7D, 0x31),
-                new SrgbColor(0xED, 0x7D, 0x31),
-                new SrgbColor(0xED, 0x7D, 0x31),
-                new SrgbColor(0xA9, 0xD1, 0x8E),
-                new SrgbColor(0xA9, 0xD1, 0x8E),
-                new SrgbColor(0xA9, 0xD1, 0x8E));
+                new SrgbColor(0x45, 0x74, 0xC8),
+                new SrgbColor(0xF2, 0x80, 0x32),
+                new SrgbColor(0xB6, 0x60, 0x26),
+                new SrgbColor(0xB6, 0x60, 0x26),
+                new SrgbColor(0xD5, 0x71, 0x2C),
+                new SrgbColor(0x98, 0xBC, 0x80),
+                new SrgbColor(0x98, 0xBC, 0x80),
+                new SrgbColor(0x98, 0xBC, 0x80));
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
         ChartRenderPlanner.BuildSurfaceSeriesAxisLabelPlans(surface, surfaceFrame)

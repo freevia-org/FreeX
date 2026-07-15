@@ -593,6 +593,11 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceBlueBandUpperBound = 0.20;
     private const double ImportedSurfaceOrangeBandUpperBound = 0.53;
     private const double ImportedSurfaceGreenBandUpperBound = 0.75;
+    private const double ImportedSurfaceLightBaseFactor = 1.02;
+    private const double ImportedSurfaceDepthDimming = 0.12;
+    private const double ImportedSurfaceNearRowFalloff = 0.25;
+    private const double ImportedSurfaceMinimumLightFactor = 0.72;
+    private const double ImportedSurfaceMaximumLightFactor = 1.04;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -2940,6 +2945,9 @@ public static partial class ChartRenderPlanner
                     var color = ResolveSurfaceFacetColor(
                         chart,
                         seriesIndex,
+                        categoryIndex,
+                        seriesCount,
+                        categoryCount,
                         seriesColors,
                         averageNormalized);
                     byte facetAlpha = chart.ChartType == ChartType.Surface3D
@@ -2987,16 +2995,58 @@ public static partial class ChartRenderPlanner
     private static SrgbColor ResolveSurfaceFacetColor(
         ChartShape chart,
         int seriesIndex,
+        int categoryIndex,
+        int seriesCount,
+        int categoryCount,
         IReadOnlyList<SrgbColor>? seriesColors,
         double normalized)
     {
-        if (chart.VaryColors)
-            return ResolveSurfaceVaryColor(normalized);
+        var color = chart.VaryColors
+            ? ResolveSurfaceVaryColor(normalized)
+            : InterpolateSurfaceColor(
+                ResolveSeriesColor(seriesIndex, seriesColors),
+                normalized);
 
-        return InterpolateSurfaceColor(
-            ResolveSeriesColor(seriesIndex, seriesColors),
-            normalized);
+        return chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
+            ? ApplyImportedSurfaceLighting(color, seriesIndex, categoryIndex, seriesCount, categoryCount)
+            : color;
     }
+
+    private static SrgbColor ApplyImportedSurfaceLighting(
+        SrgbColor color,
+        int seriesIndex,
+        int categoryIndex,
+        int seriesCount,
+        int categoryCount)
+    {
+        // PowerPoint's default 3-D light is strongest on the near-left surface
+        // and falls off across the front row before leveling on the rear row.
+        double seriesT = seriesCount <= 2
+            ? seriesIndex
+            : seriesIndex / (double)(seriesCount - 2);
+        double categoryT = categoryCount <= 2
+            ? categoryIndex
+            : categoryIndex / (double)(categoryCount - 2);
+        seriesT = Math.Clamp(seriesT, 0, 1);
+        categoryT = Math.Clamp(categoryT, 0, 1);
+        double baseLight = ImportedSurfaceLightBaseFactor - ImportedSurfaceDepthDimming * seriesT;
+        double nearRowFalloff = ImportedSurfaceNearRowFalloff * categoryT * (1 - seriesT);
+        double factor = Math.Clamp(
+            baseLight - nearRowFalloff,
+            ImportedSurfaceMinimumLightFactor,
+            ImportedSurfaceMaximumLightFactor);
+
+        return new SrgbColor(
+            ScaleSurfaceChannel(color.R, factor),
+            ScaleSurfaceChannel(color.G, factor),
+            ScaleSurfaceChannel(color.B, factor));
+    }
+
+    private static byte ScaleSurfaceChannel(byte channel, double factor) =>
+        (byte)Math.Clamp(
+            (int)Math.Round(channel * factor, MidpointRounding.AwayFromZero),
+            0,
+            255);
 
     private static SrgbColor ResolveSurfaceVaryColor(double normalized)
     {
