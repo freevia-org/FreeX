@@ -159,6 +159,19 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartsCorpusDeck_UsesPowerPointImportedBarFrameAndAxis()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "06-charts.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var bar = presentation.Slides[3].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        bar.ChartType.Should().Be(ChartType.BarClustered);
+        ChartRenderPlanner.BuildFramePlan(bar, new ChartPlanRect(0, 0, 480, 288)).Plot
+            .Should().Be(new ChartPlanRect(75.5, 15.5, 312.2, 220.25));
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(bar).Should().Be((0, 120, 20));
+    }
+
+    [Fact]
     public void FillsCorpusDeck_MaterializesInheritedLineAndFontReferences()
     {
         var presentation = PptxPackageReader.Read(Path.Combine(FindCorpusDirectory(), "12-fills.pptx"));
