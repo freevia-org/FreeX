@@ -1,0 +1,126 @@
+using FreeP.App.Compositor;
+
+namespace FreeP.App.Compositor.Tests;
+
+public sealed class PresentationReviewWorkflowSessionTests
+{
+    [Fact]
+    public void CommentMutation_RefreshesSharedPlansInCallbackOrderAndPreservesSelection()
+    {
+        var presentation = Presentation.CreateEmpty();
+        presentation.Slides[0].Title = "Review";
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var callbacks = new List<string>();
+        var session = CreateSession(editor, callbacks);
+
+        var mutation = session.AddComment("New comment", author: "Alice", initials: "AL");
+
+        mutation.Should().BeEquivalentTo(new PresentationCommentMutationPlan(
+            PresentationReviewWorkflowIntentKind.AddComment,
+            true,
+            0,
+            null,
+            presentation.Slides[0].Comments[0],
+            null));
+        session.SelectedCommentIndex.Should().Be(0);
+        session.LastCommentPanePlan!.SelectedCommentIndex.Should().Be(0);
+        callbacks.Should().ContainInOrder(
+            "dirty",
+            "comment-pane",
+            "accessibility",
+            "alt-text",
+            "proofing-pane",
+            "comment-updated");
+    }
+
+    [Fact]
+    public void AltTextMutation_UpdatesShapeAndSharedAltTextPlans()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var shape = new SlideShape { Id = 7, Name = "Chart" };
+        presentation.Slides[0].Shapes.Add(shape);
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        editor.Select(shape.Id);
+        var session = CreateSession(editor, []);
+
+        var mutation = session.ApplySelectedShapeAlternativeText(
+            "Quarterly results by region.",
+            "Quarterly results",
+            isDecorative: false);
+
+        mutation.Should().Be(new PresentationAltTextMutationPlan(
+            true,
+            0,
+            shape.Id,
+            "Quarterly results",
+            "Quarterly results by region.",
+            false,
+            null));
+        shape.AlternativeTextTitle.Should().Be("Quarterly results");
+        shape.AlternativeText.Should().Be("Quarterly results by region.");
+        session.LastAltTextRequestPlan!.CurrentTitle.Should().Be("Quarterly results");
+        session.LastAltTextPanePlan!.Description.Value.Should().Be("Quarterly results by region.");
+    }
+
+    [Fact]
+    public void ProofingMutation_NormalizesSelectionAfterCorrectionAndTracksIgnoreAndDictionaryUpdates()
+    {
+        var presentation = Presentation.CreateEmpty();
+        var slide = presentation.Slides[0];
+        slide.Title = "Intro eror";
+        slide.Shapes.Add(new SlideShape { Id = 4, Name = "Caption", Text = "Teh caption" });
+        var editor = new EditingSession(presentation, new PresentationCommandBus(presentation));
+        var session = CreateSession(editor, []);
+
+        session.RefreshProofingRequestPlan();
+        session.SelectProofingIssueRow(1).SelectedRow!.Text.Should().Be("Teh");
+        session.ApplySelectedProofingCorrection().Should().BeEquivalentTo(
+            new PresentationProofingCorrectionMutationPlan(
+                true,
+                session.LastProofingExecutionPlan!.Scopes.Single(scope => scope.ShapeId == 4) with
+                {
+                    Text = "Teh caption",
+                    Snippet = "Teh caption"
+                },
+                0,
+                3,
+                "The",
+                "The caption",
+                null));
+        session.LastProofingPanePlan!.SelectedRowIndex.Should().Be(0);
+        session.LastProofingPanePlan.SelectedRow!.Text.Should().Be("eror");
+
+        var ignoredPresentation = Presentation.CreateEmpty();
+        ignoredPresentation.Slides[0].Title = "Intro eror";
+        ignoredPresentation.Slides[0].Shapes.Add(new SlideShape { Id = 4, Text = "Teh caption" });
+        var ignoredEditor = new EditingSession(
+            ignoredPresentation,
+            new PresentationCommandBus(ignoredPresentation));
+        var ignoredSession = CreateSession(ignoredEditor, []);
+        ignoredSession.RefreshProofingRequestPlan();
+        ignoredSession.SelectProofingIssueRow(1);
+        ignoredSession.IgnoreSelectedProofingIssue().Rows.Select(row => row.Text).Should().Equal("eror");
+        ignoredSession.ProofingIgnoreState.IgnoredIssues.Should().ContainSingle();
+        ignoredSession.SelectProofingIssueRow(0).SelectedRow!.Text.Should().Be("eror");
+        ignoredSession.AddSelectedProofingWordToDictionary().Rows.Should().BeEmpty();
+        ignoredSession.ProofingDictionaryState.NormalizedWords.Should().ContainSingle().Which.Should().Be("EROR");
+        ignoredSession.LastProofingPanePlan!.Message.Should().Be(PresentationReviewWorkflowPlanner.ProofingNoIssuesMessage);
+    }
+
+    private static PresentationReviewWorkflowSession CreateSession(
+        EditingSession editor,
+        List<string> callbacks)
+        => new(
+            () => editor,
+            new PresentationReviewWorkflowSessionCallbacks(
+                MarkDirty: () => callbacks.Add("dirty"),
+                RefreshCanvas: () => callbacks.Add("canvas"),
+                RefreshNotesPane: () => callbacks.Add("notes"),
+                RefreshAccessibilitySummaryPlan: () => callbacks.Add("accessibility"),
+                RenderCommentPane: _ => callbacks.Add("comment-pane"),
+                RenderAltTextPaneIfVisible: _ => callbacks.Add("alt-text"),
+                RenderProofingPaneIfVisible: _ => callbacks.Add("proofing-pane"),
+                UpdateAfterCommentMutation: () => callbacks.Add("comment-updated"),
+                UpdateAfterCommentNavigation: () => callbacks.Add("comment-navigated"),
+                UpdateAfterProofingCorrection: () => callbacks.Add("proofing-updated")));
+}

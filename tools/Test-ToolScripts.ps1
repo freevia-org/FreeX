@@ -29,6 +29,7 @@ function Assert-ToolSourceCentralization {
             "function Read-ToolJson",
             "function ConvertTo-ToolMarkdownCell",
             "function Test-ToolGeneratedContentMatches",
+            "function Invoke-FidelityCorpusDownload",
             "function Get-RepoRoot",
             "function Get-GitValue",
             "function Resolve-FreeXExe")) {
@@ -343,6 +344,110 @@ function Assert-GeneratedDocCheckNewlineSemantics {
     Write-Host "Validated generated-document newline normalization source and behavior."
 }
 
+function Assert-FidelityCorpusDownloaderBehavior {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    . (Join-Path $ToolRoot "ToolScriptSupport.ps1")
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-fidelity-downloader-" + [guid]::NewGuid().ToString("N"))
+    $filesDirectory = Join-Path $tempRoot "files"
+    New-Item -ItemType Directory -Force -Path $filesDirectory | Out-Null
+
+    try {
+        $manifestPath = Join-Path $tempRoot "manifest.csv"
+        @(
+            "id,file,source,license,url",
+            "local-present,local/present.docx,local,Private,local://local/present.docx",
+            "local-missing,local/missing.docx,local,Private,local://local/missing.docx",
+            "existing,existing.xlsx,synthetic,MIT,https://example.invalid/existing.xlsx",
+            "download,nested/downloaded.xlsx,synthetic,MIT,https://example.invalid/downloaded.xlsx",
+            "failure,nested/partial.xlsx,synthetic,MIT,https://example.invalid/partial.xlsx",
+            "other-source,other.xlsx,other,MIT,https://example.invalid/other.xlsx"
+        ) | Set-Content -LiteralPath $manifestPath
+
+        $localPresent = Join-Path $filesDirectory "local/present.docx"
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $localPresent) | Out-Null
+        [System.IO.File]::WriteAllText($localPresent, "private")
+        [System.IO.File]::WriteAllText((Join-Path $filesDirectory "existing.xlsx"), "existing")
+
+        $downloadAction = {
+            param([string]$Uri, [string]$TargetPath, $Row)
+            if ($Row.id -eq "failure") {
+                [System.IO.File]::WriteAllText($TargetPath, "partial")
+                throw "synthetic download failure"
+            }
+
+            [System.IO.File]::WriteAllText($TargetPath, "downloaded:$Uri")
+        }
+
+        $result = Invoke-FidelityCorpusDownload `
+            -ManifestPath $manifestPath `
+            -FilesDirectory $filesDirectory `
+            -CorpusLabel "Synthetic fidelity corpus" `
+            -LocalDirectoryLabel "synthetic/files/" `
+            -DownloadAction $downloadAction
+
+        if ($result.Downloaded -ne 2 -or $result.Skipped -ne 1 -or
+            $result.LocalSkipped -ne 2 -or $result.Failed -ne 1 -or
+            $result.RowCount -ne 6 -or $result.ExitCode -ne 1) {
+            throw "Synthetic fidelity downloader counters were not preserved: $($result | ConvertTo-Json -Compress)"
+        }
+
+        $downloadedPath = Join-Path $filesDirectory "nested/downloaded.xlsx"
+        if (-not (Test-Path -LiteralPath $downloadedPath -PathType Leaf) -or
+            (Get-Content -LiteralPath $downloadedPath -Raw) -cne "downloaded:https://example.invalid/downloaded.xlsx") {
+            throw "Synthetic fidelity downloader did not create the nested downloaded target."
+        }
+
+        if (Test-Path -LiteralPath (Join-Path $filesDirectory "nested/partial.xlsx")) {
+            throw "Synthetic fidelity downloader did not remove a partial failed target."
+        }
+
+        $sourceManifestPath = Join-Path $tempRoot "source-manifest.csv"
+        @(
+            "id,file,source,license,url",
+            "selected,selected.xlsx,selected,MIT,https://example.invalid/selected.xlsx",
+            "excluded,excluded.xlsx,excluded,MIT,https://example.invalid/excluded.xlsx"
+        ) | Set-Content -LiteralPath $sourceManifestPath
+        $sourceResult = Invoke-FidelityCorpusDownload `
+            -ManifestPath $sourceManifestPath `
+            -FilesDirectory $filesDirectory `
+            -CorpusLabel "Synthetic source-filter corpus" `
+            -LocalDirectoryLabel "synthetic/files/" `
+            -Source "selected" `
+            -DownloadAction $downloadAction
+        if ($sourceResult.RowCount -ne 1 -or $sourceResult.Downloaded -ne 1 -or
+            (Test-Path -LiteralPath (Join-Path $filesDirectory "excluded.xlsx"))) {
+            throw "Synthetic fidelity downloader did not preserve source filtering."
+        }
+
+        $invalidManifestPath = Join-Path $tempRoot "invalid-manifest.csv"
+        @(
+            "id,file,source,license,url",
+            "missing-license,invalid.xlsx,synthetic,,https://example.invalid/invalid.xlsx"
+        ) | Set-Content -LiteralPath $invalidManifestPath
+        $missingLicenseRejected = $false
+        try {
+            Invoke-FidelityCorpusDownload `
+                -ManifestPath $invalidManifestPath `
+                -FilesDirectory $filesDirectory `
+                -CorpusLabel "Synthetic invalid corpus" `
+                -LocalDirectoryLabel "synthetic/files/" `
+                -DownloadAction $downloadAction | Out-Null
+        }
+        catch {
+            $missingLicenseRejected = $_.Exception.Message -like "Manifest row 'missing-license' is missing a license.*"
+        }
+        if (-not $missingLicenseRejected) {
+            throw "Synthetic fidelity downloader did not reject a missing manifest license."
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "Validated synthetic fidelity corpus downloader behavior."
+}
+
 $resolvedScriptDirectory = Resolve-ToolRepoPath -Path $ScriptDirectory -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedScriptDirectory -PathType Container)) {
     throw "Tool script directory was not found: $resolvedScriptDirectory"
@@ -362,6 +467,7 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-ScreenshotCaptureSupportBehavior -ToolRoot $resolvedDirectory
     Assert-SharedToolHelperBehavior -RepoRoot $repoRoot
     Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
+    Assert-FidelityCorpusDownloaderBehavior -ToolRoot $resolvedDirectory
 }
 
 $failedScripts = New-Object System.Collections.Generic.List[string]

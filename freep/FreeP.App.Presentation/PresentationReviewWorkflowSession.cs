@@ -1,0 +1,571 @@
+using FreeP.Core.Model;
+
+namespace FreeP.App.Compositor;
+
+public sealed record PresentationReviewWorkflowSessionCallbacks(
+    Action MarkDirty,
+    Action RefreshCanvas,
+    Action RefreshNotesPane,
+    Action RefreshAccessibilitySummaryPlan,
+    Action<PresentationCommentPanePlan> RenderCommentPane,
+    Action<PresentationAltTextPanePlan> RenderAltTextPaneIfVisible,
+    Action<PresentationProofingPanePlan> RenderProofingPaneIfVisible,
+    Action UpdateAfterCommentMutation,
+    Action UpdateAfterCommentNavigation,
+    Action UpdateAfterProofingCorrection);
+
+/// <summary>
+/// Renderer-neutral state and orchestration for the shared FreeP review workflow.
+/// Hosts retain their dirty, status, canvas, notes, and pane-rendering callbacks.
+/// </summary>
+public sealed class PresentationReviewWorkflowSession
+{
+    private readonly Func<EditingSession> _getEditor;
+    private readonly PresentationReviewWorkflowSessionCallbacks _callbacks;
+
+    public PresentationReviewWorkflowSession(
+        Func<EditingSession> getEditor,
+        PresentationReviewWorkflowSessionCallbacks callbacks)
+    {
+        _getEditor = getEditor ?? throw new ArgumentNullException(nameof(getEditor));
+        _callbacks = callbacks ?? throw new ArgumentNullException(nameof(callbacks));
+    }
+
+    public int? SelectedCommentIndex { get; set; }
+
+    public int? SelectedProofingIssueRowIndex { get; private set; }
+
+    public PresentationProofingIgnoreState ProofingIgnoreState { get; private set; } =
+        PresentationProofingIgnoreState.Empty;
+
+    public PresentationProofingDictionaryState ProofingDictionaryState { get; private set; } =
+        PresentationProofingDictionaryState.Empty;
+
+    public PresentationCommentPanePlan? LastCommentPanePlan { get; private set; }
+
+    public PresentationCommentNavigationPlan? LastCommentNavigationPlan { get; private set; }
+
+    public PresentationCommentMentionPickerPlan? LastCommentMentionPickerPlan { get; private set; }
+
+    public PresentationCommentMentionInsertionPlan? LastCommentMentionInsertionPlan { get; private set; }
+
+    public PresentationAltTextRequestPlan? LastAltTextRequestPlan { get; private set; }
+
+    public PresentationAltTextPanePlan? LastAltTextPanePlan { get; private set; }
+
+    public PresentationReadingOrderPlan? LastReadingOrderPlan { get; private set; }
+
+    public PresentationProofingRequestPlan? LastProofingRequestPlan { get; private set; }
+
+    public PresentationProofingExecutionPlan? LastProofingExecutionPlan { get; private set; }
+
+    public PresentationProofingPanePlan? LastProofingPanePlan { get; private set; }
+
+    public void RefreshReviewWorkflowPlans()
+    {
+        var editor = _getEditor();
+        var presentation = editor.Presentation;
+        LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            presentation.Slides,
+            editor.CurrentSlideIndex,
+            SelectedCommentIndex);
+        _callbacks.RefreshAccessibilitySummaryPlan();
+        RefreshAltTextPlansCore(null, null, null);
+        _callbacks.RenderAltTextPaneIfVisible(LastAltTextPanePlan!);
+        RefreshReadingOrderPlanCore();
+        RefreshProofingRequestPlan();
+    }
+
+    public PresentationCommentPanePlan ShowReviewCommentsPane()
+    {
+        LastCommentPanePlan = BuildCommentPanePlan();
+        _callbacks.RenderCommentPane(LastCommentPanePlan);
+        return LastCommentPanePlan;
+    }
+
+    public PresentationCommentPanePlan SetSelectedReviewCommentIndex(int? commentIndex)
+    {
+        SelectedCommentIndex = commentIndex;
+        return ShowReviewCommentsPane();
+    }
+
+    public void SelectReviewComment(int commentIndex)
+    {
+        SelectedCommentIndex = commentIndex;
+        ShowReviewCommentsPane();
+        RefreshReviewWorkflowPlans();
+    }
+
+    public PresentationCommentPanePlan BuildCommentPanePlan()
+    {
+        var editor = _getEditor();
+        LastCommentPanePlan = PresentationReviewWorkflowPlanner.BuildCommentPanePlan(
+            editor.Presentation.Slides,
+            editor.CurrentSlideIndex,
+            SelectedCommentIndex);
+        return LastCommentPanePlan;
+    }
+
+    public PresentationCommentNavigationPlan NavigateReviewComment(
+        PresentationReviewWorkflowIntentKind intent)
+    {
+        var editor = _getEditor();
+        var plan = PresentationReviewWorkflowPlanner.BuildCommentNavigationPlan(
+            editor.Presentation.Slides,
+            editor.CurrentSlideIndex,
+            SelectedCommentIndex,
+            intent);
+        LastCommentNavigationPlan = plan;
+        if (!plan.ShouldNavigate)
+            return plan;
+
+        if (editor.CurrentSlideIndex != plan.TargetSlideIndex)
+            editor.SelectSlide(plan.TargetSlideIndex);
+
+        SelectedCommentIndex = plan.TargetCommentIndex;
+        ShowReviewCommentsPane();
+        RefreshReviewWorkflowPlans();
+        _callbacks.UpdateAfterCommentNavigation();
+        return plan;
+    }
+
+    public PresentationCommentMutationPlan DeleteSelectedComment()
+        => ApplySelectedCommentMutation(PresentationReviewWorkflowIntentKind.DeleteComment, null, null);
+
+    public PresentationCommentMutationPlan AddComment(
+        string? text,
+        DateTime? timestamp = null,
+        string? author = null,
+        string? initials = null,
+        long xemu = 0,
+        long yemu = 0)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.AddComment,
+            null,
+            null,
+            addText: text,
+            addTimestamp: timestamp,
+            addAuthor: author,
+            addInitials: initials,
+            addXemu: xemu,
+            addYemu: yemu);
+
+    public PresentationCommentMutationPlan EditSelectedComment(
+        string? text,
+        string? author = null,
+        string? initials = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.EditComment,
+            null,
+            null,
+            editText: text,
+            editAuthor: author,
+            editInitials: initials);
+
+    public PresentationCommentMutationPlan ResolveSelectedComment(
+        DateTime? resolvedAt = null,
+        string? resolvedBy = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ResolveComment,
+            resolvedAt,
+            resolvedBy);
+
+    public PresentationCommentMutationPlan ReopenSelectedComment()
+        => ApplySelectedCommentMutation(PresentationReviewWorkflowIntentKind.ReopenComment, null, null);
+
+    public PresentationCommentMutationPlan ReplyToSelectedComment(
+        string? text,
+        DateTime? timestamp = null,
+        string? author = null,
+        string? initials = null)
+        => ApplySelectedCommentMutation(
+            PresentationReviewWorkflowIntentKind.ReplyComment,
+            null,
+            null,
+            text,
+            timestamp,
+            author,
+            initials);
+
+    public PresentationCommentMentionPickerPlan BuildCommentMentionPickerPlanForTests(
+        string? query = null,
+        string? currentAuthor = null,
+        string? currentInitials = null)
+    {
+        var editor = _getEditor();
+        LastCommentMentionPickerPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionPickerPlan(
+            editor.Presentation.Slides,
+            query,
+            currentAuthor,
+            currentInitials);
+        return LastCommentMentionPickerPlan;
+    }
+
+    public PresentationCommentMentionInsertionPlan InsertCommentMentionForTests(
+        string? text,
+        int caretIndex,
+        PresentationCommentMentionCandidate? candidate)
+    {
+        LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
+            text,
+            caretIndex,
+            candidate);
+        return LastCommentMentionInsertionPlan;
+    }
+
+    public PresentationCommentMutationPlan InsertMentionInSelectedCommentForTests(
+        int caretIndex,
+        PresentationCommentMentionCandidate? candidate,
+        string? author = null,
+        string? initials = null)
+    {
+        LastCommentMentionInsertionPlan = PresentationReviewWorkflowPlanner.BuildCommentMentionInsertionPlan(
+            GetSelectedCommentText(),
+            caretIndex,
+            candidate);
+        if (!LastCommentMentionInsertionPlan.ShouldApply)
+        {
+            var editor = _getEditor();
+            return new PresentationCommentMutationPlan(
+                PresentationReviewWorkflowIntentKind.EditComment,
+                false,
+                editor.CurrentSlideIndex,
+                SelectedCommentIndex,
+                null,
+                LastCommentMentionInsertionPlan.ValidationMessage);
+        }
+
+        return EditSelectedComment(LastCommentMentionInsertionPlan.UpdatedText, author, initials);
+    }
+
+    public string? GetSelectedCommentText()
+        => SelectedCommentIndex is { } index ? GetCommentText(index) : null;
+
+    public void RefreshAltTextPlans(
+        string? proposedDescription,
+        string? proposedTitle,
+        bool? isDecorative)
+        => RefreshAltTextPlansCore(proposedDescription, proposedTitle, isDecorative);
+
+    public PresentationAltTextMutationPlan ApplySelectedShapeAlternativeText(
+        string? description,
+        string? title = null,
+        bool isDecorative = false)
+    {
+        var editor = _getEditor();
+        uint? selectedShapeId = editor.SelectedShapeIds.Count == 1
+            ? editor.SelectedShapeIds[0]
+            : null;
+        var plan = PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(
+            editor.CurrentSlide,
+            editor.CurrentSlideIndex,
+            selectedShapeId,
+            description,
+            title,
+            isDecorative);
+        if (plan.ShouldApply)
+        {
+            editor.SetSelectedShapeAlternativeText(plan.Description, plan.Title, plan.IsDecorative);
+            LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+                editor.CurrentSlide,
+                plan.ShapeId,
+                plan.Description,
+                plan.Title,
+                plan.IsDecorative);
+            LastAltTextPanePlan = PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
+                editor.CurrentSlide,
+                plan.ShapeId,
+                plan.Description,
+                plan.Title,
+                plan.IsDecorative);
+            _callbacks.RefreshAccessibilitySummaryPlan();
+        }
+
+        return plan;
+    }
+
+    public PresentationReadingOrderPlan RefreshReadingOrderPlan()
+        => RefreshReadingOrderPlanCore();
+
+    public PresentationProofingPanePlan ShowProofingPane()
+    {
+        RefreshProofingRequestPlan();
+        return LastProofingPanePlan!;
+    }
+
+    public PresentationProofingPanePlan SelectProofingIssueRow(int rowIndex)
+    {
+        RefreshProofingRequestPlan();
+        var plan = LastProofingPanePlan!;
+        var normalized = plan.Rows.Any(row => row.RowIndex == rowIndex)
+            ? rowIndex
+            : plan.SelectedRowIndex;
+        SelectedProofingIssueRowIndex = normalized >= 0 ? normalized : null;
+        LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            LastProofingExecutionPlan!,
+            SelectedProofingIssueRowIndex,
+            ProofingIgnoreState,
+            ProofingDictionaryState);
+        return LastProofingPanePlan;
+    }
+
+    public PresentationProofingCorrectionMutationPlan ApplyProofingCorrection(
+        PresentationProofingScopeDescriptor scope,
+        int start,
+        int length,
+        string? replacement)
+    {
+        var editor = _getEditor();
+        var plan = PresentationReviewWorkflowPlanner.TryApplyProofingCorrection(
+            editor.Presentation,
+            scope,
+            start,
+            length,
+            replacement);
+        if (plan.ShouldApply)
+        {
+            _callbacks.MarkDirty();
+            _callbacks.RefreshCanvas();
+            _callbacks.RefreshNotesPane();
+            RefreshReviewWorkflowPlans();
+            _callbacks.UpdateAfterProofingCorrection();
+        }
+
+        return plan;
+    }
+
+    public PresentationProofingCorrectionMutationPlan ApplySelectedProofingCorrection()
+    {
+        if (LastProofingPanePlan?.SelectedRow is not { } selectedRow)
+            return MissingProofingCorrectionPlan();
+
+        var previousSelection = LastProofingPanePlan.SelectedRowIndex;
+        var mutation = ApplyProofingCorrection(
+            selectedRow.Scope,
+            selectedRow.Start,
+            selectedRow.Length,
+            selectedRow.SuggestedReplacement);
+        if (mutation.ShouldApply)
+        {
+            var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+                LastProofingExecutionPlan!,
+                ignoreState: ProofingIgnoreState,
+                dictionaryState: ProofingDictionaryState);
+            LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+                LastProofingExecutionPlan!,
+                PresentationReviewWorkflowPlanner.NormalizeProofingSelectionAfterCorrection(
+                    previousSelection,
+                    refreshed),
+                ProofingIgnoreState,
+                ProofingDictionaryState);
+            SelectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
+                ? LastProofingPanePlan.SelectedRowIndex
+                : null;
+            _callbacks.RenderProofingPaneIfVisible(LastProofingPanePlan);
+        }
+
+        return mutation;
+    }
+
+    public PresentationProofingPanePlan IgnoreSelectedProofingIssue()
+    {
+        if (LastProofingPanePlan is null)
+            RefreshProofingRequestPlan();
+
+        var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
+        ProofingIgnoreState = PresentationReviewWorkflowPlanner.AddProofingIgnoredIssue(
+            ProofingIgnoreState,
+            LastProofingPanePlan.SelectedRow);
+        return RefreshProofingPaneAfterIgnore(previousSelection);
+    }
+
+    public PresentationProofingPanePlan IgnoreAllSelectedProofingIssues()
+    {
+        if (LastProofingPanePlan is null)
+            RefreshProofingRequestPlan();
+
+        var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
+        ProofingIgnoreState = PresentationReviewWorkflowPlanner.AddProofingIgnoredIssueGroup(
+            ProofingIgnoreState,
+            LastProofingPanePlan.SelectedRow);
+        return RefreshProofingPaneAfterIgnore(previousSelection);
+    }
+
+    public PresentationProofingPanePlan AddSelectedProofingWordToDictionary()
+    {
+        if (LastProofingPanePlan is null)
+            RefreshProofingRequestPlan();
+
+        var previousSelection = LastProofingPanePlan!.SelectedRowIndex;
+        ProofingDictionaryState = PresentationReviewWorkflowPlanner.AddProofingDictionaryWord(
+            ProofingDictionaryState,
+            LastProofingPanePlan.SelectedRow);
+        return RefreshProofingPaneAfterIgnore(previousSelection);
+    }
+
+    private PresentationProofingPanePlan RefreshProofingPaneAfterIgnore(int previousSelection)
+    {
+        var refreshed = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            LastProofingExecutionPlan!,
+            ignoreState: ProofingIgnoreState,
+            dictionaryState: ProofingDictionaryState);
+        LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            LastProofingExecutionPlan!,
+            PresentationReviewWorkflowPlanner.NormalizeProofingSelectionAfterIgnore(
+                previousSelection,
+                refreshed),
+            ProofingIgnoreState,
+            ProofingDictionaryState);
+        SelectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
+            ? LastProofingPanePlan.SelectedRowIndex
+            : null;
+        _callbacks.RenderProofingPaneIfVisible(LastProofingPanePlan);
+        return LastProofingPanePlan;
+    }
+
+    private void RefreshAltTextPlansCore(
+        string? proposedDescription,
+        string? proposedTitle,
+        bool? isDecorative)
+    {
+        var editor = _getEditor();
+        uint? selectedShapeId = editor.SelectedShapeIds.Count == 1
+            ? editor.SelectedShapeIds[0]
+            : null;
+        LastAltTextRequestPlan = PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(
+            editor.CurrentSlide,
+            selectedShapeId,
+            proposedDescription,
+            proposedTitle,
+            isDecorative);
+        LastAltTextPanePlan = PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(
+            editor.CurrentSlide,
+            selectedShapeId,
+            proposedDescription,
+            proposedTitle,
+            isDecorative);
+    }
+
+    private PresentationReadingOrderPlan RefreshReadingOrderPlanCore()
+    {
+        var editor = _getEditor();
+        LastReadingOrderPlan = PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(
+            editor.CurrentSlide,
+            editor.CurrentSlideIndex,
+            editor.SelectedShapeIds);
+        return LastReadingOrderPlan;
+    }
+
+    public void RefreshProofingRequestPlan()
+    {
+        var presentation = _getEditor().Presentation;
+        LastProofingExecutionPlan = PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(presentation);
+        LastProofingRequestPlan = PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(presentation);
+        LastProofingPanePlan = PresentationReviewWorkflowPlanner.BuildProofingPanePlan(
+            LastProofingExecutionPlan,
+            SelectedProofingIssueRowIndex,
+            ProofingIgnoreState,
+            ProofingDictionaryState);
+        SelectedProofingIssueRowIndex = LastProofingPanePlan.SelectedRowIndex >= 0
+            ? LastProofingPanePlan.SelectedRowIndex
+            : null;
+        _callbacks.RenderProofingPaneIfVisible(LastProofingPanePlan);
+    }
+
+    private PresentationCommentMutationPlan ApplySelectedCommentMutation(
+        PresentationReviewWorkflowIntentKind intent,
+        DateTime? resolvedAt,
+        string? resolvedBy,
+        string? replyText = null,
+        DateTime? replyTimestamp = null,
+        string? replyAuthor = null,
+        string? replyInitials = null,
+        string? addText = null,
+        DateTime? addTimestamp = null,
+        string? addAuthor = null,
+        string? addInitials = null,
+        long addXemu = 0,
+        long addYemu = 0,
+        string? editText = null,
+        string? editAuthor = null,
+        string? editInitials = null)
+    {
+        var editor = _getEditor();
+        var result = PresentationCommentMutationService.Apply(
+            editor.Presentation.Slides,
+            new PresentationCommentMutationRequest(
+                intent,
+                editor.CurrentSlideIndex,
+                SelectedCommentIndex,
+                Text: intent switch
+                {
+                    PresentationReviewWorkflowIntentKind.AddComment => addText,
+                    PresentationReviewWorkflowIntentKind.EditComment => editText,
+                    PresentationReviewWorkflowIntentKind.ReplyComment => replyText,
+                    _ => null
+                },
+                Timestamp: intent switch
+                {
+                    PresentationReviewWorkflowIntentKind.AddComment => addTimestamp,
+                    PresentationReviewWorkflowIntentKind.ReplyComment => replyTimestamp,
+                    _ => null
+                },
+                Author: intent switch
+                {
+                    PresentationReviewWorkflowIntentKind.AddComment => addAuthor,
+                    PresentationReviewWorkflowIntentKind.EditComment => editAuthor,
+                    PresentationReviewWorkflowIntentKind.ReplyComment => replyAuthor,
+                    _ => null
+                },
+                Initials: intent switch
+                {
+                    PresentationReviewWorkflowIntentKind.AddComment => addInitials,
+                    PresentationReviewWorkflowIntentKind.EditComment => editInitials,
+                    PresentationReviewWorkflowIntentKind.ReplyComment => replyInitials,
+                    _ => null
+                },
+                Xemu: addXemu,
+                Yemu: addYemu,
+                ResolvedAt: resolvedAt,
+                ResolvedBy: resolvedBy));
+
+        if (result.Applied)
+        {
+            SelectedCommentIndex = result.SelectedCommentIndex;
+            _callbacks.MarkDirty();
+            ShowReviewCommentsPane();
+            RefreshReviewWorkflowPlans();
+            _callbacks.UpdateAfterCommentMutation();
+        }
+
+        return result.Plan;
+    }
+
+    public string? GetCommentText(int commentIndex)
+    {
+        var comments = _getEditor().CurrentSlide?.Comments;
+        return comments is not null && commentIndex >= 0 && commentIndex < comments.Count
+            ? comments[commentIndex].Text
+            : null;
+    }
+
+    private static PresentationProofingCorrectionMutationPlan MissingProofingCorrectionPlan()
+        => new(
+            false,
+            new PresentationProofingScopeDescriptor(
+                PresentationProofingScopeKind.SlideTitle,
+                -1,
+                null,
+                null,
+                null,
+                null,
+                null,
+                string.Empty,
+                string.Empty,
+                string.Empty),
+            0,
+            0,
+            string.Empty,
+            null,
+            PresentationReviewWorkflowPlanner.ProofingMissingIssueMessage);
+}

@@ -1,8 +1,25 @@
+using System.Reflection;
 using System.Xml.Linq;
+using Free.Shared.Ribbon.Avalonia;
+using Free.Shared.Ribbon.Icons;
+
 namespace FreeW.App.Avalonia.Tests;
 
 public sealed class RibbonCommandIconPackagingTests
 {
+    private static readonly string[] RemovedExactDuplicateSlugs =
+    [
+        "custom-paragraph-spacing", "customize-colors", "customize-fonts", "draftview",
+        "image-brightness-minus40", "image-brightness-plus40", "image-saturation-0", "image-saturation-200",
+        "image-transparency-25", "image-transparency-75", "shape-flip-horizontal", "shape-flip-vertical",
+        "shape-position", "shape-rotate-left90", "shape-rotate-right90", "shape-rotate",
+        "shape-wrap", "shape-wrap-behind", "shape-wrap-front", "shape-wrap-inline", "shape-wrap-square",
+        "shape-wrap-tight", "shape-wrap-top-bottom", "index-insert", "index-mark", "insert-quickpart",
+        "merge-rule-fill-in", "merge-rule-ref", "merge-rule-set", "merge-rule-skip-record-if",
+        "multilevel-list", "multilevel-preset-0", "multilevel-preset-1", "multilevel-preset-2", "printlayout",
+        "reset-style-set", "reviewingpane", "toc", "tof", "weblayout",
+    ];
+
     [Fact]
     public void Canonical_command_icons_are_linked_for_Avalonia_output_and_publish()
     {
@@ -44,6 +61,28 @@ public sealed class RibbonCommandIconPackagingTests
         .ToArray();
 
         missing.Should().BeEmpty("Avalonia must package the canonical SVG target for each deleted alias");
+    }
+
+    [Fact]
+    public void Exact_duplicate_aliases_resolve_through_Avalonia_loader_and_packaging()
+    {
+        var iconDirectory = Path.Combine(AppContext.BaseDirectory, "Resources", "CommandIconsSvg");
+        Directory.Exists(iconDirectory).Should().BeTrue();
+
+        var candidateMethod = typeof(AvaloniaRibbonIcons).GetMethod(
+            "GetCommandIconSlugCandidates",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        candidateMethod.Should().NotBeNull();
+
+        foreach (var alias in RemovedExactDuplicateSlugs)
+        {
+            var canonical = RibbonCommandIconSlugAliases.GetCandidates(alias).First();
+            var candidates = ((IEnumerable<string>)candidateMethod!.Invoke(null, [alias])!).ToArray();
+
+            candidates.First().Should().Be(canonical, alias);
+            File.Exists(Path.Combine(iconDirectory, canonical + ".svg")).Should().BeTrue(alias);
+            File.Exists(Path.Combine(iconDirectory, alias + ".svg")).Should().BeFalse(alias);
+        }
     }
 
     private static string FindRepositoryFile(params string[] parts)

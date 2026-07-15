@@ -315,3 +315,103 @@ function Test-ToolGeneratedContentMatches {
         throw "$Label is out of date. Run $GeneratorScriptName to refresh it."
     }
 }
+
+function Invoke-FidelityCorpusDownload {
+    param(
+        [Parameter(Mandatory = $true)][string]$ManifestPath,
+        [Parameter(Mandatory = $true)][string]$FilesDirectory,
+        [Parameter(Mandatory = $true)][string]$CorpusLabel,
+        [Parameter(Mandatory = $true)][string]$LocalDirectoryLabel,
+        [string]$Source,
+        [switch]$Force,
+        [scriptblock]$DownloadAction
+    )
+
+    if (-not (Test-Path -LiteralPath $ManifestPath -PathType Leaf)) {
+        throw "Manifest not found: $ManifestPath"
+    }
+
+    if (-not (Test-Path -LiteralPath $FilesDirectory -PathType Container)) {
+        New-Item -ItemType Directory -Path $FilesDirectory -Force | Out-Null
+    }
+
+    $rows = @(Import-Csv -LiteralPath $ManifestPath)
+    if (-not [string]::IsNullOrWhiteSpace($Source)) {
+        $rows = @($rows | Where-Object { $_.source -eq $Source })
+    }
+
+    if ($null -eq $DownloadAction) {
+        $DownloadAction = {
+            param([string]$Uri, [string]$TargetPath)
+            Invoke-WebRequest -Uri $Uri -OutFile $TargetPath -UseBasicParsing -TimeoutSec 120
+        }
+    }
+
+    $downloaded = 0
+    $skipped = 0
+    $failed = 0
+    $localSkipped = 0
+
+    foreach ($row in $rows) {
+        if ([string]::IsNullOrWhiteSpace($row.license)) {
+            throw "Manifest row '$($row.id)' is missing a license."
+        }
+
+        $target = Join-Path $FilesDirectory $row.file
+        if ($row.url -like 'local://*' -or $row.source -eq 'local') {
+            if (Test-Path -LiteralPath $target) {
+                Write-Host "[local ] $($row.file) (present)"
+            }
+            else {
+                Write-Warning "[local ] $($row.file) declared local but not found in $LocalDirectoryLabel"
+            }
+
+            $localSkipped++
+            continue
+        }
+
+        if ((Test-Path -LiteralPath $target) -and -not $Force) {
+            $skipped++
+            Write-Host "[skip  ] $($row.file) (already downloaded)"
+            continue
+        }
+
+        try {
+            $targetDirectory = Split-Path -Parent $target
+            if (-not (Test-Path -LiteralPath $targetDirectory -PathType Container)) {
+                New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
+            }
+
+            & $DownloadAction $row.url $target $row
+            $size = (Get-Item -LiteralPath $target).Length
+            if ($size -le 0) {
+                throw "downloaded 0 bytes"
+            }
+
+            $downloaded++
+            Write-Host ("[ok    ] {0} ({1:N0} bytes, {2})" -f $row.file, $size, $row.license)
+        }
+        catch {
+            $failed++
+            if (Test-Path -LiteralPath $target -PathType Leaf) {
+                Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+            }
+
+            Write-Warning "[fail  ] $($row.file) <- $($row.url): $($_.Exception.Message)"
+        }
+    }
+
+    Write-Host ""
+    Write-Host ("{0}: {1} downloaded, {2} already present, {3} local, {4} failed (of {5} rows)." -f `
+        $CorpusLabel, $downloaded, $skipped, $localSkipped, $failed, $rows.Count)
+    Write-Host "Files: $FilesDirectory"
+
+    [pscustomobject]@{
+        Downloaded  = $downloaded
+        Skipped     = $skipped
+        LocalSkipped = $localSkipped
+        Failed      = $failed
+        RowCount    = $rows.Count
+        ExitCode    = if ($failed -gt 0) { 1 } else { 0 }
+    }
+}
