@@ -71,9 +71,22 @@ public sealed class XlsxDrawingColorTintSourceGuardTests
             .And.Contain(".ToHexRgb()")
             .And.NotContain("$\"{color.R:X2}");
 
-        TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorkbookThemeReader.cs")
+        var workbookThemeReaderSource = TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorkbookThemeReader.cs");
+        workbookThemeReaderSource
             .Should()
-            .Contain("XlsxColorReader.TryParseHexColor(srgb, out var color)");
+            .Contain("DrawingMlThemeReader.Read")
+            .And.Contain("color.BaseColor ?? color.ResolvedColor")
+            .And.NotContain("XlsxColorReader.TryParseHexColor")
+            .And.NotContain("ReadThemeColor(");
+
+        var sharedThemeReaderSource = TestWorkspaceFiles.ReadRepoText(
+            "shared",
+            "Free.Shared.Opc",
+            "DrawingMlThemeReader.cs");
+        sharedThemeReaderSource
+            .Should()
+            .Contain("DrawingMlRgbColor.TryParseHexRgb")
+            .And.Contain("DrawingMlColorTransform.Apply");
         TestWorkspaceFiles.ReadCoreIoRepoSource("XlsxWorkbookThemeWriter.cs")
             .Should()
             .Contain("XlsxDrawingColorWriter.FormatRgb(theme.GetColor(color.Slot))")
