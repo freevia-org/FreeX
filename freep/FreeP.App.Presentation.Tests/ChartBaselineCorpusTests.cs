@@ -83,6 +83,11 @@ public sealed class ChartBaselineCorpusTests
             .Should().OnlyContain(color => color == scatterColors[1]);
 
         var stacked = charts.Single(chart => chart.ChartType == ChartType.ColumnStacked100);
+        stacked.DataLabels.Should().NotBeNull();
+        stacked.DataLabels!.ShowSeriesName.Should().BeTrue();
+        stacked.DataLabels.ShowCategoryName.Should().BeTrue();
+        stacked.DataLabels.ShowValue.Should().BeTrue();
+        stacked.DataLabels.ShowPercent.Should().BeFalse();
         var textStyles = charts.Select(chart => chart.TextStyle).ToArray();
         textStyles.Should().NotContainNulls();
         textStyles.Cast<ChartTextStyle>().Select(style => style.FontSizePt)
@@ -99,6 +104,10 @@ public sealed class ChartBaselineCorpusTests
         stackedBars.Where(bar => bar.CategoryIndex == 0).Sum(bar => bar.Bounds.Height)
             .Should()
             .BeApproximately(220, 0.0001);
+        var stackedLabels = ChartRenderPlanner.BuildDataLabelPlans(
+            stacked,
+            new ChartPlanRect(0, 0, 360, 220));
+        stackedLabels[0].Text.Should().Be("Actual Q1 20");
     }
 
     [Fact]

@@ -97,7 +97,9 @@ internal static class PptxChartReader
             or "areaChart" or "scatterChart" or "bubbleChart" or "radarChart"
             or "bar3DChart" or "line3DChart" or "pie3DChart" or "area3DChart" or "ofPieChart"
             or "stockChart" or "surfaceChart" or "surface3DChart");
-        shape.DataLabels = ReadDataLabels(firstChartTypeEl?.Element(C + "dLbls"));
+        var chartDataLabelsEl = firstChartTypeEl?.Element(C + "dLbls");
+        shape.DataLabels = ReadDataLabels(chartDataLabelsEl);
+        ApplyPowerPointPercentStackedDataLabelDefaults(firstChartTypeEl, chartDataLabelsEl, shape.DataLabels);
         shape.DataTable = ReadDataTable(plotArea.Element(C + "dTable"), scheme);
 
         // Secondary value axis detection
@@ -1153,6 +1155,28 @@ internal static class PptxChartReader
                 _          => (DataLabelPosition?)null
             }
         };
+    }
+
+    private static void ApplyPowerPointPercentStackedDataLabelDefaults(
+        XElement? chartTypeEl,
+        XElement? dataLabelsEl,
+        ChartDataLabels? labels)
+    {
+        if (chartTypeEl?.Name != C + "barChart" ||
+            chartTypeEl.Element(C + "grouping")?.Attribute("val")?.Value != "percentStacked" ||
+            dataLabelsEl is null ||
+            labels is not { ShowValue: true, ShowPercent: true, ShowSeriesName: false, ShowCategoryName: false } ||
+            dataLabelsEl.Element(C + "showSerName") is not null ||
+            dataLabelsEl.Element(C + "showCatName") is not null)
+        {
+            return;
+        }
+
+        // PowerPoint expands this sparse dLbls form into series/category/value labels
+        // and suppresses the percentage token when laying out a 100%-stacked chart.
+        labels.ShowSeriesName = true;
+        labels.ShowCategoryName = true;
+        labels.ShowPercent = false;
     }
 
     private static ChartDataTableSettings? ReadDataTable(XElement? dTableEl, PresentationColorScheme scheme)
