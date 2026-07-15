@@ -121,6 +121,60 @@ function Assert-ToolSourceCentralization {
     Write-Host "Validated shared tooling source guards."
 }
 
+function Assert-GeneratedDocCheckNewlineSemantics {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    foreach ($generatorName in @(
+            "Generate-ConditionalFormatOpenedStateEvidence.ps1",
+            "Generate-DialogParityInventory.ps1",
+            "Generate-DialogVisualEvidenceSummary.ps1")) {
+        $generator = Get-Content -LiteralPath (Join-Path $ToolRoot $generatorName) -Raw
+        $checkLines = @($generator -split "`r?`n" | Where-Object { $_ -match "Test-ToolGeneratedContentMatches" })
+        if ($checkLines.Count -ne 2 -or @($checkLines | Where-Object { $_ -notmatch "-NormalizeNewlines\b" }).Count -ne 0) {
+            throw "$generatorName must normalize newlines for both generated-document checks."
+        }
+    }
+
+    . (Join-Path $ToolRoot "ToolScriptSupport.ps1")
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-tool-script-tests-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
+    try {
+        $actualPath = Join-Path $tempRoot "generated.txt"
+        [System.IO.File]::WriteAllText(
+            $actualPath,
+            "first`r`nsecond`r`n",
+            [System.Text.UTF8Encoding]::new($false))
+
+        Test-ToolGeneratedContentMatches `
+            -ExpectedContent "first`nsecond`n" `
+            -ActualPath $actualPath `
+            -Label "Normalized generated-content behavior" `
+            -GeneratorScriptName "test generator" `
+            -NormalizeNewlines
+
+        $strictComparisonRejected = $false
+        try {
+            Test-ToolGeneratedContentMatches `
+                -ExpectedContent "first`nsecond`n" `
+                -ActualPath $actualPath `
+                -Label "Strict generated-content behavior" `
+                -GeneratorScriptName "test generator"
+        }
+        catch {
+            $strictComparisonRejected = $true
+        }
+
+        if (-not $strictComparisonRejected) {
+            throw "Test-ToolGeneratedContentMatches must remain strict when newline normalization is not requested."
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "Validated generated-document newline normalization source and behavior."
+}
+
 $resolvedScriptDirectory = Resolve-RepoPath $ScriptDirectory
 if (-not (Test-Path -LiteralPath $resolvedScriptDirectory -PathType Container)) {
     throw "Tool script directory was not found: $resolvedScriptDirectory"
@@ -137,6 +191,7 @@ $toolsRoot = [System.IO.Path]::GetFullPath((Resolve-RepoPath "tools")).TrimEnd([
 $resolvedDirectory = [System.IO.Path]::GetFullPath($resolvedScriptDirectory).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     Assert-ToolSourceCentralization -ToolRoot $resolvedDirectory
+    Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
 }
 
 $failedScripts = New-Object System.Collections.Generic.List[string]

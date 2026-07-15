@@ -477,8 +477,8 @@ $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 
 if ($Check) {
-    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Dialog parity inventory JSON" -GeneratorScriptName "tools\Generate-DialogParityInventory.ps1"
-    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Dialog parity inventory Markdown" -GeneratorScriptName "tools\Generate-DialogParityInventory.ps1"
+    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Dialog parity inventory JSON" -GeneratorScriptName "tools\Generate-DialogParityInventory.ps1" -NormalizeNewlines
+    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Dialog parity inventory Markdown" -GeneratorScriptName "tools\Generate-DialogParityInventory.ps1" -NormalizeNewlines
 
     Write-Host "Dialog parity inventory is up to date."
     return

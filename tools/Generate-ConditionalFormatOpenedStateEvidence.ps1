@@ -557,8 +557,8 @@ $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 
 if ($Check) {
-    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Conditional-format opened-state evidence JSON" -GeneratorScriptName "tools\Generate-ConditionalFormatOpenedStateEvidence.ps1"
-    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Conditional-format opened-state evidence Markdown" -GeneratorScriptName "tools\Generate-ConditionalFormatOpenedStateEvidence.ps1"
+    Test-ToolGeneratedContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Conditional-format opened-state evidence JSON" -GeneratorScriptName "tools\Generate-ConditionalFormatOpenedStateEvidence.ps1" -NormalizeNewlines
+    Test-ToolGeneratedContentMatches -ExpectedContent $markdown -ActualPath $resolvedMarkdownPath -Label "Conditional-format opened-state evidence Markdown" -GeneratorScriptName "tools\Generate-ConditionalFormatOpenedStateEvidence.ps1" -NormalizeNewlines
     Write-Host "Conditional-format opened-state evidence is up to date."
     return
 }
