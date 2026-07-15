@@ -2466,7 +2466,7 @@ public sealed class SlideCanvas : FrameworkElement
             "dashVert" => BuildStripePatternBrush(bg, fg, horizontal: false),
             "diagStripe" or "ltDnDiag" or "dnDiag" => BuildDiagPatternBrush(bg, fg, down: true),
             "upDiag" or "ltUpDiag" => BuildDiagPatternBrush(bg, fg, down: false),
-            "cross" => BuildCrossPatternBrush(bg, fg),
+            "cross" => BuildCrossPatternBrush(bg, fg, tileSize: 12, strokeWidth: 1),
             "diagCross" or "smConfetti" => BuildDiagCrossPatternBrush(bg, fg),
             "smGrid" => BuildCrossPatternBrush(bg, fg),
             "wave" or "trellis" => BuildDiagCrossPatternBrush(bg, fg),
@@ -2586,19 +2586,23 @@ public sealed class SlideCanvas : FrameworkElement
         };
     }
 
-    private static DrawingBrush BuildCrossPatternBrush(Color bg, Color fg)
+    private static DrawingBrush BuildCrossPatternBrush(
+        Color bg,
+        Color fg,
+        double tileSize = 6,
+        double strokeWidth = 2)
     {
         var dg = new DrawingGroup();
         dg.Children.Add(new GeometryDrawing(new SolidColorBrush(bg), null,
-            new RectangleGeometry(new Rect(0, 0, 6, 6))));
+            new RectangleGeometry(new Rect(0, 0, tileSize, tileSize))));
         dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
-            new RectangleGeometry(new Rect(2, 0, 2, 6))));
+            new RectangleGeometry(new Rect(0, 0, strokeWidth, tileSize))));
         dg.Children.Add(new GeometryDrawing(new SolidColorBrush(fg), null,
-            new RectangleGeometry(new Rect(0, 2, 6, 2))));
+            new RectangleGeometry(new Rect(0, 0, tileSize, strokeWidth))));
         return new DrawingBrush(dg)
         {
             TileMode = TileMode.Tile,
-            Viewport = new Rect(0, 0, 6, 6),
+            Viewport = new Rect(0, 0, tileSize, tileSize),
             ViewportUnits = BrushMappingMode.Absolute,
             Stretch = Stretch.None
         };

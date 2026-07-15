@@ -2376,7 +2376,8 @@ public sealed class SlideCanvas : Control
         var fg = Color.FromRgb(pat.ForegroundColor.R, pat.ForegroundColor.G, pat.ForegroundColor.B);
         var bg = Color.FromRgb(pat.BackgroundColor.R, pat.BackgroundColor.G, pat.BackgroundColor.B);
 
-        const int S = 6;
+        int tileSize = pat.Preset == "cross" ? 12 : 6;
+        int S = tileSize;
         var pixels = new byte[S * S * 4]; // BGRA layout
 
         void FillAll(Color c)
@@ -2438,7 +2439,11 @@ public sealed class SlideCanvas : Control
             case "upDiag" or "ltUpDiag":
                 for (int i = 0; i < S; i++) SetPixel(i, S - 1 - i, fg);
                 break;
-            case "cross" or "smGrid":
+            case "cross":
+                for (int x = 0; x < S; x++) SetPixel(x, 0, fg);
+                for (int y = 0; y < S; y++) SetPixel(0, y, fg);
+                break;
+            case "smGrid":
                 for (int x = 0; x < S; x++) SetPixel(x, 2, fg);
                 for (int y = 0; y < S; y++) SetPixel(2, y, fg);
                 break;

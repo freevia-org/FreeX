@@ -143,6 +143,9 @@ public sealed class ChartBaselineCorpusTests
             outline.Color.Resolved.Should().Be(new SrgbColor(0x03, 0x0E, 0x14));
             shape.TextBody!.Paragraphs.Single().Runs.Single().Color!.Resolved.Should().Be(SrgbColor.White);
         }
+
+        ((ShapeFill.Pattern)shapes.Single(candidate => candidate.Name == "PatternCross").Fill!).Preset
+            .Should().Be("cross");
     }
 
     [Fact]
