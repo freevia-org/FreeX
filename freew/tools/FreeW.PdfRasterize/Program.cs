@@ -81,8 +81,8 @@ int exitCode = await Task.Run(async () =>
     for (uint i = 0; i < pageCount; i++)
     {
         using PdfPage page = pdf.GetPage(i);
-        // PdfPageRenderOptions applies dimensions at a 120-DPI scale. Convert either the page's
-        // 96-DPI geometry or an explicit requested output size before rendering.
+        // PdfPageRenderOptions applies dimensions at a 120-DPI scale. Convert the native
+        // page geometry so the emitted PNG remains at the 96-DPI Word comparison surface.
         const double PdfRenderOptionsDpi = 120.0;
         const double TargetDpi = 96.0;
         var outputWidth = width ?? Math.Max(1u, (uint)Math.Round(page.Size.Width));

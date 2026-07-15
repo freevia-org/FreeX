@@ -466,6 +466,51 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
+    public void WordStockHierarchyAndPyramidLayouts_UseCanonicalIdsAndAlgorithms()
+    {
+        var hierarchy = new SmartArt { Kind = SmartArtKind.Hierarchy, LayoutId = "orgchart1" };
+        var root = new SmartArtNode("Plan");
+        hierarchy.Nodes.Add(root);
+        root.AddChild("Build");
+        root.Children[0].AddChild("Verify");
+
+        var pyramid = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+        pyramid.LayoutId = "pyramid1";
+
+        var doc = new TextDocument();
+        var first = new Paragraph();
+        first.Runs.Add(Run.FromSmartArt(hierarchy));
+        doc.Blocks.Add(first);
+        var second = new Paragraph();
+        second.Runs.Add(Run.FromSmartArt(pyramid));
+        doc.Blocks.Add(second);
+
+        var bytes = WriteBytes(doc);
+        var hierarchyData = EntryXml(bytes, "word/diagrams/data1.xml");
+        var hierarchyLayout = EntryXml(bytes, "word/diagrams/layout1.xml");
+        var pyramidData = EntryXml(bytes, "word/diagrams/data2.xml");
+        var pyramidLayout = EntryXml(bytes, "word/diagrams/layout2.xml");
+
+        hierarchyData.Root!.Element(Dgm + "ptLst")!.Element(Dgm + "pt")!
+            .Element(Dgm + "prSet")!.Attribute("loTypeId")!.Value
+            .Should().EndWith("/layout/orgChart1");
+        hierarchyData.Root.Element(Dgm + "ptLst")!.Element(Dgm + "pt")!
+            .Element(Dgm + "prSet")!.Attribute("loCatId")!.Value.Should().Be("hierarchy");
+        hierarchyLayout.Root!.Element(Dgm + "layoutNode")!.Element(Dgm + "alg")!
+            .Attribute("type")!.Value.Should().Be("hierRoot");
+        hierarchyLayout.Descendants(Dgm + "alg").Select(alg => alg.Attribute("type")!.Value)
+            .Should().Contain("hierChild");
+
+        pyramidData.Root!.Element(Dgm + "ptLst")!.Element(Dgm + "pt")!
+            .Element(Dgm + "prSet")!.Attribute("loCatId")!.Value.Should().Be("pyramid");
+        pyramidLayout.Root!.Element(Dgm + "layoutNode")!.Element(Dgm + "alg")!
+            .Attribute("type")!.Value.Should().Be("pyra");
+        pyramidLayout.Descendants(Dgm + "shape")
+            .Select(shape => shape.Attribute("type")?.Value)
+            .Should().Contain("trapezoid");
+    }
+
+    [Fact]
     public void NullGalleryIds_DoNotWriteFreewExtensionAttributes()
     {
         var smartArt = SmartArt.Create(SmartArtKind.List, ["A"]);

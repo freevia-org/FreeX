@@ -50,6 +50,21 @@ public sealed class VisualEvidenceRunnerScriptTests
     }
 
     [Fact]
+    public void PdfRasterizer_PreservesNativeWordPagePixelGeometry()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "freew",
+            "tools",
+            "FreeW.PdfRasterize",
+            "Program.cs"));
+
+        source.Should().Contain("PdfRenderOptionsDpi = 120.0");
+        source.Should().Contain("TargetDpi = 96.0");
+        source.Should().Contain("DestinationWidth = destinationWidth");
+        source.Should().Contain("DestinationHeight = destinationHeight");
+    }
+
+    [Fact]
     public void CombinedVisualEvidenceRunner_ForwardsOptionalWordBaselineComparison()
     {
         var source = File.ReadAllText(RepositoryFile(

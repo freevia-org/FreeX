@@ -4157,7 +4157,7 @@ public static class DocxWriter
                 new XAttribute("type", "doc"),
                 new XElement(Dgm + "prSet",
                     new XAttribute("loTypeId", SmartArtLayoutUrn(smartArt)),
-                    new XAttribute("loCatId", smartArt.Kind == SmartArtKind.Process ? "process" : "list"),
+                    new XAttribute("loCatId", SmartArtLayoutCategory(smartArt)),
                     new XAttribute("qsTypeId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/" + (smartArt.StyleId ?? "simple1")),
                     new XAttribute("qsCatId", "simple"),
                     new XAttribute("csTypeId", "urn:microsoft.com/office/officeart/2005/8/colors/" + (smartArt.ColorSchemeId ?? "accent0_1")),
@@ -4349,13 +4349,38 @@ public static class DocxWriter
 
     private static string SmartArtLayoutUrn(SmartArt smartArt)
     {
+        var suffix = SmartArtLayoutSuffix(smartArt);
+        return "urn:microsoft.com/office/officeart/2005/8/layout/" + suffix;
+    }
+
+    private static string SmartArtLayoutSuffix(SmartArt smartArt)
+    {
         var suffix = smartArt.LayoutId ?? smartArt.Kind switch
         {
             SmartArtKind.Process => "process1",
             SmartArtKind.Hierarchy => "hierarchy1",
             _ => "default"
         };
-        return "urn:microsoft.com/office/officeart/2005/8/layout/" + suffix;
+
+        // Word's stock layout ids are case-sensitive. Keep accepting the historical FreeW spelling
+        // while emitting the identifier used by Word's SmartArtLayouts collection.
+        return string.Equals(suffix, "orgchart1", StringComparison.OrdinalIgnoreCase)
+            ? "orgChart1"
+            : suffix;
+    }
+
+    private static string SmartArtLayoutCategory(SmartArt smartArt)
+    {
+        var suffix = SmartArtLayoutSuffix(smartArt);
+        if (smartArt.Kind == SmartArtKind.Hierarchy ||
+            suffix.StartsWith("hierarchy", StringComparison.OrdinalIgnoreCase) ||
+            suffix.StartsWith("orgChart", StringComparison.OrdinalIgnoreCase))
+            return "hierarchy";
+
+        if (suffix.StartsWith("pyramid", StringComparison.OrdinalIgnoreCase))
+            return "pyramid";
+
+        return smartArt.Kind == SmartArtKind.Process ? "process" : "list";
     }
 
     private static string SmartArtModelId(int index) =>
@@ -4504,7 +4529,14 @@ public static class DocxWriter
     private static XDocument BuildDiagramLayout(SmartArt smartArt)
     {
         var layoutUrn = SmartArtLayoutUrn(smartArt);
-        var category = smartArt.Kind == SmartArtKind.Process ? "process" : "list";
+        var category = SmartArtLayoutCategory(smartArt);
+        var isHierarchy = string.Equals(category, "hierarchy", StringComparison.Ordinal);
+        var isPyramid = string.Equals(category, "pyramid", StringComparison.Ordinal);
+        var rootAlgorithm = isHierarchy
+            ? "hierRoot"
+            : isPyramid
+                ? "pyra"
+                : smartArt.Kind == SmartArtKind.Process ? "lin" : "snake";
         var topLevelCount = Math.Max(1, smartArt.Nodes.Count);
         var stylePoints = Enumerable.Range(0, topLevelCount)
             .Select(i => new XElement(Dgm + "pt", new XAttribute("modelId", SmartArtModelId(i + 1))))
@@ -4554,7 +4586,7 @@ public static class DocxWriter
                     new XElement(Dgm + "dir"),
                     new XElement(Dgm + "resizeHandles", new XAttribute("val", "exact"))),
                 new XElement(Dgm + "alg",
-                    new XAttribute("type", smartArt.Kind == SmartArtKind.Process ? "lin" : "snake"),
+                    new XAttribute("type", rootAlgorithm),
                     new XElement(Dgm + "param", new XAttribute("type", "grDir"), new XAttribute("val", "tL")),
                     new XElement(Dgm + "param", new XAttribute("type", "flowDir"), new XAttribute("val", "row")),
                     new XElement(Dgm + "param", new XAttribute("type", "contDir"), new XAttribute("val", "sameDir")),
@@ -4578,9 +4610,9 @@ public static class DocxWriter
                     new XElement(Dgm + "layoutNode",
                         new XAttribute("name", "node"),
                         new XElement(Dgm + "varLst", new XElement(Dgm + "bulletEnabled", new XAttribute("val", 1))),
-                        new XElement(Dgm + "alg", new XAttribute("type", "tx")),
+                        new XElement(Dgm + "alg", new XAttribute("type", isHierarchy ? "hierChild" : "tx")),
                         new XElement(Dgm + "shape",
-                            new XAttribute("type", "rect"),
+                            new XAttribute("type", isPyramid ? "trapezoid" : "rect"),
                             new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
                             new XAttribute(R + "blip", string.Empty),
                             new XElement(Dgm + "adjLst")),
