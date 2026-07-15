@@ -4158,6 +4158,7 @@ public static class DocxWriter
                 new XAttribute("modelId", docId),
                 new XAttribute("type", "doc")));
         var cxnLst = new XElement(Dgm + "cxnLst");
+        var presentationIds = new List<(string NodeId, string PresentationId)>();
 
         var nextId = 0;
         var nextCxn = 0;
@@ -4165,6 +4166,7 @@ public static class DocxWriter
         void Emit(SmartArtNode node, string parentId)
         {
             var id = SmartArtModelId(++nextId);
+            presentationIds.Add((id, SmartArtModelId(2000 + nextId - 1)));
             ptLst.Add(new XElement(Dgm + "pt",
                 new XAttribute("modelId", id),
                 new XElement(Dgm + "t",
@@ -4187,6 +4189,25 @@ public static class DocxWriter
         foreach (var node in smartArt.Nodes)
             Emit(node, docId);
 
+        foreach (var (nodeId, presentationId) in presentationIds)
+        {
+            ptLst.Add(new XElement(Dgm + "pt",
+                new XAttribute("modelId", presentationId),
+                new XAttribute("type", "pres"),
+                new XElement(Dgm + "prSet",
+                    new XAttribute("presAssocID", nodeId),
+                    new XAttribute("presName", "node"),
+                    new XAttribute("presStyleLbl", "node0"),
+                    new XAttribute("presStyleIdx", 0),
+                    new XAttribute("presStyleCnt", 1)),
+                new XElement(Dgm + "spPr"),
+                new XElement(Dgm + "t",
+                    new XElement(A + "bodyPr"),
+                    new XElement(A + "lstStyle"),
+                    new XElement(A + "p",
+                        new XElement(A + "endParaRPr", new XAttribute("lang", "en-US"))))));
+        }
+
         return new XDocument(
             new XElement(Dgm + "dataModel",
                 new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
@@ -4195,7 +4216,13 @@ public static class DocxWriter
                 ptLst,
                 cxnLst,
                 new XElement(Dgm + "bg"),
-                new XElement(Dgm + "whole")));
+                new XElement(Dgm + "whole"),
+                new XElement(Dgm + "extLst",
+                    new XElement(A + "ext",
+                        new XAttribute("uri", Dsp.NamespaceName),
+                        new XElement(Dsp + "dataModelExt",
+                            new XAttribute("relId", drawingRelId),
+                            new XAttribute("minVer", Dgm.NamespaceName))))));
     }
 
     private static string SmartArtModelId(int index) =>
@@ -4234,10 +4261,27 @@ public static class DocxWriter
         foreach (var node in smartArt.Nodes)
             Flatten(node, 0);
 
-        // Fixed heuristic box geometry (EMU). 1 in = 914400 EMU.
-        const long boxW = 1828800;  // 2.0 in
-        const long boxH = 685800;   // 0.75 in
-        const long gap = 228600;    // 0.25 in
+        // Keep the cached drawing inside the authored SmartArt frame. Word consumes this drawing through
+        // dsp:dataModelExt, so fixed two-inch boxes make a four-node process wrap outside its frame.
+        var frameW = Math.Max(1L, PointsToEmu(smartArt.WidthPt));
+        var frameH = Math.Max(1L, PointsToEmu(smartArt.HeightPt));
+        var margin = Math.Max(1L, PointsToEmu(6));
+        var gap = Math.Max(1L, PointsToEmu(8));
+        var nodeCount = Math.Max(1, nodes.Count);
+        var isProcess = smartArt.Kind == SmartArtKind.Process
+            || string.Equals(smartArt.LayoutId, "process1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(smartArt.LayoutId, "continuousBlockProcess", StringComparison.OrdinalIgnoreCase);
+        var boxW = isProcess
+            ? Math.Max(1L, (frameW - 2 * margin - Math.Max(0, nodeCount - 1) * gap) / nodeCount)
+            : Math.Max(1L, frameW - 2 * margin);
+        var boxH = isProcess
+            ? Math.Max(1L, Math.Min(PointsToEmu(30), frameH - 2 * margin))
+            : Math.Max(1L, (frameH - 2 * margin - Math.Max(0, nodeCount - 1) * gap) / nodeCount);
+        var colorScheme = SmartArtColorScheme.FindById(smartArt.ColorSchemeId ?? string.Empty)
+            ?? SmartArtColorScheme.Default;
+        var style = SmartArtStyle.FindById(smartArt.StyleId ?? string.Empty)
+            ?? SmartArtStyle.Default;
+        var textHex = colorScheme.TextHex.TrimStart('#').ToUpperInvariant();
 
         var spTree = new XElement(Dsp + "spTree",
             new XElement(Dsp + "nvGrpSpPr",
@@ -4248,51 +4292,65 @@ public static class DocxWriter
             new XElement(Dsp + "grpSpPr",
                 new XElement(A + "xfrm",
                     new XElement(A + "off", new XAttribute("x", 0), new XAttribute("y", 0)),
-                    new XElement(A + "ext", new XAttribute("cx", 0), new XAttribute("cy", 0)),
+                    new XElement(A + "ext", new XAttribute("cx", frameW), new XAttribute("cy", frameH)),
                     new XElement(A + "chOff", new XAttribute("x", 0), new XAttribute("y", 0)),
-                    new XElement(A + "chExt", new XAttribute("cx", 0), new XAttribute("cy", 0)))));
+                    new XElement(A + "chExt", new XAttribute("cx", frameW), new XAttribute("cy", frameH)))));
 
         for (var i = 0; i < nodes.Count; i++)
         {
             var (node, depth) = nodes[i];
             long x, y;
-            switch (smartArt.Kind)
+            switch (isProcess ? SmartArtKind.Process : smartArt.Kind)
             {
                 case SmartArtKind.Process:
                     // Horizontal row of boxes (with a gap acting as the arrow space between steps).
-                    x = i * (boxW + gap);
-                    y = 0;
+                    x = margin + i * (boxW + gap);
+                    y = (frameH - boxH) / 2;
                     break;
                 case SmartArtKind.Hierarchy:
                     // Simple top-down tree: indent by depth (x) and stack by emission order (y) so children
                     // sit below and to the right of their parent — deterministic and never overlapping.
-                    x = depth * (boxW + gap);
-                    y = i * (boxH + gap);
+                    x = Math.Min(frameW - margin - boxW, margin + depth * (boxW / 3 + gap));
+                    y = Math.Min(frameH - margin - boxH, margin + i * (boxH + gap));
                     break;
                 default: // List: vertical stack of boxes.
-                    x = 0;
-                    y = i * (boxH + gap);
+                    x = margin;
+                    y = Math.Min(frameH - margin - boxH, margin + i * (boxH + gap));
                     break;
             }
 
+            var fillHex = colorScheme.FillHexAt(i).TrimStart('#').ToUpperInvariant();
+            var shapeKind = style.CornerRadius > 0 ? "roundRect" : "rect";
+            var line = style.BorderThickness > 0
+                ? new XElement(A + "ln",
+                    new XAttribute("w", Math.Max(1L, PointsToEmu(style.BorderThickness))),
+                    SolidFill(fillHex))
+                : new XElement(A + "ln", new XElement(A + "noFill"));
+
             spTree.Add(new XElement(Dsp + "sp",
-                new XAttribute("modelId", SmartArtModelId(i + 1)),
+                new XAttribute("modelId", SmartArtModelId(2000 + i)),
                 new XElement(Dsp + "nvSpPr",
                     new XElement(Dsp + "cNvPr",
-                        new XAttribute("id", i),
+                        new XAttribute("id", i + 1),
                         new XAttribute("name", $"Node {i}")),
                     new XElement(Dsp + "cNvSpPr")),
                 new XElement(Dsp + "spPr",
                     new XElement(A + "xfrm",
                         new XElement(A + "off", new XAttribute("x", x), new XAttribute("y", y)),
-                        new XElement(A + "ext", new XAttribute("cx", boxW), new XAttribute("cy", boxH))),
-                    new XElement(A + "prstGeom", new XAttribute("prst", "rect"),
-                        new XElement(A + "avLst"))),
+                    new XElement(A + "ext", new XAttribute("cx", boxW), new XAttribute("cy", boxH))),
+                    new XElement(A + "prstGeom", new XAttribute("prst", shapeKind),
+                        new XElement(A + "avLst")),
+                    SolidFill(fillHex),
+                    line),
                 new XElement(Dsp + "txBody",
                     new XElement(A + "bodyPr"),
                     new XElement(A + "lstStyle"),
                     new XElement(A + "p",
                         new XElement(A + "r",
+                            new XElement(A + "rPr",
+                                new XAttribute("lang", "en-US"),
+                                new XAttribute("sz", 1100),
+                                SolidFill(textHex)),
                             new XElement(A + "t", node.Text))))));
         }
 
@@ -4307,8 +4365,8 @@ public static class DocxWriter
     /// <summary>
     /// Builds a minimal-but-valid SmartArt LAYOUT part (word/diagrams/layoutN.xml — dgm:layoutDef). The
     /// uniqueId records which stock layout the diagram intends (list / process / hierarchy); the layout body
-    /// is intentionally near-empty (Word substitutes the built-in layout for the known uniqueId). The node
-    /// text never lives here, so an empty layout does not lose data.
+    /// remains intentionally small because the semantic data and cached drawing parts carry the document's
+    /// round-trip content.
     /// </summary>
     private static XDocument BuildDiagramLayout(SmartArt smartArt)
     {

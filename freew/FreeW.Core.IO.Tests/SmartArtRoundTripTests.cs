@@ -202,9 +202,11 @@ public class SmartArtRoundTripTests
             .Single(r => r.Attribute("Type")!.Value == DrawingRelType);
         drawingRel.Attribute("Target")!.Value.Should().Be("drawing1.xml");
 
-        // The data part remains schema-valid and no longer carries the old dgm:dataModelExt marker.
+        // The data model points Word at the pre-laid-out drawing through the required Office extension.
         var dataXml = EntryXml(docx, "word/diagrams/data1.xml");
-        dataXml.Descendants(Dgm + "dataModelExt").Should().BeEmpty();
+        var dataModelExt = dataXml.Descendants(Dsp + "dataModelExt").Should().ContainSingle().Subject;
+        dataModelExt.Attribute("relId")!.Value.Should().Be(drawingRel.Attribute("Id")!.Value);
+        dataModelExt.Attribute("minVer")!.Value.Should().Be(Dgm.NamespaceName);
     }
 
     [Fact]
@@ -225,7 +227,40 @@ public class SmartArtRoundTripTests
             var ext = sp.Descendants(A + "ext").Single();
             long.Parse(ext.Attribute("cx")!.Value).Should().BeGreaterThan(0);
             long.Parse(ext.Attribute("cy")!.Value).Should().BeGreaterThan(0);
+            sp.Element(Dsp + "spPr")!.Elements(A + "solidFill")
+                .Should().ContainSingle("Word needs an explicit fill in the cached drawing");
         }
+    }
+
+    [Fact]
+    public void Process_RenderedDrawing_UsesNonZeroGroupFrameAndUniqueShapeIds()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Idea", "Prototype", "Review", "Launch"]);
+        smartArt.HeightPt = 180;
+        var docx = WriteBytes(SingleDiagramDocument(smartArt));
+        var drawing = EntryXml(docx, "word/diagrams/drawing1.xml");
+        var data = EntryXml(docx, "word/diagrams/data1.xml");
+        var groupXfrm = drawing.Descendants(Dsp + "grpSpPr").Descendants(A + "xfrm").Single();
+        var frameExt = groupXfrm.Element(A + "ext")!;
+        var childExt = groupXfrm.Element(A + "chExt")!;
+        frameExt.Attribute("cx")!.Value.Should().Be(childExt.Attribute("cx")!.Value);
+        frameExt.Attribute("cy")!.Value.Should().Be(childExt.Attribute("cy")!.Value);
+        long.Parse(frameExt.Attribute("cx")!.Value).Should().BeGreaterThan(0);
+        long.Parse(frameExt.Attribute("cy")!.Value).Should().BeGreaterThan(0);
+
+        var shapes = drawing.Descendants(Dsp + "sp").ToList();
+        shapes.Should().HaveCount(4);
+        var shapeIds = shapes.Select(sp => sp.Element(Dsp + "nvSpPr")!.Element(Dsp + "cNvPr")!.Attribute("id")!.Value);
+        shapeIds.Should().OnlyHaveUniqueItems();
+        shapeIds.Should().NotContain("0");
+
+        var presentationPoints = data.Root!.Element(Dgm + "ptLst")!.Elements(Dgm + "pt")
+            .Where(pt => pt.Attribute("type")?.Value == "pres").ToList();
+        presentationPoints.Should().HaveCount(4);
+        shapes.Select(sp => sp.Attribute("modelId")!.Value)
+            .Should().Equal(presentationPoints.Select(pt => pt.Attribute("modelId")!.Value));
+        presentationPoints.Select(pt => pt.Element(Dgm + "prSet")!.Attribute("presAssocID")!.Value)
+            .Should().OnlyHaveUniqueItems();
     }
 
     [Fact]
