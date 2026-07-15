@@ -509,7 +509,9 @@ public static class DocxWriter
         HeaderFooter Content,
         string FileName,
         string RelationshipId,
-        IReadOnlyList<ImagePart> Images);
+        IReadOnlyList<ImagePart> Images,
+        WatermarkOptions? Watermark,
+        ImagePart? WatermarkImage);
 
     /// <summary>
     /// Walks every section (the final/body-level section first, then each non-final section in document
@@ -537,8 +539,11 @@ public static class DocxWriter
             // discovery order. We therefore reserve indices 1 (default) and 2 (even) for the final section.
             void AddPart(bool isHeader, HeaderFooterType type, HeaderFooter? content)
             {
-                if (content is null || content.IsEmpty)
+                var watermark = isHeader ? page.EffectiveWatermark : null;
+                var hasWatermark = watermark is not null;
+                if ((content is null || content.IsEmpty) && !hasWatermark)
                     return;
+                content ??= new HeaderFooter();
                 int index;
                 if (legacyFinal && type == HeaderFooterType.Default)
                     index = 1;
@@ -555,6 +560,25 @@ public static class DocxWriter
                 var fileName = (isHeader ? "header" : "footer") + index + ".xml";
                 var relationshipId = (isHeader ? "rIdHeader" : "rIdFooter") + index;
                 var images = CollectHeaderFooterImages(content, fileName, usedPartNames);
+                ImagePart? watermarkImage = null;
+                if (watermark?.IsPicture == true)
+                {
+                    var image = new InlineImage(
+                        watermark.ImageBytes!,
+                        widthPt: 468,
+                        heightPt: 117,
+                        InlineImage.DetectFormat(watermark.ImageBytes!));
+                    watermarkImage = new ImagePart(
+                        image,
+                        "rIdWatermarkImage",
+                        NextAvailablePartFileName(
+                            usedPartNames,
+                            "word/media",
+                            $"{fileName[..^4]}_watermark",
+                            InlineImage.ExtensionFor(image.Format)),
+                        (uint)(images.Count + 1));
+                    images.Add(watermarkImage);
+                }
                 parts.Add(new HeaderFooterPart(
                     section,
                     type,
@@ -562,7 +586,9 @@ public static class DocxWriter
                     content,
                     fileName,
                     relationshipId,
-                    images));
+                    images,
+                    watermark,
+                    watermarkImage));
             }
 
             // Parts are added header-then-footer per type (default, even, first) so the legacy single-section
@@ -1218,18 +1244,112 @@ public static class DocxWriter
             root.Add(new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName));
             root.Add(new XAttribute(XNamespace.Xmlns + "pic", Pic.NamespaceName));
         }
+        if (part.Watermark is not null)
+        {
+            root.Add(new XAttribute(XNamespace.Xmlns + "v", V.NamespaceName));
+            root.Add(new XAttribute(XNamespace.Xmlns + "o", O.NamespaceName));
+            root.Add(new XAttribute(XNamespace.Xmlns + "w10", W10.NamespaceName));
+        }
 
         var imagesByRun = hasImages ? BuildHeaderFooterImagesByRun(part) : new Dictionary<Run, ImagePart>();
         var drawings = RunDrawings.Empty() with { Images = imagesByRun };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (part.Content.Paragraphs.Count == 0)
+        if (part.Watermark is not null)
+            root.Add(BuildWatermarkParagraph(part.Watermark, part.WatermarkImage));
+
+        if (part.Content.Paragraphs.Count == 0 && part.Watermark is null)
             root.Add(new XElement(W + "p"));
         else
             foreach (var paragraph in part.Content.Paragraphs)
                 root.Add(BuildParagraph(paragraph, drawings, noHyperlinks));
 
         return new XDocument(root);
+    }
+
+    private static XElement BuildWatermarkParagraph(WatermarkOptions options, ImagePart? watermarkImage)
+    {
+        var color = NormalizeHex(options.FontColorHex, "808080");
+        var opacity = Math.Clamp(options.Opacity, 0, 1)
+            .ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
+        var rotation = options.Layout == WatermarkLayout.Diagonal ? "315" : "0";
+        var shapeId = watermarkImage is null ? "PowerPlusWaterMarkObject" : "PowerPlusPictureWaterMarkObject";
+        var shapeSize = watermarkImage is null
+            ? "width:468pt;height:117pt"
+            : "width:468pt;height:281pt";
+
+        var shapeType = new XElement(V + "shapetype",
+            new XAttribute("id", "_x0000_t136"),
+            new XAttribute("coordsize", "21600,21600"),
+            new XAttribute(O + "spt", "136"),
+            new XAttribute("adj", "10800"),
+            new XAttribute("path", "m@7,l@8,m@5,21600l@6,0e"),
+            new XElement(V + "formulas",
+                new XElement(V + "f", new XAttribute("eqn", "sum #0 0 10800")),
+                new XElement(V + "f", new XAttribute("eqn", "prod #0 2 1")),
+                new XElement(V + "f", new XAttribute("eqn", "sum 21600 0 @1")),
+                new XElement(V + "f", new XAttribute("eqn", "sum 0 0 @2")),
+                new XElement(V + "f", new XAttribute("eqn", "sum 21600 0 @3")),
+                new XElement(V + "f", new XAttribute("eqn", "if @0 @1 0")),
+                new XElement(V + "f", new XAttribute("eqn", "if @0 21600 @1")),
+                new XElement(V + "f", new XAttribute("eqn", "if @0 0 @2")),
+                new XElement(V + "f", new XAttribute("eqn", "if @0 @3 21600")),
+                new XElement(V + "f", new XAttribute("eqn", "if @0 @4 21600")),
+                new XElement(V + "f", new XAttribute("eqn", "if @0 21600 @5 0")),
+                new XElement(V + "f", new XAttribute("eqn", "if @0 0 @6")),
+                new XElement(V + "f", new XAttribute("eqn", "if @0 @7 21600"))),
+            new XElement(V + "path",
+                new XAttribute("textpathok", "t"),
+                new XAttribute(O + "connecttype", "custom"),
+                new XAttribute(O + "connectlocs", "@9,0;@10,10800;@11,21600;@12,10800"),
+                new XAttribute(O + "connectangles", "270,180,90,0")),
+            new XElement(V + "textpath", new XAttribute("on", "t"), new XAttribute("fitshape", "t")),
+            new XElement(V + "handles",
+                new XElement(V + "h",
+                    new XAttribute("position", "#10800,bottomRight"),
+                    new XAttribute("xrange", "6629,14971"))),
+            new XElement(O + "lock",
+                new XAttribute("ext", "edit"),
+                new XAttribute("text", "t"),
+                new XAttribute("shapetype", "t")));
+
+        var fill = watermarkImage is null
+            ? new XElement(V + "fill",
+                new XAttribute("color", color),
+                new XAttribute("opacity", opacity))
+            : new XElement(V + "fill",
+                new XAttribute(R + "id", watermarkImage.RelationshipId),
+                new XAttribute("type", "frame"),
+                new XAttribute("color2", "FFFFFF"),
+                new XAttribute("recolor", "t"),
+                new XAttribute("opacity", opacity));
+
+        var shape = new XElement(V + "shape",
+            new XAttribute("id", shapeId),
+            new XAttribute("type", "#_x0000_t136"),
+            new XAttribute("style", $"position:absolute;margin-left:0;margin-top:0;{shapeSize};rotation:{rotation};z-index:-251654144;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin"),
+            new XAttribute(O + "allowincell", "f"),
+            new XAttribute("stroked", "f"),
+            watermarkImage is null ? new XAttribute("fillcolor", color) : null,
+            fill,
+            watermarkImage is null
+                ? new XElement(V + "textpath",
+                    new XAttribute("style", $"font-family:{options.FontFamily};font-size:1pt"),
+                    new XAttribute("string", options.Text))
+                : null,
+            new XElement(W10 + "wrap", new XAttribute("anchorx", "margin"), new XAttribute("anchory", "margin")));
+
+        return new XElement(W + "p",
+            new XElement(W + "r",
+                new XElement(W + "pict",
+                    shapeType,
+                    shape)));
+    }
+
+    private static string NormalizeHex(string? value, string fallback)
+    {
+        var hex = value?.Trim().TrimStart('#');
+        return hex is { Length: 6 } && hex.All(Uri.IsHexDigit) ? hex : fallback;
     }
 
     /// <summary>
