@@ -12,7 +12,7 @@ public sealed class PptxPackageReaderSourceTests
     public void SmartArtAndDspXmlParsing_UsesSharedOpcXmlLoader()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.Core.IO",
             "PptxPackageReader.cs"));
@@ -32,7 +32,7 @@ public sealed class PptxPackageReaderSourceTests
     public void PackageLoadXml_UsesSharedHardenedOpcXmlLoader()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.Core.IO",
             "PptxPackageReader.cs"));
@@ -50,7 +50,7 @@ public sealed class PptxPackageReaderSourceTests
     public void CorePropertiesRead_UsesSharedOpcDocumentPropertiesHelper()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.Core.IO",
             "PptxPackageReader.cs"));
@@ -66,7 +66,7 @@ public sealed class PptxPackageReaderSourceTests
     public void SmartArtPictureCaptionList_IsAdmittedOnlyThroughDeterministicNodeImages()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.Core.IO",
             "PptxPackageReader.cs"));
@@ -95,7 +95,7 @@ public sealed class PptxPackageReaderSourceTests
     [Fact]
     public void DrawingMlSrgbParsing_UsesSharedRgbHelper()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var packageReaderSource = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -170,16 +170,4 @@ public sealed class PptxPackageReaderSourceTests
         writer.Write(content);
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

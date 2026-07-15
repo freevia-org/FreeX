@@ -189,7 +189,7 @@ public sealed class FileLifecycleTests : IDisposable
     public void WpfFileCommands_ConfirmSharedSaveCompatibilityPlanBeforeWriting()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             "freew",
             "FreeW.App.Host",
             "FileCommands.cs"));
@@ -293,18 +293,6 @@ public sealed class FileLifecycleTests : IDisposable
         return (FileCommands)field!.GetValue(window)!;
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 
     private string WriteDocx(string name, string text)
     {

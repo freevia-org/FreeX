@@ -61,21 +61,9 @@ public sealed class DialogSharedHelperSourceTests
     private static string ReadWorkspaceSource(params string[] relativeParts)
     {
         var parts = new string[relativeParts.Length + 1];
-        parts[0] = FindRepositoryRoot();
+        parts[0] = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         relativeParts.CopyTo(parts, 1);
         return File.ReadAllText(Path.Combine(parts));
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

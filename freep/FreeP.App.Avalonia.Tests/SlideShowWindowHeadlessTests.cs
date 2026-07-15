@@ -877,7 +877,7 @@ public sealed class SlideShowWindowHeadlessTests
     public void OpenExternalUrl_RoutesThroughSharedLauncher()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Avalonia",
             "SlideShowWindow.cs"));
@@ -1098,7 +1098,7 @@ public sealed class SlideShowWindowHeadlessTests
     public async Task CustomShowDialog_drag_reorder_uses_shared_planner_and_existing_move_mutation()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Avalonia",
             "CustomShowDialog.cs"));
@@ -1386,18 +1386,6 @@ public sealed class SlideShowWindowHeadlessTests
             "Controller.CurrentSlideIndex must track the current slide for DA5 exit restore");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 
     private static ISlideShowRecordingCaptureBackend CreateDeferredRecordingCaptureBackend() =>
         SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(

@@ -36,7 +36,7 @@ public sealed class SisterAppFrameHelperTests
     public void SisterAppMainWindows_UseSharedFrameHelpers(string appFolder, string projectFolder)
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             appFolder,
             projectFolder,
             "MainWindow.cs"));
@@ -74,7 +74,7 @@ public sealed class SisterAppFrameHelperTests
     [Fact]
     public void SisterAppFrameHelpers_LiveInSharedShellWpfInsteadOfRibbonWpf()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var shellProject = Path.Combine(root, "shared", "Free.Shared.Shell.Wpf");
         var ribbonProject = Path.Combine(root, "shared", "Free.Shared.Ribbon.Wpf");
 
@@ -101,18 +101,6 @@ public sealed class SisterAppFrameHelperTests
             .Should().NotContain("Free.Shared.AppServices");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 
     private static void AssertBefore(string source, string first, string second)
     {

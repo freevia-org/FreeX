@@ -7,7 +7,7 @@ public sealed class BackstageHostDedupSourceTests
     [Fact]
     public void BackstageView_DelegatesHostLifecycleAndActionsToSharedController()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -38,16 +38,4 @@ public sealed class BackstageHostDedupSourceTests
         source.Should().NotContain("_shell.Show");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

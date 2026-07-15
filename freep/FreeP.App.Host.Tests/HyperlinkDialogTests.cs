@@ -9,7 +9,7 @@ public sealed class HyperlinkDialogTests
     public void HyperlinkDialog_UsesSharedPlannerForPolicy()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Host",
             "HyperlinkDialog.cs"));
@@ -29,7 +29,7 @@ public sealed class HyperlinkDialogTests
     public void HyperlinkDialogPlanner_RemainsPresentationOwned()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Presentation",
             "HyperlinkDialogPlanner.cs"));
@@ -45,7 +45,7 @@ public sealed class HyperlinkDialogTests
     public void MainWindow_UsesPlannerForHyperlinkDialogRequestAndApplyPayload()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Host",
             "MainWindow.cs"));
@@ -57,16 +57,4 @@ public sealed class HyperlinkDialogTests
         source.Should().NotContain("dialog.Result.Url");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

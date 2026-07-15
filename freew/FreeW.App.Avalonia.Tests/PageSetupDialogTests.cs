@@ -550,7 +550,7 @@ public sealed class PageSetupDialogTests
     public void DialogPolicy_IsDelegatedToPresentationPlanner()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeX.slnx"),
             "freew",
             "FreeW.App.Avalonia",
             "PageSetupDialog.cs"));
@@ -562,19 +562,6 @@ public sealed class PageSetupDialogTests
         source.Should().NotContain("TryParsePos(");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var dir = AppContext.BaseDirectory;
-        while (!string.IsNullOrEmpty(dir))
-        {
-            if (File.Exists(Path.Combine(dir, "FreeX.slnx")))
-                return dir;
-
-            dir = Directory.GetParent(dir)?.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root.");
-    }
 
     private static void Execute(RibbonCommandRegistry registry, string commandId)
     {

@@ -64,7 +64,7 @@ public sealed class RibbonCommandIconAssetTests
     [Fact]
     public void FreeW_project_links_canonical_FreeX_assets_for_output_and_publish()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var projectPath = Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
         var project = XDocument.Load(projectPath);
         var canonicalIcons = project
@@ -151,7 +151,7 @@ public sealed class RibbonCommandIconAssetTests
     private static IEnumerable<string> AvaloniaCommandIds()
     {
         var sourcePath = Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"),
             "freew",
             "FreeW.App.Avalonia",
             "Ribbon",
@@ -173,16 +173,4 @@ public sealed class RibbonCommandIconAssetTests
         return (string)method!.Invoke(null, [commandId])!;
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

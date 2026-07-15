@@ -115,20 +115,8 @@ public sealed class SisterDialogTextResourceSourceTests
 
     private static string ReadAvaloniaSource(params string[] pathParts)
     {
-        var path = Path.Combine(new[] { FindRepositoryRoot(), "freew", "FreeW.App.Avalonia" }.Concat(pathParts).ToArray());
+        var path = Path.Combine(new[] { TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Avalonia" }.Concat(pathParts).ToArray());
         return File.ReadAllText(path);
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

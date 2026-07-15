@@ -24,7 +24,7 @@ public sealed class DrawingMlUnitDedupTests
     [Fact]
     public void FreePPresentationUnitConsumers_UseSharedDrawingMlUnits()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var appFiles = new[]
         {
             Read(root, "freep", "FreeP.App.Presentation", "CanvasGesturePlanner.cs"),
@@ -61,16 +61,4 @@ public sealed class DrawingMlUnitDedupTests
     private static string Read(string root, params string[] relativeParts) =>
         File.ReadAllText(Path.Combine(new[] { root }.Concat(relativeParts).ToArray()));
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

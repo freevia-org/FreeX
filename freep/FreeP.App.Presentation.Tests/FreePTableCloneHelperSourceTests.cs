@@ -7,7 +7,7 @@ public sealed class FreePTableCloneHelperSourceTests
     [Fact]
     public void TableCommandsAndSlideCloner_UseSharedCoreModelCloneHelper()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var commandSource = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -33,16 +33,4 @@ public sealed class FreePTableCloneHelperSourceTests
         clonerSource.Should().NotContain("private static TableCell CloneTableCell");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

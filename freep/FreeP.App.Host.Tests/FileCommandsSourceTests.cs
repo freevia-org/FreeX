@@ -8,7 +8,7 @@ public sealed class FileCommandsSourceTests
     public void FileCommands_UsesSharedPerFormatDialogPlans()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Host",
             "FileCommands.cs"));
@@ -78,7 +78,7 @@ public sealed class FileCommandsSourceTests
     public void WpfImageExportAdapter_OnlySuppliesSlideCanvasRenderCallback()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Host",
             "WpfPresentationSlideImageRenderer.cs"));
@@ -95,7 +95,7 @@ public sealed class FileCommandsSourceTests
     public void WpfMainWindow_RoutesPlatformOnlyCommandResidualsThroughShellCommands()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Host",
             "MainWindow.cs"));
@@ -115,16 +115,4 @@ public sealed class FileCommandsSourceTests
         source.Should().Contain("new KeyGesture(Key.Z, ModifierKeys.Control | ModifierKeys.Shift)");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }
