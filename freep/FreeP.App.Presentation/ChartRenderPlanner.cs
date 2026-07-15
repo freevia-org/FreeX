@@ -2926,7 +2926,7 @@ public static partial class ChartRenderPlanner
         double secondaryRange = secondaryMax - secondaryMin;
         var (primaryMin, primaryMax, _) = ComputePrimaryValueAxisRange(chart);
         double primaryRange = primaryMax - primaryMin;
-        double stepX = categoryCount > 1 ? plot.Width / (categoryCount - 1) : plot.Width / 2;
+        double stepX = plot.Width / Math.Max(1, categoryCount);
         var primitives = new List<ChartLineSeriesPrimitive>();
 
         for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
@@ -2952,9 +2952,7 @@ public static partial class ChartRenderPlanner
                 if (rawValue is null)
                     continue;
 
-                double x = categoryCount == 1
-                    ? plot.X + plot.Width / 2
-                    : plot.X + categoryIndex * stepX;
+                double x = plot.X + (categoryIndex + 0.5) * stepX;
                 double y = plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }
@@ -2966,7 +2964,10 @@ public static partial class ChartRenderPlanner
                 series,
                 seriesColors,
                 fillPlans,
-                ShouldSpanBlankSegments(chart)));
+                ShouldSpanBlankSegments(chart),
+                automaticMarkerSymbol: ChartMarkerPrimitiveSymbol.Square,
+                automaticMarkerRadius: 5.0,
+                defaultSmoothLine: true));
         }
 
         return primitives;
@@ -2980,7 +2981,9 @@ public static partial class ChartRenderPlanner
         IReadOnlyList<SrgbColor>? seriesColors = null,
         ChartFillPlanSet? fillPlans = null,
         bool spanBlankSegments = false,
-        ChartMarkerPrimitiveSymbol? automaticMarkerSymbol = null)
+        ChartMarkerPrimitiveSymbol? automaticMarkerSymbol = null,
+        double? automaticMarkerRadius = null,
+        bool? defaultSmoothLine = null)
     {
         series ??= new ChartSeries();
         bool suppressLine = series.LineStyle?.NoFill == true;
@@ -3002,7 +3005,7 @@ public static partial class ChartRenderPlanner
             defaultMarkerStyle,
             seriesColors,
             LineMarkerStrokeThickness);
-        var markerRadius = ResolveMarkerRadius(defaultMarkerStyle, LineMarkerRadius);
+        var markerRadius = ResolveMarkerRadius(defaultMarkerStyle, automaticMarkerRadius ?? LineMarkerRadius);
         var lineSegments = new List<ChartLineSegmentPrimitive>();
         var markers = new List<ChartCirclePrimitive>();
         int? previousPointIndex = null;
@@ -3040,7 +3043,7 @@ public static partial class ChartRenderPlanner
                     seriesIndex,
                     pointIndex,
                     point.Value,
-                    ResolveMarkerRadius(markerStyle, LineMarkerRadius),
+                    ResolveMarkerRadius(markerStyle, automaticMarkerRadius ?? LineMarkerRadius),
                     markerStyle is null && automaticMarkerSymbol.HasValue
                         ? automaticMarkerSymbol.Value
                         : ResolveMarkerSymbol(markerStyle),
@@ -3052,7 +3055,7 @@ public static partial class ChartRenderPlanner
             previousPoint = point.Value;
         }
 
-        bool isSmoothed = series.SmoothLine == true;
+        bool isSmoothed = series.SmoothLine ?? defaultSmoothLine ?? false;
 
         return new ChartLineSeriesPrimitive(
             seriesIndex,
