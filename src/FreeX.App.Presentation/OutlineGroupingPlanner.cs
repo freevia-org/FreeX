@@ -13,4 +13,19 @@ public static class OutlineGroupingPlanner
 
         return Math.Min(maxExisting + 1, 8);
     }
+
+    public static int GetUngroupedOutlineLevel(
+        uint start,
+        uint end,
+        IReadOnlyDictionary<uint, int> outlineLevels)
+    {
+        var maxExisting = 0;
+        for (var index = start; index <= end; index++)
+        {
+            if (outlineLevels.TryGetValue(index, out var level) && level > maxExisting)
+                maxExisting = level;
+        }
+
+        return Math.Max(maxExisting - 1, 0);
+    }
 }

@@ -48,7 +48,7 @@ public partial class MainWindow
         if (PivotAvailableFieldsList is null)
             return;
 
-        PivotAvailableFieldsList.ItemsSource = PivotUiPlanner.FilterPivotFieldListItems(
+        PivotAvailableFieldsList.ItemsSource = PivotUiHostHelpers.FilterPivotFieldListItems(
             _pivotFieldListAvailableItems,
             PivotFieldListSearchBox?.Text);
     }

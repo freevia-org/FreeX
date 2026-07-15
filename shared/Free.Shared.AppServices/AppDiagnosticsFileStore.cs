@@ -40,6 +40,8 @@ public sealed class AppDiagnosticsFileStore
         _options = options;
     }
 
+    public bool IsEnabled => _options.IsEnabled;
+
     public void RecordEvent(
         string eventName,
         AppDiagnosticsMetadata metadata,

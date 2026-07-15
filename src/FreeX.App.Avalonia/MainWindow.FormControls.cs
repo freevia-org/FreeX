@@ -92,7 +92,8 @@ public sealed partial class MainWindow
                     : null,
 
             FormControlKind.DropDown =>
-                AdvanceAvaloniaDropDownSelection(control, sheet),
+                FormControlInteractionService.CreateAdvanceListSelectionCommand(
+                    control, sheetId, workbook),
 
             FormControlKind.Button =>
                 // Push-button: FreeX has no macro engine, so no-op (visual press only).
@@ -121,55 +122,6 @@ public sealed partial class MainWindow
             RefreshShell(string.Empty);
     }
 
-    private IWorkbookCommand? AdvanceAvaloniaDropDownSelection(FormControlModel control, Sheet sheet)
-    {
-        // No popup yet — cycle SelectedIndex through available items on each click.
-        var itemCount = EstimateAvaloniaListItemCount(control, sheet);
-        if (itemCount <= 0)
-            itemCount = 1;
-
-        var current = control.SelectedIndex ?? 0;
-        var next = current >= itemCount ? 1 : current + 1;
-
-        return FormControlInteractionService.CreateSelectListItemCommand(
-            control, next, sheet.Id, _session.Workbook);
-    }
-
-    private int EstimateAvaloniaListItemCount(FormControlModel control, Sheet sheet)
-    {
-        if (string.IsNullOrWhiteSpace(control.ListFillRange))
-            return 0;
-
-        var raw = control.ListFillRange.Trim().TrimStart('=').Trim();
-        var bangIdx = raw.IndexOf('!');
-        string cellPart;
-        Sheet? sourceSheet;
-
-        if (bangIdx >= 0)
-        {
-            var sheetPart = raw[..bangIdx].Trim().Trim('\'');
-            cellPart = raw[(bangIdx + 1)..].Trim().Replace("$", string.Empty, System.StringComparison.Ordinal);
-            sourceSheet = _session.Workbook.GetSheet(sheetPart) ?? sheet;
-        }
-        else
-        {
-            cellPart = raw.Replace("$", string.Empty, System.StringComparison.Ordinal);
-            sourceSheet = sheet;
-        }
-
-        var colon = cellPart.IndexOf(':');
-        if (colon < 0)
-            return 1;
-
-        if (!CellAddress.TryParse(cellPart[..colon], sourceSheet.Id, out var start) ||
-            !CellAddress.TryParse(cellPart[(colon + 1)..], sourceSheet.Id, out var end))
-            return 0;
-
-        // Excel populates list-style controls from the FIRST COLUMN of ListFillRange only, so the
-        // item count is the row count regardless of how many columns the range spans.
-        var rows = Math.Max(end.Row, start.Row) - Math.Min(end.Row, start.Row) + 1;
-        return (int)rows;
-    }
 }
 
 /// <summary>What sub-region of a form control was clicked (Avalonia side).</summary>

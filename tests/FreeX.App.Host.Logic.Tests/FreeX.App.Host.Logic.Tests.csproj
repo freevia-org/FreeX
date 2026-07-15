@@ -31,6 +31,7 @@
     <Using Include="FreeX.App.Presentation.NamedRanges" />
     <Using Include="FreeX.App.Presentation.Protection" />
     <Using Include="FreeX.App.Presentation.TableUI" />
+    <Using Include="FreeX.App.Presentation.PivotUI" />
   </ItemGroup>
 
   <ItemGroup>

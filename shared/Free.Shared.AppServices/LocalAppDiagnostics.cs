@@ -20,6 +20,32 @@ public class LocalAppDiagnostics
         _metadata = metadata;
     }
 
+    protected LocalAppDiagnostics(LocalAppDiagnostics other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+        _fileStore = other._fileStore;
+        _metadata = other._metadata;
+    }
+
+    public AppDiagnosticsMetadata Metadata => _metadata;
+
+    public bool IsEnabled => _fileStore.IsEnabled;
+
+    public static LocalAppDiagnostics Create(
+        string appVersion,
+        string? diagnosticsDirectory = null)
+    {
+        var defaults = AppDiagnosticsOptions.CreateDefault();
+        var options = new AppDiagnosticsOptions(
+            string.IsNullOrWhiteSpace(diagnosticsDirectory)
+                ? defaults.DiagnosticsDirectory
+                : diagnosticsDirectory,
+            defaults.IsEnabled);
+        return new LocalAppDiagnostics(
+            new AppDiagnosticsFileStore(options),
+            AppDiagnosticsMetadata.Create(appVersion));
+    }
+
     /// <summary>Builds the default local diagnostics service for the current <see cref="AppProduct"/>.</summary>
     public static LocalAppDiagnostics CreateDefault(
         string appVersion,

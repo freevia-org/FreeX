@@ -312,6 +312,50 @@ public sealed class ClearAllowEditRangesCommand : IWorkbookCommand
     }
 }
 
+/// <summary>Sets or clears one allowed-edit-range password with undo/redo support.</summary>
+public sealed class SetAllowEditRangePasswordCommand : IWorkbookCommand
+{
+    private readonly SheetId _sheetId;
+    private readonly GridRange _range;
+    private readonly string? _password;
+    private string? _previousPassword;
+    private bool _hadPreviousEntry;
+
+    public string Label => "Set Allow Edit Range Password";
+
+    public SetAllowEditRangePasswordCommand(SheetId sheetId, GridRange range, string? password)
+    {
+        _sheetId = sheetId;
+        _range = range;
+        _password = string.IsNullOrEmpty(password) ? null : password;
+    }
+
+    public CommandOutcome Apply(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        _hadPreviousEntry = sheet.AllowEditRangePasswords.TryGetValue(_range, out _previousPassword);
+
+        if (_password is null)
+            sheet.AllowEditRangePasswords.Remove(_range);
+        else
+            sheet.AllowEditRangePasswords[_range] = _password;
+
+        sheet.UnlockedAllowEditRanges.Remove(_range);
+        return new CommandOutcome(true);
+    }
+
+    public void Revert(ICommandContext ctx)
+    {
+        var sheet = ctx.GetSheet(_sheetId);
+        if (_hadPreviousEntry)
+            sheet.AllowEditRangePasswords[_range] = _previousPassword;
+        else
+            sheet.AllowEditRangePasswords.Remove(_range);
+
+        sheet.UnlockedAllowEditRanges.Remove(_range);
+    }
+}
+
 /// <summary>Protect workbook structure with undo support.</summary>
 public sealed class ProtectWorkbookCommand : IWorkbookCommand
 {

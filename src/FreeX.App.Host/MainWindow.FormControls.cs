@@ -60,7 +60,8 @@ public partial class MainWindow
             FormControlKind.DropDown =>
                 // Dropdown opens a picker — for now advance to next item on each click
                 // (full picker popup is deferred; this keeps the linked cell updating)
-                AdvanceDropDownSelection(e.Control),
+                FormControlInteractionService.CreateAdvanceListSelectionCommand(
+                    e.Control, _currentSheetId, _workbook),
 
             FormControlKind.Button =>
                 // Push-button runs an assigned macro — FreeX has no macro engine,
@@ -89,63 +90,4 @@ public partial class MainWindow
         UpdateViewport();
     }
 
-    /// <summary>
-    /// For DropDown controls without a full popup: advances SelectedIndex by 1, wrapping around.
-    /// A proper popup picker is deferred; this keeps the linked cell cycling through list items
-    /// so the interaction is visible.
-    /// </summary>
-    private IWorkbookCommand? AdvanceDropDownSelection(FormControlModel control)
-    {
-        var sheet = _workbook.GetSheet(_currentSheetId);
-        var itemCount = EstimateListItemCount(control, sheet);
-        if (itemCount <= 0)
-            itemCount = 1;
-
-        var current = control.SelectedIndex ?? 0;
-        var next = current >= itemCount ? 1 : current + 1;
-
-        return FormControlInteractionService.CreateSelectListItemCommand(
-            control, next, _currentSheetId, _workbook);
-    }
-
-    private int EstimateListItemCount(FormControlModel control, Sheet? sheet)
-    {
-        if (sheet is null || string.IsNullOrWhiteSpace(control.ListFillRange))
-            return 0;
-
-        // Quick estimation: parse the range and count cells.
-        // Reuse the resolver's TryResolveLinkedCell pattern.
-        var raw = control.ListFillRange.Trim().TrimStart('=').Trim();
-        var bangIdx = raw.IndexOf('!');
-        string cellPart;
-        Sheet? sourceSheet;
-
-        if (bangIdx >= 0)
-        {
-            var sheetPart = raw[..bangIdx].Trim().Trim('\'');
-            cellPart = raw[(bangIdx + 1)..].Trim().Replace("$", string.Empty, System.StringComparison.Ordinal);
-            sourceSheet = _workbook.GetSheet(sheetPart) ?? sheet;
-        }
-        else
-        {
-            cellPart = raw.Replace("$", string.Empty, System.StringComparison.Ordinal);
-            sourceSheet = sheet;
-        }
-
-        var colon = cellPart.IndexOf(':');
-        if (colon < 0)
-            return 1;
-
-        var startStr = cellPart[..colon];
-        var endStr = cellPart[(colon + 1)..];
-
-        if (!CellAddress.TryParse(startStr, sourceSheet.Id, out var start) ||
-            !CellAddress.TryParse(endStr, sourceSheet.Id, out var end))
-            return 0;
-
-        // Excel populates list-style controls from the FIRST COLUMN of ListFillRange only, so the
-        // item count is the row count regardless of how many columns the range spans.
-        var rows = Math.Max(end.Row, start.Row) - Math.Min(end.Row, start.Row) + 1;
-        return (int)rows;
-    }
 }

@@ -138,23 +138,13 @@ public partial class MainWindow
 
         if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
         {
-            int newLevel = GetUngroupedOutlineLevel(sheet.ColOutlineLevels, range.Start.Col, range.End.Col);
+            int newLevel = OutlineGroupingPlanner.GetUngroupedOutlineLevel(
+                range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
             return new GroupColumnsCommand(_currentSheetId, range.Start.Col, range.End.Col, newLevel);
         }
 
-        int rowLevel = GetUngroupedOutlineLevel(sheet.RowOutlineLevels, range.Start.Row, range.End.Row);
+        int rowLevel = OutlineGroupingPlanner.GetUngroupedOutlineLevel(
+            range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
         return new GroupRowsCommand(_currentSheetId, range.Start.Row, range.End.Row, rowLevel);
-    }
-
-    private static int GetUngroupedOutlineLevel(IReadOnlyDictionary<uint, int> levels, uint start, uint end)
-    {
-        var maxLevel = 0;
-        for (var i = start; i <= end; i++)
-        {
-            if (levels.TryGetValue(i, out var level) && level > maxLevel)
-                maxLevel = level;
-        }
-
-        return Math.Max(maxLevel - 1, 0);
     }
 }

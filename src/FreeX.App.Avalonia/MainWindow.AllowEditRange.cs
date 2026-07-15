@@ -21,59 +21,6 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
-    /// <summary>
-    /// Sets (or clears) the Allow-Edit-Range password for a single range with full undo support. Mirrors
-    /// WPF's private <c>SetAllowEditRangePasswordCommand</c> in MainWindow.ReviewCommands.cs: neither
-    /// <see cref="AllowEditRangeCommand"/> nor <see cref="RemoveAllowEditRangeCommand"/> touch
-    /// <see cref="Sheet.AllowEditRangePasswords"/>, so this composes alongside them to actually persist the
-    /// range's password (already hashed by the caller) with undo/redo restoring it.
-    /// </summary>
-    private sealed class SetAllowEditRangePasswordCommand : IWorkbookCommand
-    {
-        private readonly SheetId _sheetId;
-        private readonly GridRange _range;
-        private readonly string? _password;
-        private string? _previousPassword;
-        private bool _hadPreviousEntry;
-
-        public string Label => "Set Allow Edit Range Password";
-
-        public SetAllowEditRangePasswordCommand(SheetId sheetId, GridRange range, string? password)
-        {
-            _sheetId = sheetId;
-            _range = range;
-            _password = string.IsNullOrEmpty(password) ? null : password;
-        }
-
-        public CommandOutcome Apply(ICommandContext ctx)
-        {
-            var sheet = ctx.GetSheet(_sheetId);
-            _hadPreviousEntry = sheet.AllowEditRangePasswords.TryGetValue(_range, out _previousPassword);
-
-            if (_password is null)
-                sheet.AllowEditRangePasswords.Remove(_range);
-            else
-                sheet.AllowEditRangePasswords[_range] = _password;
-
-            // The password just changed while the sheet may still be protected: any prior "already
-            // unlocked this session" grant for this range no longer reflects the current password.
-            sheet.UnlockedAllowEditRanges.Remove(_range);
-
-            return new CommandOutcome(true);
-        }
-
-        public void Revert(ICommandContext ctx)
-        {
-            var sheet = ctx.GetSheet(_sheetId);
-            if (_hadPreviousEntry)
-                sheet.AllowEditRangePasswords[_range] = _previousPassword;
-            else
-                sheet.AllowEditRangePasswords.Remove(_range);
-
-            sheet.UnlockedAllowEditRanges.Remove(_range);
-        }
-    }
-
     // ── Review ▸ Protect entry point ───────────────────────────────────────────
     private void AllowEditRanges() => _ = ShowAllowEditRangeDialogAsync();
 

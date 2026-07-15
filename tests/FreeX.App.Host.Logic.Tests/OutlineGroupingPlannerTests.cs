@@ -38,4 +38,17 @@ public sealed class OutlineGroupingPlannerTests
             .Should()
             .Be(8);
     }
+
+    [Fact]
+    public void GetUngroupedOutlineLevel_DecrementsDeepestLevelWithoutGoingBelowZero()
+    {
+        OutlineGroupingPlanner.GetUngroupedOutlineLevel(
+            2, 5, new Dictionary<uint, int> { [2] = 1, [3] = 3, [9] = 8 })
+            .Should()
+            .Be(2);
+
+        OutlineGroupingPlanner.GetUngroupedOutlineLevel(1, 1, new Dictionary<uint, int>())
+            .Should()
+            .Be(0);
+    }
 }

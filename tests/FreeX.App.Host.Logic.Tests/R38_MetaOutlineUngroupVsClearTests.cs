@@ -1,4 +1,5 @@
 using FluentAssertions;
+using FreeX.App.Presentation;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
@@ -34,20 +35,6 @@ public sealed class R38_MetaOutlineUngroupVsClearTests
         return (wb, sheet, new TestCommandContext(wb));
     }
 
-    // Mirrors the private GetUngroupedOutlineLevel in MainWindow.Outline.cs / MainWindow.OutlineCommands.cs:
-    // the deepest existing outline level found across the range, minus one, floored at zero.
-    private static int GetUngroupedOutlineLevel(IReadOnlyDictionary<uint, int> levels, uint start, uint end)
-    {
-        var maxLevel = 0;
-        for (var i = start; i <= end; i++)
-        {
-            if (levels.TryGetValue(i, out var level) && level > maxLevel)
-                maxLevel = level;
-        }
-
-        return Math.Max(maxLevel - 1, 0);
-    }
-
     [Fact]
     public void UngroupSelection_WithSingleCellSelectionOnGroupedRow_OnlyUngroupsThatRow_LeavesUnrelatedGroupUntouched()
     {
@@ -61,7 +48,7 @@ public sealed class R38_MetaOutlineUngroupVsClearTests
         // shape that used to be misread as "the user clicked Clear Outline") and invoking
         // Ungroup must still be scoped to just row 3, per UngroupSelection()'s unconditional
         // selection-scoped decrement.
-        var newLevel = GetUngroupedOutlineLevel(sheet.RowOutlineLevels, 3, 3);
+        var newLevel = OutlineGroupingPlanner.GetUngroupedOutlineLevel(3, 3, sheet.RowOutlineLevels);
         var outcome = new GroupRowsCommand(sheet.Id, 3, 3, newLevel).Apply(ctx);
 
         outcome.Success.Should().BeTrue();
@@ -81,7 +68,7 @@ public sealed class R38_MetaOutlineUngroupVsClearTests
         new GroupColumnsCommand(sheet.Id, 4, 4, 1).Apply(ctx);
         new GroupColumnsCommand(sheet.Id, 10, 12, 1).Apply(ctx);
 
-        var newLevel = GetUngroupedOutlineLevel(sheet.ColOutlineLevels, 4, 4);
+        var newLevel = OutlineGroupingPlanner.GetUngroupedOutlineLevel(4, 4, sheet.ColOutlineLevels);
         var outcome = new GroupColumnsCommand(sheet.Id, 4, 4, newLevel).Apply(ctx);
 
         outcome.Success.Should().BeTrue();
@@ -121,7 +108,7 @@ public sealed class R38_MetaOutlineUngroupVsClearTests
         new GroupRowsCommand(sheet.Id, 3, 6, 1).Apply(ctx);
         new GroupRowsCommand(sheet.Id, 20, 25, 1).Apply(ctx);
 
-        var newLevel = GetUngroupedOutlineLevel(sheet.RowOutlineLevels, 3, 6);
+        var newLevel = OutlineGroupingPlanner.GetUngroupedOutlineLevel(3, 6, sheet.RowOutlineLevels);
         var outcome = new GroupRowsCommand(sheet.Id, 3, 6, newLevel).Apply(ctx);
 
         outcome.Success.Should().BeTrue();
