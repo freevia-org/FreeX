@@ -161,6 +161,11 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255,
             "PowerPoint's imported Surface3D facets are opaque fills");
+        surfaceGeometry.FrameSegments.Should().NotBeEmpty(
+            "PowerPoint renders the projected Surface3D frame behind the facets");
+        ChartRenderPlanner.BuildSurfaceSeriesAxisLabelPlans(surface, surfaceFrame)
+            .Select(label => label.Text)
+            .Should().Equal("Low band", "Mid band", "High band");
 
         var scatter = charts.Single(chart => chart.ChartType == ChartType.Scatter);
         scatter.Series.Should().OnlyContain(series => !series.OnSecondaryAxis,
