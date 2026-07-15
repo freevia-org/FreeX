@@ -9943,10 +9943,9 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Renders an inline equation as an InlineUIContainer hosting a Border that carries the model
-    /// <see cref="Equation"/> on its Tag (so CommitToModel round-trips it, mirroring shapes). The border
-    /// consumes the shared equation visual planner so simple scripts render as styled math segments and
-    /// lightweight fraction/radical/n-ary/matrix/function structures render with visual cues.
+    /// Renders an inline equation as an InlineUIContainer. The unadorned Border carries the model
+    /// <see cref="Equation"/> on its Tag so CommitToModel can round-trip it, while leaving the
+    /// mathematical content to sit directly on the document surface like Word.
     /// </summary>
     private static InlineUIContainer BuildEquationRun(Equation equation)
     {
@@ -9954,11 +9953,6 @@ public sealed class DocumentView : RichTextBox
         var content = BuildEquationVisualContent(plan);
         var element = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xF3, 0xF6, 0xFB)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC8, 0xD8)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(3),
-            Padding = new Thickness(4, 1, 4, 1),
             Child = content,
             Tag = equation // carries the model equation so CommitToModel can round-trip it
         };
