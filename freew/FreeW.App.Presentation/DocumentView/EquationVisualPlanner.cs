@@ -415,7 +415,7 @@ public static class EquationVisualPlanner
     public const double NAryLimitGapEm = 0.08;
     public const double NAryOperandGapEm = 0.16;
     public const double MatrixColumnGapEm = 0.85;
-    public const double MatrixRowGapEm = 0.28;
+    public const double MatrixRowGapEm = 0.08;
     public const double MatrixDelimiterGapEm = 0.12;
     public const string FractionBarText = "\u2044";
     public const string RadicalSignText = "\u221a";
