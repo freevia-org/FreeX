@@ -644,6 +644,11 @@ public static partial class ChartRenderPlanner
             series.OnSecondaryAxis &&
             series.OverrideChartType is ChartType.Line or ChartType.LineMarkers);
 
+    private static bool UsesImportedCartesianAxisStrokes(ChartShape chart) =>
+        UsesImportedTextMetrics(chart) &&
+        !UsesImportedComboDefaults(chart) &&
+        chart.ChartType is not (ChartType.Pie or ChartType.Doughnut);
+
     /// <summary>
     /// Chart parts without an authored style use PowerPoint's classic default
     /// appearance. Newer Office chart styles carry an explicit style id.
@@ -5548,10 +5553,12 @@ public static partial class ChartRenderPlanner
             : new ChartStrokePlan(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
 
     private static ChartStrokePlan DefaultAxisTickStroke(ChartShape? chart = null) =>
-        chart is not null &&
-        (UsesClassicOfficeChartStyle(chart) || UsesImportedComboDefaults(chart))
-            ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.75)
-            : new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 0.75);
+        chart is not null && UsesImportedCartesianAxisStrokes(chart)
+            ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 0.75)
+            : chart is not null &&
+              (UsesClassicOfficeChartStyle(chart) || UsesImportedComboDefaults(chart))
+                ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.75)
+                : new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 0.75);
 
     private static ChartStrokePlan DefaultDataTableBorderStroke() =>
         new(new SrgbColor(0xB7, 0xB7, 0xB7), Alpha: 255, Thickness: 0.5);

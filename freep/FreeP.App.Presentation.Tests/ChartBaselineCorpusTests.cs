@@ -434,6 +434,33 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartsCorpusDeck_UsesPowerPointDarkAxisStrokesForImportedCartesianCharts()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "06-charts.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var charts = new[] { presentation.Slides[0], presentation.Slides[1], presentation.Slides[3] }
+            .Select(slide => slide.Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!)
+            .ToArray();
+
+        charts.Select(chart => chart.ChartType)
+            .Should().Equal(ChartType.ColumnClustered, ChartType.LineMarkers, ChartType.BarClustered);
+
+        foreach (var chart in charts)
+        {
+            var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 960, 540));
+
+            scene.GridLines.Stroke.Should().Be(new ChartStrokePlan(
+                new SrgbColor(0xD9, 0xD9, 0xD9),
+                Alpha: 255,
+                Thickness: 0.5));
+            scene.AxisTicks.Stroke.Should().Be(new ChartStrokePlan(
+                new SrgbColor(0x89, 0x89, 0x89),
+                Alpha: 255,
+                Thickness: 0.75));
+        }
+    }
+
+    [Fact]
     public void FillsCorpusDeck_MaterializesInheritedLineAndFontReferences()
     {
         var presentation = PptxPackageReader.Read(Path.Combine(FindCorpusDirectory(), "12-fills.pptx"));
