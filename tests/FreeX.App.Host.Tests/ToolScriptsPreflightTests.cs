@@ -11,7 +11,7 @@ public sealed class ToolScriptsPreflightTests
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-ToolScripts.ps1");
 
         script.Should().Contain("Get-ChildItem -LiteralPath $resolvedScriptDirectory -Filter \"*.ps1\" -File -Recurse");
-        script.Should().Contain("Test-IsExcludedPath");
+        script.Should().Contain("Test-ToolExcludedPath");
         script.Should().Contain("[System.Management.Automation.Language.Parser]::ParseFile");
         script.Should().Contain("PowerShell syntax validation failed");
         script.Should().Contain("preflight scripts must set `$ErrorActionPreference = `\"Stop`\".");

@@ -15,6 +15,9 @@ function Assert-ToolSourceCentralization {
     $support = Get-Content -LiteralPath $supportPath -Raw
     foreach ($requiredHelper in @(
             "function Resolve-ToolRepoPath",
+            "function Test-ToolPathRooted",
+            "function ConvertTo-ToolPlatformPath",
+            "function Resolve-ToolFullPath",
             "function Resolve-InputPath",
             "function Get-ToolRelativePath",
             "function ConvertTo-ToolNormalizedRelativePath",
@@ -70,7 +73,7 @@ function Assert-ToolSourceCentralization {
         "Test-MacOsHumanValidationChecklist.ps1" = @("Resolve-InputPath")
         "Run-UxParitySuite.ps1" = @("Get-RepoRoot", "Get-GitValue", "Resolve-FreeXExe")
         "Run-UxParityScenarioBatch.ps1" = @("Get-RepoRoot", "Get-GitValue", "Resolve-FreeXExe")
-        "Publish-UserTestBuild.ps1" = @("ConvertTo-XmlAttributeValue")
+        "Publish-UserTestBuild.ps1" = @()
     }
     foreach ($entry in $centralizedScriptHelpers.GetEnumerator()) {
         $scriptPath = Join-Path $ToolRoot $entry.Key
@@ -84,6 +87,15 @@ function Assert-ToolSourceCentralization {
                 throw "$($entry.Key) redeclares shared helper '$helperName'."
             }
         }
+    }
+
+    $publishScript = Get-Content -LiteralPath (Join-Path $ToolRoot "Publish-UserTestBuild.ps1") -Raw
+    if (-not $publishScript.Contains("ConvertTo-ToolXmlAttribute")) {
+        throw "Publish-UserTestBuild.ps1 must use ConvertTo-ToolXmlAttribute."
+    }
+
+    if ($publishScript -match 'function\s+ConvertTo-XmlAttributeValue\b') {
+        throw "Publish-UserTestBuild.ps1 redeclares obsolete helper ConvertTo-XmlAttributeValue."
     }
 
     $screenshotSupportPath = Join-Path $ToolRoot "ScreenshotCaptureSupport.ps1"
@@ -134,14 +146,49 @@ function Assert-ToolSourceCentralization {
 function Assert-SharedToolHelperBehavior {
     param([Parameter(Mandatory = $true)][string]$RepoRoot)
 
-    $resolvedTools = Resolve-ToolRepoPath -Path "tools" -RepoRoot $RepoRoot
-    if (-not [System.IO.Path]::GetFullPath($resolvedTools).Equals((Join-Path $RepoRoot "tools"), [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Resolve-ToolRepoPath returned an unexpected repository-relative path."
-    }
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-tool-helper-behavior-" + [guid]::NewGuid().ToString("N"))
+    $syntheticRepoRoot = Join-Path (Join-Path $tempRoot ".worktrees") "linked-repo"
+    New-Item -ItemType Directory -Force -Path $syntheticRepoRoot | Out-Null
+    $originalLocation = Get-Location
+    try {
+        Set-Location ([System.IO.Path]::GetTempPath())
 
-    if (-not (Test-ToolExcludedPath -Path "src/bin/sample.json" -RepoRoot $RepoRoot) -or
-        (Test-ToolExcludedPath -Path "src/sample.json" -RepoRoot $RepoRoot)) {
-        throw "Test-ToolExcludedPath did not preserve build-output exclusion behavior."
+        $expectedRelativePath = "src\bin\sample.json"
+        $relativeForwardSlashPath = "src/bin/sample.json"
+        $relativeBackslashPath = "src\bin\sample.json"
+        $absolutePath = Join-Path (Join-Path (Join-Path $syntheticRepoRoot "src") "bin") "sample.json"
+        $absoluteForwardSlashPath = $absolutePath.Replace([string][char]92, "/")
+
+        foreach ($path in @($relativeForwardSlashPath, $relativeBackslashPath, $absolutePath, $absoluteForwardSlashPath)) {
+            $relativePath = ConvertTo-ToolRepoRelativePath -Path $path -RepoRoot $syntheticRepoRoot
+            if ($relativePath -cne $expectedRelativePath) {
+                throw "ConvertTo-ToolRepoRelativePath was not slash-agnostic or repo-root anchored for '$path': '$relativePath'."
+            }
+
+            if (-not (Test-ToolExcludedPath -Path $path -RepoRoot $syntheticRepoRoot)) {
+                throw "Test-ToolExcludedPath did not exclude '$path'."
+            }
+        }
+
+        $nonExcludedPath = Join-Path (Join-Path $syntheticRepoRoot "src") "sample.json"
+        if (Test-ToolExcludedPath -Path $nonExcludedPath.Replace([string][char]92, "/") -RepoRoot $syntheticRepoRoot) {
+            throw "Test-ToolExcludedPath treated a non-excluded absolute path as excluded."
+        }
+
+        $relativeFromRoot = Get-ToolRelativePath -RootPath $syntheticRepoRoot -Path $absoluteForwardSlashPath
+        if ($relativeFromRoot -cne "src/bin/sample.json") {
+            throw "Get-ToolRelativePath returned '$relativeFromRoot' for a linked-worktree path."
+        }
+
+        $resolvedTools = Resolve-ToolRepoPath -Path "tools\ToolScriptSupport.ps1" -RepoRoot $RepoRoot
+        $expectedTools = Join-Path (Join-Path $RepoRoot "tools") "ToolScriptSupport.ps1"
+        if (-not [System.IO.Path]::GetFullPath($resolvedTools).Equals([System.IO.Path]::GetFullPath($expectedTools), [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Resolve-ToolRepoPath was not stable from outside the repository working directory."
+        }
+    }
+    finally {
+        Set-Location $originalLocation
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     if (@(Get-ToolTrackedRepositoryFiles -RepoRoot $RepoRoot).Count -eq 0) {

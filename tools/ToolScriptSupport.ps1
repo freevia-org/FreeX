@@ -1,14 +1,47 @@
+function Test-ToolPathRooted {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if ([System.IO.Path]::IsPathRooted($Path)) {
+        return $true
+    }
+
+    return $Path -match '^(?:[A-Za-z]:[\\/]|[\\/]{2})'
+}
+
+function ConvertTo-ToolPlatformPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $separator = [string][System.IO.Path]::DirectorySeparatorChar
+    return $Path.Replace([string][char]92, $separator).Replace([string][char]47, $separator)
+}
+
+function Resolve-ToolFullPath {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [string]$BasePath = (Get-Location).Path
+    )
+
+    $normalizedPath = ConvertTo-ToolPlatformPath -Path $Path
+    if (Test-ToolPathRooted -Path $Path) {
+        return [System.IO.Path]::GetFullPath($normalizedPath)
+    }
+
+    $normalizedBasePath = ConvertTo-ToolPlatformPath -Path $BasePath
+    if (-not (Test-ToolPathRooted -Path $BasePath)) {
+        $normalizedBasePath = [System.IO.Path]::GetFullPath($normalizedBasePath)
+    }
+
+    return [System.IO.Path]::GetFullPath((Join-Path $normalizedBasePath $normalizedPath))
+}
+
 function Resolve-ToolRepoPath {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
         [Parameter(Mandatory = $true)][string]$RepoRoot
     )
 
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $RepoRoot $Path
+    $fullRepoRoot = Resolve-ToolFullPath -Path $RepoRoot
+    return Resolve-ToolFullPath -Path $Path -BasePath $fullRepoRoot
 }
 
 function Resolve-InputPath {
@@ -17,16 +50,16 @@ function Resolve-InputPath {
         [Parameter(Mandatory = $true)][string]$RepoRoot
     )
 
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return [System.IO.Path]::GetFullPath($Path)
+    if (Test-ToolPathRooted -Path $Path) {
+        return Resolve-ToolFullPath -Path $Path
     }
 
-    $currentDirectoryCandidate = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
+    $currentDirectoryCandidate = Resolve-ToolFullPath -Path $Path
     if (Test-Path -LiteralPath $currentDirectoryCandidate) {
         return $currentDirectoryCandidate
     }
 
-    return [System.IO.Path]::GetFullPath((Join-Path $RepoRoot $Path))
+    return Resolve-ToolRepoPath -Path $Path -RepoRoot $RepoRoot
 }
 
 function Get-ToolRelativePath {
@@ -35,20 +68,19 @@ function Get-ToolRelativePath {
         [Parameter(Mandatory = $true)][string]$Path
     )
 
-    $fullRootPath = [System.IO.Path]::GetFullPath($RootPath)
-    if (-not $fullRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
-        $fullRootPath += [System.IO.Path]::DirectorySeparatorChar
-    }
+    $fullRootPath = Resolve-ToolFullPath -Path $RootPath
+    $fullPath = Resolve-ToolFullPath -Path $Path -BasePath $fullRootPath
+    $rootWithSeparator = $fullRootPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
 
-    $rootUri = New-Object System.Uri($fullRootPath)
-    $pathUri = New-Object System.Uri([System.IO.Path]::GetFullPath($Path))
-    return [System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString())
+    $rootUri = [System.Uri]::new($rootWithSeparator)
+    $pathUri = [System.Uri]::new($fullPath)
+    return ConvertTo-ToolNormalizedRelativePath -Path ([System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString()))
 }
 
 function ConvertTo-ToolNormalizedRelativePath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    return $Path.Replace("\", "/")
+    return $Path.Replace([string][char]92, "/")
 }
 
 function Test-ToolExcludedPath {
@@ -58,8 +90,8 @@ function Test-ToolExcludedPath {
         [string[]]$ExcludedDirectoryNames = @("bin", "obj", ".worktrees", ".claude")
     )
 
-    $relativePath = ConvertTo-ToolRepoRelativePath -Path $Path -RepoRoot $RepoRoot
-    $segments = $relativePath -split '[\\/]'
+    $relativePath = Get-ToolRelativePath -RootPath $RepoRoot -Path $Path
+    $segments = (ConvertTo-ToolNormalizedRelativePath -Path $relativePath) -split '/'
     foreach ($directoryName in $ExcludedDirectoryNames) {
         if ($segments -contains $directoryName) {
             return $true
@@ -160,11 +192,11 @@ function Resolve-FreeXExe {
     )
 
     if (-not [string]::IsNullOrWhiteSpace($RequestedPath)) {
-        $resolved = (Resolve-Path $RequestedPath).Path
-        if (-not (Test-Path $resolved)) {
+        $resolved = Resolve-ToolRepoPath -Path $RequestedPath -RepoRoot $RepoRoot
+        if (-not (Test-Path -LiteralPath $resolved)) {
             throw "FreeX executable was not found at $RequestedPath"
         }
-        return $resolved
+        return (Resolve-Path -LiteralPath $resolved).Path
     }
 
     $candidate = Join-Path $RepoRoot "src/FreeX.App.Host/bin/Release/net10.0-windows10.0.19041.0/FreeX.App.Host.exe"
@@ -189,13 +221,26 @@ function ConvertTo-ToolRepoRelativePath {
         [Parameter(Mandatory = $true)][string]$RepoRoot
     )
 
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    $fullRoot = [System.IO.Path]::GetFullPath($RepoRoot).TrimEnd('\')
-    if ($fullPath.StartsWith($fullRoot + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $fullPath.Substring($fullRoot.Length + 1).Replace('/', '\')
+    $fullRoot = Resolve-ToolFullPath -Path $RepoRoot
+    $fullPath = Resolve-ToolFullPath -Path $Path -BasePath $fullRoot
+    $trimmedRoot = $fullRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $comparison = if ([System.IO.Path]::DirectorySeparatorChar -eq [char]92) {
+        [System.StringComparison]::OrdinalIgnoreCase
+    }
+    else {
+        [System.StringComparison]::Ordinal
     }
 
-    return $fullPath.Replace('/', '\')
+    if ($fullPath.Equals($trimmedRoot, $comparison)) {
+        return ""
+    }
+
+    $rootPrefix = $trimmedRoot + [System.IO.Path]::DirectorySeparatorChar
+    if ($fullPath.StartsWith($rootPrefix, $comparison)) {
+        return $fullPath.Substring($rootPrefix.Length).Replace([string][char]47, [string][char]92)
+    }
+
+    return $fullPath.Replace([string][char]47, [string][char]92)
 }
 
 function Read-ToolJson {
