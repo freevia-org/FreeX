@@ -1419,6 +1419,21 @@ public static partial class ChartRenderPlanner
             }
         }
 
+        if (UsesImportedTextMetrics(chart) &&
+            IsHundredPercentStacked(chart.ChartType) &&
+            chart.CategoryAxis.HasMajorGridlines &&
+            !frame.IsBar)
+        {
+            double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
+            for (int index = 0; index < chart.Categories.Count; index++)
+            {
+                double x = plot.X + index * categoryStep + categoryStep / 2.0;
+                lines.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(x, plot.Y),
+                    new ChartPlanPoint(x, plot.Bottom)));
+            }
+        }
+
         // PowerPoint's stock-chart line fallback keeps the category grid authored
         // by c:catAx/majorGridlines, including the two outer plot boundaries.
         if (UsesStockLineFallback(chart) && chart.CategoryAxis.HasMajorGridlines)
@@ -4226,7 +4241,9 @@ public static partial class ChartRenderPlanner
             chart.ValueAxis.Max is null &&
             chart.Series.Any(series => !series.OnSecondaryAxis && series.Values.Any(value => value.HasValue)))
         {
-            return (0, 1, 0.25);
+            return UsesImportedTextMetrics(chart)
+                ? (0, 1, 0.1)
+                : (0, 1, 0.25);
         }
 
         double dataMin = 0;
@@ -4381,12 +4398,24 @@ public static partial class ChartRenderPlanner
     private static string FormatChartAxisLabelValue(
         ChartShape chart,
         double value,
-        string? numberFormatCode) =>
-        UsesImportedTextMetrics(chart) &&
-        chart.Series.Any(series => series.OnSecondaryAxis) &&
-        string.IsNullOrWhiteSpace(numberFormatCode)
-            ? FormatAxisValueWithoutScale(value)
-            : FormatAxisLabelValue(value, numberFormatCode);
+        string? numberFormatCode)
+    {
+        if (IsHundredPercentStacked(chart.ChartType) &&
+            (string.IsNullOrWhiteSpace(numberFormatCode) ||
+             string.Equals(numberFormatCode, "General", StringComparison.OrdinalIgnoreCase)))
+        {
+            return FormatWithCode(value, "0%");
+        }
+
+        if (UsesImportedTextMetrics(chart) &&
+            chart.Series.Any(series => series.OnSecondaryAxis) &&
+            string.IsNullOrWhiteSpace(numberFormatCode))
+        {
+            return FormatAxisValueWithoutScale(value);
+        }
+
+        return FormatAxisLabelValue(value, numberFormatCode);
+    }
 
     private static string FormatAxisValueWithoutScale(double value) =>
         value == Math.Floor(value)

@@ -237,7 +237,14 @@ public sealed class ChartBaselineCorpusTests
             "the source charts do not author c:chartSpace/c:txPr and must retain role-specific axis and label defaults");
         ChartRenderPlanner.ComputePrimaryValueAxisRange(stacked)
             .Should()
-            .Be((0, 1, 0.25));
+            .Be((0, 1, 0.1));
+        var stackedScene = scenes.Single(scene => scene.GeometryKind == ChartSceneGeometryKind.Column);
+        stackedScene.ValueAxisLabels.Select(label => label.Text)
+            .Should()
+            .Equal("0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%");
+        stackedScene.GridLines.GridLines
+            .Count(line => Math.Abs(line.Start.X - line.End.X) < 0.0001)
+            .Should().Be(stacked.Categories.Count);
         var stackedFrame = ChartRenderPlanner.BuildFramePlan(
             stacked,
             new ChartPlanRect(0, 0, 480, 288));
