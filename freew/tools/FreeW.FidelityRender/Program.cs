@@ -178,6 +178,10 @@ static void RenderDocumentComposite(
     List<FreeWVisualEvidenceRow> evidence,
     string? wpfRenderTargetFailure)
 {
+    // Calibrated against the cached Word page: the WPF note bitmap's measured height differs
+    // from the Avalonia overlay, so it needs its own printable-frame reserve.
+    const double FootnoteTrailingReserveDip = 15.0;
+
     // ── page geometry from model ──────────────────────────────────────────────────────────────────
     if (wpfRenderTargetFailure is not null)
     {
@@ -499,10 +503,11 @@ static void RenderDocumentComposite(
                     thisPageWDip, thisMarginLeft, thisMarginRight, isEndnotePage: false);
                 if (footnoteBmp is not null)
                 {
-                    // Keep the note region inside the printable frame. Word's note separator sits
-                    // above the bottom margin rather than above an arbitrary footer-height strip.
+                    // Keep the WPF note bitmap inside Word's measured printable-frame reserve.
                     double fnH = footnoteBmp.Height;
-                    double fnY = Math.Max(thisMarginTop, thisPixH - thisMarginBottom - fnH);
+                    double fnY = Math.Max(
+                        thisMarginTop,
+                        thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip);
                     var fnVis = new DrawingVisual();
                     using (var dc = fnVis.RenderOpen())
                         dc.DrawImage(footnoteBmp, new Rect(0, fnY, thisPixW, fnH));
