@@ -6,6 +6,25 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class ChartBaselineCorpusTests
 {
     [Fact]
+    public void ChartLabelsCorpus_PiePercentLabelsPreservePowerPointSeparatorAndAutomaticTitle()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var pie = presentation.Slides
+            .SelectMany(slide => slide.Shapes)
+            .Where(shape => shape.Kind == SlideShapeKind.Chart)
+            .Select(shape => shape.Chart!)
+            .Single(chart => chart.ChartType == ChartType.Pie);
+
+        pie.HasAutomaticTitle.Should().BeTrue();
+        pie.Title.Should().Be("Share");
+        pie.DataLabels.Should().NotBeNull();
+        pie.DataLabels!.ShowValue.Should().BeTrue();
+        pie.DataLabels.ShowPercent.Should().BeTrue();
+        pie.DataLabels.Separator.Should().Be(", ");
+    }
+
+    [Fact]
     public void ChartBaselineDepthCorpusDeck_ExercisesSharedPlannerDecisions()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
