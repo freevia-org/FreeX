@@ -14303,7 +14303,8 @@ public sealed class DocumentView : Control
         var op = MeasureEquationText(element.Operator, baseFormatting, EquationLargeOperatorStyle);
         var operand = MeasureEquationSlot(element.NAryOperandPlan, element.Operand, baseFormatting, EquationStructureStyle);
         var operatorWidth = Math.Max(op.Width, Math.Max(lower.Width, upper.Width));
-        return new Size(operatorWidth + operand.Width + 4, lower.Height + op.Height + upper.Height - 2);
+        var limitOverlap = Math.Max(lower.Height, upper.Height) * 0.55;
+        return new Size(operatorWidth + operand.Width + 4, op.Height + limitOverlap * 2);
     }
 
     private Size MeasureEquationMatrix(EquationVisualElement element, RunFormatting baseFormatting, bool includeDelimiters)
@@ -14433,8 +14434,10 @@ public sealed class DocumentView : Control
         var op = MeasureEquationText(element.Operator, baseFormatting, EquationLargeOperatorStyle);
         var operand = MeasureEquationSlot(element.NAryOperandPlan, element.Operand, baseFormatting, EquationStructureStyle);
         var operatorWidth = Math.Max(op.Width, Math.Max(lower.Width, upper.Width));
+        var limitOverlap = Math.Max(lower.Height, upper.Height) * 0.55;
+        var operatorY = bounds.Y + limitOverlap;
         DrawEquationSlot(context, element.NAryUpperLimitPlan, element.UpperLimit, new Rect(bounds.X, bounds.Y, operatorWidth, upper.Height), baseFormatting, EquationScriptStyle, centered: true);
-        DrawEquationText(context, element.Operator, new Rect(bounds.X, bounds.Y + upper.Height - 1, operatorWidth, op.Height), baseFormatting, EquationLargeOperatorStyle, centered: true);
+        DrawEquationText(context, element.Operator, new Rect(bounds.X, operatorY, operatorWidth, op.Height), baseFormatting, EquationLargeOperatorStyle, centered: true);
         DrawEquationSlot(context, element.NAryLowerLimitPlan, element.LowerLimit, new Rect(bounds.X, bounds.Bottom - lower.Height, operatorWidth, lower.Height), baseFormatting, EquationScriptStyle, centered: true);
         DrawEquationSlot(context, element.NAryOperandPlan, element.Operand, new Rect(bounds.X + operatorWidth + 3, bounds.Y + (bounds.Height - operand.Height) / 2, operand.Width, operand.Height), baseFormatting, EquationStructureStyle);
     }
