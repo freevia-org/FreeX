@@ -328,6 +328,31 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartsCorpusDeck_LineMarkersUsePowerPointDefaultMarkerPaletteAndStrokeWeight()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "06-charts.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var line = presentation.Slides[1].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        line.ChartType.Should().Be(ChartType.LineMarkers);
+        line.Series.Should().HaveCount(2);
+        line.Series.Select(series => series.MarkerStyle).Should().OnlyContain(style => style == null);
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(line).Should().Be((0, 120, 20));
+
+        var scene = ChartRenderPlanner.BuildScenePlan(line, new ChartPlanRect(0, 0, 960, 540));
+        scene.LineSeries.Should().HaveCount(2);
+        scene.LineSeries[0].Stroke.Thickness.Should().Be(ChartRenderPlanner.ImportedLineSeriesStrokeThickness);
+        scene.LineSeries[1].Stroke.Thickness.Should().Be(ChartRenderPlanner.ImportedLineSeriesStrokeThickness);
+        scene.LineSeries[0].Markers.Select(marker => marker.Symbol)
+            .Should().OnlyContain(symbol => symbol == ChartMarkerPrimitiveSymbol.Diamond);
+        scene.LineSeries[1].Markers.Select(marker => marker.Symbol)
+            .Should().OnlyContain(symbol => symbol == ChartMarkerPrimitiveSymbol.Square);
+        scene.LineSeries.SelectMany(series => series.Markers)
+            .Select(marker => marker.Radius)
+            .Should().OnlyContain(radius => radius == ChartRenderPlanner.ImportedLineMarkerRadius);
+    }
+
+    [Fact]
     public void FillsCorpusDeck_MaterializesInheritedLineAndFontReferences()
     {
         var presentation = PptxPackageReader.Read(Path.Combine(FindCorpusDirectory(), "12-fills.pptx"));

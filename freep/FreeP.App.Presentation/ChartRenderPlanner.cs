@@ -533,7 +533,9 @@ public static partial class ChartRenderPlanner
     public const byte AreaFillAlpha = 200;
     public const byte RectSeriesFillAlpha = 255;
     public const double LineSeriesStrokeThickness = 1.5;
+    public const double ImportedLineSeriesStrokeThickness = 3.0;
     public const double LineMarkerRadius = 3.0;
+    public const double ImportedLineMarkerRadius = 5.0;
     public const double LineMarkerStrokeThickness = 0.75;
     public const double ScatterLineThickness = 1.5;
     public const double ScatterMarkerRadius = 3.5;
@@ -699,6 +701,9 @@ public static partial class ChartRenderPlanner
         series.PointStyles.TryGetValue(pointIndex, out var pointStyle) && pointStyle.Marker is not null
             ? pointStyle.Marker
             : series.MarkerStyle;
+
+    private static ChartMarkerPrimitiveSymbol ResolveImportedLineMarkerSymbol(int seriesIndex) =>
+        StockFallbackMarkerSymbols[Math.Abs(seriesIndex) % StockFallbackMarkerSymbols.Length];
 
     private static ChartMarkerPrimitiveSymbol ResolveMarkerSymbol(ChartMarkerStyle? markerStyle)
     {
@@ -3216,6 +3221,7 @@ public static partial class ChartRenderPlanner
         double secondaryRange = secondaryMax - secondaryMin;
         double stepX = plot.Width / Math.Max(1, categoryCount - 1);
         var depth = BuildClassicThreeDDepthPlan(chart, plot);
+        bool importedLineMarkers = chart.ChartType == ChartType.LineMarkers && UsesImportedTextMetrics(chart);
         var primitives = new List<ChartLineSeriesPrimitive>();
 
         for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
@@ -3249,7 +3255,16 @@ public static partial class ChartRenderPlanner
                 chart.Series[seriesIndex],
                 seriesColors,
                 fillPlans,
-                ShouldSpanBlankSegments(chart)) with { Depth = depth });
+                ShouldSpanBlankSegments(chart),
+                automaticMarkerSymbol: importedLineMarkers
+                    ? ResolveImportedLineMarkerSymbol(seriesIndex)
+                    : null,
+                automaticMarkerRadius: importedLineMarkers
+                    ? ImportedLineMarkerRadius
+                    : null,
+                defaultLineThickness: importedLineMarkers
+                    ? ImportedLineSeriesStrokeThickness
+                    : null) with { Depth = depth });
         }
 
         return primitives;
@@ -3326,11 +3341,16 @@ public static partial class ChartRenderPlanner
         bool spanBlankSegments = false,
         ChartMarkerPrimitiveSymbol? automaticMarkerSymbol = null,
         double? automaticMarkerRadius = null,
-        bool? defaultSmoothLine = null)
+        bool? defaultSmoothLine = null,
+        double? defaultLineThickness = null)
     {
         series ??= new ChartSeries();
         bool suppressLine = series.LineStyle?.NoFill == true;
-        var stroke = ResolveAuthoredSeriesStroke(series, seriesIndex, seriesColors, LineSeriesStrokeThickness)
+        var stroke = ResolveAuthoredSeriesStroke(
+                series,
+                seriesIndex,
+                seriesColors,
+                defaultLineThickness ?? LineSeriesStrokeThickness)
             ?? ResolveSeriesStroke(seriesIndex, seriesColors);
         var defaultMarkerStyle = series.MarkerStyle;
         var markerFill = ResolveMarkerFill(
@@ -4339,6 +4359,12 @@ public static partial class ChartRenderPlanner
                 : range;
         }
         if (chart.ChartType == ChartType.BarClustered &&
+            UsesImportedTextMetrics(chart) &&
+            chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
+        {
+            return ComputeNiceRange(min, max, targetIntervals: 6);
+        }
+        if (chart.ChartType is (ChartType.Line or ChartType.LineMarkers) &&
             UsesImportedTextMetrics(chart) &&
             chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
         {
