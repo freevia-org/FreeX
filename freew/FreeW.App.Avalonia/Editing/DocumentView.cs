@@ -3901,6 +3901,12 @@ public sealed class DocumentView : Control
 
     /// <summary>Default font size (pt) for footnote / endnote body text. Word uses 10pt; we use 9pt.</summary>
     private const double NoteFontSizePt = 9.0;
+    private const double FootnoteSeparatorHeight = 6.0;
+    // Word leaves a little more room between the separator and first note, then preserves
+    // paragraph-like space between consecutive notes and below the final note.
+    private const double FootnoteTopPadding = 7.0;
+    private const double FootnoteInterNoteSpacing = 15.0;
+    private const double FootnoteTrailingPadding = 6.0;
 
     /// <summary>
     /// DB2: Measures the true wrapped height of a single note's content (number prefix + paragraph text)
@@ -4116,8 +4122,6 @@ public sealed class DocumentView : Control
         _footnoteBandHeightByPage.Clear();
         if (_doc.Footnotes.Count == 0) return;
 
-        const double SepHeight = 6.0; // separator rule + gap
-
         // Group footnote ids by the page hosting their reference (using first-pass placed positions).
         var byPage = new Dictionary<int, List<int>>();
         foreach (var id in _doc.Footnotes.Keys.OrderBy(k => k))
@@ -4134,10 +4138,11 @@ public sealed class DocumentView : Control
 
         foreach (var (pg, ids) in byPage)
         {
-            var totalHeight = SepHeight + 4; // separator rule + top-pad
+            var totalHeight = FootnoteSeparatorHeight + FootnoteTopPadding;
             var seq = seqBase;
-            foreach (var id in ids)
+            for (var index = 0; index < ids.Count; index++)
             {
+                var id = ids[index];
                 var note = _doc.Footnotes[id];
                 var displayNum = ComputeNoteDisplayNumber(seq, opts);
                 seq++;
@@ -4145,7 +4150,9 @@ public sealed class DocumentView : Control
                     ? note.Content
                     : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
                 totalHeight += MeasureNoteContentHeight(displayNum, content, _contentLeft, _contentWidth);
-                totalHeight += 2; // inter-note gap
+                totalHeight += index == ids.Count - 1
+                    ? FootnoteTrailingPadding
+                    : FootnoteInterNoteSpacing;
             }
             _footnoteBandHeightByPage[pg] = totalHeight;
         }
@@ -4208,17 +4215,20 @@ public sealed class DocumentView : Control
             var footnoteBottom = Math.Min(pageBottom - _marginBottomDip, footerTop);
 
             // DB2: true total band height = separator + true wrapped heights of all notes on this page.
-            var trueHeight = 4.0 + 6.0; // top-pad + separator
+            var trueHeight = FootnoteTopPadding + FootnoteSeparatorHeight;
             var localSeq = seqIndex;
-            foreach (var id in ids)
+            for (var index = 0; index < ids.Count; index++)
             {
+                var id = ids[index];
                 var note2 = _doc.Footnotes[id];
                 var dn = ComputeNoteDisplayNumber(localSeq++, opts);
                 var content2 = note2.Content.Count > 0
                     ? note2.Content
                     : (IReadOnlyList<Paragraph>)new List<Paragraph> { new Paragraph(string.Empty) };
                 trueHeight += MeasureNoteContentHeight(dn, content2, _contentLeft, _contentWidth);
-                trueHeight += 2; // inter-note gap
+                trueHeight += index == ids.Count - 1
+                    ? FootnoteTrailingPadding
+                    : FootnoteInterNoteSpacing;
             }
 
             // DB2: anchor the band to the usable bottom-margin edge. The band top is
@@ -4234,9 +4244,10 @@ public sealed class DocumentView : Control
             var sepWidth = Math.Min(2 * 72 * PxPerPoint, _contentWidth * 0.4);
             _noteSeparators.Add((_contentLeft, _contentLeft + sepWidth, bandTop));
 
-            var y = bandTop + 4;
-            foreach (var id in ids)
+            var y = bandTop + FootnoteTopPadding;
+            for (var index = 0; index < ids.Count; index++)
             {
+                var id = ids[index];
                 var note = _doc.Footnotes[id];
                 // DB3: compute display number from NoteNumberingOptions.
                 var displayNum = ComputeNoteDisplayNumber(seqIndex, opts);
@@ -4250,6 +4261,8 @@ public sealed class DocumentView : Control
                 if (y < bandTop + availBandHeight)
                 {
                     y = LayoutNoteContent(displayNum, content, _contentLeft, y, _contentWidth);
+                    if (index < ids.Count - 1)
+                        y += FootnoteInterNoteSpacing;
                     // DB2: clamp y to band bottom so subsequent notes don't escape past the footer.
                     y = Math.Min(y, bandTop + availBandHeight);
                 }

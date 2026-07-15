@@ -248,6 +248,40 @@ public sealed class DocumentViewNoteRenderTests
         markers.Should().Contain("2", "footnote 2's number must appear");
     }
 
+    [Fact]
+    public async Task Multiple_footnotes_use_word_like_vertical_spacing()
+    {
+        IReadOnlyList<(string Text, double X, double Y, bool IsNumberMarker)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var para = new Paragraph();
+            para.Runs.Add(new Run("Alpha"));
+            para.Runs.Add(Run.FootnoteReference(1));
+            para.Runs.Add(new Run(" beta"));
+            para.Runs.Add(Run.FootnoteReference(2));
+            doc.Blocks.Add(para);
+            doc.Footnotes[1] = new Footnote(1, "First note.");
+            doc.Footnotes[2] = new Footnote(2, "Second note.");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            items = view.NoteRenderItems;
+        });
+
+        if (!ran) return;
+
+        var markers = items!
+            .Where(item => item.IsNumberMarker)
+            .OrderBy(item => item.Y)
+            .ToList();
+        markers.Should().HaveCount(2);
+        (markers[1].Y - markers[0].Y).Should().BeInRange(27, 29,
+            "two short footnotes should retain Word-like paragraph spacing in their bottom-margin band");
+    }
+
     // ── Test 6: no-notes regression — no note items or separators ─────────────────────────────────────
 
     [Fact]
