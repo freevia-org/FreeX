@@ -1005,9 +1005,10 @@ public sealed class SlideCanvas : FrameworkElement
         if (scene.Surface is not { } plan)
             return;
 
-        if (plan.Facets.Count > 0)
+        var renderFacets = plan.RenderFacets.Count > 0 ? plan.RenderFacets : plan.Facets;
+        if (renderFacets.Count > 0)
         {
-            foreach (var facet in plan.Facets)
+            foreach (var facet in renderFacets)
             {
                 dc.DrawGeometry(
                     ToBrush(facet.Fill),

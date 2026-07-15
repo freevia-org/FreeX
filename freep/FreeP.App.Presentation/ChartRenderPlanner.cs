@@ -309,7 +309,13 @@ public readonly record struct ChartSurfaceGeometryPlan(
     IReadOnlyList<ChartSurfacePointPrimitive> Points,
     IReadOnlyList<ChartSurfaceFacetPrimitive> Facets,
     IReadOnlyList<ChartLineSegmentPrimitive> WireframeSegments,
-    IReadOnlyList<ChartLineSegmentPrimitive> ContourSegments);
+    IReadOnlyList<ChartLineSegmentPrimitive> ContourSegments)
+{
+    // Imported PowerPoint surface charts can subdivide complete cells into two
+    // visible color facets while retaining the logical cell topology above.
+    public IReadOnlyList<ChartSurfaceFacetPrimitive> RenderFacets { get; init; } =
+        Array.Empty<ChartSurfaceFacetPrimitive>();
+}
 
 public readonly record struct ChartBarClusterSlot(
     double CategoryStart,
@@ -2385,9 +2391,21 @@ public static partial class ChartRenderPlanner
 
         var wireframe = BuildSurfaceWireframeSegments(pointsByKey, seriesCount, categoryCount);
         var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
+        var renderFacets = chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
+            ? BuildSurfaceFacetPrimitives(
+                chart,
+                pointsByKey,
+                seriesCount,
+                categoryCount,
+                seriesColors,
+                triangulateCompleteCells: true)
+            : facets;
         var contours = BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
 
-        return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours);
+        return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours)
+        {
+            RenderFacets = renderFacets
+        };
     }
 
     private static ChartSurfaceGeometryPlan EmptySurfaceGeometryPlan(
@@ -2487,7 +2505,8 @@ public static partial class ChartRenderPlanner
         IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
         int seriesCount,
         int categoryCount,
-        IReadOnlyList<SrgbColor>? seriesColors)
+        IReadOnlyList<SrgbColor>? seriesColors,
+        bool triangulateCompleteCells = false)
     {
         var facets = new List<ChartSurfaceFacetPrimitive>();
         var stroke = new ChartStrokePlan(
@@ -2508,22 +2527,36 @@ public static partial class ChartRenderPlanner
                     continue;
                 }
 
-                double averageValue = facetPoints.Average(point => point.Value);
-                double averageNormalized = facetPoints.Average(point => point.NormalizedValue);
-                var color = ResolveSurfaceFacetColor(
-                    chart,
-                    seriesIndex,
-                    seriesColors,
-                    averageNormalized);
+                var renderPointSets = triangulateCompleteCells && facetPoints.Count == 4
+                    ? new[]
+                    {
+                        new[] { facetPoints[0], facetPoints[1], facetPoints[2] },
+                        new[] { facetPoints[0], facetPoints[2], facetPoints[3] }
+                    }
+                    : new[] { facetPoints.ToArray() };
 
-                facets.Add(new ChartSurfaceFacetPrimitive(
-                    seriesIndex,
-                    categoryIndex,
-                    facetPoints.Select(point => point.Point).ToArray(),
-                    new ChartFillPlan(color, Alpha: chart.ChartType == ChartType.Surface3D ? (byte)220 : (byte)185),
-                    stroke,
-                    averageValue,
-                    averageNormalized));
+                foreach (var renderPoints in renderPointSets)
+                {
+                    double averageValue = renderPoints.Average(point => point.Value);
+                    double averageNormalized = renderPoints.Average(point => point.NormalizedValue);
+                    var color = ResolveSurfaceFacetColor(
+                        chart,
+                        seriesIndex,
+                        seriesColors,
+                        averageNormalized);
+                    byte facetAlpha = chart.ChartType == ChartType.Surface3D
+                        ? UsesImportedTextMetrics(chart) ? (byte)255 : (byte)220
+                        : (byte)185;
+
+                    facets.Add(new ChartSurfaceFacetPrimitive(
+                        seriesIndex,
+                        categoryIndex,
+                        renderPoints.Select(point => point.Point).ToArray(),
+                        new ChartFillPlan(color, facetAlpha),
+                        stroke,
+                        averageValue,
+                        averageNormalized));
+                }
             }
         }
 
