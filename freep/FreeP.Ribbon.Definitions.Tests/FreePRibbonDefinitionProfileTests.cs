@@ -616,8 +616,11 @@ public sealed class FreePRibbonDefinitionProfileTests
     {
         var source = string.Join(
             Environment.NewLine,
-            File.ReadAllText(RepoFile("freep", "FreeP.Ribbon.Definitions", "FreePRibbon.cs")),
-            File.ReadAllText(RepoFile("freep", "FreeP.Ribbon.Definitions", "FreePAvaloniaRibbonDefinition.cs")));
+            Directory.GetFiles(
+                    RepoPath("freep", "FreeP.Ribbon.Definitions"),
+                    "*.cs",
+                    SearchOption.TopDirectoryOnly)
+                .Select(File.ReadAllText));
 
         source.Should().Contain("FreePRibbonText");
         source.Should().NotContain("g.Medium(\"freep.layout\", \"Layout\"");
@@ -715,6 +718,45 @@ public sealed class FreePRibbonDefinitionProfileTests
                  })
         {
             source.Should().NotContain(literal);
+        }
+    }
+
+    [Fact]
+    public void Shared_catalog_keeps_common_profile_order_and_labels_identical()
+    {
+        var wpf = FreePRibbon.Build(FreePRibbonCapabilities.Wpf);
+        var avalonia = FreePRibbon.Build(FreePRibbonCapabilities.Avalonia);
+
+        foreach (var tabId in new[] { "insert", "design", "transitions", "animations", "view" })
+        {
+            var wpfTab = wpf.FindTab(tabId)!;
+            var avaloniaTab = avalonia.FindTab(tabId)!;
+            var commonWpfGroups = wpfTab.Groups.Where(group => group.Id != "slideshow-from-transitions").ToArray();
+            var commonAvaloniaGroups = avaloniaTab.Groups.Where(group => group.Id != "slideshow-from-transitions").ToArray();
+            commonAvaloniaGroups.Select(group => group.Id).Should().Equal(commonWpfGroups.Select(group => group.Id));
+
+            foreach (var (wpfGroup, avaloniaGroup) in commonWpfGroups.Zip(commonAvaloniaGroups))
+            {
+                avaloniaGroup.Header.Should().Be(wpfGroup.Header);
+                avaloniaGroup.Controls
+                    .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
+                    .Select(control => (control.CommandId.Value, control.Label))
+                    .Should()
+                    .Equal(wpfGroup.Controls
+                        .Where(control => !string.IsNullOrEmpty(control.CommandId.Value))
+                        .Select(control => (control.CommandId.Value, control.Label)));
+            }
+        }
+
+        var commonHomeGroupIds = new[] { "clipboard", "font", "paragraph", "arrange", "editing" };
+        foreach (var groupId in commonHomeGroupIds)
+        {
+            var wpfGroup = RequiredGroup(wpf, "home", groupId);
+            var avaloniaGroup = RequiredGroup(avalonia, "home", groupId);
+            avaloniaGroup.Header.Should().Be(wpfGroup.Header);
+            avaloniaGroup.Controls.Select(control => (control.CommandId.Value, control.Label))
+                .Should()
+                .Equal(wpfGroup.Controls.Select(control => (control.CommandId.Value, control.Label)));
         }
     }
 
