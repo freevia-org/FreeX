@@ -3965,9 +3965,7 @@ public static class DocxWriter
                     new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
                     new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
                     new XAttribute(R + "dm", part.DataRelationshipId),
-                    new XAttribute(R + "lo", part.LayoutRelationshipId),
-                    new XAttribute(R + "qs", part.QuickStyleRelationshipId),
-                    new XAttribute(R + "cs", part.ColorsRelationshipId))));
+                    new XAttribute(R + "lo", part.LayoutRelationshipId))));
 
         if (part.SmartArt.IsFloating && part.SmartArt.Placement is { } smartArtPlacement)
             return BuildAnchorContainer(cx, cy, smartArtDocPr, smartArtGraphic, smartArtPlacement);
@@ -4156,56 +4154,157 @@ public static class DocxWriter
         var ptLst = new XElement(Dgm + "ptLst",
             new XElement(Dgm + "pt",
                 new XAttribute("modelId", docId),
-                new XAttribute("type", "doc")));
+                new XAttribute("type", "doc"),
+                new XElement(Dgm + "prSet",
+                    new XAttribute("loTypeId", SmartArtLayoutUrn(smartArt)),
+                    new XAttribute("loCatId", smartArt.Kind == SmartArtKind.Process ? "process" : "list"),
+                    new XAttribute("qsTypeId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/" + (smartArt.StyleId ?? "simple1")),
+                    new XAttribute("qsCatId", "simple"),
+                    new XAttribute("csTypeId", "urn:microsoft.com/office/officeart/2005/8/colors/" + (smartArt.ColorSchemeId ?? "accent0_1")),
+                    new XAttribute("csCatId", "colorful"),
+                    new XAttribute("phldr", "1")),
+                new XElement(Dgm + "spPr"),
+                DiagramText(string.Empty)));
         var cxnLst = new XElement(Dgm + "cxnLst");
-        var presentationIds = new List<(string NodeId, string PresentationId)>();
+        var semanticNodes = new List<(string Id, string PresentationId, string ParentId, int Ordinal)>();
+        var presentationIds = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [docId] = SmartArtModelId(3000)
+        };
+        var transitionPresentationIds = new Dictionary<string, string>(StringComparer.Ordinal);
 
         var nextId = 0;
         var nextCxn = 0;
-        // Pre-order walk: emit a node point + a parOf connection from its parent, then recurse children.
-        void Emit(SmartArtNode node, string parentId)
+        void Emit(SmartArtNode node, string parentId, int ordinal)
         {
             var id = SmartArtModelId(++nextId);
-            presentationIds.Add((id, SmartArtModelId(2000 + nextId - 1)));
+            var presentationId = SmartArtModelId(3000 + nextId);
+            presentationIds[id] = presentationId;
+            semanticNodes.Add((id, presentationId, parentId, ordinal));
             ptLst.Add(new XElement(Dgm + "pt",
                 new XAttribute("modelId", id),
-                new XElement(Dgm + "t",
-                    new XElement(A + "bodyPr"),
-                    new XElement(A + "lstStyle"),
-                    new XElement(A + "p",
-                        new XElement(A + "r",
-                            new XElement(A + "t", node.Text))))));
+                new XElement(Dgm + "prSet", new XAttribute("phldrT", "[Text]")),
+                new XElement(Dgm + "spPr"),
+                DiagramText(node.Text)));
+
+            var connectionId = SmartArtModelId(1000 + nextCxn);
+            var parTransId = SmartArtModelId(4000 + nextCxn);
+            var sibTransId = SmartArtModelId(5000 + nextCxn);
+            transitionPresentationIds[sibTransId] = SmartArtModelId(8000 + nextCxn);
+            AddTransitionPoint(ptLst, parTransId, "parTrans", connectionId);
+            AddTransitionPoint(ptLst, sibTransId, "sibTrans", connectionId);
             cxnLst.Add(new XElement(Dgm + "cxn",
-                new XAttribute("modelId", SmartArtModelId(1000 + nextCxn++)),
-                new XAttribute("type", "parOf"),
+                new XAttribute("modelId", connectionId),
                 new XAttribute("srcId", parentId),
                 new XAttribute("destId", id),
-                new XAttribute("srcOrd", 0),
-                new XAttribute("destOrd", 0)));
-            foreach (var child in node.Children)
-                Emit(child, id);
+                new XAttribute("srcOrd", ordinal),
+                new XAttribute("destOrd", 0),
+                new XAttribute("parTransId", parTransId),
+                new XAttribute("sibTransId", sibTransId)));
+            nextCxn++;
+            for (var i = 0; i < node.Children.Count; i++)
+                Emit(node.Children[i], id, i);
         }
 
-        foreach (var node in smartArt.Nodes)
-            Emit(node, docId);
+        for (var i = 0; i < smartArt.Nodes.Count; i++)
+            Emit(smartArt.Nodes[i], docId, i);
 
-        foreach (var (nodeId, presentationId) in presentationIds)
+        ptLst.Add(new XElement(Dgm + "pt",
+            new XAttribute("modelId", presentationIds[docId]),
+            new XAttribute("type", "pres"),
+            new XElement(Dgm + "prSet",
+                new XAttribute("presAssocID", docId),
+                new XAttribute("presName", "diagram"),
+                new XAttribute("presStyleCnt", 0),
+                new XElement(Dgm + "presLayoutVars",
+                    new XElement(Dgm + "dir"),
+                    new XElement(Dgm + "resizeHandles", new XAttribute("val", "exact")))),
+            new XElement(Dgm + "spPr")));
+
+        foreach (var node in semanticNodes)
         {
             ptLst.Add(new XElement(Dgm + "pt",
-                new XAttribute("modelId", presentationId),
+                new XAttribute("modelId", node.PresentationId),
                 new XAttribute("type", "pres"),
                 new XElement(Dgm + "prSet",
-                    new XAttribute("presAssocID", nodeId),
+                    new XAttribute("presAssocID", node.Id),
                     new XAttribute("presName", "node"),
-                    new XAttribute("presStyleLbl", "node0"),
-                    new XAttribute("presStyleIdx", 0),
-                    new XAttribute("presStyleCnt", 1)),
-                new XElement(Dgm + "spPr"),
-                new XElement(Dgm + "t",
-                    new XElement(A + "bodyPr"),
-                    new XElement(A + "lstStyle"),
-                    new XElement(A + "p",
-                        new XElement(A + "endParaRPr", new XAttribute("lang", "en-US"))))));
+                    new XAttribute("presStyleLbl", "node1"),
+                    new XAttribute("presStyleIdx", node.Ordinal % 3),
+                    new XAttribute("presStyleCnt", 3),
+                    new XElement(Dgm + "presLayoutVars",
+                        new XElement(Dgm + "bulletEnabled", new XAttribute("val", 1)))),
+                new XElement(Dgm + "spPr")));
+
+            // Word only materialises a presentation separator when a sibling follows this node. The
+            // separator is associated with the preceding node's sibTrans point, not the next node.
+            var nodeIndex = semanticNodes.IndexOf(node);
+            var hasFollowingSibling = semanticNodes.Any(other =>
+                string.Equals(other.ParentId, node.ParentId, StringComparison.Ordinal)
+                && other.Ordinal == node.Ordinal + 1);
+            if (hasFollowingSibling)
+            {
+                var transitionId = SmartArtModelId(5000 + nodeIndex);
+                ptLst.Add(new XElement(Dgm + "pt",
+                    new XAttribute("modelId", transitionPresentationIds[transitionId]),
+                    new XAttribute("type", "pres"),
+                    new XElement(Dgm + "prSet",
+                        new XAttribute("presAssocID", transitionId),
+                        new XAttribute("presName", "sibTrans"),
+                        new XAttribute("presStyleCnt", 0)),
+                    new XElement(Dgm + "spPr")));
+            }
+        }
+
+        var layoutUrn = SmartArtLayoutUrn(smartArt);
+        foreach (var node in semanticNodes)
+        {
+            cxnLst.Add(new XElement(Dgm + "cxn",
+                new XAttribute("modelId", SmartArtModelId(6000 + semanticNodes.IndexOf(node))),
+                new XAttribute("type", "presOf"),
+                new XAttribute("srcId", node.Id),
+                new XAttribute("destId", node.PresentationId),
+                new XAttribute("srcOrd", 0),
+                new XAttribute("destOrd", 0),
+                new XAttribute("presId", layoutUrn)));
+        }
+        cxnLst.Add(new XElement(Dgm + "cxn",
+            new XAttribute("modelId", SmartArtModelId(7000)),
+            new XAttribute("type", "presOf"),
+            new XAttribute("srcId", docId),
+            new XAttribute("destId", presentationIds[docId]),
+            new XAttribute("srcOrd", 0),
+            new XAttribute("destOrd", 0),
+            new XAttribute("presId", layoutUrn)));
+
+        foreach (var group in semanticNodes.GroupBy(node => node.ParentId, StringComparer.Ordinal))
+        {
+            var sourcePresentationId = presentationIds[group.Key];
+            var children = group.OrderBy(node => node.Ordinal).ToList();
+            for (var i = 0; i < children.Count; i++)
+            {
+                var child = children[i];
+                cxnLst.Add(new XElement(Dgm + "cxn",
+                    new XAttribute("modelId", SmartArtModelId(7100 + cxnLst.Elements().Count())),
+                    new XAttribute("type", "presParOf"),
+                    new XAttribute("srcId", sourcePresentationId),
+                    new XAttribute("destId", child.PresentationId),
+                    new XAttribute("srcOrd", i * 2),
+                    new XAttribute("destOrd", 0),
+                    new XAttribute("presId", layoutUrn)));
+                if (i + 1 < children.Count)
+                {
+                    var transitionId = SmartArtModelId(5000 + semanticNodes.IndexOf(children[i]));
+                    cxnLst.Add(new XElement(Dgm + "cxn",
+                        new XAttribute("modelId", SmartArtModelId(7200 + cxnLst.Elements().Count())),
+                        new XAttribute("type", "presParOf"),
+                        new XAttribute("srcId", sourcePresentationId),
+                        new XAttribute("destId", transitionPresentationIds[transitionId]),
+                        new XAttribute("srcOrd", i * 2 + 1),
+                        new XAttribute("destOrd", 0),
+                        new XAttribute("presId", layoutUrn)));
+                }
+            }
         }
 
         return new XDocument(
@@ -4225,8 +4324,42 @@ public static class DocxWriter
                             new XAttribute("minVer", Dgm.NamespaceName))))));
     }
 
+    private static XElement DiagramText(string text)
+    {
+        var paragraph = string.IsNullOrEmpty(text)
+            ? new XElement(A + "p", new XElement(A + "endParaRPr", new XAttribute("lang", "en-US")))
+            : new XElement(A + "p",
+                new XElement(A + "r",
+                    new XElement(A + "rPr", new XAttribute("lang", "en-US")),
+                    new XElement(A + "t", text)));
+        return new XElement(Dgm + "t",
+            new XElement(A + "bodyPr"),
+            new XElement(A + "lstStyle"),
+            paragraph);
+    }
+
+    private static void AddTransitionPoint(XElement ptLst, string id, string type, string connectionId) =>
+        ptLst.Add(new XElement(Dgm + "pt",
+            new XAttribute("modelId", id),
+            new XAttribute("type", type),
+            new XAttribute("cxnId", connectionId),
+            new XElement(Dgm + "prSet"),
+            new XElement(Dgm + "spPr"),
+            DiagramText(string.Empty)));
+
+    private static string SmartArtLayoutUrn(SmartArt smartArt)
+    {
+        var suffix = smartArt.LayoutId ?? smartArt.Kind switch
+        {
+            SmartArtKind.Process => "process1",
+            SmartArtKind.Hierarchy => "hierarchy1",
+            _ => "default"
+        };
+        return "urn:microsoft.com/office/officeart/2005/8/layout/" + suffix;
+    }
+
     private static string SmartArtModelId(int index) =>
-        "{00000000-0000-0000-0000-" + index.ToString("D12", System.Globalization.CultureInfo.InvariantCulture) + "}";
+        "{4F4B0000-0000-4000-8000-" + index.ToString("D12", System.Globalization.CultureInfo.InvariantCulture) + "}";
 
     /// <summary>
     /// Builds the SmartArt DATA part's relationships (word/diagrams/_rels/dataN.xml.rels). F2: a single
@@ -4328,7 +4461,7 @@ public static class DocxWriter
                 : new XElement(A + "ln", new XElement(A + "noFill"));
 
             spTree.Add(new XElement(Dsp + "sp",
-                new XAttribute("modelId", SmartArtModelId(2000 + i)),
+                new XAttribute("modelId", SmartArtModelId(3001 + i)),
                 new XElement(Dsp + "nvSpPr",
                     new XElement(Dsp + "cNvPr",
                         new XAttribute("id", i + 1),
@@ -4370,29 +4503,129 @@ public static class DocxWriter
     /// </summary>
     private static XDocument BuildDiagramLayout(SmartArt smartArt)
     {
-        // LayoutId override takes precedence; otherwise derive the stock id from Kind.
-        // We also persist the FreeW layout id in a freew:layoutId extension attribute so the reader
-        // can recover the exact catalog id even when the stock URN suffix maps to the same Kind.
-        var stockSuffix = smartArt.LayoutId ?? smartArt.Kind switch
-        {
-            SmartArtKind.Process => "process1",
-            SmartArtKind.Hierarchy => "hierarchy1",
-            _ => "list1"
-        };
-        const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/layout/";
-        var uniqueId = BaseUrn + stockSuffix;
+        var layoutUrn = SmartArtLayoutUrn(smartArt);
+        var category = smartArt.Kind == SmartArtKind.Process ? "process" : "list";
+        var topLevelCount = Math.Max(1, smartArt.Nodes.Count);
+        var stylePoints = Enumerable.Range(0, topLevelCount)
+            .Select(i => new XElement(Dgm + "pt", new XAttribute("modelId", SmartArtModelId(i + 1))))
+            .ToArray();
+        var styleConnections = Enumerable.Range(0, Math.Max(0, topLevelCount))
+            .Select(i => new XElement(Dgm + "cxn",
+                new XAttribute("modelId", SmartArtModelId(100 + i)),
+                new XAttribute("srcId", SmartArtModelId(0)),
+                new XAttribute("destId", SmartArtModelId(i + 1)),
+                new XAttribute("srcOrd", i),
+                new XAttribute("destOrd", 0)))
+            .ToArray();
+        var colorPoints = Enumerable.Range(0, topLevelCount + 1)
+            .Select(i => new XElement(Dgm + "pt", new XAttribute("modelId", SmartArtModelId(i))))
+            .ToArray();
+        var colorConnections = Enumerable.Range(0, topLevelCount)
+            .Select(i => new XElement(Dgm + "cxn",
+                new XAttribute("modelId", SmartArtModelId(200 + i)),
+                new XAttribute("srcId", SmartArtModelId(0)),
+                new XAttribute("destId", SmartArtModelId(i + 1)),
+                new XAttribute("srcOrd", i),
+                new XAttribute("destOrd", 0)))
+            .ToArray();
+
         var elem = new XElement(Dgm + "layoutDef",
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-            new XAttribute("uniqueId", uniqueId),
+            new XAttribute("uniqueId", layoutUrn),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
-            new XElement(Dgm + "catLst"),
-            new XElement(Dgm + "sampData"),
-            new XElement(Dgm + "styleData"),
-            new XElement(Dgm + "clrData"),
+            new XElement(Dgm + "catLst", new XElement(Dgm + "cat", new XAttribute("type", category), new XAttribute("pri", 400))),
+            new XElement(Dgm + "styleData",
+                new XElement(Dgm + "dataModel",
+                    new XElement(Dgm + "ptLst", new XElement(Dgm + "pt", new XAttribute("modelId", SmartArtModelId(0)), new XAttribute("type", "doc")), stylePoints),
+                    new XElement(Dgm + "cxnLst", styleConnections),
+                    new XElement(Dgm + "bg"),
+                    new XElement(Dgm + "whole"))),
+            new XElement(Dgm + "clrData",
+                new XElement(Dgm + "dataModel",
+                    new XElement(Dgm + "ptLst", colorPoints),
+                    new XElement(Dgm + "cxnLst", colorConnections),
+                    new XElement(Dgm + "bg"),
+                    new XElement(Dgm + "whole"))),
             new XElement(Dgm + "layoutNode",
-                new XAttribute("name", "diagram")));
+                new XAttribute("name", "diagram"),
+                new XElement(Dgm + "varLst",
+                    new XElement(Dgm + "dir"),
+                    new XElement(Dgm + "resizeHandles", new XAttribute("val", "exact"))),
+                new XElement(Dgm + "alg",
+                    new XAttribute("type", smartArt.Kind == SmartArtKind.Process ? "lin" : "snake"),
+                    new XElement(Dgm + "param", new XAttribute("type", "grDir"), new XAttribute("val", "tL")),
+                    new XElement(Dgm + "param", new XAttribute("type", "flowDir"), new XAttribute("val", "row")),
+                    new XElement(Dgm + "param", new XAttribute("type", "contDir"), new XAttribute("val", "sameDir")),
+                    new XElement(Dgm + "param", new XAttribute("type", "off"), new XAttribute("val", "ctr"))),
+                new XElement(Dgm + "shape",
+                    new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                    new XAttribute(R + "blip", string.Empty),
+                    new XElement(Dgm + "adjLst")),
+                new XElement(Dgm + "presOf"),
+                new XElement(Dgm + "constrLst",
+                    new XElement(Dgm + "constr", new XAttribute("type", "w"), new XAttribute("for", "ch"), new XAttribute("forName", "node"), new XAttribute("refType", "w")),
+                    new XElement(Dgm + "constr", new XAttribute("type", "h"), new XAttribute("for", "ch"), new XAttribute("forName", "node"), new XAttribute("refType", "w"), new XAttribute("refFor", "ch"), new XAttribute("refForName", "node"), new XAttribute("fact", "0.6")),
+                    new XElement(Dgm + "constr", new XAttribute("type", "w"), new XAttribute("for", "ch"), new XAttribute("forName", "sibTrans"), new XAttribute("refType", "w"), new XAttribute("refFor", "ch"), new XAttribute("refForName", "node"), new XAttribute("fact", "0.1")),
+                    new XElement(Dgm + "constr", new XAttribute("type", "sp"), new XAttribute("refType", "w"), new XAttribute("refFor", "ch"), new XAttribute("refForName", "sibTrans")),
+                    new XElement(Dgm + "constr", new XAttribute("type", "primFontSz"), new XAttribute("for", "ch"), new XAttribute("forName", "node"), new XAttribute("op", "equ"), new XAttribute("val", 65))),
+                new XElement(Dgm + "ruleLst"),
+                new XElement(Dgm + "forEach",
+                    new XAttribute("name", "children"),
+                    new XAttribute("axis", "ch"),
+                    new XAttribute("ptType", "node"),
+                    new XElement(Dgm + "layoutNode",
+                        new XAttribute("name", "node"),
+                        new XElement(Dgm + "varLst", new XElement(Dgm + "bulletEnabled", new XAttribute("val", 1))),
+                        new XElement(Dgm + "alg", new XAttribute("type", "tx")),
+                        new XElement(Dgm + "shape",
+                            new XAttribute("type", "rect"),
+                            new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                            new XAttribute(R + "blip", string.Empty),
+                            new XElement(Dgm + "adjLst")),
+                        new XElement(Dgm + "presOf", new XAttribute("axis", "desOrSelf"), new XAttribute("ptType", "node")),
+                        new XElement(Dgm + "constrLst",
+                            new XElement(Dgm + "constr", new XAttribute("type", "lMarg"), new XAttribute("refType", "primFontSz"), new XAttribute("fact", "0.3")),
+                            new XElement(Dgm + "constr", new XAttribute("type", "rMarg"), new XAttribute("refType", "primFontSz"), new XAttribute("fact", "0.3")),
+                            new XElement(Dgm + "constr", new XAttribute("type", "tMarg"), new XAttribute("refType", "primFontSz"), new XAttribute("fact", "0.3")),
+                            new XElement(Dgm + "constr", new XAttribute("type", "bMarg"), new XAttribute("refType", "primFontSz"), new XAttribute("fact", "0.3"))),
+                        new XElement(Dgm + "ruleLst", new XElement(Dgm + "rule", new XAttribute("type", "primFontSz"), new XAttribute("val", 5), new XAttribute("fact", "NaN"), new XAttribute("max", "NaN")))),
+                    smartArt.Kind == SmartArtKind.Process
+                        ? new XElement(Dgm + "forEach",
+                            new XAttribute("name", "connections"),
+                            new XAttribute("axis", "ch"),
+                            new XAttribute("ptType", "parTrans"),
+                            new XAttribute("cnt", 1),
+                            new XElement(Dgm + "layoutNode",
+                                new XAttribute("name", "connector"),
+                                new XElement(Dgm + "alg",
+                                    new XAttribute("type", "conn"),
+                                    new XElement(Dgm + "param", new XAttribute("type", "connRout"), new XAttribute("val", "straight")),
+                                    new XElement(Dgm + "param", new XAttribute("type", "begPts"), new XAttribute("val", "rect")),
+                                    new XElement(Dgm + "param", new XAttribute("type", "endPts"), new XAttribute("val", "rect")),
+                                    new XElement(Dgm + "param", new XAttribute("type", "endSty"), new XAttribute("val", "arr"))),
+                                new XElement(Dgm + "shape",
+                                    new XAttribute("type", "conn"),
+                                    new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                                    new XAttribute(R + "blip", string.Empty),
+                                    new XElement(Dgm + "adjLst")),
+                                new XElement(Dgm + "presOf"),
+                                new XElement(Dgm + "constrLst"),
+                                new XElement(Dgm + "ruleLst")))
+                        : null,
+                    new XElement(Dgm + "forEach",
+                        new XAttribute("name", "siblings"),
+                        new XAttribute("axis", "followSib"),
+                        new XAttribute("ptType", "sibTrans"),
+                        new XAttribute("cnt", 1),
+                        new XElement(Dgm + "layoutNode",
+                            new XAttribute("name", "sibTrans"),
+                            new XElement(Dgm + "alg", new XAttribute("type", "sp")),
+                            new XElement(Dgm + "shape", new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName), new XAttribute(R + "blip", string.Empty), new XElement(Dgm + "adjLst")),
+                            new XElement(Dgm + "presOf"),
+                            new XElement(Dgm + "constrLst"),
+                            new XElement(Dgm + "ruleLst"))))));
         return new XDocument(elem);
     }
 

@@ -142,13 +142,13 @@ public class SmartArtRoundTripTests
         styleRel.Attribute("Target")!.Value.Should().Be("diagrams/quickStyle1.xml");
         colorsRel.Attribute("Target")!.Value.Should().Be("diagrams/colors1.xml");
 
-        // document.xml references all four relationships from the inline dgm:relIds.
+        // document.xml references the required data/layout relationships from the inline dgm:relIds.
         var documentXml = EntryXml(docx, "word/document.xml");
         var relIds = documentXml.Descendants(Dgm + "relIds").Single();
         relIds.Attribute(R + "dm")!.Value.Should().Be(dataRel.Attribute("Id")!.Value);
         relIds.Attribute(R + "lo")!.Value.Should().Be(layoutRel.Attribute("Id")!.Value);
-        relIds.Attribute(R + "qs")!.Value.Should().Be(styleRel.Attribute("Id")!.Value);
-        relIds.Attribute(R + "cs")!.Value.Should().Be(colorsRel.Attribute("Id")!.Value);
+        relIds.Attribute(R + "qs").Should().BeNull("Word treats quickStyle as an optional relationship");
+        relIds.Attribute(R + "cs").Should().BeNull("Word treats colors as an optional relationship");
     }
 
     [Fact]
@@ -240,6 +240,7 @@ public class SmartArtRoundTripTests
         var docx = WriteBytes(SingleDiagramDocument(smartArt));
         var drawing = EntryXml(docx, "word/diagrams/drawing1.xml");
         var data = EntryXml(docx, "word/diagrams/data1.xml");
+        var layout = EntryXml(docx, "word/diagrams/layout1.xml");
         var groupXfrm = drawing.Descendants(Dsp + "grpSpPr").Descendants(A + "xfrm").Single();
         var frameExt = groupXfrm.Element(A + "ext")!;
         var childExt = groupXfrm.Element(A + "chExt")!;
@@ -255,8 +256,22 @@ public class SmartArtRoundTripTests
         shapeIds.Should().NotContain("0");
 
         var presentationPoints = data.Root!.Element(Dgm + "ptLst")!.Elements(Dgm + "pt")
-            .Where(pt => pt.Attribute("type")?.Value == "pres").ToList();
+            .Where(pt => pt.Attribute("type")?.Value == "pres"
+                && pt.Element(Dgm + "prSet")?.Attribute("presName")?.Value == "node").ToList();
         presentationPoints.Should().HaveCount(4);
+        data.Root.Element(Dgm + "ptLst")!.Elements(Dgm + "pt")
+            .Select(pt => pt.Attribute("modelId")!.Value)
+            .Should().OnlyHaveUniqueItems("Word requires semantic, transition, and presentation point ids to share one namespace");
+        data.Root.Element(Dgm + "ptLst")!.Elements(Dgm + "pt")
+            .Count(pt => pt.Attribute("type")?.Value == "pres"
+                && pt.Element(Dgm + "prSet")?.Attribute("presName")?.Value == "sibTrans")
+            .Should().Be(3, "only the gaps between four sibling nodes receive presentation separators");
+        data.Root.Element(Dgm + "cxnLst")!.Elements(Dgm + "cxn")
+            .Count(cxn => cxn.Attribute("type")?.Value == "presParOf")
+            .Should().Be(7, "the presentation tree includes four nodes and three separators");
+        layout.Descendants(Dgm + "alg")
+            .Select(alg => alg.Attribute("type")?.Value)
+            .Should().Contain("conn", "Process SmartArt needs connector layout nodes");
         shapes.Select(sp => sp.Attribute("modelId")!.Value)
             .Should().Equal(presentationPoints.Select(pt => pt.Attribute("modelId")!.Value));
         presentationPoints.Select(pt => pt.Element(Dgm + "prSet")!.Attribute("presAssocID")!.Value)
