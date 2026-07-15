@@ -341,62 +341,35 @@ public static class FormControlInteractionService
     }
 
     /// <summary>
+    /// Advances a drop-down/list-box selection by one item, wrapping to the first item. This is the
+    /// shell-neutral fallback used while a native picker is unavailable.
+    /// </summary>
+    public static IWorkbookCommand? CreateAdvanceListSelectionCommand(
+        FormControlModel control,
+        SheetId sheetId,
+        Workbook workbook)
+    {
+        var sheet = workbook.GetSheet(sheetId);
+        if (sheet is null)
+            return null;
+
+        var itemCount = FormControlListResolver.EstimateItemCount(control, sheet, workbook);
+        if (itemCount <= 0)
+            itemCount = 1;
+
+        var current = control.SelectedIndex ?? 0;
+        var next = current >= itemCount ? 1 : current + 1;
+        return CreateSelectListItemCommand(control, next, sheetId, workbook);
+    }
+
+    /// <summary>
     /// Estimates how many items are in the control's <see cref="FormControlModel.ListFillRange"/>.
     /// Returns 0 when the range cannot be resolved.
     /// </summary>
     public static int EstimateListItemCount(FormControlModel control, SheetId sheetId, Workbook workbook)
     {
-        if (string.IsNullOrWhiteSpace(control.ListFillRange))
-            return 0;
-
-        var raw = control.ListFillRange.Trim().TrimStart('=').Trim();
-        var bangIdx = raw.IndexOf('!');
-        string cellPart;
-        Sheet? sheet;
-
-        if (bangIdx >= 0)
-        {
-            var sheetPart = raw[..bangIdx].Trim().Trim('\'');
-            cellPart = raw[(bangIdx + 1)..].Trim().Replace("$", string.Empty, StringComparison.Ordinal);
-            sheet = workbook.GetSheet(sheetPart) ?? workbook.GetSheet(sheetId);
-        }
-        else
-        {
-            cellPart = raw.Replace("$", string.Empty, StringComparison.Ordinal);
-            sheet = workbook.GetSheet(sheetId);
-        }
-
-        if (sheet is null)
-            return 0;
-
-        var colon = cellPart.IndexOf(':');
-        if (colon < 0)
-        {
-            if (CellAddress.TryParse(cellPart, sheet.Id, out _))
-                return 1; // single cell → 1 item
-
-            // Not a plain A1 cell — cellPart may be a defined name (Excel allows a bare defined
-            // name as ListFillRange). Resolve it scope-aware (sheet-scoped shadows global), the
-            // same way FormControlListResolver.TryResolveRange handles NamedRangeNode, so a
-            // named-range list control's item count reflects the actual row count instead of
-            // always clamping to a single item.
-            if (bangIdx < 0 && workbook.TryGetNamedRange(cellPart, sheetId, out var namedListRange))
-            {
-                return (int)(Math.Max(namedListRange.End.Row, namedListRange.Start.Row) -
-                             Math.Min(namedListRange.End.Row, namedListRange.Start.Row) + 1);
-            }
-
-            return 1; // unresolved bare token — fall back to prior single-item behavior
-        }
-
-        if (!CellAddress.TryParse(cellPart[..colon], sheet.Id, out var start) ||
-            !CellAddress.TryParse(cellPart[(colon + 1)..], sheet.Id, out var end))
-            return 0;
-
-        // Excel populates list-style controls from the FIRST COLUMN of ListFillRange only, so the
-        // item count is the row count regardless of how many columns the range spans.
-        var rows = (int)(Math.Max(end.Row, start.Row) - Math.Min(end.Row, start.Row) + 1);
-        return rows;
+        var sheet = workbook.GetSheet(sheetId);
+        return sheet is null ? 0 : FormControlListResolver.EstimateItemCount(control, sheet, workbook);
     }
 
     // ── Linked-cell resolution ────────────────────────────────────────────────

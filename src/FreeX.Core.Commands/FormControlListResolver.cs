@@ -77,6 +77,24 @@ public static class FormControlListResolver
         return string.IsNullOrEmpty(text) ? null : text;
     }
 
+    /// <summary>
+    /// Returns the number of list items exposed by a form-control fill range. The same resolver used
+    /// for the rendered selected text is used here so A1 ranges, workbook-global names, and
+    /// sheet-scoped names all have identical behavior in both shells.
+    /// </summary>
+    public static int EstimateItemCount(FormControlModel control, Sheet sheet, Workbook? workbook)
+    {
+        ArgumentNullException.ThrowIfNull(control);
+        ArgumentNullException.ThrowIfNull(sheet);
+
+        if (!IsListControl(control.Kind) || string.IsNullOrWhiteSpace(control.ListFillRange))
+            return 0;
+
+        return TryResolveRange(control.ListFillRange.Trim(), sheet, workbook, out var resolved)
+            ? checked((int)((long)resolved.EndRow - resolved.StartRow + 1))
+            : 0;
+    }
+
     private static bool IsListControl(FormControlKind kind) =>
         kind is FormControlKind.DropDown or FormControlKind.ListBox;
 

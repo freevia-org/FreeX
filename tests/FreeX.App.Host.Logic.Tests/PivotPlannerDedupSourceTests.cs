@@ -57,9 +57,13 @@ public sealed class PivotPlannerDedupSourceTests
     }
 
     [Fact]
-    public void PivotHostPlannerFacades_DelegateToPresentationPivotUi()
+    public void PivotHostPlannerFacade_IsRemovedAndHostOnlyModelsStayThin()
     {
-        var hostPivotUiSource = DialogSourceTestSupport.ReadHostSourceFile("PivotUiPlanner.cs");
+        var repoRoot = WorkspaceFileLocator.FindWorkspaceRoot();
+        var hostPivotUiPath = Path.Combine(repoRoot, "src", "FreeX.App.Host", "PivotUiPlanner.cs");
+        var hostModelsSource = DialogSourceTestSupport.ReadHostSourceFile("PivotUiHostModels.cs");
+        var pivotCommandsSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.PivotCommands.cs");
+        var deferredLayoutSource = DialogSourceTestSupport.ReadHostSourceFile("MainWindow.PivotFieldListDeferredLayout.cs");
         var headerSource = DialogSourceTestSupport.ReadHostSourceFile("PivotHeaderDropdownPlanner.cs");
         var adornmentSource = DialogSourceTestSupport.ReadHostSourceFile("PivotRowLabelAdornmentPlanner.cs");
         var valueFieldDialogSource = DialogSourceTestSupport.ReadHostSourceFile("PivotValueFieldSettingsDialogPlanner.cs");
@@ -67,11 +71,13 @@ public sealed class PivotPlannerDedupSourceTests
         var sharedAdornmentSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotGridAdornmentPlanner.cs");
         var sharedValueFieldSource = DialogSourceTestSupport.ReadPresentationSources("PivotUI", "PivotValueFieldPlanner.cs");
 
-        hostPivotUiSource.Should().Contain("using SharedPivotUiPlanner = FreeX.App.Presentation.PivotUI.PivotUiPlanner;");
-        hostPivotUiSource.Should().Contain("SharedPivotUiPlanner.FindPivotTableContainingSelection");
-        hostPivotUiSource.Should().Contain("SharedPivotUiPlanner.TryParseValueFilter");
-        hostPivotUiSource.Should().NotContain("private static bool PivotTableContainsCell");
-        hostPivotUiSource.Should().NotContain("private static bool TryParseTopBottomValueFilter");
+        File.Exists(hostPivotUiPath).Should().BeFalse("the shared PivotUiPlanner should be consumed directly by WPF Host");
+        hostModelsSource.Should().Contain("public sealed record PivotFieldListItem");
+        hostModelsSource.Should().Contain("public sealed record PendingPivotLayoutUpdate");
+        hostModelsSource.Should().Contain("PivotUiPlanner.FieldListCaptionMatchesSearch");
+        hostModelsSource.Should().Contain("PivotUiPlanner.InsertOrAppend");
+        pivotCommandsSource.Should().Contain("PivotUiPlanner.FindPivotTableContainingSelection");
+        deferredLayoutSource.Should().Contain("PivotUiHostHelpers.FilterPivotFieldListItems");
 
         headerSource.Should().Contain("using SharedPivotGridAdornmentPlanner = FreeX.App.Presentation.PivotUI.PivotGridAdornmentPlanner;");
         headerSource.Should().Contain("SharedPivotGridAdornmentPlanner.BuildHeaderTargets(workbook, sheet)");

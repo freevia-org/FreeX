@@ -8,10 +8,10 @@ public sealed partial class PivotUiPlannerTests
     [Fact]
     public void GetFieldListCaption_ReadsStringOrFieldListItemAndIgnoresBlankCaptions()
     {
-        PivotUiPlanner.GetFieldListCaption("Region").Should().Be("Region");
-        PivotUiPlanner.GetFieldListCaption(new PivotFieldListItem("Amount", true)).Should().Be("Amount");
-        PivotUiPlanner.GetFieldListCaption(new PivotFieldListItem("  ", false)).Should().BeNull();
-        PivotUiPlanner.GetFieldListCaption(null).Should().BeNull();
+        PivotUiHostHelpers.GetFieldListCaption("Region").Should().Be("Region");
+        PivotUiHostHelpers.GetFieldListCaption(new PivotFieldListItem("Amount", true)).Should().Be("Amount");
+        PivotUiHostHelpers.GetFieldListCaption(new PivotFieldListItem("  ", false)).Should().BeNull();
+        PivotUiHostHelpers.GetFieldListCaption(null).Should().BeNull();
     }
 
     [Theory]
@@ -26,7 +26,7 @@ public sealed partial class PivotUiPlannerTests
             new PivotFieldListItem("Amount", false)
         };
 
-        var filtered = PivotUiPlanner.FilterPivotFieldListItems(fields, searchText);
+        var filtered = PivotUiHostHelpers.FilterPivotFieldListItems(fields, searchText);
 
         filtered.Should().Equal(fields);
     }
@@ -41,7 +41,7 @@ public sealed partial class PivotUiPlannerTests
             new PivotFieldListItem("Cost", true)
         };
 
-        var filtered = PivotUiPlanner.FilterPivotFieldListItems(fields, "amount");
+        var filtered = PivotUiHostHelpers.FilterPivotFieldListItems(fields, "amount");
 
         filtered.Should().Equal(new PivotFieldListItem("Sales Amount", false));
     }

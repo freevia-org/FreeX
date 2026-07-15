@@ -92,7 +92,8 @@ public sealed partial class MainWindow
 
         if (OutlineGroupingService.GetGroupingAxis(range) == OutlineGroupingAxis.Columns)
         {
-            var newColLevel = GetUngroupedOutlineLevel(sheet.ColOutlineLevels, range.Start.Col, range.End.Col);
+            var newColLevel = OutlineGroupingPlanner.GetUngroupedOutlineLevel(
+                range.Start.Col, range.End.Col, sheet.ColOutlineLevels);
             var colResult = _session.ExecuteReviewCommand(
                 new GroupColumnsCommand(sheet.Id, range.Start.Col, range.End.Col, newColLevel));
             RefreshShell(colResult.Success
@@ -101,7 +102,8 @@ public sealed partial class MainWindow
             return;
         }
 
-        var newRowLevel = GetUngroupedOutlineLevel(sheet.RowOutlineLevels, range.Start.Row, range.End.Row);
+        var newRowLevel = OutlineGroupingPlanner.GetUngroupedOutlineLevel(
+            range.Start.Row, range.End.Row, sheet.RowOutlineLevels);
         var rowResult = _session.ExecuteReviewCommand(
             new GroupRowsCommand(sheet.Id, range.Start.Row, range.End.Row, newRowLevel));
         RefreshShell(rowResult.Success
@@ -128,18 +130,6 @@ public sealed partial class MainWindow
     /// outer group. Mirrors <see cref="OutlineGroupingPlanner.GetNextOutlineLevel"/>'s "deepest
     /// level already present in the range" scan, but subtracts instead of adds.
     /// </summary>
-    private static int GetUngroupedOutlineLevel(IReadOnlyDictionary<uint, int> levels, uint start, uint end)
-    {
-        var maxLevel = 0;
-        for (var i = start; i <= end; i++)
-        {
-            if (levels.TryGetValue(i, out var level) && level > maxLevel)
-                maxLevel = level;
-        }
-
-        return Math.Max(maxLevel - 1, 0);
-    }
-
     // Data ▸ Outline ▸ Settings (the small dialog launched from Excel's Outline group). The three
     // toggles — summary rows below detail, summary columns to right of detail, automatic styles —
     // are resolved/diffed by the portable OutlineSettingsPlanner and persisted through the additive

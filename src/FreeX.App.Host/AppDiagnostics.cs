@@ -11,8 +11,7 @@ public interface IAppDiagnostics
 
 public sealed class AppDiagnostics : IAppDiagnostics
 {
-    private readonly AppDiagnosticsFileStore _fileStore;
-    private readonly AppDiagnosticsMetadata _metadata;
+    private readonly LocalAppDiagnostics _local;
     private readonly ICrashAnalytics _crashAnalytics;
 
     public AppDiagnostics(
@@ -20,8 +19,13 @@ public sealed class AppDiagnostics : IAppDiagnostics
         AppDiagnosticsMetadata metadata,
         ICrashAnalytics? crashAnalytics = null)
     {
-        _fileStore = fileStore;
-        _metadata = metadata;
+        _local = new LocalAppDiagnostics(fileStore, metadata);
+        _crashAnalytics = crashAnalytics ?? new DisabledCrashAnalytics();
+    }
+
+    public AppDiagnostics(LocalAppDiagnostics local, ICrashAnalytics? crashAnalytics = null)
+    {
+        _local = local;
         _crashAnalytics = crashAnalytics ?? new DisabledCrashAnalytics();
     }
 
@@ -31,7 +35,7 @@ public sealed class AppDiagnostics : IAppDiagnostics
         {
             var safeProperties = AppDiagnosticsFileStore.SanitizeProperties(properties)
                 .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
-            _fileStore.RecordEvent(eventName, _metadata, safeProperties);
+            _local.RecordEvent(eventName, safeProperties);
             _crashAnalytics.RecordBreadcrumb(eventName, safeProperties);
         }
         catch
@@ -45,7 +49,7 @@ public sealed class AppDiagnostics : IAppDiagnostics
         var reportPath = string.Empty;
         try
         {
-            reportPath = _fileStore.RecordCrash(exception, source, _metadata);
+            reportPath = _local.RecordCrash(exception, source);
         }
         catch
         {

@@ -399,4 +399,52 @@ public sealed class FormControlInteractionServiceTests
         addr.Row.Should().Be(1);
         addr.Col.Should().Be(1);
     }
+
+    [Fact]
+    public void AdvanceListSelection_UsesWorkbookGlobalDefinedNameAndWraps()
+    {
+        var (wb, sheet) = NewWorkbook();
+        var listRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 3, 1));
+        wb.DefineNamedRange("GlobalChoices", listRange);
+        var control = new FormControlModel
+        {
+            Kind = FormControlKind.DropDown,
+            ListFillRange = "GlobalChoices",
+            SelectedIndex = 3,
+            LinkedCell = "B1",
+        };
+
+        var command = FormControlInteractionService.CreateAdvanceListSelectionCommand(control, sheet.Id, wb);
+
+        control.SelectedIndex.Should().Be(1);
+        ApplyAndVerify(command, wb, new CellAddress(sheet.Id, 1, 2), new NumberValue(1));
+    }
+
+    [Fact]
+    public void AdvanceListSelection_PrefersSheetScopedDefinedNameOverGlobalName()
+    {
+        var (wb, sheet) = NewWorkbook();
+        wb.DefineNamedRange(
+            "Choices",
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 2, 1)));
+        wb.DefineNamedRange(
+            "Choices",
+            new GridRange(new CellAddress(sheet.Id, 5, 1), new CellAddress(sheet.Id, 7, 1)),
+            metadata: null,
+            scopeSheetId: sheet.Id);
+        var control = new FormControlModel
+        {
+            Kind = FormControlKind.ListBox,
+            ListFillRange = "Choices",
+            SelectedIndex = 2,
+            LinkedCell = "B1",
+        };
+
+        var command = FormControlInteractionService.CreateAdvanceListSelectionCommand(control, sheet.Id, wb);
+
+        control.SelectedIndex.Should().Be(3);
+        ApplyAndVerify(command, wb, new CellAddress(sheet.Id, 1, 2), new NumberValue(3));
+    }
 }

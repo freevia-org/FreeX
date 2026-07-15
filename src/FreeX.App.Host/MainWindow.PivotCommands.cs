@@ -651,7 +651,7 @@ public partial class MainWindow
 
     private static string? GetPivotFieldDragCaption(ListBox list, object originalSource) =>
         FindPivotFieldDragCaption(originalSource) ??
-        PivotUiPlanner.GetFieldListCaption(list.SelectedItem);
+        PivotUiHostHelpers.GetFieldListCaption(list.SelectedItem);
 
     private static int GetPivotFieldDragSourceIndex(ListBox list, object originalSource, string caption)
     {
@@ -663,7 +663,7 @@ public partial class MainWindow
 
         for (var index = 0; index < list.Items.Count; index++)
         {
-            if (string.Equals(PivotUiPlanner.GetFieldListCaption(list.Items[index]), caption, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(PivotUiHostHelpers.GetFieldListCaption(list.Items[index]), caption, StringComparison.OrdinalIgnoreCase))
                 return index;
         }
 
@@ -676,7 +676,7 @@ public partial class MainWindow
         while (current is not null)
         {
             if (current is FrameworkElement { DataContext: { } dataContext } &&
-                PivotUiPlanner.GetFieldListCaption(dataContext) is { } caption)
+                PivotUiHostHelpers.GetFieldListCaption(dataContext) is { } caption)
             {
                 return caption;
             }
@@ -946,13 +946,13 @@ public partial class MainWindow
         switch (targetZone)
         {
             case PivotFieldDropZone.Rows:
-                PivotUiPlanner.InsertOrAppend(rowFields, FindExistingPivotField(displayedLayout, sourceIndex.Value), adjustedInsertIndex);
+                PivotUiHostHelpers.InsertOrAppend(rowFields, FindExistingPivotField(displayedLayout, sourceIndex.Value), adjustedInsertIndex);
                 break;
             case PivotFieldDropZone.Columns:
-                PivotUiPlanner.InsertOrAppend(columnFields, FindExistingPivotField(displayedLayout, sourceIndex.Value), adjustedInsertIndex);
+                PivotUiHostHelpers.InsertOrAppend(columnFields, FindExistingPivotField(displayedLayout, sourceIndex.Value), adjustedInsertIndex);
                 break;
             case PivotFieldDropZone.Filters:
-                PivotUiPlanner.InsertOrAppend(pageFields, FindExistingPivotField(displayedLayout, sourceIndex.Value), adjustedInsertIndex);
+                PivotUiHostHelpers.InsertOrAppend(pageFields, FindExistingPivotField(displayedLayout, sourceIndex.Value), adjustedInsertIndex);
                 break;
             case PivotFieldDropZone.Values:
                 if (payload?.SourceZone != PivotFieldDropZone.Values &&
@@ -967,7 +967,7 @@ public partial class MainWindow
                     pivotTable,
                     headers,
                     sourceIndex.Value);
-                PivotUiPlanner.InsertOrAppend(dataFields, valueField, adjustedInsertIndex);
+                PivotUiHostHelpers.InsertOrAppend(dataFields, valueField, adjustedInsertIndex);
                 break;
         }
 
@@ -1499,7 +1499,7 @@ public partial class MainWindow
 
         foreach (var list in PivotFieldLists())
         {
-            if (PivotUiPlanner.GetFieldListCaption(list.SelectedItem) is { } value)
+            if (PivotUiHostHelpers.GetFieldListCaption(list.SelectedItem) is { } value)
                 return value;
         }
 

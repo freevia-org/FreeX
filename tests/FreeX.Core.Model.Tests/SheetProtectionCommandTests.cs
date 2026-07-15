@@ -15,6 +15,28 @@ public class SheetProtectionCommandTests
     }
 
     [Fact]
+    public void SetAllowEditRangePasswordCommand_ChangesAndUndoRestoresPasswordAndUnlockGrant()
+    {
+        var (_, sheet, ctx) = Setup();
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3));
+        sheet.AllowEditRangePasswords[range] = "old-hash";
+        sheet.UnlockedAllowEditRanges.Add(range);
+
+        var command = new SetAllowEditRangePasswordCommand(sheet.Id, range, "new-hash");
+
+        command.Apply(ctx).Success.Should().BeTrue();
+        sheet.AllowEditRangePasswords[range].Should().Be("new-hash");
+        sheet.UnlockedAllowEditRanges.Should().NotContain(range);
+
+        command.Revert(ctx);
+
+        sheet.AllowEditRangePasswords[range].Should().Be("old-hash");
+        sheet.UnlockedAllowEditRanges.Should().NotContain(range);
+    }
+
+    [Fact]
     public void ProtectSheetCommand_ProtectsSheetAndUndoRestoresPreviousState()
     {
         var (_, sheet, ctx) = Setup();
