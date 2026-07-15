@@ -49,6 +49,21 @@ public sealed class LocTests
     }
 
     [Fact]
+    public void SharedCatalog_FallsBackAcrossCulturesAndPreservesFormattingContracts()
+    {
+        WithUiCulture("en-US", () => Loc.Get("Ribbon_Command_Bold_Label")).Should().Be("Bold");
+        WithUiCulture("en-US", () => Loc.Format("File_CommandFailedFormat", "Open", "Denied"))
+            .Should().Be("Open failed: Denied");
+        WithUiCulture("fr-FR", () => Loc.Get("Common_ConfirmTitle")).Should().Be("Confirmation");
+        WithUiCulture("de-DE", () => Loc.Get("Backstage_GreetingMorning")).Should().Be("Good morning");
+        WithUiCulture("en-US", () => Loc.Get("Shared_Catalog_Missing_Key"))
+            .Should().Be("[[Shared_Catalog_Missing_Key]]");
+
+        WithUiCulture(Loc.PseudoLocalizationCultureName, () => Loc.Get("Common_Cancel"))
+            .Should().Contain("CCaanncceell");
+    }
+
+    [Fact]
     public void Format_PreservesCompositePlaceholders()
     {
         var pseudo = WithUiCulture(

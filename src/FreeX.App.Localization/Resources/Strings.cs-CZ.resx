@@ -12,24 +12,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Common_Cancel" xml:space="preserve">
-    <value>_Zrušit</value>
-  </data>
-  <data name="Common_ConfirmTitle" xml:space="preserve">
-    <value>Potvrzení</value>
-  </data>
-  <data name="Common_ErrorTitle" xml:space="preserve">
-    <value>Chyba</value>
-  </data>
-  <data name="Common_InformationTitle" xml:space="preserve">
-    <value>Informace</value>
-  </data>
-  <data name="Common_Ok" xml:space="preserve">
-    <value>_OK</value>
-  </data>
-  <data name="Common_WarningTitle" xml:space="preserve">
-    <value>Upozornění</value>
-  </data>
   <data name="Common_NoneParenthetical" xml:space="preserve">
     <value>(žádné)</value>
   </data>
@@ -1857,15 +1839,6 @@
   <data name="AutoFilter_SortDescending" xml:space="preserve">
     <value>Seřadit od Z do A</value>
   </data>
-  <data name="Backstage_GreetingAfternoon" xml:space="preserve">
-    <value>Dobré odpoledne</value>
-  </data>
-  <data name="Backstage_GreetingEvening" xml:space="preserve">
-    <value>Dobrý večer</value>
-  </data>
-  <data name="Backstage_GreetingMorning" xml:space="preserve">
-    <value>Dobré ráno</value>
-  </data>
   <data name="Backstage_Info_MultipleIssuesFound" xml:space="preserve">
     <value>Byly nalezeny problémy {0}</value>
   </data>
@@ -1893,38 +1866,11 @@
   <data name="Backstage_Info_OneIssueFound" xml:space="preserve">
     <value>Byl nalezen 1 problém</value>
   </data>
-  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve">
-    <value>MMM d</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve">
-    <value>MMM d, yyyy</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve">
-    <value>Právě teď</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve">
-    <value>h:mm tt</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve">
-    <value>Dnes na {0}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve">
-    <value>{0} na {1}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve">
-    <value>Včera na {0}</value>
-  </data>
-  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve">
-    <value>Otevřete {0}</value>
-  </data>
   <data name="Backstage_Recent_OpenPinnedFileAutomationName" xml:space="preserve">
     <value>Otevřete připnutý soubor {0}</value>
   </data>
   <data name="Backstage_Recent_OpenRecentFileAutomationName" xml:space="preserve">
     <value>Otevřete poslední soubor {0}</value>
-  </data>
-  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve">
-    <value>Připnout {0}</value>
   </data>
   <data name="Backstage_Recent_PinHelpText" xml:space="preserve">
     <value>Udržujte tento sešit v seznamu připnutých souborů.</value>
@@ -1934,9 +1880,6 @@
   </data>
   <data name="Backstage_Recent_RemoveAutomationName" xml:space="preserve">
     <value>Odebrat {0} z posledních souborů</value>
-  </data>
-  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve">
-    <value>Odepnout {0}</value>
   </data>
   <data name="Backstage_Recent_UnpinHelpText" xml:space="preserve">
     <value>Odeberte tento sešit ze seznamu připnutých souborů.</value>
@@ -9070,10 +9013,6 @@
 
 <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
     <value>Použít výchozí nastavení systému</value>
-  </data>
-
-<data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">
-    <value>angličtina (Spojené státy americké)</value>
   </data>
 
 <data name="Options_AppLanguageRestartNotice" xml:space="preserve">

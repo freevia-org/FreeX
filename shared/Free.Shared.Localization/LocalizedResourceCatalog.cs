@@ -10,10 +10,20 @@ public abstract class LocalizedResourceCatalog<TCatalog>
     private static readonly LocalizedResourceCatalogAttribute CatalogDefinition = GetCatalogDefinition();
 
     internal static LocalizedResourceFacade Resources { get; } =
-        new(CatalogDefinition.ResourceBaseName, typeof(TCatalog).Assembly);
+        new(
+            CatalogDefinition.ResourceBaseName,
+            typeof(TCatalog).Assembly,
+            CatalogDefinition.SharedResourceBaseName,
+            typeof(LocalizedResourceFacade).Assembly,
+            CatalogDefinition.SatelliteAssemblyName,
+            CatalogDefinition.SharedSatelliteAssemblyName);
 
     internal static AppLanguageCatalogDefinition LanguageDefinition { get; } =
-        new(CatalogDefinition.SatelliteAssemblyName, Get, GetNeutral);
+        new(
+            CatalogDefinition.SatelliteAssemblyName,
+            CatalogDefinition.SharedSatelliteAssemblyName,
+            Get,
+            GetNeutral);
 
     protected LocalizedResourceCatalog()
     {

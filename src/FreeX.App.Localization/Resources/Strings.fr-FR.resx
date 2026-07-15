@@ -12,24 +12,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Common_Cancel" xml:space="preserve">&#xD;
-    <value>_Annuler</value>&#xD;
-  </data>
-  <data name="Common_ConfirmTitle" xml:space="preserve">&#xD;
-    <value>Confirmation</value>&#xD;
-  </data>
-  <data name="Common_ErrorTitle" xml:space="preserve">&#xD;
-    <value>Erreur</value>&#xD;
-  </data>
-  <data name="Common_InformationTitle" xml:space="preserve">&#xD;
-    <value>Informations</value>&#xD;
-  </data>
-  <data name="Common_Ok" xml:space="preserve">&#xD;
-    <value>_OK</value>&#xD;
-  </data>
-  <data name="Common_WarningTitle" xml:space="preserve">&#xD;
-    <value>Avertissement</value>&#xD;
-  </data>
   <data name="Common_NoneParenthetical" xml:space="preserve">&#xD;
     <value>(aucun)</value>&#xD;
   </data>
@@ -1861,15 +1843,6 @@ Utilisez Afficher les étapes de calcul pour tracer la formule, Ignorer l'erreur
   <data name="AutoFilter_SortDescending" xml:space="preserve">&#xD;
     <value>Trier de Z à A</value>&#xD;
   </data>
-  <data name="Backstage_GreetingAfternoon" xml:space="preserve">&#xD;
-    <value>Bonjour</value>&#xD;
-  </data>
-  <data name="Backstage_GreetingEvening" xml:space="preserve">&#xD;
-    <value>Bonsoir</value>&#xD;
-  </data>
-  <data name="Backstage_GreetingMorning" xml:space="preserve">&#xD;
-    <value>Bonjour</value>&#xD;
-  </data>
   <data name="Backstage_Info_MultipleIssuesFound" xml:space="preserve">&#xD;
     <value>Problèmes {0} détectés</value>&#xD;
   </data>
@@ -1897,38 +1870,11 @@ Utilisez Afficher les étapes de calcul pour tracer la formule, Ignorer l'erreur
   <data name="Backstage_Info_OneIssueFound" xml:space="preserve">&#xD;
     <value>1 problème trouvé</value>&#xD;
   </data>
-  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve">&#xD;
-    <value>MMM d</value>&#xD;
-  </data>
-  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve">&#xD;
-    <value>MMM d, yyyy</value>&#xD;
-  </data>
-  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve">&#xD;
-    <value>Tout à l'heure</value>&#xD;
-  </data>
-  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve">&#xD;
-    <value>h:mm tt</value>&#xD;
-  </data>
-  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve">&#xD;
-    <value>Aujourd'hui à {0}</value>&#xD;
-  </data>
-  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve">&#xD;
-    <value>{0} à {1}</value>&#xD;
-  </data>
-  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve">&#xD;
-    <value>Hier à {0}</value>&#xD;
-  </data>
-  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve">&#xD;
-    <value>Ouvrir {0}</value>&#xD;
-  </data>
   <data name="Backstage_Recent_OpenPinnedFileAutomationName" xml:space="preserve">&#xD;
     <value>Ouvrir le fichier épinglé {0}</value>&#xD;
   </data>
   <data name="Backstage_Recent_OpenRecentFileAutomationName" xml:space="preserve">&#xD;
     <value>Ouvrir le fichier récent {0}</value>&#xD;
-  </data>
-  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve">&#xD;
-    <value>Épingler {0}</value>&#xD;
   </data>
   <data name="Backstage_Recent_PinHelpText" xml:space="preserve">&#xD;
     <value>Conservez ce classeur dans la liste des fichiers épinglés.</value>&#xD;
@@ -1938,9 +1884,6 @@ Utilisez Afficher les étapes de calcul pour tracer la formule, Ignorer l'erreur
   </data>
   <data name="Backstage_Recent_RemoveAutomationName" xml:space="preserve">&#xD;
     <value>Supprimer {0} des fichiers récents</value>&#xD;
-  </data>
-  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve">&#xD;
-    <value>Désépingler {0}</value>&#xD;
   </data>
   <data name="Backstage_Recent_UnpinHelpText" xml:space="preserve">&#xD;
     <value>Supprimez ce classeur de la liste des fichiers épinglés.</value>&#xD;
@@ -8664,9 +8607,6 @@ Envoyer des rapports d'erreur pour cette version de testeur?</value>&#xD;
   </data>
   <data name="Options_AppLanguageSystemDefault" xml:space="preserve">&#xD;
     <value>Utiliser les valeurs par défaut du système</value>&#xD;
-  </data>
-  <data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">&#xD;
-    <value>Anglais (États-Unis)</value>&#xD;
   </data>
   <data name="Options_AppLanguageRestartNotice" xml:space="preserve">&#xD;
     <value>Certaines fenêtres ouvertes peuvent conserver leur langue actuelle jusqu'à ce que vous redémarriez FreeX.</value>&#xD;

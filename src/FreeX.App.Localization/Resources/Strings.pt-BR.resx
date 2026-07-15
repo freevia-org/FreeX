@@ -12,24 +12,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Common_Cancel" xml:space="preserve">
-    <value>_Cancelar</value>
-  </data>
-  <data name="Common_ConfirmTitle" xml:space="preserve">
-    <value>Confirmar</value>
-  </data>
-  <data name="Common_ErrorTitle" xml:space="preserve">
-    <value>Erro</value>
-  </data>
-  <data name="Common_InformationTitle" xml:space="preserve">
-    <value>Informação</value>
-  </data>
-  <data name="Common_Ok" xml:space="preserve">
-    <value>_OK</value>
-  </data>
-  <data name="Common_WarningTitle" xml:space="preserve">
-    <value>Aviso</value>
-  </data>
   <data name="Common_NoneParenthetical" xml:space="preserve">
     <value>(nenhum)</value>
   </data>
@@ -1861,15 +1843,6 @@ Utilize Mostrar Passos de C?lculo para rastrear a f?rmula, Ignorar Erro para sup
   <data name="AutoFilter_SortDescending" xml:space="preserve">
     <value>Ordenar de Z a A</value>
   </data>
-  <data name="Backstage_GreetingAfternoon" xml:space="preserve">
-    <value>Boa tarde</value>
-  </data>
-  <data name="Backstage_GreetingEvening" xml:space="preserve">
-    <value>Boa noite</value>
-  </data>
-  <data name="Backstage_GreetingMorning" xml:space="preserve">
-    <value>Bom dia</value>
-  </data>
   <data name="Backstage_Info_MultipleIssuesFound" xml:space="preserve">
     <value>{0} problemas encontrados</value>
   </data>
@@ -1897,38 +1870,11 @@ Utilize Mostrar Passos de C?lculo para rastrear a f?rmula, Ignorar Erro para sup
   <data name="Backstage_Info_OneIssueFound" xml:space="preserve">
     <value>1 problema encontrado</value>
   </data>
-  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve">
-    <value>MMM d</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve">
-    <value>MMM d, aaaa</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve">
-    <value>Agora mesmo</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve">
-    <value>h:mm tt</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve">
-    <value>Hoje às {0}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve">
-    <value>{0} em {1}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve">
-    <value>Ontem às {0}</value>
-  </data>
-  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve">
-    <value>Abrir {0}</value>
-  </data>
   <data name="Backstage_Recent_OpenPinnedFileAutomationName" xml:space="preserve">
     <value>Abrir arquivo fixo {0}</value>
   </data>
   <data name="Backstage_Recent_OpenRecentFileAutomationName" xml:space="preserve">
     <value>Abrir arquivo recente {0}</value>
-  </data>
-  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve">
-    <value>Fixar {0}</value>
   </data>
   <data name="Backstage_Recent_PinHelpText" xml:space="preserve">
     <value>Manter esta pasta de trabalho na lista de arquivos fixados.</value>
@@ -1938,9 +1884,6 @@ Utilize Mostrar Passos de C?lculo para rastrear a f?rmula, Ignorar Erro para sup
   </data>
   <data name="Backstage_Recent_RemoveAutomationName" xml:space="preserve">
     <value>Remover {0} dos arquivos recentes</value>
-  </data>
-  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve">
-    <value>Desafixar {0}</value>
   </data>
   <data name="Backstage_Recent_UnpinHelpText" xml:space="preserve">
     <value>Remover esta pasta de trabalho da lista de arquivos fixos.</value>
@@ -9080,10 +9023,6 @@ Enviar relat?rios de falhas para esta compila??o de teste?</value>
 
 <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
     <value>Utilizar preconfiguração do sistema</value>
-  </data>
-
-<data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">
-    <value>Inglês (Estados Unidos)</value>
   </data>
 
 <data name="Options_AppLanguageRestartNotice" xml:space="preserve">

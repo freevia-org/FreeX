@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Resources;
 using FluentAssertions;
 using FreeX.App.Host;
 using FreeX.App.Localization;
@@ -14,9 +13,6 @@ namespace FreeX.App.Host.Tests;
 /// </summary>
 public sealed class LocalizationConvergenceTests
 {
-    private static readonly ResourceManager LocRm =
-        new("FreeX.App.Localization.Resources.Strings", typeof(Loc).Assembly);
-
     // The 43 satellite locales in the shared Loc catalog.
     private static readonly string[] SatelliteLocales =
     [
@@ -32,11 +28,7 @@ public sealed class LocalizationConvergenceTests
     [Fact]
     public void LocCatalog_NeutralKeyCount_IsAtLeast6000()
     {
-        var locKeys = LocRm
-            .GetResourceSet(CultureInfo.InvariantCulture, createIfNotExists: true, tryParents: false)!
-            .Cast<System.Collections.DictionaryEntry>()
-            .Select(e => (string)e.Key)
-            .ToHashSet(StringComparer.Ordinal);
+        var locKeys = Loc.GetNeutralResourceKeys();
 
         locKeys.Count.Should().BeGreaterThanOrEqualTo(6000,
             because: "the shared Loc catalog is the superset of all localization keys (>6000 expected)");
@@ -75,7 +67,7 @@ public sealed class LocalizationConvergenceTests
 
         foreach (var (key, expectedValue) in expected)
         {
-            var actual = LocRm.GetString(key, CultureInfo.InvariantCulture);
+            var actual = Loc.GetNeutral(key);
             if (actual is null)
                 missing.Add(key);
             else if (actual != expectedValue)
@@ -89,11 +81,8 @@ public sealed class LocalizationConvergenceTests
     [Fact]
     public void LocCatalog_NeutralValues_NoSentinelPlaceholders()
     {
-        var sentinels = LocRm
-            .GetResourceSet(CultureInfo.InvariantCulture, createIfNotExists: true, tryParents: false)!
-            .Cast<System.Collections.DictionaryEntry>()
-            .Where(e => ((string?)e.Value)?.StartsWith("[[", StringComparison.Ordinal) == true)
-            .Select(e => (string)e.Key)
+        var sentinels = Loc.GetNeutralResourceKeys()
+            .Where(key => Loc.GetNeutral(key).StartsWith("[[", StringComparison.Ordinal))
             .ToList();
 
         sentinels.Should().BeEmpty(
@@ -124,19 +113,24 @@ public sealed class LocalizationConvergenceTests
     [MemberData(nameof(AllSatelliteLocales))]
     public void LocCatalog_SatelliteLocale_LoadsAndContainsTranslatedKeys(string locale)
     {
-        var culture = CultureInfo.GetCultureInfo(locale);
-        var locSet  = LocRm.GetResourceSet(culture, createIfNotExists: true, tryParents: false);
+        var originalCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo(locale);
 
-        locSet.Should().NotBeNull(because: $"Loc catalog must have a satellite for '{locale}'");
+            // Spot-check moved keys: they must resolve through the shared satellite.
+            var ok = Loc.Get("Common_Ok");
+            var cancel = Loc.Get("Common_Cancel");
 
-        // Spot-check: Common_Ok and Common_Cancel must be present and non-empty.
-        var ok     = locSet!.GetString("Common_Ok");
-        var cancel = locSet.GetString("Common_Cancel");
-
-        ok.Should().NotBeNullOrWhiteSpace(
+            ok.Should().NotBeNullOrWhiteSpace(
             because: $"Common_Ok must have a non-empty translation in '{locale}'");
-        cancel.Should().NotBeNullOrWhiteSpace(
+            cancel.Should().NotBeNullOrWhiteSpace(
             because: $"Common_Cancel must have a non-empty translation in '{locale}'");
+        }
+        finally
+        {
+            CultureInfo.CurrentUICulture = originalCulture;
+        }
     }
 
     public static TheoryData<string> AllSatelliteLocales()

@@ -14,4 +14,33 @@
          a healthy, security-serviced runtime instead of pinning to whatever the SDK defaults to. -->
     <TargetLatestRuntimePatch>true</TargetLatestRuntimePatch>
   </PropertyGroup>
+
+  <!-- Product localization support is explicit. Shared satellites are only packaged and used
+       where the product also ships its corresponding app satellite. -->
+  <PropertyGroup>
+    <FreeSharedLocalizationProjectDirectory Condition="'$(FreeSharedLocalizationProjectDirectory)' == ''">$(MSBuildProjectDirectory)</FreeSharedLocalizationProjectDirectory>
+    <FreeSharedLocalizationNormalizedProjectDirectory>$([System.String]::Copy('$(FreeSharedLocalizationProjectDirectory)').Replace('\','/').ToLowerInvariant())</FreeSharedLocalizationNormalizedProjectDirectory>
+  </PropertyGroup>
+  <PropertyGroup Condition="$([System.String]::Copy('$(FreeSharedLocalizationNormalizedProjectDirectory)').Contains('/freew/'))">
+    <FreeSharedLocalizationProduct>FreeW</FreeSharedLocalizationProduct>
+    <FreeSharedLocalizationSupportedCultures Condition="'$(FreeSharedLocalizationSupportedCultures)' == ''">fr-FR</FreeSharedLocalizationSupportedCultures>
+  </PropertyGroup>
+  <PropertyGroup Condition="$([System.String]::Copy('$(FreeSharedLocalizationNormalizedProjectDirectory)').Contains('/freep/'))">
+    <FreeSharedLocalizationProduct>FreeP</FreeSharedLocalizationProduct>
+    <FreeSharedLocalizationSupportedCultures Condition="'$(FreeSharedLocalizationSupportedCultures)' == ''">fr-FR</FreeSharedLocalizationSupportedCultures>
+  </PropertyGroup>
+  <PropertyGroup Condition="
+      $([System.String]::Copy('$(FreeSharedLocalizationNormalizedProjectDirectory)').Contains('/src/')) Or
+      $([System.String]::Copy('$(FreeSharedLocalizationNormalizedProjectDirectory)').Contains('/tests/'))">
+    <FreeSharedLocalizationProduct>FreeX</FreeSharedLocalizationProduct>
+    <FreeSharedLocalizationSupportedCultures Condition="'$(FreeSharedLocalizationSupportedCultures)' == ''">bg-BG;cs-CZ;da-DK;de-AT;de-CH;de-DE;el-GR;en-AU;en-CA;en-GB;en-IE;en-NZ;en-ZA;es-AR;es-CL;es-CO;es-ES;es-MX;et-EE;fi-FI;fr-CA;fr-FR;ga-IE;hr-HR;hu-HU;it-IT;lt-LT;lv-LV;mt-MT;nb-NO;nl-BE;nl-NL;pl-PL;pt-BR;pt-PT;ro-RO;sk-SK;sl-SI;sr-Cyrl-RS;sr-Latn-RS;sv-SE;tr-TR;uk-UA</FreeSharedLocalizationSupportedCultures>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(FreeXTesterReleaseEnglishOnly)' == 'true' And '$(FreeSharedLocalizationProduct)' == 'FreeX'">
+    <FreeSharedLocalizationFilterAllSatellites>true</FreeSharedLocalizationFilterAllSatellites>
+    <SatelliteResourceLanguages>__freex_english_only__</SatelliteResourceLanguages>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(FreeXTesterReleaseEnglishOnly)' != 'true' And '$(FreeSharedLocalizationSupportedCultures)' != ''">
+    <FreeSharedLocalizationSupportedCulturePattern>$([System.String]::Copy('$(FreeSharedLocalizationSupportedCultures)').Replace(';','|'))</FreeSharedLocalizationSupportedCulturePattern>
+    <SatelliteResourceLanguages>$(FreeSharedLocalizationSupportedCultures)</SatelliteResourceLanguages>
+  </PropertyGroup>
 </Project>

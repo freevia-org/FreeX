@@ -12,24 +12,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Common_Cancel" xml:space="preserve">
-    <value>_Откажи</value>
-  </data>
-  <data name="Common_ConfirmTitle" xml:space="preserve">
-    <value>Потврда</value>
-  </data>
-  <data name="Common_ErrorTitle" xml:space="preserve">
-    <value>Грешка</value>
-  </data>
-  <data name="Common_InformationTitle" xml:space="preserve">
-    <value>Информације</value>
-  </data>
-  <data name="Common_Ok" xml:space="preserve">
-    <value>_У реду</value>
-  </data>
-  <data name="Common_WarningTitle" xml:space="preserve">
-    <value>Упозорење</value>
-  </data>
   <data name="Common_NoneParenthetical" xml:space="preserve">
     <value>(нема)</value>
   </data>
@@ -1857,15 +1839,6 @@
   <data name="AutoFilter_SortDescending" xml:space="preserve">
     <value>Поредај од З до А</value>
   </data>
-  <data name="Backstage_GreetingAfternoon" xml:space="preserve">
-    <value>добар дан</value>
-  </data>
-  <data name="Backstage_GreetingEvening" xml:space="preserve">
-    <value>добро вече</value>
-  </data>
-  <data name="Backstage_GreetingMorning" xml:space="preserve">
-    <value>добро јутро</value>
-  </data>
   <data name="Backstage_Info_MultipleIssuesFound" xml:space="preserve">
     <value>Пронађени проблеми {0}</value>
   </data>
@@ -1893,38 +1866,11 @@
   <data name="Backstage_Info_OneIssueFound" xml:space="preserve">
     <value>Пронађен је 1 проблем</value>
   </data>
-  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve">
-    <value>d. MMM</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve">
-    <value>d. MMM yyyy</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve">
-    <value>Управо сада</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve">
-    <value>HH:mm</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve">
-    <value>Данас у {0}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve">
-    <value>{0} у {1}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve">
-    <value>Јуче у {0}</value>
-  </data>
-  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve">
-    <value>Отворите {0}</value>
-  </data>
   <data name="Backstage_Recent_OpenPinnedFileAutomationName" xml:space="preserve">
     <value>Отвори закачену датотеку {0}</value>
   </data>
   <data name="Backstage_Recent_OpenRecentFileAutomationName" xml:space="preserve">
     <value>Отвори недавну датотеку {0}</value>
-  </data>
-  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve">
-    <value>Пин {0}</value>
   </data>
   <data name="Backstage_Recent_PinHelpText" xml:space="preserve">
     <value>Држите ову радну свеску на листи закачених датотека.</value>
@@ -1934,9 +1880,6 @@
   </data>
   <data name="Backstage_Recent_RemoveAutomationName" xml:space="preserve">
     <value>Уклоните {0} из недавних датотека</value>
-  </data>
-  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve">
-    <value>Откачи {0}</value>
   </data>
   <data name="Backstage_Recent_UnpinHelpText" xml:space="preserve">
     <value>Уклоните ову радну свеску с листе закачених датотека.</value>
@@ -9070,10 +9013,6 @@
 
 <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
     <value>Користи језик система</value>
-  </data>
-
-<data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">
-    <value>Енглески (Сједињене Америчке Државе)</value>
   </data>
 
 <data name="Options_AppLanguageRestartNotice" xml:space="preserve">

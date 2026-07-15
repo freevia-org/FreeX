@@ -2,4 +2,27 @@
   <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('.Tests'))">
     <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\*.cs" Link="%(Filename)%(Extension)" />
   </ItemGroup>
+
+  <Target Name="FilterFreeSharedLocalizationSatelliteResources"
+          BeforeTargets="_CopyFilesMarkedCopyLocal;CopyFilesToOutputDirectory"
+          Condition="'$(FreeSharedLocalizationProduct)' != ''">
+    <ItemGroup>
+      <_FreeSharedLocalizationSatellites Include="@(ReferenceCopyLocalPaths)"
+        Condition="'%(ReferenceCopyLocalPaths.Filename)' == 'Free.Shared.Localization.resources'" />
+      <_FreeSharedLocalizationSupported Include="@(_FreeSharedLocalizationSatellites)"
+        Condition="'$(FreeSharedLocalizationFilterAllSatellites)' != 'true' And
+          '$([System.Text.RegularExpressions.Regex]::IsMatch(&quot;%(_FreeSharedLocalizationSatellites.DestinationSubDirectory)&quot;, &quot;^($(FreeSharedLocalizationSupportedCulturePattern))[\\/]$&quot;))' == 'True'" />
+      <ReferenceCopyLocalPaths Remove="@(_FreeSharedLocalizationSatellites)" />
+      <ReferenceCopyLocalPaths Include="@(_FreeSharedLocalizationSupported)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="RemoveFreeSharedLocalizationSatellitesForEnglishOnly"
+          AfterTargets="_CopyFilesMarkedCopyLocal"
+          Condition="'$(FreeSharedLocalizationFilterAllSatellites)' == 'true'">
+    <ItemGroup>
+      <_FreeSharedLocalizationEnglishOnlySatellite Include="$(TargetDir)**\Free.Shared.Localization.resources.dll" />
+    </ItemGroup>
+    <Delete Files="@(_FreeSharedLocalizationEnglishOnlySatellite)" />
+  </Target>
 </Project>
