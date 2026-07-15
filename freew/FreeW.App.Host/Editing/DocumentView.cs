@@ -7126,6 +7126,17 @@ public sealed class DocumentView : RichTextBox
             return 0;
 
         var defaultFontSizeDip = Math.Max(8, document.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
+        var columnCount = Math.Max(1, document.Page.ColumnCount);
+        var charsPerColumnLine = columnCount == 1
+            ? 92
+            : Math.Max(
+                16,
+                (int)Math.Floor(
+                    DocumentViewLayoutPlanner.BuildColumnPlan(
+                        document.Page,
+                        PageLayout.ContentAreaDip(document.Page).Width,
+                        usePageColumns: true).WidthDip
+                    / Math.Max(4.5, defaultFontSizeDip * 0.50)));
         var height = 0.0;
         foreach (var block in document.Blocks.Take(sourceBlockIndex))
         {
@@ -7133,8 +7144,8 @@ public sealed class DocumentView : RichTextBox
                 continue;
 
             var charsPerLine = paragraph.StyleId?.StartsWith("Heading", StringComparison.OrdinalIgnoreCase) == true
-                ? 72
-                : 92;
+                ? Math.Max(16, (int)Math.Round(charsPerColumnLine * 0.78))
+                : charsPerColumnLine;
             var lineCount = Math.Max(1, (int)Math.Ceiling(
                 Math.Max(1, paragraph.PlainText.Length) / (double)charsPerLine));
             var lineHeightDip = paragraph.Formatting.LineRule switch

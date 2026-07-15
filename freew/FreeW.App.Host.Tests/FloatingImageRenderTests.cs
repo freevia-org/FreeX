@@ -306,6 +306,24 @@ public sealed class FloatingImageRenderTests
     }
 
     [StaFact]
+    public void FloatingWordArt_TwoColumnAnchorUsesColumnAwareLeadingHeight()
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildWordArtPictureWatermarkLayoutDocument();
+        var view = new DocumentView();
+        var canvas = new System.Windows.Controls.Canvas();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(doc);
+        view.Measure(new System.Windows.Size(816, 1056));
+        view.Arrange(new System.Windows.Rect(0, 0, 816, 1056));
+        view.UpdateLayout();
+
+        canvas.Children.Count.Should().Be(1, "the fixture has one floating WordArt object");
+        System.Windows.Controls.Canvas.GetTop(canvas.Children[0])
+            .Should()
+            .BeGreaterThan(260, "a two-column anchor must account for the narrower preceding paragraphs");
+    }
+
+    [StaFact]
     public void FloatingImage_MultipleCommitCycles_Preserve()
     {
         var original = DocWithFloating(zOrder: 7);
