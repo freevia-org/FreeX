@@ -13,10 +13,13 @@ public sealed class SlidePanePolicySourceGuardTests
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
 
-        source.Should().Contain("SlidePanePlanner.BuildEntries(");
+        source.Should().Contain("SlidePanePlanner.BuildSessionProjection(");
+        source.Should().Contain("SlidePanePlanner.SetSelectedSlide(");
+        source.Should().Contain("SlidePanePlanner.ToggleSection(");
         source.Should().Contain("SlidePanePlanner.BuildThumbnailVisualPlan(");
         source.Should().Contain("SlidePanePlanner.BuildSectionHeaderVisualPlan(entry)");
-        source.Should().Contain("_slidePaneCollapsedSectionIds");
+        source.Should().Contain("_slidePaneSessionState");
+        source.Should().Contain("_slidePaneProjection");
         source.Should().Contain("_slidePaneRenderedSectionHeaderPlans.Add(plan)");
         source.Should().Contain("SlidePaneEntryKind.SectionHeader");
         source.Should().Contain("BuildSlidePaneSectionHeader(entry)");
@@ -87,6 +90,8 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("Math.Abs(itemPosition.Y - _slidePaneDragStartPoint.Y) < SlidePanePlanner.DefaultDragStartThreshold");
         source.Should().NotContain("SlidePanePlanner.HitTestInsertionPoint(");
         source.Should().NotContain("SlidePanePlanner.BuildDropVisualPlan(");
+        source.Should().NotContain("_slidePaneCollapsedSectionIds");
+        source.Should().NotContain("_slidePaneDragSession");
         source.Should().NotContain("new Thickness(0, indicatorY - 1, 0, 0)");
         source.Should().NotContain("_slidePaneList.SelectedIndex = Editor.CurrentSlideIndex");
         source.Should().NotContain("Editor.DuplicateCurrentSlide();");

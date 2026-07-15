@@ -9,10 +9,13 @@ public sealed class SlidePanePolicySourceGuardTests
     {
         var source = ReadHostSource("SlidePane.cs");
 
-        source.Should().Contain("SlidePanePlanner.BuildEntries(");
+        source.Should().Contain("SlidePanePlanner.BuildSessionProjection(");
+        source.Should().Contain("SlidePanePlanner.SetSelectedSlide(");
+        source.Should().Contain("SlidePanePlanner.ToggleSection(");
         source.Should().Contain("SlidePanePlanner.BuildThumbnailVisualPlan(");
         source.Should().Contain("SlidePanePlanner.BuildSectionHeaderVisualPlan(entry)");
-        source.Should().Contain("_collapsedSectionIds");
+        source.Should().Contain("_sessionState");
+        source.Should().Contain("_sessionProjection");
         source.Should().Contain("ToggleSection(plan.SectionId)");
         source.Should().Contain("SlidePanePlanner.BeginDragSession(");
         source.Should().Contain("SlidePanePlanner.UpdateDragSession(");
@@ -57,6 +60,8 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("Math.Abs(pos.Y - _dragStartPoint.Y) < SlidePanePlanner.DefaultDragStartThreshold");
         source.Should().NotContain("SlidePanePlanner.HitTestInsertionPoint(");
         source.Should().NotContain("SlidePanePlanner.BuildDropVisualPlan(");
+        source.Should().NotContain("_collapsedSectionIds");
+        source.Should().NotContain("_dragSession");
         source.Should().NotContain("new Thickness(0, indicatorY - 1, 0, 0)");
         source.Should().NotContain("\"+ New Slide\"");
         source.Should().NotContain("\"Duplicate Slide\"");

@@ -50,14 +50,13 @@ public sealed class SlidePane : Border
     private readonly EditingSession _editor;
     private readonly ScrollViewer   _scroll;
     private readonly StackPanel     _stack;
-    private readonly HashSet<string> _collapsedSectionIds = new(StringComparer.OrdinalIgnoreCase);
+    private SlidePaneSessionState _sessionState = SlidePaneSessionState.Empty;
+    private SlidePaneSessionProjection? _sessionProjection;
 
     // Insertion indicator: a thin horizontal line drawn over the scroll area.
     private readonly Border _insertIndicator;
 
     // Drag state
-    private SlidePaneDragSessionState _dragSession = SlidePaneDragSessionState.None;
-
     private sealed record SectionHeaderTag(string SectionId, int SectionIndex);
 
     // ── Construction ──────────────────────────────────────────────────────────────
@@ -108,7 +107,11 @@ public sealed class SlidePane : Border
 
     private void OnChanged() => RebuildList();
 
-    private void OnCurrentSlideChanged(object? sender, EventArgs e) => UpdateHighlight();
+    private void OnCurrentSlideChanged(object? sender, EventArgs e)
+    {
+        _sessionState = SlidePanePlanner.SetSelectedSlide(_sessionState, _editor.CurrentSlideIndex);
+        UpdateHighlight();
+    }
 
     // ── List build ────────────────────────────────────────────────────────────────
 
@@ -118,9 +121,13 @@ public sealed class SlidePane : Border
         _stack.Children.Clear();
 
         var slides = _editor.Presentation.Slides;
-        var entries = SlidePanePlanner.BuildEntries(slides, _editor.Presentation.Sections, _collapsedSectionIds);
+        _sessionState = SlidePanePlanner.SetSelectedSlide(_sessionState, _editor.CurrentSlideIndex);
+        _sessionProjection = SlidePanePlanner.BuildSessionProjection(
+            slides,
+            _editor.Presentation.Sections,
+            _sessionState);
 
-        foreach (var entry in entries)
+        foreach (var entry in _sessionProjection.Entries)
         {
             if (entry.Kind == SlidePaneEntryKind.SectionHeader)
             {
@@ -131,7 +138,7 @@ public sealed class SlidePane : Border
             var plan = SlidePanePlanner.BuildThumbnailVisualPlan(
                 entry,
                 slides[entry.SlideIndex],
-                _editor.CurrentSlideIndex);
+                _sessionProjection.SelectedSlideIndex);
             var item = BuildSlideItem(plan, slides[entry.SlideIndex]);
             _stack.Children.Add(item);
         }
@@ -289,7 +296,7 @@ public sealed class SlidePane : Border
         {
             if (sender is Border b && b.Tag is int idx)
             {
-                _dragSession = SlidePanePlanner.BeginDragSession(idx, e.GetPosition(b).Y);
+                _sessionState = _sessionState with { DragSession = SlidePanePlanner.BeginDragSession(idx, e.GetPosition(b).Y) };
                 _editor.SelectSlide(idx);
                 e.Handled = true;
             }
@@ -412,8 +419,7 @@ public sealed class SlidePane : Border
         if (string.IsNullOrWhiteSpace(sectionId))
             return;
 
-        if (!_collapsedSectionIds.Add(sectionId))
-            _collapsedSectionIds.Remove(sectionId);
+        _sessionState = SlidePanePlanner.ToggleSection(_sessionState, sectionId);
 
         RebuildList();
     }
@@ -584,16 +590,16 @@ public sealed class SlidePane : Border
     private void OnItemMouseMove(object sender, MouseEventArgs e)
     {
         if (e.LeftButton != MouseButtonState.Pressed) return;
-        if (sender is not Border item || !_dragSession.IsTracking) return;
+        if (sender is not Border item || !_sessionState.DragSession.IsTracking) return;
 
         var update = SlidePanePlanner.UpdateDragSession(
-            _dragSession,
+            _sessionState.DragSession,
             GetPaneItemKinds(),
             e.GetPosition(item).Y,
             e.GetPosition(_stack).Y,
             ItemHeight);
-        _dragSession = update.State;
-        if (!_dragSession.IsDragging) return;
+        _sessionState = _sessionState with { DragSession = update.State };
+        if (!_sessionState.DragSession.IsDragging) return;
 
         if (update.ShouldCapturePointer)
             item.CaptureMouse();
@@ -607,9 +613,9 @@ public sealed class SlidePane : Border
         if (sender is not Border item) return;
 
         var completion = SlidePanePlanner.CompleteDragSession(
-            _dragSession,
+            _sessionState.DragSession,
             _editor.Presentation.Slides.Count);
-        _dragSession = completion.State;
+        _sessionState = _sessionState with { DragSession = completion.State };
 
         if (completion.ShouldReleaseCapture)
         {
@@ -623,7 +629,10 @@ public sealed class SlidePane : Border
 
     private void OnItemLostMouseCapture(object sender, MouseEventArgs e)
     {
-        _dragSession = SlidePanePlanner.CancelDragSession(_dragSession);
+        _sessionState = _sessionState with
+        {
+            DragSession = SlidePanePlanner.CancelDragSession(_sessionState.DragSession)
+        };
         HideInsertIndicator();
     }
 
@@ -647,11 +656,7 @@ public sealed class SlidePane : Border
 
     private IReadOnlyList<bool> GetPaneItemKinds()
     {
-        var result = new List<bool>(_stack.Children.Count);
-        foreach (UIElement child in _stack.Children)
-            result.Add(child is Border b && b.Tag is int);
-
-        return result;
+        return _sessionProjection?.PaneItemIsSlide ?? Array.Empty<bool>();
     }
 
     private void HideInsertIndicator() =>

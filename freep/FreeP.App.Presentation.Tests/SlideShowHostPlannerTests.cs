@@ -321,6 +321,54 @@ public sealed class SlideShowHostPlannerTests
     }
 
     [Fact]
+    public void PlanPointerClick_PrefersTriggerThenHyperlinkThenAdvance()
+    {
+        var slide = new Slide();
+        var shape = new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            Hyperlink = new Hyperlink { Url = "https://example.com" }
+        };
+        slide.Shapes.Add(shape);
+        slide.Animations.Add(new ShapeAnimation
+        {
+            ShapeId = 100,
+            TriggerShapeId = 42,
+            Kind = AnimationKind.Entrance,
+            Preset = AnimationPreset.Appear,
+            Trigger = AnimationTrigger.OnClick
+        });
+
+        var inside = new SlideShowPoint(48, 48);
+        var trigger = SlideShowHostPlanner.PlanPointerClick(slide, inside);
+        trigger.Kind.Should().Be(SlideShowPointerClickIntentKind.Trigger);
+        trigger.TriggerShapeId.Should().Be(42);
+        trigger.Hyperlink.Should().BeNull();
+
+        slide.Animations.Clear();
+        var hyperlink = SlideShowHostPlanner.PlanPointerClick(slide, inside);
+        hyperlink.Kind.Should().Be(SlideShowPointerClickIntentKind.Hyperlink);
+        hyperlink.Hyperlink.Should().BeSameAs(shape.Hyperlink);
+
+        var advance = SlideShowHostPlanner.PlanPointerClick(slide, new SlideShowPoint(900, 500));
+        advance.Kind.Should().Be(SlideShowPointerClickIntentKind.Advance);
+        advance.IsHandled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlanPointerClick_WithoutCurrentSlideReturnsNoOp()
+    {
+        var intent = SlideShowHostPlanner.PlanPointerClick(null, new SlideShowPoint(0, 0));
+
+        intent.Kind.Should().Be(SlideShowPointerClickIntentKind.NoOp);
+        intent.IsHandled.Should().BeFalse();
+    }
+
+    [Fact]
     public void PlanInternalSlideJump_NavigatesBySlideIdWithoutHostLookup()
     {
         var pres = MakePresentation(3);
