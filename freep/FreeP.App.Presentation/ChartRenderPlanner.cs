@@ -5204,7 +5204,7 @@ public static partial class ChartRenderPlanner
         double niceMax = Math.Ceiling(max / majorUnit) * majorUnit;
         double niceMin = min >= 0 ? 0 : Math.Floor(min / majorUnit) * majorUnit;
 
-        if (Math.Abs(niceMax - max) < majorUnit * 1e-9)
+        if (niceMax - max < majorUnit * 0.25)
             niceMax += majorUnit;
 
         return (niceMin, niceMax, majorUnit);

@@ -36,6 +36,30 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void ComputePrimaryValueAxisRange_AddsMajorUnitWhenAutoCeilingHasTooLittleHeadroom()
+    {
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 120, 195, 165, 240 });
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Series.Add(series);
+
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart)
+            .Should().Be((0, 300, 50));
+    }
+
+    [Fact]
+    public void ComputePrimaryValueAxisRange_KeepsCeilingWhenItHasSufficientHeadroom()
+    {
+        var series = new ChartSeries { Name = "Revenue" };
+        series.Values.AddRange(new double?[] { 50, 80, 65, 90, 75, 110 });
+        var chart = new ChartShape { ChartType = ChartType.BarClustered };
+        chart.Series.Add(series);
+
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart)
+            .Should().Be((0, 125, 25));
+    }
+
+    [Fact]
     public void ComputeSecondaryValueAxisRange_UsesOnlySecondarySeries()
     {
         var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
