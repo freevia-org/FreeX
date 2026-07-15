@@ -472,6 +472,9 @@ public static partial class ChartRenderPlanner
     public const double ScatterMarkerRadius = 3.5;
     public const double ScatterDataLabelWidth = 40.0;
     public const double ScatterDataLabelHeight = 11.0;
+    public const double ImportedScatterPlotLeftInset = 10.5;
+    public const double ImportedScatterPlotUpwardOffset = 10.5;
+    public const double ImportedScatterPlotRightInset = 3.0;
     public const byte BubbleFillAlpha = 180;
     public const double BubbleStrokeThickness = 0.8;
     public const byte RadarFillAlpha = 80;
@@ -824,6 +827,16 @@ public static partial class ChartRenderPlanner
             plotTop,
             plotRight - plotLeft,
             plotBottom - plotTop);
+        if (family == ChartRenderFamily.ScatterLike && UsesImportedTextMetrics(chart))
+        {
+            // PowerPoint's imported scatter layout moves the plot above the
+            // baseline category-label band and reserves a compact left gutter.
+            plot = new ChartPlanRect(
+                plot.X + ImportedScatterPlotLeftInset,
+                plot.Y - ImportedScatterPlotUpwardOffset,
+                plot.Width - ImportedScatterPlotLeftInset - ImportedScatterPlotRightInset,
+                plot.Height);
+        }
         if (UsesStockLineFallback(chart))
         {
             // Classic PowerPoint reserves a compact left value-axis gutter and a

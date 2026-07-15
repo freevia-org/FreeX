@@ -83,6 +83,11 @@ public sealed class ChartBaselineCorpusTests
         var scatter = charts.Single(chart => chart.ChartType == ChartType.Scatter);
         scatter.Series.Should().OnlyContain(series => !series.OnSecondaryAxis,
             "scatter uses two independent value axes for X and Y, not a secondary series axis");
+        ChartRenderPlanner.BuildFramePlan(scatter, new ChartPlanRect(0, 0, 480, 288)).Plot
+            .Should().Be(new ChartPlanRect(30.5, 57.5, 426.5, 200),
+                "PowerPoint places imported scatter plots above the category-label band with a compact left axis gutter");
+        ChartRenderPlanner.ComputeScatterAxisRange(scatter, useX: true)
+            .Should().Be((0, 125, 25));
         ChartRenderPlanner.ComputePrimaryValueAxisRange(scatter)
             .Should().Be((0, 50, 10));
         var scatterColors = new[]
