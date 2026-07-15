@@ -4104,6 +4104,7 @@ public static class DocxWriter
                     new XAttribute("l", 0), new XAttribute("t", 0),
                     new XAttribute("r", 0), new XAttribute("b", 0)),
                 smartArtDocPr,
+                new XElement(Wp + "cNvGraphicFramePr"),
                 smartArtGraphic));
     }
 
@@ -4648,7 +4649,16 @@ public static class DocxWriter
                     new XElement(A + "chOff", new XAttribute("x", 0), new XAttribute("y", 0)),
                     new XElement(A + "chExt", new XAttribute("cx", frameW), new XAttribute("cy", frameH)))));
 
-        void AddCachedShape(string modelId, long x, long y, long width, long height, string shapeKind, string fillHex, bool noFill = false)
+        void AddCachedShape(
+            string modelId,
+            long x,
+            long y,
+            long width,
+            long height,
+            string shapeKind,
+            string fillHex,
+            bool noFill = false,
+            string? text = null)
         {
             var line = new XElement(A + "ln",
                 new XAttribute("w", Math.Max(1L, PointsToEmu(0.75))),
@@ -4673,6 +4683,26 @@ public static class DocxWriter
                 noFill ? new XElement(A + "noFill") : SolidFill(fillHex),
                 line,
                 new XElement(A + "effectLst"));
+            var textBody = new XElement(Dsp + "txBody",
+                new XElement(A + "bodyPr",
+                    new XAttribute("spcFirstLastPara", 0),
+                    new XAttribute("vert", "horz"),
+                    new XAttribute("wrap", "square"),
+                    new XAttribute("anchor", "ctr"),
+                    new XElement(A + "noAutofit")),
+                new XElement(A + "lstStyle"),
+                string.IsNullOrEmpty(text)
+                    ? new XElement(A + "p",
+                        new XElement(A + "endParaRPr", new XAttribute("lang", "en-US")))
+                    : new XElement(A + "p",
+                        new XAttribute("algn", "ctr"),
+                        new XElement(A + "r",
+                            new XElement(A + "rPr",
+                                new XAttribute("lang", "en-US"),
+                                new XAttribute("sz", 1100),
+                                SolidFill(textHex)),
+                            new XElement(A + "t", text))));
+
             spTree.Add(new XElement(Dsp + "sp",
                 new XAttribute("modelId", modelId),
                 new XElement(Dsp + "nvSpPr",
@@ -4701,16 +4731,7 @@ public static class DocxWriter
                     new XElement(A + "fontRef",
                         new XAttribute("idx", "minor"),
                         new XElement(A + "schemeClr", new XAttribute("val", "lt1")))),
-                new XElement(Dsp + "txBody",
-                    new XElement(A + "bodyPr",
-                        new XAttribute("spcFirstLastPara", 0),
-                        new XAttribute("vert", "horz"),
-                        new XAttribute("wrap", "square"),
-                        new XAttribute("anchor", "ctr"),
-                        new XElement(A + "noAutofit")),
-                    new XElement(A + "lstStyle"),
-                    new XElement(A + "p",
-                        new XElement(A + "endParaRPr", new XAttribute("lang", "en-US")))),
+                textBody,
                 new XElement(Dsp + "txXfrm",
                     new XElement(A + "off", new XAttribute("x", x), new XAttribute("y", y)),
                     new XElement(A + "ext", new XAttribute("cx", width), new XAttribute("cy", height)))));
@@ -4757,7 +4778,7 @@ public static class DocxWriter
                 {
                     var position = positions[i];
                     var fillHex = colorScheme.FillHexAt(i).TrimStart('#').ToUpperInvariant();
-                    AddCachedShape(SmartArtModelId(9000 + i * 5 + 2), position.X, position.Y, hierarchyBoxW, hierarchyBoxH, "roundRect", fillHex);
+                    AddCachedShape(SmartArtModelId(9000 + i * 5 + 2), position.X, position.Y, hierarchyBoxW, hierarchyBoxH, "roundRect", fillHex, text: nodes[i].Node.Text);
                     AddCachedShape(SmartArtModelId(9000 + i * 5 + 3), position.X, position.Y, hierarchyBoxW, hierarchyBoxH, "roundRect", fillHex, true);
                 }
             }
@@ -4773,7 +4794,7 @@ public static class DocxWriter
                     var x = margin + (usableW - width) / 2;
                     var y = margin + i * (pyramidBoxH + layerGap);
                     var fillHex = colorScheme.FillHexAt(i).TrimStart('#').ToUpperInvariant();
-                    AddCachedShape(SmartArtModelId(9000 + i * 3 + 1), x, y, width, pyramidBoxH, "trapezoid", fillHex);
+                    AddCachedShape(SmartArtModelId(9000 + i * 3 + 1), x, y, width, pyramidBoxH, "trapezoid", fillHex, text: nodes[i].Node.Text);
                 }
             }
 

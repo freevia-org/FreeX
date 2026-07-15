@@ -306,6 +306,24 @@ public class SmartArtRoundTripTests
                 "{4F4B0000-0000-4000-8000-000000009007}",
                 "{4F4B0000-0000-4000-8000-000000009012}",
                 "{4F4B0000-0000-4000-8000-000000009017}");
+        drawing.Descendants(A + "t").Select(t => t.Value)
+            .Should().Contain(["CEO", "VP Eng", "Lead", "VP Sales"]);
+    }
+
+    [Fact]
+    public void Pyramid_RenderedDrawing_CarriesNodeTextInEachBand()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+        smartArt.LayoutId = "pyramid1";
+
+        var drawing = EntryXml(WriteBytes(SingleDiagramDocument(smartArt)), "word/diagrams/drawing1.xml");
+        var shapes = drawing.Descendants(Dsp + "sp").ToList();
+
+        shapes.Should().HaveCount(4);
+        shapes.Select(sp => sp.Element(Dsp + "spPr")!.Element(A + "prstGeom")!.Attribute("prst")!.Value)
+            .Should().OnlyContain(kind => kind == "trapezoid");
+        shapes.SelectMany(sp => sp.Descendants(A + "t").Select(t => t.Value))
+            .Should().Contain(["Top", "Middle", "Lower", "Base"]);
     }
 
     [Fact]
