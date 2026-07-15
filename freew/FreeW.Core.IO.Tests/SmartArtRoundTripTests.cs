@@ -309,6 +309,52 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
+    public void WordStockRenderedDrawing_UsesNativeShapeScaffoldAndPresentationIds()
+    {
+        var hierarchy = SmartArt.Create(SmartArtKind.Hierarchy, ["Root", "Child"]);
+        var pyramid = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Base"]);
+        pyramid.LayoutId = "pyramid1";
+
+        var document = new TextDocument();
+        var hierarchyParagraph = new Paragraph();
+        hierarchyParagraph.Runs.Add(Run.FromSmartArt(hierarchy));
+        document.Blocks.Add(hierarchyParagraph);
+        var pyramidParagraph = new Paragraph();
+        pyramidParagraph.Runs.Add(Run.FromSmartArt(pyramid));
+        document.Blocks.Add(pyramidParagraph);
+
+        var bytes = WriteBytes(document);
+        var hierarchyData = EntryXml(bytes, "word/diagrams/data1.xml");
+        var hierarchyDrawing = EntryXml(bytes, "word/diagrams/drawing1.xml");
+        var pyramidData = EntryXml(bytes, "word/diagrams/data2.xml");
+        var pyramidDrawing = EntryXml(bytes, "word/diagrams/drawing2.xml");
+
+        foreach (var shape in hierarchyDrawing.Descendants(Dsp + "sp")
+                     .Concat(pyramidDrawing.Descendants(Dsp + "sp")))
+        {
+            shape.Element(Dsp + "style").Should().NotBeNull();
+            shape.Element(Dsp + "txBody").Should().NotBeNull();
+            shape.Element(Dsp + "txXfrm").Should().NotBeNull();
+            shape.Element(Dsp + "spPr")!.Element(A + "effectLst").Should().NotBeNull();
+        }
+
+        var pyramidShapes = pyramidDrawing.Descendants(Dsp + "sp").ToList();
+        pyramidShapes.Should().HaveCount(3);
+        pyramidShapes.Select(shape => shape.Attribute("modelId")!.Value)
+            .Should().Equal(
+                pyramidData.Descendants(Dgm + "prSet")
+                    .Where(prSet => prSet.Attribute("presName")?.Value == "level")
+                    .Select(prSet => prSet.Parent!.Attribute("modelId")!.Value));
+        pyramidShapes.SelectMany(shape => shape.Descendants(A + "prstGeom"))
+            .Should().OnlyContain(geometry => geometry.Attribute("prst")!.Value == "trapezoid"
+                && geometry.Element(A + "avLst")!.Element(A + "gd")!.Attribute("fmla")!.Value == "val 85714");
+
+        hierarchyDrawing.Descendants(Dsp + "sp").Count()
+            .Should().BeGreaterThan(hierarchyData.Descendants(Dgm + "pt")
+                .Count(pt => pt.Element(Dgm + "prSet")?.Attribute("presName")?.Value == "background"));
+    }
+
+    [Fact]
     public void TwoDiagrams_GetDistinctPartsAndRelationships()
     {
         var doc = new TextDocument();
