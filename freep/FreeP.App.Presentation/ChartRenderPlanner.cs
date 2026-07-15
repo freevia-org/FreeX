@@ -563,8 +563,9 @@ public static partial class ChartRenderPlanner
     public const double ImportedBarPlotUpwardOffset = 4.5;
     public const double ImportedBarPlotWidthReduction = 15.0;
     public const double ImportedBarPlotHeightExtension = 20.25;
-    public const double ImportedPiePlotRightOffset = 4.0;
-    public const double ImportedPiePlotHeightExtension = 37.0;
+    public const double ImportedPiePlotRightOffset = 6.5;
+    public const double ImportedPiePlotUpwardOffset = 9.0;
+    public const double ImportedPiePlotHeightExtension = 62.0;
     public const byte BubbleFillAlpha = 180;
     public const double BubbleStrokeThickness = 0.8;
     public const byte RadarFillAlpha = 80;
@@ -986,11 +987,10 @@ public static partial class ChartRenderPlanner
                  chart.HasAutomaticTitle)
         {
             // PowerPoint's imported pie without value/percent labels uses a
-            // wider lower plot frame than the generic chart layout. Keep the
-            // title baseline fixed while extending the circle down and right.
+            // wider, lifted plot frame than the generic chart layout.
             plot = new ChartPlanRect(
                 plot.X + ImportedPiePlotRightOffset,
-                plot.Y,
+                plot.Y - ImportedPiePlotUpwardOffset,
                 plot.Width,
                 plot.Height + ImportedPiePlotHeightExtension);
         }

@@ -392,8 +392,8 @@ public sealed class ChartBaselineCorpusTests
         pie.DataLabels.Should().BeNull();
 
         ChartRenderPlanner.BuildFramePlan(pie, new ChartPlanRect(0, 0, 480, 288)).Plot
-            .Should().Be(new ChartPlanRect(24, 20, 382.4, 285),
-                "PowerPoint gives an imported automatic-title pie a larger lower plot frame");
+            .Should().Be(new ChartPlanRect(26.5, 11, 382.4, 310),
+                "PowerPoint gives an imported automatic-title pie a larger, lifted plot frame");
     }
 
     [Fact]
