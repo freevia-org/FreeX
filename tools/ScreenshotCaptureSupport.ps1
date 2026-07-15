@@ -116,6 +116,54 @@ public class ScreenshotWindowInfo {
 "@
 }
 
+function Get-WindowTitle($windowHandle) {
+    $title = New-Object System.Text.StringBuilder 512
+    [ScreenshotWin32]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
+    return $title.ToString()
+}
+
+function Get-ForegroundWindowInfo {
+    $foreground = [ScreenshotWin32]::GetForegroundWindow()
+    if ($foreground -eq [IntPtr]::Zero) {
+        return [pscustomobject]@{
+            Handle = "0"
+            ProcessId = $null
+            Title = ""
+        }
+    }
+
+    $actualPid = 0
+    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    return [pscustomobject]@{
+        Handle = $foreground.ToString()
+        ProcessId = $actualPid
+        Title = Get-WindowTitle $foreground
+    }
+}
+
+function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operation = "capture", [scriptblock]$failureAction = $null) {
+    $foreground = [ScreenshotWin32]::GetForegroundWindow()
+    if ($foreground -eq [IntPtr]::Zero) {
+        if ($null -ne $failureAction) {
+            & $failureAction $operation $expectedPid $expectedTitle "No foreground window was available."
+        }
+
+        throw "Blocked: no foreground window before $operation."
+    }
+
+    $actualPid = 0
+    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
+    $actualTitle = Get-WindowTitle $foreground
+    if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
+        $reason = "Foreground window '$actualTitle' (PID $actualPid) did not match expected '$expectedTitle' (PID $expectedPid)."
+        if ($null -ne $failureAction) {
+            & $failureAction $operation $expectedPid $expectedTitle $reason
+        }
+
+        throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid) before $operation."
+    }
+}
+
 function Clear-ScreenshotEvidenceArtifacts {
     Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
         Remove-Item -Force -ErrorAction SilentlyContinue

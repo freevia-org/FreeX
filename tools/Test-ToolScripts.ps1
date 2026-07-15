@@ -78,7 +78,12 @@ function Assert-ToolSourceCentralization {
 
     $screenshotSupportPath = Join-Path $ToolRoot "ScreenshotCaptureSupport.ps1"
     $screenshotSupport = Get-Content -LiteralPath $screenshotSupportPath -Raw
-    foreach ($requiredCaptureHelper in @("public class ScreenshotWin32", "function Capture-ScreenRectangle")) {
+    foreach ($requiredCaptureHelper in @(
+            "public class ScreenshotWin32",
+            "function Get-WindowTitle",
+            "function Get-ForegroundWindowInfo",
+            "function Assert-ForegroundWindowOwnership",
+            "function Capture-ScreenRectangle")) {
         if (-not $screenshotSupport.Contains($requiredCaptureHelper)) {
             throw "ScreenshotCaptureSupport.ps1 is missing required helper '$requiredCaptureHelper'."
         }
@@ -88,6 +93,14 @@ function Assert-ToolSourceCentralization {
         $scenario = Get-Content -LiteralPath (Join-Path $ToolRoot $scenarioName) -Raw
         if ($scenario -match 'public class Win32[ce]\b|public class WindowInfo[CE]\b|\$g\s*\.\s*CopyFromScreen|Add-Type\s+-TypeDefinition.*DllImport') {
             throw "$scenarioName contains duplicated Win32 or screen-capture interop."
+        }
+
+        if ($scenario -notmatch '\.\s*\(Join-Path \$PSScriptRoot "ScreenshotCaptureSupport\.ps1"\)') {
+            throw "$scenarioName must dot-source ScreenshotCaptureSupport.ps1."
+        }
+
+        if ($scenario -match 'function\s+(Get-WindowTitle|Get-ForegroundWindowInfo|Assert-ForegroundWindowOwnership)\b') {
+            throw "$scenarioName redeclares a helper owned by ScreenshotCaptureSupport.ps1."
         }
     }
 
@@ -119,6 +132,75 @@ function Assert-ToolSourceCentralization {
     }
 
     Write-Host "Validated shared tooling source guards."
+}
+
+function Assert-ScreenshotCaptureSupportBehavior {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    if ([System.Management.Automation.PSTypeName]'ScreenshotWin32'.Type) {
+        throw "ScreenshotCaptureSupport behavior guard requires an isolated ScreenshotWin32 test type."
+    }
+
+    Add-Type @"
+using System;
+using System.Text;
+
+public class ScreenshotWin32 {
+    public static IntPtr GetForegroundWindow() {
+        return new IntPtr(42);
+    }
+
+    public static uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId) {
+        processId = 1234;
+        return 0;
+    }
+
+    public static int GetWindowText(IntPtr hWnd, StringBuilder text, int capacity) {
+        text.Append("Stub Window");
+        return 11;
+    }
+}
+"@
+
+    . (Join-Path $ToolRoot "ScreenshotCaptureSupport.ps1")
+    if ((Get-WindowTitle ([IntPtr]42)) -ne "Stub Window") {
+        throw "Get-WindowTitle did not preserve Win32 window text behavior."
+    }
+
+    $foreground = Get-ForegroundWindowInfo
+    if ($foreground.Handle -ne "42" -or $foreground.ProcessId -ne 1234 -or $foreground.Title -ne "Stub Window") {
+        throw "Get-ForegroundWindowInfo did not preserve foreground handle, PID, or title behavior."
+    }
+
+    $script:unexpectedFailureAction = $false
+    Assert-ForegroundWindowOwnership 1234 "Stub Window" "matching foreground" {
+        $script:unexpectedFailureAction = $true
+    }
+    if ($script:unexpectedFailureAction) {
+        throw "Assert-ForegroundWindowOwnership invoked its failure action for matching foreground ownership."
+    }
+
+    $script:failureOperation = $null
+    $script:failureReason = $null
+    $script:errorMessage = $null
+    try {
+        Assert-ForegroundWindowOwnership 4321 "Other Window" "stub mismatch" {
+            param($operation, $expectedPid, $expectedTitle, $reason)
+            $script:failureOperation = $operation
+            $script:failureReason = $reason
+        }
+    }
+    catch {
+        $script:errorMessage = $_.Exception.Message
+    }
+
+    if ($script:failureOperation -ne "stub mismatch" -or
+        $script:failureReason -ne "Foreground window 'Stub Window' (PID 1234) did not match expected 'Other Window' (PID 4321)." -or
+        $script:errorMessage -ne "Blocked: foreground window 'Stub Window' (PID 1234) does not match expected 'Other Window' (PID 4321) before stub mismatch.") {
+        throw "Assert-ForegroundWindowOwnership did not preserve mismatch callback and blocked error behavior."
+    }
+
+    Write-Host "Validated ScreenshotCaptureSupport source and behavior guards."
 }
 
 function Assert-GeneratedDocCheckNewlineSemantics {
@@ -191,6 +273,7 @@ $toolsRoot = [System.IO.Path]::GetFullPath((Resolve-RepoPath "tools")).TrimEnd([
 $resolvedDirectory = [System.IO.Path]::GetFullPath($resolvedScriptDirectory).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     Assert-ToolSourceCentralization -ToolRoot $resolvedDirectory
+    Assert-ScreenshotCaptureSupportBehavior -ToolRoot $resolvedDirectory
     Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
 }
 
