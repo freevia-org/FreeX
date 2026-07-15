@@ -1410,7 +1410,7 @@ public sealed partial class SlideShowMainWindowCustomShowTests
         source.Should().Contain("_customShowSlideList.PreviewMouseMove += OnCustomShowSlideListMouseMove");
         source.Should().Contain("_customShowSlideList.Drop += OnCustomShowSlideListDrop");
         source.Should().Contain("ResolveCustomShowSlideDropIndex(e)");
-        source.Should().Contain("SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(");
+        source.Should().Contain("SlideShowCustomShowSessionPlanner.BuildDragReorderPlan(");
         source.Should().Contain("_host.MoveCustomShowSlide(");
 
         var window = new MainWindow(new FreePOptions(), messageService: TestUserMessageService.DiscardUnsavedChanges);

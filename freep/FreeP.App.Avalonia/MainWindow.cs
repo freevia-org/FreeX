@@ -4178,83 +4178,54 @@ public sealed class MainWindow : Window
         string? editAuthor = null,
         string? editInitials = null)
     {
-        var selected = _selectedCommentIndex;
-        var plan = intent == PresentationReviewWorkflowIntentKind.AddComment
-            ? PresentationReviewWorkflowPlanner.BuildAddCommentPlan(
-                _presentation.Slides,
-                Editor.CurrentSlideIndex,
-                addText,
-                addAuthor ?? "FreeP User",
-                addInitials,
-                addXemu,
-                addYemu,
-                addTimestamp ?? DateTime.UtcNow)
-            : selected is { } selectedIndex
-            ? intent switch
-            {
-                PresentationReviewWorkflowIntentKind.EditComment =>
-                    PresentationReviewWorkflowPlanner.BuildEditCommentPlan(
-                        _presentation.Slides,
-                        Editor.CurrentSlideIndex,
-                        selectedIndex,
-                        editText,
-                        editAuthor,
-                        editInitials),
-                PresentationReviewWorkflowIntentKind.DeleteComment =>
-                    PresentationReviewWorkflowPlanner.BuildDeleteCommentPlan(
-                        _presentation.Slides,
-                        Editor.CurrentSlideIndex,
-                        selectedIndex),
-                PresentationReviewWorkflowIntentKind.ResolveComment =>
-                    PresentationReviewWorkflowPlanner.BuildResolveCommentPlan(
-                        _presentation.Slides,
-                        Editor.CurrentSlideIndex,
-                        selectedIndex,
-                        resolvedAt ?? DateTime.UtcNow,
-                        resolvedBy ?? "FreeP User"),
-                PresentationReviewWorkflowIntentKind.ReplyComment =>
-                    PresentationReviewWorkflowPlanner.BuildReplyCommentPlan(
-                        _presentation.Slides,
-                        Editor.CurrentSlideIndex,
-                        selectedIndex,
-                        replyText,
-                        replyAuthor ?? "FreeP User",
-                        replyInitials,
-                        replyTimestamp ?? DateTime.UtcNow),
-                PresentationReviewWorkflowIntentKind.ReopenComment =>
-                    PresentationReviewWorkflowPlanner.BuildReopenCommentPlan(
-                        _presentation.Slides,
-                        Editor.CurrentSlideIndex,
-                        selectedIndex),
-                _ => new PresentationCommentMutationPlan(
-                    intent,
-                    false,
-                    Editor.CurrentSlideIndex,
-                    selected,
-                    null,
-                    PresentationReviewWorkflowPlanner.MissingCommentMessage)
-            }
-            : new PresentationCommentMutationPlan(
+        var result = PresentationCommentMutationService.Apply(
+            _presentation.Slides,
+            new PresentationCommentMutationRequest(
                 intent,
-                false,
                 Editor.CurrentSlideIndex,
-                selected,
-                null,
-                PresentationReviewWorkflowPlanner.MissingCommentMessage);
+                _selectedCommentIndex,
+                Text: intent switch
+                {
+                    PresentationReviewWorkflowIntentKind.AddComment => addText,
+                    PresentationReviewWorkflowIntentKind.EditComment => editText,
+                    PresentationReviewWorkflowIntentKind.ReplyComment => replyText,
+                    _ => null
+                },
+                Timestamp: intent switch
+                {
+                    PresentationReviewWorkflowIntentKind.AddComment => addTimestamp,
+                    PresentationReviewWorkflowIntentKind.ReplyComment => replyTimestamp,
+                    _ => null
+                },
+                Author: intent switch
+                {
+                    PresentationReviewWorkflowIntentKind.AddComment => addAuthor,
+                    PresentationReviewWorkflowIntentKind.EditComment => editAuthor,
+                    PresentationReviewWorkflowIntentKind.ReplyComment => replyAuthor,
+                    _ => null
+                },
+                Initials: intent switch
+                {
+                    PresentationReviewWorkflowIntentKind.AddComment => addInitials,
+                    PresentationReviewWorkflowIntentKind.EditComment => editInitials,
+                    PresentationReviewWorkflowIntentKind.ReplyComment => replyInitials,
+                    _ => null
+                },
+                Xemu: addXemu,
+                Yemu: addYemu,
+                ResolvedAt: resolvedAt,
+                ResolvedBy: resolvedBy));
 
-        if (PresentationReviewWorkflowPlanner.TryApplyCommentMutationPlan(_presentation.Slides, plan))
+        if (result.Applied)
         {
-            _selectedCommentIndex = PresentationReviewWorkflowPlanner.NormalizeCommentSelectionAfterMutation(
-                _presentation.Slides,
-                plan,
-                selected);
+            _selectedCommentIndex = result.SelectedCommentIndex;
             _fileWorkflow.MarkDirty();
             ShowReviewCommentsPane();
             RefreshReviewWorkflowPlans();
             UpdateStatus();
         }
 
-        return plan;
+        return result.Plan;
     }
 
     private string? GetSelectedCommentText()
@@ -7049,6 +7020,12 @@ public sealed class MainWindow : Window
 
     internal SlideShowCustomShowAuthoringPlan BuildCustomShowAuthoringPlan() =>
         SlideShowCustomShowPlanner.BuildAuthoringPlan(_presentation);
+
+    internal SlideShowCustomShowSessionPlan BuildCustomShowSessionPlan(
+        SlideShowCustomShowSessionState state) =>
+        SlideShowCustomShowSessionPlanner.BuildPlan(
+            BuildCustomShowAuthoringPlan(),
+            state);
 
     internal SlideShowCustomShowMutationResult CreateCustomShow(
         string? name,

@@ -219,14 +219,15 @@ internal sealed class CustomShowDialog : Window
 
     private void Refresh(int selectCustomShowIndex, int selectedCustomShowSlideIndex = -1)
     {
-        var plan = _host.BuildCustomShowAuthoringPlan();
+        var plan = _host.BuildCustomShowSessionPlan(
+            new SlideShowCustomShowSessionState(selectCustomShowIndex, selectedCustomShowSlideIndex));
         _availableSlides = plan.AvailableSlides;
         _showList.ItemsSource = plan.CustomShows
             .Select(show => new CustomShowListItem(
                 show.Index,
                 show.Name,
-                show.SlideIds.Count,
-                FormatShowListText(show)))
+                show.SlideCount,
+                show.DisplayText))
             .ToArray();
 
         RebuildSlides(plan.AvailableSlides);
@@ -266,33 +267,22 @@ internal sealed class CustomShowDialog : Window
     private void ApplySelectedShowToFields()
     {
         var selected = SelectedShow;
-        _nameBox.Text = selected?.Name ?? string.Empty;
-
-        var selectedSlideIds = selected is null
-            ? new HashSet<string>(StringComparer.Ordinal)
-            : _host.BuildCustomShowAuthoringPlan()
-                .CustomShows
-                .FirstOrDefault(show => show.Index == selected.Index)
-                ?.SlideIds
-                .ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>(StringComparer.Ordinal);
-        var selectedSummary = selected is null
-            ? null
-            : _host.BuildCustomShowAuthoringPlan()
-                .CustomShows
-                .FirstOrDefault(show => show.Index == selected.Index);
+        var session = _host.BuildCustomShowSessionPlan(
+            selected is null
+                ? new SlideShowCustomShowSessionState(-1)
+                : SlideShowCustomShowSessionPlanner.SelectShow(selected.Index));
+        _nameBox.Text = session.SelectedShow?.Name ?? string.Empty;
 
         foreach (var checkBox in _slideCheckBoxes)
         {
-            checkBox.IsChecked = checkBox.Tag is string slideId && selectedSlideIds.Contains(slideId);
+            checkBox.IsChecked = checkBox.Tag is string slideId && session.SelectedSlideIds.Contains(slideId);
         }
 
-        RebuildCustomShowSlides(selectedSummary);
-
-        var hasSelection = selected is not null;
-        _renameButton.IsEnabled = hasSelection;
-        _updateButton.IsEnabled = hasSelection;
-        _deleteButton.IsEnabled = hasSelection;
-        _startButton.IsEnabled = selected?.SlideCount > 0;
+        RebuildCustomShowSlides(session.SelectedSlides);
+        _renameButton.IsEnabled = session.CanRename;
+        _updateButton.IsEnabled = session.CanUpdateSlides;
+        _deleteButton.IsEnabled = session.CanDelete;
+        _startButton.IsEnabled = session.CanStart;
         UpdateMoveButtons();
         SetValidation(null);
     }
@@ -455,31 +445,14 @@ internal sealed class CustomShowDialog : Window
         int sourceSlideIndex,
         int targetDropIndex)
     {
-        if (SelectedShow is null)
-        {
-            SetValidation(SlideShowCustomShowPlanner.MissingCustomShowMessage);
-            return new SlideShowCustomShowDragReorderPlan(
-                IsValid: false,
-                ShouldApplyMutation: false,
-                SourceSlideIndex: sourceSlideIndex,
-                SourceSlideId: string.Empty,
-                TargetDropIndex: targetDropIndex,
-                TargetSlideIndex: -1,
-                SelectedSlideIndex: -1,
-                SlideIds: Array.Empty<string>(),
-                ErrorMessage: SlideShowCustomShowPlanner.MissingCustomShowMessage);
-        }
-
-        var slideItems = _customShowSlideList.Items
-            .OfType<CustomShowSlideListItem>()
-            .ToArray();
-        var sourceSlideId = sourceSlideIndex >= 0 && sourceSlideIndex < slideItems.Length
-            ? slideItems[sourceSlideIndex].SlideId
-            : string.Empty;
-        var plan = SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(
-            slideItems.Select(item => item.SlideId).ToArray(),
+        var selected = SelectedShow;
+        var session = _host.BuildCustomShowSessionPlan(
+            selected is null
+                ? new SlideShowCustomShowSessionState(-1)
+                : SlideShowCustomShowSessionPlanner.SelectShow(selected.Index));
+        var plan = SlideShowCustomShowSessionPlanner.BuildDragReorderPlan(
+            session,
             sourceSlideIndex,
-            sourceSlideId,
             targetDropIndex);
 
         if (!plan.IsValid)
@@ -496,7 +469,7 @@ internal sealed class CustomShowDialog : Window
         }
 
         ApplyMutationResult(_host.MoveCustomShowSlide(
-            SelectedShow.Index,
+            selected!.Index,
             plan.SourceSlideIndex,
             plan.SourceSlideId,
             plan.TargetSlideIndex));
@@ -550,20 +523,15 @@ internal sealed class CustomShowDialog : Window
         Refresh(result.CustomShowIndex, result.SelectedSlideIndex);
     }
 
-    private void RebuildCustomShowSlides(SlideShowCustomShowSummary? show)
+    private void RebuildCustomShowSlides(
+        IReadOnlyList<SlideShowCustomShowSessionSlideItemPlan> slides)
     {
-        var titleBySlideId = _availableSlides.ToDictionary(
-            slide => slide.SlideId,
-            slide => $"Slide {slide.Index + 1}: {slide.Title}",
-            StringComparer.Ordinal);
-        _customShowSlideList.ItemsSource = show?.SlideIds
-            .Select((slideId, index) => new CustomShowSlideListItem(
-                index,
-                slideId,
-                titleBySlideId.TryGetValue(slideId, out var title)
-                    ? title
-                    : $"Missing slide: {slideId}"))
-            .ToArray() ?? Array.Empty<CustomShowSlideListItem>();
+        _customShowSlideList.ItemsSource = slides
+            .Select(slide => new CustomShowSlideListItem(
+                slide.Index,
+                slide.SlideId,
+                slide.DisplayText))
+            .ToArray();
         if (_customShowSlideList.Items.Count > 0 && _customShowSlideList.SelectedIndex < 0)
             _customShowSlideList.SelectedIndex = 0;
         UpdateMoveButtons();
@@ -586,15 +554,6 @@ internal sealed class CustomShowDialog : Window
 
     private void SetValidation(string? message) =>
         _validationText.Text = message ?? string.Empty;
-
-    private static string FormatShowListText(SlideShowCustomShowSummary show)
-    {
-        var name = string.IsNullOrWhiteSpace(show.Name)
-            ? $"Custom Show {show.Index + 1}"
-            : show.Name;
-        var slideLabel = show.SlideIds.Count == 1 ? "slide" : "slides";
-        return $"{name} ({show.SlideIds.Count} {slideLabel})";
-    }
 
     private static Button MakeButton(
         string label,
