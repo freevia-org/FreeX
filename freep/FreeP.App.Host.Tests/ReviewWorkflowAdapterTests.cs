@@ -2072,20 +2072,20 @@ public sealed class ReviewWorkflowAdapterTests
             "FreeP.App.Host",
             "MainWindow.cs"));
 
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildCommentPanePlan(");
+        source.Should().Contain("PresentationReviewWorkflowSession");
+        source.Should().Contain("_reviewWorkflowSession.RefreshReviewWorkflowPlans();");
+        source.Should().Contain("_reviewWorkflowSession.ApplySelectedShapeAlternativeText(");
+        source.Should().Contain("_reviewWorkflowSession.ApplyProofingCorrection(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilitySummaryPlan(_presentation)");
         source.Should().Contain("PresentationReviewWorkflowPlanner.NormalizeAccessibilityCheckerRowSelection(");
         source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAccessibilityCheckerNavigationPlan(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextRequestPlan(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextPanePlan(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildAltTextMutationPlan(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildReadingOrderPlan(");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingExecutionPlan(_presentation)");
-        source.Should().Contain("PresentationReviewWorkflowPlanner.BuildProofingRequestPlan(_presentation)");
+        source.Should().Contain("_reviewWorkflowSession.RefreshAltTextPlans(");
+        source.Should().Contain("_reviewWorkflowSession.RefreshReadingOrderPlan();");
+        source.Should().Contain("_reviewWorkflowSession.RefreshProofingRequestPlan();");
         source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringPanePlan(");
         source.Should().Contain("PresentationMediaTranscriptPlanner.BuildCaptionAuthoringMutationPlan(");
         source.Should().Contain("PresentationMediaTranscriptPlanner.ApplyCaptionAuthoringMutation(");
-        source.Should().Contain("LastCommentPanePlan = plan;");
+        source.Should().Contain("RenderCommentPane(PresentationCommentPanePlan plan)");
         source.Should().Contain("cm.AuthorDisplayName");
         source.Should().Contain("cm.InitialsBadgeText");
         source.Should().Contain("cm.ThreadStatusLabel");
