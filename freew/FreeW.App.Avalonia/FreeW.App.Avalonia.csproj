@@ -40,6 +40,18 @@
 
   <ItemGroup>
     <Content Include="Packaging\macos\FreeW.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Reuse the canonical command SVGs that FreeW's WPF host links from FreeX. The shared
+         Avalonia loader resolves these from Resources\CommandIconsSvg at runtime. -->
+    <Content Include="..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg"
+             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <!-- FreeW-specific canonical artwork remains owned by the WPF host; link it into the same
+         flat runtime directory so Avalonia resolves the shared aliases identically. -->
+    <Content Include="..\FreeW.App.Host\Resources\CommandIconsSvg\**\*.svg"
+             Link="Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
