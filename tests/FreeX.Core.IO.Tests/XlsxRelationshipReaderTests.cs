@@ -1,6 +1,7 @@
 using System.Xml.Linq;
 using FluentAssertions;
 using FreeX.Core.IO;
+using Free.Shared.Opc;
 
 namespace FreeX.Core.IO.Tests;
 
@@ -148,20 +149,47 @@ public sealed class XlsxRelationshipReaderTests
     }
 
     [Fact]
-    public void ReadTargets_UsesSingleDictionarySlotProbeWhenAddingRelationshipIds()
+    public void ReadTargets_DelegatesInternalMapConstructionToSharedOpc()
     {
         var source = TestWorkspaceFiles.ReadCoreIoSource("XlsxRelationshipReader.cs");
         var readTargets = source[
             source.IndexOf("public static Dictionary<string, string> ReadTargets", StringComparison.Ordinal)..
-            source.IndexOf("private static bool IsExternalRelationship", StringComparison.Ordinal)];
+            source.Length];
 
-        readTargets.Should().Contain("CollectionsMarshal.GetValueRefOrAddDefault");
-        readTargets.Should().NotContain(
-            "targets.ContainsKey(id)",
-            "relationship parsing should avoid a second dictionary lookup for every unique relationship id");
-        readTargets.Should().NotContain(
-            "targets[id] =",
-            "relationship parsing should assign through the probed dictionary slot instead of indexing again");
+        readTargets.Should().Contain("OpcRelationships.LoadInternalTargetMap");
+        readTargets.Should().NotContain("CollectionsMarshal");
+        readTargets.Should().NotContain("foreach (var relationship in OpcRelationships.Load(");
+    }
+
+    [Fact]
+    public void SharedOpcInternalTargetMap_PreservesFirstDuplicateAndSkipsExternalTargets()
+    {
+        XNamespace relationshipNs = "http://schemas.openxmlformats.org/package/2006/relationships";
+        var relationshipsXml = new XDocument(new XElement(
+            relationshipNs + "Relationships",
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdSheet"),
+                new XAttribute("Type", "type/sheet"),
+                new XAttribute("Target", "worksheets/sheet1.xml")),
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdSheet"),
+                new XAttribute("Type", "type/sheet"),
+                new XAttribute("Target", "worksheets/sheet2.xml")),
+            new XElement(
+                relationshipNs + "Relationship",
+                new XAttribute("Id", "rIdLink"),
+                new XAttribute("Type", "type/link"),
+                new XAttribute("Target", "https://example.test/"))));
+
+        var map = OpcRelationships.LoadInternalTargetMap(
+            relationshipsXml,
+            relationshipNs,
+            target => target);
+
+        map.Should().ContainSingle();
+        map["rIdSheet"].Should().Be("worksheets/sheet1.xml");
     }
 
     [Fact]

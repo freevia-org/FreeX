@@ -10,6 +10,30 @@ namespace FreeX.Core.Model.Tests;
 /// </summary>
 public sealed class FormControlInteractionServiceTests
 {
+    [Fact]
+    public void CreateCommand_DispatchesNormalizedSpinnerGesture()
+    {
+        var (wb, sheet) = NewWorkbook();
+        var control = new FormControlModel
+        {
+            Kind = FormControlKind.Spinner,
+            Value = 5,
+            Min = 1,
+            Max = 10,
+            Increment = 1,
+            LinkedCell = "B1",
+        };
+
+        var command = FormControlInteractionService.CreateCommand(
+            new FormControlInteractionRequest(control, FormControlGesture.StepUp),
+            sheet.FormControls,
+            sheet.Id,
+            wb);
+
+        command.Should().NotBeNull();
+        control.Value.Should().Be(6);
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static (Workbook Workbook, Sheet Sheet) NewWorkbook()

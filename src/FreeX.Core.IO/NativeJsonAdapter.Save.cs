@@ -29,7 +29,7 @@ public sealed partial class NativeJsonAdapter
     /// (<c>ProtectSheetCommand</c>/<c>ProtectWorkbookCommand</c>) hashes a freshly-typed password
     /// into a legacy 4-hex-digit verifier immediately, and a workbook loaded from .xlsx carries
     /// its cached "iso29500:..." or legacy-hex hash straight through. Blindly re-hashing an
-    /// already-hashed value with <see cref="NativePasswordHelper.HashPassword"/> would produce
+    /// already-hashed value with a native password hasher would produce
     /// sha256(&lt;hash&gt;) instead of sha256(&lt;plaintext&gt;), which
     /// <see cref="ProtectionPasswordHelper.VerifyStoredPassword"/> can never again verify against
     /// the real typed password — a permanent lockout. So any value already recognizable as one of
@@ -37,23 +37,9 @@ public sealed partial class NativeJsonAdapter
     /// stored verbatim; only a value with neither shape (genuine plaintext) is hashed here.
     /// </summary>
     private static string StoreProtectionPassword(string value) =>
-        ProtectionPasswordHelper.IsIso29500Hash(value) || IsLegacyPasswordHashShape(value)
+        ProtectionPasswordHelper.IsIso29500Hash(value) || ProtectionPasswordHelper.IsLegacyPasswordHash(value)
             ? value
-            : NativePasswordHelper.HashPassword(value);
-
-    /// <summary>
-    /// True when <paramref name="value"/> has the exact shape of a legacy (pre-2013) Excel
-    /// password verifier produced by <c>ProtectionPasswordHelper.ToVerifiedLegacyPasswordHash</c>:
-    /// exactly 4 hex digits. Mirrors <c>ProtectionPasswordHelper.IsLegacyPasswordHash</c> (private
-    /// to FreeX.Core.Model) so this IO-layer save path can recognize the same shape without a
-    /// dependency on that helper's internals.
-    /// </summary>
-    private static bool IsLegacyPasswordHashShape(string value) =>
-        value.Length == 4 &&
-        value.All(ch =>
-            ch is >= '0' and <= '9' ||
-            ch is >= 'A' and <= 'F' ||
-            ch is >= 'a' and <= 'f');
+            : ProtectionPasswordHelper.HashNativePassword(value);
 
     private static void Save(
         Workbook workbook,

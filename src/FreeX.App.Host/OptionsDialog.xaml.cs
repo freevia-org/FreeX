@@ -513,13 +513,13 @@ public partial class OptionsDialog : Window
         }
 
         var iterativeEnabled = OptIterativeEnabled.IsChecked == true;
-        if (!TryParseMaxIterations(OptMaxIterations.Text, out var maxIterations))
+        if (!CalculationOptionsInputParser.TryParseMaxIterations(OptMaxIterations.Text, out var maxIterations))
         {
             ShowInvalidInputWarning(UiText.Get("Options_InvalidMaxIterationsMessage"), OptMaxIterations);
             return;
         }
 
-        if (!TryParseMaxChange(OptMaxChange.Text, out var maxChange))
+        if (!CalculationOptionsInputParser.TryParseMaxChange(OptMaxChange.Text, out var maxChange))
         {
             ShowInvalidInputWarning(UiText.Get("Options_InvalidMaxChangeMessage"), OptMaxChange);
             return;
@@ -598,32 +598,6 @@ public partial class OptionsDialog : Window
 
     private const int DefaultMaxCalculationIterations = 100;
     private const double DefaultMaxCalculationChange = 0.001;
-
-    private static bool TryParseMaxIterations(string? text, out int maxIterations)
-    {
-        maxIterations = 0;
-        if (!int.TryParse((text ?? string.Empty).Trim(), System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
-            || parsed <= 0)
-        {
-            return false;
-        }
-
-        maxIterations = parsed;
-        return true;
-    }
-
-    private static bool TryParseMaxChange(string? text, out double maxChange)
-    {
-        maxChange = 0;
-        if (!double.TryParse((text ?? string.Empty).Trim(), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
-            || parsed < 0)
-        {
-            return false;
-        }
-
-        maxChange = parsed;
-        return true;
-    }
 
     private bool ShowInvalidInputWarning(string message, Control target)
     {

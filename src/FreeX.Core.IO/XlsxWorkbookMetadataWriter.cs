@@ -431,7 +431,7 @@ internal static class XlsxWorkbookMetadataWriter
         if (!string.IsNullOrWhiteSpace(workbook.StructureProtectionPassword) &&
             !ProtectionPasswordHelper.IsIso29500Hash(workbook.StructureProtectionPassword))
         {
-            protection.SetAttributeValue("workbookPassword", XlsxWorkbookMetadataXmlHelper.ToLegacyPasswordHash(workbook.StructureProtectionPassword));
+            protection.SetAttributeValue("workbookPassword", ProtectionPasswordHelper.ToLegacyPasswordHash(workbook.StructureProtectionPassword));
         }
 
         XlsxWorkbookProtectionNormalizer.NormalizeElement(protection);

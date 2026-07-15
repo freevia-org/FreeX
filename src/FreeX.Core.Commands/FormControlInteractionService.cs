@@ -3,6 +3,20 @@ using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
 
+/// <summary>Host-neutral form-control gesture after native event translation.</summary>
+public enum FormControlGesture
+{
+    Body,
+    StepUp,
+    StepDown,
+}
+
+/// <summary>Normalized request sent by either host to the shared form-control dispatcher.</summary>
+public readonly record struct FormControlInteractionRequest(
+    FormControlModel Control,
+    FormControlGesture Gesture,
+    int ListItemIndex = 0);
+
 /// <summary>
 /// State-transition logic for legacy Excel form controls: maps a user gesture (click, step,
 /// select) to the correct model mutation and linked-cell write, and wraps the whole thing in
@@ -14,6 +28,53 @@ namespace FreeX.Core.Commands;
 /// </summary>
 public static class FormControlInteractionService
 {
+    /// <summary>
+    /// Dispatches a normalized host gesture to the shared form-control command factory. Native
+    /// hosts retain responsibility for translating their pointer/mouse event into the gesture
+    /// and list-item index before calling this method.
+    /// </summary>
+    public static IWorkbookCommand? CreateCommand(
+        FormControlInteractionRequest request,
+        IReadOnlyList<FormControlModel> controls,
+        SheetId sheetId,
+        Workbook workbook)
+    {
+        ArgumentNullException.ThrowIfNull(request.Control);
+        ArgumentNullException.ThrowIfNull(controls);
+        ArgumentNullException.ThrowIfNull(workbook);
+
+        return request.Control.Kind switch
+        {
+            FormControlKind.CheckBox =>
+                CreateToggleCheckBoxCommand(request.Control, sheetId, workbook),
+            FormControlKind.OptionButton =>
+                CreateSelectOptionButtonCommand(request.Control, controls, sheetId, workbook),
+            FormControlKind.Spinner =>
+                CreateStepCommand(
+                    request.Control,
+                    request.Gesture == FormControlGesture.StepUp ? +1 : -1,
+                    sheetId,
+                    workbook),
+            FormControlKind.ScrollBar =>
+                CreateStepCommand(
+                    request.Control,
+                    request.Gesture == FormControlGesture.StepUp ? -1 : +1,
+                    sheetId,
+                    workbook),
+            FormControlKind.ListBox =>
+                request.ListItemIndex > 0
+                    ? CreateSelectListItemCommand(
+                        request.Control,
+                        request.ListItemIndex,
+                        sheetId,
+                        workbook)
+                    : null,
+            FormControlKind.DropDown =>
+                CreateAdvanceListSelectionCommand(request.Control, sheetId, workbook),
+            FormControlKind.Button or FormControlKind.GroupBox or FormControlKind.Label or _ => null,
+        };
+    }
+
     // ── Cell → Control sync ──────────────────────────────────────────────────
 
     /// <summary>

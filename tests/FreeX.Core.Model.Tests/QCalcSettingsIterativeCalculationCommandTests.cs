@@ -11,6 +11,26 @@ namespace FreeX.Core.Model.Tests;
 /// </summary>
 public sealed class QCalcSettingsIterativeCalculationCommandTests
 {
+    [Theory]
+    [InlineData(" 250 ", true, 250)]
+    [InlineData("0", false, 0)]
+    [InlineData("", false, 0)]
+    public void CalculationOptionsInputParser_ValidatesMaxIterations(string text, bool expected, int value)
+    {
+        CalculationOptionsInputParser.TryParseMaxIterations(text, out var parsed).Should().Be(expected);
+        parsed.Should().Be(value);
+    }
+
+    [Theory]
+    [InlineData(" 0.0005 ", true, 0.0005)]
+    [InlineData("-0.1", false, 0)]
+    [InlineData("not-a-number", false, 0)]
+    public void CalculationOptionsInputParser_ValidatesMaxChange(string text, bool expected, double value)
+    {
+        CalculationOptionsInputParser.TryParseMaxChange(text, out var parsed).Should().Be(expected);
+        parsed.Should().Be(value);
+    }
+
     [Fact]
     public void SetIterativeCalculationOptionsCommand_SetsSettingsAndUndoRestores()
     {

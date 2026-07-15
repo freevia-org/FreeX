@@ -10,12 +10,59 @@ public sealed class FreeXBehaviorDedupSourceBoundaryTests
         var host = ReadHost("MainWindow.FormControls.cs");
         var avalonia = ReadAvalonia("MainWindow.FormControls.cs");
 
-        host.Should().Contain("FormControlInteractionService.CreateAdvanceListSelectionCommand(");
-        avalonia.Should().Contain("FormControlInteractionService.CreateAdvanceListSelectionCommand(");
+        host.Should().Contain("FormControlInteractionService.CreateCommand(");
+        avalonia.Should().Contain("FormControlInteractionService.CreateCommand(");
         host.Should().NotContain("AdvanceDropDownSelection");
         avalonia.Should().NotContain("AdvanceAvaloniaDropDownSelection");
         host.Should().NotContain("EstimateListItemCount(");
         avalonia.Should().NotContain("EstimateAvaloniaListItemCount(");
+    }
+
+    [Fact]
+    public void FormControlHostDispatch_UsesSharedRequestWhileKeepingNativeGestureTranslation()
+    {
+        var host = ReadHost("MainWindow.FormControls.cs");
+        var avalonia = ReadAvalonia("MainWindow.FormControls.cs");
+
+        host.Should().Contain("new FormControlInteractionRequest(e.Control, gesture, e.ListItemIndex)");
+        avalonia.Should().Contain("new FormControlInteractionRequest(control, gesture, listItemIndex)");
+        host.Should().Contain("FormControlClickRegion.StepUp => FormControlGesture.StepUp");
+        avalonia.Should().Contain("FormControlClickKind.StepUp => FormControlGesture.StepUp");
+        host.Should().Contain("FormControlInteractionService.CreateCommand(");
+        avalonia.Should().Contain("FormControlInteractionService.CreateCommand(");
+        host.Should().NotContain("CreateToggleCheckBoxCommand(");
+        avalonia.Should().NotContain("CreateToggleCheckBoxCommand(");
+    }
+
+    [Fact]
+    public void CalculationOptionsHosts_UseSharedInvariantParser()
+    {
+        var host = ReadHost("OptionsDialog.xaml.cs");
+        var avalonia = ReadAvalonia("MainWindow.Options.cs");
+
+        host.Should().Contain("CalculationOptionsInputParser.TryParseMaxIterations");
+        host.Should().Contain("CalculationOptionsInputParser.TryParseMaxChange");
+        avalonia.Should().Contain("CalculationOptionsInputParser.TryParseMaxIterations");
+        avalonia.Should().Contain("CalculationOptionsInputParser.TryParseMaxChange");
+        host.Should().NotContain("private static bool TryParseMaxIterations");
+        host.Should().NotContain("private static bool TryParseMaxChange");
+        avalonia.Should().NotContain("private static bool TryParseMaxIterations");
+        avalonia.Should().NotContain("private static bool TryParseMaxChange");
+    }
+
+    [Fact]
+    public void LegacyProtectionHashing_IsOwnedByCoreAndCalledDirectlyByExcelWriters()
+    {
+        var helper = ReadCoreModel("ProtectionPasswordHelper.cs");
+        var workbookWriter = ReadCoreIo("XlsxWorkbookMetadataWriter.cs");
+        var sheetWriter = ReadCoreIo("XlsxWorksheetProtectionMetadataWriter.cs");
+        var xmlHelper = ReadCoreIo("XlsxWorkbookMetadataXmlHelper.cs");
+
+        helper.Should().Contain("public static string ToLegacyPasswordHash");
+        helper.Should().Contain("public static bool IsLegacyPasswordHash");
+        workbookWriter.Should().Contain("ProtectionPasswordHelper.ToLegacyPasswordHash");
+        sheetWriter.Should().Contain("ProtectionPasswordHelper.ToLegacyPasswordHash");
+        xmlHelper.Should().NotContain("ToLegacyPasswordHash");
     }
 
     [Fact]
@@ -73,4 +120,10 @@ public sealed class FreeXBehaviorDedupSourceBoundaryTests
 
     private static string ReadCoreCommands(string fileName) =>
         WorkspaceFileLocator.ReadAllText("src", "FreeX.Core.Commands", fileName);
+
+    private static string ReadCoreModel(string fileName) =>
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.Core.Model", fileName);
+
+    private static string ReadCoreIo(string fileName) =>
+        WorkspaceFileLocator.ReadAllText("src", "FreeX.Core.IO", fileName);
 }

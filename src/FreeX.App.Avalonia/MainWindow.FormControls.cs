@@ -64,43 +64,17 @@ public sealed partial class MainWindow
         var sheetId = sheet.Id;
         var workbook = _session.Workbook;
 
-        IWorkbookCommand? command = control.Kind switch
+        var gesture = clickKind switch
         {
-            FormControlKind.CheckBox =>
-                FormControlInteractionService.CreateToggleCheckBoxCommand(control, sheetId, workbook),
-
-            FormControlKind.OptionButton =>
-                FormControlInteractionService.CreateSelectOptionButtonCommand(
-                    control, sheet.FormControls, sheetId, workbook),
-
-            FormControlKind.Spinner =>
-                FormControlInteractionService.CreateStepCommand(
-                    control,
-                    clickKind == FormControlClickKind.StepUp ? +1 : -1,
-                    sheetId, workbook),
-
-            FormControlKind.ScrollBar =>
-                FormControlInteractionService.CreateStepCommand(
-                    control,
-                    clickKind == FormControlClickKind.StepUp ? -1 : +1,
-                    sheetId, workbook),
-
-            FormControlKind.ListBox =>
-                listItemIndex > 0
-                    ? FormControlInteractionService.CreateSelectListItemCommand(
-                        control, listItemIndex, sheetId, workbook)
-                    : null,
-
-            FormControlKind.DropDown =>
-                FormControlInteractionService.CreateAdvanceListSelectionCommand(
-                    control, sheetId, workbook),
-
-            FormControlKind.Button =>
-                // Push-button: FreeX has no macro engine, so no-op (visual press only).
-                null,
-
-            _ => null,
+            FormControlClickKind.StepUp => FormControlGesture.StepUp,
+            FormControlClickKind.StepDown => FormControlGesture.StepDown,
+            _ => FormControlGesture.Body,
         };
+        var command = FormControlInteractionService.CreateCommand(
+            new FormControlInteractionRequest(control, gesture, listItemIndex),
+            sheet.FormControls,
+            sheetId,
+            workbook);
 
         if (command is null)
         {
