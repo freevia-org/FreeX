@@ -198,16 +198,7 @@ public static class DialogPngAnalyzer
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $invariantCulture = [System.Globalization.CultureInfo]::InvariantCulture
-
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function ConvertTo-RepoRelativePath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -269,7 +260,7 @@ function Format-PhysicalSize {
 function Read-JsonFile {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $resolvedPath = Resolve-RepoPath $Path
+    $resolvedPath = Resolve-ToolRepoPath -Path $Path -RepoRoot $repoRoot
     if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
         throw "Required dialog evidence input was not found: $resolvedPath"
     }
@@ -292,7 +283,7 @@ function Resolve-ManifestPngPath {
         return $png
     }
 
-    Join-Path (Split-Path -Parent (Resolve-RepoPath $ManifestPath)) $png
+    Join-Path (Split-Path -Parent (Resolve-ToolRepoPath -Path $ManifestPath -RepoRoot $repoRoot)) $png
 }
 
 function Test-ManifestPngExists {
@@ -1007,11 +998,11 @@ $policyAcceptedNativeDifferenceGroups = @(
         Sort-Object -Property Name
 )
 
-$wpfManifestRelativePath = ConvertTo-RepoRelativePath (Resolve-RepoPath $WpfManifestPath)
-$avaloniaManifestRelativePath = ConvertTo-RepoRelativePath (Resolve-RepoPath $AvaloniaManifestPath)
-$inventoryRelativePath = ConvertTo-RepoRelativePath (Resolve-RepoPath $InventoryPath)
-$resolvedMarkdownPath = Resolve-RepoPath $MarkdownPath
-$resolvedJsonPath = Resolve-RepoPath $JsonPath
+$wpfManifestRelativePath = ConvertTo-RepoRelativePath (Resolve-ToolRepoPath -Path $WpfManifestPath -RepoRoot $repoRoot)
+$avaloniaManifestRelativePath = ConvertTo-RepoRelativePath (Resolve-ToolRepoPath -Path $AvaloniaManifestPath -RepoRoot $repoRoot)
+$inventoryRelativePath = ConvertTo-RepoRelativePath (Resolve-ToolRepoPath -Path $InventoryPath -RepoRoot $repoRoot)
+$resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
+$resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $jsonRelativePath = ConvertTo-RepoRelativePath $resolvedJsonPath
 
 $jsonModel = [ordered]@{

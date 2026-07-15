@@ -8,43 +8,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
-
-function Convert-ToXmlAttribute {
-    param([Parameter(Mandatory = $true)][string]$Value)
-
-    return [System.Security.SecurityElement]::Escape($Value)
-}
-
-function Test-FileContentMatches {
-    param(
-        [Parameter(Mandatory = $true)][string]$ExpectedPath,
-        [Parameter(Mandatory = $true)][string]$ActualPath,
-        [Parameter(Mandatory = $true)][string]$Label
-    )
-
-    if (-not (Test-Path -LiteralPath $ActualPath -PathType Leaf)) {
-        throw "$Label is missing. Run tools\Generate-FreeWCommandInventory.ps1 to create it."
-    }
-
-    $expected = Get-Content -LiteralPath $ExpectedPath -Raw
-    $actual = Get-Content -LiteralPath $ActualPath -Raw
-    if ($expected -cne $actual) {
-        throw "$Label is out of date. Run tools\Generate-FreeWCommandInventory.ps1 to refresh it."
-    }
-}
-
-$resolvedJsonPath = Resolve-RepoPath $JsonPath
-$resolvedMarkdownPath = Resolve-RepoPath $MarkdownPath
+$resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
+$resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-freew-command-inventory-" + [System.Guid]::NewGuid().ToString("N"))
 $tempJsonPath = Join-Path $tempRoot "freew-command-inventory.json"
 $tempMarkdownPath = Join-Path $tempRoot "freew-command-inventory.md"
@@ -52,7 +19,7 @@ $tempMarkdownPath = Join-Path $tempRoot "freew-command-inventory.md"
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
 
 try {
-    $definitionsProject = Convert-ToXmlAttribute (Resolve-RepoPath "freew\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj")
+    $definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath -Path "freew\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" -RepoRoot $repoRoot)
     $projectPath = Join-Path $tempRoot "FreeW.CommandInventory.Generator.csproj"
     $programPath = Join-Path $tempRoot "Program.cs"
 
@@ -1174,8 +1141,8 @@ internal sealed record SourceLiteralFile(string Id, string Label, string Relativ
     }
 
     if ($Check) {
-        Test-FileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedJsonPath -Label $JsonPath
-        Test-FileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label $MarkdownPath
+        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedJsonPath -Label $JsonPath -GeneratorScriptName "tools\Generate-FreeWCommandInventory.ps1"
+        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label $MarkdownPath -GeneratorScriptName "tools\Generate-FreeWCommandInventory.ps1"
         Write-Host "FreeW command inventory docs are up to date."
         return
     }

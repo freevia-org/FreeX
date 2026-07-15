@@ -8,43 +8,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
-
-function Convert-ToXmlAttribute {
-    param([Parameter(Mandatory = $true)][string]$Value)
-
-    return [System.Security.SecurityElement]::Escape($Value)
-}
-
-function Test-FileContentMatches {
-    param(
-        [Parameter(Mandatory = $true)][string]$ExpectedPath,
-        [Parameter(Mandatory = $true)][string]$ActualPath,
-        [Parameter(Mandatory = $true)][string]$Label
-    )
-
-    if (-not (Test-Path -LiteralPath $ActualPath -PathType Leaf)) {
-        throw "$Label is missing. Run tools\Generate-FreePCommandParityInventory.ps1 to create it."
-    }
-
-    $expected = Get-Content -LiteralPath $ExpectedPath -Raw
-    $actual = Get-Content -LiteralPath $ActualPath -Raw
-    if ($expected -cne $actual) {
-        throw "$Label is out of date. Run tools\Generate-FreePCommandParityInventory.ps1 to refresh it."
-    }
-}
-
-$resolvedInventoryPath = Resolve-RepoPath $InventoryPath
-$resolvedMarkdownPath = Resolve-RepoPath $MarkdownPath
+$resolvedInventoryPath = Resolve-ToolRepoPath -Path $InventoryPath -RepoRoot $repoRoot
+$resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-freep-command-inventory-" + [System.Guid]::NewGuid().ToString("N"))
 $tempJsonPath = Join-Path $tempRoot "freep-command-parity-inventory.json"
 $tempMarkdownPath = Join-Path $tempRoot "freep-command-parity-inventory.md"
@@ -52,7 +19,7 @@ $tempMarkdownPath = Join-Path $tempRoot "freep-command-parity-inventory.md"
 New-Item -ItemType Directory -Path $tempRoot | Out-Null
 
 try {
-    $definitionsProject = Convert-ToXmlAttribute (Resolve-RepoPath "freep\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj")
+    $definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath -Path "freep\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" -RepoRoot $repoRoot)
     $projectPath = Join-Path $tempRoot "FreeP.CommandInventory.Generator.csproj"
     $programPath = Join-Path $tempRoot "Program.cs"
 
@@ -2078,8 +2045,8 @@ internal sealed record Classification(string Name, string Notes);
     }
 
     if ($Check) {
-        Test-FileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedInventoryPath -Label $InventoryPath
-        Test-FileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label $MarkdownPath
+        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedInventoryPath -Label $InventoryPath -GeneratorScriptName "tools\Generate-FreePCommandParityInventory.ps1"
+        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label $MarkdownPath -GeneratorScriptName "tools\Generate-FreePCommandParityInventory.ps1"
         Write-Host "FreeP command parity inventory docs are up to date."
         return
     }

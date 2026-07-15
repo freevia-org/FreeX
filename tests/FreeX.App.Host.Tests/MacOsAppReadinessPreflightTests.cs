@@ -67,6 +67,12 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AtomicFileWriterTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.AvaloniaShellSourceTests");
         script.Should().Contain("FullyQualifiedName~FreeX.App.Services.Tests.MacOsLaunchSmokeReportKeyDriftGuardTests");
+        script.Should().Contain("new(LocalAppDiagnostics.Create(");
+        script.Should().Contain("Path = \"shared\\Free.Shared.AppServices\\LocalAppDiagnostics.cs\"");
+        script.Should().Contain("string.IsNullOrWhiteSpace(diagnosticsDirectory)");
+        script.Should().Contain("? defaults.DiagnosticsDirectory");
+        script.Should().Contain(": diagnosticsDirectory,");
+        script.Should().Contain("Path = \"shared\\Free.Shared.AppServices\\AppCrashHandlers.cs\"");
         script.Should().Contain("dotnet test tests/FreeX.Core.Model.Tests/FreeX.Core.Model.Tests.csproj");
         script.Should().Contain("FullyQualifiedName~FreeX.Core.Model.Tests.ExportPathPlannerTests");
         script.Should().Contain("freex-${{ matrix.runtime }}-portable-pdf-exporter-tests.trx");
@@ -885,6 +891,20 @@ public sealed class MacOsAppReadinessPreflightTests
     }
 
     [Fact]
+    public void MacOsAppReadinessPreflight_FailsWhenCrashHandlerWrapperIsDisconnected()
+    {
+        using var temp = new TestTemporaryDirectory();
+        CreateMinimalMacOsReadinessRepo(temp.Path, disconnectedCrashHandlers: true);
+
+        var scriptPath = WorkspaceFileLocator.Find("tools", "Test-MacOsAppReadiness.ps1");
+        var result = RunScriptFromTemporaryWorkingDirectory(scriptPath, $"-ProjectRoot \"{temp.Path}\"");
+
+        result.ExitCode.Should().NotBe(0);
+        (result.Output + result.Error).Should().Contain(
+            "RegisterCrashHandlers' in shared\\Free.Shared.AppServices\\LocalAppDiagnostics.cs must delegate to 'AppCrashHandlers.Register('");
+    }
+
+    [Fact]
     public void MacOsAppReadinessPreflight_FailsForWindowsSpecificAvaloniaTargetFramework()
     {
         using var temp = new TestTemporaryDirectory();
@@ -1096,7 +1116,8 @@ public sealed class MacOsAppReadinessPreflightTests
         string workflowArm64Runner = "macos-15",
         string workflowX64Runner = "macos-15-intel",
         string extraAvaloniaSourcePath = "src/FreeX.App.Avalonia/WindowsOnlyLeak.cs",
-        string extraAvaloniaSource = "")
+        string extraAvaloniaSource = "",
+        bool disconnectedCrashHandlers = false)
     {
         WriteFile(
             root,
@@ -1847,30 +1868,79 @@ public sealed class MacOsAppReadinessPreflightTests
             root,
             "src/FreeX.App.Avalonia/AvaloniaAppDiagnostics.cs",
             """
+            using Free.Shared.AppServices;
+
             namespace FreeX.App.Avalonia;
 
-            internal sealed class AvaloniaAppDiagnostics
+            internal sealed class AvaloniaAppDiagnostics : LocalAppDiagnostics
             {
-                public static AvaloniaAppDiagnostics Create(string? diagnosticsDirectory = null)
+                private AvaloniaAppDiagnostics(LocalAppDiagnostics local)
+                    : base(local) { }
+
+                public static AvaloniaAppDiagnostics Create(string? diagnosticsDirectory = null) =>
+                    new(LocalAppDiagnostics.Create(
+                        AppHelpInfo.GetVersionText(typeof(AvaloniaAppDiagnostics).Assembly),
+                        diagnosticsDirectory));
+
+                public void RegisterUnhandledExceptionHandlers() => RegisterCrashHandlers();
+            }
+            """);
+
+        var localAppDiagnosticsRegisterCrashHandlers = disconnectedCrashHandlers
+            ? """
+                public void RegisterCrashHandlers() { }
+                private void RegisterOtherCrashHandlers() => AppCrashHandlers.Register();
+              """
+            : """
+                public void RegisterCrashHandlers(
+                    Action<Action<Exception>>? subscribeDispatcher = null,
+                    Action? onAfterFault = null) =>
+                    AppCrashHandlers.Register(
+                        (exception, source) => RecordCrash(exception, source),
+                        subscribeDispatcher,
+                        onAfterFault);
+              """;
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.AppServices/LocalAppDiagnostics.cs",
+            """
+            namespace Free.Shared.AppServices;
+
+            public class LocalAppDiagnostics
+            {
+                public static LocalAppDiagnostics Create(string appVersion, string? diagnosticsDirectory = null)
                 {
-                    AppDiagnosticsOptions.CreateDefault();
-                    new AppDiagnosticsFileStore(options);
-                    AppDiagnosticsMetadata.Create("Version Test");
-                    return new();
+                    var defaults = AppDiagnosticsOptions.CreateDefault();
+                    var options = new AppDiagnosticsOptions(
+                        string.IsNullOrWhiteSpace(diagnosticsDirectory)
+                            ? defaults.DiagnosticsDirectory
+                            : diagnosticsDirectory,
+                        defaults.IsEnabled);
+                    return new LocalAppDiagnostics(
+                        new AppDiagnosticsFileStore(options),
+                        AppDiagnosticsMetadata.Create(appVersion));
                 }
 
-                public void RegisterUnhandledExceptionHandlers()
+            {{REGISTER_CRASH_HANDLERS}}
+                public void RecordEvent(string eventName) { }
+                public string RecordCrash(Exception exception, string source) => "";
+            }
+            """.Replace("{{REGISTER_CRASH_HANDLERS}}", localAppDiagnosticsRegisterCrashHandlers, StringComparison.Ordinal));
+
+        WriteFile(
+            root,
+            "shared/Free.Shared.AppServices/AppCrashHandlers.cs",
+            """
+            namespace Free.Shared.AppServices;
+
+            public static class AppCrashHandlers
+            {
+                public static void Register()
                 {
                     AppDomain.CurrentDomain.UnhandledException += (_, args) => { };
                     TaskScheduler.UnobservedTaskException += (_, args) => { };
                 }
-
-                public void RecordEvent(string eventName, IReadOnlyDictionary<string, string?>? properties = null)
-                {
-                    AppDiagnosticsFileStore.SanitizeProperties(properties);
-                }
-
-                public string RecordCrash(Exception exception, string source) => "";
             }
             """);
 
@@ -1887,6 +1957,9 @@ public sealed class MacOsAppReadinessPreflightTests
                     "grantKind",
                     "payloadRedacted"
                 };
+
+                public static IEnumerable<KeyValuePair<string, string?>> SanitizeProperties(
+                    IReadOnlyDictionary<string, string?>? properties) => properties ?? new Dictionary<string, string?>();
             }
             """);
 

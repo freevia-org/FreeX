@@ -9,16 +9,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Get-CoveragePercent {
     param($Tab)
@@ -160,9 +151,9 @@ function Set-GeneratedBlock {
     [IO.File]::WriteAllText((Resolve-Path -LiteralPath $Path), $updatedText)
 }
 
-$inventoryPath = Resolve-RepoPath $InventoryPath
-$commandSurfacePath = Resolve-RepoPath $CommandSurfacePath
-$menuToolbarPath = Resolve-RepoPath $MenuToolbarPath
+$inventoryPath = Resolve-ToolRepoPath -Path $InventoryPath -RepoRoot $repoRoot
+$commandSurfacePath = Resolve-ToolRepoPath -Path $CommandSurfacePath -RepoRoot $repoRoot
+$menuToolbarPath = Resolve-ToolRepoPath -Path $MenuToolbarPath -RepoRoot $repoRoot
 
 $inventory = Get-Content -LiteralPath $inventoryPath -Raw | ConvertFrom-Json
 if ($inventory.schemaVersion -ne 1) {

@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FreeX.ToolsShared.Wpf;
 
 namespace FreeP.RenderCompare;
 
@@ -31,8 +32,8 @@ internal static class ImageDiff
     /// <summary>Compare two PNG files and return metrics. Writes a heatmap if <paramref name="heatmapPath"/> is non-null.</summary>
     internal static DiffResult Compare(string pathA, string pathB, string? heatmapPath = null)
     {
-        var bmpA = LoadAsBgra32(pathA);
-        var bmpB = LoadAsBgra32(pathB);
+        var bmpA = WpfImageDiff.LoadBitmap(pathA);
+        var bmpB = WpfImageDiff.LoadBitmap(pathB);
 
         var widthA  = bmpA.PixelWidth;
         var heightA = bmpA.PixelHeight;
@@ -43,8 +44,8 @@ internal static class ImageDiff
         var w = Math.Max(widthA, widthB);
         var h = Math.Max(heightA, heightB);
 
-        var pixA = GetBgra32Pixels(bmpA, widthA, heightA);
-        var pixB = GetBgra32Pixels(bmpB, widthB, heightB);
+        var pixA = WpfImageDiff.GetBgra32Pixels(bmpA, widthA, heightA);
+        var pixB = WpfImageDiff.GetBgra32Pixels(bmpB, widthB, heightB);
 
         long totalDiff  = 0;
         int  maxDiff    = 0;
@@ -154,29 +155,6 @@ internal static class ImageDiff
         encoder.Save(fs);
     }
 
-    // -----------------------------------------------------------------------
-    // Image loading helpers (mirrors FreeX.SheetImageCompare)
-    // -----------------------------------------------------------------------
-    private static BitmapSource LoadAsBgra32(string path)
-    {
-        using var stream = File.OpenRead(path);
-        var decoder = BitmapDecoder.Create(
-            stream,
-            BitmapCreateOptions.PreservePixelFormat,
-            BitmapCacheOption.OnLoad);
-
-        var frame = decoder.Frames[0];
-        return frame.Format == PixelFormats.Bgra32
-            ? frame
-            : new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
-    }
-
-    private static byte[] GetBgra32Pixels(BitmapSource bmp, int w, int h)
-    {
-        var pixels = new byte[(long)w * h * 4];
-        bmp.CopyPixels(pixels, w * 4, 0);
-        return pixels;
-    }
 }
 
 /// <summary>Result of <see cref="ImageDiff.Compare"/>.</summary>
