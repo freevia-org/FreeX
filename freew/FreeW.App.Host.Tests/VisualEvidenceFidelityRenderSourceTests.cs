@@ -88,6 +88,9 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("[\"wpfRenderTargetBitmapReason\"] = wpfRenderTargetFailure");
         source.Should().Contain("const double FootnoteTrailingReserveDip = 15.0;");
         source.Should().Contain("thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip");
+        source.Should().Contain("PageLayout.PointsToDip(24)");
+        source.Should().Contain("thisPixW - 2 * ins");
+        source.Should().Contain("width - inset");
         project.Should().Contain("FreeW.App.Presentation");
         project.Should().Contain("PackageReference Include=\"SkiaSharp\"");
     }

@@ -155,8 +155,12 @@ public sealed class FidelityRenderCompositeTests
             {
                 var bc  = ParseHexColor(pb.ColorHex, Colors.Black);
                 var pen = new Pen(new SolidColorBrush(bc), Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0)));
-                double ins = pen.Thickness / 2;
-                dc.DrawRectangle(null, pen, new Rect(ins, ins, pixW - pen.Thickness, pixH - pen.Thickness));
+                var edgeInset = Math.Min(PageLayout.PointsToDip(24), Math.Min(pixW, pixH) / 4.0);
+                double ins = edgeInset + pen.Thickness / 2;
+                dc.DrawRectangle(null, pen,
+                    new Rect(ins, ins,
+                        Math.Max(0, pixW - 2 * ins),
+                        Math.Max(0, pixH - 2 * ins)));
             }
             bmp.Render(bv);
         }
@@ -378,7 +382,7 @@ public sealed class FidelityRenderCompositeTests
     }
 
     [StaFact]
-    public void CompositeRender_PageBorder_PixelsNearEdge()
+    public void CompositeRender_PageBorder_UsesWordPageEdgeInset()
     {
         var doc = TextDocument.CreateEmpty();
         doc.Page.PageBorder = new PageBorder("#000000", 3.0);
@@ -388,9 +392,13 @@ public sealed class FidelityRenderCompositeTests
         var bmp    = RenderComposite(doc);
         var pixels = GetPixels(bmp);
         int stride = bmp.PixelWidth * 4;
+        double edgeInset = PageLayout.PointsToDip(24);
 
         HasNonWhitePixelsInRegion(pixels, stride, new Rect(10, 1, bmp.PixelWidth - 20, 8))
-            .Should().BeTrue("page border must draw dark pixels near the top edge of the page");
+            .Should().BeFalse("Word's page border must not be painted on the bitmap edge");
+        HasNonWhitePixelsInRegion(pixels, stride,
+                new Rect(10, edgeInset - 3, bmp.PixelWidth - 20, 8))
+            .Should().BeTrue("page border must draw at Word's 24pt page-edge inset");
     }
 
     // ════════════════════════════════════════════════════════════════════════════════════════════════

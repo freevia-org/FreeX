@@ -25,7 +25,7 @@ using SkiaSharp;
 //       layer 1: page background colour
 //       layer 1b: watermark (text or picture, rendered via its own RenderTargetBitmap)
 //       layer 2: multi-column FlowDocument body (ApplyColumnLayout applied before paginating)
-//       layer 3: page border drawn around the body
+//       layer 3: page border drawn inside Word's 24pt page-edge offset
 //       layer 4: floating-object overlay canvas (SyncFloatingObjectsCanvas), composited per-page
 //       layer 5: headers/footers via PaginatedEditorPanel PageBox sub-editors
 //   - --no-composite uses the original bare FlowDocument path (for regression comparison)
@@ -429,9 +429,16 @@ static void RenderDocumentComposite(
                 var borderColor = ParseHexColor(pb.ColorHex, Colors.Black);
                 var pen = new Pen(new SolidColorBrush(borderColor),
                     Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0)));
-                double ins = pen.Thickness / 2;
+                // w:pgBorders defaults to Measure from: Page with w:space="24" points. Keep
+                // the WPF evidence surface aligned with the Avalonia and Print Preview paths.
+                double edgeInset = Math.Min(
+                    PageLayout.PointsToDip(24),
+                    Math.Min(thisPixW, thisPixH) / 4.0);
+                double ins = edgeInset + pen.Thickness / 2;
                 dc.DrawRectangle(null, pen,
-                    new Rect(ins, ins, thisPixW - pen.Thickness, thisPixH - pen.Thickness));
+                    new Rect(ins, ins,
+                        Math.Max(0, thisPixW - 2 * ins),
+                        Math.Max(0, thisPixH - 2 * ins)));
             }
             bmp.Render(borderVisual);
         }
@@ -783,8 +790,15 @@ static SKBitmap RenderSoftwarePageBitmap(
             StrokeWidth = (float)Math.Max(1, PageLayout.PointsToDip(border.WidthPt)),
             IsStroke = true
         };
-        var inset = borderPaint.StrokeWidth / 2f;
-        canvas.DrawRect(new SKRect(inset, inset, width - inset, height - inset), borderPaint);
+        var edgeInset = Math.Min(
+            (float)PageLayout.PointsToDip(24),
+            Math.Min(width, height) / 4f);
+        var inset = edgeInset + borderPaint.StrokeWidth / 2f;
+        canvas.DrawRect(new SKRect(
+            inset,
+            inset,
+            Math.Max(inset, width - inset),
+            Math.Max(inset, height - inset)), borderPaint);
     }
 
     DrawSoftwareHeaderFooter(canvas, doc, pageIndex + 1, pageCount, width, height, contentLeft, contentRight, smallFont, mutedPaint);
