@@ -181,33 +181,6 @@ $dpi   = [ScreenshotWin32]::GetScreenDpi()
 $scale = $dpi / 96.0
 Write-Host "Screen DPI: $dpi  Scale: $scale"
 
-function Get-WindowTitle($windowHandle) {
-    $title = New-Object System.Text.StringBuilder 512
-    [ScreenshotWin32]::GetWindowText($windowHandle, $title, $title.Capacity) | Out-Null
-    return $title.ToString()
-}
-
-function Get-ForegroundWindowInfo {
-    $foreground = [ScreenshotWin32]::GetForegroundWindow()
-    if ($foreground -eq [IntPtr]::Zero) {
-        return [pscustomobject]@{
-            Handle = "0"
-            ProcessId = $null
-            Title = ""
-        }
-    }
-
-    $actualPid = 0
-    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
-    $title = New-Object System.Text.StringBuilder 512
-    [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
-    return [pscustomobject]@{
-        Handle = $foreground.ToString()
-        ProcessId = $actualPid
-        Title = $title.ToString()
-    }
-}
-
 function Write-RootCaptureBlockerManifest($operation, $expectedPid, $expectedTitle, $reason) {
     $manifestPath = Join-Path $outDir "screenshot_blocker_manifest.json"
     [pscustomobject]@{
@@ -235,24 +208,10 @@ function Write-RootCaptureBlockerManifest($operation, $expectedPid, $expectedTit
     Write-Warning "Saved blocker manifest $manifestPath"
 }
 
-function Assert-ForegroundWindowOwnership($expectedPid, $expectedTitle, $operation = "capture") {
-    $foreground = [ScreenshotWin32]::GetForegroundWindow()
-    if ($foreground -eq [IntPtr]::Zero) {
-        Clear-ScreenshotEvidenceArtifacts
-        Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle "No foreground window was available."
-        throw "Blocked: no foreground window before $operation."
-    }
-
-    $actualPid = 0
-    [ScreenshotWin32]::GetWindowThreadProcessId($foreground, [ref]$actualPid) | Out-Null
-    $title = New-Object System.Text.StringBuilder 512
-    [ScreenshotWin32]::GetWindowText($foreground, $title, $title.Capacity) | Out-Null
-    $actualTitle = $title.ToString()
-    if ($actualPid -ne $expectedPid -or $actualTitle -ne $expectedTitle) {
-        Clear-ScreenshotEvidenceArtifacts
-        Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle "Foreground window '$actualTitle' (PID $actualPid) did not match expected '$expectedTitle' (PID $expectedPid)."
-        throw "Blocked: foreground window '$actualTitle' (PID $actualPid) does not match expected '$expectedTitle' (PID $expectedPid) before $operation."
-    }
+$script:ForegroundWindowOwnershipFailureAction = {
+    param($operation, $expectedPid, $expectedTitle, $reason)
+    Clear-ScreenshotEvidenceArtifacts
+    Write-RootCaptureBlockerManifest $operation $expectedPid $expectedTitle $reason
 }
 
 function Assert-ForegroundProcessOwnership($expectedPid, $operation = "capture") {
@@ -341,7 +300,7 @@ function Set-ExcelForegroundWindow($excelHwnd, $excelPid, $expectedTitle, $opera
         }
     }
 
-    Assert-ForegroundWindowOwnership $excelPid $expectedTitle $operation
+    Assert-ForegroundWindowOwnership $excelPid $expectedTitle $operation $script:ForegroundWindowOwnershipFailureAction
 }
 
 function Find-ExcelPopupWindow($expectedPid, $ownerWindowHandle, $minimumWidth, $minimumHeight) {
@@ -462,10 +421,10 @@ function Click-ExcelAutoFilterHeaderDropdown($excelApp, $worksheet, $headerAddre
 
     [ScreenshotWin32]::SetCursorPos($clickX, $clickY) | Out-Null
     Start-Sleep -Milliseconds 100
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel AutoFilter dropdown mouse down"
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel AutoFilter dropdown mouse down" $script:ForegroundWindowOwnershipFailureAction
     [ScreenshotWin32]::mouse_event(2, 0, 0, 0, 0)
     Start-Sleep -Milliseconds 60
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel AutoFilter dropdown mouse up"
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel AutoFilter dropdown mouse up" $script:ForegroundWindowOwnershipFailureAction
     [ScreenshotWin32]::mouse_event(4, 0, 0, 0, 0)
 }
 
@@ -489,30 +448,30 @@ function Expand-ExcelNumberFormatDropdown($expectedPid, $excelElement, $expected
         throw "Excel Home number-format dropdown tour could not expand NumberFormatGallery through UI Automation."
     }
 
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel Number Format dropdown expand"
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel Number Format dropdown expand" $script:ForegroundWindowOwnershipFailureAction
     $pattern.Expand()
 }
 
 function Open-ExcelWorksheetContextMenu($expectedPid, $expectedTitle) {
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel worksheet context menu keyboard input"
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel worksheet context menu keyboard input" $script:ForegroundWindowOwnershipFailureAction
     [System.Windows.Forms.SendKeys]::SendWait("+{F10}")
 }
 
 function Open-ExcelHomeBordersDropdown($expectedPid, $expectedTitle) {
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel Home Borders dropdown keyboard input"
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel Home Borders dropdown keyboard input" $script:ForegroundWindowOwnershipFailureAction
     [System.Windows.Forms.SendKeys]::SendWait("%h")
     Start-Sleep -Milliseconds 350
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel Home Borders dropdown keytip continuation"
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel Home Borders dropdown keytip continuation" $script:ForegroundWindowOwnershipFailureAction
     [System.Windows.Forms.SendKeys]::SendWait("b")
 }
 
 function Open-ExcelNativeOpenDialog($expectedPid, $expectedTitle) {
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel native Open dialog keyboard input"
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel native Open dialog keyboard input" $script:ForegroundWindowOwnershipFailureAction
     [System.Windows.Forms.SendKeys]::SendWait("^{F12}")
 }
 
 function Open-ExcelNativeSaveAsDialog($expectedPid, $expectedTitle) {
-    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel native Save As dialog keyboard input"
+    Assert-ForegroundWindowOwnership $expectedPid $expectedTitle "Excel native Save As dialog keyboard input" $script:ForegroundWindowOwnershipFailureAction
     [System.Windows.Forms.SendKeys]::SendWait("{F12}")
 }
 
@@ -545,7 +504,7 @@ function Invoke-ExcelAutoFilterFlyoutTour {
         [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel AutoFilter flyout setup"
-        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel AutoFilter flyout setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel AutoFilter flyout setup" $script:ForegroundWindowOwnershipFailureAction
 
         Click-ExcelAutoFilterHeaderDropdown $excelApp $worksheet "A1" $excelPid $excelTitle
         Start-Sleep -Milliseconds 900
@@ -684,7 +643,7 @@ function Invoke-ExcelNumberFormatDropdownTour {
         [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel Number Format dropdown setup"
-        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel Number Format dropdown setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel Number Format dropdown setup" $script:ForegroundWindowOwnershipFailureAction
 
         $desktop = [System.Windows.Automation.AutomationElement]::RootElement
         $processCondition = New-Object System.Windows.Automation.PropertyCondition(
@@ -829,7 +788,7 @@ function Invoke-ExcelHomeBordersDropdownTour {
         [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel Home Borders dropdown setup"
-        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel Home Borders dropdown setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel Home Borders dropdown setup" $script:ForegroundWindowOwnershipFailureAction
 
         Open-ExcelHomeBordersDropdown $excelPid $excelTitle
         Start-Sleep -Milliseconds 1800
@@ -953,7 +912,7 @@ function Invoke-ExcelWorksheetContextMenuTour {
         [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel worksheet context menu setup"
-        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel worksheet context menu setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel worksheet context menu setup" $script:ForegroundWindowOwnershipFailureAction
 
         Open-ExcelWorksheetContextMenu $excelPid $excelTitle
         Start-Sleep -Milliseconds 900
@@ -1086,7 +1045,7 @@ function Invoke-ExcelOpenWorkbookDialogTour {
         [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel native Open dialog setup"
-        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel native Open dialog setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel native Open dialog setup" $script:ForegroundWindowOwnershipFailureAction
 
         Open-ExcelNativeOpenDialog $excelPid $excelTitle
         Start-Sleep -Milliseconds 1200
@@ -1216,7 +1175,7 @@ function Invoke-ExcelSaveAsWorkbookDialogTour {
         [ScreenshotWin32]::GetWindowThreadProcessId($excelHwnd, [ref]$excelPid) | Out-Null
         $excelTitle = Get-WindowTitle $excelHwnd
         Set-ExcelForegroundWindow $excelHwnd $excelPid $excelTitle "Excel native Save As dialog setup"
-        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel native Save As dialog setup"
+        Assert-ForegroundWindowOwnership $excelPid $excelTitle "Excel native Save As dialog setup" $script:ForegroundWindowOwnershipFailureAction
 
         Open-ExcelNativeSaveAsDialog $excelPid $excelTitle
         Start-Sleep -Milliseconds 1200
@@ -1570,20 +1529,20 @@ function Screenshot-Tab($tabName, $widthSpec) {
     $cy   = [int]($rect.Top  + $rect.Height / 2)
     [System.Windows.Forms.Cursor]::Position = [System.Drawing.Point]::new($cx, $cy)
     Start-Sleep -Milliseconds 100
-    Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab keyboard input"
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab keyboard input" $script:ForegroundWindowOwnershipFailureAction
     [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
     # Also try a real mouse click via mouse_event.
-    Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab mouse down"
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab mouse down" $script:ForegroundWindowOwnershipFailureAction
     [ScreenshotWin32]::mouse_event(2,0,0,0,0)
     Start-Sleep -Milliseconds 50
-    Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab mouse up"
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle "ribbon tab mouse up" $script:ForegroundWindowOwnershipFailureAction
     [ScreenshotWin32]::mouse_event(4,0,0,0,0)
     Start-Sleep -Milliseconds 800
 
     $wrect = New-Object ScreenshotWin32+RECT
     [ScreenshotWin32]::GetWindowRect($hwnd, [ref]$wrect) | Out-Null
     $w = $wrect.Right - $wrect.Left
-    Assert-ForegroundWindowOwnership $wpid $expectedTitle "screen capture"
+    Assert-ForegroundWindowOwnership $wpid $expectedTitle "screen capture" $script:ForegroundWindowOwnershipFailureAction
 
     $safe = $tabName -replace '[^a-zA-Z0-9_]','_'
     $fileName = "excel_$($widthSpec.Label)_$safe.png"
