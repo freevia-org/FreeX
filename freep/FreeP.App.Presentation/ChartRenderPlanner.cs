@@ -418,7 +418,12 @@ public readonly record struct ChartRadarPrimitivePlan(
     IReadOnlyList<ChartGridLinePlan> Spokes,
     ChartStrokePlan SpokeStroke,
     IReadOnlyList<ChartTextPlan> CategoryLabels,
-    IReadOnlyList<ChartRadarSeriesPrimitive> Series);
+    IReadOnlyList<ChartRadarSeriesPrimitive> Series)
+{
+    // Radar value labels are separate from category labels because PowerPoint
+    // places them on the vertical value axis, not on the category spokes.
+    public IReadOnlyList<ChartTextPlan> ValueLabels { get; init; } = Array.Empty<ChartTextPlan>();
+}
 
 public readonly record struct ChartPieSlicePrimitive(
     int SeriesIndex,
@@ -554,7 +559,12 @@ public static partial class ChartRenderPlanner
     public const double BubbleStrokeThickness = 0.8;
     public const byte RadarFillAlpha = 80;
     public const double RadarSeriesStrokeThickness = 1.5;
+    public const double ImportedRadarSeriesStrokeThickness = 3.0;
     public const double RadarMarkerRadius = 3.0;
+    public const double ImportedRadarPlotBottomReduction = 40.0;
+    public const double ImportedRadarRadiusFactor = 0.98;
+    public const double ImportedRadarCenterOffsetX = 6.0;
+    public const double ImportedRadarCenterOffsetY = 19.0;
     public const double ThreeDPieVerticalScale = 0.72;
     public const byte ThreeDPieDepthFillAlpha = 140;
     public const double ClassicThreeDDepthScale = 0.045;
@@ -977,6 +987,15 @@ public static partial class ChartRenderPlanner
                 plot.Y - 5.0,
                 plot.Width,
                 plot.Height + 56.0);
+        }
+        else if (chart.ChartType == ChartType.Radar && UsesImportedTextMetrics(chart))
+        {
+            // Imported PowerPoint radar charts leave a compact lower label band,
+            // moving the five-sided plot upward while keeping its legend right.
+            plot = plot with
+            {
+                Height = Math.Max(1.0, plot.Height - ImportedRadarPlotBottomReduction)
+            };
         }
         if (UsesStockLineFallback(chart))
         {
@@ -4021,8 +4040,12 @@ public static partial class ChartRenderPlanner
                 ? chart.Series[0].Values.Count
                 : 3);
 
-        var center = new ChartPlanPoint(plot.X + plot.Width / 2, plot.Y + plot.Height / 2);
-        double radius = Math.Min(plot.Width, plot.Height) / 2 * 0.75;
+        bool importedRadar = UsesImportedTextMetrics(chart);
+        var center = new ChartPlanPoint(
+            plot.X + plot.Width / 2 + (importedRadar ? ImportedRadarCenterOffsetX : 0),
+            plot.Y + plot.Height / 2 + (importedRadar ? ImportedRadarCenterOffsetY : 0));
+        double radius = Math.Min(plot.Width, plot.Height) / 2 *
+            (importedRadar ? ImportedRadarRadiusFactor : 0.75);
         double dataMax = 0;
         foreach (var series in chart.Series)
         {
@@ -4036,10 +4059,17 @@ public static partial class ChartRenderPlanner
         if (dataMax <= 0)
             dataMax = 1;
 
+        int ringCount = importedRadar ? 9 : 4;
+        double radarMax = importedRadar
+            ? Math.Ceiling(dataMax / 10.0) * 10.0
+            : dataMax;
+        var gridStroke = importedRadar
+            ? new ChartStrokePlan(new SrgbColor(0x80, 0x80, 0x80), Alpha: 255, Thickness: 0.5)
+            : DefaultGridLineStroke();
         var rings = new List<ChartRadarRingPrimitive>();
-        for (int ring = 1; ring <= 4; ring++)
+        for (int ring = 1; ring <= ringCount; ring++)
         {
-            double ringRadius = radius * ring / 4;
+            double ringRadius = radius * ring / ringCount;
             var points = new ChartPlanPoint[categoryCount];
             for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
             {
@@ -4052,7 +4082,7 @@ public static partial class ChartRenderPlanner
             rings.Add(new ChartRadarRingPrimitive(
                 points,
                 new ChartPathPrimitive(points, IsClosed: true, Fill: null),
-                DefaultGridLineStroke()));
+                gridStroke));
         }
 
         var spokes = new List<ChartGridLinePlan>(categoryCount);
@@ -4066,15 +4096,39 @@ public static partial class ChartRenderPlanner
                     center.Y + radius * Math.Sin(angle))));
         }
 
+        var valueLabels = new List<ChartTextPlan>();
+        if (importedRadar)
+        {
+            for (int ring = 0; ring <= ringCount; ring++)
+            {
+                double ringRadius = radius * ring / ringCount;
+                double labelY = center.Y - ringRadius - 7.0;
+                valueLabels.Add(new ChartTextPlan(
+                    FormatAxisValue(radarMax * ring / ringCount),
+                    new ChartPlanRect(center.X - 58.0, labelY, 48.0, 14.0),
+                    IsBold: false,
+                    FontSize: ResolveTextFontSize(chart, 6.5),
+                    Alignment: ChartPlanTextAlignment.Right));
+            }
+        }
+
         var labels = new List<ChartTextPlan>();
         for (int categoryIndex = 0; categoryIndex < chart.Categories.Count && categoryIndex < categoryCount; categoryIndex++)
         {
             double angle = GetRadarAngle(categoryIndex, categoryCount);
-            double labelX = center.X + (radius + 6) * Math.Cos(angle);
-            double labelY = center.Y + (radius + 6) * Math.Sin(angle);
+            double labelOffset = importedRadar
+                ? Math.Sin(angle) < -0.5
+                    ? 39.0
+                    : Math.Sin(angle) > 0.5
+                        ? 3.0
+                        : 37.0
+                : 6.0;
+            double labelX = center.X + (radius + labelOffset) * Math.Cos(angle);
+            double labelY = center.Y + (radius + labelOffset) * Math.Sin(angle);
+            double labelWidth = importedRadar ? 96.0 : 40.0;
             labels.Add(new ChartTextPlan(
                 chart.Categories[categoryIndex],
-                new ChartPlanRect(labelX - 20, labelY - 6, 40, ResolveCategoryLabelHeight(chart)),
+                new ChartPlanRect(labelX - labelWidth / 2, labelY - 6, labelWidth, ResolveCategoryLabelHeight(chart)),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Center));
@@ -4104,8 +4158,11 @@ public static partial class ChartRenderPlanner
 
             var color = ResolveSeriesColor(seriesIndex, seriesColors);
             var fill = filled ? ResolveSeriesFill(seriesIndex, seriesColors, RadarFillAlpha, fillPlans) : (ChartFillPlan?)null;
-            var stroke = ResolveAuthoredSeriesStroke(series, seriesIndex, seriesColors, RadarSeriesStrokeThickness)
-                ?? new ChartStrokePlan(color, Alpha: 255, Thickness: RadarSeriesStrokeThickness);
+            double seriesStrokeThickness = importedRadar
+                ? ImportedRadarSeriesStrokeThickness
+                : RadarSeriesStrokeThickness;
+            var stroke = ResolveAuthoredSeriesStroke(series, seriesIndex, seriesColors, seriesStrokeThickness)
+                ?? new ChartStrokePlan(color, Alpha: 255, Thickness: seriesStrokeThickness);
             var markers = new List<ChartCirclePrimitive>();
             if (withMarkers)
             {
@@ -4146,9 +4203,12 @@ public static partial class ChartRenderPlanner
         return new ChartRadarPrimitivePlan(
             rings,
             spokes,
-            DefaultRadarSpokeStroke(),
+            importedRadar ? gridStroke : DefaultRadarSpokeStroke(),
             labels,
-            seriesPrimitives);
+            seriesPrimitives)
+        {
+            ValueLabels = valueLabels
+        };
     }
 
     private static IReadOnlyList<ChartPathPrimitive> BuildRadarSeriesPaths(

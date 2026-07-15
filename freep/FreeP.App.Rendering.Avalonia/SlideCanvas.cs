@@ -1366,6 +1366,9 @@ public sealed class SlideCanvas : Control
         foreach (var spoke in plan.Spokes)
             dc.DrawLine(spokePen, ToPoint(spoke.Start), ToPoint(spoke.End));
 
+        foreach (var label in plan.ValueLabels)
+            DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
+
         foreach (var label in plan.CategoryLabels)
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds), label.IsBold, label.FontSize, ToTextAlignment(label.Alignment));
 

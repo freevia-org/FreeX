@@ -76,6 +76,31 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartTypesCorpus_RadarUsesPowerPointScaleAndFullImportedLabels()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "18-chart-types.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[2].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        chart.ChartType.Should().Be(ChartType.Radar);
+        chart.RadarStyle.Should().Be(RadarStyle.Marker);
+        chart.Categories.Should().Equal("Speed", "Power", "Agility", "Stamina", "Tech");
+
+        var frame = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 1280, 720));
+        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(chart, frame.Plot);
+
+        plan.Rings.Should().HaveCount(9);
+        plan.ValueLabels.Select(label => label.Text)
+            .Should().Equal("0", "10", "20", "30", "40", "50", "60", "70", "80", "90");
+        plan.CategoryLabels.Select(label => label.Text)
+            .Should().Equal("Speed", "Power", "Agility", "Stamina", "Tech");
+        plan.CategoryLabels.Should().OnlyContain(label => !label.Text.Contains("...", StringComparison.Ordinal));
+        plan.Series.Should().HaveCount(2);
+        plan.Series.Should().OnlyContain(series =>
+            series.Stroke.Thickness == ChartRenderPlanner.ImportedRadarSeriesStrokeThickness);
+    }
+
+    [Fact]
     public void ChartBaselineDepthCorpusDeck_ExercisesSharedPlannerDecisions()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
