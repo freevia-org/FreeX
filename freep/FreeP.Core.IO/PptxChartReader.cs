@@ -1182,6 +1182,8 @@ internal static class PptxChartReader
         labels.ShowSeriesName = true;
         labels.ShowCategoryName = true;
         labels.ShowPercent = false;
+        labels.ShowLegendKey = true;
+        labels.Separator ??= ", ";
     }
 
     private static void ApplyPowerPointPiePercentDataLabelDefaults(

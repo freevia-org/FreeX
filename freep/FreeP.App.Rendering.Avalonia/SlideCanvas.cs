@@ -1006,7 +1006,10 @@ public sealed class SlideCanvas : Control
 
         foreach (var label in scene.DataLabels)
         {
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+            if (label.LegendKeyBounds is { } keyBounds && label.LegendKeyFill is { } keyFill)
+                dc.FillRectangle(ToBrush(keyFill), ToRect(keyBounds));
+
+            DrawChartLabel(dc, label.Text, ToRect(label.TextBounds ?? label.Bounds),
                 label.IsBold,
                 label.FontSize,
                 ToTextAlignment(label.Alignment));

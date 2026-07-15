@@ -452,7 +452,12 @@ public readonly record struct ChartDataLabelPlan(
     ChartPlanRect Bounds,
     bool IsBold,
     double FontSize,
-    ChartPlanTextAlignment Alignment);
+    ChartPlanTextAlignment Alignment)
+{
+    public ChartPlanRect? TextBounds { get; init; }
+    public ChartPlanRect? LegendKeyBounds { get; init; }
+    public ChartFillPlan? LegendKeyFill { get; init; }
+}
 
 public readonly record struct ChartLegendItemPlan(
     ChartPlanRect SwatchBounds,
@@ -555,6 +560,7 @@ public static partial class ChartRenderPlanner
     private const double DipPerPoint = 96.0 / 72.0;
     private const double DefaultBarGapWidthPercent = 150.0;
     private const double ImportedPercentStackedGapWidthPercent = 250.0;
+    private const double ImportedPercentStackedPlotBottomReduction = 19.0;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -589,6 +595,14 @@ public static partial class ChartRenderPlanner
     // font defaults below.
     private static bool UsesImportedTextMetrics(ChartShape chart) =>
         chart.TextStyle?.FontSizePt is >= 12.0;
+
+    // PowerPoint opens imported percent-stacked charts without c:overlap with
+    // clustered series slots but normalized stacked extents. Keep authored
+    // models on the explicit stacked path while matching that Office default.
+    private static bool UsesImportedPercentStackedClusterLayout(ChartShape chart) =>
+        IsHundredPercentStacked(chart.ChartType) &&
+        UsesImportedTextMetrics(chart) &&
+        chart.BarOverlapPercent is null;
 
     /// <summary>
     /// Chart parts without an authored style use PowerPoint's classic default
@@ -967,8 +981,8 @@ public static partial class ChartRenderPlanner
             plot = new ChartPlanRect(
                 bounds.X + 31.0,
                 bounds.Y + 54.0,
-                bounds.Width - 69.0,
-                bounds.Height - 69.0);
+                bounds.Width - 65.0,
+                bounds.Height - 69.0 - ImportedPercentStackedPlotBottomReduction);
         }
         if (TryResolveManualLayoutRect(chart.PlotAreaManualLayout, bounds, out var manualPlot))
             plot = manualPlot;
@@ -1124,7 +1138,7 @@ public static partial class ChartRenderPlanner
             DrawFlatGrid = !UsesProjectedSurfaceFrame(chart),
             GridLines = BuildMajorGridLinePrimitivePlan(chart, frame),
             AxisTicks = BuildMajorAxisTickPrimitivePlan(chart, frame),
-            DataLabels = BuildDataLabelPlans(chart, plot),
+            DataLabels = BuildDataLabelPlans(chart, plot, seriesColors, fillPlans),
             DataTable = BuildDataTablePrimitivePlan(chart, frame, seriesColors, fillPlans),
             SecondaryAxis = BuildSecondaryValueAxisPrimitivePlan(chart, frame),
             CategoryAxisLabels = BuildCategoryAxisLabelPlans(chart, frame),
@@ -1951,8 +1965,9 @@ public static partial class ChartRenderPlanner
 
         var (secondaryMin, secondaryMax, _) = ComputeSecondaryValueAxisRange(chart);
         double secondaryRange = secondaryMax - secondaryMin;
-        bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
         bool percentStacked = IsHundredPercentStacked(chart.ChartType);
+        bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
+        bool importedPercentStackedCluster = UsesImportedPercentStackedClusterLayout(chart);
         double categoryWidth = plot.Width / categoryCount;
         var columnSeriesIndices = chart.Series
             .Select((series, index) => (series, index))
@@ -1961,13 +1976,19 @@ public static partial class ChartRenderPlanner
             .Select(item => item.index)
             .ToArray();
         int seriesCount = Math.Max(1, columnSeriesIndices.Length);
-        var spacing = ResolveBarClusterSpacing(chart, categoryWidth, seriesCount, stacked);
+        var spacing = ResolveBarClusterSpacing(
+            chart,
+            categoryWidth,
+            seriesCount,
+            stacked && !importedPercentStackedCluster);
         bool varyByPoint = ShouldVaryPointColors(chart);
 
         var primitives = new List<ChartRectPrimitive>();
         for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
         {
             var slot = ResolveBarClusterSlot(plot.X, categoryIndex, spacing);
+            if (importedPercentStackedCluster)
+                slot = ResolveImportedPercentStackedClusterSlot(slot);
             double stackedY = plot.Bottom;
 
             for (int columnSeriesIndex = 0; columnSeriesIndex < columnSeriesIndices.Length; columnSeriesIndex++)
@@ -1988,10 +2009,16 @@ public static partial class ChartRenderPlanner
                 if (effectiveRange <= 0)
                     continue;
 
-                double x = stacked
-                    ? slot.ClusterStart
-                    : slot.ClusterStart + columnSeriesIndex * slot.SeriesStep;
-                double drawWidth = Math.Max(1, slot.SeriesSize - (stacked ? 0 : 1));
+                double x = importedPercentStackedCluster
+                    ? slot.ClusterStart + columnSeriesIndex * slot.SeriesStep
+                    : stacked
+                        ? slot.ClusterStart
+                        : slot.ClusterStart + columnSeriesIndex * slot.SeriesStep;
+                double drawWidth = Math.Max(
+                    1,
+                    slot.SeriesSize - (stacked && !importedPercentStackedCluster ? 0 : 1));
+                if (importedPercentStackedCluster)
+                    drawWidth = slot.SeriesSize;
                 if (stacked)
                 {
                     double height = Math.Max(
@@ -2010,7 +2037,7 @@ public static partial class ChartRenderPlanner
                         columnSeriesIndex,
                         seriesCount,
                         isHorizontalBar: false,
-                        stacked);
+                        stacked && !importedPercentStackedCluster);
                     var bounds = ApplyBarGapDepthOffset(
                         new ChartPlanRect(x, stackedY - height, drawWidth, height),
                         depth);
@@ -2027,8 +2054,21 @@ public static partial class ChartRenderPlanner
                 }
                 else
                 {
-                    double height = Math.Max(0.5, Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Height));
-                    double y = plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
+                    double height = Math.Max(
+                        0.5,
+                        percentStacked
+                            ? ComputeStackedExtent(
+                                chart,
+                                categoryIndex,
+                                rawValue.Value,
+                                series.OnSecondaryAxis,
+                                plot.Height,
+                                Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Height),
+                                percentStacked)
+                            : Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Height));
+                    double y = percentStacked
+                        ? plot.Bottom - height
+                        : plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
                     var depth = BuildBarGapDepthPlan(
                         chart,
                         categoryWidth,
@@ -2070,11 +2110,16 @@ public static partial class ChartRenderPlanner
 
         var (secondaryMin, secondaryMax, _) = ComputeSecondaryValueAxisRange(chart);
         double secondaryRange = secondaryMax - secondaryMin;
-        bool stacked = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
         bool percentStacked = IsHundredPercentStacked(chart.ChartType);
+        bool stacked = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
+        bool importedPercentStackedCluster = UsesImportedPercentStackedClusterLayout(chart);
         double categoryHeight = plot.Height / categoryCount;
         int seriesCount = Math.Max(1, chart.Series.Count);
-        var spacing = ResolveBarClusterSpacing(chart, categoryHeight, seriesCount, stacked);
+        var spacing = ResolveBarClusterSpacing(
+            chart,
+            categoryHeight,
+            seriesCount,
+            stacked && !importedPercentStackedCluster);
         bool varyByPoint = ShouldVaryPointColors(chart);
 
         var primitives = new List<ChartRectPrimitive>();
@@ -2082,6 +2127,8 @@ public static partial class ChartRenderPlanner
         {
             int renderRow = categoryCount - 1 - categoryIndex;
             var slot = ResolveBarClusterSlot(plot.Y, renderRow, spacing);
+            if (importedPercentStackedCluster)
+                slot = ResolveImportedPercentStackedClusterSlot(slot);
             double stackedX = plot.X;
 
             for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
@@ -2111,13 +2158,28 @@ public static partial class ChartRenderPlanner
                             plot.Width,
                             Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Width),
                             percentStacked)
-                        : Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Width));
-                int renderSeries = stacked ? seriesIndex : seriesCount - 1 - seriesIndex;
+                        : percentStacked
+                            ? ComputeStackedExtent(
+                                chart,
+                                categoryIndex,
+                                rawValue.Value,
+                                series.OnSecondaryAxis,
+                                plot.Width,
+                                Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Width),
+                                percentStacked)
+                            : Math.Abs((rawValue.Value - effectiveMin) / effectiveRange * plot.Width));
+                int renderSeries = stacked && !importedPercentStackedCluster
+                    ? seriesIndex
+                    : seriesCount - 1 - seriesIndex;
                 double y = stacked
-                    ? slot.ClusterStart
+                    ? importedPercentStackedCluster
+                        ? slot.ClusterStart + renderSeries * slot.SeriesStep
+                        : slot.ClusterStart
                     : slot.ClusterStart + renderSeries * slot.SeriesStep;
                 double x = stacked ? stackedX : plot.X;
-                double height = Math.Max(1, slot.SeriesSize - (stacked ? 0 : 1));
+                double height = Math.Max(
+                    1,
+                    slot.SeriesSize - (stacked && !importedPercentStackedCluster ? 0 : 1));
 
                 var depth = BuildBarGapDepthPlan(
                     chart,
@@ -2125,7 +2187,7 @@ public static partial class ChartRenderPlanner
                     seriesIndex,
                     seriesCount,
                     isHorizontalBar: true,
-                    stacked);
+                    stacked && !importedPercentStackedCluster);
                 var bounds = ApplyBarGapDepthOffset(new ChartPlanRect(x, y, width, height), depth);
 
                 primitives.Add(new ChartRectPrimitive(
@@ -3995,7 +4057,9 @@ public static partial class ChartRenderPlanner
 
     public static IReadOnlyList<ChartDataLabelPlan> BuildDataLabelPlans(
         ChartShape chart,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
     {
         var family = GetRenderFamily(chart.ChartType);
         if (family is ChartRenderFamily.Radar or ChartRenderFamily.ScatterLike || !plot.HasPositiveArea)
@@ -4023,7 +4087,7 @@ public static partial class ChartRenderPlanner
                 ? BuildLineDataLabelPlans(chart, seriesIndex, plot)
                 : seriesIsBar
                     ? BuildBarDataLabelPlans(chart, seriesIndex, plot)
-                    : BuildColumnDataLabelPlans(chart, seriesIndex, plot);
+                    : BuildColumnDataLabelPlans(chart, seriesIndex, plot, seriesColors, fillPlans);
 
             plans.AddRange(seriesPlans);
         }
@@ -5233,7 +5297,9 @@ public static partial class ChartRenderPlanner
     private static IReadOnlyList<ChartDataLabelPlan> BuildColumnDataLabelPlans(
         ChartShape chart,
         int seriesIndex,
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        ChartFillPlanSet? fillPlans)
     {
         var labels = ResolveEffectiveLabels(chart, seriesIndex);
         if (labels is null || seriesIndex < 0 || seriesIndex >= chart.Series.Count)
@@ -5253,11 +5319,16 @@ public static partial class ChartRenderPlanner
         if (effectiveRange <= 0)
             return Array.Empty<ChartDataLabelPlan>();
 
-        bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
         bool percentStacked = IsHundredPercentStacked(chart.ChartType);
+        bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
+        bool importedPercentStackedCluster = UsesImportedPercentStackedClusterLayout(chart);
         double categoryWidth = plot.Width / categoryCount;
         int seriesCount = Math.Max(1, chart.Series.Count);
-        var spacing = ResolveBarClusterSpacing(chart, categoryWidth, seriesCount, stacked);
+        var spacing = ResolveBarClusterSpacing(
+            chart,
+            categoryWidth,
+            seriesCount,
+            stacked && !importedPercentStackedCluster);
         var position = labels.Position ?? DataLabelPosition.OutsideEnd;
         var plans = new List<ChartDataLabelPlan>();
 
@@ -5271,9 +5342,13 @@ public static partial class ChartRenderPlanner
 
             double value = rawValue.Value;
             var slot = ResolveBarClusterSlot(plot.X, categoryIndex, spacing);
-            double barX = stacked
-                ? slot.ClusterStart
-                : slot.ClusterStart + seriesIndex * slot.SeriesStep;
+            if (importedPercentStackedCluster)
+                slot = ResolveImportedPercentStackedClusterSlot(slot);
+            double barX = importedPercentStackedCluster
+                ? slot.ClusterStart + seriesIndex * slot.SeriesStep
+                : stacked
+                    ? slot.ClusterStart
+                    : slot.ClusterStart + seriesIndex * slot.SeriesStep;
 
             double barHeight;
             double barY;
@@ -5319,7 +5394,7 @@ public static partial class ChartRenderPlanner
                 barY = plot.Bottom - (value - effectiveMin) / effectiveRange * plot.Height;
             }
 
-            double total = ComputeDataLabelTotal(chart, series, categoryIndex, stacked, labels);
+            double total = ComputeDataLabelTotal(chart, series, categoryIndex, stacked || percentStacked, labels);
             string categoryName = categoryIndex < chart.Categories.Count
                 ? chart.Categories[categoryIndex]
                 : string.Empty;
@@ -5345,19 +5420,39 @@ public static partial class ChartRenderPlanner
                 };
 
             double labelWidth = UsesImportedTextMetrics(chart)
-                ? Math.Max(50.0, slot.SeriesSize)
+                ? Math.Max(percentStacked ? 100.0 : 50.0, slot.SeriesSize)
                 : slot.SeriesSize;
             double labelX = UsesImportedTextMetrics(chart)
                 ? barX + slot.SeriesSize / 2.0 - labelWidth / 2.0
                 : barX;
-            plans.Add(new ChartDataLabelPlan(
+            var labelPlan = new ChartDataLabelPlan(
                 seriesIndex,
                 categoryIndex,
                 text,
                 new ChartPlanRect(labelX, labelY, labelWidth, labelHeight),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center));
+                Alignment: ChartPlanTextAlignment.Center);
+            if (labels.ShowLegendKey)
+            {
+                const double keySize = 6.0;
+                const double keyGap = 3.0;
+                labelPlan = labelPlan with
+                {
+                    TextBounds = new ChartPlanRect(
+                        labelX + keySize + keyGap,
+                        labelY,
+                        Math.Max(1.0, labelWidth - keySize - keyGap),
+                        labelHeight),
+                    LegendKeyBounds = new ChartPlanRect(
+                        labelX,
+                        labelY + (labelHeight - keySize) / 2.0,
+                        keySize,
+                        keySize),
+                    LegendKeyFill = ResolveSeriesFill(seriesIndex, seriesColors, RectSeriesFillAlpha, fillPlans)
+                };
+            }
+            plans.Add(labelPlan);
         }
 
         return plans;
@@ -5443,11 +5538,16 @@ public static partial class ChartRenderPlanner
         if (effectiveRange <= 0)
             return Array.Empty<ChartDataLabelPlan>();
 
-        bool stacked = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
         bool percentStacked = IsHundredPercentStacked(chart.ChartType);
+        bool stacked = chart.ChartType is ChartType.BarStacked or ChartType.BarStacked100;
+        bool importedPercentStackedCluster = UsesImportedPercentStackedClusterLayout(chart);
         double categoryHeight = plot.Height / categoryCount;
         int seriesCount = Math.Max(1, chart.Series.Count);
-        var spacing = ResolveBarClusterSpacing(chart, categoryHeight, seriesCount, stacked);
+        var spacing = ResolveBarClusterSpacing(
+            chart,
+            categoryHeight,
+            seriesCount,
+            stacked && !importedPercentStackedCluster);
         var position = labels.Position ?? DataLabelPosition.OutsideEnd;
         var plans = new List<ChartDataLabelPlan>();
 
@@ -5462,6 +5562,8 @@ public static partial class ChartRenderPlanner
             double value = rawValue.Value;
             int renderRow = categoryCount - 1 - categoryIndex;
             var slot = ResolveBarClusterSlot(plot.Y, renderRow, spacing);
+            if (importedPercentStackedCluster)
+                slot = ResolveImportedPercentStackedClusterSlot(slot);
 
             double barWidth;
             double barX;
@@ -5500,17 +5602,31 @@ public static partial class ChartRenderPlanner
                         Math.Abs((value - effectiveMin) / effectiveRange * plot.Width),
                         percentStacked));
                 barX = stackedX;
-                barY = slot.ClusterStart;
+                int renderSeries = seriesCount - 1 - seriesIndex;
+                barY = importedPercentStackedCluster
+                    ? slot.ClusterStart + renderSeries * slot.SeriesStep
+                    : slot.ClusterStart;
             }
             else
             {
                 int renderSeries = seriesCount - 1 - seriesIndex;
-                barWidth = Math.Abs((value - effectiveMin) / effectiveRange * plot.Width);
+                barWidth = percentStacked
+                    ? Math.Max(
+                        0.5,
+                        ComputeStackedExtent(
+                            chart,
+                            categoryIndex,
+                            value,
+                            series.OnSecondaryAxis,
+                            plot.Width,
+                            Math.Abs((value - effectiveMin) / effectiveRange * plot.Width),
+                            percentStacked))
+                    : Math.Abs((value - effectiveMin) / effectiveRange * plot.Width);
                 barX = plot.X;
                 barY = slot.ClusterStart + renderSeries * slot.SeriesStep;
             }
 
-            double total = ComputeDataLabelTotal(chart, series, categoryIndex, stacked, labels);
+            double total = ComputeDataLabelTotal(chart, series, categoryIndex, stacked || percentStacked, labels);
             string categoryName = categoryIndex < chart.Categories.Count
                 ? chart.Categories[categoryIndex]
                 : string.Empty;
@@ -5843,6 +5959,13 @@ public static partial class ChartRenderPlanner
         {
             CategoryStart = plotStart + categoryIndex * spacing.CategorySize,
             ClusterStart = plotStart + categoryIndex * spacing.CategorySize + spacing.ClusterStart
+        };
+
+    private static ChartBarClusterSlot ResolveImportedPercentStackedClusterSlot(
+        ChartBarClusterSlot slot) =>
+        slot with
+        {
+            ClusterStart = slot.CategoryStart + (slot.CategorySize - slot.SeriesSize) / 2.0
         };
 
     private static void AccumulateValues(

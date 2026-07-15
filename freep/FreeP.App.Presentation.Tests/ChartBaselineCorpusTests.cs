@@ -199,6 +199,8 @@ public sealed class ChartBaselineCorpusTests
         stacked.DataLabels.ShowCategoryName.Should().BeTrue();
         stacked.DataLabels.ShowValue.Should().BeTrue();
         stacked.DataLabels.ShowPercent.Should().BeFalse();
+        stacked.DataLabels.ShowLegendKey.Should().BeTrue();
+        stacked.DataLabels.Separator.Should().Be(", ");
         var textStyles = charts.Select(chart => chart.TextStyle).ToArray();
         textStyles.Should().NotContainNulls();
         textStyles.Cast<ChartTextStyle>().Select(style => style.FontSizePt)
@@ -213,8 +215,8 @@ public sealed class ChartBaselineCorpusTests
             stacked,
             new ChartPlanRect(0, 0, 480, 288));
         stackedFrame.Plot
-            .Should().Be(new ChartPlanRect(31, 54, 411, 219),
-                "PowerPoint gives imported 100%-stacked columns a taller plot with a narrower category gutter");
+            .Should().Be(new ChartPlanRect(31, 54, 415, 200),
+                "PowerPoint gives imported 100%-stacked columns a compact category gutter and reserved lower band");
         var stackedBars = ChartRenderPlanner.BuildColumnPrimitives(
             stacked,
             stackedFrame.Plot);
@@ -223,16 +225,24 @@ public sealed class ChartBaselineCorpusTests
         double expectedBarWidth = categoryWidth / 3.5;
         foreach (var bar in stackedBars)
             bar.Bounds.Width.Should().BeApproximately(expectedBarWidth, 0.0001);
-        stackedBars.Where(bar => bar.CategoryIndex == 0)
-            .Select(bar => bar.Bounds.X)
-            .Should().OnlyContain(x => Math.Abs(
-                x - (stackedFrame.Plot.X + (categoryWidth - expectedBarWidth) / 2)) < 0.0001);
-        stackedBars.Where(bar => bar.CategoryIndex == 0).Sum(bar => bar.Bounds.Height)
-            .Should().BeApproximately(stackedFrame.Plot.Height, 0.0001);
+        var firstCategoryBars = stackedBars.Where(bar => bar.CategoryIndex == 0).OrderBy(bar => bar.SeriesIndex).ToArray();
+        firstCategoryBars[0].Bounds.X.Should().BeApproximately(
+            stackedFrame.Plot.X + (categoryWidth - expectedBarWidth) / 2,
+            0.0001);
+        firstCategoryBars[1].Bounds.X.Should().BeApproximately(
+            firstCategoryBars[0].Bounds.X + categoryWidth / 3.5,
+            0.0001);
+        firstCategoryBars[0].Bounds.Height.Should().BeApproximately(stackedFrame.Plot.Height * 0.4, 0.0001);
+        firstCategoryBars[1].Bounds.Height.Should().BeApproximately(stackedFrame.Plot.Height * 0.6, 0.0001);
         var stackedLabels = ChartRenderPlanner.BuildDataLabelPlans(
             stacked,
             new ChartPlanRect(0, 0, 360, 220));
-        stackedLabels[0].Text.Should().Be("Actual Q1 20");
+        stackedLabels[0].Text.Should().Be("Actual, Q1, 20");
+        stackedLabels.Should().OnlyContain(label => label.Bounds.Width >= 100);
+        stackedLabels.Should().OnlyContain(label =>
+            label.TextBounds.HasValue &&
+            label.LegendKeyBounds.HasValue &&
+            label.LegendKeyFill.HasValue);
     }
 
     [Fact]
