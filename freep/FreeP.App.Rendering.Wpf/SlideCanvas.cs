@@ -256,11 +256,12 @@ public sealed class SlideCanvas : FrameworkElement
             && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
 
         var bounds = shape.BoundsDip;
-        bool hasTransform = shape.RotationDeg != 0 || shape.FlipH || shape.FlipV;
+        var renderTransform = ShapeTransformPlanner.PlanShapeRenderTransform(shape);
+        bool hasTransform = !renderTransform.IsIdentity;
 
         if (hasTransform)
         {
-            dc.PushTransform(ToWpfTransform(ShapeTransformPlanner.PlanShapeTransform(shape)));
+            dc.PushTransform(ToWpfTransform(renderTransform));
         }
 
         // Effects: draw before the shape (painter's algorithm — shadow behind shape)

@@ -38,6 +38,23 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
+    public void Scene3dProjectionPlanner_ProjectsIsometricTopUpCamera()
+    {
+        var projection = Scene3dProjectionPlanner.Plan(
+            new LayoutRect(80, 320, 266, 186),
+            "isometricTopUp");
+
+        projection.M11.Should().BeApproximately(0.505, 0.0001);
+        projection.M12.Should().BeApproximately(0.2925, 0.0001);
+        projection.M21.Should().BeApproximately(-1.015, 0.0001);
+        projection.M22.Should().BeApproximately(0.588, 0.0001);
+        projection.IsIdentity.Should().BeFalse();
+
+        Scene3dProjectionPlanner.Plan(new LayoutRect(0, 0, 100, 60), "orthographicFront")
+            .Should().Be(ShapeAffineTransform.Identity);
+    }
+
+    [Fact]
     public void ResolvedShapeEffectRenderPlanner_ExpandsShadowAndGlowPasses()
     {
         var effects = new ResolvedShapeEffects
@@ -210,7 +227,7 @@ public sealed class RendererNeutralDedupPlannerTests
 
         foreach (var source in new[] { wpf, avalonia })
         {
-            source.Should().Contain("ShapeTransformPlanner.PlanShapeTransform");
+            source.Should().Contain("ShapeTransformPlanner.PlanShapeRenderTransform");
             source.Should().Contain("ResolvedShapeEffectRenderPlanner.PlanOuterEffects");
             source.Should().Contain("TextRunEffectRenderPlanner");
             source.Should().NotContain("BuildWarpYFunc");

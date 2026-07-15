@@ -31,6 +31,14 @@ public static class ShapeTransformPlanner
     public static ShapeAffineTransform PlanShapeTransform(DrawOp.Shape shape) =>
         PlanShapeTransform(shape.BoundsDip, shape.RotationDeg, shape.FlipH, shape.FlipV);
 
+    /// <summary>
+    /// Produces the single transform used to render a shape, including its ordinary
+    /// DrawingML transform and any supported 3-D scene-camera projection.
+    /// </summary>
+    public static ShapeAffineTransform PlanShapeRenderTransform(DrawOp.Shape shape) =>
+        PlanShapeTransform(shape).Append(
+            Scene3dProjectionPlanner.Plan(shape.BoundsDip, shape.Effects?.Scene3dCameraPreset));
+
     public static ShapeAffineTransform PlanShapeTransform(
         LayoutRect bounds,
         double rotationDeg,
@@ -66,5 +74,35 @@ public static class ShapeTransformPlanner
             cos,
             cx - cx * cos + cy * sin,
             cy - cx * sin - cy * cos);
+    }
+}
+
+/// <summary>
+/// Conservative 2-D projections for DrawingML scene camera presets. This keeps
+/// camera interpretation shared by the WPF and Avalonia renderers while leaving
+/// unsupported presets as their existing front-on rendering.
+/// </summary>
+public static class Scene3dProjectionPlanner
+{
+    public static ShapeAffineTransform Plan(LayoutRect bounds, string? cameraPreset)
+    {
+        if (!string.Equals(cameraPreset, "isometricTopUp", StringComparison.OrdinalIgnoreCase))
+            return ShapeAffineTransform.Identity;
+
+        // PowerPoint's isometricTopUp camera projects the local X axis down-right
+        // and the local Y axis down-left at a 120-degree angle. This oblique basis
+        // is deliberately not expressible as a simple rotation plus scale.
+        const double xAxisX = 0.505;
+        const double xAxisY = 0.2925;
+        const double yAxisX = -1.015;
+        const double yAxisY = 0.588;
+
+        double cx = bounds.X + bounds.Width / 2.0;
+        double cy = bounds.Y + bounds.Height / 2.0;
+        var toOrigin = new ShapeAffineTransform(1, 0, 0, 1, -cx, -cy);
+        var projection = new ShapeAffineTransform(xAxisX, xAxisY, yAxisX, yAxisY, 0, 0);
+        var fromOrigin = new ShapeAffineTransform(1, 0, 0, 1, cx, cy);
+
+        return toOrigin.Append(projection).Append(fromOrigin);
     }
 }

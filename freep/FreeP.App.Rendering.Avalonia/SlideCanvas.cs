@@ -219,11 +219,12 @@ public sealed class SlideCanvas : Control
             && (shape.ElbowRouteDip is null || shape.ElbowRouteDip.Count < 2)) return;
 
         var bounds = shape.BoundsDip;
-        bool hasTransform = shape.RotationDeg != 0 || shape.FlipH || shape.FlipV;
+        var renderTransform = ShapeTransformPlanner.PlanShapeRenderTransform(shape);
+        bool hasTransform = !renderTransform.IsIdentity;
 
         IDisposable? transformScope = null;
         if (hasTransform)
-            transformScope = dc.PushTransform(ToAvaloniaMatrix(ShapeTransformPlanner.PlanShapeTransform(shape)));
+            transformScope = dc.PushTransform(ToAvaloniaMatrix(renderTransform));
 
         if (shape.Effects is not null)
             RenderShapeEffects(dc, shape);

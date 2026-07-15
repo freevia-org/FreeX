@@ -450,6 +450,12 @@ public sealed class ResolvedShapeEffects
     /// -1 means no scene3d → use default top-left illumination.
     /// </summary>
     public double LightDirDeg { get; init; } = -1;
+
+    /// <summary>
+    /// DrawingML camera preset from <c>a:scene3d/a:camera @prst</c>. Empty when
+    /// the shape has no scene camera.
+    /// </summary>
+    public string Scene3dCameraPreset { get; init; } = string.Empty;
 }
 
 // ─── Draw operations ──────────────────────────────────────────────────────────────────────────────────────────────

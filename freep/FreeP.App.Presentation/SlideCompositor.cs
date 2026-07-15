@@ -313,7 +313,8 @@ public static class SlideCompositor
             ExtrusionDepthDip = fx.ExtrusionHeightEmu / EmuPerDip,
             ContourWidthDip   = fx.ContourWidthEmu    / EmuPerDip,
             ContourColor      = fx.ContourColor,
-            LightDirDeg       = ResolveLightDir(fx.Scene3d)
+            LightDirDeg       = ResolveLightDir(fx.Scene3d),
+            Scene3dCameraPreset = fx.Scene3d?.CameraPreset ?? string.Empty,
         };
     }
 
