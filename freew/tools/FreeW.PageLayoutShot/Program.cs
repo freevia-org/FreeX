@@ -1095,7 +1095,8 @@ static DocumentNoteRegionPlan? BuildEvidenceNoteRegionPlan(
 
 static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase) ||
-    string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase);
+    string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase);
 
 static (byte[] PngBytes, int PixelWidth, int PixelHeight) CropToDocumentPageSurface(
     byte[] pngBytes,

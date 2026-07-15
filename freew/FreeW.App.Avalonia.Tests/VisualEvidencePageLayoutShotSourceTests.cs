@@ -91,6 +91,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("equation-structures");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"equation-structures\", 1)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildEquationStructuresDocument");
+        source.Should().Contain("string.Equals(scenarioId, \"equation-structures\", StringComparison.OrdinalIgnoreCase)");
         source.Should().Contain("ResolveAvaloniaHeaderSlotName(expectationDocument, pageNumber)");
         source.Should().Contain("ResolveAvaloniaFooterSlotName(expectationDocument, pageNumber)");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-hf-images\", 1)");
