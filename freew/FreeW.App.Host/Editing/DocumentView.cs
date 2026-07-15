@@ -10117,7 +10117,7 @@ public sealed class DocumentView : RichTextBox
         {
             Orientation = Orientation.Vertical,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(2, 0, 2, 0),
+            Margin = new Thickness(2, 4, 2, 0),
             Tag = EquationVisualElementKind.Accent
         };
 
@@ -10138,7 +10138,7 @@ public sealed class DocumentView : RichTextBox
         {
             Orientation = Orientation.Vertical,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(2, 0, 2, 0),
+            Margin = new Thickness(2, 4, 2, 0),
             MinWidth = 14,
             Tag = EquationVisualElementKind.Bar
         };
@@ -10192,7 +10192,7 @@ public sealed class DocumentView : RichTextBox
         {
             Orientation = Orientation.Vertical,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(2, 0, 2, 0),
+            Margin = new Thickness(2, 6, 2, 0),
             Tag = EquationVisualElementKind.GroupChar
         };
 
@@ -10370,7 +10370,7 @@ public sealed class DocumentView : RichTextBox
         text.TextAlignment = textAlignment;
         text.Margin = margin ?? new Thickness(0);
         text.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
-        text.LineHeight = Math.Max(1, text.FontSize * 1.05);
+        text.LineHeight = Math.Max(1, text.FontSize * 0.85);
         return text;
     }
 
