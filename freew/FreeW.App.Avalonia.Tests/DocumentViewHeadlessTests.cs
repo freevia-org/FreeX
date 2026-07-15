@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Themes.Fluent;
+using AvaloniaTextOptions = Avalonia.Media.TextOptions;
+using AvaloniaTextRenderingMode = Avalonia.Media.TextRenderingMode;
 using Free.Shared.AppServices;
 using Free.Shared.Shell.Avalonia;
 using FreeW.App.Avalonia;
@@ -96,6 +98,22 @@ public sealed class DocumentViewHeadlessTests
 
         formatting.Should().NotBeNullOrEmpty();
         formatting!.Should().OnlyContain(f => f.FontFamily == "Calibri" && f.FontSizePt == 11);
+    }
+
+    [Fact]
+    public async Task Document_view_uses_grayscale_text_antialiasing_for_document_surface_fidelity()
+    {
+        var renderingMode = AvaloniaTextRenderingMode.Unspecified;
+        var ran = await OnUiThread(() =>
+        {
+            var view = new DocumentView();
+            renderingMode = AvaloniaTextOptions.GetTextRenderingMode(view);
+        });
+
+        if (!ran)
+            return;
+
+        renderingMode.Should().Be(AvaloniaTextRenderingMode.Antialias);
     }
 
     [Fact]

@@ -257,6 +257,9 @@ public sealed class DocumentView : Control
     {
         _customDictionary = customDictionary ?? CustomDictionaryStore.Load();
         Focusable = true;
+        // Word's exported pages use grayscale antialiasing. Subpixel LCD rendering leaves colour fringes
+        // in page previews and captured document surfaces, so keep document text device-independent.
+        TextOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
         _bus = new DocumentCommandBus(new ViewContext(this));
         _bus.Changed += OnModelChanged;
     }
