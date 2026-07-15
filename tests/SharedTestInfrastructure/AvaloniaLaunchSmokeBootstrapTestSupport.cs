@@ -1,3 +1,4 @@
+using System.IO;
 using FluentAssertions;
 
 internal static class AvaloniaLaunchSmokeBootstrapTestSupport
