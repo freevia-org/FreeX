@@ -1901,7 +1901,13 @@ public static partial class ChartRenderPlanner
         bool stacked = chart.ChartType is ChartType.ColumnStacked or ChartType.ColumnStacked100;
         bool percentStacked = IsHundredPercentStacked(chart.ChartType);
         double categoryWidth = plot.Width / categoryCount;
-        int seriesCount = Math.Max(1, chart.Series.Count);
+        var columnSeriesIndices = chart.Series
+            .Select((series, index) => (series, index))
+            .Where(item => item.series.OverrideChartType is not (
+                ChartType.Line or ChartType.LineMarkers or ChartType.Scatter or ChartType.Bubble))
+            .Select(item => item.index)
+            .ToArray();
+        int seriesCount = Math.Max(1, columnSeriesIndices.Length);
         var spacing = ResolveBarClusterSpacing(chart, categoryWidth, seriesCount, stacked);
         bool varyByPoint = ShouldVaryPointColors(chart);
 
@@ -1911,17 +1917,10 @@ public static partial class ChartRenderPlanner
             var slot = ResolveBarClusterSlot(plot.X, categoryIndex, spacing);
             double stackedY = plot.Bottom;
 
-            for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
+            for (int columnSeriesIndex = 0; columnSeriesIndex < columnSeriesIndices.Length; columnSeriesIndex++)
             {
+                int seriesIndex = columnSeriesIndices[columnSeriesIndex];
                 var series = chart.Series[seriesIndex];
-                if (series.OverrideChartType.HasValue &&
-                    series.OverrideChartType.Value is ChartType.Line
-                        or ChartType.LineMarkers
-                        or ChartType.Scatter
-                        or ChartType.Bubble)
-                {
-                    continue;
-                }
 
                 double? rawValue = ResolveBlankSensitiveValue(
                     chart,
@@ -1938,7 +1937,7 @@ public static partial class ChartRenderPlanner
 
                 double x = stacked
                     ? slot.ClusterStart
-                    : slot.ClusterStart + seriesIndex * slot.SeriesStep;
+                    : slot.ClusterStart + columnSeriesIndex * slot.SeriesStep;
                 double drawWidth = Math.Max(1, slot.SeriesSize - (stacked ? 0 : 1));
                 if (stacked)
                 {
@@ -1955,7 +1954,7 @@ public static partial class ChartRenderPlanner
                     var depth = BuildBarGapDepthPlan(
                         chart,
                         categoryWidth,
-                        seriesIndex,
+                        columnSeriesIndex,
                         seriesCount,
                         isHorizontalBar: false,
                         stacked);
@@ -1980,7 +1979,7 @@ public static partial class ChartRenderPlanner
                     var depth = BuildBarGapDepthPlan(
                         chart,
                         categoryWidth,
-                        seriesIndex,
+                        columnSeriesIndex,
                         seriesCount,
                         isHorizontalBar: false,
                         stacked);
