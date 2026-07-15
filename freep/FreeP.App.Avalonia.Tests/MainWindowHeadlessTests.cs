@@ -367,6 +367,62 @@ public sealed class MainWindowHeadlessTests
     }
 
     [Fact]
+    public void RibbonDefinition_avalonia_injections_preserve_order_metadata_and_duplicate_guards()
+    {
+        var definition = FreePRibbonAvalonia.Build();
+        var home = definition.Tabs.Single(t => t.Id == "home");
+        var file = home.Groups.Single(g => g.Id == "file");
+        var insert = definition.Tabs.Single(t => t.Id == "insert");
+        var charts = insert.Groups.Single(g => g.Id == "charts");
+
+        var expectedFileSuffix = new[]
+        {
+            PresentationExportPlanner.ImageExportCommandId,
+            PresentationExportPlanner.NotesPagePdfExportCommandId,
+            PresentationExportPlanner.VideoExportCommandId,
+        };
+        file.Controls.Select(control => control.CommandId.Value)
+            .TakeLast(expectedFileSuffix.Length)
+            .Should()
+            .Equal(expectedFileSuffix);
+        file.Controls.Count(control =>
+            control.CommandId.Value == PresentationExportPlanner.NotesPagePdfExportCommandId)
+            .Should().Be(1);
+        file.Controls.Count(control =>
+            control.CommandId.Value == PresentationExportPlanner.ImageExportCommandId)
+            .Should().Be(1);
+        file.Controls.Count(control =>
+            control.CommandId.Value == PresentationExportPlanner.VideoExportCommandId)
+            .Should().Be(1);
+        charts.Controls.Select(control => control.CommandId.Value)
+            .Last()
+            .Should().Be(ChartDataDialogPlanner.EditDataCommandId);
+        charts.Controls.Count(control =>
+            control.CommandId.Value == ChartDataDialogPlanner.EditDataCommandId)
+            .Should().Be(1);
+
+        var expectedMetadata = new Dictionary<string, (RibbonCommandIconKind Icon, string KeyTip)>
+        {
+            [PresentationExportPlanner.NotesPagePdfExportCommandId] = (RibbonCommandIconKind.Print, "XN"),
+            [PresentationExportPlanner.ImageExportCommandId] = (RibbonCommandIconKind.Picture, "XI"),
+            [PresentationExportPlanner.VideoExportCommandId] = (RibbonCommandIconKind.Generic, "XV"),
+            [ChartDataDialogPlanner.EditDataCommandId] = (RibbonCommandIconKind.ChartTitle, "E"),
+        };
+
+        foreach (var control in file.Controls.Concat(charts.Controls))
+        {
+            if (!expectedMetadata.TryGetValue(control.CommandId.Value, out var metadata))
+                continue;
+
+            control.Should().BeOfType<RibbonButton>();
+            control.PreferredLayout.Should().Be(RibbonCommandLayoutKind.Medium);
+            control.Icon.Should().NotBeNull();
+            control.Icon!.Kind.Should().Be(metadata.Icon);
+            control.KeyTip.Should().Be(metadata.KeyTip);
+        }
+    }
+
+    [Fact]
     public void RibbonDefinition_slides_group_has_new_duplicate_delete()
     {
         var definition = FreePRibbonAvalonia.Build();

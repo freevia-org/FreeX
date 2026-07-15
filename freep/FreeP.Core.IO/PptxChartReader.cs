@@ -68,7 +68,7 @@ internal static class PptxChartReader
         shape.PlotAreaManualLayout = ReadManualLayout(plotArea.Element(C + "layout"));
 
         var serIdxMap = DetectChartTypeAndSeries(plotArea, shape, scheme);
-        ApplyPowerPointPieAutomaticTitleDefault(chartEl, shape);
+        ApplyPowerPointAutomaticTitleDefault(chartEl, shape);
 
         // Axes (catAx / dateAx = category axis; valAx = value axis)
         bool primaryValAxRead = false;
@@ -1209,12 +1209,11 @@ internal static class PptxChartReader
         labels.Separator ??= ", ";
     }
 
-    private static void ApplyPowerPointPieAutomaticTitleDefault(
+    private static void ApplyPowerPointAutomaticTitleDefault(
         XElement chartEl,
         ChartShape shape)
     {
-        if (shape.ChartType != ChartType.Pie ||
-            shape.Title is not null ||
+        if (shape.Title is not null ||
             chartEl.Element(C + "autoTitleDeleted")?.Attribute("val")?.Value != "0" ||
             shape.Series.Count != 1 ||
             string.IsNullOrWhiteSpace(shape.Series[0].Name))
@@ -1222,8 +1221,8 @@ internal static class PptxChartReader
             return;
         }
 
-        // PowerPoint renders the single pie-series name as an automatic chart
-        // title when autoTitleDeleted is explicitly false.
+        // PowerPoint renders a single series name as an automatic chart title
+        // when autoTitleDeleted is explicitly false.
         shape.Title = shape.Series[0].Name;
         shape.HasAutomaticTitle = true;
     }
