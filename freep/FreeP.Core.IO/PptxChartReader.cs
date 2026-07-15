@@ -172,10 +172,11 @@ internal static class PptxChartReader
 
     private static int? ReadStyleId(XElement chartSpace)
     {
-        var style = chartSpace.Descendants()
-            .FirstOrDefault(element =>
-                element.Name.LocalName == "style" &&
-                int.TryParse(element.Attribute("val")?.Value, out _));
+        // Office may place a c14:style compatibility marker before the
+        // authoritative c:style. Prefer the chart namespace so style 2 is not
+        // misread as the compatibility style 102.
+        var style = chartSpace.Element(C + "style")
+            ?? chartSpace.Descendants(C + "style").FirstOrDefault();
         return int.TryParse(style?.Attribute("val")?.Value, out var value) ? value : null;
     }
 

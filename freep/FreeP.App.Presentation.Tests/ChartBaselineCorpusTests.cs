@@ -6,6 +6,16 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class ChartBaselineCorpusTests
 {
     [Fact]
+    public void ChartLabelsCorpus_PreservesAuthoritativeChartStyle()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[2].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+        chart.StyleId.Should().Be(2);
+        chart.ValueAxis.HasMajorGridlines.Should().BeTrue();
+    }
+
+    [Fact]
     public void ChartLabelsCorpus_PiePercentLabelsPreservePowerPointSeparatorAndAutomaticTitle()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
