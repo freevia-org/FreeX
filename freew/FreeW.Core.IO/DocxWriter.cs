@@ -1649,7 +1649,7 @@ public static class DocxWriter
     private static XElement BuildTableProperties(Table table)
     {
         // Children must follow the CT_TblPr schema order, else Word's strict validator rejects the table:
-        // tblStyle, tblpPr, tblW, jc, tblCellSpacing, tblInd, tblBorders, tblCellMar, tblLook.
+        // tblStyle, tblpPr, tblW, jc, tblCellSpacing, tblInd, tblBorders, tblLayout, tblCellMar, tblLook.
         var tblPr = new XElement(W + "tblPr");
 
         // Named table style (w:tblStyle), placed first in CT_TblPr. Emitted when TableStyleId is set so
@@ -1710,6 +1710,11 @@ public static class DocxWriter
                 new XElement(W + "insideV", new XAttribute(W + "val", "none"))));
         }
 
+        // Word auto-fits a table when tblLayout is absent, even when tblGrid has explicit widths.
+        // Emit the model's fixed default explicitly so authored grid widths survive in Word.
+        tblPr.Add(new XElement(W + "tblLayout", new XAttribute(W + "type",
+            table.AutoFit == AutoFitMode.Fixed ? "fixed" : "autofit")));
+
         // Default cell margins (w:tblCellMar): inside padding applied to cells with no own override.
         // Emitted only when set, so plain tables stay unchanged. Follows tblBorders in CT_TblPr order.
         if (table.DefaultCellMargins is { } cellMar)
@@ -1730,10 +1735,6 @@ public static class DocxWriter
                 new XAttribute(W + "noHBand", fmt.BandedRows ? "0" : "1"),
                 new XAttribute(W + "noVBand", fmt.BandedColumns ? "0" : "1")));
         }
-        // w:tblLayout controls auto-fit behaviour. "fixed" (Word default) is not emitted; "autofit" is
-        // emitted for both Contents and Window modes.
-        if (table.AutoFit != AutoFitMode.Fixed)
-            tblPr.Add(new XElement(W + "tblLayout", new XAttribute(W + "type", "autofit")));
         return tblPr;
     }
 

@@ -868,6 +868,41 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_FixedAutoFit_EmitsFixedLayoutBeforeCellMargins_AndRoundTrips()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 2);
+        table.AutoFit = AutoFitMode.Fixed;
+        table.ColumnWidthsPt.AddRange([120.0, 180.0]);
+        table.DefaultCellMargins = new TableCellMargins(TopPt: 3, LeftPt: 6, BottomPt: 3, RightPt: 6);
+        doc.Blocks.Add(table);
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var tableProperties = WriteDocumentXml(doc).Descendants(ns + "tblPr").Single();
+        tableProperties.Element(ns + "tblLayout")?.Attribute(ns + "type")?.Value.Should().Be("fixed");
+        tableProperties.Elements().ToList().IndexOf(tableProperties.Element(ns + "tblLayout")!)
+            .Should().BeLessThan(tableProperties.Elements().ToList().IndexOf(tableProperties.Element(ns + "tblCellMar")!));
+
+        var result = RoundTrip(doc);
+        result.Blocks.OfType<Table>().Single().AutoFit.Should().Be(AutoFitMode.Fixed);
+    }
+
+    [Fact]
+    public void Table_ContentAutoFit_EmitsAutofitLayout_AndRoundTrips()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        table.AutoFit = AutoFitMode.Contents;
+        doc.Blocks.Add(table);
+
+        var ns = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        WriteDocumentXml(doc).Descendants(ns + "tblLayout").Single().Attribute(ns + "type")?.Value.Should().Be("autofit");
+
+        var result = RoundTrip(doc);
+        result.Blocks.OfType<Table>().Single().AutoFit.Should().Be(AutoFitMode.Contents);
+    }
+
+    [Fact]
     public void Table_WithoutShadingOrWidths_StillRoundTrips()
     {
         var doc = new TextDocument();

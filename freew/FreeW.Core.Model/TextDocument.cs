@@ -2098,7 +2098,7 @@ public enum TableAlignment
 /// Controls how a table fits its content and container (<c>w:tbl/w:tblPr/w:tblLayout</c>).
 /// <see cref="Fixed"/> keeps column widths fixed; <see cref="Contents"/> shrinks/grows columns to
 /// their content; <see cref="Window"/> stretches the table to the container width. <see cref="Fixed"/>
-/// is the default (no element emitted) so existing tables round-trip unchanged.
+/// is the default and is emitted as <c>w:type="fixed"</c> so Word preserves authored grid widths.
 /// </summary>
 public enum AutoFitMode
 {
@@ -2170,7 +2170,7 @@ public sealed class Table : Block
 
     /// <summary>
     /// How the table auto-fits to its content or container (<c>tbl/tblPr/w:tblLayout</c>).
-    /// <see cref="AutoFitMode.Fixed"/> is the default (no element emitted). <see cref="AutoFitMode.Contents"/>
+    /// <see cref="AutoFitMode.Fixed"/> is the default and emits <c>w:type="fixed"</c>. <see cref="AutoFitMode.Contents"/>
     /// maps to <c>w:type="autofit"</c>; <see cref="AutoFitMode.Window"/> maps to <c>w:type="autofit"</c> with
     /// the table's preferred width set to 100% of the page. Set by Table Layout > Cell Size > AutoFit.
     /// </summary>
