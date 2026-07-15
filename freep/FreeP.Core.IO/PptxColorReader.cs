@@ -228,6 +228,12 @@ internal static class PptxColorReader
         if (lnElement.Element(A + "noFill") is not null)
             return ShapeOutline.None.Instance;
 
+        // A zero-width line is an explicit no-line marker. Treating it as an
+        // omitted width used to synthesize the default 0.75 pt black outline.
+        if (long.TryParse(lnElement.Attribute("w")?.Value, NumberStyles.Integer,
+                CultureInfo.InvariantCulture, out var explicitWidthEmu) && explicitWidthEmu == 0)
+            return ShapeOutline.None.Instance;
+
         // w attribute in EMU; convert to points
         var wAttr = lnElement.Attribute("w")?.Value;
         double widthPt = 0.75;

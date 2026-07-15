@@ -45,6 +45,16 @@ public sealed class ThemeColorTransformTests
             .Should().Be(new SrgbColor(sharedResolved.R, sharedResolved.G, sharedResolved.B));
     }
 
+    [Fact]
+    public void OutlineReader_ZeroWidthLine_IsNoOutline()
+    {
+        var outline = PptxColorReader.TryReadOutline(
+            new XElement(A + "ln", new XAttribute("w", "0")),
+            PresentationColorScheme.CreateDefault());
+
+        outline.Should().BeSameAs(ShapeOutline.None.Instance);
+    }
+
     [Theory]
     [InlineData("50000", null, null, null)]
     [InlineData(null, "25000", null, null)]

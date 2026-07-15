@@ -285,6 +285,36 @@ public sealed class WordArtTests : IDisposable
     }
 
     [Fact]
+    public void Compositor_NoFillTextBoxShapeShadow_IsResolvedOntoGlyphs()
+    {
+        var p = MakePres();
+        p.Slides[0].Shapes.Clear();
+
+        var shape = TextShape(_ => { });
+        shape.Fill = ShapeFill.None.Instance;
+        shape.Effects = new ShapeEffects
+        {
+            HasOuterShadow = true,
+            OuterShadowColor = new SrgbColor(0x40, 0x40, 0x40),
+            OuterShadowAlpha = 180,
+            OuterShadowBlurRadEmu = 63500,
+            OuterShadowDistEmu = 38100,
+            OuterShadowDirDeg = 45.0,
+        };
+        p.Slides[0].Shapes.Add(shape);
+
+        var run = SlideCompositor.Compose(p, p.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .Single()
+            .Text!.Paragraphs[0].Runs[0];
+
+        run.TextShadow.Should().NotBeNull();
+        run.TextShadow!.Color.Should().Be(new SrgbColor(0x40, 0x40, 0x40));
+        run.TextShadow.Alpha.Should().Be(180);
+        run.TextShadow.BlurDip.Should().BeApproximately(63500.0 / 9525.0, 0.01);
+    }
+
+    [Fact]
     public void Compositor_TextFill_Gradient_ResolvedToResolvedFillGradient()
     {
         var fill = new ShapeFill.Gradient(

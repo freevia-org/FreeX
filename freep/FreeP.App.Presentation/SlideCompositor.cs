@@ -230,8 +230,16 @@ public static class SlideCompositor
                 ? presentation.Masters.Find(m => m.Id == resolvedLayout.MasterId)
                 : presentation.Masters.FirstOrDefault();
 
+            // PowerPoint applies a shape effect to the glyphs of a text-only,
+            // no-fill text box. Carry that shadow onto runs so renderers do not
+            // shadow the empty rectangular frame instead.
+            var inheritedTextShadow = shape.Fill is ShapeFill.None && shape.Effects?.HasOuterShadow == true
+                ? ResolveShapeShadowAsTextShadow(shape.Effects)
+                : null;
+
             text = ResolveTextLayout(shape.TextBody, effectiveAnchor, effectiveDefaultAlign, shape.Placeholder,
-                theme, slideIndex, effectiveClrMap, layoutPh?.TextBody, masterPh?.TextBody, resolvedMaster?.TextStyles);
+                theme, slideIndex, effectiveClrMap, layoutPh?.TextBody, masterPh?.TextBody, resolvedMaster?.TextStyles,
+                inheritedTextShadow);
         }
 
         // Wave 26: convert the elbow route from EMU to DIP for connector shapes
@@ -308,6 +316,15 @@ public static class SlideCompositor
             LightDirDeg       = ResolveLightDir(fx.Scene3d)
         };
     }
+
+    private static ResolvedRunShadow ResolveShapeShadowAsTextShadow(ShapeEffects effects) => new()
+    {
+        Color = effects.OuterShadowColor,
+        Alpha = effects.OuterShadowAlpha,
+        BlurDip = effects.OuterShadowBlurRadEmu / EmuPerDip,
+        DistDip = effects.OuterShadowDistEmu / EmuPerDip,
+        DirDeg = effects.OuterShadowDirDeg,
+    };
 
     /// <summary>
     /// Converts the OOXML lightRig dir= string to degrees clockwise from the top.
@@ -1201,7 +1218,8 @@ public static class SlideCompositor
         IReadOnlyDictionary<string, string>? effectiveClrMap = null,
         TextBody? layoutBody = null,
         TextBody? masterBody = null,
-        MasterTextStyles? masterTextStyles = null)
+        MasterTextStyles? masterTextStyles = null,
+        ResolvedRunShadow? inheritedTextShadow = null)
     {
         // Determine hard-coded fallback font size and font (last resort only).
         double fallbackFontSizePt = placeholder?.Type switch
@@ -1338,6 +1356,10 @@ public static class SlideCompositor
                         DistDip = PointsToDip(ts.DistPt),
                         DirDeg  = ts.DirDeg,
                     };
+                }
+                else if (inheritedTextShadow is not null)
+                {
+                    resolvedTextShadow = inheritedTextShadow;
                 }
 
                 if (run.TextReflection is not null)

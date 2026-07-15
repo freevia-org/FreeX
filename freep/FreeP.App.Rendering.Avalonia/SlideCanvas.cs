@@ -272,6 +272,7 @@ public sealed class SlideCanvas : Control
     private static void RenderShapeEffects(DrawingContext dc, DrawOp.Shape shape)
     {
         if (shape.Geometry.Contours.Count == 0) return;
+        if (shape.Text is not null && shape.Fill is ResolvedFill.None) return;
         var plan = ResolvedShapeEffectRenderPlanner.PlanOuterEffects(shape.Effects);
 
         if (plan.ShadowPasses.Count > 0)
