@@ -423,6 +423,20 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void FormatDataLabel_UsesAuthoredSeparatorForImportedPowerPointLabels()
+    {
+        var labels = new ChartDataLabels
+        {
+            ShowValue = true,
+            ShowPercent = true,
+            Separator = ", "
+        };
+
+        ChartRenderPlanner.FormatDataLabel(labels, 45, 100, "Q1", "Sales")
+            .Should().Be("45, 45%");
+    }
+
+    [Fact]
     public void FormatDataLabel_UsesConditionalScaledNumberFormat()
     {
         var labels = new ChartDataLabels
