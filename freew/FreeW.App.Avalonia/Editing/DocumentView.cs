@@ -86,6 +86,10 @@ public sealed class DocumentView : Control
     // Superscript / subscript rendering approximation (matches Word's ~58% size + ~33% raise/lower).
     // SuperSubScale: font shrinks to ~58% of the run's size (Word uses 58.3%).
     private const double SuperSubScale = 0.583;
+    // Avalonia's Calibri 11 FormattedText line box is about 6% taller than Word's natural
+    // single-line box. Apply this only to unstyled/Normal body text; headings and explicit line
+    // spacing retain their own metrics.
+    private const double WordDefaultBodyLineHeightScale = 0.94;
     // SuperYRaiseFraction: superscript baseline sits at ~33% from the top of the line box.
     private const double SuperYRaiseFraction = 0.15;
     // SubYLowerFraction: subscript top sits at ~33% from the top of the line box so the shrunk
@@ -3912,7 +3916,7 @@ public sealed class DocumentView : Control
         var lineH   = Math.Max(1, Build("Ag", noteFmt).Height);
 
         var numText  = number + " ";
-        var numWidth = Build(numText, numFmt).WidthIncludingTrailingWhitespace;
+        var numWidth = BuildForLayout(numText, numFmt).WidthIncludingTrailingWhitespace;
         var textLeft = x + numWidth;
         var penX     = textLeft;
         var lineY    = 0.0; // relative to the note's start Y
@@ -4059,7 +4063,7 @@ public sealed class DocumentView : Control
 
         // Emit the number marker first (superscript), then the text flows after it on the same line.
         var numText = number + " ";
-        var numWidth = Build(numText, numFmt).WidthIncludingTrailingWhitespace;
+        var numWidth = BuildForLayout(numText, numFmt).WidthIncludingTrailingWhitespace;
         _noteItems.Add(new NoteRenderItem { Text = numText, Fmt = numFmt, X = x, Y = y });
 
         var textLeft = x + numWidth;
@@ -4431,6 +4435,9 @@ public sealed class DocumentView : Control
         var pf = ResolveParagraphFmt(paragraph);
         var alignment = pf.Alignment;
         var spaceAfter = pf.SpaceAfterPt * PxPerPoint;
+        var naturalLineHeightScale = UsesWordDefaultBodyLineBox(paragraph, pf, cells)
+            ? WordDefaultBodyLineHeightScale
+            : 1.0;
 
         // Paragraph indents: left/right reduce available width; first-line applies only to line 0.
         var indentLeft  = pf.IndentLeftPt  * PxPerPoint;
@@ -4465,13 +4472,13 @@ public sealed class DocumentView : Control
             if (run.Image is not null || run.Shape is not null) continue; // skip non-text
             foreach (var ch in run.Text)
             {
-                var h = Build(ch.ToString(), ResolveRunFmt(run.Formatting, paragraph)).Height;
+                var h = BuildForLayout(ch.ToString(), ResolveRunFmt(run.Formatting, paragraph)).Height;
                 if (h > firstLineNaturalH) firstLineNaturalH = h;
                 // VV1: do NOT break — scan all chars across ALL text runs (max over all cells).
             }
             // VV1: do NOT break — scan all runs.
         }
-        var firstLineHeight = ApplyLineSpacing(firstLineNaturalH, pf);
+        var firstLineHeight = ApplyLineSpacing(firstLineNaturalH * naturalLineHeightScale, pf);
         var anchorContentY = PeekFirstLineContentY(firstLineHeight);
         CollectFloatingObjects(blockIndex, paragraph, anchorContentY);
         var dropCapPlan = DocumentViewLayoutPlanner.BuildDropCapLayoutPlan(
@@ -4526,7 +4533,7 @@ public sealed class DocumentView : Control
                 var decision = reviewPolicy.RevisionDecision(cells[c].Revision);
                 if (decision.IsTextVisible)
                 {
-                    var ft = Build(cells[c].Ch.ToString(), cells[c].Fmt);
+                    var ft = BuildForLayout(cells[c].Ch.ToString(), cells[c].Fmt);
                     measured[c] = ft.WidthIncludingTrailingWhitespace;
                     heights[c] = ft.Height;
                 }
@@ -4584,7 +4591,8 @@ public sealed class DocumentView : Control
                 if (_wrapExclusions.Count > 0)
                     AdvancePastTopAndBottomExclusions(lineH2, lineAlignWidth);
                 EmitLinePaged(blockIndex, cells, measured, heights, lineStart, breakAt, alignment,
-                    lineAlignWidth, paraLeftInset + lineExtraInset, pf);
+                    lineAlignWidth, paraLeftInset + lineExtraInset, pf,
+                    naturalLineHeightScale: naturalLineHeightScale);
                 lineIndex++;
                 lineStart = breakAt;
                 lineWidth = 0;
@@ -4622,7 +4630,8 @@ public sealed class DocumentView : Control
                 AdvancePastTopAndBottomExclusions(lineH, lineAlignWidth);
             }
             EmitLinePaged(blockIndex, cells, measured, heights, lineStart, cells.Count, alignment,
-                lineAlignWidth, paraLeftInset + lineExtraInset, pf, isLast: true);
+                lineAlignWidth, paraLeftInset + lineExtraInset, pf, isLast: true,
+                naturalLineHeightScale: naturalLineHeightScale);
         }
         _layoutContentY += spaceAfter;
     }
@@ -4638,7 +4647,8 @@ public sealed class DocumentView : Control
         double availableWidth,
         double leftInset,
         ParagraphFormatting pf,
-        bool isLast = false)
+        bool isLast = false,
+        double naturalLineHeightScale = 1.0)
     {
         double lineWidth = 0;
         // Natural line height: use the tallest glyph but also respect line-spacing rule.
@@ -4651,7 +4661,7 @@ public sealed class DocumentView : Control
         }
 
         // Apply line-spacing rule from paragraph formatting.
-        double lineHeight = ApplyLineSpacing(naturalHeight, pf);
+        double lineHeight = ApplyLineSpacing(naturalHeight * naturalLineHeightScale, pf);
 
         // Ensure the whole line fits on one page (push to next page if it overflows).
         var contentY = ReserveContentY(lineHeight);
@@ -4878,6 +4888,23 @@ public sealed class DocumentView : Control
         };
     }
 
+    private static bool UsesWordDefaultBodyLineBox(
+        Paragraph paragraph,
+        ParagraphFormatting paragraphFormatting,
+        IReadOnlyList<Cell> cells)
+    {
+        if (paragraphFormatting.LineRule != LineSpacingRule.Multiple || paragraphFormatting.LineSpacingIsSet)
+            return false;
+
+        if (paragraph.StyleId is { Length: > 0 } styleId &&
+            !string.Equals(styleId, "Normal", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return cells.Count > 0 && cells.All(cell =>
+            string.Equals(cell.Fmt.FontFamily, "Calibri", StringComparison.OrdinalIgnoreCase) &&
+            Math.Abs((cell.Fmt.FontSizePt ?? DefaultFontSizePt) - 11.0) < 0.01);
+    }
+
     private static double AlignmentOffset(TextAlignment alignment, double textWidth, double lineWidth, bool isLast = false) => alignment switch
     {
         TextAlignment.Center  => Math.Max(0, (textWidth - lineWidth) / 2),
@@ -4933,7 +4960,7 @@ public sealed class DocumentView : Control
         var heights = new double[cells.Count];
         for (var c = 0; c < cells.Count; c++)
         {
-            var ft = Build(cells[c].Ch.ToString(), cells[c].Fmt);
+            var ft = BuildForLayout(cells[c].Ch.ToString(), cells[c].Fmt);
             measured[c] = ft.WidthIncludingTrailingWhitespace;
             heights[c] = ft.Height;
         }
@@ -13725,12 +13752,14 @@ public sealed class DocumentView : Control
 
     private List<Cell> DisplayCells(Paragraph paragraph)
     {
-        if (paragraph.Runs.All(run => run.Equation is null))
-            return FallbackCells(paragraph.PlainText);
-
         var cells = new List<Cell>();
         foreach (var run in paragraph.Runs)
         {
+            // Non-editable paragraphs (including note references and fields) still need their
+            // per-run display formatting. Flattening to PlainText loses superscript markers.
+            var link = run.HyperlinkUrl is { Length: > 0 } || run.HyperlinkAnchor is { Length: > 0 }
+                ? new LinkInfo(run.HyperlinkUrl, run.HyperlinkAnchor, run.HyperlinkTooltip)
+                : (LinkInfo?)null;
             if (run.Equation is { } equation)
             {
                 AddEquationDisplayCells(equation, run.Formatting, cells);
@@ -13738,7 +13767,8 @@ public sealed class DocumentView : Control
             }
 
             foreach (var ch in run.Text)
-                cells.Add(new Cell(ch, run.Formatting));
+                cells.Add(new Cell(ch, run.Formatting, run.CommentId, run.Revision, run.RevisionAuthor,
+                    run.RevisionDateXml, link, run.FormatRevision));
         }
         return cells;
     }
@@ -14096,6 +14126,16 @@ public sealed class DocumentView : Control
             FontSizePx(fmt),
             BrushFor(fmt.ColorHex));
     }
+
+    // Layout must use the same superscript/subscript scale that drawing uses. Otherwise a marker
+    // is painted small but reserves full-size width, which can push an otherwise fitting Word line over.
+    private FormattedText BuildForLayout(string text, RunFormatting fmt) =>
+        Build(text, LayoutMetricFormatting(fmt));
+
+    private static RunFormatting LayoutMetricFormatting(RunFormatting fmt) =>
+        fmt.VerticalAlign is VerticalAlign.Superscript or VerticalAlign.Subscript
+            ? fmt with { FontSizePt = (fmt.FontSizePt ?? DefaultFontSizePt) * SuperSubScale }
+            : fmt;
 
     private static double FontSizePx(RunFormatting fmt) => (fmt.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
 

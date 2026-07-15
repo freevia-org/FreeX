@@ -99,6 +99,62 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task Footnote_reference_uses_its_rendered_superscript_scale_for_layout_metrics()
+    {
+        IReadOnlyList<(char Ch, double X, double W, double Y, double LineHeight, bool IsSubscript)>? placed = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            var paragraph = new Paragraph();
+            paragraph.Runs.Add(new Run("1"));
+            paragraph.Runs.Add(Run.FootnoteReference(1));
+            doc.Blocks.Add(paragraph);
+            doc.Footnotes[1] = new Footnote(1, "Footnote body.");
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(960, 1200));
+            placed = view.GetPlacedForBlock(0);
+        });
+
+        if (!ran)
+            return;
+
+        placed.Should().NotBeNullOrEmpty();
+        placed.Should().HaveCount(2);
+        placed![1].W.Should().BeApproximately(placed[0].W * 0.583, 0.01,
+            "footnote-reference layout width must match the superscript scale used by rendering");
+    }
+
+    [Fact]
+    public async Task Default_calibri_body_uses_the_word_single_line_box()
+    {
+        double firstLineY = 0;
+        double secondLineY = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("First body paragraph."));
+            doc.Blocks.Add(new Paragraph("Second body paragraph."));
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(960, 1200));
+
+            firstLineY = view.GetPlacedForBlock(0).First().Y;
+            secondLineY = view.GetPlacedForBlock(1).First().Y;
+        });
+
+        if (!ran)
+            return;
+
+        (secondLineY - firstLineY).Should().BeInRange(28.3, 28.9,
+            "unstyled Calibri 11 body paragraphs should advance at Word's natural single-line cadence");
+    }
+
+    [Fact]
     public async Task Typing_inserts_text_and_is_undoable()
     {
         string? after = null;
