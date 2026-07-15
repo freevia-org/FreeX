@@ -5335,8 +5335,12 @@ public sealed class DocumentView : RichTextBox
     private FrameworkElement BuildDrawingWordArtVisual(DrawingObjectVisualPlan plan)
     {
         var wordArt = plan.WordArt!;
-        var foreground = BuildDrawingFillBrush(wordArt.Fill);
+        var fillBrush = BuildDrawingFillBrush(wordArt.Fill);
+        var foreground = BuildDrawingWordArtTextBrush(wordArt.Fill);
         var wpfEffect = BuildWordArtEffect(plan.Effects, DocumentEffectSet.FromTheme(_model.Theme));
+        if (wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
+            return BuildWarpedDrawingWordArtVisual(wordArt, fillBrush, foreground, wpfEffect);
+
         var textBlock = new TextBlock
         {
             Text = wordArt.Text,
@@ -5359,9 +5363,164 @@ public sealed class DocumentView : RichTextBox
             Height = plan.Rect.HeightDip,
             BorderBrush = wordArt.Outline.IsVisible ? BuildDrawingStrokeBrush(wordArt.Outline) : null,
             BorderThickness = wordArt.Outline.IsVisible ? new Thickness(Math.Max(0.5, wordArt.Outline.WidthDip)) : new Thickness(0),
-            Background = System.Windows.Media.Brushes.Transparent,
+            Background = fillBrush,
             Child = textBlock
         };
+    }
+
+    private static FrameworkElement BuildWarpedDrawingWordArtVisual(
+        DrawingObjectWordArtPlan wordArt,
+        System.Windows.Media.Brush fillBrush,
+        System.Windows.Media.Brush foreground,
+        System.Windows.Media.Effects.Effect? effect)
+    {
+        var canvas = new Canvas
+        {
+            Width = 1,
+            Height = 1,
+            Background = fillBrush,
+            Effect = effect
+        };
+
+        // The caller assigns the final size immediately after this method returns. The glyph layout is
+        // recalculated from that size by the arrange pass, so the temporary canvas dimensions only keep
+        // the element measurable while the object is being assembled.
+        canvas.SizeChanged += (_, _) => ArrangeWarpedWordArtGlyphs(canvas, wordArt, foreground);
+        return canvas;
+    }
+
+    private static System.Windows.Media.Brush BuildDrawingWordArtTextBrush(DrawingObjectFillPlan fill)
+    {
+        var backgroundHex = fill.ColorHex
+            ?? fill.GradientStops.FirstOrDefault()?.ColorHex
+            ?? fill.PatternBackgroundColorHex
+            ?? fill.PatternForegroundColorHex;
+        if (!TryParseColor(backgroundHex, out var background))
+            return System.Windows.Media.Brushes.White;
+
+        var luminance = (0.2126 * background.R + 0.7152 * background.G + 0.0722 * background.B) / 255.0;
+        return new SolidColorBrush(luminance < 0.42
+            ? System.Windows.Media.Colors.White
+            : System.Windows.Media.Colors.Black);
+    }
+
+    private static void ArrangeWarpedWordArtGlyphs(
+        Canvas canvas,
+        DrawingObjectWordArtPlan wordArt,
+        System.Windows.Media.Brush foreground)
+    {
+        if (canvas.ActualWidth <= 1 || canvas.ActualHeight <= 1)
+            return;
+
+        canvas.Children.Clear();
+        var fontSize = Math.Max(8, wordArt.FontSizeDip);
+        var glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
+        var totalWidth = glyphs.Sum(glyph => glyph.DesiredSize.Width);
+        var targetWidth = canvas.ActualWidth * 0.8;
+        if (totalWidth > targetWidth && totalWidth > 0)
+        {
+            fontSize = Math.Max(8, fontSize * targetWidth / totalWidth);
+            glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
+            totalWidth = glyphs.Sum(glyph => glyph.DesiredSize.Width);
+        }
+
+        if (glyphs.Count == 0 || totalWidth <= 0)
+            return;
+
+        var halfSpan = totalWidth / 2;
+        var currentX = canvas.ActualWidth / 2 - halfSpan;
+        var placements = new List<(double CenterX, double CenterY, double RotationDegrees, double Width, double Height)>(glyphs.Count);
+        for (var index = 0; index < glyphs.Count; index++)
+        {
+            var glyph = glyphs[index];
+            var width = glyph.DesiredSize.Width;
+            var height = glyph.DesiredSize.Height;
+            var centerX = currentX + width / 2;
+            var normalizedX = (centerX - canvas.ActualWidth / 2) / Math.Max(1, halfSpan);
+            double centerY;
+            double rotationDegrees;
+            if (wordArt.Warp == WordArtWarp.ArchUp)
+            {
+                var depth = Math.Min(canvas.ActualHeight * 0.28, Math.Max(3, totalWidth * 0.12));
+                centerY = canvas.ActualHeight / 2 - depth / 2 + depth * normalizedX * normalizedX;
+                rotationDegrees = Math.Atan(2 * depth * normalizedX / Math.Max(1, halfSpan)) * 180 / Math.PI;
+            }
+            else
+            {
+                var amplitude = Math.Min(canvas.ActualHeight * 0.16, Math.Max(2, totalWidth * 0.055));
+                var progress = (centerX - (canvas.ActualWidth / 2 - halfSpan)) / totalWidth;
+                var phase = Math.PI * 2 * progress;
+                centerY = canvas.ActualHeight / 2 + amplitude * Math.Sin(phase);
+                rotationDegrees = Math.Atan(amplitude * Math.PI * 2 * Math.Cos(phase) / totalWidth) * 180 / Math.PI;
+            }
+
+            placements.Add((centerX, centerY, rotationDegrees, width, height));
+            currentX += width;
+        }
+
+        var outlineBrush = wordArt.Outline.IsVisible
+            ? BuildDrawingStrokeBrush(wordArt.Outline)
+            : null;
+        for (var index = 0; index < glyphs.Count; index++)
+        {
+            var placement = placements[index];
+            var character = wordArt.Text[index].ToString();
+            if (outlineBrush is not null)
+            {
+                foreach (var offset in new[] { (-0.8, 0.0), (0.8, 0.0), (0.0, -0.8), (0.0, 0.8) })
+                    AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, outlineBrush, placement, offset);
+            }
+            AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, foreground, placement, (0, 0));
+        }
+    }
+
+    private static List<TextBlock> CreateWordArtGlyphs(
+        string text,
+        double fontSize,
+        bool bold,
+        System.Windows.Media.Brush foreground)
+    {
+        var glyphs = new List<TextBlock>(text.Length);
+        foreach (var character in text)
+        {
+            var glyph = new TextBlock
+            {
+                Text = character.ToString(),
+                FontFamily = new FontFamily("Calibri"),
+                FontSize = fontSize,
+                FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
+                Foreground = foreground,
+                TextWrapping = TextWrapping.NoWrap
+            };
+            glyph.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            glyphs.Add(glyph);
+        }
+        return glyphs;
+    }
+
+    private static void AddWarpedWordArtGlyph(
+        Canvas canvas,
+        string character,
+        double fontSize,
+        bool bold,
+        System.Windows.Media.Brush foreground,
+        (double CenterX, double CenterY, double RotationDegrees, double Width, double Height) placement,
+        (double X, double Y) offset)
+    {
+        var glyph = new TextBlock
+        {
+            Text = character,
+            FontFamily = new FontFamily("Calibri"),
+            FontSize = fontSize,
+            FontWeight = bold ? FontWeights.Bold : FontWeights.Normal,
+            Foreground = foreground,
+            TextWrapping = TextWrapping.NoWrap,
+            RenderTransformOrigin = new Point(0.5, 0.5),
+            RenderTransform = new RotateTransform(placement.RotationDegrees)
+        };
+        Canvas.SetLeft(glyph, placement.CenterX - placement.Width / 2 + offset.X);
+        Canvas.SetTop(glyph, placement.CenterY - placement.Height / 2 + offset.Y);
+        canvas.Children.Add(glyph);
     }
 
     private static System.Windows.Media.Brush BuildDrawingFillBrush(DrawingObjectFillPlan fill)

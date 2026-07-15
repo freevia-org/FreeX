@@ -263,12 +263,54 @@ public sealed class FloatingObjectRenderTests
         root.Tag.Should().BeSameAs(wordArt);
         var textBlock = LogicalDescendants<TextBlock>(root).Single();
         textBlock.Foreground.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Colors.Black);
+        root.Background.Should().BeOfType<SolidColorBrush>()
             .Which.Color.Should().Be(Color.FromRgb(0xED, 0x7D, 0x31));
         var effect = textBlock.Effect.Should().BeOfType<DropShadowEffect>().Subject;
         effect.Color.Should().Be(Color.FromRgb(0xED, 0x7D, 0x31));
         effect.BlurRadius.Should().BeApproximately(sharedPlan.Effects.ShadowBlurDip, 0.01);
         effect.ShadowDepth.Should().BeApproximately(sharedPlan.Effects.ShadowDistanceDip, 0.01);
         sharedPlan.Effects.Summary.Should().Be("shadow");
+    }
+
+    [StaFact]
+    public void FloatingOverlay_RendersWarpedWordArtWithContrastingTextAndFill()
+    {
+        var wordArt = new WordArt("Warped FX", WordArtStyle.GlowBlue, 28)
+        {
+            Warp = WordArtWarp.Wave1,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 4
+            }
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Canvas>().Single();
+        root.Background.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromRgb(0x24, 0x24, 0x24));
+
+        root.Measure(new Size(180, 64));
+        root.Arrange(new Rect(0, 0, 180, 64));
+        root.UpdateLayout();
+
+        var glyphs = root.Children.OfType<TextBlock>().ToList();
+        glyphs.Should().HaveCount(wordArt.Text.Length);
+        glyphs.All(glyph => glyph.Foreground is SolidColorBrush brush && brush.Color == Colors.White)
+            .Should().BeTrue();
+        glyphs.Any(glyph => glyph.RenderTransform is RotateTransform rotation && Math.Abs(rotation.Angle) > 0.1)
+            .Should().BeTrue();
     }
 
     [StaFact]
