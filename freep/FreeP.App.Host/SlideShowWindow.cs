@@ -8,7 +8,7 @@ using System.Windows.Threading;
 using Free.Shared.AppServices;
 using Free.Shared.Drawing;
 using FreeP.App.Compositor;
-using FreeP.App.Host.Recording;
+using FreeP.App.Recording;
 using FreeP.App.Rendering.Wpf;
 using FreeP.Core.Model;
 
@@ -379,7 +379,11 @@ public sealed class SlideShowWindow : Window
         ApplyInkExecution(SlideShowInkExecutionPlanner.UndoLastStroke(_inkExecutionState));
 
     private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend() =>
-        new WpfWindowsRecordingCaptureBackend();
+        new WindowsRecordingCaptureBackend(
+            new WindowsRecordingHostMetadata(
+                "WPF slideshow",
+                "WPF Windows recording capture adapter",
+                "ppt/media/freep-recordings/wpf"));
 
     // ── Keyboard navigation ───────────────────────────────────────────────────────
 

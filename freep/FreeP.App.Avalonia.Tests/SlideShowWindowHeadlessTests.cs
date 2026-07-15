@@ -6,7 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless;
 using FreeP.App.Avalonia;
-using FreeP.App.Avalonia.Recording;
+using FreeP.App.Recording;
 using FreeP.App.Compositor;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
@@ -1403,6 +1403,6 @@ public sealed class SlideShowWindowHeadlessTests
         SlideShowHostCapabilityRecordingCaptureBackend.FromCapabilities(
             SlideShowRecordingCaptureAdapterPlanner.BuildCapabilities(
                 SlideShowRecordingCaptureAdapterPlanner.BuildDeferredReadiness(
-                    AvaloniaWindowsRecordingCaptureBackend.HostName,
+                    "Avalonia slideshow",
                     "Avalonia microphone/camera capture adapter")));
 }

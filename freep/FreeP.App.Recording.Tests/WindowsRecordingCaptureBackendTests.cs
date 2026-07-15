@@ -1,19 +1,22 @@
-using System.IO.Compression;
-using System.Text;
-using System.Xml.Linq;
-using FreeP.App.Avalonia.Recording;
 using FreeP.App.Compositor;
-using FreeP.Core.IO;
-using FreeP.Core.Model;
+using FreeP.App.Recording;
+using System.IO;
+using System.IO.Compression;
+using System.Xml.Linq;
 
-namespace FreeP.App.Avalonia.Tests;
+namespace FreeP.App.Recording.Tests;
 
-public sealed class AvaloniaWindowsRecordingCaptureBackendTests
+public sealed class WindowsRecordingCaptureBackendTests
 {
+    private static WindowsRecordingHostMetadata WpfMetadata => new(
+        "WPF slideshow",
+        "WPF Windows recording capture adapter",
+        "ppt/media/freep-recordings/wpf");
+
     [Fact]
     public void Readiness_WithMicrophone_ProjectsNarrationCaptureAndDeferredCamera()
     {
-        var backend = new AvaloniaWindowsRecordingCaptureBackend(
+        var backend = CreateBackend(
             new FakeDeviceCatalog(
                 new SlideShowRecordingCaptureDeviceDescriptor(
                     SlideShowRecordingCaptureDeviceKind.Microphone,
@@ -24,8 +27,8 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
                     "audio/mp4")),
             new FakeCaptureEngine());
 
-        backend.Capabilities.HostName.Should().Be("Avalonia slideshow");
-        backend.AdapterReadiness.AdapterName.Should().Be("Avalonia Windows recording capture adapter");
+        backend.Capabilities.HostName.Should().Be("WPF slideshow");
+        backend.AdapterReadiness.AdapterName.Should().Be("WPF Windows recording capture adapter");
         backend.AdapterReadiness.CanCaptureNarration.Should().BeTrue();
         backend.AdapterReadiness.CanCaptureCamera.Should().BeFalse();
         backend.AdapterReadiness.ReadyStreams.Should().Equal(SlideShowRecordingCaptureStreamKind.NarrationAudio);
@@ -36,7 +39,7 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
     [Fact]
     public void Readiness_WithNoDevices_RemainsOsBackedButUnavailable()
     {
-        var backend = new AvaloniaWindowsRecordingCaptureBackend(
+        var backend = CreateBackend(
             new FakeDeviceCatalog(),
             new FakeCaptureEngine());
 
@@ -51,7 +54,7 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
 
         var evidence = SlideShowRecordingHostAdapterParityPlanner.BuildUnavailableHardwareEvidence(
             new[] { backend.AdapterReadiness });
-        evidence.HasAvaloniaUnavailableHardware.Should().BeTrue();
+        evidence.HasWpfUnavailableHardware.Should().BeTrue();
         evidence.ClaimsCapture.Should().BeFalse();
         evidence.ClaimsPowerPointComBaseline.Should().BeFalse();
     }
@@ -59,7 +62,7 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
     [Fact]
     public void Readiness_WithMicrophoneAndCamera_ProjectsNarrationAndCameraHandoff()
     {
-        var backend = new AvaloniaWindowsRecordingCaptureBackend(
+        var backend = CreateBackend(
             new FakeDeviceCatalog(
                 new SlideShowRecordingCaptureDeviceDescriptor(
                     SlideShowRecordingCaptureDeviceKind.Microphone,
@@ -87,10 +90,10 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
     }
 
     [Fact]
-    public void Planner_WithAvaloniaMicrophoneBackend_StartsAndCompletesNarrationCapture()
+    public void Planner_WithWpfMicrophoneBackend_StartsAndCompletesNarrationCapture()
     {
         var engine = new FakeCaptureEngine();
-        var backend = new AvaloniaWindowsRecordingCaptureBackend(
+        var backend = CreateBackend(
             new FakeDeviceCatalog(
                 new SlideShowRecordingCaptureDeviceDescriptor(
                     SlideShowRecordingCaptureDeviceKind.Microphone,
@@ -116,14 +119,14 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
             started.AddMilliseconds(1800));
 
         engine.StartedRequests.Should().HaveCount(2);
-        engine.StartedRequests[0].Should().Match<AvaloniaWindowsRecordingCaptureStartRequest>(request =>
+        engine.StartedRequests[0].Should().Match<WindowsRecordingCaptureStartRequest>(request =>
             request.Device.DeviceId == "mic-0" &&
             request.SlideIndex == 0 &&
-            request.PackagePath == "ppt/media/freep-recordings/avalonia/slide-001-narration.wav");
-        engine.StartedRequests[1].Should().Match<AvaloniaWindowsRecordingCaptureStartRequest>(request =>
+            request.PackagePath == "ppt/media/freep-recordings/wpf/slide-001-narration.wav");
+        engine.StartedRequests[1].Should().Match<WindowsRecordingCaptureStartRequest>(request =>
             request.Device.DeviceId == "mic-0" &&
             request.SlideIndex == 1 &&
-            request.PackagePath == "ppt/media/freep-recordings/avalonia/slide-002-narration.wav");
+            request.PackagePath == "ppt/media/freep-recordings/wpf/slide-002-narration.wav");
         var segment = moved.Segments.Should().ContainSingle().Subject;
         segment.NarrationCaptured.Should().BeTrue();
         segment.CameraCaptured.Should().BeFalse();
@@ -135,7 +138,7 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
             artifact.IsPersistable &&
             artifact.SuggestedFileName == "slide-001-narration.wav" &&
             artifact.ContentType == "audio/wav" &&
-            artifact.PackagePath == "ppt/media/freep-recordings/avalonia/slide-001-narration.wav" &&
+            artifact.PackagePath == "ppt/media/freep-recordings/wpf/slide-001-narration.wav" &&
             artifact.PayloadBytes != null &&
             artifact.PayloadBytes.Length == artifact.ContentLengthBytes &&
             artifact.ContentSha256.Length == 64);
@@ -144,10 +147,10 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
     }
 
     [Fact]
-    public void Planner_WithAvaloniaCameraBackend_StartsAndCompletesVideoWhenEngineProvidesPayload()
+    public void Planner_WithWpfCameraBackend_StartsAndCompletesVideoWhenEngineProvidesPayload()
     {
         var engine = new FakeCaptureEngine();
-        var backend = new AvaloniaWindowsRecordingCaptureBackend(
+        var backend = CreateBackend(
             new FakeDeviceCatalog(
                 new SlideShowRecordingCaptureDeviceDescriptor(
                     SlideShowRecordingCaptureDeviceKind.Microphone,
@@ -183,8 +186,8 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
         engine.StartedRequests.Where(request => request.Device.Kind == SlideShowRecordingCaptureDeviceKind.Camera)
             .Select(request => request.PackagePath)
             .Should().Equal(
-                "ppt/media/freep-recordings/avalonia/slide-001-camera.mp4",
-                "ppt/media/freep-recordings/avalonia/slide-002-camera.mp4");
+                "ppt/media/freep-recordings/wpf/slide-001-camera.mp4",
+                "ppt/media/freep-recordings/wpf/slide-002-camera.mp4");
         moved.LastActions.Select(action => action.Kind).Should().ContainInOrder(
             SlideShowRecordingExecutionActionKind.StartNarrationCapture,
             SlideShowRecordingExecutionActionKind.StartCameraCapture);
@@ -198,17 +201,17 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
             artifact.IsPersistable &&
             artifact.SuggestedFileName == "slide-001-camera.mp4" &&
             artifact.ContentType == "video/mp4" &&
-            artifact.PackagePath == "ppt/media/freep-recordings/avalonia/slide-001-camera.mp4" &&
+            artifact.PackagePath == "ppt/media/freep-recordings/wpf/slide-001-camera.mp4" &&
             artifact.PayloadBytes != null &&
             artifact.PayloadBytes.Length == artifact.ContentLengthBytes &&
             artifact.ContentSha256.Length == 64);
     }
 
     [Fact]
-    public void Planner_WithAvaloniaCameraBackend_PersistsEncodedVideoPayloadThroughPptxPackage()
+    public void Planner_WithWpfCameraBackend_PersistsEncodedVideoPayloadThroughPptxPackage()
     {
         var (presentation, cameraArtifact) = BuildPresentationWithCapturedCameraArtifact(
-            new AvaloniaWindowsRecordingCaptureBackend(
+            CreateBackend(
                 new FakeDeviceCatalog(
                     new SlideShowRecordingCaptureDeviceDescriptor(
                         SlideShowRecordingCaptureDeviceKind.Camera,
@@ -225,8 +228,8 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
         stream.Position = 0;
         using (var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true))
         {
-            var mediaEntry = archive.GetEntry("ppt/media/freep-recordings/avalonia/slide-001-camera.mp4");
-            mediaEntry.Should().NotBeNull("the Avalonia encoded camera payload must be written at the host package path");
+            var mediaEntry = archive.GetEntry("ppt/media/freep-recordings/wpf/slide-001-camera.mp4");
+            mediaEntry.Should().NotBeNull("the WPF encoded camera payload must be written at the host package path");
             ReadBytes(mediaEntry!).Should().Equal(cameraArtifact.PayloadBytes);
 
             archive.GetEntry("ppt/media/recordingArtifacts.xml").Should().NotBeNull();
@@ -244,7 +247,7 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
         var reloadedCamera = reloaded.RecordingMediaArtifacts
             .Single(artifact => artifact.Kind == PresentationRecordingMediaArtifactKind.CameraVideo);
 
-        reloadedCamera.PackagePath.Should().Be("ppt/media/freep-recordings/avalonia/slide-001-camera.mp4");
+        reloadedCamera.PackagePath.Should().Be("ppt/media/freep-recordings/wpf/slide-001-camera.mp4");
         reloadedCamera.ContentType.Should().Be("video/mp4");
         reloadedCamera.ContentSha256.Should().Be(cameraArtifact.ContentSha256);
         reloadedCamera.ContentLengthBytes.Should().Be(cameraArtifact.ContentLengthBytes);
@@ -254,7 +257,7 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
     [Fact]
     public void DefaultWindowsEngine_CameraCaptureDefersEncodedPayloadAfterHandoff()
     {
-        var engine = new AvaloniaWindowsRecordingCaptureEngine();
+        var engine = new WindowsRecordingCaptureEngine(WpfMetadata.AdapterName);
         var device = new SlideShowRecordingCaptureDeviceDescriptor(
             SlideShowRecordingCaptureDeviceKind.Camera,
             "camera-0",
@@ -263,14 +266,14 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
             IsAvailable: true,
             "video/mp4");
         var started = new DateTimeOffset(2026, 7, 14, 10, 0, 0, TimeSpan.Zero);
-        var packagePath = "ppt/media/freep-recordings/avalonia/slide-001-camera.mp4";
+        var packagePath = "ppt/media/freep-recordings/wpf/slide-001-camera.mp4";
 
-        engine.BeginCapture(new AvaloniaWindowsRecordingCaptureStartRequest(
+        engine.BeginCapture(new WindowsRecordingCaptureStartRequest(
             device,
             SlideIndex: 0,
             started,
             packagePath));
-        var result = engine.CompleteCapture(new AvaloniaWindowsRecordingCaptureRequest(
+        var result = engine.CompleteCapture(new WindowsRecordingCaptureRequest(
             device,
             SlideIndex: 0,
             DurationMs: 1500,
@@ -285,8 +288,8 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
             new[]
             {
                 new SlideShowRecordingCameraEncodingReadinessRow(
-                    AvaloniaWindowsRecordingCaptureBackend.HostName,
-                    AvaloniaWindowsRecordingCaptureBackend.AdapterName,
+                    WpfMetadata.HostName,
+                    WpfMetadata.AdapterName,
                     packagePath,
                     "video/mp4",
                     DeviceHandoffReached: result.StatusText.Contains("camera device handoff reached", StringComparison.Ordinal),
@@ -296,10 +299,80 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
                     SlideShowRecordingCameraEncodingEvidenceSource.LocalDefaultNoComEngine,
                     result.StatusText)
             });
-        evidence.HasAvaloniaNoComHandoff.Should().BeTrue();
+        evidence.HasWpfNoComHandoff.Should().BeTrue();
         evidence.HasPackageTargets.Should().BeTrue();
         evidence.HasLocalEncodedPayload.Should().BeFalse();
         evidence.ClaimsPowerPointComBaseline.Should().BeFalse();
+    }
+
+    [Fact]
+    public void HostMetadata_ControlsPackagePathAndCapturedResult()
+    {
+        var metadata = new WindowsRecordingHostMetadata(
+            "Avalonia slideshow",
+            "Avalonia Windows recording capture adapter",
+            "ppt/media/freep-recordings/avalonia");
+        var engine = new FakeCaptureEngine();
+        var backend = new WindowsRecordingCaptureBackend(
+            metadata,
+            new FakeDeviceCatalog(
+                new SlideShowRecordingCaptureDeviceDescriptor(
+                    SlideShowRecordingCaptureDeviceKind.Microphone,
+                    "mic-0",
+                    "Studio microphone",
+                    IsDefault: true,
+                    IsAvailable: true,
+                    "audio/wav")),
+            engine);
+        var started = new DateTimeOffset(2026, 7, 15, 10, 0, 0, TimeSpan.Zero);
+
+        backend.BeginCapture(new SlideShowRecordingCaptureStartRequest(
+            SlideShowRecordingMediaArtifactKind.NarrationAudio,
+            1,
+            started,
+            "nested\\slide-002-narration.mp4",
+            "audio/wav"));
+        var result = backend.CompleteCapture(new SlideShowRecordingCaptureRequest(
+            SlideShowRecordingMediaArtifactKind.NarrationAudio,
+            1,
+            started,
+            started.AddSeconds(2),
+            2000,
+            "nested\\slide-002-narration.mp4",
+            "audio/wav"));
+
+        engine.StartedRequests.Should().ContainSingle().Which.PackagePath
+            .Should().Be("ppt/media/freep-recordings/avalonia/slide-002-narration.wav");
+        result.Should().Match<SlideShowRecordingCaptureResult>(capture =>
+            capture.IsCaptured &&
+            capture.PackagePath == "ppt/media/freep-recordings/avalonia/slide-002-narration.wav" &&
+            capture.SuggestedFileNameOverride == "slide-002-narration.wav" &&
+            capture.ContentTypeOverride == "audio/wav" &&
+            capture.ContentLengthBytes > 0 &&
+            capture.ContentSha256.Length == 64);
+    }
+
+    [Fact]
+    public void PlatformComposition_UsesSharedBackendAndHasNoHostLocalCopies()
+    {
+        var root = FindRepositoryRoot();
+        var wpfSource = Read(root, "freep", "FreeP.App.Host", "SlideShowWindow.cs");
+        var avaloniaSource = Read(root, "freep", "FreeP.App.Avalonia", "SlideShowWindow.cs");
+
+        foreach (var source in new[] { wpfSource, avaloniaSource })
+        {
+            source.Should().Contain("new WindowsRecordingCaptureBackend(");
+            source.Should().Contain("new WindowsRecordingHostMetadata(");
+            source.Should().NotContain("WpfWindowsRecording");
+            source.Should().NotContain("AvaloniaWindowsRecording");
+        }
+
+        Read(root, "freep", "FreeP.App.Host", "FreeP.App.Host.csproj")
+            .Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
+        Read(root, "freep", "FreeP.App.Avalonia", "FreeP.App.Avalonia.csproj")
+            .Should().Contain("FreeP.App.Recording\\FreeP.App.Recording.csproj");
+        AssertNoHostLocalRecordingSources(root, "FreeP.App.Host");
+        AssertNoHostLocalRecordingSources(root, "FreeP.App.Avalonia");
     }
 
     private static (Presentation Presentation, PresentationRecordingMediaArtifact CameraArtifact)
@@ -329,8 +402,8 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
             artifact.HasPayload &&
             artifact.SuggestedFileName == "slide-001-camera.mp4" &&
             artifact.ContentType == "video/mp4" &&
-            artifact.PackagePath == "ppt/media/freep-recordings/avalonia/slide-001-camera.mp4" &&
-            artifact.CapturedByHost == AvaloniaWindowsRecordingCaptureBackend.HostName &&
+            artifact.PackagePath == "ppt/media/freep-recordings/wpf/slide-001-camera.mp4" &&
+            artifact.CapturedByHost == WpfMetadata.HostName &&
             artifact.ContentSha256.Length == 64);
 
         return (presentation, cameraArtifact);
@@ -344,7 +417,37 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
         return memory.ToArray();
     }
 
-    private sealed class FakeDeviceCatalog : IAvaloniaWindowsRecordingDeviceCatalog
+    private static string Read(string root, params string[] relativeParts) =>
+        File.ReadAllText(Path.Combine(new[] { root }.Concat(relativeParts).ToArray()));
+
+    private static void AssertNoHostLocalRecordingSources(string root, string projectName)
+    {
+        var recordingDirectory = Path.Combine(root, "freep", projectName, "Recording");
+        if (Directory.Exists(recordingDirectory))
+        {
+            Directory.GetFiles(recordingDirectory, "*.cs").Should().BeEmpty();
+        }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
+             directory is not null;
+             directory = directory.Parent)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
+                return directory.FullName;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
+    }
+
+    private static WindowsRecordingCaptureBackend CreateBackend(
+        IWindowsRecordingDeviceCatalog deviceCatalog,
+        IWindowsRecordingCaptureEngine captureEngine) =>
+        new(WpfMetadata, deviceCatalog, captureEngine);
+
+    private sealed class FakeDeviceCatalog : IWindowsRecordingDeviceCatalog
     {
         private readonly IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> _devices;
 
@@ -356,22 +459,22 @@ public sealed class AvaloniaWindowsRecordingCaptureBackendTests
         public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices() => _devices;
     }
 
-    private sealed class FakeCaptureEngine : IAvaloniaWindowsRecordingCaptureEngine
+    private sealed class FakeCaptureEngine : IWindowsRecordingCaptureEngine
     {
-        public List<AvaloniaWindowsRecordingCaptureStartRequest> StartedRequests { get; } = new();
+        public List<WindowsRecordingCaptureStartRequest> StartedRequests { get; } = new();
 
-        public void BeginCapture(AvaloniaWindowsRecordingCaptureStartRequest request)
+        public void BeginCapture(WindowsRecordingCaptureStartRequest request)
         {
             StartedRequests.Add(request);
         }
 
-        public AvaloniaWindowsRecordingCaptureResult CompleteCapture(AvaloniaWindowsRecordingCaptureRequest request)
+        public WindowsRecordingCaptureResult CompleteCapture(WindowsRecordingCaptureRequest request)
         {
-            var payload = Encoding.UTF8.GetBytes(
+            var payload = System.Text.Encoding.UTF8.GetBytes(
                 $"{request.Device.Kind}|{request.Device.DeviceId}|{request.SlideIndex}|{request.DurationMs}|{request.PackagePath}");
 
-            return AvaloniaWindowsRecordingCaptureResult.Captured(
-                $"Fake Avalonia {request.Device.Kind} captured {request.PackagePath}",
+            return WindowsRecordingCaptureResult.Captured(
+                $"Fake WPF {request.Device.Kind} captured {request.PackagePath}",
                 request.PackagePath,
                 payload);
         }

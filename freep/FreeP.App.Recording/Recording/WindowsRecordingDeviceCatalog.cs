@@ -2,19 +2,21 @@ using System.Runtime.InteropServices;
 using System.Text;
 using FreeP.App.Compositor;
 
-namespace FreeP.App.Avalonia.Recording;
+namespace FreeP.App.Recording;
 
-internal interface IAvaloniaWindowsRecordingDeviceCatalog
+public interface IWindowsRecordingDeviceCatalog
 {
     IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices();
 }
 
-internal sealed class AvaloniaWindowsRecordingDeviceCatalog : IAvaloniaWindowsRecordingDeviceCatalog
+public sealed class WindowsRecordingDeviceCatalog : IWindowsRecordingDeviceCatalog
 {
     public IReadOnlyList<SlideShowRecordingCaptureDeviceDescriptor> EnumerateDevices()
     {
         if (!OperatingSystem.IsWindows())
+        {
             return Array.Empty<SlideShowRecordingCaptureDeviceDescriptor>();
+        }
 
         var devices = new List<SlideShowRecordingCaptureDeviceDescriptor>();
         AddMicrophoneDevices(devices);
