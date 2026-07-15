@@ -29,6 +29,28 @@ public class WatermarkOptionsRoundTripTests
         return XDocument.Load(reader);
     }
 
+    private static XDocument ReadHeaderXml(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = zip.GetEntry("word/header1.xml")!;
+        using var reader = entry.Open();
+        return XDocument.Load(reader);
+    }
+
+    private static string ReadHeaderRelsXml(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        var entry = zip.GetEntry("word/_rels/header1.xml.rels")!;
+        using var reader = new StreamReader(entry.Open());
+        return reader.ReadToEnd();
+    }
+
     // ── WatermarkOptions full round-trip ──────────────────────────────────
 
     [Fact]
@@ -127,6 +149,50 @@ public class WatermarkOptionsRoundTripTests
         props.Should().ContainKey(Ooxml.WatermarkColorPropertyName);
         props.Should().ContainKey(Ooxml.WatermarkLayoutPropertyName);
         props.Should().ContainKey(Ooxml.WatermarkOpacityPropertyName);
+    }
+
+    [Fact]
+    public void WatermarkOptions_EmitsWordCompatibleVmlInDefaultHeader()
+    {
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions("CONFIDENTIAL")
+        {
+            FontFamily = "Arial",
+            FontColorHex = "#123456",
+            Layout = WatermarkLayout.Horizontal,
+            Opacity = 0.5
+        };
+
+        var xml = ReadHeaderXml(doc);
+        var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+        var shape = xml.Descendants(vml + "shape").Single();
+        var textPath = shape.Element(vml + "textpath");
+
+        shape.Attribute("style")!.Value.Should().Contain("rotation:0");
+        shape.Attribute("fillcolor")!.Value.Should().Be("123456");
+        shape.Element(vml + "fill")!.Attribute("opacity")!.Value.Should().Be("0.5");
+        textPath!.Attribute("string")!.Value.Should().Be("CONFIDENTIAL");
+        textPath.Attribute("style")!.Value.Should().Contain("font-family:Arial");
+    }
+
+    [Fact]
+    public void PictureWatermark_EmitsHeaderRelationshipAndMedia()
+    {
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+        };
+
+        var rels = ReadHeaderRelsXml(doc);
+        rels.Should().Contain("Id=\"rIdWatermarkImage\"");
+
+        using var stream = new MemoryStream();
+        DocxWriter.Write(doc, stream);
+        stream.Position = 0;
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+        zip.GetEntry("word/media/header1_watermark1.png").Should().NotBeNull();
     }
 
     // ── Legacy Watermark migration ────────────────────────────────────────

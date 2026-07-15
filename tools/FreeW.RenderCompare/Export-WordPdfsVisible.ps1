@@ -21,6 +21,7 @@ public static class WordPdfVisibleUi32 {
   [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);
   [DllImport("user32.dll", SetLastError=true)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
   [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
   [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr GetDlgItem(IntPtr hDlg, int nIDDlgItem);
   [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 }
@@ -102,6 +103,74 @@ function Wait-File {
     return $null
 }
 
+function Dismiss-WordStartupExperienceDialog {
+    param([object]$Word)
+
+    try {
+        $wordWindow = [IntPtr]$Word.Hwnd
+        if ($wordWindow -eq [IntPtr]::Zero) {
+            return
+        }
+
+        $wordProcessId = [uint32]0
+        [void][WordPdfVisibleUi32]::GetWindowThreadProcessId($wordWindow, [ref]$wordProcessId)
+        [WordPdfVisibleUi32]::EnumWindows({
+            param($hWnd, $lParam)
+            if (-not [WordPdfVisibleUi32]::IsWindowVisible($hWnd)) {
+                return $true
+            }
+
+            $ownerProcessId = [uint32]0
+            [void][WordPdfVisibleUi32]::GetWindowThreadProcessId($hWnd, [ref]$ownerProcessId)
+            if ($ownerProcessId -ne $wordProcessId) {
+                return $true
+            }
+
+            $title = [Text.StringBuilder]::new(512)
+            [void][WordPdfVisibleUi32]::GetWindowText($hWnd, $title, $title.Capacity)
+            if ($title.ToString() -eq 'Powering your experiences') {
+                [void][WordPdfVisibleUi32]::SendMessage($hWnd, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+            }
+
+            return $true
+        }, [IntPtr]::Zero) | Out-Null
+    }
+    catch {
+        # Word may not expose its top-level window while it is starting.
+    }
+}
+
+function Invoke-WordRetry {
+    param(
+        [scriptblock]$Action,
+        [string]$Operation,
+        [object]$Word,
+        [int]$TimeoutSeconds = 120
+    )
+
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    $lastError = $null
+    do {
+        try {
+            return & $Action
+        }
+        catch {
+            $lastError = $_
+            if ($_.Exception.HResult -ne [int]0x80010001) {
+                throw
+            }
+
+            if ($Word) {
+                Dismiss-WordStartupExperienceDialog -Word $Word
+            }
+
+            Start-Sleep -Milliseconds 500
+        }
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    throw "$Operation failed after $TimeoutSeconds seconds: $($lastError.Exception.Message)"
+}
+
 function Get-WordApplication {
     param(
         [string]$ProgId,
@@ -114,7 +183,9 @@ function Get-WordApplication {
     }
     catch {
         $Created.Value = $true
-        return New-Object -ComObject $ProgId
+        return Invoke-WordRetry -Operation "Create $ProgId" -Action {
+            New-Object -ComObject $ProgId
+        }
     }
 }
 
@@ -125,7 +196,10 @@ New-Item -ItemType Directory -Force -Path $outDirFull | Out-Null
 
 $files =
 if ($Docs) {
-    $Docs | ForEach-Object { Join-Path $corpusDirFull $_ } | Where-Object { Test-Path -LiteralPath $_ }
+    $Docs |
+        ForEach-Object { $_ -split ',' } |
+        ForEach-Object { Join-Path $corpusDirFull $_ } |
+        Where-Object { Test-Path -LiteralPath $_ }
 }
 else {
     Get-ChildItem -LiteralPath $corpusDirFull -Filter *.docx |
@@ -140,8 +214,9 @@ if (-not $files) {
 
 $createdWord = $false
 $word = Get-WordApplication $WordApplicationProgId ([ref]$createdWord)
-$word.Visible = $true
-try { $word.DisplayAlerts = 0 } catch {}
+Invoke-WordRetry -Operation 'Set Word.Visible' -Word $word -Action { $word.Visible = $true }
+Dismiss-WordStartupExperienceDialog -Word $word
+try { Invoke-WordRetry -Operation 'Set Word.DisplayAlerts' -Word $word -Action { $word.DisplayAlerts = 0 } } catch {}
 
 $results = New-Object System.Collections.Generic.List[object]
 try {
@@ -155,7 +230,7 @@ try {
 
         foreach ($doc in @($word.Documents)) {
             if ([string]::Equals($doc.FullName, $fixture.FullName, [StringComparison]::OrdinalIgnoreCase)) {
-                $doc.Close($false)
+                Invoke-WordRetry -Operation "Close $($fixture.Name)" -Word $word -Action { $doc.Close($false) }
             }
         }
 
@@ -164,12 +239,27 @@ try {
         $status = 'ok'
         $errorMessage = ''
         try {
-            $doc = $word.Documents.Open($fixture.FullName, $false, $true, $false)
-            $doc.Activate()
+            $doc = Invoke-WordRetry -Operation "Open $($fixture.Name)" -Action {
+                $word.Documents.Open($fixture.FullName, $false, $true, $false)
+            } -Word $word
+            Invoke-WordRetry -Operation "Activate $($fixture.Name)" -Word $word -Action { $doc.Activate() }
             $code = @"
-`$ErrorActionPreference='Stop'
-`$word=[Runtime.InteropServices.Marshal]::GetActiveObject('$WordApplicationProgId')
-`$word.CommandBars.ExecuteMso('FileSaveAsPdfOrXps')
+`$ErrorActionPreference = 'Stop'
+`$deadline = [DateTime]::UtcNow.AddSeconds(30)
+`$lastError = `$null
+do {
+    try {
+        `$word = [Runtime.InteropServices.Marshal]::GetActiveObject('$WordApplicationProgId')
+        `$word.CommandBars.ExecuteMso('FileSaveAsPdfOrXps')
+        exit 0
+    }
+    catch {
+        `$lastError = `$_
+        if (`$_.Exception.HResult -ne [int]0x80010001) { throw }
+        Start-Sleep -Milliseconds 500
+    }
+} while ([DateTime]::UtcNow -lt `$deadline)
+throw "ExecuteMso failed: `$(`$lastError.Exception.Message)"
 "@
             $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($code))
             $child = Start-Process -FilePath powershell.exe -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-EncodedCommand',$encoded) -PassThru -WindowStyle Hidden
@@ -199,7 +289,7 @@ try {
         }
         finally {
             if ($doc) {
-                try { $doc.Close($false) } catch {}
+                try { Invoke-WordRetry -Operation "Close $($fixture.Name)" -Word $word -Action { $doc.Close($false) } } catch {}
             }
         }
 
