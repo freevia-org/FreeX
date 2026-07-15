@@ -27,7 +27,7 @@ public sealed class FreePLocalizationStartupTests : IDisposable
     {
         CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("fr-FR");
 
-        AppLocalization.InstallSharedSeams();
+        AppLocalization.Bootstrap.InstallSharedSeams();
 
         ShellStrings.Current.Cancel.Should().Be("_Annuler");
         ShellStrings.Current.Ok.Should().Be("_OK");
@@ -40,7 +40,7 @@ public sealed class FreePLocalizationStartupTests : IDisposable
     {
         CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("fr-FR");
 
-        AppLocalization.InstallSharedSeams();
+        AppLocalization.Bootstrap.InstallSharedSeams();
 
         BackstageStrings.Current.Get("Backstage_GreetingMorning").Should().Be("Bonjour");
         BackstageStrings.Current.Format("Backstage_Recent_OpenRecentFileAutomationName", "Roadmap.pptx")
@@ -54,9 +54,9 @@ public sealed class FreePLocalizationStartupTests : IDisposable
     [Fact]
     public void ApplyAppLanguage_UsesPersistedUiLanguageForResourceLookup()
     {
-        AppLocalization.InstallSharedSeams();
+        AppLocalization.Bootstrap.InstallSharedSeams();
 
-        AppLocalization.ApplyAppLanguage(AppLanguageCatalog.PseudoLocalizationCultureName);
+        AppLocalization.Bootstrap.ApplyAppLanguage(AppLanguageCatalog.PseudoLocalizationCultureName);
 
         string.Equals(
             CultureInfo.CurrentUICulture.Name,
@@ -75,9 +75,9 @@ public sealed class FreePLocalizationStartupTests : IDisposable
         var composition = File.ReadAllText(RepositoryFile("freep", "FreeP.App.Host", "AppComposition.cs"));
 
         program.Should().Contain("InstallSharedSeams = AppComposition.InstallSharedSeams");
-        program.Should().Contain("ApplyUiLanguage: AppLocalization.ApplyAppLanguage");
-        program.Should().Contain("ApplyCurrentCultureToWpf: AppLocalization.ApplyCurrentCultureToWpf");
-        composition.Should().Contain("AppLocalization.InstallSharedSeams();");
+        program.Should().Contain("ApplyUiLanguage: AppLocalization.Bootstrap.ApplyAppLanguage");
+        program.Should().Contain("ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf");
+        composition.Should().Contain("AppLocalization.Bootstrap.InstallSharedSeams();");
         composition.Should().NotContain("StaticShellStrings.ForProductTitle");
         composition.Should().NotContain("DefaultBackstageStrings.Instance");
     }

@@ -38,8 +38,8 @@ public static class Program
             },
             Localization = new WpfApplicationLocalizationStartupSpec<FreePOptions>(
                 SelectUiLanguage: options => options.UiLanguage,
-                ApplyUiLanguage: AppLocalization.ApplyAppLanguage,
-                ApplyCurrentCultureToWpf: AppLocalization.ApplyCurrentCultureToWpf)
+                ApplyUiLanguage: AppLocalization.Bootstrap.ApplyAppLanguage,
+                ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf)
         });
     }
 }

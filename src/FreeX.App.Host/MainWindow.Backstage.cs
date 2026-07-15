@@ -950,7 +950,7 @@ public partial class MainWindow
                 previousAppLanguage,
                 AppLanguageCatalog.NormalizeCultureName(_options.AppLanguage));
             if (appLanguageChanged)
-                AppLocalization.ApplyAppLanguage(_options.AppLanguage);
+                AppLocalization.Bootstrap.ApplyAppLanguage(_options.AppLanguage);
 
             ApplyFormulaErrorCheckingOptions(dlg.DisabledFormulaErrorCodesResult);
             ApplyOptionsCalculationSettings(dlg.CalculationSettingsResult);

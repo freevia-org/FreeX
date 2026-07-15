@@ -57,7 +57,7 @@ public sealed class SlideSizeDialogTests
     [StaFact]
     public void SlideSizeDialog_UsesSharedLocalizedButtonRow()
     {
-        AppLocalization.InstallSharedSeams();
+        AppLocalization.Bootstrap.InstallSharedSeams();
 
         var dlg = new SlideSizeDialog(MakeSession());
         var buttons = FindButtons((DependencyObject)dlg.Content);

@@ -75,17 +75,9 @@ public partial class App : Application
         // Velopack is invoked earlier, from Program.Main, before the WPF Application is created,
         // so install/update/uninstall hooks are serviced before any UI initializes.
         var options = FreeXOptions.Load();
-        AppLocalization.ApplyAppLanguage(options.AppLanguage);
-        AppLocalization.ApplyCurrentCultureToWpf();
-        ShellStrings.Current = new ResourceShellStrings(
-            () => UiText.Ok,
-            () => UiText.Cancel,
-            () => UiText.ErrorTitle,
-            () => UiText.WarningTitle,
-            () => UiText.InformationTitle,
-            () => UiText.ConfirmTitle,
-            UiText.CreateAutomationName);
-        BackstageStrings.Current = new ResourceBackstageStrings(UiText.Get, UiText.Format);
+        AppLocalization.Bootstrap.InstallSharedSeams();
+        AppLocalization.Bootstrap.ApplyAppLanguage(options.AppLanguage);
+        AppLocalization.Bootstrap.ApplyCurrentCultureToWpf();
         DialogSizing.RegisterAppDialogSizing();
 
         // Let the SHARED ribbon-icon factory (used by shared chrome — the BackstageFrame rail, QAT, …)

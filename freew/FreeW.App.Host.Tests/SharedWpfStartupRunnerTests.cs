@@ -152,10 +152,10 @@ public sealed class SharedWpfStartupRunnerTests : IDisposable
         freePProgram.Should().NotContain("System.Environment.GetEnvironmentVariable");
         freeWProgram.Should().NotContain("Application.Current");
         freePProgram.Should().NotContain("Application.Current");
-        freeWProgram.Should().NotContain("AppLocalization.ApplyAppLanguage(options.UiLanguage)");
-        freePProgram.Should().NotContain("AppLocalization.ApplyAppLanguage(options.UiLanguage)");
-        freeWProgram.Should().NotContain("AppLocalization.ApplyCurrentCultureToWpf();");
-        freePProgram.Should().NotContain("AppLocalization.ApplyCurrentCultureToWpf();");
+        freeWProgram.Should().NotContain("AppLocalization.Bootstrap.ApplyAppLanguage(options.UiLanguage)");
+        freePProgram.Should().NotContain("AppLocalization.Bootstrap.ApplyAppLanguage(options.UiLanguage)");
+        freeWProgram.Should().NotContain("AppLocalization.Bootstrap.ApplyCurrentCultureToWpf();");
+        freePProgram.Should().NotContain("AppLocalization.Bootstrap.ApplyCurrentCultureToWpf();");
         freeWProgram.Should().NotContain("RegisterCrashHandlers");
         freePProgram.Should().NotContain("RegisterCrashHandlers");
         freeWProgram.Should().NotContain("RecordEvent(\"app_start\")");
