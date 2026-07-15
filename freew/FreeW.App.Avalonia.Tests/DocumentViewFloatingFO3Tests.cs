@@ -501,6 +501,20 @@ public sealed class DocumentViewFloatingFO3Tests
         summaries.Should().ContainSingle().Which.Should().Be(expected);
     }
 
+    [Fact]
+    public void ArchUpGlyphPlacement_IsSymmetricAndCurved()
+    {
+        var placements = DocumentView.BuildArchUpGlyphPlacements([10d, 10d, 10d, 10d, 10d], new Rect(20, 30, 100, 40));
+
+        placements.Should().HaveCount(5);
+        placements[0].CenterY.Should().BeApproximately(placements[4].CenterY, 0.001);
+        placements[1].CenterY.Should().BeApproximately(placements[3].CenterY, 0.001);
+        placements[0].CenterY.Should().BeGreaterThan(placements[2].CenterY);
+        placements[0].RotationRadians.Should().BeLessThan(0);
+        placements[2].RotationRadians.Should().BeApproximately(0, 0.001);
+        placements[4].RotationRadians.Should().BeGreaterThan(0);
+    }
+
     // ── SmartArt collection tests ─────────────────────────────────────────────────────────────────
 
     [Fact]

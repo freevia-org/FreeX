@@ -15903,25 +15903,102 @@ public sealed class DocumentView : Control
             ColorHex   = ContrastingWordArtTextColor(wd.Fill),
         };
 
-        // Path deformation is not supported in Avalonia immediate-mode yet, so
-        // render the unwarped text as the closest readable fallback.
         var displayText = wd.Text;
-
-        var ft = Build(displayText, textFmt);
-        var tx = rect.X + Math.Max(0, (rect.Width  - ft.WidthIncludingTrailingWhitespace) / 2);
-        var ty = rect.Y + Math.Max(0, (rect.Height - ft.Height) / 2);
         using (context.PushClip(rect))
-            context.DrawText(ft, new Point(tx, ty));
+        {
+            if (wd.Warp == WordArtWarp.ArchUp)
+                DrawArchUpWordArtText(context, displayText, textFmt, rect);
+            else
+            {
+                var ft = Build(displayText, textFmt);
+                var tx = rect.X + Math.Max(0, (rect.Width  - ft.WidthIncludingTrailingWhitespace) / 2);
+                var ty = rect.Y + Math.Max(0, (rect.Height - ft.Height) / 2);
+                context.DrawText(ft, new Point(tx, ty));
+            }
+        }
 
         // For styles with an outline, draw the text a second time with a contrasting colour offset by 1px
         // to simulate an outline effect (poor-man's outline — Avalonia has no DrawTextOutline API).
         if (wd.Outline.IsVisible && !string.IsNullOrEmpty(wd.Outline.ColorHex))
         {
             var outlineFmt = textFmt with { ColorHex = wd.Outline.ColorHex };
-            var outlineFt  = Build(displayText, outlineFmt);
             using (context.PushClip(rect))
-                context.DrawText(outlineFt, new Point(tx + 1, ty + 1));
+            {
+                if (wd.Warp == WordArtWarp.ArchUp)
+                    DrawArchUpWordArtText(context, displayText, outlineFmt, rect, new Vector(1, 1));
+                else
+                {
+                    var outlineFt = Build(displayText, outlineFmt);
+                    var tx = rect.X + Math.Max(0, (rect.Width  - outlineFt.WidthIncludingTrailingWhitespace) / 2);
+                    var ty = rect.Y + Math.Max(0, (rect.Height - outlineFt.Height) / 2);
+                    context.DrawText(outlineFt, new Point(tx + 1, ty + 1));
+                }
+            }
         }
+    }
+
+    private void DrawArchUpWordArtText(
+        DrawingContext context,
+        string text,
+        RunFormatting format,
+        Rect rect,
+        Vector offset = default)
+    {
+        var glyphs = text.Select(ch => Build(ch.ToString(), format)).ToList();
+        var totalWidth = glyphs.Sum(glyph => glyph.WidthIncludingTrailingWhitespace);
+        var targetWidth = rect.Width * 0.80;
+        if (totalWidth > targetWidth && totalWidth > 0)
+        {
+            var scaledFormat = format with
+            {
+                FontSizePt = Math.Max(8, (format.FontSizePt ?? DefaultFontSizePt) * targetWidth / totalWidth)
+            };
+            glyphs = text.Select(ch => Build(ch.ToString(), scaledFormat)).ToList();
+        }
+
+        var placements = BuildArchUpGlyphPlacements(
+            glyphs.Select(glyph => glyph.WidthIncludingTrailingWhitespace).ToList(),
+            rect);
+
+        for (var index = 0; index < glyphs.Count; index++)
+        {
+            var glyph = glyphs[index];
+            var placement = placements[index];
+            using var transform = context.PushTransform(
+                Matrix.CreateTranslation(-glyph.WidthIncludingTrailingWhitespace / 2, -glyph.Height / 2)
+                * Matrix.CreateRotation(placement.RotationRadians)
+                * Matrix.CreateTranslation(placement.CenterX + offset.X, placement.CenterY + offset.Y));
+            context.DrawText(glyph, new Point(0, 0));
+        }
+    }
+
+    internal static IReadOnlyList<(double CenterX, double CenterY, double RotationRadians)> BuildArchUpGlyphPlacements(
+        IReadOnlyList<double> glyphWidths,
+        Rect rect)
+    {
+        if (glyphWidths.Count == 0)
+            return [];
+
+        var totalWidth = glyphWidths.Sum();
+        if (totalWidth <= 0)
+            return [];
+
+        var halfSpan = totalWidth / 2;
+        var archDepth = Math.Min(rect.Height * 0.28, Math.Max(3, totalWidth * 0.12));
+        var centeredY = rect.Center.Y - archDepth / 2;
+        var currentX = rect.Center.X - halfSpan;
+        var placements = new List<(double CenterX, double CenterY, double RotationRadians)>(glyphWidths.Count);
+        foreach (var width in glyphWidths)
+        {
+            var centerX = currentX + width / 2;
+            var normalizedX = (centerX - rect.Center.X) / halfSpan;
+            var centerY = centeredY + archDepth * normalizedX * normalizedX;
+            var tangent = 2 * archDepth * normalizedX / halfSpan;
+            placements.Add((centerX, centerY, Math.Atan(tangent)));
+            currentX += width;
+        }
+
+        return placements;
     }
 
     private static IBrush? BuildWordArtFillBrush(DrawingObjectFillPlan fill)
