@@ -3993,15 +3993,15 @@ public static class DocxReader
         if (ptLst is null)
             return null;
 
-        // Index every node point (skip the type="doc"/"pres" presentation points) by its modelId, capturing
-        // its text from the first a:t in its dgm:t body.
+        // Index semantic node points by modelId. Word also emits parTrans/sibTrans points in ptLst;
+        // those are layout bookkeeping and must not become authored SmartArt nodes on read.
         var textById = new Dictionary<string, string>(StringComparer.Ordinal);
         var nodeById = new Dictionary<string, SmartArtNode>(StringComparer.Ordinal);
         var orderedIds = new List<string>();
         foreach (var pt in ptLst.Elements(Dgm + "pt"))
         {
             var type = pt.Attribute("type")?.Value;
-            if (type is "doc" or "pres")
+            if (type is "doc" or "pres" or "parTrans" or "sibTrans")
                 continue;
             var modelId = pt.Attribute("modelId")?.Value;
             if (modelId is null)
@@ -4019,7 +4019,8 @@ public static class DocxReader
         var parentOrder = new List<(string Src, string Dest)>();
         foreach (var cxn in dataModel.Element(Dgm + "cxnLst")?.Elements(Dgm + "cxn") ?? [])
         {
-            if (cxn.Attribute("type")?.Value != "parOf")
+            var connectionType = cxn.Attribute("type")?.Value;
+            if (connectionType is not null && connectionType is not "parOf")
                 continue;
             var src = cxn.Attribute("srcId")?.Value;
             var dest = cxn.Attribute("destId")?.Value;
@@ -4143,6 +4144,34 @@ public static class DocxReader
                 }
             }
         }
+
+        // Word's native package may omit the optional quickStyle/colors relIds. FreeW records those
+        // catalog ids in the document point's prSet, so recover them from the data part in that form.
+        if (target.StyleId is null || target.ColorSchemeId is null)
+        {
+            var dataRelId = relIds?.Attribute(R + "dm")?.Value;
+            if (dataRelId is not null && relationships.TryGetValue(dataRelId, out var dataPath))
+            {
+                var docPoint = LoadPart(archive, dataPath)?.Root?
+                    .Element(Dgm + "ptLst")?.Elements(Dgm + "pt")
+                    .FirstOrDefault(pt => pt.Attribute("type")?.Value == "doc");
+                var prSet = docPoint?.Element(Dgm + "prSet");
+                if (target.StyleId is null)
+                    target.StyleId = GallerySuffix(prSet?.Attribute("qsTypeId")?.Value);
+                if (target.ColorSchemeId is null)
+                    target.ColorSchemeId = GallerySuffix(prSet?.Attribute("csTypeId")?.Value);
+            }
+        }
+    }
+
+    private static string? GallerySuffix(string? uniqueId)
+    {
+        if (string.IsNullOrEmpty(uniqueId))
+            return null;
+        var lastSlash = uniqueId.LastIndexOf('/');
+        return lastSlash >= 0 && lastSlash < uniqueId.Length - 1
+            ? uniqueId[(lastSlash + 1)..]
+            : null;
     }
 
     /// <summary>
