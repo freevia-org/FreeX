@@ -213,10 +213,10 @@ public sealed class ChartRenderingTests
 
     /// <summary>
     /// Bug fix: Scatter chart must NOT dispatch to DrawLineChart (no Polyline), but instead render
-    /// discrete Ellipse markers at each (x,y) point. Regression test for B-charts fix #1.
+    /// discrete Word-style markers at each (x,y) point. Regression test for B-charts fix #1.
     /// </summary>
     [StaFact]
-    public void ScatterChart_RendersEllipseMarkersAndNoPolylines()
+    public void ScatterChart_RendersDistinctMarkersAndNoPolylines()
     {
         var view = new DocumentView();
         view.LoadModel(TextDocument.CreateEmpty());
@@ -225,13 +225,14 @@ public sealed class ChartRenderingTests
         chart.Series.Add(new ChartSeries("Sample", new double[] { 52, 58, 63, 68, 74 }));
         view.InsertChart(chart);
 
-        // After fix: scatter → DrawScatterChart → Ellipse markers, NO connecting Polyline.
+        // After fix: scatter → DrawScatterChart → marker geometry, NO connecting Polyline.
         var polylines = LogicalDescendants<System.Windows.Shapes.Polyline>(view.Document);
         Assert.Empty(polylines);
 
-        // One Ellipse per data point (5 points × 1 series = 5 markers).
-        var ellipses = LogicalDescendants<System.Windows.Shapes.Ellipse>(view.Document);
-        Assert.Equal(5, ellipses.Count);
+        // The colorful Word style cycles diamond, square, triangle, and X markers.
+        Assert.True(LogicalDescendants<System.Windows.Shapes.Polygon>(view.Document).Count >= 2);
+        Assert.True(LogicalDescendants<System.Windows.Shapes.Rectangle>(view.Document).Count >= 1);
+        Assert.True(LogicalDescendants<System.Windows.Shapes.Line>(view.Document).Count >= 2);
     }
 
     /// <summary>
@@ -304,12 +305,12 @@ public sealed class ChartRenderingTests
 
         var textBlocks = LogicalDescendants<System.Windows.Controls.TextBlock>(view.Document);
         var title = textBlocks.Single(text => text.Text == "Revenue by quarter");
-        Assert.Equal(18, title.FontSize);
-        Assert.Equal(16, textBlocks.Single(text => text.Text == "USD").FontSize);
-        Assert.Equal(16, textBlocks.Single(text => text.Text == "Quarter").FontSize);
+        Assert.Equal(24, title.FontSize);
+        Assert.Equal(20, textBlocks.Single(text => text.Text == "USD").FontSize);
+        Assert.Equal(20, textBlocks.Single(text => text.Text == "Quarter").FontSize);
 
         var axisTickLabels = textBlocks
-            .Where(text => text.Text is "0" or "0.55" or "1.1" or "1.65" or "2.2")
+            .Where(text => text.Text is "0" or "0.75" or "1.5" or "2.25" or "3")
             .ToList();
         Assert.Equal(5, axisTickLabels.Count);
     }

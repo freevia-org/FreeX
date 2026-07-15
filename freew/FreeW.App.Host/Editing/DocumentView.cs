@@ -10871,9 +10871,9 @@ public sealed class DocumentView : RichTextBox
             var title = new TextBlock
             {
                 Text = chart.Title,
-                FontSize = 18,
+                FontSize = 24,
                 FontWeight = FontWeights.Normal,
-                Margin = new Thickness(0, 0, 0, 8),
+                Margin = new Thickness(0, 0, 0, 10),
                 HorizontalAlignment = HorizontalAlignment.Center
             };
             DockPanel.SetDock(title, Dock.Top);
@@ -10888,10 +10888,8 @@ public sealed class DocumentView : RichTextBox
         }
 
         var actualShowTitle = settings.ShowTitle && !string.IsNullOrEmpty(chart.Title);
-        var titleH = actualShowTitle ? 22 : 0;
-        var legendH = settings.ShowLegend ? 22 : 0;
-        var plotW = Math.Max(24, widthPx - 12);
-        var plotH = Math.Max(24, heightPx - 12 - titleH - legendH);
+        var titleH = actualShowTitle ? 46 : 0;
+        var legendH = settings.ShowLegend ? 18 : 0;
 
         // Plot-area background fill (Style 2/3/7/8 use a coloured background).
         var plotBg = settings.PlotAreaFill
@@ -10902,17 +10900,20 @@ public sealed class DocumentView : RichTextBox
         // These are added to the root DockPanel before the plot so they dock outside the plot area.
         var isPie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
         var showAxisTitles = !isPie && settings.ShowAxisTitles;
+        var axisReserve = showAxisTitles ? 78 : 0;
+        var plotW = Math.Max(24, widthPx - 12 - (showAxisTitles ? 44 : 0));
+        var plotH = Math.Max(24, heightPx - 12 - titleH - legendH - axisReserve);
         if (showAxisTitles && !string.IsNullOrEmpty(settings.ValueAxisTitle))
         {
             var valueLabel = new TextBlock
             {
                 Text = settings.ValueAxisTitle,
-                FontSize = 16,
+                FontSize = 20,
                 Foreground = System.Windows.Media.Brushes.Black,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 LayoutTransform = new RotateTransform(-90)
             };
-            var valueHost = new Border { Child = valueLabel, Padding = new Thickness(2), Width = 34 };
+            var valueHost = new Border { Child = valueLabel, Padding = new Thickness(2), Width = 44 };
             DockPanel.SetDock(valueHost, Dock.Left);
             root.Children.Add(valueHost);
         }
@@ -10921,7 +10922,7 @@ public sealed class DocumentView : RichTextBox
             var catLabel = new TextBlock
             {
                 Text = settings.CategoryAxisTitle,
-                FontSize = 16,
+                FontSize = 20,
                 Foreground = System.Windows.Media.Brushes.Black,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 Margin = new Thickness(0, 2, 0, 0)
@@ -11217,25 +11218,19 @@ public sealed class DocumentView : RichTextBox
         for (var s = 0; s < chart.Series.Count; s++)
         {
             var vals = chart.Series[s].Values;
-            var color = new SolidColorBrush(settings.Palette[s % settings.Palette.Length]);
 
             for (var c = 0; c < vals.Count; c++)
             {
                 var px = Px(c);
                 var py = Py(vals[c]);
+                var color = new SolidColorBrush(
+                    settings.Palette[(chart.Series.Count == 1 ? c : s) % settings.Palette.Length]);
 
-                // Filled circle marker — no connecting line.
-                var dot = new System.Windows.Shapes.Ellipse
-                {
-                    Width = markerR * 2,
-                    Height = markerR * 2,
-                    Fill = color,
-                    Stroke = System.Windows.Media.Brushes.White,
-                    StrokeThickness = 0.5
-                };
-                Canvas.SetLeft(dot, px - markerR);
-                Canvas.SetTop(dot, py - markerR);
-                plot.Children.Add(dot);
+                // Word's colorful scatter style cycles marker geometry as well as color.
+                var marker = BuildScatterMarker(color, c % 4, markerR);
+                Canvas.SetLeft(marker, px - markerR);
+                Canvas.SetTop(marker, py - markerR);
+                plot.Children.Add(marker);
 
                 if (settings.ShowDataLabels)
                     AddDataLabel(plot, vals[c], px + markerR + 2, py - 10);
@@ -11251,6 +11246,54 @@ public sealed class DocumentView : RichTextBox
             var catW = w / Math.Max(1, chart.Categories.Count);
             AddCategoryLabel(plot, chart, c, px - catW / 2, plotH + 1, catW, System.Windows.TextAlignment.Center);
         }
+    }
+
+    private static FrameworkElement BuildScatterMarker(SolidColorBrush fill, int markerIndex, double radius)
+    {
+        var diameter = radius * 2;
+        return markerIndex switch
+        {
+            0 => new System.Windows.Shapes.Polygon
+            {
+                Points = new PointCollection
+                {
+                    new(radius, 0), new(diameter, radius), new(radius, diameter), new(0, radius)
+                },
+                Fill = fill
+            },
+            1 => new System.Windows.Shapes.Rectangle
+            {
+                Width = diameter,
+                Height = diameter,
+                Fill = fill
+            },
+            2 => new System.Windows.Shapes.Polygon
+            {
+                Points = new PointCollection
+                {
+                    new(radius, 0), new(diameter, diameter), new(0, diameter)
+                },
+                Fill = fill
+            },
+            _ => new Canvas
+            {
+                Width = diameter,
+                Height = diameter,
+                Children =
+                {
+                    new System.Windows.Shapes.Line
+                    {
+                        X1 = 1, Y1 = 1, X2 = diameter - 1, Y2 = diameter - 1,
+                        Stroke = fill, StrokeThickness = 1.5
+                    },
+                    new System.Windows.Shapes.Line
+                    {
+                        X1 = diameter - 1, Y1 = 1, X2 = 1, Y2 = diameter - 1,
+                        Stroke = fill, StrokeThickness = 1.5
+                    }
+                }
+            }
+        };
     }
 
     /// <summary>Pie (or doughnut) chart over the first series' values, one slice per category.</summary>

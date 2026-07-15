@@ -15263,17 +15263,17 @@ public sealed class DocumentView : Control
         context.DrawRectangle(null, ChartFramePen, rect);
 
         // ── Title bar ──
-        const double titleH = 20;
-        var titleY = rect.Y + 4;
+        const double titleH = 46;
+        var titleY = rect.Y + 10;
         if (!string.IsNullOrEmpty(cd.Title))
         {
-            var titleFmt = new RunFormatting { FontSizePt = 9, Bold = true };
+            var titleFmt = new RunFormatting { FontSizePt = 18 };
             var ft = Build(cd.Title, titleFmt);
             var tx = rect.X + (rect.Width - ft.WidthIncludingTrailingWhitespace) / 2;
             context.DrawText(ft, new Point(Math.Max(rect.X + 2, tx), titleY));
         }
 
-        var annotFmt = new RunFormatting { FontSizePt = 7 };
+        var annotFmt = new RunFormatting { FontSizePt = 9 };
 
         // BC2: Legend is placed at the BOTTOM (matches WPF). Build legend entries for ALL series
         // with "Series N" fallback; for Pie/Doughnut use categories with "Item N" fallback.
@@ -15310,18 +15310,18 @@ public sealed class DocumentView : Control
         var legendH = legendEntries.Count > 0 ? legendRowH + legendPad * 2 : 0.0;
 
         // ── Value-axis (Y) title — left strip ──
-        const double valAxisTitleW = 12; // width of rotated text strip
+        const double valAxisTitleW = 24; // width of rotated text strip
         var hasValTitle = !string.IsNullOrEmpty(cd.ValueAxisTitle);
         var valTitleW = hasValTitle ? valAxisTitleW : 0.0;
 
         // ── Category-axis (X) title — bottom strip ──
-        const double catAxisTitleH = 12;
+        const double catAxisTitleH = 24;
         var hasCatTitle = !string.IsNullOrEmpty(cd.CategoryAxisTitle);
         var catTitleH = hasCatTitle ? catAxisTitleH : 0.0;
 
         // ── Plot area bounds after reserving annotation strips ──
-        var plotTop    = rect.Y + (string.IsNullOrEmpty(cd.Title) ? 8 : titleH + 4);
-        var plotBottom = rect.Bottom - 18 - catTitleH - legendH; // x-axis labels + optional cat title + legend
+        var plotTop    = rect.Y + (string.IsNullOrEmpty(cd.Title) ? 12 : titleH + 8);
+        var plotBottom = rect.Bottom - 55 - catTitleH - legendH; // x-axis labels + optional cat title + legend
         var plotLeft   = rect.X + 32 + valTitleW;      // y-axis labels + optional val title
         var plotRight  = rect.Right - 8;
         var plotW      = Math.Max(10, plotRight - plotLeft);
@@ -15514,10 +15514,6 @@ public sealed class DocumentView : Control
             }
         }
 
-        // Kind label (bottom-right corner, tiny).
-        var kindFmt = new RunFormatting { FontSizePt = 7, ColorHex = "#999999" };
-        var kindFt  = Build(cd.Kind.ToString(), kindFmt);
-        context.DrawText(kindFt, new Point(rect.Right - kindFt.WidthIncludingTrailingWhitespace - 2, rect.Bottom - kindFt.Height));
     }
 
     /// <summary>
@@ -15683,12 +15679,13 @@ public sealed class DocumentView : Control
         for (var si = 0; si < nSeries; si++)
         {
             var (_, vals) = cd.Series[si];
-            var color = ChartColorAt(cd, si);
-            var brush = new SolidColorBrush(color);
-
             for (var ci = 0; ci < nBars; ci++)
             {
                 var val = ci < vals.Count ? vals[ci] : 0;
+                // Word's single-series column charts shade individual points;
+                // grouped charts remain series-colored.
+                var color = ChartColorAt(cd, nSeries == 1 ? ci : si);
+                var brush = new SolidColorBrush(color);
 
                 if (horizontal)
                 {
@@ -15805,17 +15802,68 @@ public sealed class DocumentView : Control
         for (var si = 0; si < cd.Series.Count; si++)
         {
             var (_, values) = cd.Series[si];
-            var brush = new SolidColorBrush(ChartColorAt(cd, si));
             for (var ci = 0; ci < values.Count; ci++)
             {
                 var px = Px(ci);
                 var py = Py(values[ci]);
-                context.DrawEllipse(brush, null, new Point(px, py), 3.5, 3.5);
+                var color = ChartColorAt(cd, cd.Series.Count == 1 ? ci : si);
+                DrawScatterMarker(context, color, ci % 4, new Point(px, py), 3.5);
             }
         }
 
         context.DrawLine(new Pen(ChartGridlineBrush, 1.0),
             new Point(plotLeft, plotBottom), new Point(plotLeft + plotW, plotBottom));
+    }
+
+    private static void DrawScatterMarker(
+        DrawingContext context,
+        Color color,
+        int markerIndex,
+        Point center,
+        double radius)
+    {
+        var brush = new SolidColorBrush(color);
+        switch (markerIndex)
+        {
+            case 0:
+            {
+                var geometry = new StreamGeometry();
+                using (var path = geometry.Open())
+                {
+                    path.BeginFigure(new Point(center.X, center.Y - radius), true);
+                    path.LineTo(new Point(center.X + radius, center.Y));
+                    path.LineTo(new Point(center.X, center.Y + radius));
+                    path.LineTo(new Point(center.X - radius, center.Y));
+                    path.EndFigure(true);
+                }
+                context.DrawGeometry(brush, null, geometry);
+                break;
+            }
+            case 1:
+                context.FillRectangle(brush, new Rect(center.X - radius, center.Y - radius, radius * 2, radius * 2));
+                break;
+            case 2:
+            {
+                var geometry = new StreamGeometry();
+                using (var path = geometry.Open())
+                {
+                    path.BeginFigure(new Point(center.X, center.Y - radius), true);
+                    path.LineTo(new Point(center.X + radius, center.Y + radius));
+                    path.LineTo(new Point(center.X - radius, center.Y + radius));
+                    path.EndFigure(true);
+                }
+                context.DrawGeometry(brush, null, geometry);
+                break;
+            }
+            default:
+                context.DrawLine(new Pen(brush, 1.5),
+                    new Point(center.X - radius, center.Y - radius),
+                    new Point(center.X + radius, center.Y + radius));
+                context.DrawLine(new Pen(brush, 1.5),
+                    new Point(center.X + radius, center.Y - radius),
+                    new Point(center.X - radius, center.Y + radius));
+                break;
+        }
     }
 
     private static void DrawChartPie(DrawingContext context, FloatingChartData cd,

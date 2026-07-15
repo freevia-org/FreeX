@@ -43,6 +43,25 @@ public sealed record ChartValueAxisPlan(double Minimum, double Maximum)
         if (maximum <= minimum)
             maximum = minimum + 1;
 
+        // Word chooses a human-friendly major unit instead of exposing the raw
+        // data extrema. Four major intervals match the compact chart surfaces
+        // used by the fidelity corpus (2.2 becomes 0..3, 66 becomes 0..80).
+        var rawStep = (maximum - minimum) / 4;
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawStep)));
+        var normalizedStep = rawStep / magnitude;
+        var step = normalizedStep <= 1
+            ? magnitude
+            : normalizedStep <= 2
+                ? 2 * magnitude
+                : normalizedStep <= 5
+                    ? 5 * magnitude
+                    : 10 * magnitude;
+
+        minimum = Math.Floor(minimum / step) * step;
+        maximum = Math.Ceiling(maximum / step) * step;
+        if (maximum <= minimum)
+            maximum = minimum + step;
+
         return new ChartValueAxisPlan(minimum, maximum);
     }
 }

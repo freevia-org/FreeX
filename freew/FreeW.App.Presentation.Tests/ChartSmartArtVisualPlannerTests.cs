@@ -123,12 +123,24 @@ public sealed class ChartSmartArtVisualPlannerTests
 
         var axis = ChartSmartArtVisualPlanner.BuildChartPlan(chart).ValueAxis;
 
-        axis.Minimum.Should().Be(-4);
-        axis.Maximum.Should().Be(6);
-        axis.Range.Should().Be(10);
-        axis.ZeroFraction.Should().BeApproximately(0.4, 0.001);
-        axis.ValueFraction(-4).Should().Be(0);
-        axis.ValueFraction(6).Should().Be(1);
+        axis.Minimum.Should().Be(-5);
+        axis.Maximum.Should().Be(10);
+        axis.Range.Should().Be(15);
+        axis.ZeroFraction.Should().BeApproximately(1.0 / 3.0, 0.001);
+        axis.ValueFraction(-5).Should().Be(0);
+        axis.ValueFraction(10).Should().Be(1);
+    }
+
+    [Fact]
+    public void ChartPlan_UsesWordFriendlyPositiveMajorUnits()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"], [1.4, 1.8, 1.6, 2.2]);
+
+        var axis = ChartSmartArtVisualPlanner.BuildChartPlan(chart).ValueAxis;
+
+        axis.Minimum.Should().Be(0);
+        axis.Maximum.Should().Be(3);
+        axis.Range.Should().Be(3);
     }
 
     [Fact]
