@@ -147,8 +147,8 @@ public class SmartArtRoundTripTests
         var relIds = documentXml.Descendants(Dgm + "relIds").Single();
         relIds.Attribute(R + "dm")!.Value.Should().Be(dataRel.Attribute("Id")!.Value);
         relIds.Attribute(R + "lo")!.Value.Should().Be(layoutRel.Attribute("Id")!.Value);
-        relIds.Attribute(R + "qs").Should().BeNull("Word treats quickStyle as an optional relationship");
-        relIds.Attribute(R + "cs").Should().BeNull("Word treats colors as an optional relationship");
+        relIds.Attribute(R + "qs")!.Value.Should().Be(styleRel.Attribute("Id")!.Value);
+        relIds.Attribute(R + "cs")!.Value.Should().Be(colorsRel.Attribute("Id")!.Value);
     }
 
     [Fact]
@@ -207,6 +207,13 @@ public class SmartArtRoundTripTests
         var dataModelExt = dataXml.Descendants(Dsp + "dataModelExt").Should().ContainSingle().Subject;
         dataModelExt.Attribute("relId")!.Value.Should().Be(drawingRel.Attribute("Id")!.Value);
         dataModelExt.Attribute("minVer")!.Value.Should().Be(Dgm.NamespaceName);
+
+        var documentRels = EntryXml(docx, "word/_rels/document.xml.rels");
+        documentRels.Root!.Elements(Rel + "Relationship")
+            .Should().ContainSingle(r =>
+                r.Attribute("Id")!.Value == dataModelExt.Attribute("relId")!.Value &&
+                r.Attribute("Type")!.Value == DrawingRelType &&
+                r.Attribute("Target")!.Value == "diagrams/drawing1.xml");
     }
 
     [Fact]
@@ -292,9 +299,13 @@ public class SmartArtRoundTripTests
         var drawing = EntryXml(docx, "word/diagrams/drawing1.xml");
 
         // 4 nodes total (CEO, VP Eng, Lead, VP Sales) → 4 shapes.
-        drawing.Descendants(Dsp + "sp").Should().HaveCount(4);
-        drawing.Descendants(A + "t").Select(t => t.Value)
-            .Should().Contain(["CEO", "VP Eng", "Lead", "VP Sales"]);
+        drawing.Descendants(Dsp + "sp").Should().HaveCount(11);
+        drawing.Descendants(Dsp + "sp").Select(sp => sp.Attribute("modelId")!.Value)
+            .Should().Contain(
+                "{4F4B0000-0000-4000-8000-000000009002}",
+                "{4F4B0000-0000-4000-8000-000000009007}",
+                "{4F4B0000-0000-4000-8000-000000009012}",
+                "{4F4B0000-0000-4000-8000-000000009017}");
     }
 
     [Fact]
@@ -496,18 +507,28 @@ public class SmartArtRoundTripTests
             .Should().EndWith("/layout/orgChart1");
         hierarchyData.Root.Element(Dgm + "ptLst")!.Element(Dgm + "pt")!
             .Element(Dgm + "prSet")!.Attribute("loCatId")!.Value.Should().Be("hierarchy");
-        hierarchyLayout.Root!.Element(Dgm + "layoutNode")!.Element(Dgm + "alg")!
-            .Attribute("type")!.Value.Should().Be("hierRoot");
+        hierarchyLayout.Root!.Element(Dgm + "layoutNode")!
+            .Descendants(Dgm + "alg").Select(alg => alg.Attribute("type")!.Value)
+            .Should().Contain("hierRoot");
         hierarchyLayout.Descendants(Dgm + "alg").Select(alg => alg.Attribute("type")!.Value)
             .Should().Contain("hierChild");
+        hierarchyLayout.Descendants(Dgm + "layoutNode").Select(node => node.Attribute("name")!.Value)
+            .Should().Contain(["hierRoot1", "composite", "background", "text", "hierChild2", "Name10"]);
+        hierarchyData.Descendants(Dgm + "prSet").Select(prSet => prSet.Attribute("presName")?.Value)
+            .Should().Contain(["hierRoot1", "composite", "background", "text", "hierChild2"]);
 
         pyramidData.Root!.Element(Dgm + "ptLst")!.Element(Dgm + "pt")!
             .Element(Dgm + "prSet")!.Attribute("loCatId")!.Value.Should().Be("pyramid");
-        pyramidLayout.Root!.Element(Dgm + "layoutNode")!.Element(Dgm + "alg")!
-            .Attribute("type")!.Value.Should().Be("pyra");
+        pyramidLayout.Root!.Element(Dgm + "layoutNode")!
+            .Descendants(Dgm + "alg").Select(alg => alg.Attribute("type")!.Value)
+            .Should().Contain("pyra");
         pyramidLayout.Descendants(Dgm + "shape")
             .Select(shape => shape.Attribute("type")?.Value)
             .Should().Contain("trapezoid");
+        pyramidLayout.Descendants(Dgm + "layoutNode").Select(node => node.Attribute("name")!.Value)
+            .Should().Contain(["Name0", "Name8", "level", "levelTx"]);
+        pyramidData.Descendants(Dgm + "prSet").Select(prSet => prSet.Attribute("presName")?.Value)
+            .Should().Contain(["Name0", "Name8", "level", "levelTx"]);
     }
 
     [Fact]

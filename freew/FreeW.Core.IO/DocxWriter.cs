@@ -416,9 +416,10 @@ public static class DocxWriter
                         $"layout{index}.xml",
                         $"quickStyle{index}.xml",
                         $"colors{index}.xml",
-                        // The drawing rel is data-part-relative (lives in word/diagrams/_rels/dataN.xml.rels),
-                        // so a plain "rId1" is fine and clash-free per data part.
-                        "rId1",
+                        // Word resolves dgm:dataModelExt/@relId against the document-level relationship
+                        // set (the native package points at rId8 there). Keep the same id in the data-part
+                        // rels emitted for backwards compatibility with the existing reader/tests.
+                        $"rIdDgmDrawing{index}",
                         $"drawing{index}.xml",
                         (uint)index));
                 }
@@ -994,6 +995,7 @@ public static class DocxWriter
             relationships.Add(Relationship(s.LayoutRelationshipId, DiagramLayoutRelType, "diagrams/" + s.LayoutFileName));
             relationships.Add(Relationship(s.QuickStyleRelationshipId, DiagramStyleRelType, "diagrams/" + s.QuickStyleFileName));
             relationships.Add(Relationship(s.ColorsRelationshipId, DiagramColorsRelType, "diagrams/" + s.ColorsFileName));
+            relationships.Add(Relationship(s.DrawingRelationshipId, DiagramDrawingRelType, "diagrams/" + s.DrawingFileName));
         }
         foreach (var (url, relationshipId) in hyperlinks)
             relationships.Add(Relationship(relationshipId, HyperlinkRel, url, external: true));
@@ -3965,7 +3967,9 @@ public static class DocxWriter
                     new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
                     new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
                     new XAttribute(R + "dm", part.DataRelationshipId),
-                    new XAttribute(R + "lo", part.LayoutRelationshipId))));
+                    new XAttribute(R + "lo", part.LayoutRelationshipId),
+                    new XAttribute(R + "qs", part.QuickStyleRelationshipId),
+                    new XAttribute(R + "cs", part.ColorsRelationshipId))));
 
         if (part.SmartArt.IsFloating && part.SmartArt.Placement is { } smartArtPlacement)
             return BuildAnchorContainer(cx, cy, smartArtDocPr, smartArtGraphic, smartArtPlacement);
@@ -4166,31 +4170,35 @@ public static class DocxWriter
                 new XElement(Dgm + "spPr"),
                 DiagramText(string.Empty)));
         var cxnLst = new XElement(Dgm + "cxnLst");
-        var semanticNodes = new List<(string Id, string PresentationId, string ParentId, int Ordinal)>();
+        var semanticNodes = new List<(string Id, string PresentationId, string ParentId, int Ordinal, int Depth)>();
         var presentationIds = new Dictionary<string, string>(StringComparer.Ordinal)
         {
             [docId] = SmartArtModelId(3000)
         };
+        var parentTransitionPresentationIds = new Dictionary<string, string>(StringComparer.Ordinal);
         var transitionPresentationIds = new Dictionary<string, string>(StringComparer.Ordinal);
+        var transitionDepths = new Dictionary<string, int>(StringComparer.Ordinal);
 
         var nextId = 0;
         var nextCxn = 0;
-        void Emit(SmartArtNode node, string parentId, int ordinal)
+        void Emit(SmartArtNode node, string parentId, int ordinal, int depth)
         {
             var id = SmartArtModelId(++nextId);
             var presentationId = SmartArtModelId(3000 + nextId);
             presentationIds[id] = presentationId;
-            semanticNodes.Add((id, presentationId, parentId, ordinal));
+            semanticNodes.Add((id, presentationId, parentId, ordinal, depth));
             ptLst.Add(new XElement(Dgm + "pt",
                 new XAttribute("modelId", id),
-                new XElement(Dgm + "prSet", new XAttribute("phldrT", "[Text]")),
+                new XElement(Dgm + "prSet", new XAttribute("phldr", "1")),
                 new XElement(Dgm + "spPr"),
                 DiagramText(node.Text)));
 
             var connectionId = SmartArtModelId(1000 + nextCxn);
             var parTransId = SmartArtModelId(4000 + nextCxn);
             var sibTransId = SmartArtModelId(5000 + nextCxn);
+            parentTransitionPresentationIds[parTransId] = SmartArtModelId(7500 + nextCxn);
             transitionPresentationIds[sibTransId] = SmartArtModelId(8000 + nextCxn);
+            transitionDepths[sibTransId] = depth;
             AddTransitionPoint(ptLst, parTransId, "parTrans", connectionId);
             AddTransitionPoint(ptLst, sibTransId, "sibTrans", connectionId);
             cxnLst.Add(new XElement(Dgm + "cxn",
@@ -4203,106 +4211,169 @@ public static class DocxWriter
                 new XAttribute("sibTransId", sibTransId)));
             nextCxn++;
             for (var i = 0; i < node.Children.Count; i++)
-                Emit(node.Children[i], id, i);
+                Emit(node.Children[i], id, i, depth + 1);
         }
 
         for (var i = 0; i < smartArt.Nodes.Count; i++)
-            Emit(smartArt.Nodes[i], docId, i);
-
-        ptLst.Add(new XElement(Dgm + "pt",
-            new XAttribute("modelId", presentationIds[docId]),
-            new XAttribute("type", "pres"),
-            new XElement(Dgm + "prSet",
-                new XAttribute("presAssocID", docId),
-                new XAttribute("presName", "diagram"),
-                new XAttribute("presStyleCnt", 0),
-                new XElement(Dgm + "presLayoutVars",
-                    new XElement(Dgm + "dir"),
-                    new XElement(Dgm + "resizeHandles", new XAttribute("val", "exact")))),
-            new XElement(Dgm + "spPr")));
-
-        foreach (var node in semanticNodes)
-        {
-            ptLst.Add(new XElement(Dgm + "pt",
-                new XAttribute("modelId", node.PresentationId),
-                new XAttribute("type", "pres"),
-                new XElement(Dgm + "prSet",
-                    new XAttribute("presAssocID", node.Id),
-                    new XAttribute("presName", "node"),
-                    new XAttribute("presStyleLbl", "node1"),
-                    new XAttribute("presStyleIdx", node.Ordinal % 3),
-                    new XAttribute("presStyleCnt", 3),
-                    new XElement(Dgm + "presLayoutVars",
-                        new XElement(Dgm + "bulletEnabled", new XAttribute("val", 1)))),
-                new XElement(Dgm + "spPr")));
-
-            // Word only materialises a presentation separator when a sibling follows this node. The
-            // separator is associated with the preceding node's sibTrans point, not the next node.
-            var nodeIndex = semanticNodes.IndexOf(node);
-            var hasFollowingSibling = semanticNodes.Any(other =>
-                string.Equals(other.ParentId, node.ParentId, StringComparison.Ordinal)
-                && other.Ordinal == node.Ordinal + 1);
-            if (hasFollowingSibling)
-            {
-                var transitionId = SmartArtModelId(5000 + nodeIndex);
-                ptLst.Add(new XElement(Dgm + "pt",
-                    new XAttribute("modelId", transitionPresentationIds[transitionId]),
-                    new XAttribute("type", "pres"),
-                    new XElement(Dgm + "prSet",
-                        new XAttribute("presAssocID", transitionId),
-                        new XAttribute("presName", "sibTrans"),
-                        new XAttribute("presStyleCnt", 0)),
-                    new XElement(Dgm + "spPr")));
-            }
-        }
+            Emit(smartArt.Nodes[i], docId, i, 0);
 
         var layoutUrn = SmartArtLayoutUrn(smartArt);
-        foreach (var node in semanticNodes)
+        var isHierarchyLayout = string.Equals(SmartArtLayoutCategory(smartArt), "hierarchy", StringComparison.Ordinal);
+        var isPyramidLayout = string.Equals(SmartArtLayoutCategory(smartArt), "pyramid", StringComparison.Ordinal);
+
+        void AddPresentationPoint(string id, string assocId, string name, string? styleLabel = null)
+        {
+            var prSet = new XElement(Dgm + "prSet",
+                new XAttribute("presAssocID", assocId),
+                new XAttribute("presName", name),
+                new XAttribute("presStyleCnt", 0));
+            if (!string.IsNullOrEmpty(styleLabel))
+                prSet.Add(new XAttribute("presStyleLbl", styleLabel));
+            ptLst.Add(new XElement(Dgm + "pt",
+                new XAttribute("modelId", id),
+                new XAttribute("type", "pres"),
+                prSet,
+                new XElement(Dgm + "spPr")));
+        }
+
+        void AddPresentationConnection(string type, string sourceId, string destinationId, int sourceOrdinal = 0)
         {
             cxnLst.Add(new XElement(Dgm + "cxn",
-                new XAttribute("modelId", SmartArtModelId(6000 + semanticNodes.IndexOf(node))),
-                new XAttribute("type", "presOf"),
-                new XAttribute("srcId", node.Id),
-                new XAttribute("destId", node.PresentationId),
-                new XAttribute("srcOrd", 0),
+                new XAttribute("modelId", SmartArtModelId(6000 + cxnLst.Elements().Count())),
+                new XAttribute("type", type),
+                new XAttribute("srcId", sourceId),
+                new XAttribute("destId", destinationId),
+                new XAttribute("srcOrd", sourceOrdinal),
                 new XAttribute("destOrd", 0),
                 new XAttribute("presId", layoutUrn)));
         }
-        cxnLst.Add(new XElement(Dgm + "cxn",
-            new XAttribute("modelId", SmartArtModelId(7000)),
-            new XAttribute("type", "presOf"),
-            new XAttribute("srcId", docId),
-            new XAttribute("destId", presentationIds[docId]),
-            new XAttribute("srcOrd", 0),
-            new XAttribute("destOrd", 0),
-            new XAttribute("presId", layoutUrn)));
 
-        foreach (var group in semanticNodes.GroupBy(node => node.ParentId, StringComparer.Ordinal))
+        if (isHierarchyLayout || isPyramidLayout)
         {
-            var sourcePresentationId = presentationIds[group.Key];
-            var children = group.OrderBy(node => node.Ordinal).ToList();
-            for (var i = 0; i < children.Count; i++)
+            var containerIds = new Dictionary<string, string>(StringComparer.Ordinal);
+            var rootIds = new Dictionary<string, string>(StringComparer.Ordinal);
+            var nodePresentationId = 9000;
+
+            var documentName = isHierarchyLayout ? "hierChild1" : "Name0";
+            AddPresentationPoint(presentationIds[docId], docId, documentName);
+            AddPresentationConnection("presOf", docId, presentationIds[docId]);
+
+            foreach (var node in semanticNodes)
             {
-                var child = children[i];
-                cxnLst.Add(new XElement(Dgm + "cxn",
-                    new XAttribute("modelId", SmartArtModelId(7100 + cxnLst.Elements().Count())),
-                    new XAttribute("type", "presParOf"),
-                    new XAttribute("srcId", sourcePresentationId),
-                    new XAttribute("destId", child.PresentationId),
-                    new XAttribute("srcOrd", i * 2),
-                    new XAttribute("destOrd", 0),
-                    new XAttribute("presId", layoutUrn)));
-                if (i + 1 < children.Count)
+                if (isPyramidLayout)
                 {
-                    var transitionId = SmartArtModelId(5000 + semanticNodes.IndexOf(children[i]));
-                    cxnLst.Add(new XElement(Dgm + "cxn",
-                        new XAttribute("modelId", SmartArtModelId(7200 + cxnLst.Elements().Count())),
-                        new XAttribute("type", "presParOf"),
-                        new XAttribute("srcId", sourcePresentationId),
-                        new XAttribute("destId", transitionPresentationIds[transitionId]),
-                        new XAttribute("srcOrd", i * 2 + 1),
-                        new XAttribute("destOrd", 0),
-                        new XAttribute("presId", layoutUrn)));
+                    var containerId = SmartArtModelId(nodePresentationId++);
+                    var levelId = SmartArtModelId(nodePresentationId++);
+                    var levelTextId = SmartArtModelId(nodePresentationId++);
+                    containerIds[node.Id] = containerId;
+                    AddPresentationPoint(containerId, node.Id, "Name8");
+                    AddPresentationPoint(levelId, node.Id, "level", "node1");
+                    AddPresentationPoint(levelTextId, node.Id, "levelTx", "revTx");
+                    AddPresentationConnection("presOf", node.Id, levelId);
+                    AddPresentationConnection("presOf", node.Id, levelTextId, 1);
+                    AddPresentationConnection("presParOf", containerId, levelId);
+                    AddPresentationConnection("presParOf", containerId, levelTextId, 1);
+                    continue;
+                }
+
+                var depth = node.Depth;
+                var rootId = SmartArtModelId(nodePresentationId++);
+                var compositeId = SmartArtModelId(nodePresentationId++);
+                var backgroundId = SmartArtModelId(nodePresentationId++);
+                var textId = SmartArtModelId(nodePresentationId++);
+                var childId = SmartArtModelId(nodePresentationId++);
+                rootIds[node.Id] = rootId;
+                containerIds[node.Id] = childId;
+                var suffix = depth == 0 ? string.Empty : (depth + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                AddPresentationPoint(rootId, node.Id, "hierRoot" + (depth + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                AddPresentationPoint(compositeId, node.Id, "composite" + suffix);
+                AddPresentationPoint(backgroundId, node.Id, "background" + suffix, "node" + depth.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                AddPresentationPoint(textId, node.Id, "text" + suffix, "fgAcc" + depth.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                AddPresentationPoint(childId, node.Id, "hierChild" + (depth + 2).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                AddPresentationConnection("presOf", node.Id, textId);
+                AddPresentationConnection("presParOf", rootId, compositeId);
+                AddPresentationConnection("presParOf", compositeId, backgroundId);
+                AddPresentationConnection("presParOf", compositeId, textId, 1);
+                AddPresentationConnection("presParOf", compositeId, childId, 2);
+            }
+
+            if (isPyramidLayout)
+            {
+                foreach (var node in semanticNodes.OrderBy(n => n.Ordinal))
+                    AddPresentationConnection("presParOf", presentationIds[docId], containerIds[node.Id], node.Ordinal);
+            }
+            else
+            {
+                foreach (var group in semanticNodes.GroupBy(node => node.ParentId, StringComparer.Ordinal))
+                {
+                    var sourceId = group.Key == docId ? presentationIds[docId] : containerIds[group.Key];
+                    var children = group.OrderBy(node => node.Ordinal).ToList();
+                    for (var i = 0; i < children.Count; i++)
+                    {
+                        var child = children[i];
+                        var childRoot = rootIds[child.Id];
+                        if (group.Key == docId)
+                        {
+                            AddPresentationConnection("presParOf", sourceId, childRoot, i);
+                        }
+                        else
+                        {
+                            var parentTransitionId = SmartArtModelId(4000 + semanticNodes.IndexOf(child));
+                            var parentTransitionPresentationId = parentTransitionPresentationIds[parentTransitionId];
+                            var transitionName = "Name" + (10 + Math.Max(0, child.Depth - 1) * 7).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                            AddPresentationPoint(parentTransitionPresentationId, parentTransitionId, transitionName, "parChTrans1D" + Math.Max(2, child.Depth + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            AddPresentationConnection("presOf", parentTransitionId, parentTransitionPresentationId);
+                            AddPresentationConnection("presParOf", sourceId, parentTransitionPresentationId, i * 2);
+                            AddPresentationConnection("presParOf", parentTransitionPresentationId, childRoot);
+                        }
+                        if (i + 1 < children.Count)
+                        {
+                            var transitionId = SmartArtModelId(5000 + semanticNodes.IndexOf(child));
+                            var transitionPresentationId = transitionPresentationIds[transitionId];
+                            var transitionName = "Name" + (10 + transitionDepths[transitionId] * 7).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                            AddPresentationPoint(transitionPresentationId, transitionId, transitionName, "parChTrans1D" + (transitionDepths[transitionId] + 2).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            AddPresentationConnection("presOf", transitionId, transitionPresentationId);
+                            AddPresentationConnection("presParOf", sourceId, transitionPresentationId, i * 2 + 1);
+                            AddPresentationConnection("presParOf", transitionPresentationId, rootIds[children[i + 1].Id]);
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            AddPresentationPoint(presentationIds[docId], docId, "diagram");
+            foreach (var node in semanticNodes)
+            {
+                AddPresentationPoint(node.PresentationId, node.Id, "node", "node1");
+                var nodeIndex = semanticNodes.IndexOf(node);
+                var hasFollowingSibling = semanticNodes.Any(other =>
+                    string.Equals(other.ParentId, node.ParentId, StringComparison.Ordinal)
+                    && other.Ordinal == node.Ordinal + 1);
+                if (hasFollowingSibling)
+                {
+                    var transitionId = SmartArtModelId(5000 + nodeIndex);
+                    AddPresentationPoint(transitionPresentationIds[transitionId], transitionId, "sibTrans");
+                }
+            }
+
+            foreach (var node in semanticNodes)
+                AddPresentationConnection("presOf", node.Id, node.PresentationId);
+            AddPresentationConnection("presOf", docId, presentationIds[docId]);
+
+            foreach (var group in semanticNodes.GroupBy(node => node.ParentId, StringComparer.Ordinal))
+            {
+                var sourcePresentationId = presentationIds[group.Key];
+                var children = group.OrderBy(node => node.Ordinal).ToList();
+                for (var i = 0; i < children.Count; i++)
+                {
+                    var child = children[i];
+                    AddPresentationConnection("presParOf", sourcePresentationId, child.PresentationId, i * 2);
+                    if (i + 1 < children.Count)
+                    {
+                        var transitionId = SmartArtModelId(5000 + semanticNodes.IndexOf(child));
+                        AddPresentationConnection("presParOf", sourcePresentationId, transitionPresentationIds[transitionId], i * 2 + 1);
+                    }
                 }
             }
         }
@@ -4429,6 +4500,9 @@ public static class DocxWriter
         var isProcess = smartArt.Kind == SmartArtKind.Process
             || string.Equals(smartArt.LayoutId, "process1", StringComparison.OrdinalIgnoreCase)
             || string.Equals(smartArt.LayoutId, "continuousBlockProcess", StringComparison.OrdinalIgnoreCase);
+        var drawingCategory = SmartArtLayoutCategory(smartArt);
+        var isHierarchy = string.Equals(drawingCategory, "hierarchy", StringComparison.Ordinal);
+        var isPyramid = string.Equals(drawingCategory, "pyramid", StringComparison.Ordinal);
         var boxW = isProcess
             ? Math.Max(1L, (frameW - 2 * margin - Math.Max(0, nodeCount - 1) * gap) / nodeCount)
             : Math.Max(1L, frameW - 2 * margin);
@@ -4453,6 +4527,95 @@ public static class DocxWriter
                     new XElement(A + "ext", new XAttribute("cx", frameW), new XAttribute("cy", frameH)),
                     new XElement(A + "chOff", new XAttribute("x", 0), new XAttribute("y", 0)),
                     new XElement(A + "chExt", new XAttribute("cx", frameW), new XAttribute("cy", frameH)))));
+
+        void AddCachedShape(string modelId, long x, long y, long width, long height, string shapeKind, string fillHex, bool noFill = false)
+        {
+            var line = new XElement(A + "ln",
+                new XAttribute("w", Math.Max(1L, PointsToEmu(0.75))),
+                SolidFill("808080"));
+            var spPr = new XElement(Dsp + "spPr",
+                new XElement(A + "xfrm",
+                    new XElement(A + "off", new XAttribute("x", x), new XAttribute("y", y)),
+                    new XElement(A + "ext", new XAttribute("cx", width), new XAttribute("cy", height))),
+                new XElement(A + "prstGeom", new XAttribute("prst", shapeKind), new XElement(A + "avLst")),
+                noFill ? new XElement(A + "noFill") : SolidFill(fillHex),
+                line);
+            spTree.Add(new XElement(Dsp + "sp",
+                new XAttribute("modelId", modelId),
+                new XElement(Dsp + "nvSpPr",
+                    new XElement(Dsp + "cNvPr", new XAttribute("id", spTree.Elements(Dsp + "sp").Count() + 1), new XAttribute("name", "SmartArt")),
+                    new XElement(Dsp + "cNvSpPr")),
+                spPr));
+        }
+
+        if (isHierarchy || isPyramid)
+        {
+            if (isHierarchy)
+            {
+                var levelGap = Math.Max(1L, PointsToEmu(18));
+                var hierarchyBoxW = Math.Max(1L, Math.Min(PointsToEmu(112), frameW - 2 * margin));
+                var hierarchyBoxH = Math.Max(1L, Math.Min(PointsToEmu(28), frameH - 2 * margin));
+                var positions = new Dictionary<int, (long X, long Y)>();
+
+                for (var i = 0; i < nodes.Count; i++)
+                {
+                    var depth = nodes[i].Depth;
+                    var siblings = nodes.Select((item, index) => (item, index))
+                        .Where(pair => pair.item.Depth == depth)
+                        .ToList();
+                    var slot = siblings.FindIndex(pair => pair.index == i);
+                    var rowWidth = siblings.Count * hierarchyBoxW + Math.Max(0, siblings.Count - 1) * gap;
+                    var x = Math.Max(margin, (frameW - rowWidth) / 2 + slot * (hierarchyBoxW + gap));
+                    var y = Math.Min(frameH - margin - hierarchyBoxH, margin + depth * (hierarchyBoxH + levelGap));
+                    positions[i] = (x, y);
+                }
+
+                for (var i = 0; i < nodes.Count; i++)
+                {
+                    var parentIndex = nodes.FindIndex(candidate => candidate.Node.Children.Contains(nodes[i].Node));
+                    if (parentIndex < 0)
+                        continue;
+
+                    var parent = positions[parentIndex];
+                    var child = positions[i];
+                    var x = Math.Min(parent.X + boxW / 2, child.X + boxW / 2);
+                    var y = Math.Min(parent.Y + hierarchyBoxH, child.Y);
+                    var width = Math.Max(1L, Math.Abs((parent.X + hierarchyBoxW / 2) - (child.X + hierarchyBoxW / 2)));
+                    var height = Math.Max(1L, Math.Abs(child.Y - (parent.Y + hierarchyBoxH)));
+                    AddCachedShape(SmartArtModelId(7500 + i), x, y, width, height, "line", "808080", true);
+                }
+
+                for (var i = 0; i < nodes.Count; i++)
+                {
+                    var position = positions[i];
+                    var fillHex = colorScheme.FillHexAt(i).TrimStart('#').ToUpperInvariant();
+                    AddCachedShape(SmartArtModelId(9000 + i * 5 + 2), position.X, position.Y, hierarchyBoxW, hierarchyBoxH, "roundRect", fillHex);
+                    AddCachedShape(SmartArtModelId(9000 + i * 5 + 3), position.X, position.Y, hierarchyBoxW, hierarchyBoxH, "roundRect", fillHex, true);
+                }
+            }
+            else
+            {
+                var layerGap = Math.Max(1L, PointsToEmu(2));
+                var pyramidBoxH = Math.Max(1L, Math.Min(PointsToEmu(28), frameH - 2 * margin));
+                var usableW = Math.Max(1L, frameW - 2 * margin);
+                var pyramidBoxW = Math.Max(1L, usableW / Math.Max(1, nodes.Count));
+                for (var i = 0; i < nodes.Count; i++)
+                {
+                    var width = Math.Max(1L, pyramidBoxW - i * Math.Max(1L, pyramidBoxW / Math.Max(1, nodes.Count * 3)));
+                    var x = margin + (usableW - width) / 2;
+                    var y = margin + i * (pyramidBoxH + layerGap);
+                    var fillHex = colorScheme.FillHexAt(i).TrimStart('#').ToUpperInvariant();
+                    AddCachedShape(SmartArtModelId(9000 + i * 3 + 1), x, y, width, pyramidBoxH, "trapezoid", fillHex);
+                }
+            }
+
+            return new XDocument(
+                new XElement(Dsp + "drawing",
+                    new XAttribute(XNamespace.Xmlns + "dsp", Dsp.NamespaceName),
+                    new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                    new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                    spTree));
+        }
 
         for (var i = 0; i < nodes.Count; i++)
         {
@@ -4532,6 +4695,8 @@ public static class DocxWriter
         var category = SmartArtLayoutCategory(smartArt);
         var isHierarchy = string.Equals(category, "hierarchy", StringComparison.Ordinal);
         var isPyramid = string.Equals(category, "pyramid", StringComparison.Ordinal);
+        if (isHierarchy || isPyramid)
+            return LoadSmartArtLayoutTemplate(isHierarchy ? "hierarchy1.xml" : "pyramid1.xml", layoutUrn, category);
         var rootAlgorithm = isHierarchy
             ? "hierRoot"
             : isPyramid
@@ -4659,6 +4824,18 @@ public static class DocxWriter
                             new XElement(Dgm + "constrLst"),
                             new XElement(Dgm + "ruleLst"))))));
         return new XDocument(elem);
+    }
+
+    private static XDocument LoadSmartArtLayoutTemplate(string fileName, string layoutUrn, string category)
+    {
+        var resourceName = "FreeW.Core.IO.SmartArtLayoutTemplates." + fileName;
+        using var stream = typeof(DocxWriter).Assembly.GetManifestResourceStream(resourceName)
+            ?? throw new InvalidOperationException("Embedded SmartArt layout template not found: " + resourceName);
+        var layout = XDocument.Load(stream);
+        var root = layout.Root ?? throw new InvalidOperationException("SmartArt layout template has no root: " + resourceName);
+        root.SetAttributeValue("uniqueId", layoutUrn);
+        root.Element(Dgm + "catLst")?.Element(Dgm + "cat")?.SetAttributeValue("type", category);
+        return layout;
     }
 
     /// <summary>
