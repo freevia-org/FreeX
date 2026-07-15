@@ -240,6 +240,8 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255,
             "PowerPoint's imported Surface3D facets are opaque fills");
+        surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Stroke.Alpha == 0,
+            "PowerPoint's imported Surface3D faces do not draw opaque white facet outlines");
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
         ChartRenderPlanner.BuildSurfaceSeriesAxisLabelPlans(surface, surfaceFrame)
