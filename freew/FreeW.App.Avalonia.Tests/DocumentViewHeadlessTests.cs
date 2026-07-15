@@ -75,6 +75,30 @@ public sealed class DocumentViewHeadlessTests
     }
 
     [Fact]
+    public async Task Unstyled_runs_inherit_document_default_run_formatting()
+    {
+        IReadOnlyList<RunFormatting>? formatting = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.DefaultRun = doc.DefaultRun with { FontFamily = "Calibri", FontSizePt = 11 };
+            doc.Blocks.Add(new Paragraph("Default-run cascade"));
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 1200));
+            formatting = view.GetPlacedFormattingForBlock(0);
+        });
+
+        if (!ran)
+            return;
+
+        formatting.Should().NotBeNullOrEmpty();
+        formatting!.Should().OnlyContain(f => f.FontFamily == "Calibri" && f.FontSizePt == 11);
+    }
+
+    [Fact]
     public async Task Typing_inserts_text_and_is_undoable()
     {
         string? after = null;

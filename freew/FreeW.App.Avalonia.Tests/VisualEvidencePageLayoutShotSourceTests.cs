@@ -38,9 +38,13 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().MatchRegex("CropToDocumentPageSurface\\([\\s\\S]*?pageNumber,\\s*viewportOffsetY\\)");
         source.Should().Contain("DocumentViewLayoutPlanner.BuildSurfacePlan(");
         source.Should().Contain("pageTopInViewport = surfacePlan.PageTopDip(pageIndex) - viewportOffsetY");
+        source.Should().Contain("noteRegionOverlayApplied: false");
+        source.Should().Contain("noteRegionOverlayApplied: true");
         source.Should().Contain("DocumentNoteRegionPlanner.BuildFootnoteRegion");
         source.Should().Contain("DocumentNoteRegionPlanner.BuildEndnoteRegion");
-        source.Should().Contain("[\"noteRegionRenderStatus\"] = \"shared-plan-overlay\"");
+        source.Should().Contain("[\"noteRegionRenderStatus\"] = noteRegionOverlayApplied");
+        source.Should().Contain("\"avalonia-document-view\"");
+        source.Should().Contain("\"shared-plan-overlay\"");
         source.Should().Contain("f2-section-landscape");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-section-landscape\", 1)");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"f2-section-landscape\", 2)");

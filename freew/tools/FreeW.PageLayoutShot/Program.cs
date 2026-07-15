@@ -789,17 +789,6 @@ static int RenderMode(
             pageNumber,
             viewportOffsetY);
     }
-    bytes = AddNoteRegionOverlayIfNeeded(
-        bytes,
-        captureWidth,
-        captureHeight,
-        evidencePage,
-        doc,
-        pageNumber,
-        hasFootnotes,
-        hasEndnotes,
-        isSyntheticPage);
-
     if (bytes.Length > 0)
     {
         File.WriteAllBytes(outPath, bytes);
@@ -826,7 +815,8 @@ static int RenderMode(
             sectionGeometryPage: sectionGeometryPage,
             sectionGeometrySurfacePlan: sectionPageSurface,
             document: doc,
-            evidenceDocument: sectionPageSurface is null ? null : sourceDocument);
+            evidenceDocument: sectionPageSurface is null ? null : sourceDocument,
+            noteRegionOverlayApplied: false);
         Console.WriteLine($"[PageLayoutShot] {label}: {bytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -893,7 +883,8 @@ static int RenderMode(
             sectionGeometryPage: sectionGeometryPage,
             sectionGeometrySurfacePlan: sectionPageSurface,
             document: doc,
-            evidenceDocument: sectionPageSurface is null ? null : sourceDocument);
+            evidenceDocument: sectionPageSurface is null ? null : sourceDocument,
+            noteRegionOverlayApplied: true);
         Console.WriteLine($"[PageLayoutShot] {label} (Skia fallback): {pngBytes.Length:N0} bytes → {outPath}");
         return 0;
     }
@@ -976,7 +967,8 @@ static void AddAvaloniaEvidence(
     FreeWVisualSectionGeometryPagePlan? sectionGeometryPage = null,
     FreeWVisualSectionGeometrySurfacePlan? sectionGeometrySurfacePlan = null,
     TextDocument? document = null,
-    TextDocument? evidenceDocument = null)
+    TextDocument? evidenceDocument = null,
+    bool noteRegionOverlayApplied = false)
 {
     var expectationDocument = evidenceDocument ?? document;
     var stats = ComputePngPixelStats(pngBytes, pixelWidth, pixelHeight);
@@ -1038,7 +1030,9 @@ static void AddAvaloniaEvidence(
         metadata["noteRegionKind"] = noteRegionPlan.Kind.ToString();
         metadata["noteRegionRows"] = noteRegionPlan.Rows.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
         metadata["noteRegionLabels"] = string.Join(",", noteRegionPlan.Rows.Select(r => r.Label));
-        metadata["noteRegionRenderStatus"] = "shared-plan-overlay";
+        metadata["noteRegionRenderStatus"] = noteRegionOverlayApplied
+            ? "shared-plan-overlay"
+            : "avalonia-document-view";
     }
 
     var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(

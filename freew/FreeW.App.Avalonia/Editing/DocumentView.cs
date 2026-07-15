@@ -2115,6 +2115,15 @@ public sealed class DocumentView : Control
                 .ToList();
 
     /// <summary>
+    /// Returns the effective display formatting for a block's placed glyphs.
+    /// </summary>
+    internal IReadOnlyList<RunFormatting> GetPlacedFormattingForBlock(int blockIndex) =>
+        _placed
+            .Where(p => p.Block == blockIndex && !p.Sentinel)
+            .Select(p => p.Fmt)
+            .ToList();
+
+    /// <summary>
     /// AV-TAB: Returns placed glyphs for block 0 including tab characters for test introspection.
     /// Each tuple: (Ch, X, W) — non-sentinels only.
     /// </summary>
@@ -4413,10 +4422,9 @@ public sealed class DocumentView : Control
     private void LayoutParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth, double leftInset = 0, string? marker = null)
     {
         var rawCells = IsEditable(paragraph) ? ParaCells(paragraph) : DisplayCells(paragraph);
-        // Resolve named-style formatting for display only; editing re-derives raw cells from the model.
-        var cells = paragraph.StyleId is null
-            ? rawCells
-            : rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
+        // Resolve document defaults and named styles for display only; editing re-derives raw cells
+        // from the model. Unstyled paragraphs still inherit DefaultRun, just as they do in Word.
+        var cells = rawCells.Select(c => c with { Fmt = ResolveRunFmt(c.Fmt, paragraph) }).ToList();
         var reviewPolicy = CurrentReviewDisplayPolicy;
         var pf = ResolveParagraphFmt(paragraph);
         var alignment = pf.Alignment;
@@ -4860,8 +4868,11 @@ public sealed class DocumentView : Control
         {
             LineSpacingRule.Exact   => Math.Max(1, pf.LineHeightPt  * PxPerPoint),
             LineSpacingRule.AtLeast => Math.Max(naturalHeight, pf.LineHeightPt * PxPerPoint),
-            // Multiple (default): multiply by the line-spacing factor (1.15 Word default).
-            _ => naturalHeight * (pf.LineSpacing > 0 ? pf.LineSpacing : 1.15),
+            // A missing w:spacing/@w:line uses Word's natural single-line height. The model carries
+            // 1.15 as a convenience default, but it is not an explicit OOXML line-spacing instruction.
+            _ => (pf.LineSpacingIsSet || Math.Abs(pf.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001)
+                ? naturalHeight * (pf.LineSpacing > 0 ? pf.LineSpacing : 1.15)
+                : naturalHeight,
         };
     }
 
@@ -13949,18 +13960,11 @@ public sealed class DocumentView : Control
     /// </summary>
     private RunFormatting ResolveRunFmt(RunFormatting raw, Paragraph paragraph)
     {
-        var styleRun = RunFormatting.Default;
-        var hasStyle = false;
+        var resolved = _doc.DefaultRun;
         foreach (var style in StyleChain(paragraph.StyleId))
-        {
-            styleRun = OverlayRun(styleRun, style.Run);
-            hasStyle = true;
-        }
+            resolved = OverlayRun(resolved, style.Run);
 
-        return hasStyle ? OverlayRun(styleRun, raw) with
-        {
-            FontSizePt = raw.FontSizePt ?? styleRun.FontSizePt ?? _doc.DefaultRun.FontSizePt,
-        } : raw;
+        return OverlayRun(resolved, raw);
     }
 
     /// <summary>Cascade the paragraph's named-style paragraph formatting (alignment + spacing)
