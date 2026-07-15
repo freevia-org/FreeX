@@ -205,7 +205,7 @@ public sealed class SlideCanvas : Control
 
     private static void RenderBackground(DrawingContext dc, DrawOp.Background bg)
     {
-        var brush = MakeBrush(bg.Fill, bg.BoundsDip);
+        var brush = MakeBrush(bg.Fill, bg.BoundsDip, easeGradientStops: true);
         if (brush is null) return;
         dc.FillRectangle(brush,
             new Rect(bg.BoundsDip.X, bg.BoundsDip.Y, bg.BoundsDip.Width, bg.BoundsDip.Height));
@@ -2277,18 +2277,18 @@ public sealed class SlideCanvas : Control
             * Matrix.CreateTranslation(cx + reflection.OffsetX, pivotY + reflection.OffsetY);
     }
 
-    private static IBrush? MakeBrush(ResolvedFill fill, LayoutRect bounds) => fill switch
+    private static IBrush? MakeBrush(ResolvedFill fill, LayoutRect bounds, bool easeGradientStops = false) => fill switch
     {
         ResolvedFill.None      => null,
         ResolvedFill.Solid s   => new SolidColorBrush(Color.FromArgb(s.Alpha, s.Color.R, s.Color.G, s.Color.B)),
         ResolvedFill.Gradient g when g.Kind == GradientKind.Radial => MakeRadialGradientBrush(g),
-        ResolvedFill.Gradient g  => MakeLinearGradientBrush(g),
+        ResolvedFill.Gradient g  => MakeLinearGradientBrush(g, easeGradientStops),
         ResolvedFill.Picture  p  => MakePictureBrush(p),
         ResolvedFill.PatternFill pat => MakePatternBrush(pat),
         _                      => null
     };
 
-    private static GradientStops BuildGradientStops(ResolvedFill.Gradient g)
+    private static GradientStops BuildGradientStops(ResolvedFill.Gradient g, bool easePositions = false)
     {
         var stops = new GradientStops();
         for (int index = 0; index < g.Stops.Count; index++)
@@ -2302,7 +2302,10 @@ public sealed class SlideCanvas : Control
             for (int step = 1; step < 16; step++)
             {
                 double fraction = step / 16.0;
-                var color = GradientColorInterpolation.InterpolateLinearLight(start.Color, end.Color, fraction);
+                var color = GradientColorInterpolation.InterpolateLinearLight(
+                    start.Color,
+                    end.Color,
+                    easePositions ? GradientColorInterpolation.EasePowerPointPosition(fraction) : fraction);
                 stops.Add(new AvGradientStop(
                     Color.FromRgb(color.R, color.G, color.B),
                     start.Position + (end.Position - start.Position) * fraction));
@@ -2311,7 +2314,7 @@ public sealed class SlideCanvas : Control
         return stops;
     }
 
-    private static IBrush MakeLinearGradientBrush(ResolvedFill.Gradient g)
+    private static IBrush MakeLinearGradientBrush(ResolvedFill.Gradient g, bool easePositions = false)
     {
         // OOXML a:lin ang convention (stored as AngleDegrees = ang/60000):
         //   0°  = flows east  (left → right):   Start=(0, 0.5), End=(1, 0.5)
@@ -2326,7 +2329,7 @@ public sealed class SlideCanvas : Control
         {
             StartPoint    = new RelativePoint(0.5 - 0.5 * dx, 0.5 - 0.5 * dy, RelativeUnit.Relative),
             EndPoint      = new RelativePoint(0.5 + 0.5 * dx, 0.5 + 0.5 * dy, RelativeUnit.Relative),
-            GradientStops = BuildGradientStops(g)
+            GradientStops = BuildGradientStops(g, easePositions)
         };
     }
 

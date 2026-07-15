@@ -453,6 +453,17 @@ public sealed class ChartRenderPlannerTests
         midpoint.Should().Be(new SrgbColor(0xB1, 0xA8, 0xBA));
     }
 
+    [Theory]
+    [InlineData(0.1, 0.028)]
+    [InlineData(0.5, 0.5)]
+    [InlineData(0.9, 0.972)]
+    public void GradientColorInterpolation_EasesPowerPointStopPositions(double fraction, double expected)
+    {
+        GradientColorInterpolation.EasePowerPointPosition(fraction)
+            .Should()
+            .BeApproximately(expected, 0.0001);
+    }
+
     [Fact]
     public void BuildStockPrimitivePlan_ClassifiesOpenClosePriceMovesForSharedRendering()
     {

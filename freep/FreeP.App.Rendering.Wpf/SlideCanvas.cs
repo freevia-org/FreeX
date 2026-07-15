@@ -241,7 +241,7 @@ public sealed class SlideCanvas : FrameworkElement
 
     private static void RenderBackground(DrawingContext dc, DrawOp.Background bg)
     {
-        var brush = MakeBrush(bg.Fill, bg.BoundsDip);
+        var brush = MakeBrush(bg.Fill, bg.BoundsDip, easeGradientStops: true);
         if (brush is null) return;
 
         dc.DrawRectangle(brush, null,
@@ -2329,19 +2329,19 @@ public sealed class SlideCanvas : FrameworkElement
 
     // ── WPF primitive helpers ──────────────────────────────────────────────────
 
-    private static Brush? MakeBrush(ResolvedFill fill, LayoutRect bounds) => fill switch
+    private static Brush? MakeBrush(ResolvedFill fill, LayoutRect bounds, bool easeGradientStops = false) => fill switch
     {
         ResolvedFill.None => null,
         ResolvedFill.Solid s => FreezeBrush(
             new SolidColorBrush(Color.FromArgb(s.Alpha, s.Color.R, s.Color.G, s.Color.B))),
         ResolvedFill.Gradient g when g.Kind == GradientKind.Radial => MakeRadialGradientBrush(g),
-        ResolvedFill.Gradient g => MakeLinearGradientBrush(g),
+        ResolvedFill.Gradient g => MakeLinearGradientBrush(g, easeGradientStops),
         ResolvedFill.Picture p => MakePictureBrush(p),
         ResolvedFill.PatternFill pat => MakePatternBrush(pat),
         _ => null
     };
 
-    private static GradientStopCollection BuildGradientStops(ResolvedFill.Gradient g)
+    private static GradientStopCollection BuildGradientStops(ResolvedFill.Gradient g, bool easePositions = false)
     {
         var stops = new GradientStopCollection();
         for (int index = 0; index < g.Stops.Count; index++)
@@ -2355,7 +2355,10 @@ public sealed class SlideCanvas : FrameworkElement
             for (int step = 1; step < 16; step++)
             {
                 double fraction = step / 16.0;
-                var color = GradientColorInterpolation.InterpolateLinearLight(start.Color, end.Color, fraction);
+                var color = GradientColorInterpolation.InterpolateLinearLight(
+                    start.Color,
+                    end.Color,
+                    easePositions ? GradientColorInterpolation.EasePowerPointPosition(fraction) : fraction);
                 stops.Add(new System.Windows.Media.GradientStop(
                     Color.FromRgb(color.R, color.G, color.B),
                     start.Position + (end.Position - start.Position) * fraction));
@@ -2364,7 +2367,7 @@ public sealed class SlideCanvas : FrameworkElement
         return stops;
     }
 
-    private static Brush MakeLinearGradientBrush(ResolvedFill.Gradient g)
+    private static Brush MakeLinearGradientBrush(ResolvedFill.Gradient g, bool easePositions = false)
     {
         // OOXML a:lin ang convention (stored in model as AngleDegrees = ang/60000):
         //   0°  = gradient flows east  (left → right):   Start=(0, 0.5), End=(1, 0.5)
@@ -2380,7 +2383,7 @@ public sealed class SlideCanvas : FrameworkElement
         var startPoint = new Point(0.5 - 0.5 * dx, 0.5 - 0.5 * dy);
         var endPoint   = new Point(0.5 + 0.5 * dx, 0.5 + 0.5 * dy);
 
-        var brush = new LinearGradientBrush(BuildGradientStops(g), startPoint, endPoint);
+        var brush = new LinearGradientBrush(BuildGradientStops(g, easePositions), startPoint, endPoint);
         if (brush.CanFreeze) brush.Freeze();
         return brush;
     }

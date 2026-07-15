@@ -5,6 +5,13 @@ namespace FreeP.App.Compositor;
 /// <summary>PowerPoint-compatible linear-light color interpolation for DrawingML gradients.</summary>
 public static class GradientColorInterpolation
 {
+    /// <summary>Applies PowerPoint's eased progression between two DrawingML gradient stops.</summary>
+    public static double EasePowerPointPosition(double fraction)
+    {
+        fraction = Math.Clamp(fraction, 0, 1);
+        return fraction * fraction * (3 - 2 * fraction);
+    }
+
     public static SrgbColor InterpolateLinearLight(SrgbColor start, SrgbColor end, double fraction) =>
         new(
             InterpolateChannel(start.R, end.R, fraction),
