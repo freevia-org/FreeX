@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -95,17 +97,22 @@ public sealed class ChartRenderingTests
     }
 
     [StaFact]
-    public void Style2_PlotAreaFill_ProducesNonWhiteCanvasBackground()
+    public void Style2_PlotAreaFill_IsLimitedToScenePlotBounds()
     {
-        // Style 2 has PlotAreaFill=true → the Canvas background must not be transparent/white.
-        var view = ViewWithStyledChart(styleId: 2);
-        var canvases = LogicalDescendants<System.Windows.Controls.Canvas>(view.Document);
-        var plotCanvas = canvases.FirstOrDefault(c => c.Width > 10);
-        Assert.NotNull(plotCanvas);
-        // The background should be a SolidColorBrush that is NOT transparent.
-        Assert.IsType<System.Windows.Media.SolidColorBrush>(plotCanvas!.Background);
-        var bg = (System.Windows.Media.SolidColorBrush)plotCanvas.Background;
-        Assert.NotEqual(System.Windows.Media.Colors.Transparent, bg.Color);
+        // Style 2 has PlotAreaFill=true; the fill is a bounded child, not the root canvas background.
+        var chart = new Chart { Kind = ChartKind.Column, StyleId = 2 };
+        chart.Categories.AddRange(new[] { "A", "B" });
+        chart.Series.Add(new ChartSeries("S1", new double[] { 1, 2 }));
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 240, 180);
+        var canvas = DocumentView.BuildChartSceneCanvas(scene);
+        var plotFill = Assert.Single(canvas.Children.OfType<Border>());
+        // The root canvas remains transparent while the plot fill owns the scene plot bounds.
+        Assert.Equal(System.Windows.Media.Colors.Transparent,
+            ((System.Windows.Media.SolidColorBrush)canvas.Background).Color);
+        Assert.Equal(scene.PlotBounds.Width, plotFill.Width);
+        Assert.Equal(scene.PlotBounds.Height, plotFill.Height);
+        Assert.Equal(scene.PlotBounds.X, Canvas.GetLeft(plotFill));
+        Assert.Equal(scene.PlotBounds.Y, Canvas.GetTop(plotFill));
     }
 
     [StaFact]
@@ -148,6 +155,20 @@ public sealed class ChartRenderingTests
         var rects = LogicalDescendants<System.Windows.Shapes.Rectangle>(view.Document);
         var legendSwatches = rects.Where(r => r.Width <= 12 && r.Height <= 12).ToList();
         Assert.True(legendSwatches.Count > 0, "legend swatches expected for Layout 5");
+    }
+
+    [StaFact]
+    public void DataLabel_PreservesFourSignificantDigits()
+    {
+        var view = new DocumentView();
+        view.LoadModel(TextDocument.CreateEmpty());
+        var chart = Chart.Create(ChartKind.Column, new[] { "A" }, new[] { 1.234 });
+        chart.QuickLayoutId = 5;
+
+        view.InsertChart(chart);
+
+        var text = LogicalDescendants<TextBlock>(view.Document).Select(block => block.Text);
+        Assert.Contains("1.234", text);
     }
 
     [StaFact]

@@ -10833,16 +10833,7 @@ public sealed class DocumentView : RichTextBox
         var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, widthPx, heightPx);
         var strokeThickness = EffectLineThickness(effectSet);
 
-        var root = new Canvas
-        {
-            Width = scene.FrameBounds.Width,
-            Height = scene.FrameBounds.Height,
-            Background = scene.PlotFillHex is null
-                ? System.Windows.Media.Brushes.Transparent
-                : new SolidColorBrush(ParseHexColor(scene.PlotFillHex))
-        };
-        RenderChartScene(root, scene);
-
+        var root = BuildChartSceneCanvas(scene);
         var element = new Border
         {
             Width = widthPx,
@@ -10858,8 +10849,33 @@ public sealed class DocumentView : RichTextBox
         return new InlineUIContainer(element) { BaselineAlignment = BaselineAlignment.Bottom };
     }
 
+    internal static Canvas BuildChartSceneCanvas(ChartScene scene)
+    {
+        var canvas = new Canvas
+        {
+            Width = scene.FrameBounds.Width,
+            Height = scene.FrameBounds.Height,
+            Background = System.Windows.Media.Brushes.Transparent
+        };
+        RenderChartScene(canvas, scene);
+        return canvas;
+    }
+
     private static void RenderChartScene(Canvas canvas, ChartScene scene)
     {
+        if (scene.PlotFillHex is not null)
+        {
+            var plotFill = new Border
+            {
+                Width = scene.PlotBounds.Width,
+                Height = scene.PlotBounds.Height,
+                Background = new SolidColorBrush(ParseSceneColor(scene.PlotFillHex))
+            };
+            Canvas.SetLeft(plotFill, scene.PlotBounds.X);
+            Canvas.SetTop(plotFill, scene.PlotBounds.Y);
+            canvas.Children.Add(plotFill);
+        }
+
         foreach (var line in scene.GridLines.Concat(scene.AxisLines))
         {
             canvas.Children.Add(new System.Windows.Shapes.Line

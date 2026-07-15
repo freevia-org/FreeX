@@ -27,6 +27,36 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartScene_HorizontalBarValueAxisLabels_FollowVerticalGridlines()
+    {
+        var chart = Chart.Create(ChartKind.Bar, ["A", "B"], [1.0, 2.0]);
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 240, 180);
+        var labels = scene.Texts.Where(text => text.Kind == ChartSceneTextKind.ValueAxis).ToList();
+        var gridlines = scene.GridLines.ToList();
+
+        gridlines.Should().HaveCount(4);
+        labels.Should().HaveCount(5);
+        labels.Should().OnlyContain(label => label.Anchor == ChartSceneTextAnchor.TopCenter);
+        labels.Select(label => label.X).Should().Equal(
+            new[] { scene.PlotBounds.X }
+                .Concat(gridlines.Select(line => line.X1)));
+        labels.Should().OnlyContain(label => label.Y == scene.PlotBounds.Bottom + 2);
+        gridlines.Should().OnlyContain(line => line.X1 == line.X2);
+    }
+
+    [Fact]
+    public void ChartScene_DataLabels_PreserveFourSignificantDigits()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A"], [1.234]);
+        chart.QuickLayoutId = 5;
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 240, 180);
+
+        scene.Texts.Single(text => text.Kind == ChartSceneTextKind.DataLabel).Text.Should().Be("1.234");
+    }
+
+    [Fact]
     public void ChartScene_LineAreaAndScatter_UseSharedPointAndMarkerPrimitives()
     {
         var area = Chart.Create(ChartKind.Area, ["A", "B", "C"], [1.0, 3.0, 2.0]);

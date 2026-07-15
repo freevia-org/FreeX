@@ -176,6 +176,8 @@ public sealed record ChartScene(
     ChartSceneRect PlotBounds,
     string? PlotFillHex,
     IReadOnlyList<string> PaletteHex,
+    IReadOnlyList<string> Categories,
+    int SeriesCount,
     IReadOnlyList<ChartSceneLine> GridLines,
     IReadOnlyList<ChartSceneLine> AxisLines,
     IReadOnlyList<ChartSceneBar> Bars,
@@ -466,13 +468,13 @@ public static class ChartSmartArtVisualPlanner
                     }
                 }
 
-                var labelX = horizontalGrid ? plot.X - 2 : plot.X - 2;
-                var labelY = plot.Bottom - fraction * plot.Height;
+                var labelX = horizontalGrid ? plot.X + fraction * plot.Width : plot.X - 2;
+                var labelY = horizontalGrid ? plot.Bottom + 2 : plot.Bottom - fraction * plot.Height;
                 texts.Add(new ChartSceneText(
                     value.ToString("G3", CultureInfo.InvariantCulture),
                     labelX,
                     labelY,
-                    ChartSceneTextAnchor.CenterRight,
+                    horizontalGrid ? ChartSceneTextAnchor.TopCenter : ChartSceneTextAnchor.CenterRight,
                     ChartSceneTextKind.ValueAxis,
                     textColor,
                     9));
@@ -683,7 +685,8 @@ public static class ChartSmartArtVisualPlanner
 
         return new ChartScene(chart.Kind, plan.GeometryKind, frame, plot,
             plan.PlotAreaFill && !isPie ? "#D9E2F3" : null,
-            plan.PaletteHex, gridLines, axisLines, bars, lineSeries, markers, slices, texts, legend);
+            plan.PaletteHex, plan.Categories, plan.Series.Count,
+            gridLines, axisLines, bars, lineSeries, markers, slices, texts, legend);
     }
 
     private static void AddCategoryText(List<ChartSceneText> texts, Chart chart, int index, double x, double y, ChartSceneTextAnchor anchor)
@@ -709,7 +712,7 @@ public static class ChartSmartArtVisualPlanner
         texts.Add(new ChartSceneText(FormatChartValue(value), x, y, ChartSceneTextAnchor.TopLeft,
             ChartSceneTextKind.DataLabel, "#000000", 8));
 
-    private static string FormatChartValue(double value) => value.ToString("G3", CultureInfo.InvariantCulture);
+    private static string FormatChartValue(double value) => value.ToString("G4", CultureInfo.InvariantCulture);
 
     public static IReadOnlyList<string> BuildChartVisualSignatures(IEnumerable<ChartVisualPlan> charts)
     {

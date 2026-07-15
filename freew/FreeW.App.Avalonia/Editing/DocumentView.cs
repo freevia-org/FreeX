@@ -2481,7 +2481,8 @@ public sealed class DocumentView : Control
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            return _floatingCharts.Select(c => (c.Rect, c.BehindText, c.ZOrder, c.Kind, c.Title)).ToList();
+            return _floatingCharts.Select(c => (c.Rect, c.BehindText, c.ZOrder, c.Scene.Kind,
+                c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.Title)?.Text)).ToList();
         }
     }
 
@@ -2496,9 +2497,10 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _floatingCharts.Select(c =>
-                (c.Rect, c.BehindText, c.ZOrder, c.Kind, c.Title,
-                 (IReadOnlyList<string>)c.Categories.AsReadOnly(),
-                 c.Series.Count)).ToList();
+                (c.Rect, c.BehindText, c.ZOrder, c.Scene.Kind,
+                 c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.Title)?.Text,
+                 c.Scene.Categories,
+                 c.Scene.SeriesCount)).ToList();
         }
     }
 
@@ -2615,7 +2617,8 @@ public sealed class DocumentView : Control
         get
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
-            return _inlineCharts.Select(c => (c.Rect, c.Kind, c.Title)).ToList();
+            return _inlineCharts.Select(c => (c.Rect, c.Scene.Kind,
+                c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.Title)?.Text)).ToList();
         }
     }
 
@@ -2885,7 +2888,10 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _floatingCharts.Select(c =>
-                (c.ShowLegend, c.ShowDataLabels, c.CategoryAxisTitle, c.ValueAxisTitle)).ToList();
+                (c.Scene.Legend.Count > 0,
+                 c.Scene.Texts.Any(text => text.Kind == ChartSceneTextKind.DataLabel),
+                 c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.AxisTitle && text.RotationDegrees == 0)?.Text,
+                 c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.AxisTitle && text.RotationDegrees != 0)?.Text)).ToList();
         }
     }
 
@@ -2899,7 +2905,10 @@ public sealed class DocumentView : Control
         {
             if (_laidOutWidth < 0) Relayout(FallbackWidth);
             return _inlineCharts.Select(c =>
-                (c.ShowLegend, c.ShowDataLabels, c.CategoryAxisTitle, c.ValueAxisTitle)).ToList();
+                (c.Scene.Legend.Count > 0,
+                 c.Scene.Texts.Any(text => text.Kind == ChartSceneTextKind.DataLabel),
+                 c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.AxisTitle && text.RotationDegrees == 0)?.Text,
+                 c.Scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.AxisTitle && text.RotationDegrees != 0)?.Text)).ToList();
         }
     }
 
@@ -5472,8 +5481,7 @@ public sealed class DocumentView : Control
                 var rect       = new Rect(x, pageSpaceY, width, height);
 
                 // Build inline chart data (reuses the same struct as floating charts).
-                var series = chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList();
-                _inlineCharts.Add(BuildChartData(chart, rect, behindText: false, zOrder: 0, series));
+                _inlineCharts.Add(BuildChartData(chart, rect, behindText: false, zOrder: 0));
 
                 // ZZ1 fix: use the FULL object box as the hit-test band so TryHitTest/MoveCaretVertical
                 // can reach a tall inline chart from above (pressing Down) or via a click in the upper
@@ -5639,12 +5647,7 @@ public sealed class DocumentView : Control
                     break;
 
                 case DocumentFloatingObjectKind.Chart when run.Chart is { IsFloating: true } chart:
-                    var chartData = BuildChartData(
-                        chart,
-                        rect,
-                        snapshot.BehindText,
-                        snapshot.ZOrderIndex,
-                        chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
+                    var chartData = BuildChartData(chart, rect, snapshot.BehindText, snapshot.ZOrderIndex);
                     chartData.BlockIndex = snapshot.BlockIndex;
                     chartData.RunIndex = snapshot.RunIndex;
                     _floatingCharts.Add(chartData);
@@ -14953,18 +14956,10 @@ public sealed class DocumentView : Control
         // AV-FLSEL: model location so hit-test can issue commands.
         public int BlockIndex;
         public int RunIndex;
-        public ChartKind    Kind;
-        public string?      Title;
-        public List<string> Categories = [];
-        public List<(string? Name, List<double> Values)> Series = [];
         public ChartScene Scene = new(
             ChartKind.Column, ChartVisualGeometryKind.Bars,
             new ChartSceneRect(0, 0, 1, 1), new ChartSceneRect(0, 0, 1, 1),
-            null, [], [], [], [], [], [], [], [], []);
-        public bool ShowLegend;
-        public bool ShowDataLabels;
-        public string? CategoryAxisTitle;
-        public string? ValueAxisTitle;
+            null, [], [], 0, [], [], [], [], [], [], [], []);
     }
 
     private sealed class FloatingWordArtData
@@ -15156,12 +15151,7 @@ public sealed class DocumentView : Control
 
                 case DocumentFloatingObjectKind.Chart when child is Chart chart:
                     childData.Kind = FloatingGroupChildData.ChildKind.Chart;
-                    childData.Chart = BuildChartData(
-                        chart,
-                        childRect,
-                        snapshot.BehindText,
-                        snapshot.ZOrderIndex,
-                        chart.Series.Select(s => (s.Name, new List<double>(s.Values))).ToList());
+                    childData.Chart = BuildChartData(chart, childRect, snapshot.BehindText, snapshot.ZOrderIndex);
                     break;
 
                 case DocumentFloatingObjectKind.WordArt when child is WordArt:
@@ -15209,14 +15199,11 @@ public sealed class DocumentView : Control
 
     /// <summary>
     /// Centralised factory for <see cref="FloatingChartData"/> — shared by the floating chart collector,
-    /// the inline chart layout, and the drawing-group child collector. Resolves QuickLayout / StyleId
-    /// to determine which annotation flags are active, then copies chart model data into the data struct.
+    /// the inline chart layout, and the drawing-group child collector. The renderer consumes the shared
+    /// scene directly; no duplicate chart plan or model-data copy is retained here.
     /// </summary>
-    private static FloatingChartData BuildChartData(
-        Chart chart, Rect rect, bool behindText, int zOrder,
-        List<(string? Name, List<double> Values)> series)
+    private static FloatingChartData BuildChartData(Chart chart, Rect rect, bool behindText, int zOrder)
     {
-        var plan = ChartSmartArtVisualPlanner.BuildChartPlan(chart);
         var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, rect.Width, rect.Height);
 
         return new FloatingChartData
@@ -15224,15 +15211,7 @@ public sealed class DocumentView : Control
             Rect              = rect,
             BehindText        = behindText,
             ZOrder            = zOrder,
-            Kind              = chart.Kind,
-            Title             = scene.Texts.FirstOrDefault(text => text.Kind == ChartSceneTextKind.Title)?.Text,
-            Categories        = new List<string>(chart.Categories),
-            Series            = series,
             Scene             = scene,
-            ShowLegend        = plan.ShowLegend,
-            ShowDataLabels    = plan.ShowDataLabels,
-            CategoryAxisTitle = plan.CategoryAxisTitle,
-            ValueAxisTitle    = plan.ValueAxisTitle,
         };
     }
 
