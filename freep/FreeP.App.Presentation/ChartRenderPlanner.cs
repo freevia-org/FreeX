@@ -2920,8 +2920,8 @@ public static partial class ChartRenderPlanner
                 var renderPointSets = triangulateCompleteCells && facetPoints.Count == 4
                     ? new[]
                     {
-                        new[] { facetPoints[0], facetPoints[1], facetPoints[2] },
-                        new[] { facetPoints[0], facetPoints[2], facetPoints[3] }
+                        new[] { facetPoints[0], facetPoints[1], facetPoints[3] },
+                        new[] { facetPoints[1], facetPoints[2], facetPoints[3] }
                     }
                     : new[] { facetPoints.ToArray() };
 

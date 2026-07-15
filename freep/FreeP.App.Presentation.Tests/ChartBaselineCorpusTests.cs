@@ -238,6 +238,16 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.RenderFacets.Should().HaveCount(8,
             "imported PowerPoint Surface3D cells render a continuous triangulated surface, including blank-cell fallbacks");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
+        var firstSurfaceCellFacets = surfaceGeometry.RenderFacets
+            .Where(facet => facet.SeriesIndex == 0 && facet.CategoryIndex == 0)
+            .ToArray();
+        firstSurfaceCellFacets.Should().HaveCount(2);
+        firstSurfaceCellFacets[0].Points.Select(point => point.X)
+            .Should().Equal(new[] { 0.0, 147.6, 32.4 },
+                "PowerPoint splits the first imported surface cell along the 0-3 diagonal");
+        firstSurfaceCellFacets[1].Points.Select(point => point.X)
+            .Should().Equal(new[] { 147.6, 180.0, 32.4 },
+                "the paired imported surface triangle shares the alternate diagonal");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255,
             "PowerPoint's imported Surface3D facets are opaque fills");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Stroke.Alpha == 0,
