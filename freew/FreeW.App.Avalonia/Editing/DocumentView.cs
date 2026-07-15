@@ -14325,13 +14325,13 @@ public sealed class DocumentView : Control
             ? EquationAccentText(element.Accent)
             : element.GroupCharacter;
         var mark = MeasureEquationText(markText, baseFormatting, EquationDecoratorStyle);
-        return new Size(Math.Max(baseText.Width, mark.Width) + 2, baseText.Height + mark.Height - 3);
+        return new Size(Math.Max(baseText.Width, mark.Width) + 2, baseText.Height);
     }
 
     private Size MeasureEquationBar(EquationVisualElement element, RunFormatting baseFormatting)
     {
         var baseText = MeasureEquationSlot(element.BarBasePlan, element.BaseText, baseFormatting, EquationStructureStyle);
-        return new Size(Math.Max(14, baseText.Width + 2), baseText.Height + 2);
+        return new Size(Math.Max(14, baseText.Width + 2), baseText.Height);
     }
 
     private Size MeasureEquationDelimiter(EquationVisualElement element, RunFormatting baseFormatting)
@@ -14481,8 +14481,10 @@ public sealed class DocumentView : Control
         var markSize = MeasureEquationText(mark, baseFormatting, EquationDecoratorStyle);
         var baseSize = MeasureEquationSlot(basePlan, element.BaseText, baseFormatting, EquationStructureStyle);
         var markOnTop = element.Kind == EquationVisualElementKind.Accent || element.GroupCharacterTop;
-        var baseY = markOnTop ? bounds.Bottom - baseSize.Height : bounds.Y;
-        var markY = markOnTop ? bounds.Y : bounds.Bottom - markSize.Height;
+        var baseY = bounds.Y + (bounds.Height - baseSize.Height) / 2;
+        var markY = markOnTop
+            ? baseY - markSize.Height * 0.55
+            : baseY + baseSize.Height - markSize.Height * 0.45;
         DrawEquationText(context, mark, new Rect(bounds.X, markY, bounds.Width, markSize.Height), baseFormatting, EquationDecoratorStyle, centered: true);
         DrawEquationSlot(context, basePlan, element.BaseText, new Rect(bounds.X, baseY, bounds.Width, baseSize.Height), baseFormatting, EquationStructureStyle, centered: true);
     }
@@ -14492,7 +14494,7 @@ public sealed class DocumentView : Control
         var baseSize = MeasureEquationSlot(element.BarBasePlan, element.BaseText, baseFormatting, EquationStructureStyle);
         var baseY = bounds.Y + (bounds.Height - baseSize.Height) / 2;
         DrawEquationSlot(context, element.BarBasePlan, element.BaseText, new Rect(bounds.X, baseY, bounds.Width, baseSize.Height), baseFormatting, EquationStructureStyle, centered: true);
-        var lineY = element.BarTop ? baseY : baseY + baseSize.Height;
+        var lineY = element.BarTop ? baseY - 1 : baseY + baseSize.Height + 1;
         context.DrawLine(EquationLinePen, new Point(bounds.X + 1, lineY), new Point(bounds.Right - 1, lineY));
     }
 
