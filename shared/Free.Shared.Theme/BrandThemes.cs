@@ -59,6 +59,7 @@ public static class BrandThemes
             TitleBarDisabled:     ThemeColor.FromHex("#8BA6B8"),
             TitleBarButtonBorder: ThemeColor.FromHex("#55FFFFFF"),  // alpha 0x55
             RibbonButtonHover:    ThemeColor.FromHex("#BEE6FD"),
+            RibbonInlineDivider:  ThemeColor.FromHex("#CCCCCC"),
             Text:                 ThemeColor.FromHex("#1F1F1F"),
             MutedText:            ThemeColor.FromHex("#5F6368"),
             SubtleText:           ThemeColor.FromHex("#767676"),
@@ -108,6 +109,7 @@ public static class BrandThemes
             TitleBarButtonBorder: ThemeColor.FromHex("#55FFFFFF"),
             // ── Ribbon hover: FreeWRibbonResources.xaml FreeXRibbonButtonHoverBrush (#E6F6FA). ──
             RibbonButtonHover:    ThemeColor.FromHex("#E6F6FA"),
+            RibbonInlineDivider:  ThemeColor.FromHex("#CCCCCC"),
             Text:                 s_text,
             MutedText:            s_mutedText,
             SubtleText:           s_subtleText,
@@ -154,6 +156,7 @@ public static class BrandThemes
             TitleBarDisabled:     ThemeColor.FromHex("#8BA6B8"),
             TitleBarButtonBorder: ThemeColor.FromHex("#55FFFFFF"),
             RibbonButtonHover:    ThemeColor.FromHex("#FDDDD6"),
+            RibbonInlineDivider:  ThemeColor.FromHex("#CCCCCC"),
             Text:                 s_text,
             MutedText:            s_mutedText,
             SubtleText:           s_subtleText,
@@ -188,6 +191,7 @@ public static class BrandThemes
             TitleBarDisabled:     ThemeColor.FromHex("#6E7074"),
             TitleBarButtonBorder: ThemeColor.FromHex("#55FFFFFF"),
             RibbonButtonHover:    ThemeColor.FromHex("#F9D9BC"),
+            RibbonInlineDivider:  ThemeColor.FromHex("#CCCCCC"),
             Text:                 s_text,
             MutedText:            s_mutedText,
             SubtleText:           s_subtleText,

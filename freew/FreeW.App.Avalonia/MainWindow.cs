@@ -11,6 +11,7 @@ using Free.Shared.AppServices;
 using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell.Avalonia;
+using Free.Shared.Theme;
 using FreeW.App.Avalonia.Backstage;
 using FreeW.App.Avalonia.Editing;
 using FreeW.App.Avalonia.Pdf;
@@ -1241,7 +1242,8 @@ public sealed class MainWindow : Window
             FreeWRibbon.BuildDefinition(),
             registry,
             contextSource: contextSource,
-            afterExecute: () => _editor.Focus());
+            afterExecute: () => _editor.Focus(),
+            palette: RibbonVisualPalette.FromTheme(App.ActiveTheme));
         HasToolbar = true;
         return new Border
         {
