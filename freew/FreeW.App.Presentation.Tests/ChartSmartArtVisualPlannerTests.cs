@@ -5,6 +5,66 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class ChartSmartArtVisualPlannerTests
 {
     [Fact]
+    public void ChartScene_ColumnGolden_CentralizesFrameAxesBarsLabelsAndLegend()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.0, 2.0], "Actual");
+        chart.Series.Add(new ChartSeries("Forecast", [2.0, 3.0]));
+        chart.Title = "Revenue";
+        chart.ShowLegend = true;
+        chart.QuickLayoutId = 5;
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 240, 180);
+
+        scene.FrameBounds.Should().Be(new ChartSceneRect(0, 0, 240, 180));
+        scene.PlotBounds.Should().Be(new ChartSceneRect(32, 54, 200, 86));
+        scene.Bars.Should().HaveCount(4);
+        scene.GridLines.Should().HaveCount(4);
+        scene.AxisLines.Should().ContainSingle();
+        scene.Legend.Should().HaveCount(2);
+        scene.Texts.Count(text => text.Kind == ChartSceneTextKind.ValueAxis).Should().Be(5);
+        scene.Texts.Count(text => text.Kind == ChartSceneTextKind.CategoryAxis).Should().Be(2);
+        scene.Texts.Count(text => text.Kind == ChartSceneTextKind.DataLabel).Should().Be(4);
+    }
+
+    [Fact]
+    public void ChartScene_LineAreaAndScatter_UseSharedPointAndMarkerPrimitives()
+    {
+        var area = Chart.Create(ChartKind.Area, ["A", "B", "C"], [1.0, 3.0, 2.0]);
+        area.StyleId = 4;
+        var areaScene = ChartSmartArtVisualPlanner.BuildChartScene(area, 300, 200);
+
+        areaScene.LineSeries.Should().ContainSingle().Which.FillArea.Should().BeTrue();
+        areaScene.LineSeries[0].Points.Should().HaveCount(3);
+        areaScene.Markers.Should().HaveCount(3);
+
+        var scatter = Chart.Create(ChartKind.Scatter, ["155", "160", "165", "170"], [52.0, 58.0, 63.0, 68.0]);
+        var scatterScene = ChartSmartArtVisualPlanner.BuildChartScene(scatter, 300, 200);
+
+        scatterScene.LineSeries.Should().BeEmpty();
+        scatterScene.Markers.Select(marker => marker.Kind).Should().ContainInOrder(
+            ChartSceneMarkerKind.Diamond,
+            ChartSceneMarkerKind.Square,
+            ChartSceneMarkerKind.Triangle,
+            ChartSceneMarkerKind.Cross);
+    }
+
+    [Fact]
+    public void ChartScene_PieAndDoughnut_UseSharedSlicesAndCategoryLegend()
+    {
+        var chart = Chart.Create(ChartKind.Doughnut, ["A", "B", "C"], [1.0, 2.0, 3.0]);
+        chart.ShowLegend = true;
+        chart.QuickLayoutId = 5;
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 240, 180);
+
+        scene.Slices.Should().HaveCount(3);
+        scene.Slices.Should().OnlyContain(slice => slice.InnerRadius > 0);
+        scene.Legend.Select(entry => entry.Text).Should().ContainInOrder("A", "B", "C");
+        scene.GridLines.Should().BeEmpty();
+        scene.AxisLines.Should().BeEmpty();
+    }
+
+    [Fact]
     public void ChartPlan_ResolvesPaletteStyleAndLayoutFlags()
     {
         var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0], title: "Revenue");
