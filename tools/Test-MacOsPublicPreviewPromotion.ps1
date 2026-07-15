@@ -13,20 +13,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Resolve-InputPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return [System.IO.Path]::GetFullPath($Path)
-    }
-
-    $currentDirectoryCandidate = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
-    if (Test-Path -LiteralPath $currentDirectoryCandidate) {
-        return $currentDirectoryCandidate
-    }
-
-    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Assert-RequiredValue {
     param(
@@ -133,10 +120,10 @@ if ([string]::IsNullOrWhiteSpace($HumanChecklistScriptPath)) {
     $HumanChecklistScriptPath = Join-Path $PSScriptRoot "Test-MacOsHumanValidationChecklist.ps1"
 }
 
-$resolvedArtifactRoot = Resolve-InputPath $ArtifactRoot
-$resolvedChecklistRoot = Resolve-InputPath $ChecklistRoot
-$resolvedEvidencePreflightScriptPath = Resolve-InputPath $EvidencePreflightScriptPath
-$resolvedHumanChecklistScriptPath = Resolve-InputPath $HumanChecklistScriptPath
+$resolvedArtifactRoot = Resolve-InputPath -Path $ArtifactRoot -RepoRoot $repoRoot
+$resolvedChecklistRoot = Resolve-InputPath -Path $ChecklistRoot -RepoRoot $repoRoot
+$resolvedEvidencePreflightScriptPath = Resolve-InputPath -Path $EvidencePreflightScriptPath -RepoRoot $repoRoot
+$resolvedHumanChecklistScriptPath = Resolve-InputPath -Path $HumanChecklistScriptPath -RepoRoot $repoRoot
 $resolvedHumanChecklistTemplatePath = Get-HumanChecklistTemplatePath
 
 if (-not (Test-Path -LiteralPath $resolvedArtifactRoot -PathType Container)) {

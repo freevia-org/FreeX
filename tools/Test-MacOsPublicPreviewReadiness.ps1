@@ -35,20 +35,7 @@ function Write-GitHubErrorAnnotation {
     Write-Host "::error title=macOS public-preview readiness::$escapedMessage"
 }
 
-function Resolve-InputPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return [System.IO.Path]::GetFullPath($Path)
-    }
-
-    $currentDirectoryCandidate = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
-    if (Test-Path -LiteralPath $currentDirectoryCandidate) {
-        return $currentDirectoryCandidate
-    }
-
-    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -1663,7 +1650,7 @@ function Test-RuntimeBundle {
     Test-DiagnosticsArtifact -Root $Root -BundleDirectory $BundleDirectory -Runtime $Runtime -AppIdentity $ArtifactIdentity
 }
 
-$resolvedArtifactRoot = Resolve-InputPath $ArtifactRoot
+$resolvedArtifactRoot = Resolve-InputPath -Path $ArtifactRoot -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedArtifactRoot -PathType Container)) {
     throw "macOS public-preview artifact root was not found: $resolvedArtifactRoot"
 }

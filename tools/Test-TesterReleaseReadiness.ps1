@@ -15,15 +15,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Assert-Contains {
     param(
@@ -47,10 +39,10 @@ function Get-TesterMinorVersion {
     return 5
 }
 
-$progressFile = Resolve-RepoPath $ProgressPath
-$workflowFile = Resolve-RepoPath $WorkflowPath
-$distributionPlanFile = Resolve-RepoPath $DistributionPlanPath
-$checklistFile = Resolve-RepoPath $ChecklistPath
+$progressFile = Resolve-ToolRepoPath -Path $ProgressPath -RepoRoot $repoRoot
+$workflowFile = Resolve-ToolRepoPath -Path $WorkflowPath -RepoRoot $repoRoot
+$distributionPlanFile = Resolve-ToolRepoPath -Path $DistributionPlanPath -RepoRoot $repoRoot
+$checklistFile = Resolve-ToolRepoPath -Path $ChecklistPath -RepoRoot $repoRoot
 
 foreach ($path in @($progressFile, $workflowFile, $distributionPlanFile, $checklistFile)) {
     if (-not (Test-Path -LiteralPath $path)) {

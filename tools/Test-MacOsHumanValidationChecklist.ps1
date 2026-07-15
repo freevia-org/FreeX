@@ -10,20 +10,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $validationErrors = New-Object System.Collections.Generic.List[string]
 
-function Resolve-InputPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return [System.IO.Path]::GetFullPath($Path)
-    }
-
-    $currentDirectoryCandidate = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
-    if (Test-Path -LiteralPath $currentDirectoryCandidate) {
-        return $currentDirectoryCandidate
-    }
-
-    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -776,7 +763,7 @@ function Test-PublicPreviewDecision {
     }
 }
 
-$resolvedChecklistPath = Resolve-InputPath $ChecklistPath
+$resolvedChecklistPath = Resolve-InputPath -Path $ChecklistPath -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedChecklistPath -PathType Leaf)) {
     throw "macOS human validation checklist was not found: $resolvedChecklistPath"
 }

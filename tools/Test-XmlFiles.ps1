@@ -7,57 +7,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
-
-function Test-IsBuildOutputPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $relativePath = Get-RepositoryRelativePath $Path
-    $segments = $relativePath -split '[\\/]'
-    return $segments -contains "bin" -or
-        $segments -contains "obj" -or
-        $segments -contains ".worktrees" -or
-        $segments -contains ".claude"
-}
-
-function Get-RepositoryRelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if (-not [System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    $root = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    if ($fullPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $fullPath.Substring($root.Length).TrimStart([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    }
-
-    return $Path
-}
-
-function Get-TrackedRepositoryFiles {
-    $gitOutput = & git -C $repoRoot ls-files --deduplicate
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to enumerate tracked files with git ls-files."
-    }
-
-    foreach ($relativePath in $gitOutput) {
-        if ([string]::IsNullOrWhiteSpace($relativePath)) {
-            continue
-        }
-
-        $relativePath
-    }
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 $normalizedExtensions = New-Object System.Collections.Generic.HashSet[string]([System.StringComparer]::OrdinalIgnoreCase)
 foreach ($extension in $XmlExtensions) {
@@ -75,9 +25,9 @@ if ($normalizedExtensions.Count -eq 0) {
 
 $xmlPaths = New-Object System.Collections.Generic.List[string]
 if ($XmlRoots.Count -eq 0) {
-    foreach ($trackedPath in (Get-TrackedRepositoryFiles)) {
+    foreach ($trackedPath in (Get-ToolTrackedRepositoryFiles -RepoRoot $repoRoot)) {
         $resolvedTrackedPath = Join-Path $repoRoot $trackedPath
-        if ((Test-IsBuildOutputPath $trackedPath) -or -not (Test-Path -LiteralPath $resolvedTrackedPath -PathType Leaf)) {
+        if ((Test-ToolExcludedPath -Path $trackedPath -RepoRoot $repoRoot) -or -not (Test-Path -LiteralPath $resolvedTrackedPath -PathType Leaf)) {
             continue
         }
 
@@ -89,7 +39,7 @@ if ($XmlRoots.Count -eq 0) {
 }
 else {
     foreach ($xmlRoot in $XmlRoots) {
-        $resolvedXmlRoot = Resolve-RepoPath $xmlRoot
+        $resolvedXmlRoot = Resolve-ToolRepoPath -Path $xmlRoot -RepoRoot $repoRoot
         if (-not (Test-Path -LiteralPath $resolvedXmlRoot)) {
             throw "XML root was not found: $resolvedXmlRoot"
         }
@@ -105,7 +55,7 @@ else {
 
         Get-ChildItem -LiteralPath $rootItem.FullName -File -Recurse |
             Where-Object {
-                $normalizedExtensions.Contains($_.Extension) -and -not (Test-IsBuildOutputPath $_.FullName)
+                $normalizedExtensions.Contains($_.Extension) -and -not (Test-ToolExcludedPath -Path $_.FullName -RepoRoot $repoRoot)
             } |
             ForEach-Object { $xmlPaths.Add($_.FullName) }
     }

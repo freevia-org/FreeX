@@ -9,37 +9,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
-
-function Normalize-RelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    return $Path.Replace("\", "/")
-}
-
-function Get-RelativePath {
-    param(
-        [Parameter(Mandatory = $true)][string]$RootPath,
-        [Parameter(Mandatory = $true)][string]$Path
-    )
-
-    $fullRootPath = [System.IO.Path]::GetFullPath($RootPath)
-    if (-not $fullRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
-        $fullRootPath += [System.IO.Path]::DirectorySeparatorChar
-    }
-
-    $rootUri = New-Object System.Uri($fullRootPath)
-    $pathUri = New-Object System.Uri([System.IO.Path]::GetFullPath($Path))
-    return [System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString())
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Test-IsIgnoredProjectPath {
     param(
@@ -59,23 +29,17 @@ function Test-IsIgnoredProjectPath {
         $segments -contains ".claude"
 }
 
-function Test-IsIgnoredDirectoryName {
-    param([Parameter(Mandatory = $true)][string]$Name)
-
-    return $Name -in @("bin", "obj", ".git", ".worktrees", ".claude")
-}
-
 function Test-IsIncludedProjectPath {
     param([Parameter(Mandatory = $true)][string]$RelativePath)
 
     foreach ($prefix in $ExcludedProjectPathPrefixes) {
-        if ($RelativePath.StartsWith((Normalize-RelativePath $prefix), [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($RelativePath.StartsWith((ConvertTo-ToolNormalizedRelativePath $prefix), [System.StringComparison]::OrdinalIgnoreCase)) {
             return $false
         }
     }
 
     foreach ($prefix in $ProjectPathPrefixes) {
-        if ($RelativePath.StartsWith((Normalize-RelativePath $prefix), [System.StringComparison]::OrdinalIgnoreCase)) {
+        if ($RelativePath.StartsWith((ConvertTo-ToolNormalizedRelativePath $prefix), [System.StringComparison]::OrdinalIgnoreCase)) {
             return $true
         }
     }
@@ -83,31 +47,12 @@ function Test-IsIncludedProjectPath {
     return $false
 }
 
-function Get-ProjectFiles {
-    param([Parameter(Mandatory = $true)][System.IO.DirectoryInfo]$Directory)
-
-    foreach ($projectFile in $Directory.EnumerateFiles("*.csproj")) {
-        $relativePath = Normalize-RelativePath (Get-RelativePath -RootPath $resolvedProjectRoot -Path $projectFile.FullName)
-        if (-not (Test-IsIgnoredProjectPath -ProjectFile $projectFile -RelativePath $relativePath)) {
-            $projectFile
-        }
-    }
-
-    foreach ($childDirectory in $Directory.EnumerateDirectories()) {
-        if (Test-IsIgnoredDirectoryName $childDirectory.Name) {
-            continue
-        }
-
-        Get-ProjectFiles -Directory $childDirectory
-    }
-}
-
-$resolvedProjectRoot = Resolve-RepoPath $ProjectRoot
+$resolvedProjectRoot = Resolve-ToolRepoPath -Path $ProjectRoot -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
     throw "Project root was not found: $resolvedProjectRoot"
 }
 
-$resolvedSolutionPath = Resolve-RepoPath $SolutionPath
+$resolvedSolutionPath = Resolve-ToolRepoPath -Path $SolutionPath -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedSolutionPath -PathType Leaf)) {
     throw "Solution file was not found: $resolvedSolutionPath"
 }
@@ -120,7 +65,7 @@ if (-not $solutionRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
 }
 $solutionProjectPaths = @(
     $solutionXml.SelectNodes("//*[local-name()='Project']") |
-        ForEach-Object { Normalize-RelativePath ([string]$_.Path) } |
+        ForEach-Object { ConvertTo-ToolNormalizedRelativePath ([string]$_.Path) } |
         Sort-Object -Unique
 )
 
@@ -130,7 +75,7 @@ if ($solutionProjectPaths.Count -eq 0) {
 
 $duplicateSolutionProjectPaths = @(
     $solutionXml.SelectNodes("//*[local-name()='Project']") |
-        ForEach-Object { Normalize-RelativePath ([string]$_.Path) } |
+        ForEach-Object { ConvertTo-ToolNormalizedRelativePath ([string]$_.Path) } |
         Group-Object { $_.ToUpperInvariant() } |
         Where-Object { $_.Count -gt 1 } |
         ForEach-Object { $_.Group[0] } |
@@ -147,10 +92,12 @@ $escapedSolutionProjectPaths = @(
 )
 
 $discoveredProjectPaths = @(
-    Get-ProjectFiles -Directory (Get-Item -LiteralPath $resolvedProjectRoot) |
+    Get-ToolProjectFiles -Directory (Get-Item -LiteralPath $resolvedProjectRoot) |
         ForEach-Object {
-            $relativePath = Normalize-RelativePath (Get-RelativePath -RootPath $resolvedProjectRoot -Path $_.FullName)
-            $relativePath
+            $relativePath = ConvertTo-ToolNormalizedRelativePath (Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $_.FullName)
+            if (-not (Test-IsIgnoredProjectPath -ProjectFile $_ -RelativePath $relativePath)) {
+                $relativePath
+            }
         } |
         Where-Object { Test-IsIncludedProjectPath $_ } |
         Sort-Object -Unique
