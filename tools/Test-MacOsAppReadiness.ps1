@@ -92,6 +92,20 @@ function Assert-TextBefore {
     }
 }
 
+function Assert-MethodDelegates {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$MethodName,
+        [Parameter(Mandatory = $true)][string]$TargetCall,
+        [Parameter(Mandatory = $true)][string]$Message
+    )
+
+    $methodPattern = "(?s)\b(?:public|private|protected|internal)\s+(?:static\s+)?[\w<>,.?\[\]]+\s+$([regex]::Escape($MethodName))\s*\([^;{}]*?\)\s*(?<body>=>.*?;|\{.*?\})"
+    $methodMatch = [System.Text.RegularExpressions.Regex]::Match($Text, $methodPattern)
+    Assert-True -Condition $methodMatch.Success -Message $Message
+    Assert-ContainsText -Text $methodMatch.Groups["body"].Value -Needle $TargetCall -Message $Message
+}
+
 function Get-WorkflowStepBlock {
     param(
         [Parameter(Mandatory = $true)][string]$Workflow,
@@ -1098,15 +1112,55 @@ function Test-SourceWiring {
         @{
             Path = "src\FreeX.App.Avalonia\AvaloniaAppDiagnostics.cs"
             Markers = @(
-                "internal sealed class AvaloniaAppDiagnostics",
-                "AppDiagnosticsOptions.CreateDefault()",
+                "internal sealed class AvaloniaAppDiagnostics : LocalAppDiagnostics",
+                "private AvaloniaAppDiagnostics(LocalAppDiagnostics local)",
+                ": base(local)",
+                "public static AvaloniaAppDiagnostics Create(string? diagnosticsDirectory = null)",
+                "new(LocalAppDiagnostics.Create(",
+                "AppHelpInfo.GetVersionText(typeof(AvaloniaAppDiagnostics).Assembly)",
+                "diagnosticsDirectory));",
+                "public void RegisterUnhandledExceptionHandlers() => RegisterCrashHandlers();"
+            )
+            OrderedPairs = @()
+        },
+        @{
+            Path = "shared\Free.Shared.AppServices\LocalAppDiagnostics.cs"
+            Markers = @(
+                "public class LocalAppDiagnostics",
+                "public static LocalAppDiagnostics Create(",
+                "var defaults = AppDiagnosticsOptions.CreateDefault();",
+                "var options = new AppDiagnosticsOptions(",
+                "string.IsNullOrWhiteSpace(diagnosticsDirectory)",
+                "? defaults.DiagnosticsDirectory",
+                ": diagnosticsDirectory,",
                 "new AppDiagnosticsFileStore(options)",
-                "AppDiagnosticsMetadata.Create(",
-                "AppDomain.CurrentDomain.UnhandledException +=",
-                "TaskScheduler.UnobservedTaskException +=",
+                "AppDiagnosticsMetadata.Create(appVersion)",
+                "public void RegisterCrashHandlers(",
                 "RecordEvent(string eventName",
-                "RecordCrash(Exception exception, string source)",
-                "AppDiagnosticsFileStore.SanitizeProperties(properties)"
+                "RecordCrash(Exception exception, string source)"
+            )
+            OrderedPairs = @(
+                @{
+                    First = "string.IsNullOrWhiteSpace(diagnosticsDirectory)"
+                    Second = "? defaults.DiagnosticsDirectory"
+                },
+                @{
+                    First = "? defaults.DiagnosticsDirectory"
+                    Second = ": diagnosticsDirectory,"
+                }
+            )
+            Delegations = @(
+                @{
+                    MethodName = "RegisterCrashHandlers"
+                    TargetCall = "AppCrashHandlers.Register("
+                }
+            )
+        },
+        @{
+            Path = "shared\Free.Shared.AppServices\AppCrashHandlers.cs"
+            Markers = @(
+                "AppDomain.CurrentDomain.UnhandledException +=",
+                "TaskScheduler.UnobservedTaskException +="
             )
             OrderedPairs = @()
         },
@@ -1115,7 +1169,8 @@ function Test-SourceWiring {
             Markers = @(
                 "AllowedPropertyNames",
                 '"grantKind"',
-                '"payloadRedacted"'
+                '"payloadRedacted"',
+                "public static IEnumerable<KeyValuePair<string, string?>> SanitizeProperties("
             )
             OrderedPairs = @()
         },
@@ -3124,6 +3179,10 @@ function Test-SourceWiring {
 
         foreach ($orderedPair in $contract.OrderedPairs) {
             Assert-TextBefore -Text $sourceText -First $orderedPair.First -Second $orderedPair.Second -Message "macOS source wiring order is invalid in $($contract.Path)."
+        }
+
+        foreach ($delegation in $contract.Delegations) {
+            Assert-MethodDelegates -Text $sourceText -MethodName $delegation.MethodName -TargetCall $delegation.TargetCall -Message "macOS source wiring method '$($delegation.MethodName)' in $($contract.Path) must delegate to '$($delegation.TargetCall)'."
         }
     }
 

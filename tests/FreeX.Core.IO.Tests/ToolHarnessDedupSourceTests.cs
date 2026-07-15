@@ -76,4 +76,63 @@ public sealed class ToolHarnessDedupSourceTests
         foregroundCapture.Should().Contain("WindowFinder.FindProcessPopup(windowProcessId.Value, window.Handle, options.PopupTimeout, 120, 80)");
         foregroundCapture.Should().Contain("Visible window candidates:");
     }
+
+    [Fact]
+    public void ToolScripts_UseCanonicalSharedSupportEntryPoints()
+    {
+        var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");
+        var screenshotSupport = TestWorkspaceFiles.ReadRepoText("tools", "ScreenshotCaptureSupport.ps1");
+        var inventoryScripts = new[]
+        {
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreePCommandParityInventory.ps1"),
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreeWCommandInventory.ps1"),
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-CommandInventoryDocs.ps1"),
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-DialogParityInventory.ps1"),
+            TestWorkspaceFiles.ReadRepoText("tools", "Test-GeneratedDocs.ps1"),
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-ConditionalFormatOpenedStateEvidence.ps1"),
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-CrossAppParityDashboard.ps1"),
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-DialogVisualEvidenceSummary.ps1"),
+        };
+        var screenshotScripts = new[]
+        {
+            TestWorkspaceFiles.ReadRepoText("tools", "screenshot_excel.ps1"),
+            TestWorkspaceFiles.ReadRepoText("tools", "screenshot_ribbon.ps1"),
+        };
+
+        support.Should().Contain("function Resolve-ToolRepoPath");
+        support.Should().Contain("function Test-ToolGeneratedFileContentMatches");
+        inventoryScripts.Should().OnlyContain(script => script.Contains("ToolScriptSupport.ps1", StringComparison.Ordinal));
+        inventoryScripts.Should().OnlyContain(script => !script.Contains("function Resolve-RepoPath", StringComparison.Ordinal));
+        screenshotSupport.Should().Contain("function Resolve-CaptureWidths");
+        screenshotScripts.Should().OnlyContain(script => script.Contains("ScreenshotCaptureSupport.ps1", StringComparison.Ordinal));
+        screenshotScripts.Should().OnlyContain(script => !script.Contains("function Resolve-CaptureWidths", StringComparison.Ordinal));
+        screenshotScripts.Should().OnlyContain(script => !script.Contains("function Capture-ScreenRectangle", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FreePRenderCompare_UsesSharedWpfBitmapDecodeHelpers()
+    {
+        var project = TestWorkspaceFiles.ReadRepoText("tools", "FreeP.RenderCompare", "FreeP.RenderCompare.csproj");
+        var imageDiff = TestWorkspaceFiles.ReadRepoText("tools", "FreeP.RenderCompare", "ImageDiff.cs");
+
+        project.Should().Contain("FreeX.ToolsShared.Wpf.csproj");
+        imageDiff.Should().Contain("WpfImageDiff.LoadBitmap(pathA)");
+        imageDiff.Should().Contain("WpfImageDiff.GetBgra32Pixels(bmpA, widthA, heightA)");
+        imageDiff.Should().NotContain("private static BitmapSource LoadAsBgra32");
+        imageDiff.Should().NotContain("private static byte[] GetBgra32Pixels");
+    }
+
+    [Fact]
+    public void WpfImageDiff_UsesChecked64BitBufferSizing()
+    {
+        var imageDiff = TestWorkspaceFiles.ReadRepoText("tools", "FreeX.ToolsShared.Wpf", "WpfImageDiff.cs");
+
+        imageDiff.Should().Contain("var pixelCount = checked((long)width * height);");
+        imageDiff.Should().Contain("var stride = checked((long)width * 4);");
+        imageDiff.Should().Contain("var bufferLength = checked(pixelCount * 4);");
+        imageDiff.Should().Contain("new byte[layout.BufferLength]");
+        imageDiff.Should().Contain("bitmap.CopyPixels(pixels, layout.Stride, 0)");
+        imageDiff.Should().NotContain("new byte[width * height * 4]");
+        imageDiff.Should().NotContain("bitmap.CopyPixels(pixels, width * 4, 0)");
+    }
 }

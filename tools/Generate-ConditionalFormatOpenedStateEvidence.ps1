@@ -7,16 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function ConvertTo-RepoRelativePath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -33,7 +24,7 @@ function ConvertTo-RepoRelativePath {
 function Read-JsonFile {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $resolvedPath = Resolve-RepoPath $Path
+    $resolvedPath = Resolve-ToolRepoPath -Path $Path -RepoRoot $repoRoot
     if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
         throw "Required generated parity input is missing: $resolvedPath"
     }
@@ -265,10 +256,10 @@ function Get-CaptureTargetStatus {
         [string]$FallbackEvidenceNote = ""
     )
 
-    $resolvedManifestPath = Resolve-RepoPath $ManifestPath
+    $resolvedManifestPath = Resolve-ToolRepoPath -Path $ManifestPath -RepoRoot $repoRoot
     $fallbackEvidence = @()
     if (-not [string]::IsNullOrWhiteSpace($FallbackEvidencePath)) {
-        $resolvedFallbackPath = Resolve-RepoPath $FallbackEvidencePath
+        $resolvedFallbackPath = Resolve-ToolRepoPath -Path $FallbackEvidencePath -RepoRoot $repoRoot
         if (Test-Path -LiteralPath $resolvedFallbackPath -PathType Leaf) {
             $fallbackEvidence += ConvertTo-RepoRelativePath $resolvedFallbackPath
         }
@@ -310,7 +301,7 @@ function Get-CaptureTargetStatus {
     $manifestMatchesTarget = $manifestSubject -eq $expectedManifestSubject -and $manifestScenario -eq $Scenario
     $resolvedScreenshot = Resolve-ScreenshotPath -Manifest $manifest -ManifestPath $resolvedManifestPath
     $screenshotExists = -not [string]::IsNullOrWhiteSpace($resolvedScreenshot) -and
-        (Test-Path -LiteralPath (Resolve-RepoPath $resolvedScreenshot) -PathType Leaf -ErrorAction SilentlyContinue)
+        (Test-Path -LiteralPath (Resolve-ToolRepoPath -Path $resolvedScreenshot -RepoRoot $repoRoot) -PathType Leaf -ErrorAction SilentlyContinue)
     if (-not $screenshotExists -and -not [string]::IsNullOrWhiteSpace($resolvedScreenshot)) {
         $screenshotExists = Test-Path -LiteralPath $resolvedScreenshot -PathType Leaf -ErrorAction SilentlyContinue
     }
@@ -613,8 +604,8 @@ foreach ($row in $rows) {
 
 $markdown = $md.ToString()
 
-$resolvedJsonPath = Resolve-RepoPath $JsonPath
-$resolvedMarkdownPath = Resolve-RepoPath $MarkdownPath
+$resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
+$resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 
 if ($Check) {
     Test-FileContentMatches -ExpectedContent $json -ActualPath $resolvedJsonPath -Label "Conditional-format opened-state evidence JSON"

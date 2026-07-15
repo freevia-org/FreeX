@@ -8,21 +8,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Read-GeneratedJson {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $resolvedPath = Resolve-RepoPath $Path
+    $resolvedPath = Resolve-ToolRepoPath -Path $Path -RepoRoot $repoRoot
     if (-not (Test-Path -LiteralPath $resolvedPath -PathType Leaf)) {
         throw "Required generated parity input is missing: $resolvedPath"
     }
@@ -132,8 +123,8 @@ function Test-FileContentMatches {
     }
 }
 
-$resolvedJsonPath = Resolve-RepoPath $JsonPath
-$resolvedMarkdownPath = Resolve-RepoPath $MarkdownPath
+$resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
+$resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-cross-app-parity-dashboard-" + [System.Guid]::NewGuid().ToString("N"))
 $tempJsonPath = Join-Path $tempRoot "avalonia-wpf-cross-app-dashboard.json"
 $tempMarkdownPath = Join-Path $tempRoot "avalonia-wpf-cross-app-dashboard.md"

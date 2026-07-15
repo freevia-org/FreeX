@@ -7,16 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function ConvertTo-RepoRelativePath {
     param([Parameter(Mandatory = $true)][string]$Path)
@@ -504,8 +495,8 @@ foreach ($row in $rows) {
 
 $markdown = $md.ToString()
 
-$resolvedJsonPath = Resolve-RepoPath $JsonPath
-$resolvedMarkdownPath = Resolve-RepoPath $MarkdownPath
+$resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
+$resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
 
 if ($Check) {
     $existingJson = if (Test-Path -LiteralPath $resolvedJsonPath -PathType Leaf) { Get-Content -LiteralPath $resolvedJsonPath -Raw } else { "" }

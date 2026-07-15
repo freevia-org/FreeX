@@ -34,7 +34,7 @@ public static class WpfImageDiff
         var actualPixels = GetBgra32Pixels(actualBmp, width, height);
 
         long totalDiff = 0;
-        int pixelCount = width * height;
+        var pixelCount = GetBgra32BufferLayout(width, height).PixelCount;
         for (int i = 0; i < pixelCount; i++)
         {
             int offset = i * 4;
@@ -83,8 +83,25 @@ public static class WpfImageDiff
 
     public static byte[] GetBgra32Pixels(BitmapSource bitmap, int width, int height)
     {
-        var pixels = new byte[width * height * 4];
-        bitmap.CopyPixels(pixels, width * 4, 0);
+        var layout = GetBgra32BufferLayout(width, height);
+        var pixels = new byte[layout.BufferLength];
+        bitmap.CopyPixels(pixels, layout.Stride, 0);
         return pixels;
+    }
+
+    private static (int Stride, int BufferLength, int PixelCount) GetBgra32BufferLayout(int width, int height)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        var pixelCount = checked((long)width * height);
+        var stride = checked((long)width * 4);
+        var bufferLength = checked(pixelCount * 4);
+        if (stride > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(width), "The BGRA32 stride exceeds the supported buffer size.");
+        if (bufferLength > int.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(width), "The BGRA32 pixel buffer exceeds the supported buffer size.");
+
+        return ((int)stride, (int)bufferLength, checked((int)pixelCount));
     }
 }

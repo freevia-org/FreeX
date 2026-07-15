@@ -116,19 +116,13 @@ public class WindowInfoE {
 
 $outDir = Join-Path $PSScriptRoot "screenshots_excel"
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+. (Join-Path $PSScriptRoot "ScreenshotCaptureSupport.ps1")
 $autoFilterFlyoutOutDir = Join-Path $outDir "autofilter-flyout-tour"
 $numberFormatDropdownOutDir = Join-Path $outDir "home-number-format-dropdown-tour"
 $homeBordersDropdownOutDir = Join-Path $outDir "home-borders-dropdown-tour"
 $worksheetContextMenuOutDir = Join-Path $outDir "worksheet-context-menu-tour"
 $openWorkbookDialogOutDir = Join-Path $outDir "open-workbook-dialog-tour"
 $saveAsWorkbookDialogOutDir = Join-Path $outDir "save-as-workbook-dialog-tour"
-function Clear-ScreenshotEvidenceArtifacts {
-    Get-ChildItem $outDir -Filter "*.png" -ErrorAction SilentlyContinue |
-        Remove-Item -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath (Join-Path $outDir "screenshot_manifest.json") -Force -ErrorAction SilentlyContinue
-    Remove-Item -LiteralPath (Join-Path $outDir "screenshot_blocker_manifest.json") -Force -ErrorAction SilentlyContinue
-}
-
 function Clear-AutoFilterFlyoutEvidenceArtifacts {
     if (Test-Path -LiteralPath $autoFilterFlyoutOutDir -PathType Container) {
         Get-ChildItem $autoFilterFlyoutOutDir -Filter "*.png" -ErrorAction SilentlyContinue |
@@ -274,86 +268,6 @@ $interactiveCapturePlan = @(
     }
 )
 $windowLogicalHeight = 768
-
-function Get-RibbonWidthEvidencePurpose($windowLogicalWidth) {
-    if ($null -eq $windowLogicalWidth) {
-        return "Maximized baseline before resize pressure."
-    }
-
-    if ($windowLogicalWidth -ge 1100) {
-        return "Wide ribbon breakpoint before most command groups collapse."
-    }
-
-    if ($windowLogicalWidth -ge 900) {
-        return "Medium ribbon breakpoint where grouped commands begin to compress."
-    }
-
-    return "Narrow ribbon breakpoint for overflow and compact command layouts."
-}
-
-$defaultCaptureWidths = @(
-    [pscustomobject]@{ Label = "max"; WindowLogicalWidth = $null; EvidencePurpose = (Get-RibbonWidthEvidencePurpose $null) },
-    [pscustomobject]@{ Label = "1100"; WindowLogicalWidth = 1100.0; EvidencePurpose = (Get-RibbonWidthEvidencePurpose 1100.0) },
-    [pscustomobject]@{ Label = "900"; WindowLogicalWidth = 900.0; EvidencePurpose = (Get-RibbonWidthEvidencePurpose 900.0) },
-    [pscustomobject]@{ Label = "750"; WindowLogicalWidth = 750.0; EvidencePurpose = (Get-RibbonWidthEvidencePurpose 750.0) }
-)
-
-function Resolve-CaptureWidths($requestedWidths) {
-    if ([string]::IsNullOrWhiteSpace($requestedWidths)) {
-        return $defaultCaptureWidths
-    }
-
-    $entries = $requestedWidths.Split(',')
-    $widths = @()
-    $invalid = @()
-    $emptyPositions = @()
-    for ($index = 0; $index -lt $entries.Length; $index++) {
-        $value = $entries[$index].Trim()
-        if ($value.Length -eq 0) {
-            $emptyPositions += ($index + 1)
-            continue
-        }
-
-        if ($value -ieq "max") {
-            $widths += $defaultCaptureWidths[0]
-            continue
-        }
-
-        $parsed = 0.0
-        $canParse = [double]::TryParse(
-            $value,
-            [System.Globalization.NumberStyles]::Float,
-            [System.Globalization.CultureInfo]::InvariantCulture,
-            [ref]$parsed)
-        if (-not $canParse -or [double]::IsNaN($parsed) -or [double]::IsInfinity($parsed) -or $parsed -le 0) {
-            $invalid += $value
-            continue
-        }
-
-        $label = $parsed.ToString([System.Globalization.CultureInfo]::InvariantCulture)
-        $knownWidth = $defaultCaptureWidths | Where-Object { $_.Label -eq $label } | Select-Object -First 1
-        if ($null -ne $knownWidth) {
-            $widths += $knownWidth
-            continue
-        }
-
-        $widths += [pscustomobject]@{
-            Label = $label
-            WindowLogicalWidth = $parsed
-            EvidencePurpose = (Get-RibbonWidthEvidencePurpose $parsed)
-        }
-    }
-
-    if ($emptyPositions.Count -gt 0) {
-        throw "Ribbon screenshot width list contains empty entry at position(s): $($emptyPositions -join ', ')."
-    }
-
-    if ($invalid.Count -gt 0) {
-        throw "Ribbon screenshot width list contains invalid width(s): $($invalid -join ', '). Use positive finite numbers or max."
-    }
-
-    return $widths
-}
 
 $captureWidths = @(Resolve-CaptureWidths $Widths)
 
@@ -629,15 +543,6 @@ function New-ExcelWorksheetContextMenuSampleWorkbook($excelApp) {
     $worksheet.Range("B2").Select() | Out-Null
 
     return $workbook
-}
-
-function Capture-ScreenRectangle($left, $top, $width, $height, $path) {
-    $bmp = New-Object System.Drawing.Bitmap($width, $height)
-    $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.CopyFromScreen($left, $top, 0, 0, [System.Drawing.Size]::new($width, $height))
-    $g.Dispose()
-    $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
-    $bmp.Dispose()
 }
 
 function Click-ExcelAutoFilterHeaderDropdown($excelApp, $worksheet, $headerAddress, $expectedPid, $expectedTitle) {
