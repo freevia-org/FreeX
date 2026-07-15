@@ -272,7 +272,7 @@ public sealed class SlideCanvas : FrameworkElement
         // skip the bbox-derived elbow geometry.
         if (shape.ElbowRouteDip is { Count: >= 2 })
         {
-            var pen = MakePen(shape.Outline);
+            var pen = shape.Effects?.HasSoftEdge == true ? null : MakePen(shape.Outline);
             if (pen is not null)
             {
                 var pg = new PathGeometry();
@@ -288,7 +288,7 @@ public sealed class SlideCanvas : FrameworkElement
             // Draw geometry
             var geometry = ContourListToGeometry(shape.Geometry);
             var fillBrush = MakeBrush(shape.Fill, bounds);
-            var pen = MakePen(shape.Outline);
+            var pen = shape.Effects?.HasSoftEdge == true ? null : MakePen(shape.Outline);
             dc.DrawGeometry(fillBrush, pen, geometry);
         }
 
@@ -335,6 +335,22 @@ public sealed class SlideCanvas : FrameworkElement
                 var glowPen = new Pen(glowBrush, pass.StrokeWidthDip);
                 if (glowPen.CanFreeze) glowPen.Freeze();
                 dc.DrawGeometry(null, glowPen, glowGeo);
+            }
+        }
+
+        if (plan.SoftEdgePasses.Count > 0)
+        {
+            var softEdgeGeo = ContourListToGeometry(shape.Geometry);
+            var fillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
+            if (fillBrush is not null)
+            {
+                foreach (var pass in plan.SoftEdgePasses)
+                {
+                    var softEdgePen = new Pen(fillBrush, pass.StrokeWidthDip);
+                    dc.PushOpacity(pass.Alpha / 255.0);
+                    dc.DrawGeometry(null, softEdgePen, softEdgeGeo);
+                    dc.Pop();
+                }
             }
         }
 

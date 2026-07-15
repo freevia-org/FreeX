@@ -256,7 +256,7 @@ public sealed class SlideCanvas : Control
             if (geometry is not null)
             {
                 var fillBrush = MakeBrush(shape.Fill, bounds);
-                var pen       = MakePen(shape.Outline);
+                var pen       = shape.Effects?.HasSoftEdge == true ? null : MakePen(shape.Outline);
                 dc.DrawGeometry(fillBrush, pen, geometry);
             }
         }
@@ -300,6 +300,20 @@ public sealed class SlideCanvas : Control
                     Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
                 var glowPen    = new Pen(glowBrush, pass.StrokeWidthDip);
                 dc.DrawGeometry(null, glowPen, glowGeo);
+            }
+        }
+
+        if (plan.SoftEdgePasses.Count > 0)
+        {
+            var softEdgeGeo = AvaloniaSlideGeometryFactory.ToGeometry(shape.Geometry);
+            var fillBrush = MakeBrush(shape.Fill, shape.BoundsDip);
+            if (softEdgeGeo is not null && fillBrush is not null)
+            {
+                foreach (var pass in plan.SoftEdgePasses)
+                {
+                    using var opacityScope = dc.PushOpacity(pass.Alpha / 255.0);
+                    dc.DrawGeometry(null, new Pen(fillBrush, pass.StrokeWidthDip), softEdgeGeo);
+                }
             }
         }
     }

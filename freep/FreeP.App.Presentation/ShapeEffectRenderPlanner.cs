@@ -19,6 +19,8 @@ public static class ResolvedShapeEffectRenderPlanner
             effects.HasGlow,
             effects.GlowColor,
             effects.GlowAlpha,
-            effects.GlowRadiusDip));
+            effects.GlowRadiusDip,
+            effects.HasSoftEdge,
+            effects.SoftEdgeRadiusDip));
     }
 }

@@ -13,13 +13,19 @@ public readonly record struct ShapeGlowPass(
     SrgbColor Color,
     byte Alpha);
 
+public readonly record struct ShapeSoftEdgePass(
+    double StrokeWidthDip,
+    byte Alpha);
+
 public sealed record ShapeEffectRenderPlan(
     IReadOnlyList<ShapeShadowPass> ShadowPasses,
-    IReadOnlyList<ShapeGlowPass> GlowPasses)
+    IReadOnlyList<ShapeGlowPass> GlowPasses,
+    IReadOnlyList<ShapeSoftEdgePass> SoftEdgePasses)
 {
     public static ShapeEffectRenderPlan Empty { get; } = new(
         Array.Empty<ShapeShadowPass>(),
-        Array.Empty<ShapeGlowPass>());
+        Array.Empty<ShapeGlowPass>(),
+        Array.Empty<ShapeSoftEdgePass>());
 }
 
 public readonly record struct ShapeEffectValues(
@@ -32,7 +38,9 @@ public readonly record struct ShapeEffectValues(
     bool HasGlow,
     SrgbColor GlowColor,
     byte GlowAlpha,
-    double GlowRadiusDip);
+    double GlowRadiusDip,
+    bool HasSoftEdge,
+    double SoftEdgeRadiusDip);
 
 public static class ShapeEffectRenderPlanner
 {
@@ -51,16 +59,19 @@ public static class ShapeEffectRenderPlanner
             effects.HasGlow,
             effects.GlowColor,
             effects.GlowAlpha,
-            DrawingMlCoordinateUnits.EmuToPixels(effects.GlowRadiusEmu)));
+            DrawingMlCoordinateUnits.EmuToPixels(effects.GlowRadiusEmu),
+            effects.HasSoftEdge,
+            DrawingMlCoordinateUnits.EmuToPixels(effects.SoftEdgeRadEmu)));
     }
 
     public static ShapeEffectRenderPlan PlanOuterEffects(ShapeEffectValues effects)
     {
         var shadows = PlanShadowPasses(effects);
         var glows = PlanGlowPasses(effects);
-        return shadows.Count == 0 && glows.Count == 0
+        var softEdges = PlanSoftEdgePasses(effects);
+        return shadows.Count == 0 && glows.Count == 0 && softEdges.Count == 0
             ? ShapeEffectRenderPlan.Empty
-            : new ShapeEffectRenderPlan(shadows, glows);
+            : new ShapeEffectRenderPlan(shadows, glows, softEdges);
     }
 
     private static IReadOnlyList<ShapeShadowPass> PlanShadowPasses(ShapeEffectValues effects)
@@ -118,6 +129,24 @@ public static class ShapeEffectRenderPlanner
                 radius * 2,
                 effects.GlowColor,
                 passAlpha));
+        }
+
+        return passes;
+    }
+
+    private static IReadOnlyList<ShapeSoftEdgePass> PlanSoftEdgePasses(ShapeEffectValues effects)
+    {
+        if (!effects.HasSoftEdge || effects.SoftEdgeRadiusDip <= 0)
+            return Array.Empty<ShapeSoftEdgePass>();
+
+        int passCount = Math.Min(6, (int)Math.Ceiling(effects.SoftEdgeRadiusDip / 2));
+        var passes = new List<ShapeSoftEdgePass>(passCount);
+        for (int index = passCount; index >= 1; index--)
+        {
+            double ratio = index / (double)passCount;
+            double width = effects.SoftEdgeRadiusDip * 2 * ratio;
+            byte alpha = (byte)Math.Round(16 + 16 * (1 - ratio));
+            passes.Add(new ShapeSoftEdgePass(width, alpha));
         }
 
         return passes;

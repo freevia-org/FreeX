@@ -67,7 +67,7 @@ public sealed class RendererNeutralDedupPlannerTests
     }
 
     [Fact]
-    public void ResolvedShapeEffectRenderPlanner_ExpandsShadowAndGlowPasses()
+    public void ResolvedShapeEffectRenderPlanner_ExpandsShadowGlowAndSoftEdgePasses()
     {
         var effects = new ResolvedShapeEffects
         {
@@ -80,7 +80,9 @@ public sealed class RendererNeutralDedupPlannerTests
             HasGlow = true,
             GlowColor = new SrgbColor(4, 5, 6),
             GlowAlpha = 120,
-            GlowRadiusDip = 5
+            GlowRadiusDip = 5,
+            HasSoftEdge = true,
+            SoftEdgeRadiusDip = 6
         };
 
         var plan = ResolvedShapeEffectRenderPlanner.PlanOuterEffects(effects);
@@ -89,6 +91,9 @@ public sealed class RendererNeutralDedupPlannerTests
         plan.ShadowPasses[0].Should().Be(new ShapeShadowPass(6, -4, new SrgbColor(1, 2, 3), 33));
         plan.ShadowPasses[^1].Should().Be(new ShapeShadowPass(10, 0, new SrgbColor(1, 2, 3), 100));
         plan.GlowPasses.Should().HaveCount(3);
+        plan.SoftEdgePasses.Should().HaveCount(3);
+        plan.SoftEdgePasses[0].StrokeWidthDip.Should().BeApproximately(12, 0.001);
+        plan.SoftEdgePasses[^1].StrokeWidthDip.Should().BeApproximately(4, 0.001);
         plan.GlowPasses[0].StrokeWidthDip.Should().BeApproximately(10, 0.001);
         plan.GlowPasses[0].Alpha.Should().Be(30);
         plan.GlowPasses[^1].StrokeWidthDip.Should().BeApproximately(10.0 / 3.0, 0.001);
