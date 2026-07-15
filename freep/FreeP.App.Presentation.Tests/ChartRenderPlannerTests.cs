@@ -1538,6 +1538,43 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildColumnPrimitives_ExcludesInterleavedComboLineFromClusterGeometry()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.AddRange(new[] { "Jan", "Feb" });
+
+        var firstColumn = new ChartSeries { Name = "Revenue" };
+        firstColumn.Values.AddRange(new double?[] { 120, 145 });
+        chart.Series.Add(firstColumn);
+
+        var line = new ChartSeries
+        {
+            Name = "Units",
+            OnSecondaryAxis = true,
+            OverrideChartType = ChartType.LineMarkers
+        };
+        line.Values.AddRange(new double?[] { 5200, 6100 });
+        chart.Series.Add(line);
+
+        var secondColumn = new ChartSeries { Name = "Series 3" };
+        secondColumn.Values.AddRange(new double?[] { 2, 3 });
+        chart.Series.Add(secondColumn);
+
+        var primitives = ChartRenderPlanner.BuildColumnPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 200, 100));
+
+        primitives.Should().HaveCount(4);
+        var first = primitives.Single(p => p.SeriesIndex == 0 && p.CategoryIndex == 0);
+        var second = primitives.Single(p => p.SeriesIndex == 2 && p.CategoryIndex == 0);
+        first.Bounds.X.Should().BeApproximately(21.4286, 0.0001);
+        first.Bounds.Width.Should().BeApproximately(27.5714, 0.0001);
+        second.Bounds.X.Should().BeApproximately(50, 0.0001,
+            "the interleaved line series must not consume a column slot");
+        second.Bounds.Width.Should().BeApproximately(27.5714, 0.0001);
+    }
+
+    [Fact]
     public void ResolveBarClusterSpacing_DefaultMatchesPowerPointBarRelativeGapGeometry()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
