@@ -35,7 +35,8 @@ public static class DocumentNoteRegionPlanner
 {
     public const double NoteTextFontSizePt = 9.0;
     public const double LabelScale = 0.75;
-    public const double FootnoteSeparatorWidthDip = 60.0;
+    // Word's default footnote separator is two inches at the 96-DPI document surface.
+    public const double FootnoteSeparatorWidthDip = 192.0;
     public const double RowHorizontalGapDip = 6.0;
 
     private const double PxPerPoint = 96.0 / 72.0;

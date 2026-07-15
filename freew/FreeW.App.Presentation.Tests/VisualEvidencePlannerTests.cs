@@ -482,6 +482,7 @@ public sealed class VisualEvidencePlannerTests
         footnotePlan.Kind.Should().Be(DocumentNoteRegionKind.Footnotes);
         footnotePlan.IsSyntheticPage.Should().BeFalse();
         footnotePlan.Heading.Should().BeNull();
+        DocumentNoteRegionPlanner.FootnoteSeparatorWidthDip.Should().Be(192.0);
         footnotePlan.SeparatorWidthDip.Should().Be(DocumentNoteRegionPlanner.FootnoteSeparatorWidthDip);
         footnotePlan.Rows.Should().ContainSingle();
         footnotePlan.Rows[0].Label.Should().Be("1");
