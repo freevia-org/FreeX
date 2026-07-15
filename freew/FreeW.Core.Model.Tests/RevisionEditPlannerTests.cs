@@ -3,6 +3,46 @@ namespace FreeW.Core.Model.Tests;
 public sealed class RevisionEditPlannerTests
 {
     [Fact]
+    public void CloneRunWithText_PreservesRunMetadataAndReplacesOnlyText()
+    {
+        var formatting = RunFormatting.Default with { Bold = true, Italic = true };
+        var source = new Run("source", formatting)
+        {
+            HyperlinkUrl = "https://example.com",
+            HyperlinkAnchor = "bookmark",
+            HyperlinkTooltip = "Example",
+            FieldKind = RunFieldKind.PageNumber,
+            FootnoteId = 7,
+            EndnoteId = 8,
+            CommentId = 9,
+            IsCommentReference = true,
+            IsPageBreak = true,
+            Revision = RevisionKind.Inserted,
+            RevisionAuthor = "Alice",
+            RevisionDateXml = "2026-07-06T12:00:00Z",
+            FormatRevision = new FormatRevision(RunFormatting.Default, "Reviewer", "2026-07-06T00:00:00Z")
+        };
+
+        var clone = RevisionEditPlanner.CloneRunWithText(source, "replacement");
+
+        clone.Text.Should().Be("replacement");
+        clone.Formatting.Should().BeSameAs(formatting);
+        clone.HyperlinkUrl.Should().Be(source.HyperlinkUrl);
+        clone.HyperlinkAnchor.Should().Be(source.HyperlinkAnchor);
+        clone.HyperlinkTooltip.Should().Be(source.HyperlinkTooltip);
+        clone.FieldKind.Should().Be(source.FieldKind);
+        clone.FootnoteId.Should().Be(source.FootnoteId);
+        clone.EndnoteId.Should().Be(source.EndnoteId);
+        clone.CommentId.Should().Be(source.CommentId);
+        clone.IsCommentReference.Should().Be(source.IsCommentReference);
+        clone.IsPageBreak.Should().Be(source.IsPageBreak);
+        clone.Revision.Should().Be(source.Revision);
+        clone.RevisionAuthor.Should().Be(source.RevisionAuthor);
+        clone.RevisionDateXml.Should().Be(source.RevisionDateXml);
+        clone.FormatRevision.Should().BeSameAs(source.FormatRevision);
+    }
+
+    [Fact]
     public void InsertTrackedText_PreservesSplitRunMetadata()
     {
         var paragraph = new Paragraph();

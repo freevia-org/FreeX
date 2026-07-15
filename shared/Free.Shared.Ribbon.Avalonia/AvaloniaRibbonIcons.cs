@@ -197,11 +197,13 @@ public static class AvaloniaRibbonIcons
         yield return slug;
     }
 
-    // Mirrors RibbonIconFactory.Svg.cs GetCommandIconSlugCandidates: the slug itself, then a known
-    // alias for command names whose canonical icon file is named differently.
+    // Try shared canonical aliases before the historical slug, then retain the renderer-specific
+    // aliases used by FreeX command names.
     private static IEnumerable<string> GetCommandIconSlugCandidates(string slug)
     {
-        yield return slug;
+        var sharedCandidates = RibbonCommandIconSlugAliases.GetCandidates(slug).ToArray();
+        foreach (var candidate in sharedCandidates)
+            yield return candidate;
 
         var alias = slug switch
         {
@@ -287,7 +289,7 @@ public static class AvaloniaRibbonIcons
             _ => ""
         };
 
-        if (alias.Length > 0 && !string.Equals(alias, slug, StringComparison.Ordinal))
+        if (alias.Length > 0 && !sharedCandidates.Contains(alias, StringComparer.OrdinalIgnoreCase))
             yield return alias;
     }
 

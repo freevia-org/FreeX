@@ -77,8 +77,30 @@ public sealed class RibbonCommandIconAssetTests
         ((string?)canonicalIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
         ((string?)canonicalIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
 
-        foreach (var alias in new[] { "align-center.svg", "chart.svg", "datetime.svg", "font-dialog.svg", "highlight.svg", "zoom-dialog.svg" })
+        foreach (var alias in new[]
+        {
+            "align-center.svg", "chart.svg", "datetime.svg", "font-dialog.svg", "highlight.svg", "zoom-dialog.svg",
+            "reject-all.svg", "style-heading1.svg", "style-heading2.svg", "style-title.svg"
+        })
             File.Exists(Path.Combine(root, "freew", "FreeW.App.Host", "Resources", "CommandIconsSvg", alias)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void FreeW_document_views_use_shared_run_clone_helper()
+    {
+        var root = FindRepositoryRoot();
+        foreach (var relativePath in new[]
+        {
+            Path.Combine("freew", "FreeW.App.Host", "Editing", "DocumentView.cs"),
+            Path.Combine("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs")
+        })
+        {
+            var source = File.ReadAllText(Path.Combine(root, relativePath));
+
+            source.Should().Contain("RevisionEditPlanner.CloneRunWithText");
+            source.Should().NotContain("CloneRunWithText(ModelRun");
+            source.Should().NotContain("CloneRunWithText(Run");
+        }
     }
 
     [StaFact]

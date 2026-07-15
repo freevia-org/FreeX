@@ -13238,7 +13238,7 @@ public sealed class DocumentView : RichTextBox
             position = runEnd;
             if (length == 0)
             {
-                rebuilt.Add(CloneRunWithText(source, source.Text));
+                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text));
                 continue;
             }
 
@@ -13246,7 +13246,7 @@ public sealed class DocumentView : RichTextBox
             var coverEnd = Math.Min(runEnd, endOffset);
             if (coverStart >= coverEnd)
             {
-                rebuilt.Add(CloneRunWithText(source, source.Text));
+                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text));
                 continue;
             }
 
@@ -13254,50 +13254,19 @@ public sealed class DocumentView : RichTextBox
             var localEnd = coverEnd - runStart;
 
             if (localStart > 0)
-                rebuilt.Add(CloneRunWithText(source, source.Text[..localStart]));
+                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[..localStart]));
 
-            var covered = CloneRunWithText(source, source.Text[localStart..localEnd]);
+            var covered = RevisionEditPlanner.CloneRunWithText(source, source.Text[localStart..localEnd]);
             covered.Formatting = transform(source.Formatting);
             rebuilt.Add(covered);
 
             if (localEnd < length)
-                rebuilt.Add(CloneRunWithText(source, source.Text[localEnd..]));
+                rebuilt.Add(RevisionEditPlanner.CloneRunWithText(source, source.Text[localEnd..]));
         }
 
         paragraph.Runs.Clear();
         paragraph.Runs.AddRange(rebuilt);
     }
-
-    private static ModelRun CloneRunWithText(ModelRun source, string text) => new(text, source.Formatting)
-    {
-        Image = source.Image,
-        Equation = source.Equation,
-        Shape = source.Shape,
-        WordArt = source.WordArt,
-        Chart = source.Chart,
-        EmbeddedObject = source.EmbeddedObject,
-        SmartArt = source.SmartArt,
-        PreservedDrawing = source.PreservedDrawing,
-        DrawingGroup = source.DrawingGroup,
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        FieldKind = source.FieldKind,
-        TableFormula = source.TableFormula,
-        Citation = source.Citation,
-        CrossReference = source.CrossReference,
-        ComplexField = source.ComplexField,
-        FootnoteId = source.FootnoteId,
-        EndnoteId = source.EndnoteId,
-        CommentId = source.CommentId,
-        IsCommentReference = source.IsCommentReference,
-        IsPageBreak = source.IsPageBreak,
-        Revision = source.Revision,
-        Control = source.Control,
-        RevisionAuthor = source.RevisionAuthor,
-        RevisionDateXml = source.RevisionDateXml,
-        FormatRevision = source.FormatRevision
-    };
 
     /// <summary>
     /// Applies an external hyperlink to the current selection. If the selection is non-empty its text

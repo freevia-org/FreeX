@@ -13840,8 +13840,8 @@ public sealed class DocumentView : Control
             }
             else
             {
-                var before = CloneRunWithText(run, run.Text[..local]);
-                var after = CloneRunWithText(run, run.Text[local..]);
+                var before = RevisionEditPlanner.CloneRunWithText(run, run.Text[..local]);
+                var after = RevisionEditPlanner.CloneRunWithText(run, run.Text[local..]);
                 paragraph.Runs.RemoveAt(i);
                 paragraph.Runs.Insert(i, before);
                 paragraph.Runs.Insert(i + 1, insertedRun);
@@ -13853,36 +13853,6 @@ public sealed class DocumentView : Control
         paragraph.Runs.Add(insertedRun);
     }
 
-    private static Run CloneRunWithText(Run source, string text) => new(text, source.Formatting)
-    {
-        Image = source.Image,
-        Equation = source.Equation,
-        Shape = source.Shape,
-        WordArt = source.WordArt,
-        Chart = source.Chart,
-        EmbeddedObject = source.EmbeddedObject,
-        SmartArt = source.SmartArt,
-        PreservedDrawing = source.PreservedDrawing,
-        DrawingGroup = source.DrawingGroup,
-        HyperlinkUrl = source.HyperlinkUrl,
-        HyperlinkAnchor = source.HyperlinkAnchor,
-        HyperlinkTooltip = source.HyperlinkTooltip,
-        FieldKind = source.FieldKind,
-        TableFormula = source.TableFormula,
-        Citation = source.Citation,
-        CrossReference = source.CrossReference,
-        ComplexField = source.ComplexField,
-        FootnoteId = source.FootnoteId,
-        EndnoteId = source.EndnoteId,
-        CommentId = source.CommentId,
-        IsCommentReference = source.IsCommentReference,
-        IsPageBreak = source.IsPageBreak,
-        Revision = source.Revision,
-        Control = source.Control,
-        RevisionAuthor = source.RevisionAuthor,
-        RevisionDateXml = source.RevisionDateXml,
-        FormatRevision = source.FormatRevision
-    };
 
     private static void SetRuns(Paragraph paragraph, IReadOnlyList<Cell> cells)
     {
@@ -13954,7 +13924,7 @@ public sealed class DocumentView : Control
         }
 
         foreach (var (offset, run) in citationMarks.OrderBy(item => item.Offset))
-            InsertRunAtOffset(paragraph, offset, CloneRunWithText(run, string.Empty));
+            InsertRunAtOffset(paragraph, offset, RevisionEditPlanner.CloneRunWithText(run, string.Empty));
     }
 
     private static List<(int Offset, Run Run)> TextlessRunPositions(Paragraph paragraph)
