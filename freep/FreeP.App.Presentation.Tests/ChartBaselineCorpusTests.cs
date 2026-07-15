@@ -50,10 +50,11 @@ public sealed class ChartBaselineCorpusTests
         var surfaceGeometry = ChartRenderPlanner.BuildSurfaceGeometryPlan(
             surface,
             new ChartPlanRect(0, 0, 360, 220));
-        surfaceGeometry.Facets.Should().HaveCount(2);
+        surfaceGeometry.Facets.Should().HaveCount(4);
         surfaceGeometry.WireframeSegments.Should().HaveCountGreaterThan(surfaceGeometry.Facets.Count);
         surfaceGeometry.ContourSegments.Should().NotBeEmpty();
-        surfaceGeometry.Facets.Should().OnlyContain(facet => facet.Points.Count == 4);
+        surfaceGeometry.Facets.Count(facet => facet.Points.Count == 3).Should().Be(2);
+        surfaceGeometry.Facets.Count(facet => facet.Points.Count == 4).Should().Be(2);
 
         var scatter = charts.Single(chart => chart.ChartType == ChartType.Scatter);
         scatter.Series.Should().OnlyContain(series => !series.OnSecondaryAxis,

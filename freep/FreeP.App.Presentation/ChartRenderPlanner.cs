@@ -500,6 +500,16 @@ public static partial class ChartRenderPlanner
         new(0xF7, 0x96, 0x46)
     ];
 
+    // PowerPoint's default varying surface style moves through the theme's
+    // blue, orange, green, and yellow accents as elevation increases.
+    private static readonly SrgbColor[] SurfaceVaryColors =
+    [
+        new(0x44, 0x72, 0xC4),
+        new(0xED, 0x7D, 0x31),
+        new(0xA9, 0xD1, 0x8E),
+        new(0xFF, 0xC0, 0x00)
+    ];
+
     // Office charts commonly carry an 18pt default c:chartSpace/c:txPr. Their
     // in-frame auto-layout reserves substantially more room for that text than
     // the compact FreeP-created chart defaults below.
@@ -2083,35 +2093,27 @@ public static partial class ChartRenderPlanner
         {
             for (int categoryIndex = 0; categoryIndex < categoryCount - 1; categoryIndex++)
             {
-                if (!TryGetSurfaceQuad(
-                        points,
-                        seriesIndex,
-                        categoryIndex,
-                        out var topLeft,
-                        out var topRight,
-                        out var bottomRight,
-                        out var bottomLeft))
+                var facetPoints = GetSurfaceFacetPoints(
+                    points,
+                    seriesIndex,
+                    categoryIndex);
+                if (facetPoints.Count < 3)
                 {
                     continue;
                 }
 
-                double averageValue = (topLeft.Value + topRight.Value + bottomRight.Value + bottomLeft.Value) / 4.0;
-                double averageNormalized =
-                    (topLeft.NormalizedValue + topRight.NormalizedValue + bottomRight.NormalizedValue + bottomLeft.NormalizedValue) / 4.0;
-                var color = InterpolateSurfaceColor(
-                    ResolveSeriesColor(seriesIndex, seriesColors),
+                double averageValue = facetPoints.Average(point => point.Value);
+                double averageNormalized = facetPoints.Average(point => point.NormalizedValue);
+                var color = ResolveSurfaceFacetColor(
+                    chart,
+                    seriesIndex,
+                    seriesColors,
                     averageNormalized);
 
                 facets.Add(new ChartSurfaceFacetPrimitive(
                     seriesIndex,
                     categoryIndex,
-                    new[]
-                    {
-                        topLeft.Point,
-                        topRight.Point,
-                        bottomRight.Point,
-                        bottomLeft.Point
-                    },
+                    facetPoints.Select(point => point.Point).ToArray(),
                     new ChartFillPlan(color, Alpha: chart.ChartType == ChartType.Surface3D ? (byte)220 : (byte)185),
                     stroke,
                     averageValue,
@@ -2120,6 +2122,58 @@ public static partial class ChartRenderPlanner
         }
 
         return facets;
+    }
+
+    private static IReadOnlyList<ChartSurfacePointPrimitive> GetSurfaceFacetPoints(
+        IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
+        int seriesIndex,
+        int categoryIndex)
+    {
+        var facetPoints = new List<ChartSurfacePointPrimitive>(4);
+        AddSurfaceFacetPoint(points, facetPoints, seriesIndex, categoryIndex);
+        AddSurfaceFacetPoint(points, facetPoints, seriesIndex, categoryIndex + 1);
+        AddSurfaceFacetPoint(points, facetPoints, seriesIndex + 1, categoryIndex + 1);
+        AddSurfaceFacetPoint(points, facetPoints, seriesIndex + 1, categoryIndex);
+        return facetPoints;
+    }
+
+    private static void AddSurfaceFacetPoint(
+        IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
+        List<ChartSurfacePointPrimitive> facetPoints,
+        int seriesIndex,
+        int categoryIndex)
+    {
+        if (points.TryGetValue((seriesIndex, categoryIndex), out var point))
+            facetPoints.Add(point);
+    }
+
+    private static SrgbColor ResolveSurfaceFacetColor(
+        ChartShape chart,
+        int seriesIndex,
+        IReadOnlyList<SrgbColor>? seriesColors,
+        double normalized)
+    {
+        if (chart.VaryColors)
+            return ResolveSurfaceVaryColor(normalized);
+
+        return InterpolateSurfaceColor(
+            ResolveSeriesColor(seriesIndex, seriesColors),
+            normalized);
+    }
+
+    private static SrgbColor ResolveSurfaceVaryColor(double normalized)
+    {
+        normalized = Math.Clamp(normalized, 0, 1);
+        double position = normalized * (SurfaceVaryColors.Length - 1);
+        int lowerIndex = (int)Math.Floor(position);
+        int upperIndex = Math.Min(lowerIndex + 1, SurfaceVaryColors.Length - 1);
+        double fraction = position - lowerIndex;
+        var lower = SurfaceVaryColors[lowerIndex];
+        var upper = SurfaceVaryColors[upperIndex];
+        return new SrgbColor(
+            (byte)Math.Round(lower.R + (upper.R - lower.R) * fraction),
+            (byte)Math.Round(lower.G + (upper.G - lower.G) * fraction),
+            (byte)Math.Round(lower.B + (upper.B - lower.B) * fraction));
     }
 
     private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceContourSegments(

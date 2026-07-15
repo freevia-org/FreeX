@@ -501,6 +501,22 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceGeometryPlan_Surface3DPreservesIncompleteCellsAsTriangles()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.VaryColors = true;
+        chart.Series[0].Values[1] = null;
+
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        plan.Facets.Should().HaveCount(2);
+        plan.Facets.Should().OnlyContain(facet => facet.Points.Count == 3);
+        plan.Facets.Select(facet => facet.Fill.Color).Distinct().Should().HaveCountGreaterThan(1);
+    }
+
+    [Fact]
     public void BuildSurfaceGeometryPlan_SurfacePlansContourSegmentsInPlotBounds()
     {
         var chart = MakeSurfaceChart(ChartType.Surface);
