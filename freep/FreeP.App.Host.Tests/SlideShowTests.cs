@@ -3,7 +3,6 @@ using System.IO;
 using System.Text;
 using FreeP.App.Compositor;
 using FreeP.App.Host;
-using FreeP.App.Host.Recording;
 using Xunit;
 using FluentAssertions;
 using FreeP.Core.Model;

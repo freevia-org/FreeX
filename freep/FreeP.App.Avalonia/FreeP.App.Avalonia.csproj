@@ -22,6 +22,7 @@
     <ProjectReference Include="..\FreeP.Core.Model\FreeP.Core.Model.csproj" />
     <ProjectReference Include="..\FreeP.Core.IO\FreeP.Core.IO.csproj" />
     <ProjectReference Include="..\FreeP.App.Presentation\FreeP.App.Presentation.csproj" />
+    <ProjectReference Include="..\FreeP.App.Recording\FreeP.App.Recording.csproj" />
     <ProjectReference Include="..\FreeP.App.Rendering.Avalonia\FreeP.App.Rendering.Avalonia.csproj" />
     <ProjectReference Include="..\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" />
     <ProjectReference Include="..\..\shared\Free.Shared.AppServices\Free.Shared.AppServices.csproj" />

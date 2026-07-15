@@ -7,8 +7,8 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using Free.Shared.AppServices;
-using FreeP.App.Avalonia.Recording;
 using FreeP.App.Compositor;
+using FreeP.App.Recording;
 using FreeP.App.Rendering.Avalonia;
 using FreeP.Core.Model;
 
@@ -373,7 +373,11 @@ public sealed class SlideShowWindow : Window
         ApplyInkExecution(SlideShowInkExecutionPlanner.UndoLastStroke(_inkExecutionState));
 
     private static ISlideShowRecordingCaptureBackend CreateDefaultRecordingCaptureBackend() =>
-        new AvaloniaWindowsRecordingCaptureBackend();
+        new WindowsRecordingCaptureBackend(
+            new WindowsRecordingHostMetadata(
+                "Avalonia slideshow",
+                "Avalonia Windows recording capture adapter",
+                "ppt/media/freep-recordings/avalonia"));
 
     /// <summary>Exposes the slide canvas for test assertions (DA1 suppression).</summary>
     internal SlideCanvas CanvasForTest => _slideCanvas;
