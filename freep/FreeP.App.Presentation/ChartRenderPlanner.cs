@@ -908,6 +908,19 @@ public static partial class ChartRenderPlanner
                 plot.Width - ImportedBarPlotWidthReduction,
                 plot.Height + ImportedBarPlotHeightExtension);
         }
+        if (family == ChartRenderFamily.Pie &&
+            UsesImportedTextMetrics(chart) &&
+            chart.HasAutomaticTitle &&
+            chart.DataLabels is { ShowValue: true, ShowPercent: true })
+        {
+            // PowerPoint's automatic pie title and best-fit labels use a slightly
+            // larger plot box than the generic imported chart frame.
+            plot = new ChartPlanRect(
+                plot.X - 10.0,
+                plot.Y - 10.0,
+                plot.Width + 10.0,
+                plot.Height + 20.0);
+        }
         if (UsesStockLineFallback(chart))
         {
             // Classic PowerPoint reserves a compact left value-axis gutter and a
@@ -939,6 +952,14 @@ public static partial class ChartRenderPlanner
                 bounds.Width - 2 * margin,
                 titleHeight)
             : null;
+        if (titleBounds is { } pieTitle &&
+            family == ChartRenderFamily.Pie &&
+            UsesImportedTextMetrics(chart) &&
+            chart.HasAutomaticTitle &&
+            chart.DataLabels is { ShowValue: true, ShowPercent: true })
+        {
+            titleBounds = pieTitle with { Y = pieTitle.Y - 10.0 };
+        }
         return new ChartFramePlan(
             bounds,
             plot,
@@ -4068,17 +4089,17 @@ public static partial class ChartRenderPlanner
             ? $"{value / total * 100:0}%"
             : "0%";
 
-        var parts = new StringBuilder();
+        var parts = new List<string>();
         if (labels.ShowSeriesName && !string.IsNullOrEmpty(seriesName))
-            parts.Append(seriesName).Append(' ');
+            parts.Add(seriesName);
         if (labels.ShowCategoryName && !string.IsNullOrEmpty(categoryName))
-            parts.Append(categoryName).Append(' ');
+            parts.Add(categoryName);
         if (labels.ShowValue)
-            parts.Append(formattedValue).Append(' ');
+            parts.Add(formattedValue);
         if (labels.ShowPercent)
-            parts.Append(percent).Append(' ');
+            parts.Add(percent);
 
-        return parts.ToString().Trim();
+        return string.Join(labels.Separator ?? " ", parts);
     }
 
     public static string FormatWithCode(double value, string code)

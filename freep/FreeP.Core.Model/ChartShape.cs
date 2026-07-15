@@ -156,6 +156,9 @@ public sealed class ChartDataLabels
     /// <summary>Number format code (e.g. "0.00", "#,##0", "0%"). Null or empty = General.</summary>
     public string? NumberFormat { get; set; }
 
+    /// <summary>Separator between composed label parts. Null keeps FreeP's compact space separator.</summary>
+    public string? Separator { get; set; }
+
     /// <summary>Returns true if any label component is enabled.</summary>
     public bool HasAny => ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName;
 }

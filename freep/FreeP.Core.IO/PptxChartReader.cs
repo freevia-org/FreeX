@@ -1144,6 +1144,7 @@ internal static class PptxChartReader
             ShowSeriesName   = showSer,
             ShowLegendKey    = showLegend,
             NumberFormat     = string.IsNullOrEmpty(numFmt) ? null : numFmt,
+            Separator        = dLblsEl.Element(C + "separator")?.Value,
             Position         = posStr switch
             {
                 "ctr"      => DataLabelPosition.Center,
@@ -1187,6 +1188,13 @@ internal static class PptxChartReader
         XElement? dataLabelsEl,
         ChartDataLabels? labels)
     {
+        if (chartTypeEl?.Name == C + "pieChart" &&
+            dataLabelsEl is not null &&
+            labels?.ShowPercent == true)
+        {
+            labels.Separator ??= ", ";
+        }
+
         if (chartTypeEl?.Name != C + "pieChart" ||
             dataLabelsEl is null ||
             dataLabelsEl.Element(C + "showVal") is not null ||
@@ -1198,6 +1206,7 @@ internal static class PptxChartReader
         // PowerPoint exposes the sparse pie form (showPercent without showVal)
         // as value-and-percent labels when it opens an imported presentation.
         labels.ShowValue = true;
+        labels.Separator ??= ", ";
     }
 
     private static void ApplyPowerPointPieAutomaticTitleDefault(
