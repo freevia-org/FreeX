@@ -554,6 +554,7 @@ public static partial class ChartRenderPlanner
     public const double SurfaceContourStrokeThickness = 0.9;
     private const double DipPerPoint = 96.0 / 72.0;
     private const double DefaultBarGapWidthPercent = 150.0;
+    private const double ImportedPercentStackedGapWidthPercent = 250.0;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -958,6 +959,16 @@ public static partial class ChartRenderPlanner
                 bounds.Y + 57.0,
                 bounds.Width - 120.0,
                 bounds.Height - 99.0);
+        }
+        else if (chart.ChartType == ChartType.ColumnStacked100 && UsesImportedTextMetrics(chart))
+        {
+            // Imported 100%-stacked columns use a taller plot and a narrower
+            // left category gutter than the generic chart frame.
+            plot = new ChartPlanRect(
+                bounds.X + 31.0,
+                bounds.Y + 54.0,
+                bounds.Width - 69.0,
+                bounds.Height - 69.0);
         }
         if (TryResolveManualLayoutRect(chart.PlotAreaManualLayout, bounds, out var manualPlot))
             plot = manualPlot;
@@ -5698,6 +5709,8 @@ public static partial class ChartRenderPlanner
         bool stacked)
     {
         double gapWidth = Math.Clamp(chart.BarGapWidthPercent ?? (int)DefaultBarGapWidthPercent, 0, 500);
+        if (stacked && chart.ChartType == ChartType.ColumnStacked100 && UsesImportedTextMetrics(chart))
+            gapWidth = ImportedPercentStackedGapWidthPercent;
         if (stacked || seriesCount <= 1)
         {
             double singleSeriesSize = categorySize / (1.0 + gapWidth / 100.0);
