@@ -1108,7 +1108,7 @@ public sealed class SlideShowWindowHeadlessTests
         source.Should().Contain("_customShowSlideList.PointerReleased += OnCustomShowSlideListPointerReleased");
         source.Should().Contain("_customShowSlideList.AddHandler(DragDrop.DropEvent, OnCustomShowSlideListDrop)");
         source.Should().Contain("ResolveCustomShowSlideDropIndex(e)");
-        source.Should().Contain("SlideShowCustomShowPlanner.BuildCustomShowSlideDragReorderPlan(");
+        source.Should().Contain("SlideShowCustomShowSessionPlanner.BuildDragReorderPlan(");
         source.Should().Contain("_host.MoveCustomShowSlide(");
 
         var ran = await OnUiThread(() =>
