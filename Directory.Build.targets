@@ -6,16 +6,12 @@
   <Target Name="FilterFreeSharedLocalizationSatelliteResources"
           BeforeTargets="_CopyFilesMarkedCopyLocal;CopyFilesToOutputDirectory"
           Condition="'$(FreeSharedLocalizationProduct)' != ''">
-    <ItemGroup Condition="'$(FreeSharedLocalizationFilterAllSatellites)' == 'true'">
-      <_FreeSharedLocalizationUnsupportedSatellite Include="@(ReferenceCopyLocalPaths)"
-        Condition="'%(ReferenceCopyLocalPaths.Filename)' == 'Free.Shared.Localization.resources'" />
-      <ReferenceCopyLocalPaths Remove="@(_FreeSharedLocalizationUnsupportedSatellite)" />
-    </ItemGroup>
-    <ItemGroup Condition="'$(FreeSharedLocalizationProduct)' == 'FreeW' Or '$(FreeSharedLocalizationProduct)' == 'FreeP'">
+    <ItemGroup>
       <_FreeSharedLocalizationSatellites Include="@(ReferenceCopyLocalPaths)"
         Condition="'%(ReferenceCopyLocalPaths.Filename)' == 'Free.Shared.Localization.resources'" />
       <_FreeSharedLocalizationSupported Include="@(_FreeSharedLocalizationSatellites)"
-        Condition="'%(_FreeSharedLocalizationSatellites.DestinationSubDirectory)' == 'fr-FR\'" />
+        Condition="'$(FreeSharedLocalizationFilterAllSatellites)' != 'true' And
+          '$([System.Text.RegularExpressions.Regex]::IsMatch(&quot;%(_FreeSharedLocalizationSatellites.DestinationSubDirectory)&quot;, &quot;^($(FreeSharedLocalizationSupportedCulturePattern))\\$&quot;))' == 'True'" />
       <ReferenceCopyLocalPaths Remove="@(_FreeSharedLocalizationSatellites)" />
       <ReferenceCopyLocalPaths Include="@(_FreeSharedLocalizationSupported)" />
     </ItemGroup>
