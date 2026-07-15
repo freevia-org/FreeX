@@ -16,8 +16,8 @@ namespace FreeP.Core.IO;
 public static class PresentationPdfExporter
 {
     // Widescreen 16:9 slide (PowerPoint default 13.333in x 7.5in) in PDF points (1/72 inch).
-    public const double DefaultSlideWidthPoints = 960.0;
-    public const double DefaultSlideHeightPoints = 540.0;
+    public const double DefaultSlideWidthPoints = PresentationPdfScenePlanner.DefaultSlideWidthPoints;
+    public const double DefaultSlideHeightPoints = PresentationPdfScenePlanner.DefaultSlideHeightPoints;
     private const double MarginPt = 54.0;
     private const double TitleSize = 32.0;
     private const double BodySize = 18.0;
@@ -27,7 +27,6 @@ public static class PresentationPdfExporter
     private const double ArrowheadMinLengthPt = 8.0;
     private const double ArrowheadLengthStrokeScale = 4.0;
     private const double ArrowheadHalfWidthRatio = 0.35;
-    private const double EmuPerPoint = 12700.0;
     private const double DipToPoint = 0.75;
 
     /// <summary>Renders the presentation to PDF bytes in memory.</summary>
@@ -53,15 +52,7 @@ public static class PresentationPdfExporter
             foreach (var slide in presentation.Slides)
                 pages.Add(BuildSlidePage(slide, presentation.SlideSizeCxEmu, presentation.SlideSizeCyEmu));
 
-        var p = presentation.Properties;
-        var properties = new PdfDocumentProperties(
-            Title: NullIfBlank(p.Title),
-            Author: NullIfBlank(p.Author),
-            Subject: NullIfBlank(p.Subject),
-            Keywords: NullIfBlank(p.Keywords),
-            Creator: "FreeP");
-
-        return new PdfContentDocument(pages, properties);
+        return new PdfContentDocument(pages, PresentationPdfScenePlanner.BuildDocumentProperties(presentation));
     }
 
     /// <summary>Builds the portable draw-op page for one slide at FreeP's default 16:9 slide size.</summary>
@@ -72,8 +63,10 @@ public static class PresentationPdfExporter
     public static PdfContentPage BuildSlidePage(Slide slide, long slideWidthEmu, long slideHeightEmu)
         => BuildSlidePage(
             slide,
-            slideWidthPoints: slideWidthEmu > 0 ? EmuToPoints(slideWidthEmu) : DefaultSlideWidthPoints,
-            slideHeightPoints: slideHeightEmu > 0 ? EmuToPoints(slideHeightEmu) : DefaultSlideHeightPoints);
+            PresentationPdfScenePlanner.ResolveSlideSize(slideWidthEmu, slideHeightEmu));
+
+    private static PdfContentPage BuildSlidePage(Slide slide, PresentationPdfSlideSize slideSize) =>
+        BuildSlidePage(slide, slideSize.WidthPoints, slideSize.HeightPoints);
 
     private static PdfContentPage BuildSlidePage(
         Slide slide,
@@ -467,13 +460,13 @@ public static class PresentationPdfExporter
 
     private static ShapeBox? TryAppendShapeGeometry(List<PdfDrawOp> ops, SlideShape shape, double slideHeightPoints)
     {
-        var width = EmuToPoints(shape.ExtentCxEmu);
-        var height = EmuToPoints(shape.ExtentCyEmu);
+        var width = PresentationPdfScenePlanner.EmuToPoints(shape.ExtentCxEmu);
+        var height = PresentationPdfScenePlanner.EmuToPoints(shape.ExtentCyEmu);
         if (width <= 0 || height <= 0)
             return null;
 
-        var x = EmuToPoints(shape.OffsetXEmu);
-        var y = slideHeightPoints - EmuToPoints(shape.OffsetYEmu) - height;
+        var x = PresentationPdfScenePlanner.EmuToPoints(shape.OffsetXEmu);
+        var y = slideHeightPoints - PresentationPdfScenePlanner.EmuToPoints(shape.OffsetYEmu) - height;
 
         if (TryAppendPictureImage(ops, shape, x, y, width, height))
             return new ShapeBox(x, y, width, height);
@@ -993,7 +986,7 @@ public static class PresentationPdfExporter
     }
 
     private static (double X, double Y) ToPdfPoint((long X, long Y) point, double slideHeightPoints) =>
-        (EmuToPoints(point.X), slideHeightPoints - EmuToPoints(point.Y));
+        PresentationPdfScenePlanner.ToPdfPoint(point, slideHeightPoints);
 
     private static void AppendShapeText(List<PdfDrawOp> ops, ShapeBox box, string content)
     {
@@ -1202,15 +1195,11 @@ public static class PresentationPdfExporter
         }
     }
 
-    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
-
     // The portable text op draws a single line; flatten tabs so spacing is at least visible.
     private static string OneLine(string text) => text.Replace("\t", "    ");
 
     private static string[] Lines(string text) =>
         text.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
-
-    private static double EmuToPoints(long emu) => emu / EmuPerPoint;
 
     private static PdfColor ToPdfColor(ThemeAwareColor color)
     {

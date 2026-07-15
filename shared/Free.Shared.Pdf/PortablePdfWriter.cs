@@ -159,11 +159,11 @@ public static class PortablePdfWriter
                 AppendRotationGroup(content, group, imageResources, opacityResources, patternResources);
                 break;
             case PdfOpacityGroup group:
-                opacityResources.TryGetValue(NormalizeOpacity(group.Opacity), out var groupOpacityResource);
+                opacityResources.TryGetValue(PdfRenderGeometry.NormalizeOpacity(group.Opacity), out var groupOpacityResource);
                 AppendOpacityGroup(content, group, groupOpacityResource?.ResourceName, imageResources, opacityResources, patternResources);
                 break;
             case PdfImage image when imageResources.TryGetValue(image, out var resource):
-                opacityResources.TryGetValue(NormalizeOpacity(image.Opacity), out var imageOpacityResource);
+                opacityResources.TryGetValue(PdfRenderGeometry.NormalizeOpacity(image.Opacity), out var imageOpacityResource);
                 AppendImage(content, image, resource, imageOpacityResource?.ResourceName);
                 break;
         }
@@ -332,7 +332,7 @@ public static class PortablePdfWriter
             .SelectMany(EnumerateOps)
             .SelectMany(EnumerateGradients))
         {
-            if (byGradient.ContainsKey(gradient) || !TryNormalizeGradient(gradient, out var normalized))
+            if (byGradient.ContainsKey(gradient) || !TryCreateNormalizedGradient(gradient, out var normalized))
                 continue;
 
             var resource = new PdfPatternResource($"P{resources.Count + 1}", normalized);
@@ -389,10 +389,10 @@ public static class PortablePdfWriter
         switch (op)
         {
             case PdfImage image:
-                yield return NormalizeOpacity(image.Opacity);
+                yield return PdfRenderGeometry.NormalizeOpacity(image.Opacity);
                 break;
             case PdfOpacityGroup group:
-                yield return NormalizeOpacity(group.Opacity);
+                yield return PdfRenderGeometry.NormalizeOpacity(group.Opacity);
                 break;
         }
     }
@@ -474,39 +474,14 @@ public static class PortablePdfWriter
         $"/C0 [{FormatColorComponent(start.R)} {FormatColorComponent(start.G)} {FormatColorComponent(start.B)}] " +
         $"/C1 [{FormatColorComponent(end.R)} {FormatColorComponent(end.G)} {FormatColorComponent(end.B)}] /N 1 >>";
 
-    private static bool TryNormalizeGradient(PdfLinearGradient gradient, out PdfLinearGradient normalized)
+    private static bool TryCreateNormalizedGradient(PdfLinearGradient gradient, out PdfLinearGradient normalized)
     {
         normalized = gradient;
-        if (!IsFinite(gradient.StartX) ||
-            !IsFinite(gradient.StartY) ||
-            !IsFinite(gradient.EndX) ||
-            !IsFinite(gradient.EndY) ||
-            DistanceSquared(gradient.StartX, gradient.StartY, gradient.EndX, gradient.EndY) < 0.000001)
+        if (!PdfRenderGeometry.TryNormalizeGradient(gradient, out var stops))
             return false;
-
-        var stops = gradient.Stops
-            .Where(stop => IsFinite(stop.Position))
-            .Select(stop => new PdfGradientStop(Math.Clamp(stop.Position, 0.0, 1.0), stop.Color))
-            .OrderBy(stop => stop.Position)
-            .ToList();
-        if (stops.Count == 0)
-            return false;
-        if (stops.Count == 1)
-            stops.Add(new PdfGradientStop(1.0, stops[0].Color));
-        if (stops[0].Position > 0.0)
-            stops.Insert(0, new PdfGradientStop(0.0, stops[0].Color));
-        if (stops[^1].Position < 1.0)
-            stops.Add(new PdfGradientStop(1.0, stops[^1].Color));
 
         normalized = gradient with { Stops = stops };
         return true;
-    }
-
-    private static double DistanceSquared(double x1, double y1, double x2, double y2)
-    {
-        var dx = x2 - x1;
-        var dy = y2 - y1;
-        return dx * dx + dy * dy;
     }
 
     private static PdfImageResource DecodeJpeg(string resourceName, byte[] bytes)
@@ -846,34 +821,18 @@ public static class PortablePdfWriter
             resource.PixelHeight <= 0)
             return false;
 
-        var sourceX = Clamp(
-            (int)Math.Round(NormalizeCropFraction(image.SourceCrop.Left) * resource.PixelWidth),
-            0,
-            resource.PixelWidth - 1);
-        var sourceY = Clamp(
-            (int)Math.Round(NormalizeCropFraction(image.SourceCrop.Top) * resource.PixelHeight),
-            0,
-            resource.PixelHeight - 1);
-        var sourceWidth = Clamp(
-            (int)Math.Round((1.0 - NormalizeCropFraction(image.SourceCrop.Left) - NormalizeCropFraction(image.SourceCrop.Right)) * resource.PixelWidth),
-            1,
-            resource.PixelWidth - sourceX);
-        var sourceHeight = Clamp(
-            (int)Math.Round((1.0 - NormalizeCropFraction(image.SourceCrop.Top) - NormalizeCropFraction(image.SourceCrop.Bottom)) * resource.PixelHeight),
-            1,
-            resource.PixelHeight - sourceY);
-
-        if (sourceX == 0 &&
-            sourceY == 0 &&
-            sourceWidth == resource.PixelWidth &&
-            sourceHeight == resource.PixelHeight)
+        if (!PdfRenderGeometry.TryGetImageSourceRect(
+                resource.PixelWidth,
+                resource.PixelHeight,
+                image.SourceCrop,
+                out var sourceRect))
             return false;
 
-        var scaleX = image.Width / sourceWidth;
-        var scaleY = image.Height / sourceHeight;
-        var sourceBottom = resource.PixelHeight - sourceY - sourceHeight;
+        var scaleX = image.Width / sourceRect.Width;
+        var scaleY = image.Height / sourceRect.Height;
+        var sourceBottom = resource.PixelHeight - sourceRect.Y - sourceRect.Height;
         placement = new PdfImagePlacement(
-            image.X - sourceX * scaleX,
+            image.X - sourceRect.X * scaleX,
             image.Y - sourceBottom * scaleY,
             resource.PixelWidth * scaleX,
             resource.PixelHeight * scaleY);
@@ -1165,7 +1124,7 @@ public static class PortablePdfWriter
         if (width <= 0 || height <= 0)
             return;
 
-        var points = GetPresetClipPolygonPoints(x, y, width, height, clipKind);
+        var points = PdfRenderGeometry.GetPresetClipPolygonPoints(x, y, width, height, clipKind);
         if (points.Length == 0)
             return;
 
@@ -1173,64 +1132,6 @@ public static class PortablePdfWriter
         for (var i = 1; i < points.Length; i++)
             content.AppendLine($"{FormatNumber(points[i].X)} {FormatNumber(points[i].Y)} l");
         content.AppendLine("h");
-    }
-
-    private static PdfPathPoint[] GetPresetClipPolygonPoints(
-        double x,
-        double y,
-        double width,
-        double height,
-        PdfImageClipKind clipKind)
-    {
-        var right = x + width;
-        var top = y + height;
-        var midX = x + width / 2.0;
-        var midY = y + height / 2.0;
-        var quarterX = x + width * 0.25;
-        var threeQuarterX = x + width * 0.75;
-
-        return clipKind switch
-        {
-            PdfImageClipKind.Triangle =>
-            [
-                new PdfPathPoint(midX, top),
-                new PdfPathPoint(right, y),
-                new PdfPathPoint(x, y),
-            ],
-            PdfImageClipKind.Diamond =>
-            [
-                new PdfPathPoint(midX, top),
-                new PdfPathPoint(right, midY),
-                new PdfPathPoint(midX, y),
-                new PdfPathPoint(x, midY),
-            ],
-            PdfImageClipKind.Parallelogram =>
-            [
-                new PdfPathPoint(quarterX, top),
-                new PdfPathPoint(right, top),
-                new PdfPathPoint(threeQuarterX, y),
-                new PdfPathPoint(x, y),
-            ],
-            PdfImageClipKind.Hexagon =>
-            [
-                new PdfPathPoint(quarterX, top),
-                new PdfPathPoint(threeQuarterX, top),
-                new PdfPathPoint(right, midY),
-                new PdfPathPoint(threeQuarterX, y),
-                new PdfPathPoint(quarterX, y),
-                new PdfPathPoint(x, midY),
-            ],
-            PdfImageClipKind.Chevron =>
-            [
-                new PdfPathPoint(x, top),
-                new PdfPathPoint(threeQuarterX, top),
-                new PdfPathPoint(right, midY),
-                new PdfPathPoint(threeQuarterX, y),
-                new PdfPathPoint(x, y),
-                new PdfPathPoint(quarterX, midY),
-            ],
-            _ => [],
-        };
     }
 
     private static void AppendRoundedRectanglePath(
@@ -1532,18 +1433,6 @@ public static class PortablePdfWriter
 
     private static string FormatColorComponent(byte value) =>
         FormatNumber(value / 255d);
-
-    private static bool IsFinite(double value) =>
-        !double.IsNaN(value) && !double.IsInfinity(value);
-
-    private static double NormalizeOpacity(double opacity) =>
-        Math.Round(Math.Clamp(double.IsFinite(opacity) ? opacity : 1.0, 0.0, 1.0), 3);
-
-    private static double NormalizeCropFraction(double value) =>
-        double.IsFinite(value) ? value : 0.0;
-
-    private static int Clamp(int value, int min, int max) =>
-        Math.Max(min, Math.Min(value, max));
 
     private static void WriteAscii(Stream stream, string text) =>
         stream.Write(PdfEncoding.GetBytes(text));

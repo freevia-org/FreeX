@@ -1,5 +1,6 @@
 using System.IO;
 using Free.Shared.Shell;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -38,7 +39,7 @@ public sealed record PresentationImageExportResult(
 /// </summary>
 public static class PresentationImageExportExecutor
 {
-    public const int DefaultWidthPx = 1280;
+    public const int DefaultWidthPx = PresentationPdfScenePlanner.DefaultRasterWidthPx;
     public const int DefaultHeightPx = 720;
 
     private const string FallbackBaseFileName = "Presentation";

@@ -1,5 +1,5 @@
-using Free.Shared.Drawing;
 using Free.Shared.Pdf;
+using FreeP.Core.IO;
 using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor;
@@ -25,7 +25,7 @@ public sealed record PresentationRasterPdfRenderPlan(
 /// </summary>
 public static class PresentationRasterPdfExporter
 {
-    public const int DefaultWidthPx = PresentationImageExportExecutor.DefaultWidthPx;
+    public const int DefaultWidthPx = PresentationPdfScenePlanner.DefaultRasterWidthPx;
 
     private static readonly byte[] BlankWhitePng =
     [
@@ -65,10 +65,15 @@ public static class PresentationRasterPdfExporter
         ArgumentNullException.ThrowIfNull(renderSlideToPng);
         request ??= new PresentationRasterPdfExportRequest();
 
-        var pageWidth = ToPositivePoints(presentation.SlideSizeCxEmu, 960);
-        var pageHeight = ToPositivePoints(presentation.SlideSizeCyEmu, 540);
-        var widthPx = Math.Max(1, request.WidthPx);
-        var heightPx = Math.Max(1, request.HeightPx ?? (int)Math.Round(widthPx * (pageHeight / pageWidth)));
+        var rasterSize = PresentationPdfScenePlanner.ResolveRasterSize(
+            presentation.SlideSizeCxEmu,
+            presentation.SlideSizeCyEmu,
+            request.WidthPx,
+            request.HeightPx);
+        var pageWidth = rasterSize.SlideSize.WidthPoints;
+        var pageHeight = rasterSize.SlideSize.HeightPoints;
+        var widthPx = rasterSize.WidthPx;
+        var heightPx = rasterSize.HeightPx;
         var range = PresentationExportPlanner.BuildSlideRangePlan(request.SlideRange, presentation.Slides.Count);
 
         var pages = new List<PdfRasterPage>(Math.Max(1, range.SlideNumbers.Count));
@@ -88,25 +93,6 @@ public static class PresentationRasterPdfExporter
         return new PresentationRasterPdfRenderPlan(range, pageWidth, pageHeight, widthPx, heightPx, pages);
     }
 
-    private static double ToPositivePoints(long emu, double fallbackPoints)
-    {
-        if (emu <= 0)
-            return fallbackPoints;
-
-        var points = DrawingMlCoordinateUnits.EmuToPoints(emu);
-        return points > 0 ? points : fallbackPoints;
-    }
-
     private static PdfDocumentProperties? BuildDocumentProperties(Presentation presentation)
-    {
-        var p = presentation.Properties;
-        return new PdfDocumentProperties(
-            Title: NullIfBlank(p.Title),
-            Author: NullIfBlank(p.Author),
-            Subject: NullIfBlank(p.Subject),
-            Keywords: NullIfBlank(p.Keywords),
-            Creator: "FreeP");
-    }
-
-    private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+        => PresentationPdfScenePlanner.BuildDocumentProperties(presentation);
 }
