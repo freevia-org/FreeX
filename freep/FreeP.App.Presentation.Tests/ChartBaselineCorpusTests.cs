@@ -87,7 +87,9 @@ public sealed class ChartBaselineCorpusTests
         textStyles.Should().NotContainNulls();
         textStyles.Cast<ChartTextStyle>().Select(style => style.FontSizePt)
             .Should().OnlyContain(fontSize => fontSize == 18.0,
-                "PowerPoint supplies an 18pt default c:txPr when a chart has no explicit text properties");
+                "PowerPoint supplies an 18pt inherited title default when a chart has no explicit text properties");
+        textStyles.Cast<ChartTextStyle>().Should().OnlyContain(style => style.IsImplicitDefault,
+            "the source charts do not author c:chartSpace/c:txPr and must retain role-specific axis and label defaults");
         ChartRenderPlanner.ComputePrimaryValueAxisRange(stacked)
             .Should()
             .Be((0, 1, 0.25));

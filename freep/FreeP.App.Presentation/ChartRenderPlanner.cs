@@ -510,9 +510,9 @@ public static partial class ChartRenderPlanner
         new(0xFF, 0xC0, 0x00)
     ];
 
-    // Office charts commonly carry an 18pt default c:chartSpace/c:txPr. Their
-    // in-frame auto-layout reserves substantially more room for that text than
-    // the compact FreeP-created chart defaults below.
+    // Office chart imports reserve a larger in-frame area for the inherited 18pt
+    // title default. Axes and data labels still use their compact role-specific
+    // font defaults below.
     private static bool UsesImportedTextMetrics(ChartShape chart) =>
         chart.TextStyle?.FontSizePt is >= 12.0;
 
@@ -523,7 +523,16 @@ public static partial class ChartRenderPlanner
     public static bool UsesClassicOfficeChartStyle(ChartShape chart) =>
         !chart.StyleId.HasValue;
 
+    /// <summary>Resolves chart text that uses an axis, legend, or data-label role.</summary>
     public static double ResolveTextFontSize(ChartShape chart, double fallback) =>
+        chart.TextStyle?.FontSizePt is > 0
+            ? chart.TextStyle.IsImplicitDefault
+                ? Math.Max(fallback, 10.0)
+                : chart.TextStyle.FontSizePt.Value
+            : fallback;
+
+    /// <summary>Resolves title text, for which Office's inherited 18pt default applies.</summary>
+    public static double ResolveTitleFontSize(ChartShape chart, double fallback) =>
         chart.TextStyle?.FontSizePt is > 0 ? chart.TextStyle.FontSizePt.Value : fallback;
 
     private static double ResolveFrameMargin(ChartShape chart) =>

@@ -394,6 +394,19 @@ public sealed class ChartRenderPlannerTests
         ChartRenderPlanner.ResolveTextFontSize(chart, 6.5).Should().Be(18.0);
     }
 
+    [Fact]
+    public void ResolveTextFontSize_InheritedOfficeTitleDefault_UsesCompactRoleFallback()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            TextStyle = new ChartTextStyle { FontSizePt = 18.0, IsImplicitDefault = true }
+        };
+
+        ChartRenderPlanner.ResolveTextFontSize(chart, 6.5).Should().Be(10.0);
+        ChartRenderPlanner.ResolveTitleFontSize(chart, 9.0).Should().Be(18.0);
+    }
+
     [Theory]
     [InlineData(ChartType.Stock)]
     [InlineData(ChartType.Surface)]

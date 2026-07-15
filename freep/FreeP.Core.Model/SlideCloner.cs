@@ -183,6 +183,7 @@ public static class SlideCloner
             ? null
             : new ChartTextStyle
             {
+                IsImplicitDefault = style.IsImplicitDefault,
                 FontSizePt = style.FontSizePt,
                 Bold       = style.Bold,
                 Italic     = style.Italic,

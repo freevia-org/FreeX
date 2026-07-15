@@ -188,6 +188,13 @@ public sealed class ChartDataTableSettings
 /// <summary>Small chart text style subset shared by chart labels, data tables, and render planners.</summary>
 public sealed class ChartTextStyle
 {
+    /// <summary>
+    /// True when the reader synthesized the Office chart default because the source chart has no
+    /// <c>c:chartSpace/c:txPr</c>. This must not override role-specific axis or label defaults,
+    /// and it must not be serialized as an authored text-properties node.
+    /// </summary>
+    public bool IsImplicitDefault { get; set; }
+
     /// <summary>Font size in points, or null to use the chart renderer default.</summary>
     public double? FontSizePt { get; set; }
 

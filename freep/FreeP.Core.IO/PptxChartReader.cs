@@ -49,11 +49,11 @@ internal static class PptxChartReader
         {
             StyleId = ReadStyleId(chartSpace)
         };
-        // PowerPoint uses an 18pt default for chart-owned text when c:txPr is
-        // absent. Make that inherited default explicit so re-imported FreeP
-        // charts and externally authored charts share the same render metrics.
+        // PowerPoint uses an 18pt default for chart titles when c:txPr is absent,
+        // but axes and data labels retain their role-specific defaults. Preserve
+        // that inherited state without turning it into authored chart text.
         shape.TextStyle = ReadChartTextStyle(chartSpace.Element(C + "txPr"), scheme)
-            ?? new ChartTextStyle { FontSizePt = 18.0 };
+            ?? new ChartTextStyle { FontSizePt = 18.0, IsImplicitDefault = true };
 
         // Title
         shape.Title = ReadTitle(chartEl.Element(C + "title"));

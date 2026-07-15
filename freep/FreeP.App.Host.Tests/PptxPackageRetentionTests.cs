@@ -1511,6 +1511,26 @@ public sealed class PptxPackageRetentionTests
         reloadedDataTable.TextStyle!.FontFamily.Should().BeNull();
     }
 
+    [Fact]
+    public void ReadWrite_ChartWithoutTextProperties_DoesNotSerializeSyntheticOfficeDefault()
+    {
+        using var source = BuildPptxWithLineChartSmoothDecision(smooth: false);
+        var loaded = PptxPackageReader.Read(source);
+        var chart = loaded.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        chart.TextStyle.Should().NotBeNull();
+        chart.TextStyle!.IsImplicitDefault.Should().BeTrue();
+        chart.TextStyle.FontSizePt.Should().Be(18.0);
+
+        using var saved = new MemoryStream();
+        PptxPackageWriter.Write(loaded, saved);
+
+        using var archive = new ZipArchive(new MemoryStream(saved.ToArray()), ZipArchiveMode.Read);
+        var chartXml = LoadXml(archive, "ppt/charts/chart1.xml");
+        chartXml.Root!.Element(ChartNs + "txPr").Should().BeNull(
+            "an inherited Office chart-title default is not an authored c:chartSpace/c:txPr node");
+    }
+
     private static MemoryStream BuildPptxWithLineChartSmoothDecision(bool smooth)
     {
         var presentation = new Presentation();

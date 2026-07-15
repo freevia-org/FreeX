@@ -733,7 +733,7 @@ public sealed class SlideCanvas : FrameworkElement
         if (chart.Title is not null)
         {
             DrawChartLabel(dc, chart.Title, ToRect(frame.TitleBounds!.Value),
-                isBold: !classicOfficeStyle, fontSize: ChartRenderPlanner.ResolveTextFontSize(chart, 9.0), align: TextAlignment.Center);
+                isBold: !classicOfficeStyle, fontSize: ChartRenderPlanner.ResolveTitleFontSize(chart, 9.0), align: TextAlignment.Center);
         }
 
         if (!frame.HasPlot) return;

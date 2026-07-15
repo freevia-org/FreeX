@@ -690,6 +690,9 @@ internal static class PptxChartWriter
 
     private static XElement? BuildChartTextPropertiesEl(ChartTextStyle? style)
     {
+        if (style?.IsImplicitDefault == true)
+            return null;
+
         var defRPr = BuildChartDefaultRunPropertiesEl(style);
         if (defRPr is null)
             return null;
