@@ -87,7 +87,7 @@ public static class XlsxWorkbookThemeReader
         foreach (var (slot, elementName) in ThemeColorElements)
         {
             if (sharedTheme.ColorScheme[ToSharedSlot(slot)] is { } color)
-                theme = theme.WithColor(slot, new CellColor(color.ResolvedColor.R, color.ResolvedColor.G, color.ResolvedColor.B));
+                theme = theme.WithColor(slot, ToCellColor(color.BaseColor ?? color.ResolvedColor));
         }
 
         return theme.WithNativeColorSchemeXml(colorScheme.ToString(SaveOptions.DisableFormatting));
@@ -139,7 +139,7 @@ public static class XlsxWorkbookThemeReader
         foreach (var (slot, elementName) in ThemeColorElements)
         {
             if (sharedColors[ToSharedSlot(slot)] is { } color)
-                colors[slot] = new CellColor(color.ResolvedColor.R, color.ResolvedColor.G, color.ResolvedColor.B);
+                colors[slot] = ToCellColor(color.BaseColor ?? color.ResolvedColor);
         }
 
         var name = colorScheme.Attribute("name")?.Value;
@@ -307,4 +307,7 @@ public static class XlsxWorkbookThemeReader
             WorkbookThemeColorSlot.FollowedHyperlink => DrawingMlThemeColorSlot.FollowedHyperlink,
             _ => DrawingMlThemeColorSlot.Dark1
         };
+
+    private static CellColor ToCellColor(DrawingMlRgbColor color) =>
+        new(color.R, color.G, color.B);
 }

@@ -13,7 +13,8 @@ public readonly record struct DrawingMlThemeColor(
     DrawingMlRgbColor ResolvedColor,
     DrawingMlThemeColorKind Kind,
     string? Value = null,
-    string? FallbackValue = null);
+    string? FallbackValue = null,
+    DrawingMlRgbColor? BaseColor = null);
 
 public sealed class DrawingMlThemeColorScheme
 {

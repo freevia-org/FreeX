@@ -94,7 +94,8 @@ public static class DrawingMlThemeReader
 
         if (!string.IsNullOrWhiteSpace(relationship.Target))
         {
-            var resolved = OpcPathHelper.ResolveRelativeZipPath(ownerDirectory, relationship.Target);
+            var target = OpcPathHelper.UnescapeRelationshipPathSegments(relationship.Target);
+            var resolved = OpcPathHelper.ResolveRelativeZipPath(ownerDirectory, target);
             if (archive.GetEntry(resolved) is not null)
                 return resolved;
         }
@@ -126,7 +127,7 @@ public static class DrawingMlThemeReader
             ReadFraction(colorElement, "lumOff", 0.0, 2.0),
             ReadFraction(colorElement, "tint", 1.0, 1.0),
             ReadFraction(colorElement, "shade", 1.0, 1.0));
-        return new DrawingMlThemeColor(resolved, kind, value, fallbackValue);
+        return new DrawingMlThemeColor(resolved, kind, value, fallbackValue, color);
     }
 
     private static string? ReadTypeface(XElement? fontElement, XNamespace drawing) =>

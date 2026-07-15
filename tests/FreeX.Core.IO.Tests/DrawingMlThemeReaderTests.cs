@@ -26,6 +26,25 @@ public sealed class DrawingMlThemeReaderTests
     }
 
     [Fact]
+    public void ReadColor_AppliesCombinedLuminanceTintAndShadeTransforms()
+    {
+        var drawing = XNamespace.Get(DrawingMlThemeReader.DrawingNamespaceUri);
+        var colorContainer = new XElement(
+            drawing + "accent1",
+            new XElement(
+                drawing + "srgbClr",
+                new XAttribute("val", "000000"),
+                new XElement(drawing + "lumMod", new XAttribute("val", "50000")),
+                new XElement(drawing + "lumOff", new XAttribute("val", "10000")),
+                new XElement(drawing + "tint", new XAttribute("val", "80000")),
+                new XElement(drawing + "shade", new XAttribute("val", "50000"))));
+
+        DrawingMlThemeReader.ReadColor(colorContainer)!.Value.ResolvedColor
+            .Should()
+            .Be(new DrawingMlRgbColor(36, 36, 36));
+    }
+
+    [Fact]
     public void SharedSlotMapper_PreservesAliasesAndCanonicalNames()
     {
         DrawingMlThemeColorSlotMapper.TryMapRole(" tx1 ", out var tx1).Should().BeTrue();
@@ -44,19 +63,40 @@ public sealed class DrawingMlThemeReaderTests
         {
             WriteEntry(archive, "word/_rels/document.xml.rels", """
                 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-                  <Relationship Id="rIdTheme" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="themes/custom-theme.xml" />
+                  <Relationship Id="rIdTheme" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="themes/custom%20theme.xml" />
                 </Relationships>
                 """);
-            WriteEntry(archive, "word/themes/custom-theme.xml", RepresentativeThemeXml);
+            WriteEntry(archive, "word/themes/custom theme.xml", RepresentativeThemeXml);
             WriteEntry(archive, "word/theme/theme1.xml", """<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Fallback" />""");
         }
 
         stream.Position = 0;
         using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
         DrawingMlThemeReader.ResolveThemePartPath(readArchive, "word/document.xml", "word/theme/theme1.xml")
-            .Should().Be("word/themes/custom-theme.xml");
+            .Should().Be("word/themes/custom theme.xml");
         DrawingMlThemeReader.TryReadThemePart(readArchive, "word/document.xml", "word/theme/theme1.xml")!.Name
             .Should().Be("Contract Theme");
+    }
+
+    [Fact]
+    public void TryReadThemePart_UsesFallbackWhenThemeRelationshipTargetIsMissing()
+    {
+        using var stream = new MemoryStream();
+        using (var archive = new ZipArchive(stream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            WriteEntry(archive, "word/_rels/document.xml.rels", """
+                <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+                  <Relationship Id="rIdTheme" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="themes/missing-theme.xml" />
+                </Relationships>
+                """);
+            WriteEntry(archive, "word/theme/theme1.xml", """<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Fallback" />""");
+        }
+
+        stream.Position = 0;
+        using var readArchive = new ZipArchive(stream, ZipArchiveMode.Read);
+        DrawingMlThemeReader.TryReadThemePart(readArchive, "word/document.xml", "word/theme/theme1.xml")!.Name
+            .Should()
+            .Be("Fallback");
     }
 
     [Fact]
