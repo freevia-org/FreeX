@@ -539,6 +539,16 @@ public static partial class ChartRenderPlanner
     public const byte RectSeriesFillAlpha = 255;
     public const double LineSeriesStrokeThickness = 1.5;
     public const double ImportedLineSeriesStrokeThickness = 3.0;
+    public const double ImportedComboLegendSwatchWidth = 25.0;
+    public const double ImportedComboLegendSwatchHeight = 14.0;
+    public const double ImportedComboLegendLineHeight = 38.0;
+    public const double ImportedComboLegendLabelOffset = -7.0;
+    public const double ImportedComboLegendVerticalOffset = 26.0;
+    public const double ImportedComboPlotLeftInset = 3.0;
+    public const double ImportedComboPlotRightReduction = 8.0;
+    public const double ImportedComboPlotBottomReduction = 1.5;
+    public const double ImportedComboSecondaryLabelCompensation = 8.0;
+    public const double ImportedComboLegendRightCompensation = 8.0;
     public const double LineMarkerRadius = 3.0;
     public const double ImportedLineMarkerRadius = 5.0;
     public const double LineMarkerStrokeThickness = 0.75;
@@ -621,6 +631,14 @@ public static partial class ChartRenderPlanner
         IsHundredPercentStacked(chart.ChartType) &&
         UsesImportedTextMetrics(chart) &&
         chart.BarOverlapPercent is null;
+
+    private static bool UsesImportedComboDefaults(ChartShape chart) =>
+        chart.ChartType == ChartType.ColumnClustered &&
+        UsesImportedTextMetrics(chart) &&
+        chart.SecondaryValueAxis is { Delete: false } &&
+        chart.Series.Any(series =>
+            series.OnSecondaryAxis &&
+            series.OverrideChartType is ChartType.Line or ChartType.LineMarkers);
 
     /// <summary>
     /// Chart parts without an authored style use PowerPoint's classic default
@@ -997,6 +1015,14 @@ public static partial class ChartRenderPlanner
                 Height = Math.Max(1.0, plot.Height - ImportedRadarPlotBottomReduction)
             };
         }
+        if (UsesImportedComboDefaults(chart))
+        {
+            plot = new ChartPlanRect(
+                plot.X + ImportedComboPlotLeftInset,
+                plot.Y,
+                Math.Max(1.0, plot.Width - ImportedComboPlotRightReduction),
+                Math.Max(1.0, plot.Height - ImportedComboPlotBottomReduction));
+        }
         if (UsesStockLineFallback(chart))
         {
             // Classic PowerPoint reserves a compact left value-axis gutter and a
@@ -1253,7 +1279,10 @@ public static partial class ChartRenderPlanner
                     ? chart.Series[0].Values.Count
                     : 0
             : chart.Series.Count;
-        double legendLineHeight = ResolveLegendLineHeight(chart);
+        bool importedCombo = UsesImportedComboDefaults(chart);
+        double legendLineHeight = importedCombo
+            ? ImportedComboLegendLineHeight
+            : ResolveLegendLineHeight(chart);
         int maxItems = (int)Math.Max(1, verticalLegend ? legendBounds.Height / legendLineHeight : legendWidth / 80);
         int itemsToShow = Math.Min(itemCount, maxItems);
         if (itemsToShow == 0)
@@ -1263,6 +1292,8 @@ public static partial class ChartRenderPlanner
         double firstItemY = verticalLegend && !hasManualLayout
             ? legendBounds.Y + Math.Max(0, (legendBounds.Height - itemsToShow * legendLineHeight) / 2)
             : legendBounds.Y;
+        if (importedCombo && verticalLegend && !hasManualLayout)
+            firstItemY += ImportedComboLegendVerticalOffset;
         for (int itemIndex = 0; itemIndex < itemsToShow; itemIndex++)
         {
             int sourceItemIndex = frame.IsPie
@@ -1272,6 +1303,12 @@ public static partial class ChartRenderPlanner
                     : itemIndex;
             double itemX = verticalLegend ? legendBounds.X : legendBounds.X + itemIndex * 80.0;
             double itemY = verticalLegend ? firstItemY + itemIndex * legendLineHeight : legendBounds.Y;
+            bool lineSeries = !frame.IsPie &&
+                chart.Series[sourceItemIndex].OverrideChartType is ChartType.Line or ChartType.LineMarkers;
+            double swatchWidth = importedCombo ? ImportedComboLegendSwatchWidth : 8.0;
+            double swatchHeight = importedCombo
+                ? lineSeries ? 12.0 : ImportedComboLegendSwatchHeight
+                : 8.0;
             double textWidth = verticalLegend
                 ? Math.Max(0, legendWidth - 10)
                 : Math.Min(70, Math.Max(0, legendBounds.Right - itemX - 10));
@@ -1285,10 +1322,18 @@ public static partial class ChartRenderPlanner
                 : FallbackSeriesColors[0];
 
             items.Add(new ChartLegendItemPlan(
-                new ChartPlanRect(itemX, itemY + 3, 8, 8),
+                new ChartPlanRect(
+                    itemX,
+                    itemY + (importedCombo && lineSeries ? 2.0 : 3.0),
+                    swatchWidth,
+                    swatchHeight),
                 new ChartTextPlan(
                     text,
-                    new ChartPlanRect(itemX + 10, itemY, textWidth, legendLineHeight),
+                    new ChartPlanRect(
+                        itemX + (importedCombo ? ImportedComboLegendSwatchWidth + 4.0 : 10.0),
+                        itemY + (importedCombo ? ImportedComboLegendLabelOffset : 0.0),
+                        textWidth,
+                        legendLineHeight),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 7.0),
                     Alignment: ChartPlanTextAlignment.Left),
@@ -1317,7 +1362,10 @@ public static partial class ChartRenderPlanner
             bool importedTextMetrics = UsesImportedTextMetrics(chart);
             if (importedTextMetrics && chart.SecondaryValueAxis is { Delete: false })
             {
-                double legendX = Math.Min(frame.Bounds.Right, plot.Right + 80.0);
+                double legendX = Math.Min(
+                    frame.Bounds.Right,
+                    plot.Right + 80.0 +
+                    (UsesImportedComboDefaults(chart) ? ImportedComboLegendRightCompensation : 0.0));
                 return new ChartPlanRect(
                     legendX,
                     plot.Y,
@@ -2006,7 +2054,8 @@ public static partial class ChartRenderPlanner
         var labels = new List<ChartTextPlan>(tickCount + 1);
         var ticks = new List<ChartGridLinePlan>(tickCount + 1);
         double labelX = plot.Right + AxisMajorTickLength + GridlinePad +
-            (UsesImportedTextMetrics(chart) ? 8.0 : 0.0);
+            (UsesImportedTextMetrics(chart) ? 8.0 : 0.0) +
+            (UsesImportedComboDefaults(chart) ? ImportedComboSecondaryLabelCompensation : 0.0);
         double labelWidth = Math.Max(
             1,
             (UsesImportedTextMetrics(chart) ? 72.0 : AxisLabelWidth) -
@@ -2047,7 +2096,7 @@ public static partial class ChartRenderPlanner
         return new ChartSecondaryValueAxisPrimitivePlan(
             labels,
             ticks,
-            DefaultAxisTickStroke(),
+            DefaultAxisTickStroke(UsesImportedComboDefaults(chart) ? chart : null),
             title);
     }
 
@@ -3344,7 +3393,10 @@ public static partial class ChartRenderPlanner
                 ShouldSpanBlankSegments(chart),
                 automaticMarkerSymbol: ChartMarkerPrimitiveSymbol.Square,
                 automaticMarkerRadius: 5.0,
-                defaultSmoothLine: true));
+                defaultSmoothLine: true,
+                defaultLineThickness: UsesImportedComboDefaults(chart)
+                    ? ImportedLineSeriesStrokeThickness
+                    : null));
         }
 
         return primitives;
@@ -5478,12 +5530,14 @@ public static partial class ChartRenderPlanner
     ];
 
     private static ChartStrokePlan DefaultGridLineStroke(ChartShape? chart = null) =>
-        chart is not null && UsesClassicOfficeChartStyle(chart)
+        chart is not null &&
+        (UsesClassicOfficeChartStyle(chart) || UsesImportedComboDefaults(chart))
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.5)
             : new ChartStrokePlan(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
 
     private static ChartStrokePlan DefaultAxisTickStroke(ChartShape? chart = null) =>
-        chart is not null && UsesClassicOfficeChartStyle(chart)
+        chart is not null &&
+        (UsesClassicOfficeChartStyle(chart) || UsesImportedComboDefaults(chart))
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.75)
             : new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 0.75);
 

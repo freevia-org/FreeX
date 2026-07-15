@@ -38,6 +38,38 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartLabelsCorpus_ImportedComboUsesPowerPointOverlayAndLegendStyling()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[2].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+
+        scene.GridLines.Stroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0x00, 0x00, 0x00),
+            Alpha: 255,
+            Thickness: 0.5));
+        scene.AxisTicks.Stroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0x00, 0x00, 0x00),
+            Alpha: 255,
+            Thickness: 0.75));
+        scene.SecondaryAxis.TickStroke.Should().Be(scene.AxisTicks.Stroke);
+
+        var overlay = scene.ComboLineSeries.Should().ContainSingle().Subject;
+        overlay.Stroke.Thickness.Should().Be(ChartRenderPlanner.ImportedLineSeriesStrokeThickness);
+        scene.LegendItems.Should().HaveCount(3);
+        scene.LegendItems[0].SwatchBounds.Width.Should().Be(ChartRenderPlanner.ImportedComboLegendSwatchWidth);
+        scene.LegendItems[0].SwatchBounds.Height.Should().Be(ChartRenderPlanner.ImportedComboLegendSwatchHeight);
+        scene.LegendItems[1].SwatchBounds.Height.Should().Be(ChartRenderPlanner.ImportedComboLegendSwatchHeight);
+        scene.LegendItems[2].SwatchBounds.Width.Should().Be(ChartRenderPlanner.ImportedComboLegendSwatchWidth);
+        (scene.LegendItems[1].Label.Bounds.Y - scene.LegendItems[0].Label.Bounds.Y)
+            .Should().Be(ChartRenderPlanner.ImportedComboLegendLineHeight);
+    }
+
+    [Fact]
     public void ChartLabelsCorpus_PiePercentLabelsPreservePowerPointSeparatorAndAutomaticTitle()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
