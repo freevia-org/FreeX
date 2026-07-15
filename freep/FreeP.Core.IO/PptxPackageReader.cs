@@ -4960,21 +4960,38 @@ public static class PptxPackageReader
 
             var data = new TableStyleData { StyleId = styleId };
 
-            data.WholeTbl = ReadTableStyleEntry(styleEl.Element(A + "wholeTbl"), scheme);
-            data.FirstRow = ReadTableStyleEntry(styleEl.Element(A + "firstRow"), scheme);
-            data.LastRow  = ReadTableStyleEntry(styleEl.Element(A + "lastRow"),  scheme);
-            data.FirstCol = ReadTableStyleEntry(styleEl.Element(A + "firstCol"), scheme);
-            data.LastCol  = ReadTableStyleEntry(styleEl.Element(A + "lastCol"),  scheme);
-            data.Band1H   = ReadTableStyleEntry(styleEl.Element(A + "band1H"),   scheme);
-            data.Band2H   = ReadTableStyleEntry(styleEl.Element(A + "band2H"),   scheme);
-            data.Band1V   = ReadTableStyleEntry(styleEl.Element(A + "band1V"),   scheme);
-            data.Band2V   = ReadTableStyleEntry(styleEl.Element(A + "band2V"),   scheme);
+            data.WholeTbl = ReadTableStyleEntry(styleEl.Element(A + "wholeTbl"), scheme, styleId, TableStyleRegion.Whole);
+            data.FirstRow = ReadTableStyleEntry(styleEl.Element(A + "firstRow"), scheme, styleId, TableStyleRegion.FirstRow);
+            data.LastRow  = ReadTableStyleEntry(styleEl.Element(A + "lastRow"),  scheme, styleId, TableStyleRegion.LastRow);
+            data.FirstCol = ReadTableStyleEntry(styleEl.Element(A + "firstCol"), scheme, styleId, TableStyleRegion.FirstCol);
+            data.LastCol  = ReadTableStyleEntry(styleEl.Element(A + "lastCol"),  scheme, styleId, TableStyleRegion.LastCol);
+            data.Band1H   = ReadTableStyleEntry(styleEl.Element(A + "band1H"),   scheme, styleId, TableStyleRegion.Band1H);
+            data.Band2H   = ReadTableStyleEntry(styleEl.Element(A + "band2H"),   scheme, styleId, TableStyleRegion.Band2H);
+            data.Band1V   = ReadTableStyleEntry(styleEl.Element(A + "band1V"),   scheme, styleId, TableStyleRegion.Band1V);
+            data.Band2V   = ReadTableStyleEntry(styleEl.Element(A + "band2V"),   scheme, styleId, TableStyleRegion.Band2V);
 
             tableStyles[styleId] = data;
         }
     }
 
-    private static TableStyleEntry? ReadTableStyleEntry(XElement? regionEl, PresentationColorScheme scheme)
+    private enum TableStyleRegion
+    {
+        Whole,
+        FirstRow,
+        LastRow,
+        FirstCol,
+        LastCol,
+        Band1H,
+        Band2H,
+        Band1V,
+        Band2V
+    }
+
+    private static TableStyleEntry? ReadTableStyleEntry(
+        XElement? regionEl,
+        PresentationColorScheme scheme,
+        string styleId,
+        TableStyleRegion region)
     {
         if (regionEl is null) return null;
 
@@ -4991,6 +5008,8 @@ public static class PptxPackageReader
             var fillEl = tcStyle.Element(A + "fill");
             if (fillEl is not null)
                 fill = PptxColorReader.TryReadFill(fillEl, scheme);
+
+            fill = ApplyPowerPointBuiltInTableBandFillCompatibility(fill, scheme, styleId, region);
 
             // Border: use tcBdr/insideH and insideV for interior, or lnB for bottom etc.
             // Each side element (a:bottom etc.) wraps an a:ln child — pass the ln to TryReadOutline.
@@ -5026,6 +5045,43 @@ public static class PptxPackageReader
             return null;
 
         return new TableStyleEntry { Fill = fill, BorderOutline = border, TextColor = textColor };
+    }
+
+    private static ShapeFill? ApplyPowerPointBuiltInTableBandFillCompatibility(
+        ShapeFill? fill,
+        PresentationColorScheme scheme,
+        string styleId,
+        TableStyleRegion region)
+    {
+        const string mediumStyle2Accent1 = "{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}";
+        if (!styleId.Equals(mediumStyle2Accent1, StringComparison.OrdinalIgnoreCase)
+            || region is not (TableStyleRegion.Whole or TableStyleRegion.Band1H or TableStyleRegion.Band1V)
+            || fill is not ShapeFill.Solid solid
+            || solid.Color.SchemeColor is not { Slot: ThemeColorSlot.Accent1 } accent1)
+        {
+            return fill;
+        }
+
+        // PowerPoint keeps the built-in style's Accent 1 header, but renders its body
+        // bands from Dark 2 with half the authored tint. Keep this compatibility rule
+        // table-scoped so ordinary DrawingML tint consumers retain their existing meaning.
+        var bodyTint = Math.Clamp(accent1.Tint * 0.5, 0.0, 1.0);
+        var bodyRef = new SchemeColorRef
+        {
+            RoleName = "dk2",
+            Slot = ThemeColorSlot.Dk2,
+            LumMod = accent1.LumMod,
+            LumOff = accent1.LumOff,
+            Tint = bodyTint,
+            Shade = accent1.Shade
+        };
+        var resolved = ThemeColorTransform.Apply(
+            scheme[ThemeColorSlot.Dk2],
+            bodyRef.LumMod,
+            bodyRef.LumOff,
+            bodyRef.Tint,
+            bodyRef.Shade);
+        return new ShapeFill.Solid(new ThemeAwareColor(resolved, bodyRef, solid.Color.Alpha));
     }
 
     // ── 18A: picture crop + colour effects ───────────────────────────────────────────
