@@ -384,6 +384,17 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void GradientColorInterpolation_UsesLinearLightRatherThanDirectSrgbMidpoint()
+    {
+        var midpoint = GradientColorInterpolation.InterpolateLinearLight(
+            new SrgbColor(0xA0, 0xD0, 0xFF),
+            new SrgbColor(0xC0, 0x70, 0x00),
+            0.5);
+
+        midpoint.Should().Be(new SrgbColor(0xB1, 0xA8, 0xBA));
+    }
+
+    [Fact]
     public void BuildStockPrimitivePlan_ClassifiesOpenClosePriceMovesForSharedRendering()
     {
         var chart = MakeStockChart();

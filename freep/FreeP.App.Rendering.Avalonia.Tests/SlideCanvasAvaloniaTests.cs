@@ -1797,9 +1797,11 @@ public sealed class SlideCanvasAvaloniaTests
         var brush = pen.Brush.Should()
             .BeOfType<LinearGradientBrush>()
             .Subject;
-        brush.GradientStops.Select(stop => (stop.Offset, stop.Color)).Should().Equal(
-            (0.0, Color.FromRgb(0x10, 0x20, 0x30)),
-            (1.0, Color.FromRgb(0xD0, 0xE0, 0xF0)));
+        brush.GradientStops.Should().HaveCount(17);
+        brush.GradientStops.First().Should().Match<global::Avalonia.Media.GradientStop>(stop =>
+            stop.Offset == 0.0 && stop.Color == Color.FromRgb(0x10, 0x20, 0x30));
+        brush.GradientStops.Last().Should().Match<global::Avalonia.Media.GradientStop>(stop =>
+            stop.Offset == 1.0 && stop.Color == Color.FromRgb(0xD0, 0xE0, 0xF0));
         pen.DashStyle.Should().BeOfType<DashStyle>().Subject.Dashes.Should().Equal(8.0, 3.0);
     }
 

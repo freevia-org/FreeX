@@ -2340,8 +2340,23 @@ public sealed class SlideCanvas : FrameworkElement
     private static GradientStopCollection BuildGradientStops(ResolvedFill.Gradient g)
     {
         var stops = new GradientStopCollection();
-        foreach (var s in g.Stops)
-            stops.Add(new System.Windows.Media.GradientStop(Color.FromRgb(s.Color.R, s.Color.G, s.Color.B), s.Position));
+        for (int index = 0; index < g.Stops.Count; index++)
+        {
+            var start = g.Stops[index];
+            stops.Add(new System.Windows.Media.GradientStop(Color.FromRgb(start.Color.R, start.Color.G, start.Color.B), start.Position));
+            if (index == g.Stops.Count - 1)
+                continue;
+
+            var end = g.Stops[index + 1];
+            for (int step = 1; step < 16; step++)
+            {
+                double fraction = step / 16.0;
+                var color = GradientColorInterpolation.InterpolateLinearLight(start.Color, end.Color, fraction);
+                stops.Add(new System.Windows.Media.GradientStop(
+                    Color.FromRgb(color.R, color.G, color.B),
+                    start.Position + (end.Position - start.Position) * fraction));
+            }
+        }
         return stops;
     }
 

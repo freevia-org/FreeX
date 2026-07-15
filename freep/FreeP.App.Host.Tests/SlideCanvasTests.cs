@@ -328,9 +328,11 @@ public sealed class SlideCanvasTests
         var brush = pen.Brush.Should()
             .BeOfType<System.Windows.Media.LinearGradientBrush>()
             .Subject;
-        brush.GradientStops.Select(stop => (stop.Offset, stop.Color)).Should().Equal(
-            (0.0, System.Windows.Media.Color.FromRgb(0x10, 0x20, 0x30)),
-            (1.0, System.Windows.Media.Color.FromRgb(0xD0, 0xE0, 0xF0)));
+        brush.GradientStops.Should().HaveCount(17);
+        brush.GradientStops.First().Should().Match<System.Windows.Media.GradientStop>(stop =>
+            stop.Offset == 0.0 && stop.Color == System.Windows.Media.Color.FromRgb(0x10, 0x20, 0x30));
+        brush.GradientStops.Last().Should().Match<System.Windows.Media.GradientStop>(stop =>
+            stop.Offset == 1.0 && stop.Color == System.Windows.Media.Color.FromRgb(0xD0, 0xE0, 0xF0));
         pen.DashStyle.Dashes.Should().Equal(8.0, 3.0);
         pen.IsFrozen.Should().BeTrue();
     }
