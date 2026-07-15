@@ -11,20 +11,31 @@ public sealed class LocalizedResourceFacade
         string resourceBaseName,
         Assembly resourceAssembly,
         string sharedResourceBaseName = LocalizedResourceCatalogAttribute.DefaultSharedResourceBaseName,
-        Assembly? sharedResourceAssembly = null)
+        Assembly? sharedResourceAssembly = null,
+        string satelliteAssemblyName = "",
+        string sharedSatelliteAssemblyName = LocalizedResourceCatalogAttribute.DefaultSharedSatelliteAssemblyName)
         : this(
             new ResourceManager(resourceBaseName, resourceAssembly),
             new ResourceManager(
                 sharedResourceBaseName,
-                sharedResourceAssembly ?? typeof(LocalizedResourceFacade).Assembly))
+                sharedResourceAssembly ?? typeof(LocalizedResourceFacade).Assembly),
+            GetSharedFallbackCultureNames(
+                resourceAssembly,
+                satelliteAssemblyName,
+                sharedResourceAssembly ?? typeof(LocalizedResourceFacade).Assembly,
+                sharedSatelliteAssemblyName))
     {
     }
 
     public LocalizedResourceFacade(
         ResourceManager resourceManager,
-        ResourceManager? sharedResourceManager = null)
+        ResourceManager? sharedResourceManager = null,
+        IReadOnlySet<string>? sharedSatelliteCultureNames = null)
     {
-        _catalog = new LocalizedTextCatalog(resourceManager, sharedResourceManager);
+        _catalog = new LocalizedTextCatalog(
+            resourceManager,
+            sharedResourceManager,
+            sharedSatelliteCultureNames);
     }
 
     public string Get(string key) => _catalog.Get(key);
@@ -42,4 +53,24 @@ public sealed class LocalizedResourceFacade
         LocalizedTextCatalog.CreateAutomationName(textWithAccessKey);
 
     public string CreateMissingText(string key) => LocalizedTextCatalog.CreateMissingText(key);
+
+    private static IReadOnlySet<string> GetSharedFallbackCultureNames(
+        Assembly resourceAssembly,
+        string satelliteAssemblyName,
+        Assembly sharedResourceAssembly,
+        string sharedSatelliteAssemblyName)
+    {
+        satelliteAssemblyName = string.IsNullOrWhiteSpace(satelliteAssemblyName)
+            ? resourceAssembly.GetName().Name + ".resources.dll"
+            : satelliteAssemblyName;
+
+        return SatelliteCultureCatalog.GetSharedFallbackCultureNames(
+            GetAssemblyDirectory(resourceAssembly),
+            satelliteAssemblyName,
+            GetAssemblyDirectory(sharedResourceAssembly),
+            sharedSatelliteAssemblyName);
+    }
+
+    private static string GetAssemblyDirectory(Assembly assembly) =>
+        Path.GetDirectoryName(assembly.Location) ?? AppContext.BaseDirectory;
 }

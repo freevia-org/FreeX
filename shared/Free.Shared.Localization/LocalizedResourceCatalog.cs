@@ -14,10 +14,16 @@ public abstract class LocalizedResourceCatalog<TCatalog>
             CatalogDefinition.ResourceBaseName,
             typeof(TCatalog).Assembly,
             CatalogDefinition.SharedResourceBaseName,
-            typeof(LocalizedResourceFacade).Assembly);
+            typeof(LocalizedResourceFacade).Assembly,
+            CatalogDefinition.SatelliteAssemblyName,
+            CatalogDefinition.SharedSatelliteAssemblyName);
 
     internal static AppLanguageCatalogDefinition LanguageDefinition { get; } =
-        new(CatalogDefinition.SatelliteAssemblyName, Get, GetNeutral);
+        new(
+            CatalogDefinition.SatelliteAssemblyName,
+            CatalogDefinition.SharedSatelliteAssemblyName,
+            Get,
+            GetNeutral);
 
     protected LocalizedResourceCatalog()
     {

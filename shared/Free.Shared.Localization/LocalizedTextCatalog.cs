@@ -9,7 +9,8 @@ namespace Free.Shared.Localization;
 /// </summary>
 public sealed class LocalizedTextCatalog(
     ResourceManager resourceManager,
-    ResourceManager? sharedResourceManager = null)
+    ResourceManager? sharedResourceManager = null,
+    IReadOnlySet<string>? sharedSatelliteCultureNames = null)
 {
     public const string PseudoLocalizationCultureName = "qps-ploc";
 
@@ -17,6 +18,7 @@ public sealed class LocalizedTextCatalog(
         resourceManager ?? throw new ArgumentNullException(nameof(resourceManager));
 
     private readonly ResourceManager? _sharedResourceManager = sharedResourceManager;
+    private readonly IReadOnlySet<string>? _sharedSatelliteCultureNames = sharedSatelliteCultureNames;
 
     public string Get(string key)
     {
@@ -30,7 +32,7 @@ public sealed class LocalizedTextCatalog(
         }
 
         return _resourceManager.GetString(key, culture)
-            ?? _sharedResourceManager?.GetString(key, culture)
+            ?? GetSharedString(key, culture)
             ?? CreateMissingText(key);
     }
 
@@ -67,6 +69,18 @@ public sealed class LocalizedTextCatalog(
     private string? GetNeutralString(string key) =>
         _resourceManager.GetString(key, CultureInfo.InvariantCulture)
         ?? _sharedResourceManager?.GetString(key, CultureInfo.InvariantCulture);
+
+    private string? GetSharedString(string key, CultureInfo culture)
+    {
+        if (_sharedResourceManager is null)
+            return null;
+
+        var sharedCulture = _sharedSatelliteCultureNames is null ||
+            _sharedSatelliteCultureNames.Contains(culture.Name)
+                ? culture
+                : CultureInfo.InvariantCulture;
+        return _sharedResourceManager.GetString(key, sharedCulture);
+    }
 
     private static HashSet<string> GetResourceKeys(ResourceManager resourceManager)
     {

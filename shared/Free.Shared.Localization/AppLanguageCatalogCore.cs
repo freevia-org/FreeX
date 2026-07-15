@@ -6,19 +6,24 @@ public sealed class AppLanguageCatalogDefinition
 {
     public AppLanguageCatalogDefinition(
         string satelliteAssemblyName,
+        string sharedSatelliteAssemblyName,
         Func<string, string> getText,
         Func<string, string> getNeutralText)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(satelliteAssemblyName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(sharedSatelliteAssemblyName);
         ArgumentNullException.ThrowIfNull(getText);
         ArgumentNullException.ThrowIfNull(getNeutralText);
 
         SatelliteAssemblyName = satelliteAssemblyName;
+        SharedSatelliteAssemblyName = sharedSatelliteAssemblyName;
         GetText = getText;
         GetNeutralText = getNeutralText;
     }
 
     public string SatelliteAssemblyName { get; }
+
+    public string SharedSatelliteAssemblyName { get; }
 
     public Func<string, string> GetText { get; }
 
@@ -115,26 +120,13 @@ public static class AppLanguageCatalogCore
         string baseDirectory,
         AppLanguageCatalogDefinition definition)
     {
-        if (!Directory.Exists(baseDirectory))
-            return [];
+        var appCultures = SatelliteCultureCatalog.GetPackagedCultureNames(
+            baseDirectory,
+            definition.SatelliteAssemblyName);
+        var sharedCultures = SatelliteCultureCatalog.GetPackagedCultureNames(
+            baseDirectory,
+            definition.SharedSatelliteAssemblyName);
 
-        try
-        {
-            return Directory
-                .EnumerateDirectories(baseDirectory)
-                .Where(directory => File.Exists(Path.Combine(directory, definition.SatelliteAssemblyName)))
-                .Select(Path.GetFileName)
-                .Where(cultureName => !string.IsNullOrWhiteSpace(cultureName))
-                .Select(cultureName => cultureName!)
-                .ToArray();
-        }
-        catch (IOException)
-        {
-            return [];
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return [];
-        }
+        return appCultures.Intersect(sharedCultures, StringComparer.OrdinalIgnoreCase);
     }
 }

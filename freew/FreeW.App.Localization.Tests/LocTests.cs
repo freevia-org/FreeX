@@ -55,7 +55,7 @@ public sealed class LocTests
         WithUiCulture("en-US", () => Loc.Format("File_CommandFailedFormat", "Open", "Denied"))
             .Should().Be("Open failed: Denied");
         WithUiCulture("fr-FR", () => Loc.Get("Common_ConfirmTitle")).Should().Be("Confirmation");
-        WithUiCulture("de-DE", () => Loc.Get("Backstage_GreetingMorning")).Should().Be("Guten Morgen");
+        WithUiCulture("de-DE", () => Loc.Get("Backstage_GreetingMorning")).Should().Be("Good morning");
         WithUiCulture("en-US", () => Loc.Get("Shared_Catalog_Missing_Key"))
             .Should().Be("[[Shared_Catalog_Missing_Key]]");
 

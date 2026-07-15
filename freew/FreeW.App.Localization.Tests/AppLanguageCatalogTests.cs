@@ -43,7 +43,10 @@ public sealed class AppLanguageCatalogTests
             var satelliteDirectory = Path.Combine(baseDirectory, "fr-FR");
             Directory.CreateDirectory(satelliteDirectory);
             File.WriteAllText(Path.Combine(satelliteDirectory, "FreeW.App.Localization.resources.dll"), "");
-            Directory.CreateDirectory(Path.Combine(baseDirectory, "uk-UA"));
+            File.WriteAllText(Path.Combine(satelliteDirectory, "Free.Shared.Localization.resources.dll"), "");
+            var sharedOnlyDirectory = Path.Combine(baseDirectory, "uk-UA");
+            Directory.CreateDirectory(sharedOnlyDirectory);
+            File.WriteAllText(Path.Combine(sharedOnlyDirectory, "Free.Shared.Localization.resources.dll"), "");
 
             var options = AppLanguageCatalog.GetAvailableLanguages(baseDirectory);
 

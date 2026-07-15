@@ -2,4 +2,31 @@
   <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('.Tests'))">
     <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\*.cs" Link="%(Filename)%(Extension)" />
   </ItemGroup>
+
+  <Target Name="FilterFreeSharedLocalizationSatelliteResources"
+          BeforeTargets="_CopyFilesMarkedCopyLocal;CopyFilesToOutputDirectory"
+          Condition="'$(FreeSharedLocalizationProduct)' != ''">
+    <ItemGroup Condition="'$(FreeSharedLocalizationFilterAllSatellites)' == 'true'">
+      <_FreeSharedLocalizationUnsupportedSatellite Include="@(ReferenceCopyLocalPaths)"
+        Condition="'%(ReferenceCopyLocalPaths.Filename)' == 'Free.Shared.Localization.resources'" />
+      <ReferenceCopyLocalPaths Remove="@(_FreeSharedLocalizationUnsupportedSatellite)" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(FreeSharedLocalizationProduct)' == 'FreeW' Or '$(FreeSharedLocalizationProduct)' == 'FreeP'">
+      <_FreeSharedLocalizationSatellites Include="@(ReferenceCopyLocalPaths)"
+        Condition="'%(ReferenceCopyLocalPaths.Filename)' == 'Free.Shared.Localization.resources'" />
+      <_FreeSharedLocalizationSupported Include="@(_FreeSharedLocalizationSatellites)"
+        Condition="'%(_FreeSharedLocalizationSatellites.DestinationSubDirectory)' == 'fr-FR\'" />
+      <ReferenceCopyLocalPaths Remove="@(_FreeSharedLocalizationSatellites)" />
+      <ReferenceCopyLocalPaths Include="@(_FreeSharedLocalizationSupported)" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="RemoveFreeSharedLocalizationSatellitesForEnglishOnly"
+          AfterTargets="_CopyFilesMarkedCopyLocal"
+          Condition="'$(FreeSharedLocalizationFilterAllSatellites)' == 'true'">
+    <ItemGroup>
+      <_FreeSharedLocalizationEnglishOnlySatellite Include="$(TargetDir)**\Free.Shared.Localization.resources.dll" />
+    </ItemGroup>
+    <Delete Files="@(_FreeSharedLocalizationEnglishOnlySatellite)" />
+  </Target>
 </Project>

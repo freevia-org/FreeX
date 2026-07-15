@@ -24,6 +24,14 @@ internal static partial class ResxResourceTestSupport
     public static Dictionary<string, string> ReadResxValues(string resourceDirectory, string fileName) =>
         ReadResxValues(Path.Combine(resourceDirectory, fileName));
 
+    public static IReadOnlySet<string> FindSatelliteCultures(
+        string baseDirectory,
+        string satelliteAssemblyName) =>
+        Directory.EnumerateDirectories(baseDirectory)
+            .Where(directory => File.Exists(Path.Combine(directory, satelliteAssemblyName)))
+            .Select(directory => Path.GetFileName(directory)!)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>The set of <c>{…}</c> composite-format placeholder tokens present in <paramref name="value"/>.</summary>
     public static HashSet<string> CompositePlaceholderTokens(string value) =>
         CompositeFormatPlaceholderPattern().Matches(value)
