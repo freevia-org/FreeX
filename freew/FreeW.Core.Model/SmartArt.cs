@@ -10,11 +10,10 @@
 // nodes, no children); Hierarchy nests children. Size is kept in points to match the rest of the FreeW unit
 // model (the writer converts to EMU).
 //
-// SIMPLIFICATION (Y1 milestone): only the diagram DATA part (word/diagrams/dataN.xml â€” dgm:dataModel) is
-// authored with real content; it carries every node's text (dgm:pt/dgm:t) and the parentâ†’child structure
-// (dgm:cxnLst). The layout / quickStyle / colors parts are emitted near-empty-but-valid (stock list/process
-// ids). No dsp:drawing rendered-geometry extension is emitted, so Word re-runs auto-layout on open. The node
-// text + hierarchy in the data part is the round-trip requirement; the data part is what must survive.
+// SIMPLIFICATION (Y1 milestone): the diagram DATA part (word/diagrams/dataN.xml â€” dgm:dataModel) carries
+// every node's text and the parentâ†’child structure (dgm:cxnLst). The layout / quickStyle / colors parts are
+// emitted near-empty-but-valid (stock list/process ids), while the writer also emits a cached dsp:drawing
+// geometry part so compatible viewers can display positioned shapes without recomputing the diagram.
 
 /// <summary>
 /// The kind of a <see cref="SmartArt"/> diagram. Determines which stock layout id the writer references and
