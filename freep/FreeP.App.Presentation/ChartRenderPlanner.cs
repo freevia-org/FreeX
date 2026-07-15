@@ -2582,12 +2582,15 @@ public static partial class ChartRenderPlanner
             .ThenBy(point => point.CategoryIndex)
             .ToArray();
 
-        var wireframe = BuildSurfaceWireframeSegments(pointsByKey, seriesCount, categoryCount);
+        var renderPointsByKey = UsesImportedTextMetrics(chart) && chart.ChartType == ChartType.Surface3D
+            ? AddImportedSurfaceBlankPointFallbacks(pointsByKey, seriesCount, categoryCount)
+            : pointsByKey;
+        var wireframe = BuildSurfaceWireframeSegments(renderPointsByKey, seriesCount, categoryCount);
         var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
         var renderFacets = chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
             ? BuildSurfaceFacetPrimitives(
                 chart,
-                pointsByKey,
+                renderPointsByKey,
                 seriesCount,
                 categoryCount,
                 seriesColors,
@@ -2604,6 +2607,63 @@ public static partial class ChartRenderPlanner
             FrameSegments = frameSegments
         };
     }
+
+    private static IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive>
+        AddImportedSurfaceBlankPointFallbacks(
+            IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
+            int seriesCount,
+            int categoryCount)
+    {
+        var renderPoints = new Dictionary<(int Series, int Category), ChartSurfacePointPrimitive>(points);
+        for (int seriesIndex = 0; seriesIndex < seriesCount; seriesIndex++)
+        {
+            for (int categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+            {
+                var key = (seriesIndex, categoryIndex);
+                if (renderPoints.ContainsKey(key))
+                    continue;
+
+                if (categoryIndex > 0 && categoryIndex < categoryCount - 1 &&
+                    renderPoints.TryGetValue((seriesIndex, categoryIndex - 1), out var previousCategory) &&
+                    renderPoints.TryGetValue((seriesIndex, categoryIndex + 1), out var nextCategory))
+                {
+                    renderPoints[key] = InterpolateSurfacePoint(
+                        previousCategory,
+                        nextCategory,
+                        seriesIndex,
+                        categoryIndex);
+                    continue;
+                }
+
+                if (seriesIndex > 0 && seriesIndex < seriesCount - 1 &&
+                    renderPoints.TryGetValue((seriesIndex - 1, categoryIndex), out var previousSeries) &&
+                    renderPoints.TryGetValue((seriesIndex + 1, categoryIndex), out var nextSeries))
+                {
+                    renderPoints[key] = InterpolateSurfacePoint(
+                        previousSeries,
+                        nextSeries,
+                        seriesIndex,
+                        categoryIndex);
+                }
+            }
+        }
+
+        return renderPoints;
+    }
+
+    private static ChartSurfacePointPrimitive InterpolateSurfacePoint(
+        ChartSurfacePointPrimitive first,
+        ChartSurfacePointPrimitive second,
+        int seriesIndex,
+        int categoryIndex) =>
+        new(
+            seriesIndex,
+            categoryIndex,
+            new ChartPlanPoint(
+                (first.Point.X + second.Point.X) / 2.0,
+                (first.Point.Y + second.Point.Y) / 2.0),
+            (first.Value + second.Value) / 2.0,
+            (first.NormalizedValue + second.NormalizedValue) / 2.0);
 
     private static ChartSurfaceGeometryPlan EmptySurfaceGeometryPlan(
         IReadOnlyList<ChartSurfaceCellPrimitive> cells) =>
@@ -2855,16 +2915,14 @@ public static partial class ChartRenderPlanner
     private static SrgbColor ResolveSurfaceVaryColor(double normalized)
     {
         normalized = Math.Clamp(normalized, 0, 1);
-        double position = normalized * (SurfaceVaryColors.Length - 1);
-        int lowerIndex = (int)Math.Floor(position);
-        int upperIndex = Math.Min(lowerIndex + 1, SurfaceVaryColors.Length - 1);
-        double fraction = position - lowerIndex;
-        var lower = SurfaceVaryColors[lowerIndex];
-        var upper = SurfaceVaryColors[upperIndex];
-        return new SrgbColor(
-            (byte)Math.Round(lower.R + (upper.R - lower.R) * fraction),
-            (byte)Math.Round(lower.G + (upper.G - lower.G) * fraction),
-            (byte)Math.Round(lower.B + (upper.B - lower.B) * fraction));
+        // PowerPoint's imported Surface3D vary-colors mode assigns a discrete
+        // theme band to each visible facet. Interpolating between the bands
+        // produces muted colors that do not match the opaque blue/orange/green/
+        // yellow faces in the authored chart.
+        int colorIndex = (int)Math.Round(
+            normalized * (SurfaceVaryColors.Length - 1),
+            MidpointRounding.AwayFromZero);
+        return SurfaceVaryColors[Math.Clamp(colorIndex, 0, SurfaceVaryColors.Length - 1)];
     }
 
     private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceContourSegments(

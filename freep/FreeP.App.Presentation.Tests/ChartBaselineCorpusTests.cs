@@ -178,8 +178,8 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.ContourSegments.Should().NotBeEmpty();
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 3).Should().Be(2);
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 4).Should().Be(2);
-        surfaceGeometry.RenderFacets.Should().HaveCount(6,
-            "imported PowerPoint Surface3D cells render as two visible triangles when complete");
+        surfaceGeometry.RenderFacets.Should().HaveCount(8,
+            "imported PowerPoint Surface3D cells render a continuous triangulated surface, including blank-cell fallbacks");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255,
             "PowerPoint's imported Surface3D facets are opaque fills");
