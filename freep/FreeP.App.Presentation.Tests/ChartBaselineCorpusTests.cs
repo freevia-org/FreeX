@@ -178,8 +178,8 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.ContourSegments.Should().NotBeEmpty();
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 3).Should().Be(2);
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 4).Should().Be(2);
-        surfaceGeometry.RenderFacets.Should().HaveCount(6,
-            "imported PowerPoint Surface3D cells render as two visible triangles when complete");
+        surfaceGeometry.RenderFacets.Should().HaveCount(8,
+            "imported PowerPoint Surface3D cells render a continuous triangulated surface, including blank-cell fallbacks");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255,
             "PowerPoint's imported Surface3D facets are opaque fills");
@@ -325,6 +325,31 @@ public sealed class ChartBaselineCorpusTests
         ChartRenderPlanner.BuildFramePlan(pie, new ChartPlanRect(0, 0, 480, 288)).Plot
             .Should().Be(new ChartPlanRect(24, 20, 382.4, 285),
                 "PowerPoint gives an imported automatic-title pie a larger lower plot frame");
+    }
+
+    [Fact]
+    public void ChartsCorpusDeck_LineMarkersUsePowerPointDefaultMarkerPaletteAndStrokeWeight()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "06-charts.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var line = presentation.Slides[1].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        line.ChartType.Should().Be(ChartType.LineMarkers);
+        line.Series.Should().HaveCount(2);
+        line.Series.Select(series => series.MarkerStyle).Should().OnlyContain(style => style == null);
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(line).Should().Be((0, 120, 20));
+
+        var scene = ChartRenderPlanner.BuildScenePlan(line, new ChartPlanRect(0, 0, 960, 540));
+        scene.LineSeries.Should().HaveCount(2);
+        scene.LineSeries[0].Stroke.Thickness.Should().Be(ChartRenderPlanner.ImportedLineSeriesStrokeThickness);
+        scene.LineSeries[1].Stroke.Thickness.Should().Be(ChartRenderPlanner.ImportedLineSeriesStrokeThickness);
+        scene.LineSeries[0].Markers.Select(marker => marker.Symbol)
+            .Should().OnlyContain(symbol => symbol == ChartMarkerPrimitiveSymbol.Diamond);
+        scene.LineSeries[1].Markers.Select(marker => marker.Symbol)
+            .Should().OnlyContain(symbol => symbol == ChartMarkerPrimitiveSymbol.Square);
+        scene.LineSeries.SelectMany(series => series.Markers)
+            .Select(marker => marker.Radius)
+            .Should().OnlyContain(radius => radius == ChartRenderPlanner.ImportedLineMarkerRadius);
     }
 
     [Fact]
