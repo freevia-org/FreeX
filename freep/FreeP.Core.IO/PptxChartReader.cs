@@ -46,7 +46,11 @@ internal static class PptxChartReader
         if (chartEl is null) return null;
 
         var shape = new ChartShape();
-        shape.TextStyle = ReadChartTextStyle(chartSpace.Element(C + "txPr"), scheme);
+        // PowerPoint uses an 18pt default for chart-owned text when c:txPr is
+        // absent. Make that inherited default explicit so re-imported FreeP
+        // charts and externally authored charts share the same render metrics.
+        shape.TextStyle = ReadChartTextStyle(chartSpace.Element(C + "txPr"), scheme)
+            ?? new ChartTextStyle { FontSizePt = 18.0 };
 
         // Title
         shape.Title = ReadTitle(chartEl.Element(C + "title"));
@@ -101,8 +105,13 @@ internal static class PptxChartReader
             var axId = ParseInt(axEl.Element(C + "axId")?.Attribute("val")?.Value);
             valAxIds.Add(axId);
         }
+        // Scatter and bubble charts always use two value axes: one for X and one
+        // for Y. They are not a primary/secondary pair, so do not reclassify all
+        // of their series onto a nonexistent secondary value axis.
+        bool hasIndependentXAndYAxis = shape.ChartType is ChartType.Scatter or ChartType.Bubble;
+
         // If we have 2+ valAx elements, the second one is the secondary axis.
-        if (valAxIds.Count >= 2)
+        if (!hasIndependentXAndYAxis && valAxIds.Count >= 2)
         {
             int secondaryAxId = valAxIds[1]; // second valAx is secondary
 

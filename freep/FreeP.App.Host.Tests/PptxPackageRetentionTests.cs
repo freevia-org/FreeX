@@ -1135,6 +1135,8 @@ public sealed class PptxPackageRetentionTests
         scatterChart.ChartType.Should().Be(ChartType.Scatter);
         scatterChart.RegenerateWorkbookOnSave.Should().BeFalse();
         scatterChart.Series.Should().HaveCount(1);
+        scatterChart.Series.Should().OnlyContain(series => !series.OnSecondaryAxis,
+            "scatter uses independent X and Y value axes rather than a secondary series axis");
         scatterChart.Series[0].FormulaReferences.SeriesName.Should().Be("'Scatter Source'!$B$1");
         scatterChart.Series[0].FormulaReferences.XValues.Should().Be("'Scatter Source'!$A$2:$A$4");
         scatterChart.Series[0].FormulaReferences.YValues.Should().Be("'Scatter Source'!Scatter_Y");
@@ -1143,6 +1145,8 @@ public sealed class PptxPackageRetentionTests
         bubbleChart.ChartType.Should().Be(ChartType.Bubble);
         bubbleChart.RegenerateWorkbookOnSave.Should().BeFalse();
         bubbleChart.Series.Should().HaveCount(1);
+        bubbleChart.Series.Should().OnlyContain(series => !series.OnSecondaryAxis,
+            "bubble uses independent X and Y value axes rather than a secondary series axis");
         bubbleChart.Series[0].FormulaReferences.SeriesName.Should().Be("'Bubble Source'!$B$1");
         bubbleChart.Series[0].FormulaReferences.XValues.Should().Be("'Bubble Source'!$A$2:$A$4");
         bubbleChart.Series[0].FormulaReferences.YValues.Should().Be("'Bubble Source'!Bubble_Y");

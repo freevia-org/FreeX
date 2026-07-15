@@ -56,9 +56,19 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.Facets.Should().OnlyContain(facet => facet.Points.Count == 4);
 
         var scatter = charts.Single(chart => chart.ChartType == ChartType.Scatter);
+        scatter.Series.Should().OnlyContain(series => !series.OnSecondaryAxis,
+            "scatter uses two independent value axes for X and Y, not a secondary series axis");
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(scatter)
+            .Should().Be((0, 50, 10));
+        var scatterColors = new[]
+        {
+            new SrgbColor(0x44, 0x72, 0xC4),
+            new SrgbColor(0xED, 0x7D, 0x31),
+        };
         var scatterPlan = ChartRenderPlanner.BuildScatterPrimitivePlan(
             scatter,
-            new ChartPlanRect(0, 0, 360, 220));
+            new ChartPlanRect(0, 0, 360, 220),
+            scatterColors);
         scatterPlan.Series[0].IsSmoothed.Should().BeTrue();
         scatterPlan.Series[0].LinePaths.Single().Segments
             .Should()
@@ -67,8 +77,16 @@ public sealed class ChartBaselineCorpusTests
         scatterPlan.Series[1].LinePaths.Single().Segments
             .Should()
             .OnlyContain(segment => segment.Kind == ChartLinePathSegmentKind.Line);
+        scatterPlan.Series[1].LinePaths.Single().Stroke.Color.Should().Be(scatterColors[1]);
+        scatterPlan.Series[1].Markers.Select(marker => marker.Fill!.Value.Color)
+            .Should().OnlyContain(color => color == scatterColors[1]);
 
         var stacked = charts.Single(chart => chart.ChartType == ChartType.ColumnStacked100);
+        var textStyles = charts.Select(chart => chart.TextStyle).ToArray();
+        textStyles.Should().NotContainNulls();
+        textStyles.Cast<ChartTextStyle>().Select(style => style.FontSizePt)
+            .Should().OnlyContain(fontSize => fontSize == 18.0,
+                "PowerPoint supplies an 18pt default c:txPr when a chart has no explicit text properties");
         ChartRenderPlanner.ComputePrimaryValueAxisRange(stacked)
             .Should()
             .Be((0, 1, 0.25));

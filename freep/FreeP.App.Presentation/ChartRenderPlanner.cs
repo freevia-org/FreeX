@@ -566,8 +566,9 @@ public static partial class ChartRenderPlanner
         if (series.LineStyle?.NoFill == true)
             return null;
 
+        // The compositor resolves series fills against the live theme. Prefer that
+        // palette over the import-time sRGB fallback stored with a scheme color.
         var color = series.LineStyle?.Color?.Resolved
-            ?? series.FillColor?.Resolved
             ?? ResolveSeriesColor(seriesIndex, seriesColors);
         var thickness = PointsToDip(series.LineStyle?.WidthPt) ?? defaultThickness;
         var dash = series.LineStyle?.Dash ?? OutlineDash.Solid;
@@ -628,10 +629,14 @@ public static partial class ChartRenderPlanner
             : (SrgbColor?)null;
         var color = markerStyle?.FillColor?.Resolved
             ?? pointStyleColor
-            ?? pointColorOverride
-            ?? series.FillColor?.Resolved
-            ?? ResolveSeriesColor(seriesIndex, seriesColors);
-        return new ChartFillPlan(color, defaultAlpha);
+            ?? pointColorOverride;
+        if (color.HasValue)
+            return new ChartFillPlan(color.Value, defaultAlpha);
+
+        if (fillPlans?.TryGetSeriesFill(seriesIndex, defaultAlpha, out var seriesFill) == true)
+            return seriesFill;
+
+        return new ChartFillPlan(ResolveSeriesColor(seriesIndex, seriesColors), defaultAlpha);
     }
 
     private static ChartFillPlan ResolvePointFill(
