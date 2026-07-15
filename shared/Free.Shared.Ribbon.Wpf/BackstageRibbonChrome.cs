@@ -12,7 +12,7 @@ namespace Free.Shared.Ribbon.Wpf;
 public static class BackstageRibbonChrome
 {
     public static BackstageFrameChrome Create() => new(
-        new Uri("/Free.Shared.Ribbon.Wpf;component/SharedChromeResources.xaml", UriKind.Relative),
+        new Uri("/Free.Shared.Shell.Wpf;component/BackstageChromeResources.xaml", UriKind.Relative),
         CreateIcon,
         RibbonTooltip.SetKeyTip,
         RibbonTooltip.SetTitle,

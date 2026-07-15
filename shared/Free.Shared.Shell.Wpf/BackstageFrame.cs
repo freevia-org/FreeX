@@ -132,7 +132,7 @@ public sealed class BackstageEntry
 /// pane entry's element. Action entries fire their callback and close the frame.
 ///
 /// The frame owns: sidebar styling (reuses <c>BackstageSidebarNavButton*</c> from
-/// <c>SharedChromeResources.xaml</c>), <see cref="Show"/>/<see cref="Hide"/>, back-arrow + Esc to close,
+/// <c>BackstageChromeResources.xaml</c>), <see cref="Show"/>/<see cref="Hide"/>, back-arrow + Esc to close,
 /// and the accent colours (re-tintable per app). It reimplements no file IO — every action routes back
 /// into a host callback. Dependency-light: WPF + Free.Shared.Ribbon only.
 /// </summary>
