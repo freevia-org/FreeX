@@ -12,24 +12,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Common_Cancel" xml:space="preserve">
-    <value>_Отказ</value>
-  </data>
-  <data name="Common_ConfirmTitle" xml:space="preserve">
-    <value>Потвърждение</value>
-  </data>
-  <data name="Common_ErrorTitle" xml:space="preserve">
-    <value>Грешка</value>
-  </data>
-  <data name="Common_InformationTitle" xml:space="preserve">
-    <value>Информация</value>
-  </data>
-  <data name="Common_Ok" xml:space="preserve">
-    <value>_ОК</value>
-  </data>
-  <data name="Common_WarningTitle" xml:space="preserve">
-    <value>Предупреждение</value>
-  </data>
   <data name="Common_NoneParenthetical" xml:space="preserve">
     <value>(няма)</value>
   </data>
@@ -1861,15 +1843,6 @@
   <data name="AutoFilter_SortDescending" xml:space="preserve">
     <value>Сортиране от Я до А</value>
   </data>
-  <data name="Backstage_GreetingAfternoon" xml:space="preserve">
-    <value>добър ден</value>
-  </data>
-  <data name="Backstage_GreetingEvening" xml:space="preserve">
-    <value>Добър вечер</value>
-  </data>
-  <data name="Backstage_GreetingMorning" xml:space="preserve">
-    <value>добро утро</value>
-  </data>
   <data name="Backstage_Info_MultipleIssuesFound" xml:space="preserve">
     <value>Открити са проблеми с {0}</value>
   </data>
@@ -1897,38 +1870,11 @@
   <data name="Backstage_Info_OneIssueFound" xml:space="preserve">
     <value>Намерен е 1 проблем</value>
   </data>
-  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve">
-    <value>МММ d</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve">
-    <value>d MMM, yyyy</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve">
-    <value>Току-що</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve">
-    <value>ч:мм тт</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve">
-    <value>Днес в {0}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve">
-    <value>{0} при {1}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve">
-    <value>Вчера в {0}</value>
-  </data>
-  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve">
-    <value>Отворете {0}</value>
-  </data>
   <data name="Backstage_Recent_OpenPinnedFileAutomationName" xml:space="preserve">
     <value>Отворете фиксирания файл {0}</value>
   </data>
   <data name="Backstage_Recent_OpenRecentFileAutomationName" xml:space="preserve">
     <value>Отворете скорошен файл {0}</value>
-  </data>
-  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve">
-    <value>Пин {0}</value>
   </data>
   <data name="Backstage_Recent_PinHelpText" xml:space="preserve">
     <value>Съхранявайте тази работна книга в списъка с фиксирани файлове.</value>
@@ -1938,9 +1884,6 @@
   </data>
   <data name="Backstage_Recent_RemoveAutomationName" xml:space="preserve">
     <value>Премахнете {0} от последните файлове</value>
-  </data>
-  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve">
-    <value>Откачете {0}</value>
   </data>
   <data name="Backstage_Recent_UnpinHelpText" xml:space="preserve">
     <value>Премахнете тази работна книга от списъка с фиксирани файлове.</value>
@@ -8637,9 +8580,6 @@
   </data>
   <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
     <value>Използване на системния език</value>
-  </data>
-  <data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">
-    <value>Английски (САЩ)</value>
   </data>
   <data name="Options_AppLanguageRestartNotice" xml:space="preserve">
     <value>Някои отворени прозорци може да запазят текущия си език, докато не рестартирате FreeX.</value>

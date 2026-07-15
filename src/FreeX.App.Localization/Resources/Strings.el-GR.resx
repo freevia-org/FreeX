@@ -12,24 +12,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Common_Cancel" xml:space="preserve">
-    <value>_Άκυρο</value>
-  </data>
-  <data name="Common_ConfirmTitle" xml:space="preserve">
-    <value>Επιβεβαίωση</value>
-  </data>
-  <data name="Common_ErrorTitle" xml:space="preserve">
-    <value>Σφάλμα</value>
-  </data>
-  <data name="Common_InformationTitle" xml:space="preserve">
-    <value>Πληροφορίες</value>
-  </data>
-  <data name="Common_Ok" xml:space="preserve">
-    <value>_OK</value>
-  </data>
-  <data name="Common_WarningTitle" xml:space="preserve">
-    <value>Προειδοποίηση</value>
-  </data>
   <data name="Common_NoneParenthetical" xml:space="preserve">
     <value>(κανένα)</value>
   </data>
@@ -1861,15 +1843,6 @@
   <data name="AutoFilter_SortDescending" xml:space="preserve">
     <value>Ταξινόμηση Ζ σε Α</value>
   </data>
-  <data name="Backstage_GreetingAfternoon" xml:space="preserve">
-    <value>Καλησπέρα</value>
-  </data>
-  <data name="Backstage_GreetingEvening" xml:space="preserve">
-    <value>καλησπέρα</value>
-  </data>
-  <data name="Backstage_GreetingMorning" xml:space="preserve">
-    <value>Καλημέρα</value>
-  </data>
   <data name="Backstage_Info_MultipleIssuesFound" xml:space="preserve">
     <value>Βρέθηκαν ζητήματα {0}</value>
   </data>
@@ -1897,38 +1870,11 @@
   <data name="Backstage_Info_OneIssueFound" xml:space="preserve">
     <value>Βρέθηκε 1 θέμα</value>
   </data>
-  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve">
-    <value>MMM d</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve">
-    <value>ΜΜΜ η, εεεε</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve">
-    <value>Μόλις τώρα</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve">
-    <value>h:mm tt</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve">
-    <value>Σήμερα στο {0}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve">
-    <value>{0} στο {1}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve">
-    <value>Χθες στο {0}</value>
-  </data>
-  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve">
-    <value>Ανοίξτε το {0}</value>
-  </data>
   <data name="Backstage_Recent_OpenPinnedFileAutomationName" xml:space="preserve">
     <value>Ανοίξτε το καρφιτσωμένο αρχείο {0}</value>
   </data>
   <data name="Backstage_Recent_OpenRecentFileAutomationName" xml:space="preserve">
     <value>Ανοίξτε το πρόσφατο αρχείο {0}</value>
-  </data>
-  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve">
-    <value>Καρφίτσωμα {0}</value>
   </data>
   <data name="Backstage_Recent_PinHelpText" xml:space="preserve">
     <value>Διατηρήστε αυτό το βιβλίο εργασίας στη λίστα καρφιτσωμένων αρχείων.</value>
@@ -1938,9 +1884,6 @@
   </data>
   <data name="Backstage_Recent_RemoveAutomationName" xml:space="preserve">
     <value>Καταργήστε το {0} από πρόσφατα αρχεία</value>
-  </data>
-  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve">
-    <value>Ξεκαρφιτσώστε το {0}</value>
   </data>
   <data name="Backstage_Recent_UnpinHelpText" xml:space="preserve">
     <value>Καταργήστε αυτό το βιβλίο εργασίας από τη λίστα καρφιτσωμένων αρχείων.</value>
@@ -9080,10 +9023,6 @@ ZX
 
 <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
     <value>Χρήση προεπιλογής συστήματος</value>
-  </data>
-
-<data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">
-    <value>Αγγλικά (Ηνωμένες Πολιτείες)</value>
   </data>
 
 <data name="Options_AppLanguageRestartNotice" xml:space="preserve">

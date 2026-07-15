@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Backstage_GreetingAfternoon" xml:space="preserve"><value>dobar dan</value></data>
+  <data name="Backstage_GreetingEvening" xml:space="preserve"><value>dobro veče</value></data>
+  <data name="Backstage_GreetingMorning" xml:space="preserve"><value>dobro jutro</value></data>
+  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve"><value>d. MMM</value></data>
+  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve"><value>d. MMM yyyy</value></data>
+  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve"><value>Upravo sada</value></data>
+  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve"><value>HH:mm</value></data>
+  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve"><value>Danas u {0}</value></data>
+  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve"><value>{0} u {1}</value></data>
+  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve"><value>Juče u {0}</value></data>
+  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve"><value>Otvorite {0}</value></data>
+  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve"><value>Pin {0}</value></data>
+  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve"><value>Otkači {0}</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>_Otkaži</value></data>
+  <data name="Common_ConfirmTitle" xml:space="preserve"><value>Potvrda</value></data>
+  <data name="Common_ErrorTitle" xml:space="preserve"><value>Greška</value></data>
+  <data name="Common_InformationTitle" xml:space="preserve"><value>Informacije</value></data>
+  <data name="Common_Ok" xml:space="preserve"><value>_U redu</value></data>
+  <data name="Common_WarningTitle" xml:space="preserve"><value>Upozorenje</value></data>
+  <data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve"><value>Engleski (Sjedinjene Američke Države)</value></data>
+</root>

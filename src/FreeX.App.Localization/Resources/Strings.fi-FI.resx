@@ -12,24 +12,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Common_Cancel" xml:space="preserve">
-    <value>_Peruuta</value>
-  </data>
-  <data name="Common_ConfirmTitle" xml:space="preserve">
-    <value>Vahvista</value>
-  </data>
-  <data name="Common_ErrorTitle" xml:space="preserve">
-    <value>Virhe</value>
-  </data>
-  <data name="Common_InformationTitle" xml:space="preserve">
-    <value>Tiedot</value>
-  </data>
-  <data name="Common_Ok" xml:space="preserve">
-    <value>_OK</value>
-  </data>
-  <data name="Common_WarningTitle" xml:space="preserve">
-    <value>Varoitus</value>
-  </data>
   <data name="Common_NoneParenthetical" xml:space="preserve">
     <value>(ei mitään)</value>
   </data>
@@ -1861,15 +1843,6 @@ Käytä Näytä laskentavaiheet jäljittääksesi kaavan, Ohita virhe estääkse
   <data name="AutoFilter_SortDescending" xml:space="preserve">
     <value>Lajittele Ö-A</value>
   </data>
-  <data name="Backstage_GreetingAfternoon" xml:space="preserve">
-    <value>Hyvää iltapäivää</value>
-  </data>
-  <data name="Backstage_GreetingEvening" xml:space="preserve">
-    <value>Hyvää iltaa</value>
-  </data>
-  <data name="Backstage_GreetingMorning" xml:space="preserve">
-    <value>Hyvää huomenta</value>
-  </data>
   <data name="Backstage_Info_MultipleIssuesFound" xml:space="preserve">
     <value>{0} ongelmaa löydetty</value>
   </data>
@@ -1897,38 +1870,11 @@ Käytä Näytä laskentavaiheet jäljittääksesi kaavan, Ohita virhe estääkse
   <data name="Backstage_Info_OneIssueFound" xml:space="preserve">
     <value>1 ongelma löydetty</value>
   </data>
-  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve">
-    <value>MMM d</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve">
-    <value>MM d, yyyy</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve">
-    <value>Juuri nyt</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve">
-    <value>h:mm tt</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve">
-    <value>Tänään klo {0}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve">
-    <value>{0} klo {1}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve">
-    <value>Eilen klo {0}</value>
-  </data>
-  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve">
-    <value>Avaa {0}</value>
-  </data>
   <data name="Backstage_Recent_OpenPinnedFileAutomationName" xml:space="preserve">
     <value>Avaa kiinnitetty tiedosto {0}</value>
   </data>
   <data name="Backstage_Recent_OpenRecentFileAutomationName" xml:space="preserve">
     <value>Avaa viimeisin tiedosto {0}</value>
-  </data>
-  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve">
-    <value>Kiinnitä {0}</value>
   </data>
   <data name="Backstage_Recent_PinHelpText" xml:space="preserve">
     <value>Säilytä tämä työkirja kiinnitettyjen tiedostojen luettelossa.</value>
@@ -1938,9 +1884,6 @@ Käytä Näytä laskentavaiheet jäljittääksesi kaavan, Ohita virhe estääkse
   </data>
   <data name="Backstage_Recent_RemoveAutomationName" xml:space="preserve">
     <value>Poista {0} viimeaikaisista tiedostoista</value>
-  </data>
-  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve">
-    <value>Irrota {0}</value>
   </data>
   <data name="Backstage_Recent_UnpinHelpText" xml:space="preserve">
     <value>Poista tämä työkirja kiinnitettyjen tiedostojen luettelosta.</value>
@@ -9080,10 +9023,6 @@ Lähetetäänkö tämän testausversion kaatumisraportit?</value>
 
 <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
     <value>Käytä järjestelmän oletusarvoa</value>
-  </data>
-
-<data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">
-    <value>englanti (Yhdysvallat)</value>
   </data>
 
 <data name="Options_AppLanguageRestartNotice" xml:space="preserve">

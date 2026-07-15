@@ -12,24 +12,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Common_Cancel" xml:space="preserve">
-    <value>_Anuluj</value>
-  </data>
-  <data name="Common_ConfirmTitle" xml:space="preserve">
-    <value>Potwierdzenie</value>
-  </data>
-  <data name="Common_ErrorTitle" xml:space="preserve">
-    <value>Błąd</value>
-  </data>
-  <data name="Common_InformationTitle" xml:space="preserve">
-    <value>Informacja</value>
-  </data>
-  <data name="Common_Ok" xml:space="preserve">
-    <value>_OK</value>
-  </data>
-  <data name="Common_WarningTitle" xml:space="preserve">
-    <value>Ostrzeżenie</value>
-  </data>
   <data name="Common_NoneParenthetical" xml:space="preserve">
     <value>(brak)</value>
   </data>
@@ -1861,15 +1843,6 @@ Użyj opcji Pokaż kroki obliczeń, aby prześledzić formułę, Ignoruj błąd,
   <data name="AutoFilter_SortDescending" xml:space="preserve">
     <value>Sortuj Z do A</value>
   </data>
-  <data name="Backstage_GreetingAfternoon" xml:space="preserve">
-    <value>Dzień dobry</value>
-  </data>
-  <data name="Backstage_GreetingEvening" xml:space="preserve">
-    <value>Dobry wieczór</value>
-  </data>
-  <data name="Backstage_GreetingMorning" xml:space="preserve">
-    <value>Dzień dobry</value>
-  </data>
   <data name="Backstage_Info_MultipleIssuesFound" xml:space="preserve">
     <value>{0} Znaleziono problemy</value>
   </data>
@@ -1897,38 +1870,11 @@ Użyj opcji Pokaż kroki obliczeń, aby prześledzić formułę, Ignoruj błąd,
   <data name="Backstage_Info_OneIssueFound" xml:space="preserve">
     <value>Znaleziono 1 problem</value>
   </data>
-  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve">
-    <value>MMM re</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve">
-    <value>MMM d, rrrr</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve">
-    <value>Właśnie teraz</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve">
-    <value>h:mm tt</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve">
-    <value>Dzisiaj o {0}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve">
-    <value>{0} o {1}</value>
-  </data>
-  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve">
-    <value>Wczoraj o {0}</value>
-  </data>
-  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve">
-    <value>Otwórz {0}</value>
-  </data>
   <data name="Backstage_Recent_OpenPinnedFileAutomationName" xml:space="preserve">
     <value>Otwórz przypięty plik {0}</value>
   </data>
   <data name="Backstage_Recent_OpenRecentFileAutomationName" xml:space="preserve">
     <value>Otwórz ostatni plik {0}</value>
-  </data>
-  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve">
-    <value>Kołek {0}</value>
   </data>
   <data name="Backstage_Recent_PinHelpText" xml:space="preserve">
     <value>Zachowaj ten skoroszyt na liście przypiętych plików.</value>
@@ -1938,9 +1884,6 @@ Użyj opcji Pokaż kroki obliczeń, aby prześledzić formułę, Ignoruj błąd,
   </data>
   <data name="Backstage_Recent_RemoveAutomationName" xml:space="preserve">
     <value>Usuń {0} z ostatnich plików</value>
-  </data>
-  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve">
-    <value>Odepnij {0}</value>
   </data>
   <data name="Backstage_Recent_UnpinHelpText" xml:space="preserve">
     <value>Usuń ten skoroszyt z listy przypiętych plików.</value>
@@ -9080,10 +9023,6 @@ Wysłać raporty o awariach dla tej wersji testowej?</value>
 
 <data name="Options_AppLanguageSystemDefault" xml:space="preserve">
     <value>Użyj ustawień domyślnych systemu</value>
-  </data>
-
-<data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve">
-    <value>Angielski (Stany Zjednoczone)</value>
   </data>
 
 <data name="Options_AppLanguageRestartNotice" xml:space="preserve">

@@ -7,14 +7,24 @@ public sealed class LocalizedResourceFacade
 {
     private readonly LocalizedTextCatalog _catalog;
 
-    public LocalizedResourceFacade(string resourceBaseName, Assembly resourceAssembly)
-        : this(new ResourceManager(resourceBaseName, resourceAssembly))
+    public LocalizedResourceFacade(
+        string resourceBaseName,
+        Assembly resourceAssembly,
+        string sharedResourceBaseName = LocalizedResourceCatalogAttribute.DefaultSharedResourceBaseName,
+        Assembly? sharedResourceAssembly = null)
+        : this(
+            new ResourceManager(resourceBaseName, resourceAssembly),
+            new ResourceManager(
+                sharedResourceBaseName,
+                sharedResourceAssembly ?? typeof(LocalizedResourceFacade).Assembly))
     {
     }
 
-    public LocalizedResourceFacade(ResourceManager resourceManager)
+    public LocalizedResourceFacade(
+        ResourceManager resourceManager,
+        ResourceManager? sharedResourceManager = null)
     {
-        _catalog = new LocalizedTextCatalog(resourceManager);
+        _catalog = new LocalizedTextCatalog(resourceManager, sharedResourceManager);
     }
 
     public string Get(string key) => _catalog.Get(key);

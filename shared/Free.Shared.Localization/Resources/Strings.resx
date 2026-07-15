@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="Backstage_GreetingAfternoon" xml:space="preserve"><value>Good afternoon</value></data>
+  <data name="Backstage_GreetingEvening" xml:space="preserve"><value>Good evening</value></data>
+  <data name="Backstage_GreetingMorning" xml:space="preserve"><value>Good morning</value></data>
+  <data name="Backstage_Recent_LastOpenedDateFormat" xml:space="preserve"><value>MMM d</value></data>
+  <data name="Backstage_Recent_LastOpenedDateWithYearFormat" xml:space="preserve"><value>MMM d, yyyy</value></data>
+  <data name="Backstage_Recent_LastOpenedJustNow" xml:space="preserve"><value>Just now</value></data>
+  <data name="Backstage_Recent_LastOpenedTimeFormat" xml:space="preserve"><value>h:mm tt</value></data>
+  <data name="Backstage_Recent_LastOpenedTodayAt" xml:space="preserve"><value>Today at {0}</value></data>
+  <data name="Backstage_Recent_LastOpenedWeekdayAt" xml:space="preserve"><value>{0} at {1}</value></data>
+  <data name="Backstage_Recent_LastOpenedYesterdayAt" xml:space="preserve"><value>Yesterday at {0}</value></data>
+  <data name="Backstage_Recent_OpenAutomationHelpText" xml:space="preserve"><value>Open {0}</value></data>
+  <data name="Backstage_Recent_PinAutomationName" xml:space="preserve"><value>Pin {0}</value></data>
+  <data name="Backstage_Recent_UnpinAutomationName" xml:space="preserve"><value>Unpin {0}</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>_Cancel</value></data>
+  <data name="Common_ConfirmTitle" xml:space="preserve"><value>Confirm</value></data>
+  <data name="Common_ErrorTitle" xml:space="preserve"><value>Error</value></data>
+  <data name="Common_InformationTitle" xml:space="preserve"><value>Information</value></data>
+  <data name="Common_Ok" xml:space="preserve"><value>_OK</value></data>
+  <data name="Common_WarningTitle" xml:space="preserve"><value>Warning</value></data>
+  <data name="File_CommandFailedFormat" xml:space="preserve"><value>{0} failed: {1}</value></data>
+  <data name="File_CommandUnavailableFormat" xml:space="preserve"><value>{0} unavailable.</value></data>
+  <data name="File_InsertedFormat" xml:space="preserve"><value>Inserted {0}</value></data>
+  <data name="File_InsertPictureCommand" xml:space="preserve"><value>Insert picture</value></data>
+  <data name="File_InsertPicturePickerTitle" xml:space="preserve"><value>Insert Picture</value></data>
+  <data name="File_OpenCommand" xml:space="preserve"><value>Open</value></data>
+  <data name="File_OpenedFormat" xml:space="preserve"><value>Opened {0}</value></data>
+  <data name="File_SaveAsTitleFormat" xml:space="preserve"><value>Save as {0}</value></data>
+  <data name="File_SaveCommand" xml:space="preserve"><value>Save</value></data>
+  <data name="File_SavedFormat" xml:space="preserve"><value>Saved {0}</value></data>
+  <data name="File_SelectedFileNotLocalPathFormat" xml:space="preserve"><value>{0} failed: selected file is not available as a local path.</value></data>
+  <data name="File_UnsupportedExtensionFormat" xml:space="preserve"><value>Save failed: unsupported extension "{0}".</value></data>
+  <data name="File_UnsupportedFileTypeFormat" xml:space="preserve"><value>{0} failed: unsupported file type "{1}".</value></data>
+  <data name="Options_AppLanguageEnglishUnitedStates" xml:space="preserve"><value>English (United States)</value></data>
+  <data name="Ribbon_Command_Bold_KeyTip" xml:space="preserve"><value>1</value></data>
+  <data name="Ribbon_Command_Bold_Label" xml:space="preserve"><value>Bold</value></data>
+  <data name="Ribbon_Command_Bullets_Label" xml:space="preserve"><value>Bullets</value></data>
+  <data name="Ribbon_Command_Copy_KeyTip" xml:space="preserve"><value>C</value></data>
+  <data name="Ribbon_Command_Copy_Label" xml:space="preserve"><value>Copy</value></data>
+  <data name="Ribbon_Command_Cut_Label" xml:space="preserve"><value>Cut</value></data>
+  <data name="Ribbon_Command_FontFamily_Label" xml:space="preserve"><value>Font</value></data>
+  <data name="Ribbon_Command_FontSize_Label" xml:space="preserve"><value>Size</value></data>
+  <data name="Ribbon_Command_FormatPainter_Label" xml:space="preserve"><value>Format Painter</value></data>
+  <data name="Ribbon_Command_Italic_KeyTip" xml:space="preserve"><value>2</value></data>
+  <data name="Ribbon_Command_Italic_Label" xml:space="preserve"><value>Italic</value></data>
+  <data name="Ribbon_Command_Numbering_Label" xml:space="preserve"><value>Numbering</value></data>
+  <data name="Ribbon_Command_Paste_KeyTip" xml:space="preserve"><value>V</value></data>
+  <data name="Ribbon_Command_Paste_Label" xml:space="preserve"><value>Paste</value></data>
+  <data name="Ribbon_Command_Underline_KeyTip" xml:space="preserve"><value>3</value></data>
+  <data name="Ribbon_Command_Underline_Label" xml:space="preserve"><value>Underline</value></data>
+  <data name="Ribbon_Group_Clipboard_KeyTip" xml:space="preserve"><value>C</value></data>
+  <data name="Ribbon_Group_Clipboard_Label" xml:space="preserve"><value>Clipboard</value></data>
+  <data name="Ribbon_Group_Font_KeyTip" xml:space="preserve"><value>F</value></data>
+  <data name="Ribbon_Group_Font_Label" xml:space="preserve"><value>Font</value></data>
+  <data name="Ribbon_Group_Paragraph_KeyTip" xml:space="preserve"><value>P</value></data>
+  <data name="Ribbon_Group_Paragraph_Label" xml:space="preserve"><value>Paragraph</value></data>
+  <data name="Ribbon_Tab_Home_KeyTip" xml:space="preserve"><value>H</value></data>
+  <data name="Ribbon_Tab_Home_Label" xml:space="preserve"><value>Home</value></data>
+</root>
