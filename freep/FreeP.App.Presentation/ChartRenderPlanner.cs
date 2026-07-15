@@ -590,6 +590,9 @@ public static partial class ChartRenderPlanner
     private const double DefaultBarGapWidthPercent = 150.0;
     private const double ImportedPercentStackedGapWidthPercent = 250.0;
     private const double ImportedPercentStackedPlotBottomReduction = 19.0;
+    private const double ImportedSurfaceBlueBandUpperBound = 0.20;
+    private const double ImportedSurfaceOrangeBandUpperBound = 0.53;
+    private const double ImportedSurfaceGreenBandUpperBound = 0.75;
 
     private static readonly SrgbColor[] FallbackSeriesColors =
     [
@@ -2997,9 +3000,13 @@ public static partial class ChartRenderPlanner
         // theme band to each visible facet. Interpolating between the bands
         // produces muted colors that do not match the opaque blue/orange/green/
         // yellow faces in the authored chart.
-        int colorIndex = (int)Math.Round(
-            normalized * (SurfaceVaryColors.Length - 1),
-            MidpointRounding.AwayFromZero);
+        int colorIndex = normalized switch
+        {
+            < ImportedSurfaceBlueBandUpperBound => 0,
+            < ImportedSurfaceOrangeBandUpperBound => 1,
+            < ImportedSurfaceGreenBandUpperBound => 2,
+            _ => 3
+        };
         return SurfaceVaryColors[Math.Clamp(colorIndex, 0, SurfaceVaryColors.Length - 1)];
     }
 
