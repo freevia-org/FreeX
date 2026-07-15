@@ -123,7 +123,13 @@ public static class FreeWVisualEvidenceDocumentFactory
             new Run(" | page "),
             Run.PageNumberField());
 
-        doc.Blocks.Add(StyledParagraph("Field/Page Number Variants", "Heading1"));
+        // Word only resolves pgNumType/chapStyle when the matching heading participates in a
+        // numbered outline. Keep the fixture's chapter-prefixed PAGE contract valid in OOXML.
+        doc.Blocks.Add(new Paragraph("Field/Page Number Variants")
+        {
+            StyleId = "Heading1",
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel }
+        });
         doc.Blocks.Add(new Paragraph(
             "This shared fixture exercises PAGE and NUMPAGES fields across first, even, and default " +
             "header/footer slots, chapter-prefixed page numbering, plus document-property fields in the body."));

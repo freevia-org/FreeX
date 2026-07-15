@@ -801,6 +801,7 @@ public sealed class VisualEvidencePlannerTests
         document.Page.PageNumberStartAt.Should().Be(1);
         document.Page.PageNumberChapterStyleLevel.Should().Be(1);
         document.Page.PageNumberChapterSeparator.Should().Be(PageNumberChapterSeparator.Hyphen);
+        document.Blocks.OfType<Paragraph>().First().Formatting.ListKind.Should().Be(ListKind.MultiLevel);
         document.FinalSectionHeadersFooters.FirstHeader.Should().NotBeNull();
         document.FinalSectionHeadersFooters.FirstFooter.Should().NotBeNull();
         document.FinalSectionHeadersFooters.EvenHeader.Should().NotBeNull();
