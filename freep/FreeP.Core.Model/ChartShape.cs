@@ -397,6 +397,12 @@ public sealed class ChartShape
     /// <summary>Chart variant (column clustered, pie, line, etc.).</summary>
     public ChartType ChartType { get; set; } = ChartType.ColumnClustered;
 
+    /// <summary>
+    /// Authored chart style identifier from <c>c:chartSpace/c:style</c> or its
+    /// newer compatibility extension. Null means the classic Office default style.
+    /// </summary>
+    public int? StyleId { get; set; }
+
     /// <summary>Chart title text, or null if no title.</summary>
     public string? Title { get; set; }
 

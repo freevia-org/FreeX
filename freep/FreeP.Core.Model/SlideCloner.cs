@@ -113,6 +113,7 @@ public static class SlideCloner
         var copy = new ChartShape
         {
             ChartType    = src.ChartType,
+            StyleId      = src.StyleId,
             Title        = src.Title,
             TextStyle    = CloneChartTextStyle(src.TextStyle),
             Legend       = src.Legend,

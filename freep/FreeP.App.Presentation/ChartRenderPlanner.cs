@@ -516,6 +516,13 @@ public static partial class ChartRenderPlanner
     private static bool UsesImportedTextMetrics(ChartShape chart) =>
         chart.TextStyle?.FontSizePt is >= 12.0;
 
+    /// <summary>
+    /// Chart parts without an authored style use PowerPoint's classic default
+    /// appearance. Newer Office chart styles carry an explicit style id.
+    /// </summary>
+    public static bool UsesClassicOfficeChartStyle(ChartShape chart) =>
+        !chart.StyleId.HasValue;
+
     public static double ResolveTextFontSize(ChartShape chart, double fallback) =>
         chart.TextStyle?.FontSizePt is > 0 ? chart.TextStyle.FontSizePt.Value : fallback;
 
@@ -1054,7 +1061,7 @@ public static partial class ChartRenderPlanner
 
         return new ChartMajorGridLinePrimitivePlan(
             lines,
-            DefaultGridLineStroke());
+            DefaultGridLineStroke(chart));
     }
 
     public static ChartMajorAxisTickPrimitivePlan BuildMajorAxisTickPrimitivePlan(
@@ -1074,7 +1081,7 @@ public static partial class ChartRenderPlanner
         return new ChartMajorAxisTickPrimitivePlan(
             categoryTicks,
             valueTicks,
-            DefaultAxisTickStroke());
+            DefaultAxisTickStroke(chart));
     }
 
     public static IReadOnlyList<ChartTextPlan> BuildCategoryAxisLabelPlans(
@@ -4574,11 +4581,15 @@ public static partial class ChartRenderPlanner
         new(new ChartPlanPoint(bounds.X, bounds.Bottom), new ChartPlanPoint(bounds.X, bounds.Y))
     ];
 
-    private static ChartStrokePlan DefaultGridLineStroke() =>
-        new(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
+    private static ChartStrokePlan DefaultGridLineStroke(ChartShape? chart = null) =>
+        chart is not null && UsesClassicOfficeChartStyle(chart)
+            ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.5)
+            : new ChartStrokePlan(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
 
-    private static ChartStrokePlan DefaultAxisTickStroke() =>
-        new(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 0.75);
+    private static ChartStrokePlan DefaultAxisTickStroke(ChartShape? chart = null) =>
+        chart is not null && UsesClassicOfficeChartStyle(chart)
+            ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.75)
+            : new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 0.75);
 
     private static ChartStrokePlan DefaultDataTableBorderStroke() =>
         new(new SrgbColor(0xB7, 0xB7, 0xB7), Alpha: 255, Thickness: 0.5);

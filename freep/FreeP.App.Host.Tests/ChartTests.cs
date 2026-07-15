@@ -38,6 +38,7 @@ public sealed class ChartTests : IDisposable
     {
         var chart = new ChartShape();
         chart.ChartType.Should().Be(ChartType.ColumnClustered);
+        chart.StyleId.Should().BeNull();
         chart.Title.Should().BeNull();
         chart.Categories.Should().BeEmpty();
         chart.Series.Should().BeEmpty();
@@ -61,6 +62,7 @@ public sealed class ChartTests : IDisposable
         var slide = new Slide();
         var chart = BuildDoughnutChart(holeSize: 65);
         chart.FirstSliceAngleDegrees = 135;
+        chart.StyleId = 102;
         chart.BarGapWidthPercent = 25;
         chart.BarOverlapPercent = -40;
         chart.BarGapDepthPercent = 125;
@@ -79,6 +81,7 @@ public sealed class ChartTests : IDisposable
         var clonedChart = clone.Shapes.Single().Chart!;
         clonedChart.Should().NotBeSameAs(chart);
         clonedChart.ChartType.Should().Be(ChartType.Doughnut);
+        clonedChart.StyleId.Should().Be(102);
         clonedChart.DoughnutHolePercent.Should().Be(65);
         clonedChart.FirstSliceAngleDegrees.Should().Be(135);
         clonedChart.BarGapWidthPercent.Should().Be(25);

@@ -917,7 +917,10 @@ public sealed class SlideCanvas : Control
 
         dc.FillRectangle(Brushes.White,
             new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
-        var framePen = new Pen(new SolidColorBrush(Color.FromRgb(0xBF, 0xBF, 0xBF)), 0.5);
+        bool classicOfficeStyle = ChartRenderPlanner.UsesClassicOfficeChartStyle(chart);
+        Pen? framePen = classicOfficeStyle
+            ? null
+            : new Pen(new SolidColorBrush(Color.FromRgb(0xBF, 0xBF, 0xBF)), 0.5);
         dc.DrawRectangle(null, framePen,
             new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
 
@@ -929,7 +932,7 @@ public sealed class SlideCanvas : Control
         if (chart.Title is not null)
             DrawChartLabel(dc, chart.Title,
                 ToRect(frame.TitleBounds!.Value),
-                isBold: true, fontSize: ChartRenderPlanner.ResolveTextFontSize(chart, 9.0), align: TextAlignment.Center);
+                isBold: !classicOfficeStyle, fontSize: ChartRenderPlanner.ResolveTextFontSize(chart, 9.0), align: TextAlignment.Center);
 
         if (!frame.HasPlot) return;
 

@@ -45,7 +45,10 @@ internal static class PptxChartReader
         var chartEl = chartSpace.Element(C + "chart");
         if (chartEl is null) return null;
 
-        var shape = new ChartShape();
+        var shape = new ChartShape
+        {
+            StyleId = ReadStyleId(chartSpace)
+        };
         // PowerPoint uses an 18pt default for chart-owned text when c:txPr is
         // absent. Make that inherited default explicit so re-imported FreeP
         // charts and externally authored charts share the same render metrics.
@@ -161,6 +164,15 @@ internal static class PptxChartReader
         }
 
         return shape;
+    }
+
+    private static int? ReadStyleId(XElement chartSpace)
+    {
+        var style = chartSpace.Descendants()
+            .FirstOrDefault(element =>
+                element.Name.LocalName == "style" &&
+                int.TryParse(element.Attribute("val")?.Value, out _));
+        return int.TryParse(style?.Attribute("val")?.Value, out var value) ? value : null;
     }
 
     // ── Title ─────────────────────────────────────────────────────────────────

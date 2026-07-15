@@ -8,6 +8,13 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class ChartRenderPlannerTests
 {
     [Fact]
+    public void UsesClassicOfficeChartStyle_DistinguishesStylelessAndStyledCharts()
+    {
+        ChartRenderPlanner.UsesClassicOfficeChartStyle(new ChartShape()).Should().BeTrue();
+        ChartRenderPlanner.UsesClassicOfficeChartStyle(new ChartShape { StyleId = 102 }).Should().BeFalse();
+    }
+
+    [Fact]
     public void ComputePrimaryValueAxisRange_ExcludesSecondarySeries()
     {
         var primary = new ChartSeries { Name = "Bars", OnSecondaryAxis = false };
@@ -636,7 +643,7 @@ public sealed class ChartRenderPlannerTests
         plan.GridLines[^1].Start.Should().Be(new ChartPlanPoint(frame.Plot.X, frame.Plot.Y));
         plan.GridLines[^1].End.Should().Be(new ChartPlanPoint(frame.Plot.Right, frame.Plot.Y));
         plan.Stroke.Should().Be(new ChartStrokePlan(
-            new SrgbColor(0xD9, 0xD9, 0xD9),
+            new SrgbColor(0x00, 0x00, 0x00),
             Alpha: 255,
             Thickness: 0.5));
     }
@@ -675,7 +682,7 @@ public sealed class ChartRenderPlannerTests
         plan.ValueTicks[^1].Start.Should().Be(new ChartPlanPoint(frame.Plot.X - ChartRenderPlanner.AxisMajorTickLength, frame.Plot.Y));
         plan.ValueTicks[^1].End.Should().Be(new ChartPlanPoint(frame.Plot.X, frame.Plot.Y));
         plan.Stroke.Should().Be(new ChartStrokePlan(
-            new SrgbColor(0x7F, 0x7F, 0x7F),
+            new SrgbColor(0x00, 0x00, 0x00),
             Alpha: 255,
             Thickness: 0.75));
     }
