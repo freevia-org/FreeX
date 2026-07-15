@@ -787,7 +787,8 @@ static int RenderMode(
             width,
             height,
             pageNumber,
-            viewportOffsetY);
+            viewportOffsetY,
+            WordComparableContentOffsetY(scenarioId));
     }
     if (bytes.Length > 0)
     {
@@ -847,7 +848,8 @@ static int RenderMode(
                 width,
                 height,
                 pageNumber,
-                viewportOffsetY);
+                viewportOffsetY,
+                WordComparableContentOffsetY(scenarioId));
         }
         pngBytes = AddNoteRegionOverlayIfNeeded(
             pngBytes,
@@ -1098,13 +1100,17 @@ static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase);
 
+static int WordComparableContentOffsetY(string scenarioId) =>
+    string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+
 static (byte[] PngBytes, int PixelWidth, int PixelHeight) CropToDocumentPageSurface(
     byte[] pngBytes,
     PageSettings page,
     int fallbackWidth,
     int fallbackHeight,
     int pageNumber,
-    double viewportOffsetY)
+    double viewportOffsetY,
+    int contentOffsetY)
 {
     using var source = SKBitmap.Decode(pngBytes);
     if (source is null)
@@ -1134,7 +1140,15 @@ static (byte[] PngBytes, int PixelWidth, int PixelHeight) CropToDocumentPageSurf
     surface.Canvas.DrawBitmap(
         source,
         new SKRect(sourceX, sourceY, sourceX + pixelWidth, sourceY + pixelHeight),
-        new SKRect(0, 0, pixelWidth, pixelHeight));
+        new SKRect(0, contentOffsetY, pixelWidth, pixelHeight + contentOffsetY));
+    if (contentOffsetY > 0)
+    {
+        // The print-layout editor draws a page-chrome outline. Word's exported page PNG does not.
+        using var pageChromeMask = new SKPaint { Color = SKColors.White, IsAntialias = false };
+        surface.Canvas.DrawRect(0, contentOffsetY, pixelWidth, 1, pageChromeMask);
+        surface.Canvas.DrawRect(0, contentOffsetY, 1, pixelHeight - contentOffsetY, pageChromeMask);
+        surface.Canvas.DrawRect(pixelWidth - 1, contentOffsetY, 1, pixelHeight - contentOffsetY, pageChromeMask);
+    }
     using var image = surface.Snapshot();
     using var data = image.Encode(SKEncodedImageFormat.Png, 95);
     return data is null
