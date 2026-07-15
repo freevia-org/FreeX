@@ -30,4 +30,7 @@
   <ItemGroup>
     <Using Include="Free.Shared.IO" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="SmartArtLayoutTemplates\\*.xml" />
+  </ItemGroup>
 </Project>
