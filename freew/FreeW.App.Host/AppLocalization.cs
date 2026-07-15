@@ -1,7 +1,4 @@
 using System.Globalization;
-using System.Threading;
-using System.Windows;
-using System.Windows.Markup;
 using Free.Shared.Shell;
 using FreeW.App.Localization;
 
@@ -10,8 +7,6 @@ namespace FreeW.App.Host;
 internal static class AppLocalization
 {
     private static readonly CultureInfo StartupUiCulture = CultureInfo.CurrentUICulture;
-    private static int _wpfLanguageMetadataApplied;
-
     public static void InstallSharedSeams()
     {
         ShellStrings.Current = new ResourceShellStrings(
@@ -26,20 +21,11 @@ internal static class AppLocalization
     }
 
     public static void ApplyAppLanguage(string? cultureName)
-    {
-        var uiCulture = AppLanguageCatalog.ResolveCulture(cultureName, StartupUiCulture);
+        => WpfLocalizationCultureBootstrap.ApplyUiCulture(
+            cultureName,
+            name => AppLanguageCatalog.ResolveCulture(name, StartupUiCulture),
+            StartupUiCulture);
 
-        CultureInfo.DefaultThreadCurrentUICulture = uiCulture;
-        Thread.CurrentThread.CurrentUICulture = uiCulture;
-    }
-
-    public static void ApplyCurrentCultureToWpf()
-    {
-        if (Interlocked.Exchange(ref _wpfLanguageMetadataApplied, 1) == 1)
-            return;
-
-        FrameworkElement.LanguageProperty.OverrideMetadata(
-            typeof(FrameworkElement),
-            new FrameworkPropertyMetadata(XmlLanguage.GetLanguage(CultureInfo.CurrentCulture.IetfLanguageTag)));
-    }
+    public static void ApplyCurrentCultureToWpf() =>
+        WpfLocalizationCultureBootstrap.ApplyCurrentCultureToWpf();
 }
