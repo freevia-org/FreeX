@@ -9,7 +9,7 @@ public sealed class ReviewCommandSourceTests
     public void ReviewCommandHandlers_RouteThroughExpectedPlannersDialogsAndServices()
     {
         var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
-        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var controllerSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewSessionController.cs");
 
         source.Should().Contain("SpellCheckWorkflowPlanner.ScanWorksheet(");
         source.Should().Contain("SpellCheckWorkflowPlanner.BuildReplaceAllCommand(");
@@ -21,26 +21,22 @@ public sealed class ReviewCommandSourceTests
         source.Should().NotContain("DrawingObjectCommandPlanner.BuildAltTextCommand(");
         source.Should().NotContain("AltTextTargetResolver.Resolve(");
         source.Should().NotContain("AltTextObjectKind.");
-        source.Should().Contain("CommentNavigationPlanner.GetDefaultCommentText(sheet.Comments, addr)");
-        source.Should().Contain("SheetGrid.BeginNoteInlineEdit(addr, addr.ToA1(), defaultText);");
-        source.Should().Contain("SheetGrid.BeginThreadedCommentInlineEdit(addr, addr.ToA1(), existing);");
+        source.Should().Contain("ReviewSessionController.GetSelectedNoteTarget()");
+        source.Should().Contain("ReviewSessionController.GetSelectedThreadedCommentTarget()");
+        source.Should().Contain("SheetGrid.BeginNoteInlineEdit(target.Address, target.Address.ToA1(), target.NoteText);");
+        source.Should().Contain("SheetGrid.BeginThreadedCommentInlineEdit(target.Address, target.Address.ToA1(), target.ThreadedComment);");
         source.Should().Contain("SheetGrid_NoteInlineEditSubmitted");
         source.Should().Contain("SheetGrid_ThreadedCommentInlineEditSubmitted");
         source.Should().Contain("e.KeepOpen = true;");
-        source.Should().Contain("e.ErrorMessage = LocalizeCommandErrorMessage(outcome.ErrorMessage);");
-        source.Should().Contain("case GridThreadedCommentEditAction.EditReply");
-        source.Should().Contain("new UpdateThreadedCommentReplyCommand(");
-        normalizedSource.Should().Contain("result.ReplyEditText,\n                            result.IsResolved");
-        source.Should().Contain("case GridThreadedCommentEditAction.DeleteReply");
-        source.Should().Contain("new DeleteThreadedCommentReplyCommand(");
-        normalizedSource.Should().Contain("replyIndex,\n                            result.IsResolved");
+        source.Should().Contain("e.ErrorMessage = mutation.ErrorMessage;");
+        source.Should().Contain("ReviewSessionController.ApplyThreadedComment(");
         source.Should().NotContain("new ThreadedCommentDialog(addr.ToA1(), existing)");
-        source.Should().Contain("CommentNavigationPlanner.OrderedThreadedCommentAddresses(sheet.ThreadedComments)");
+        source.Should().Contain("ReviewSessionController.NavigateThreadedComment(previous)");
         source.Should().Contain("CommentListWindow.CreateThreadedCommentItems(sheet.ThreadedComments)");
         source.Should().Contain("ShowOrRefreshCommentListWindow(");
         source.Should().Contain("new CommentListWindow(title, items, NavigateToCell) { Owner = this }");
         source.Should().Contain("window.Show();");
-        source.Should().Contain("CommentNavigationPlanner.OrderedNoteAddresses(sheet.Comments)");
+        source.Should().Contain("ReviewSessionController.NavigateNote(previous)");
         source.Should().Contain("CommentListWindow.CreateNoteItems(sheet.Comments)");
         source.Should().NotContain("CommentNavigationPlanner.OrderedCommentAddresses(sheet.Comments, sheet.ThreadedComments)");
         source.Should().NotContain("CommentNavigationPlanner.FormatCommentList(sheet.Comments, sheet.ThreadedComments)");
@@ -66,6 +62,10 @@ public sealed class ReviewCommandSourceTests
         source.Should().Contain("WorkbookShareReadinessPlanKind.SaveAsBeforeShare");
         source.Should().NotContain("ShareWorkbookPlanner.CreatePlan(_currentFilePath)");
         source.Should().Contain("_shareService.ShareFileAsync(this, sharePath, _workbook.Name)");
+        controllerSource.Should().Contain("PresentationReviewSessionController");
+        controllerSource.Should().Contain("TryExecuteRepeatableCurrentRangeCommand(");
+        controllerSource.Should().Contain("LocalizeCommandErrorMessage(outcome.ErrorMessage)");
+        controllerSource.Should().Contain("SetActiveCell));");
     }
 
 }

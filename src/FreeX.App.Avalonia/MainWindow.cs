@@ -22,6 +22,7 @@ using Avalonia.VisualTree;
 using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Backstage;
+using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DataTools;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.DrawingUI;
@@ -12072,18 +12073,18 @@ public sealed partial class MainWindow : Window
 
     private void NavigateReviewNote(bool previous) =>
         NavigateReviewTarget(
-            () => _session.GoToNextNote(previous: previous),
+            () => ReviewSessionController.NavigateNote(previous),
             previous ? "previous note" : "next note",
             previous ? "Previous note was not found." : "Next note was not found.");
 
     private void NavigateReviewThreadedComment(bool previous) =>
         NavigateReviewTarget(
-            () => _session.GoToNextThreadedComment(previous: previous),
+            () => ReviewSessionController.NavigateThreadedComment(previous),
             previous ? "previous comment" : "next comment",
             previous ? "Previous threaded comment was not found." : "Next threaded comment was not found.");
 
     private void NavigateReviewTarget(
-        Func<WorkbookNavigationResult> navigate,
+        Func<PresentationReviewNavigationResult> navigate,
         string statusLabel,
         string fallbackMessage)
     {
@@ -12101,13 +12102,15 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        if (result.SelectedRange is not { } selectedRange)
+        if (result.Target is null)
         {
             ShowEditIssue(UiText.Get("MainLoc_ReviewTargetNotSelected"));
             return;
         }
 
-        RefreshShell($"Selected {FormatRangeReference(selectedRange)} ({statusLabel})");
+        ApplyReviewRefreshPlan(
+            result.RefreshPlan,
+            $"Selected {FormatRangeReference(_session.SelectedRange)} ({statusLabel})");
     }
 
     private static string FormatReviewWorkflowSummary(ReviewWorkflowPlan plan)

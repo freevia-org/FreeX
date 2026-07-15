@@ -25,8 +25,8 @@ public sealed partial class MainWindow
         var text = await ShowCommentTextPromptAsync("New Note", "Note text");
         if (string.IsNullOrWhiteSpace(text))
             return;
-        var result = _session.SetActiveCellNote(text);
-        RefreshShell(result.Success
+        var result = ReviewSessionController.ApplyNote(text);
+        ApplyReviewRefreshPlan(result.RefreshPlan, result.Success
             ? $"Added note to {FormatCellReference(_session.ActiveCell)}"
             : result.ErrorMessage ?? "Could not add note.");
     }
@@ -35,18 +35,18 @@ public sealed partial class MainWindow
 
     private async Task ShowEditNoteDialogAsync()
     {
-        var existing = _session.GetActiveCellNote();
-        if (existing is null)
+        var target = ReviewSessionController.GetSelectedNoteTarget();
+        if (target is null || !ReviewSessionController.HasNoteAtSelection())
         {
             RefreshShell(UiText.Get("Comment_NoNote"));
             return;
         }
 
-        var text = await ShowCommentTextPromptAsync(UiText.Get("Comment_EditNoteTitle"), UiText.Get("Comment_NoteLabel"), existing);
+        var text = await ShowCommentTextPromptAsync(UiText.Get("Comment_EditNoteTitle"), UiText.Get("Comment_NoteLabel"), target.NoteText);
         if (text is null)
             return;
-        var result = _session.SetActiveCellNote(text);
-        RefreshShell(result.Success
+        var result = ReviewSessionController.ApplyNote(text);
+        ApplyReviewRefreshPlan(result.RefreshPlan, result.Success
             ? UiText.Format("Comment_NoteUpdated", FormatCellReference(_session.ActiveCell))
             : result.ErrorMessage ?? UiText.Get("Comment_NoteFailed"));
     }
@@ -55,14 +55,14 @@ public sealed partial class MainWindow
 
     private void ResolveActiveCellThreadedComment(bool resolved)
     {
-        var result = _session.SetActiveCellThreadedCommentResolved(resolved);
+        var result = ReviewSessionController.ResolveThreadedComment(resolved);
         if (!result.Success)
         {
             RefreshShell(result.ErrorMessage ?? UiText.Get("Comment_CommentFailed"));
             return;
         }
 
-        RefreshShell(UiText.Format(
+        ApplyReviewRefreshPlan(result.RefreshPlan, UiText.Format(
             resolved ? "Comment_Resolved" : "Comment_Unresolved",
             FormatCellReference(_session.ActiveCell)));
     }
@@ -75,14 +75,14 @@ public sealed partial class MainWindow
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var result = _session.ExecuteReviewCommand(new ConvertNotesToCommentsCommand(_session.ActiveSheet.Id));
+        var result = ReviewSessionController.ConvertNotesToComments();
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? "Convert to Comments failed.");
             return;
         }
 
-        RefreshShell("Converted notes to comments.");
+        ApplyReviewRefreshPlan(result.RefreshPlan, "Converted notes to comments.");
     }
 
     // ── Threaded comment dialog: create / edit root / reply / edit-reply / delete-reply ────────
@@ -97,77 +97,31 @@ public sealed partial class MainWindow
     // ConvertNotesToComments), so no WorkbookSession changes are needed.
     private async Task ShowThreadedCommentDialogAsync()
     {
-        _session.ActiveSheet.ThreadedComments.TryGetValue(_session.ActiveCell, out var existing);
+        var target = ReviewSessionController.GetSelectedThreadedCommentTarget();
+        var existing = target?.ThreadedComment;
         var cellRef = FormatCellReference(_session.ActiveCell);
         var dialogResult = await ShowThreadedCommentEditorAsync(cellRef, existing);
         if (dialogResult is null)
             return;
 
-        var (success, errorMessage) = ApplyThreadedCommentDialogResult(existing, dialogResult);
-        if (!success)
+        var mutation = ApplyThreadedCommentDialogResult(existing, dialogResult);
+        if (!mutation.Success)
         {
-            RefreshShell(errorMessage ?? UiText.Get("Comment_CommentFailed"));
+            RefreshShell(mutation.ErrorMessage ?? UiText.Get("Comment_CommentFailed"));
             return;
         }
 
-        RefreshShell(existing is null
+        ApplyReviewRefreshPlan(mutation.RefreshPlan, existing is null
             ? $"Added comment to {cellRef}"
             : UiText.Format("Comment_CommentUpdated", cellRef));
     }
 
-    private (bool Success, string? ErrorMessage) ApplyThreadedCommentDialogResult(
+    private PresentationReviewMutationResult ApplyThreadedCommentDialogResult(
         ThreadedComment? existing,
         ThreadedCommentDialogResult dialogResult)
     {
-        var sheetId = _session.ActiveSheet.Id;
-        var cell = _session.ActiveCell;
-
-        switch (dialogResult.Action)
-        {
-            case ThreadedCommentDialogAction.EditReply when dialogResult.ReplyIndex is { } editIndex:
-            {
-                var result = _session.ExecuteReviewCommand(new UpdateThreadedCommentReplyCommand(
-                    sheetId,
-                    cell,
-                    editIndex,
-                    dialogResult.ReplyEditText ?? string.Empty,
-                    dialogResult.IsResolved));
-                return (result.Success, result.ErrorMessage);
-            }
-            case ThreadedCommentDialogAction.DeleteReply when dialogResult.ReplyIndex is { } deleteIndex:
-            {
-                var result = _session.ExecuteReviewCommand(new DeleteThreadedCommentReplyCommand(
-                    sheetId,
-                    cell,
-                    deleteIndex,
-                    dialogResult.IsResolved));
-                return (result.Success, result.ErrorMessage);
-            }
-            default:
-            {
-                if (existing is null)
-                {
-                    // No thread yet: the "reply" text box is actually the new root comment text.
-                    var result = _session.SetActiveCellThreadedComment(dialogResult.ReplyText ?? string.Empty);
-                    return (result.Success, result.ErrorMessage);
-                }
-
-                var hasThreadChange =
-                    dialogResult.RootText is not null ||
-                    dialogResult.ReplyText is not null ||
-                    dialogResult.IsResolved != existing.IsResolved;
-                if (!hasThreadChange)
-                    return (true, null);
-
-                var applyResult = _session.ExecuteReviewCommand(new ApplyThreadedCommentChangesCommand(
-                    sheetId,
-                    cell,
-                    dialogResult.RootText,
-                    dialogResult.ReplyText,
-                    dialogResult.IsResolved));
-                return (applyResult.Success, applyResult.ErrorMessage);
-            }
-        }
+        _ = existing;
+        return ReviewSessionController.ApplyThreadedComment(dialogResult);
     }
 
     /// <summary>
