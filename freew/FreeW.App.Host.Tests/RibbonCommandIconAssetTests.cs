@@ -1,9 +1,11 @@
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Xml.Linq;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Free.Shared.Ribbon;
+using Free.Shared.Ribbon.Icons;
 using FreeW.App.Host;
 
 namespace FreeW.App.Host.Tests;
@@ -30,11 +32,11 @@ public sealed class RibbonCommandIconAssetTests
                 CommandId = id,
                 FileName = ToCommandIconSlug(id) + ".svg"
             })
-            .Where(item => !File.Exists(Path.Combine(iconDirectory, item.FileName)))
+            .Where(item => !HasCommandIconAsset(iconDirectory, item.FileName[..^4]))
             .Select(item => $"{item.CommandId} -> {item.FileName}")
             .ToArray();
 
-        missing.Should().BeEmpty("each visible FreeW command should resolve to app-local SVG artwork before shared fallback glyphs");
+        missing.Should().BeEmpty($"each visible FreeW command should resolve through a canonical or product SVG before shared fallback glyphs. Missing: {string.Join("; ", missing)}");
     }
 
     [Fact]
@@ -57,6 +59,26 @@ public sealed class RibbonCommandIconAssetTests
     {
         ToCommandIconSlug("freew.accept-all").Should().Be("accept-all");
         ToCommandIconSlug("freew.align-center").Should().Be("align-center");
+    }
+
+    [Fact]
+    public void FreeW_project_links_canonical_FreeX_assets_for_output_and_publish()
+    {
+        var root = FindRepositoryRoot();
+        var projectPath = Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj");
+        var project = XDocument.Load(projectPath);
+        var canonicalIcons = project
+            .Descendants("Content")
+            .Single(item => (string?)item.Attribute("Include") ==
+                @"..\..\src\FreeX.Ribbon.Definitions\Resources\CommandIconsSvg\**\*.svg");
+
+        ((string?)canonicalIcons.Attribute("Link")).Should().Be(
+            @"Resources\CommandIconsSvg\%(RecursiveDir)%(Filename)%(Extension)");
+        ((string?)canonicalIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
+        ((string?)canonicalIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
+
+        foreach (var alias in new[] { "align-center.svg", "chart.svg", "datetime.svg", "font-dialog.svg", "highlight.svg", "zoom-dialog.svg" })
+            File.Exists(Path.Combine(root, "freew", "FreeW.App.Host", "Resources", "CommandIconsSvg", alias)).Should().BeFalse();
     }
 
     [StaFact]
@@ -88,6 +110,12 @@ public sealed class RibbonCommandIconAssetTests
         CommandIds(FreeWRibbon.Build())
             .Select(id => id.Value)
             .Where(id => !string.IsNullOrWhiteSpace(id));
+
+    private static bool HasCommandIconAsset(string iconDirectory, string slug) =>
+        RibbonCommandIconSlugAliases.GetCandidates(slug)
+            .SelectMany(candidate => new[] { candidate, candidate + "-small", candidate + "-large" })
+            .Select(candidate => Path.Combine(iconDirectory, candidate + ".svg"))
+            .Any(File.Exists);
 
     private static IEnumerable<RibbonCommandId> CommandIds(RibbonDefinition definition)
     {

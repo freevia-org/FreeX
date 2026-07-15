@@ -33,7 +33,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="Resources\FreeX.ico" />
+    <Resource Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico" Link="Resources\FreeX.ico" />
   </ItemGroup>
 
   <!-- Compile App.xaml as a Page so the WPF SDK does not generate its own Main; the explicit
@@ -64,7 +64,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Resources\FreeX.ico" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
+             Link="Resources\FreeX.ico"
+             CopyToOutputDirectory="PreserveNewest" />
     <!-- CommandIconsSvg now live in FreeX.Ribbon.Definitions (shared with the Avalonia app) and are
          copied to this app's output transitively at Resources\CommandIconsSvg\ — the same path
          RibbonIconFactory.Svg.cs loads from. -->
@@ -79,7 +81,7 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <NoWarn>$(NoWarn);WFO0003</NoWarn>
-    <ApplicationIcon>Resources\FreeX.ico</ApplicationIcon>
+    <ApplicationIcon>..\..\shared\Free.Shared.Shell\Resources\FreeX.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <!-- ReachFramework provides System.Windows.Xps.* and System.Printing -->
     <UseReachFramework>true</UseReachFramework>

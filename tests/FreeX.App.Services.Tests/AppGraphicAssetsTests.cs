@@ -15,7 +15,7 @@ public sealed class AppGraphicAssetsTests
                 "io.github.tony-xmelon.freex",
                 "X",
                 "#127a41",
-                "src/FreeX.App.Host/Resources/FreeX.ico",
+                "shared/Free.Shared.Shell/Resources/FreeX.ico",
                 "src/FreeX.App.Host/FreeX.App.Host.csproj",
                 "src/FreeX.App.Avalonia/Packaging/macos/FreeX.icns",
                 "src/FreeX.App.Avalonia/Packaging/macos/Info.plist",
@@ -50,9 +50,37 @@ public sealed class AppGraphicAssetsTests
 
         var project = File.ReadAllText(RepoFile(app.WpfProjectPath));
         var iconFileName = Path.GetFileName(app.WindowsIconPath);
-        project.Should().Contain($"<Resource Include=\"Resources\\{iconFileName}\"");
-        project.Should().Contain($"<Content Include=\"Resources\\{iconFileName}\"");
-        project.Should().Contain($"<ApplicationIcon>Resources\\{iconFileName}</ApplicationIcon>");
+        if (app.Name == "FreeX")
+        {
+            project.Should().Contain("<Resource Include=\"..\\..\\shared\\Free.Shared.Shell\\Resources\\FreeX.ico\"");
+            project.Should().Contain("<Content Include=\"..\\..\\shared\\Free.Shared.Shell\\Resources\\FreeX.ico\"");
+            project.Should().Contain("<ApplicationIcon>..\\..\\shared\\Free.Shared.Shell\\Resources\\FreeX.ico</ApplicationIcon>");
+        }
+        else
+        {
+            project.Should().Contain($"<Resource Include=\"Resources\\{iconFileName}\"");
+            project.Should().Contain($"<Content Include=\"Resources\\{iconFileName}\"");
+            project.Should().Contain($"<ApplicationIcon>Resources\\{iconFileName}</ApplicationIcon>");
+        }
+    }
+
+    [Fact]
+    public void FreeX_ico_has_one_canonical_source_and_both_desktop_project_links()
+    {
+        var root = Path.GetDirectoryName(RepositoryFileLocator.Find("FreeX.slnx"))!;
+        var canonical = Path.Combine(root, "shared", "Free.Shared.Shell", "Resources", "FreeX.ico");
+        var oldWpf = Path.Combine(root, "src", "FreeX.App.Host", "Resources", "FreeX.ico");
+        var oldAvalonia = Path.Combine(root, "src", "FreeX.App.Avalonia", "Resources", "FreeX.ico");
+        var wpfProject = File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Host", "FreeX.App.Host.csproj"));
+        var avaloniaProject = File.ReadAllText(Path.Combine(root, "src", "FreeX.App.Avalonia", "FreeX.App.Avalonia.csproj"));
+
+        File.Exists(canonical).Should().BeTrue();
+        File.Exists(oldWpf).Should().BeFalse();
+        File.Exists(oldAvalonia).Should().BeFalse();
+        wpfProject.Should().Contain("Link=\"Resources\\FreeX.ico\"");
+        avaloniaProject.Should().Contain("Link=\"Resources\\FreeX.ico\"");
+        avaloniaProject.Should().Contain("CopyToPublishDirectory=\"PreserveNewest\"");
+        File.ReadAllBytes(canonical).Should().NotBeEmpty();
     }
 
     [Theory]

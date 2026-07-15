@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace Free.Shared.Theme.Tests;
 
 /// <summary>
@@ -6,6 +8,52 @@ namespace Free.Shared.Theme.Tests;
 /// </summary>
 public sealed class BrandThemesTests
 {
+    [Fact]
+    public void Shared_wpf_neutral_fallbacks_match_authoritative_brand_theme_roles()
+    {
+        var xaml = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "shared", "Free.Shared.Ribbon.Wpf", "SharedChromeResources.xaml"));
+        var colors = BrandThemes.FreeX.Colors;
+        var expected = new Dictionary<string, string>
+        {
+            ["ChromeWhiteBrush"] = colors.White.ToHex(),
+            ["ChromeTextBrush"] = colors.Text.ToHex(),
+            ["ChromeMutedTextBrush"] = colors.MutedText.ToHex(),
+            ["ChromeClosePressedBrush"] = colors.Danger.ToHex(),
+        };
+
+        foreach (var pair in expected)
+        {
+            var match = Regex.Match(xaml, $@"x:Key=""{pair.Key}""\s+Color=""(?<hex>#[0-9A-Fa-f]+)""");
+            match.Success.Should().BeTrue(pair.Key);
+            match.Groups["hex"].Value.Should().Be(pair.Value);
+        }
+
+        foreach (var theme in new[] { BrandThemes.FreeX, BrandThemes.FreeW, BrandThemes.FreeP, BrandThemes.FreeXMidnight })
+        {
+            theme.Colors.White.ToHex().Should().Be(colors.White.ToHex());
+            theme.Colors.Text.ToHex().Should().Be(colors.Text.ToHex());
+            theme.Colors.MutedText.ToHex().Should().Be(colors.MutedText.ToHex());
+            theme.Colors.Danger.ToHex().Should().Be(colors.Danger.ToHex());
+        }
+    }
+
+    [Fact]
+    public void Ribbon_visual_palette_projects_from_theme_roles_without_local_palette_literals()
+    {
+        var palette = RibbonVisualPalette.FromTheme(BrandThemes.FreeP);
+        palette.Surface.Should().Be(BrandThemes.FreeP.Colors.RibbonSurface);
+        palette.Accent.Should().Be(BrandThemes.FreeP.Colors.Accent);
+        palette.Divider.Should().Be(BrandThemes.FreeP.Colors.Border);
+        palette.InlineDivider.Should().Be(BrandThemes.FreeP.Colors.RibbonInlineDivider);
+        palette.GroupLabel.Should().Be(BrandThemes.FreeP.Colors.MutedText);
+        palette.Hover.Should().Be(BrandThemes.FreeP.Colors.RibbonButtonHover);
+        palette.HoverBorder.Should().Be(BrandThemes.FreeP.Colors.BorderStrong);
+        palette.Checked.Should().Be(BrandThemes.FreeP.Colors.AccentPressed);
+        palette.TabHover.Should().Be(BrandThemes.FreeP.Colors.AccentSoft);
+        palette.TabStrip.Should().Be(BrandThemes.FreeP.Colors.ChromeSurface);
+        palette.TabText.Should().Be(BrandThemes.FreeP.Colors.Text);
+    }
+
     // ── Byte-identical check against ThemeResources.xaml ─────────────────────────────────
 
     [Fact] public void FreeX_Accent_Is_0F6D8C()               => BrandThemes.FreeX.Colors.Accent.ToHex().Should().Be("#0F6D8C");
@@ -169,5 +217,13 @@ public sealed class BrandThemesTests
         {
             t.Name.Should().NotBeNullOrWhiteSpace();
         }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            directory = directory.Parent;
+        return directory?.FullName ?? throw new InvalidOperationException("FreeX repository root was not found.");
     }
 }

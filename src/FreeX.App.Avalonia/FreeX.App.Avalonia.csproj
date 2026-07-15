@@ -32,7 +32,11 @@
 
   <ItemGroup>
     <Content Include="Packaging\macos\FreeX.icns" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <Content Include="Resources\FreeX.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Keep the runtime resource path through a project link to the neutral shared canonical ICO. -->
+    <Content Include="..\..\shared\Free.Shared.Shell\Resources\FreeX.ico"
+             Link="Resources\FreeX.ico"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(TargetFramework)' != 'net10.0-macos'">

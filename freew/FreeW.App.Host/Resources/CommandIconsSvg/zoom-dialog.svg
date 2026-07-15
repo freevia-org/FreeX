@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32" role="img" aria-label="Zoom">
-  <rect width="32" height="32" fill="none"/>
-  <circle cx="13.5" cy="13.5" r="8.5" fill="#ffffff" stroke="#242424" stroke-width="1.7"/>
-  <path d="M20 20l6.5 6.5" fill="none" stroke="#242424" stroke-width="2" stroke-linecap="round"/>
-  <path d="M13.5 9v9M9 13.5h9" fill="none" stroke="#0F6D8C" stroke-width="1.8" stroke-linecap="round"/>
-</svg>
