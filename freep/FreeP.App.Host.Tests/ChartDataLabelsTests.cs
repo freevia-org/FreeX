@@ -568,12 +568,12 @@ public sealed class ChartDataLabelsTests : IDisposable
         chart.Series.Add(secondary);
 
         // The secondary range from ComputeNiceSecondaryAxisRange must cover the 1M value.
-        var (secMin, secMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        var (secMin, secMax, _) = ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
         double secRange   = secMax - secMin;
         double testVal    = 1_000_000.0;
         double correctFrac = (testVal - secMin) / secRange;
 
-        var (pMin, pMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceAxisRange(chart);
+        var (pMin, pMax, _) = ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
         double pRange   = pMax - pMin;
         double brokenFrac = (testVal - pMin) / pRange;
 
@@ -601,9 +601,9 @@ public sealed class ChartDataLabelsTests : IDisposable
         chart.Series.Add(primary);
         chart.Series.Add(secondary);
 
-        var (secMin, secMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        var (secMin, secMax, _) = ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
         double secRange  = secMax - secMin;
-        var (pMin, pMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceAxisRange(chart);
+        var (pMin, pMax, _) = ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
         double pRange    = pMax - pMin;
         double testVal   = 100_000.0;
 
@@ -632,9 +632,9 @@ public sealed class ChartDataLabelsTests : IDisposable
         chart.Series.Add(primary);
         chart.Series.Add(secondary);
 
-        var (secMin, secMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        var (secMin, secMax, _) = ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
         double secRange  = secMax - secMin;
-        var (pMin, pMax, _) = FreeP.App.Rendering.Wpf.SlideCanvas.ComputeNiceAxisRange(chart);
+        var (pMin, pMax, _) = ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
         double pRange    = pMax - pMin;
         double testVal   = 50_000.0;
 

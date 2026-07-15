@@ -8,6 +8,88 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class ChartRenderPlannerTests
 {
     [Fact]
+    public void BuildScenePlan_ResolvesChartFamilyAndAllSharedPaintInputsOnce()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            Title = "Revenue",
+            Categories = { "Q1", "Q2", "Q3" },
+            DataLabels = new ChartDataLabels { ShowValue = true }
+        };
+        var series = new ChartSeries { Name = "Actual" };
+        series.Values.AddRange(new double?[] { 10, 30, 20 });
+        chart.Series.Add(series);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 400, 300));
+
+        scene.GeometryKind.Should().Be(ChartSceneGeometryKind.Line);
+        scene.Frame.Plot.HasPositiveArea.Should().BeTrue();
+        scene.Title!.Value.Text.Should().Be("Revenue");
+        scene.LineSeries.Should().ContainSingle().Which.Markers.Should().HaveCount(3);
+        scene.DataLabels.Should().HaveCount(3);
+        scene.AxisTicks.ValueTicks.Should().NotBeEmpty();
+        scene.ValueAxisLabels.Should().NotBeEmpty();
+        scene.CategoryAxisLabels.Should().HaveCount(3);
+        scene.AxisTitles.Should().BeEmpty();
+        scene.LegendItems.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void BuildScenePlan_CorpusFamiliesCarryGeometryInSharedPlan()
+    {
+        var scatter = MakeTwoSeriesChart(ChartType.Scatter);
+        scatter.Series[0].XValues.AddRange(new double?[] { 1, 2 });
+        scatter.Series[1].XValues.AddRange(new double?[] { 2, 3 });
+        var bubble = MakeTwoSeriesChart(ChartType.Bubble);
+        bubble.Series[0].XValues.AddRange(new double?[] { 1, 2 });
+        bubble.Series[1].XValues.AddRange(new double?[] { 2, 3 });
+        bubble.Series[0].BubbleSizes.AddRange(new double?[] { 10, 20 });
+        bubble.Series[1].BubbleSizes.AddRange(new double?[] { 15, 25 });
+        var charts = new[]
+        {
+            MakeTwoSeriesChart(ChartType.ColumnClustered),
+            MakeTwoSeriesChart(ChartType.BarClustered),
+            MakeTwoSeriesChart(ChartType.Area),
+            scatter,
+            bubble,
+            MakeTwoSeriesChart(ChartType.Radar),
+            MakeTwoSeriesChart(ChartType.Pie),
+            MakeTwoSeriesChart(ChartType.Doughnut),
+            MakeSurfaceChart(ChartType.Surface3D),
+            MakeStockChart()
+        };
+
+        var scenes = charts
+            .Select(chart => ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 480, 288)))
+            .ToArray();
+
+        scenes.Should().OnlyContain(scene => scene.Frame.HasPlot);
+        scenes.Select(scene => scene.GeometryKind).Should().Equal(
+            ChartSceneGeometryKind.Column,
+            ChartSceneGeometryKind.Bar,
+            ChartSceneGeometryKind.Area,
+            ChartSceneGeometryKind.Scatter,
+            ChartSceneGeometryKind.Bubble,
+            ChartSceneGeometryKind.Radar,
+            ChartSceneGeometryKind.Pie,
+            ChartSceneGeometryKind.Doughnut,
+            ChartSceneGeometryKind.Surface,
+            ChartSceneGeometryKind.Stock);
+        scenes[0].Rectangles.Should().NotBeEmpty();
+        scenes[2].AreaSeries.Should().NotBeEmpty();
+        scenes[3].Scatter.Should().NotBeNull();
+        scenes[4].Bubble.Should().NotBeNull();
+        scenes[5].Radar.Should().NotBeNull();
+        scenes[6].PieSlices.Should().NotBeEmpty();
+        scenes[7].DoughnutSlices.Should().NotBeEmpty();
+        scenes[8].Surface.Should().NotBeNull();
+        scenes[9].Stock.Should().NotBeNull();
+    }
+
+    [Fact]
     public void UsesClassicOfficeChartStyle_DistinguishesStylelessAndStyledCharts()
     {
         ChartRenderPlanner.UsesClassicOfficeChartStyle(new ChartShape()).Should().BeTrue();

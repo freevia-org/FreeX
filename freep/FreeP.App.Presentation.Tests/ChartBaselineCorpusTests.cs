@@ -26,9 +26,25 @@ public sealed class ChartBaselineCorpusTests
                 ChartType.ColumnStacked100,
             });
 
+        var scenes = charts
+            .Select(chart => ChartRenderPlanner.BuildScenePlan(
+                chart,
+                new ChartPlanRect(0, 0, 480, 288)))
+            .ToArray();
+        scenes.Should().OnlyContain(scene => scene.Frame.HasPlot);
+        scenes.Select(scene => scene.GeometryKind).Should().Contain(new[]
+        {
+            ChartSceneGeometryKind.Stock,
+            ChartSceneGeometryKind.Surface,
+            ChartSceneGeometryKind.Scatter,
+            ChartSceneGeometryKind.Column,
+        });
+
         var stock = charts.Single(chart => chart.ChartType == ChartType.Stock);
         stock.HasHighLowLines.Should().BeFalse(
             "the PowerPoint baseline stock chart relies on its line-series fallback");
+        scenes.Single(scene => scene.GeometryKind == ChartSceneGeometryKind.Stock)
+            .LineSeries.Should().HaveCount(4);
         var stockFallback = ChartRenderPlanner.BuildStockFallbackLineSeriesPrimitives(
             stock,
             new ChartPlanRect(0, 0, 360, 220));
@@ -55,6 +71,8 @@ public sealed class ChartBaselineCorpusTests
                 ChartStockPriceMove.Unchanged);
 
         var surface = charts.Single(chart => chart.ChartType == ChartType.Surface3D);
+        scenes.Single(scene => scene.GeometryKind == ChartSceneGeometryKind.Surface)
+            .Surface.Should().NotBeNull();
         ChartRenderPlanner.BuildFramePlan(surface, new ChartPlanRect(0, 0, 480, 288)).Plot
             .Should().Be(new ChartPlanRect(44, 57, 360, 189),
                 "PowerPoint reserves a dedicated projected frame for classic Surface3D charts");

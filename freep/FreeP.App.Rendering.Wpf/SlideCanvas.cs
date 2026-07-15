@@ -727,140 +727,97 @@ public sealed class SlideCanvas : FrameworkElement
     private static void RenderChart(DrawingContext dc, DrawOp.Chart chartOp)
     {
         var bounds = chartOp.BoundsDip;
-        var chart  = chartOp.ChartShape;
+        var chart = chartOp.ChartShape;
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            ToPlanRect(bounds),
+            chartOp.SeriesColors,
+            chartOp.FillPlans);
 
-        // ── Frame background ───────────────────────────────────────────────────
-        bool classicOfficeStyle = ChartRenderPlanner.UsesClassicOfficeChartStyle(chart);
-        var frameBrush = FreezeBrush(new SolidColorBrush(Colors.White));
-        var frameRect = new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height);
-        dc.DrawRectangle(frameBrush, null, frameRect);
+        dc.DrawRectangle(
+            FreezeBrush(new SolidColorBrush(Colors.White)),
+            null,
+            new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
 
-        // ── Layout areas ────────────────────────────────────────────────────────
-        var frame = ChartRenderPlanner.BuildFramePlan(chart, ToPlanRect(bounds));
-        bool isPie = frame.IsPie;
-        bool isBar = frame.IsBar;
-        bool isScatterLike = frame.IsScatterLike;
-        bool isRadar = frame.IsRadar;
-        // Title
-        if (chart.Title is not null)
+        if (scene.Title is { } title)
+            DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment));
+
+        if (!scene.Frame.HasPlot)
+            return;
+
+        if (scene.DrawFlatGrid && scene.GridLines.GridLines.Count > 0)
         {
-            DrawChartLabel(dc, chart.Title, ToRect(frame.TitleBounds!.Value),
-                isBold: !classicOfficeStyle, fontSize: ChartRenderPlanner.ResolveTitleFontSize(chart, 9.0), align: TextAlignment.Center);
-        }
-
-        if (!frame.HasPlot) return;
-
-        var plot = frame.Plot;
-        double plotX = plot.X;
-        double plotY = plot.Y;
-        double plotW = plot.Width;
-        double plotH = plot.Height;
-
-        // ── Gridlines (drawn before bars so they appear behind) ─────────────────
-        var gridLinePlan = ChartRenderPlanner.BuildMajorGridLinePrimitivePlan(chart, frame);
-        if (!ChartRenderPlanner.UsesProjectedSurfaceFrame(chart) && gridLinePlan.GridLines.Count > 0)
-        {
-            var gridPen = CreateChartGridLinePen(gridLinePlan);
-            foreach (var gridLine in gridLinePlan.GridLines)
+            var gridPen = CreateChartGridLinePen(scene.GridLines);
+            foreach (var gridLine in scene.GridLines.GridLines)
                 dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
         }
 
-        // ── Dispatch to chart type ─────────────────────────────────────────────
-        switch (chart.ChartType)
+        switch (scene.GeometryKind)
         {
-            case FreeP.Core.Model.ChartType.ColumnClustered:
-            case FreeP.Core.Model.ChartType.ColumnStacked:
-            case FreeP.Core.Model.ChartType.ColumnStacked100:
-                RenderColumnChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
+            case ChartSceneGeometryKind.Column:
+                RenderColumnChart(dc, scene);
                 break;
-
-            case FreeP.Core.Model.ChartType.Surface:
-            case FreeP.Core.Model.ChartType.Surface3D:
-                RenderSurfaceChart(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH);
+            case ChartSceneGeometryKind.Surface:
+                RenderSurfaceChart(dc, scene);
                 break;
-
-            case FreeP.Core.Model.ChartType.BarClustered:
-            case FreeP.Core.Model.ChartType.BarStacked:
-            case FreeP.Core.Model.ChartType.BarStacked100:
-                RenderBarChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
+            case ChartSceneGeometryKind.Bar:
+                RenderBarChart(dc, scene);
                 break;
-
-            case FreeP.Core.Model.ChartType.Line:
-            case FreeP.Core.Model.ChartType.LineMarkers:
-                RenderLineChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH,
-                    withMarkers: chart.ChartType == FreeP.Core.Model.ChartType.LineMarkers);
+            case ChartSceneGeometryKind.Line:
+                RenderLineChart(dc, scene);
                 break;
-
-            case FreeP.Core.Model.ChartType.Stock:
-                RenderStockChart(dc, chart, chartOp.SeriesColors, plotX, plotY, plotW, plotH);
+            case ChartSceneGeometryKind.Stock:
+                RenderStockChart(dc, scene);
                 break;
-
-            case FreeP.Core.Model.ChartType.Pie:
-                RenderPieChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
+            case ChartSceneGeometryKind.Pie:
+                RenderPieChart(dc, scene);
                 break;
-
-            case FreeP.Core.Model.ChartType.Doughnut:
-                RenderDoughnutChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
+            case ChartSceneGeometryKind.Doughnut:
+                RenderDoughnutChart(dc, scene);
                 break;
-
-            case FreeP.Core.Model.ChartType.Area:
-            case FreeP.Core.Model.ChartType.AreaStacked:
-                RenderAreaChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
+            case ChartSceneGeometryKind.Area:
+                RenderAreaChart(dc, scene);
                 break;
-
-            case FreeP.Core.Model.ChartType.Scatter:
-                RenderScatterChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
+            case ChartSceneGeometryKind.Scatter:
+                RenderScatterChart(dc, scene);
                 break;
-
-            case FreeP.Core.Model.ChartType.Bubble:
-                RenderBubbleChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
+            case ChartSceneGeometryKind.Bubble:
+                RenderBubbleChart(dc, scene);
                 break;
-
-            case FreeP.Core.Model.ChartType.Radar:
-                RenderRadarChart(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
+            case ChartSceneGeometryKind.Radar:
+                RenderRadarChart(dc, scene);
                 break;
-
             default:
-                // Unknown — render a placeholder rectangle
                 dc.DrawRectangle(
                     FreezeBrush(new SolidColorBrush(Color.FromArgb(30, 0, 0, 0))),
                     null,
-                    new Rect(plotX, plotY, plotW, plotH));
+                    ToRect(scene.Frame.Plot));
                 break;
         }
 
-        // ── Combo chart: render secondary-group series with their OverrideChartType ──
-        // (e.g. a lineChart series overlaid on a barChart primary — rendered as a line).
-        bool hasOverrideSeries = chart.Series.Any(s => s.OverrideChartType.HasValue);
-        if (hasOverrideSeries && !isPie && !isBar && !isRadar && !isScatterLike)
-        {
-            RenderComboOverrideSeries(dc, chart, chartOp.SeriesColors, chartOp.FillPlans, plotX, plotY, plotW, plotH);
-        }
+        if (scene.ComboLineSeries.Count > 0)
+            RenderComboOverrideSeries(dc, scene);
 
-        var tickPlan = ChartRenderPlanner.BuildMajorAxisTickPrimitivePlan(chart, frame);
-        if (tickPlan.CategoryTicks.Count > 0 || tickPlan.ValueTicks.Count > 0)
+        if (scene.AxisTicks.CategoryTicks.Count > 0 || scene.AxisTicks.ValueTicks.Count > 0)
         {
-            var tickPen = CreateChartAxisTickPen(tickPlan);
-            foreach (var tick in tickPlan.CategoryTicks)
+            var tickPen = CreateChartAxisTickPen(scene.AxisTicks);
+            foreach (var tick in scene.AxisTicks.CategoryTicks)
                 dc.DrawLine(tickPen, ToPoint(tick.Start), ToPoint(tick.End));
-            foreach (var tick in tickPlan.ValueTicks)
+            foreach (var tick in scene.AxisTicks.ValueTicks)
                 dc.DrawLine(tickPen, ToPoint(tick.Start), ToPoint(tick.End));
         }
 
-        // ── Data labels ────────────────────────────────────────────────────────
-        foreach (var label in ChartRenderPlanner.BuildDataLabelPlans(chart, plot))
+        foreach (var label in scene.DataLabels)
         {
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
-                isBold: label.IsBold,
-                fontSize: label.FontSize,
-                align: ToTextAlignment(label.Alignment));
+                label.IsBold,
+                label.FontSize,
+                ToTextAlignment(label.Alignment));
         }
 
-        // ── Secondary value axis (right side) ──────────────────────────────────
-        var dataTablePlan = ChartRenderPlanner.BuildDataTablePrimitivePlan(chart, frame, chartOp.SeriesColors, chartOp.FillPlans);
-        RenderChartDataTable(dc, dataTablePlan);
+        RenderChartDataTable(dc, scene.DataTable);
 
-        var secondaryAxisPlan = ChartRenderPlanner.BuildSecondaryValueAxisPrimitivePlan(chart, frame);
+        var secondaryAxisPlan = scene.SecondaryAxis;
         if (secondaryAxisPlan.Ticks.Count > 0 || secondaryAxisPlan.Labels.Count > 0)
         {
             var secondaryTickPen = CreateChartSecondaryAxisTickPen(secondaryAxisPlan);
@@ -869,61 +826,47 @@ public sealed class SlideCanvas : FrameworkElement
             foreach (var label in secondaryAxisPlan.Labels)
             {
                 DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
-                    isBold: label.IsBold,
-                    fontSize: label.FontSize,
-                    align: ToTextAlignment(label.Alignment));
+                    label.IsBold,
+                    label.FontSize,
+                    ToTextAlignment(label.Alignment));
             }
         }
 
         if (secondaryAxisPlan.Title is { } secondaryAxisTitle)
             DrawChartAxisTitle(dc, secondaryAxisTitle);
 
-        // ── Axis labels ────────────────────────────────────────────────────────
-        foreach (var label in ChartRenderPlanner.BuildCategoryAxisLabelPlans(chart, frame))
+        foreach (var label in scene.CategoryAxisLabels)
         {
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
-                isBold: label.IsBold,
-                fontSize: label.FontSize,
-                align: ToTextAlignment(label.Alignment));
+                label.IsBold,
+                label.FontSize,
+                ToTextAlignment(label.Alignment));
         }
 
-        // Value axis labels using nice tick values
-        foreach (var label in ChartRenderPlanner.BuildValueAxisLabelPlans(chart, frame))
+        foreach (var label in scene.ValueAxisLabels)
         {
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
-                isBold: label.IsBold,
-                fontSize: label.FontSize,
-                align: ToTextAlignment(label.Alignment));
+                label.IsBold,
+                label.FontSize,
+                ToTextAlignment(label.Alignment));
         }
 
-        foreach (var title in ChartRenderPlanner.BuildAxisTitlePlans(chart, frame))
-        {
-            DrawChartAxisTitle(dc, title);
-        }
+        foreach (var titlePlan in scene.AxisTitles)
+            DrawChartAxisTitle(dc, titlePlan);
 
-        foreach (var item in ChartRenderPlanner.BuildLegendItemPlans(chart, frame, chartOp.SeriesColors, chartOp.FillPlans))
+        foreach (var item in scene.LegendItems)
         {
-            dc.DrawRectangle(
-                ToBrush(item.Fill),
-                null,
-                ToRect(item.SwatchBounds));
+            dc.DrawRectangle(ToBrush(item.Fill), null, ToRect(item.SwatchBounds));
             DrawChartLabel(dc, item.Label.Text, ToRect(item.Label.Bounds),
-                isBold: item.Label.IsBold,
-                fontSize: item.Label.FontSize,
-                align: ToTextAlignment(item.Label.Alignment));
+                item.Label.IsBold,
+                item.Label.FontSize,
+                ToTextAlignment(item.Label.Alignment));
         }
     }
 
-    // ── Column chart ─────────────────────────────────────────────────────────
-
-    private static void RenderColumnChart(
-        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartFillPlanSet fillPlans,
-        double plotX, double plotY, double plotW, double plotH)
+    private static void RenderColumnChart(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildColumnPrimitives(chart, plot, seriesColors, fillPlans))
+        foreach (var primitive in scene.Rectangles)
         {
             dc.DrawRectangle(
                 ToBrush(primitive.Fill),
@@ -939,27 +882,17 @@ public sealed class SlideCanvas : FrameworkElement
     /// lineChart, is mixed with the primary type, e.g. barChart).
     /// Only Line / LineMarkers overrides are handled here; others are future-proofed silently.
     /// </summary>
-    private static void RenderComboOverrideSeries(
-        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartFillPlanSet fillPlans,
-        double plotX, double plotY, double plotW, double plotH)
+    private static void RenderComboOverrideSeries(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildComboOverrideLineSeriesPrimitives(chart, plot, seriesColors, fillPlans))
+        foreach (var primitive in scene.ComboLineSeries)
             RenderLineSeriesPrimitive(dc, primitive);
     }
 
     // ── Bar (horizontal) chart ────────────────────────────────────────────────
 
-    private static void RenderBarChart(
-        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartFillPlanSet fillPlans,
-        double plotX, double plotY, double plotW, double plotH)
+    private static void RenderBarChart(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildBarPrimitives(chart, plot, seriesColors, fillPlans))
+        foreach (var primitive in scene.Rectangles)
         {
             dc.DrawRectangle(
                 ToBrush(primitive.Fill),
@@ -970,15 +903,9 @@ public sealed class SlideCanvas : FrameworkElement
 
     // ── Line chart ────────────────────────────────────────────────────────────
 
-    private static void RenderLineChart(
-        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartFillPlanSet fillPlans,
-        double plotX, double plotY, double plotW, double plotH,
-        bool withMarkers)
+    private static void RenderLineChart(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildLineSeriesPrimitives(chart, plot, withMarkers, seriesColors, fillPlans))
+        foreach (var primitive in scene.LineSeries)
             RenderLineSeriesPrimitive(dc, primitive);
     }
 
@@ -1007,25 +934,13 @@ public sealed class SlideCanvas : FrameworkElement
 
     // ── Pie chart ─────────────────────────────────────────────────────────────
 
-    private static void RenderPieChart(
-        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartFillPlanSet fillPlans,
-        double plotX, double plotY, double plotW, double plotH)
+    private static void RenderPieChart(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildPieSlicePrimitives(chart, plot, seriesColors, fillPlans))
+        foreach (var primitive in scene.PieSlices)
         {
-            // Resolve slice color: seriesColors is pre-expanded per-point by the compositor
-            // (cycling accent1-6 from the theme) so point index gives the correct slice fill.
-            SrgbColor sc = primitive.PointIndex < seriesColors.Count
-                ? seriesColors[primitive.PointIndex]
-                : new SrgbColor(0x4F, 0x81, 0xBD);
-
-            var fill = primitive.Fill ?? new ChartFillPlan(sc, Alpha: 255);
-            if (primitive.HasThreeDDepth)
+            var fill = primitive.Fill!.Value;
+            if (primitive.DepthFill is { } depthFill)
             {
-                var depthFill = fill.WithAlpha(ChartRenderPlanner.ThreeDPieDepthFillAlpha);
                 dc.DrawGeometry(
                     ToBrush(depthFill),
                     null,
@@ -1063,14 +978,9 @@ public sealed class SlideCanvas : FrameworkElement
 
     // ── Area chart ────────────────────────────────────────────────────────────
 
-    private static void RenderAreaChart(
-        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartFillPlanSet fillPlans,
-        double plotX, double plotY, double plotW, double plotH)
+    private static void RenderAreaChart(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildAreaSeriesPrimitives(chart, plot, seriesColors, fillPlans))
+        foreach (var primitive in scene.AreaSeries)
         {
             if (primitive.AreaPath.Fill is not { } fill)
                 continue;
@@ -1090,17 +1000,10 @@ public sealed class SlideCanvas : FrameworkElement
 
     // ── Doughnut chart ────────────────────────────────────────────────────────
 
-    private static void RenderSurfaceChart(
-        DrawingContext dc,
-        FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        double plotX,
-        double plotY,
-        double plotW,
-        double plotH)
+    private static void RenderSurfaceChart(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(chart, plot, seriesColors);
+        if (scene.Surface is not { } plan)
+            return;
 
         if (plan.Facets.Count > 0)
         {
@@ -1130,22 +1033,14 @@ public sealed class SlideCanvas : FrameworkElement
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
     }
 
-    private static void RenderDoughnutChart(
-        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartFillPlanSet fillPlans,
-        double plotX, double plotY, double plotW, double plotH)
+    private static void RenderDoughnutChart(DrawingContext dc, ChartScenePlan scene)
     {
         var borderPen = new Pen(FreezeBrush(new SolidColorBrush(Colors.White)), 0.8);
         if (borderPen.CanFreeze) borderPen.Freeze();
 
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        foreach (var primitive in ChartRenderPlanner.BuildDoughnutSlicePrimitives(chart, plot, seriesColors, fillPlans))
+        foreach (var primitive in scene.DoughnutSlices)
         {
-            SrgbColor sc = primitive.PointIndex < seriesColors.Count
-                ? seriesColors[primitive.PointIndex]
-                : GetSeriesColor(chart, primitive.PointIndex, 0, seriesColors);
-            var brush = ToBrush(primitive.Fill ?? new ChartFillPlan(sc, Alpha: 255));
+            var brush = ToBrush(primitive.Fill!.Value);
 
             // Build annular wedge: outer arc CW, then inner arc CCW.
             var geo = new StreamGeometry();
@@ -1177,14 +1072,10 @@ public sealed class SlideCanvas : FrameworkElement
 
     // ── Scatter (XY) chart ────────────────────────────────────────────────────
 
-    private static void RenderScatterChart(
-        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartFillPlanSet fillPlans,
-        double plotX, double plotY, double plotW, double plotH)
+    private static void RenderScatterChart(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        var plan = ChartRenderPlanner.BuildScatterPrimitivePlan(chart, plot, seriesColors, fillPlans);
+        if (scene.Scatter is not { } plan)
+            return;
         var gridPen = ToPen(plan.GridLineStroke);
 
         foreach (var gridLine in plan.GridLines)
@@ -1214,24 +1105,16 @@ public sealed class SlideCanvas : FrameworkElement
 
     // ── Bubble chart ──────────────────────────────────────────────────────────
 
-    private static void RenderStockChart(
-        DrawingContext dc,
-        FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        double plotX,
-        double plotY,
-        double plotW,
-        double plotH)
+    private static void RenderStockChart(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        if (!chart.HasHighLowLines)
+        if (scene.Stock is null)
         {
-            foreach (var primitive in ChartRenderPlanner.BuildStockFallbackLineSeriesPrimitives(chart, plot, seriesColors))
+            foreach (var primitive in scene.LineSeries)
                 RenderLineSeriesPrimitive(dc, primitive);
             return;
         }
 
-        foreach (var primitive in ChartRenderPlanner.BuildStockVolumePrimitives(chart, plot, seriesColors))
+        foreach (var primitive in scene.StockVolumes)
         {
             dc.DrawRectangle(
                 ToBrush(primitive.Fill),
@@ -1239,7 +1122,7 @@ public sealed class SlideCanvas : FrameworkElement
                 ToRect(primitive.Bounds));
         }
 
-        var plan = ChartRenderPlanner.BuildStockPrimitivePlan(chart, plot);
+        var plan = scene.Stock.Value;
 
         foreach (var segment in plan.HighLowLines)
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
@@ -1249,14 +1132,10 @@ public sealed class SlideCanvas : FrameworkElement
             dc.DrawLine(ToPen(tick.Segment.Stroke), ToPoint(tick.Segment.Start), ToPoint(tick.Segment.End));
     }
 
-    private static void RenderBubbleChart(
-        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartFillPlanSet fillPlans,
-        double plotX, double plotY, double plotW, double plotH)
+    private static void RenderBubbleChart(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        var plan = ChartRenderPlanner.BuildBubblePrimitivePlan(chart, plot, seriesColors, fillPlans);
+        if (scene.Bubble is not { } plan)
+            return;
         var gridPen = ToPen(plan.GridLineStroke);
 
         foreach (var gridLine in plan.GridLines)
@@ -1280,14 +1159,10 @@ public sealed class SlideCanvas : FrameworkElement
 
     // ── Radar chart ───────────────────────────────────────────────────────────
 
-    private static void RenderRadarChart(
-        DrawingContext dc, FreeP.Core.Model.ChartShape chart,
-        IReadOnlyList<SrgbColor> seriesColors,
-        ChartFillPlanSet fillPlans,
-        double plotX, double plotY, double plotW, double plotH)
+    private static void RenderRadarChart(DrawingContext dc, ChartScenePlan scene)
     {
-        var plot = new ChartPlanRect(plotX, plotY, plotW, plotH);
-        var plan = ChartRenderPlanner.BuildRadarPrimitivePlan(chart, plot, seriesColors, fillPlans);
+        if (scene.Radar is not { } plan)
+            return;
 
         foreach (var ring in plan.Rings)
             dc.DrawGeometry(null, ToPen(ring.Stroke), ToGeometry(ring.Path));
@@ -1316,57 +1191,6 @@ public sealed class SlideCanvas : FrameworkElement
     }
 
     // ── Chart helpers ─────────────────────────────────────────────────────────
-
-    private static SrgbColor GetSeriesColor(
-        FreeP.Core.Model.ChartShape chart, int seriesIndex, int pointIndex,
-        IReadOnlyList<SrgbColor> seriesColors)
-    {
-        if (seriesIndex < seriesColors.Count) return seriesColors[seriesIndex];
-        // Fallback cycle
-        var fallbacks = new SrgbColor[]
-        {
-            new(0x4F, 0x81, 0xBD), new(0xC0, 0x50, 0x4D),
-            new(0x9B, 0xBB, 0x59), new(0x80, 0x64, 0xA2),
-            new(0x4B, 0xAC, 0xC6), new(0xF7, 0x96, 0x46)
-        };
-        return fallbacks[seriesIndex % fallbacks.Length];
-    }
-
-    /// <summary>
-    /// Computes nice axis min/max/majorUnit matching PowerPoint's auto-scale algorithm:
-    /// major unit is chosen from {1, 2, 2.5, 5} × 10^n so that there are ~4-6 intervals.
-    /// Considers ONLY series that are NOT on the secondary axis (OnSecondaryAxis == false).
-    /// Returns (min, max, majorUnit).
-    /// </summary>
-    internal static (double min, double max, double majorUnit) ComputeNiceAxisRange(
-        FreeP.Core.Model.ChartShape chart) =>
-        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
-
-    /// <summary>
-    /// Computes the nice axis range for the SECONDARY value axis using ONLY series that have
-    /// OnSecondaryAxis == true.  Returns (0,1,1) when there are no secondary-axis series
-    /// (avoids divide-by-zero).  CB1 fix.
-    /// </summary>
-    internal static (double min, double max, double majorUnit) ComputeNiceSecondaryAxisRange(
-        FreeP.Core.Model.ChartShape chart) =>
-        ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
-
-    /// <summary>
-    /// Nice-number axis range for scatter/bubble X axis (uses XValues) or Y axis (uses Values).
-    /// </summary>
-    internal static (double min, double max, double majorUnit) ComputeNiceScatterAxisRange(
-        FreeP.Core.Model.ChartShape chart, bool useX) =>
-        ChartRenderPlanner.ComputeScatterAxisRange(chart, useX);
-
-    // Keep old signature for compatibility with existing callers that only need min/max
-    private static (double min, double max) ComputeAxisRange(FreeP.Core.Model.ChartShape chart)
-    {
-        var (min, max, _) = ComputeNiceAxisRange(chart);
-        return (min, max);
-    }
-
-    private static string FormatAxisValue(double v) =>
-        ChartRenderPlanner.FormatAxisValue(v);
 
     private static void DrawChartLabel(
         DrawingContext dc, string text, Rect rect,

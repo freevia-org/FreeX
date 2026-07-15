@@ -1643,7 +1643,7 @@ public sealed class SlideCanvasAvaloniaTests
         var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
         chart.Series.Add(series);
 
-        var (min, max, mu) = SlideCanvas.ComputeNiceAxisRange(chart);
+        var (min, max, mu) = ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
 
         min.Should().Be(0, "data min >= 0 → axis starts at 0");
         max.Should().BeGreaterThan(40, "axis max must be at or above data max");
@@ -1673,7 +1673,7 @@ public sealed class SlideCanvasAvaloniaTests
         chart.Series.Add(primary);
         chart.Series.Add(secondary);
 
-        var (min, max, _) = SlideCanvas.ComputeNiceAxisRange(chart);
+        var (min, max, _) = ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
 
         min.Should().BeGreaterThanOrEqualTo(0, "primary range min should start at or above 0");
         max.Should().BeLessThan(10_000,
@@ -1694,7 +1694,7 @@ public sealed class SlideCanvasAvaloniaTests
         chart.Series.Add(primary);
         chart.Series.Add(secondary);
 
-        var (secMin, secMax, secMu) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        var (secMin, secMax, secMu) = ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
 
         secMin.Should().BeGreaterThanOrEqualTo(0, "secondary range min should start at or above 0");
         secMax.Should().BeGreaterThanOrEqualTo(1_000_000, "secondary range must cover the 1M secondary max");
@@ -1720,7 +1720,7 @@ public sealed class SlideCanvasAvaloniaTests
         chart.Series.Add(primary);
         chart.Series.Add(secondary);
 
-        var (secMin, secMax, _) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        var (secMin, secMax, _) = ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
         double secRange = secMax - secMin;
 
         double plotH    = 400.0;  // hypothetical plot height in pixels
@@ -1735,7 +1735,7 @@ public sealed class SlideCanvasAvaloniaTests
             "CB1: a secondary value near the secondary max should map to near the top of the plot (large pixel height from bottom)");
 
         // What the OLD (broken) code would give: using the primary range for a 1M value
-        var (primaryMin, primaryMax, _) = SlideCanvas.ComputeNiceAxisRange(chart);
+        var (primaryMin, primaryMax, _) = ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
         double primaryRange = primaryMax - primaryMin;
         double brokenPxFromBottom = (testVal - primaryMin) / primaryRange * plotH;
 
@@ -1835,8 +1835,8 @@ public sealed class SlideCanvasAvaloniaTests
         var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
         chart.Series.Add(s);
 
-        var (min, max, mu) = SlideCanvas.ComputeNiceAxisRange(chart);
-        var (sMin, sMax, sMu) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        var (min, max, mu) = ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
+        var (sMin, sMax, sMu) = ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
 
         // Primary range should cover the data
         max.Should().BeGreaterThanOrEqualTo(100, "primary range covers primary-only data");
@@ -1928,7 +1928,7 @@ public sealed class SlideCanvasAvaloniaTests
         chart.Series.Add(secondary);
 
         // Compute what the label Y fraction should be for the secondary series' last point (1_000_000).
-        var (secMin, secMax, _) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        var (secMin, secMax, _) = ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
         double secRange   = secMax - secMin;
         double testVal    = 1_000_000.0;
 
@@ -1936,7 +1936,7 @@ public sealed class SlideCanvasAvaloniaTests
         double correctFrac = (testVal - secMin) / secRange;
 
         // CC2 broken path would use primary: fraction = (val - primaryMin) / primaryRange >> 1
-        var (primaryMin, primaryMax, _) = SlideCanvas.ComputeNiceAxisRange(chart);
+        var (primaryMin, primaryMax, _) = ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
         double primaryRange = primaryMax - primaryMin;
         double brokenFrac   = (testVal - primaryMin) / primaryRange;
 
@@ -2152,9 +2152,9 @@ public sealed class SlideCanvasAvaloniaTests
         chart.Series.Add(primary);
         chart.Series.Add(secondary);
 
-        var (secMin, secMax, _) = SlideCanvas.ComputeNiceSecondaryAxisRange(chart);
+        var (secMin, secMax, _) = ChartRenderPlanner.ComputeSecondaryValueAxisRange(chart);
         double secRange  = secMax - secMin;
-        var (pMin, pMax, _) = SlideCanvas.ComputeNiceAxisRange(chart);
+        var (pMin, pMax, _) = ChartRenderPlanner.ComputePrimaryValueAxisRange(chart);
         double pRange    = pMax - pMin;
         double testVal   = 100_000.0;
 

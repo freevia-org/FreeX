@@ -22,6 +22,22 @@ public enum ChartRenderFamily
     Radar
 }
 
+public enum ChartSceneGeometryKind
+{
+    Empty,
+    Column,
+    Surface,
+    Bar,
+    Line,
+    Stock,
+    Pie,
+    Doughnut,
+    Area,
+    Scatter,
+    Bubble,
+    Radar
+}
+
 public enum ChartPlanTextAlignment
 {
     Left,
@@ -405,6 +421,7 @@ public readonly record struct ChartPieSlicePrimitive(
     double EndAngle,
     ChartFillPlan? Fill)
 {
+    public ChartFillPlan? DepthFill { get; init; }
     public double SweepAngle => EndAngle - StartAngle;
     public bool IsLargeArc => SweepAngle > Math.PI;
     public double VerticalScale { get; init; }
@@ -439,6 +456,41 @@ public readonly record struct ChartLegendItemPlan(
 public readonly record struct ChartAxisTitlePlan(
     ChartTextPlan Label,
     ChartAxisTitleOrientation Orientation);
+
+/// <summary>
+/// Complete renderer-neutral chart scene. The platform canvases consume this
+/// object as a paint list; chart layout, scaling, labels, and geometry are
+/// intentionally resolved here exactly once.
+/// </summary>
+public sealed class ChartScenePlan
+{
+    public ChartFramePlan Frame { get; init; }
+    public ChartSceneGeometryKind GeometryKind { get; init; }
+    public ChartTextPlan? Title { get; init; }
+    public bool DrawFlatGrid { get; init; }
+    public ChartMajorGridLinePrimitivePlan GridLines { get; init; }
+    public ChartMajorAxisTickPrimitivePlan AxisTicks { get; init; }
+    public IReadOnlyList<ChartDataLabelPlan> DataLabels { get; init; } = Array.Empty<ChartDataLabelPlan>();
+    public ChartDataTablePrimitivePlan DataTable { get; init; }
+    public ChartSecondaryValueAxisPrimitivePlan SecondaryAxis { get; init; }
+    public IReadOnlyList<ChartTextPlan> CategoryAxisLabels { get; init; } = Array.Empty<ChartTextPlan>();
+    public IReadOnlyList<ChartTextPlan> ValueAxisLabels { get; init; } = Array.Empty<ChartTextPlan>();
+    public IReadOnlyList<ChartAxisTitlePlan> AxisTitles { get; init; } = Array.Empty<ChartAxisTitlePlan>();
+    public IReadOnlyList<ChartLegendItemPlan> LegendItems { get; init; } = Array.Empty<ChartLegendItemPlan>();
+
+    public IReadOnlyList<ChartRectPrimitive> Rectangles { get; init; } = Array.Empty<ChartRectPrimitive>();
+    public ChartSurfaceGeometryPlan? Surface { get; init; }
+    public IReadOnlyList<ChartLineSeriesPrimitive> LineSeries { get; init; } = Array.Empty<ChartLineSeriesPrimitive>();
+    public ChartStockPrimitivePlan? Stock { get; init; }
+    public IReadOnlyList<ChartRectPrimitive> StockVolumes { get; init; } = Array.Empty<ChartRectPrimitive>();
+    public IReadOnlyList<ChartAreaSeriesPrimitive> AreaSeries { get; init; } = Array.Empty<ChartAreaSeriesPrimitive>();
+    public IReadOnlyList<ChartPieSlicePrimitive> PieSlices { get; init; } = Array.Empty<ChartPieSlicePrimitive>();
+    public IReadOnlyList<ChartPieSlicePrimitive> DoughnutSlices { get; init; } = Array.Empty<ChartPieSlicePrimitive>();
+    public ChartScatterPrimitivePlan? Scatter { get; init; }
+    public ChartBubblePrimitivePlan? Bubble { get; init; }
+    public ChartRadarPrimitivePlan? Radar { get; init; }
+    public IReadOnlyList<ChartLineSeriesPrimitive> ComboLineSeries { get; init; } = Array.Empty<ChartLineSeriesPrimitive>();
+}
 
 /// <summary>
 /// Renderer-neutral chart planning helpers shared by the WPF and Avalonia slide canvases.
@@ -896,6 +948,154 @@ public static partial class ChartRenderPlanner
             legendAreaWidth,
             legendAreaHeight,
             family);
+    }
+
+    public static ChartScenePlan BuildScenePlan(
+        ChartShape chart,
+        ChartPlanRect bounds,
+        IReadOnlyList<SrgbColor>? seriesColors = null,
+        ChartFillPlanSet? fillPlans = null)
+    {
+        var frame = BuildFramePlan(chart, bounds);
+        ChartTextPlan? title = chart.Title is not null
+            ? new ChartTextPlan(
+                chart.Title,
+                frame.TitleBounds ?? default,
+                IsBold: !UsesClassicOfficeChartStyle(chart),
+                FontSize: ResolveTitleFontSize(chart, 9.0),
+                Alignment: ChartPlanTextAlignment.Center)
+            : null;
+
+        if (!frame.HasPlot)
+        {
+            return new ChartScenePlan
+            {
+                Frame = frame,
+                GeometryKind = ChartSceneGeometryKind.Empty,
+                Title = title,
+                GridLines = EmptyMajorGridLinePrimitivePlan(),
+                AxisTicks = EmptyMajorAxisTickPrimitivePlan(),
+                DataTable = EmptyDataTablePrimitivePlan(),
+                SecondaryAxis = EmptySecondaryValueAxisPrimitivePlan()
+            };
+        }
+
+        var plot = frame.Plot;
+        var geometryKind = chart.ChartType switch
+        {
+            ChartType.ColumnClustered or ChartType.ColumnStacked or ChartType.ColumnStacked100 => ChartSceneGeometryKind.Column,
+            ChartType.Surface or ChartType.Surface3D => ChartSceneGeometryKind.Surface,
+            ChartType.BarClustered or ChartType.BarStacked or ChartType.BarStacked100 => ChartSceneGeometryKind.Bar,
+            ChartType.Line or ChartType.LineMarkers => ChartSceneGeometryKind.Line,
+            ChartType.Stock => ChartSceneGeometryKind.Stock,
+            ChartType.Pie => ChartSceneGeometryKind.Pie,
+            ChartType.Doughnut => ChartSceneGeometryKind.Doughnut,
+            ChartType.Area or ChartType.AreaStacked => ChartSceneGeometryKind.Area,
+            ChartType.Scatter => ChartSceneGeometryKind.Scatter,
+            ChartType.Bubble => ChartSceneGeometryKind.Bubble,
+            ChartType.Radar => ChartSceneGeometryKind.Radar,
+            _ => ChartSceneGeometryKind.Empty
+        };
+
+        IReadOnlyList<ChartRectPrimitive> rectangles = Array.Empty<ChartRectPrimitive>();
+        ChartSurfaceGeometryPlan? surface = null;
+        IReadOnlyList<ChartLineSeriesPrimitive> lineSeries = Array.Empty<ChartLineSeriesPrimitive>();
+        ChartStockPrimitivePlan? stock = null;
+        IReadOnlyList<ChartRectPrimitive> stockVolumes = Array.Empty<ChartRectPrimitive>();
+        IReadOnlyList<ChartAreaSeriesPrimitive> areaSeries = Array.Empty<ChartAreaSeriesPrimitive>();
+        IReadOnlyList<ChartPieSlicePrimitive> pieSlices = Array.Empty<ChartPieSlicePrimitive>();
+        IReadOnlyList<ChartPieSlicePrimitive> doughnutSlices = Array.Empty<ChartPieSlicePrimitive>();
+        ChartScatterPrimitivePlan? scatter = null;
+        ChartBubblePrimitivePlan? bubble = null;
+        ChartRadarPrimitivePlan? radar = null;
+
+        switch (geometryKind)
+        {
+            case ChartSceneGeometryKind.Column:
+                rectangles = BuildColumnPrimitives(chart, plot, seriesColors, fillPlans);
+                break;
+            case ChartSceneGeometryKind.Surface:
+                surface = BuildSurfaceGeometryPlan(chart, plot, seriesColors);
+                break;
+            case ChartSceneGeometryKind.Bar:
+                rectangles = BuildBarPrimitives(chart, plot, seriesColors, fillPlans);
+                break;
+            case ChartSceneGeometryKind.Line:
+                lineSeries = BuildLineSeriesPrimitives(
+                    chart,
+                    plot,
+                    withMarkers: chart.ChartType == ChartType.LineMarkers,
+                    seriesColors,
+                    fillPlans);
+                break;
+            case ChartSceneGeometryKind.Stock:
+                if (!chart.HasHighLowLines)
+                {
+                    lineSeries = BuildStockFallbackLineSeriesPrimitives(chart, plot, seriesColors, fillPlans);
+                }
+                else
+                {
+                    stockVolumes = BuildStockVolumePrimitives(chart, plot, seriesColors);
+                    stock = BuildStockPrimitivePlan(chart, plot);
+                }
+                break;
+            case ChartSceneGeometryKind.Pie:
+                pieSlices = BuildPieSlicePrimitives(chart, plot, seriesColors, fillPlans);
+                break;
+            case ChartSceneGeometryKind.Doughnut:
+                doughnutSlices = BuildDoughnutSlicePrimitives(chart, plot, seriesColors, fillPlans);
+                break;
+            case ChartSceneGeometryKind.Area:
+                areaSeries = BuildAreaSeriesPrimitives(chart, plot, seriesColors, fillPlans);
+                break;
+            case ChartSceneGeometryKind.Scatter:
+                scatter = BuildScatterPrimitivePlan(chart, plot, seriesColors, fillPlans);
+                break;
+            case ChartSceneGeometryKind.Bubble:
+                bubble = BuildBubblePrimitivePlan(chart, plot, seriesColors, fillPlans);
+                break;
+            case ChartSceneGeometryKind.Radar:
+                radar = BuildRadarPrimitivePlan(chart, plot, seriesColors, fillPlans);
+                break;
+        }
+
+        bool canHaveComboOverlay = frame.Family is not (
+            ChartRenderFamily.Pie or
+            ChartRenderFamily.HorizontalBar or
+            ChartRenderFamily.Radar or
+            ChartRenderFamily.ScatterLike);
+        var comboLineSeries = canHaveComboOverlay && chart.Series.Any(series => series.OverrideChartType.HasValue)
+            ? BuildComboOverrideLineSeriesPrimitives(chart, plot, seriesColors, fillPlans)
+            : Array.Empty<ChartLineSeriesPrimitive>();
+
+        return new ChartScenePlan
+        {
+            Frame = frame,
+            GeometryKind = geometryKind,
+            Title = title,
+            DrawFlatGrid = !UsesProjectedSurfaceFrame(chart),
+            GridLines = BuildMajorGridLinePrimitivePlan(chart, frame),
+            AxisTicks = BuildMajorAxisTickPrimitivePlan(chart, frame),
+            DataLabels = BuildDataLabelPlans(chart, plot),
+            DataTable = BuildDataTablePrimitivePlan(chart, frame, seriesColors, fillPlans),
+            SecondaryAxis = BuildSecondaryValueAxisPrimitivePlan(chart, frame),
+            CategoryAxisLabels = BuildCategoryAxisLabelPlans(chart, frame),
+            ValueAxisLabels = BuildValueAxisLabelPlans(chart, frame),
+            AxisTitles = BuildAxisTitlePlans(chart, frame),
+            LegendItems = BuildLegendItemPlans(chart, frame, seriesColors, fillPlans),
+            Rectangles = rectangles,
+            Surface = surface,
+            LineSeries = lineSeries,
+            Stock = stock,
+            StockVolumes = stockVolumes,
+            AreaSeries = areaSeries,
+            PieSlices = pieSlices,
+            DoughnutSlices = doughnutSlices,
+            Scatter = scatter,
+            Bubble = bubble,
+            Radar = radar,
+            ComboLineSeries = comboLineSeries
+        };
     }
 
     public static ChartRenderFamily GetRenderFamily(ChartType chartType) =>
@@ -4455,6 +4655,14 @@ public static partial class ChartRenderPlanner
         {
             double sweepAngle = visibleValue.Value / total * 2 * Math.PI;
             double endAngle = startAngle + sweepAngle;
+            var fill = ResolvePointFill(
+                series,
+                seriesIndex,
+                visibleValue.PointIndex,
+                seriesColors,
+                RectSeriesFillAlpha,
+                fillPlans,
+                varyByPoint);
             primitives.Add(new ChartPieSlicePrimitive(
                 seriesIndex,
                 visibleValue.PointIndex,
@@ -4463,17 +4671,13 @@ public static partial class ChartRenderPlanner
                 outerRadius,
                 startAngle,
                 endAngle,
-                ResolvePointFill(
-                    series,
-                    seriesIndex,
-                    visibleValue.PointIndex,
-                    seriesColors,
-                    RectSeriesFillAlpha,
-                    fillPlans,
-                    varyByPoint))
+                fill)
             {
                 VerticalScale = verticalScale,
-                DepthOffsetY = depthOffsetY
+                DepthOffsetY = depthOffsetY,
+                DepthFill = depthOffsetY > 0
+                    ? fill.WithAlpha(ThreeDPieDepthFillAlpha)
+                    : null
             });
             startAngle = endAngle;
         }
