@@ -14469,9 +14469,27 @@ public sealed class DocumentView : Control
 
         if (includeDelimiters)
         {
-            DrawEquationText(context, EquationVisualPlanner.MatrixOpenDelimiterText, new Rect(bounds.X, bounds.Y, delimiterWidth, bounds.Height), baseFormatting, EquationNormalStyle, centered: true);
-            DrawEquationText(context, EquationVisualPlanner.MatrixCloseDelimiterText, new Rect(gridX + metrics.Width + 2, bounds.Y, delimiterWidth, bounds.Height), baseFormatting, EquationNormalStyle, centered: true);
+            DrawEquationMatrixBracket(context, bounds.X, bounds.Y, bounds.Bottom, delimiterWidth, opening: true);
+            DrawEquationMatrixBracket(context, gridX + metrics.Width + 2, bounds.Y, bounds.Bottom, delimiterWidth, opening: false);
         }
+    }
+
+    private static void DrawEquationMatrixBracket(
+        DrawingContext context,
+        double x,
+        double top,
+        double bottom,
+        double width,
+        bool opening)
+    {
+        var cap = Math.Max(2, Math.Min(4, width - 2));
+        var verticalX = opening ? x + width - 1 : x + 1;
+        var topY = top + 1;
+        var bottomY = bottom - 1;
+        context.DrawLine(EquationLinePen, new Point(verticalX, topY), new Point(verticalX, bottomY));
+        var capDirection = opening ? -1 : 1;
+        context.DrawLine(EquationLinePen, new Point(verticalX, topY), new Point(verticalX + capDirection * cap, topY));
+        context.DrawLine(EquationLinePen, new Point(verticalX, bottomY), new Point(verticalX + capDirection * cap, bottomY));
     }
 
     private void DrawEquationDecorator(DrawingContext context, EquationVisualElement element, Rect bounds, RunFormatting baseFormatting)
