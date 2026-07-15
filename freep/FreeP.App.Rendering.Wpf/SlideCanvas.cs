@@ -1389,7 +1389,11 @@ public sealed class SlideCanvas : FrameworkElement
             {
                 continue;
             }
-            var ft = BuildFormattedText(para, initialColumnLayout.ColumnWidthDip, text.Wrap);
+            var ft = BuildFormattedText(
+                para,
+                initialColumnLayout.ColumnWidthDip,
+                text.Wrap,
+                useIdealMetrics: text.AutoFitKind == TextAutoFitKind.None);
             initialMeasured.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
                 ft.Height,
@@ -1413,7 +1417,11 @@ public sealed class SlideCanvas : FrameworkElement
             {
                 continue;
             }
-            var ft = BuildFormattedText(para, columnLayout.ColumnWidthDip, renderText.Wrap);
+            var ft = BuildFormattedText(
+                para,
+                columnLayout.ColumnWidthDip,
+                renderText.Wrap,
+                useIdealMetrics: renderText.AutoFitKind == TextAutoFitKind.None);
             formatted[i] = ft;
             measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
@@ -1468,7 +1476,11 @@ public sealed class SlideCanvas : FrameworkElement
             var para = text.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
 
-            var ft = BuildFormattedText(para, area.Width, text.Wrap);
+            var ft = BuildFormattedText(
+                para,
+                area.Width,
+                text.Wrap,
+                useIdealMetrics: text.AutoFitKind == TextAutoFitKind.None);
             initialMeasured.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
                 ft.Height,
@@ -1487,7 +1499,11 @@ public sealed class SlideCanvas : FrameworkElement
             var para = renderText.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
 
-            var ft = BuildFormattedText(para, area.Width, renderText.Wrap);
+            var ft = BuildFormattedText(
+                para,
+                area.Width,
+                renderText.Wrap,
+                useIdealMetrics: renderText.AutoFitKind == TextAutoFitKind.None);
             formatted[i] = ft;
             measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
@@ -1874,7 +1890,11 @@ public sealed class SlideCanvas : FrameworkElement
             TextSoftEdge = run.TextSoftEdge
         };
 
-    private static FormattedText BuildFormattedText(ResolvedParagraph para, double maxWidth, bool wrap)
+    private static FormattedText BuildFormattedText(
+        ResolvedParagraph para,
+        double maxWidth,
+        bool wrap,
+        bool useIdealMetrics = false)
     {
         // Combine all runs into a single string (FormattedText supports range formatting).
         var sb = new System.Text.StringBuilder();
@@ -1897,9 +1917,10 @@ public sealed class SlideCanvas : FrameworkElement
             Color.FromRgb(firstRun.Color.R, firstRun.Color.G, firstRun.Color.B));
         if (brush.CanFreeze) brush.Freeze();
 
-        // P1: Use Display formatting mode for GDI-compatible metrics (matches PowerPoint's
-        // pixel-grid-snapped text rendering at 96 DPI). pixelsPerDip = 1.0 is correct for
-        // RenderTargetBitmap at 96 DPI.
+        // P1: Keep Display formatting for bold headings, which matches PowerPoint's
+        // pixel-grid-snapped title rendering at 96 DPI. Regular text in a no-autofit body
+        // uses Ideal metrics below so wrapping follows PowerPoint's vector text layout.
+        // pixelsPerDip = 1.0 is correct for RenderTargetBitmap at 96 DPI.
         //
         // Wave 6A investigation: GlyphRun-based text rendering was evaluated as an alternative
         // to FormattedText. Baseline parity measurements on text-heavy decks showed:
@@ -1921,7 +1942,9 @@ public sealed class SlideCanvas : FrameworkElement
             emSizePx,
             brush,
             numberSubstitution: null,
-            textFormattingMode: TextFormattingMode.Display,
+            textFormattingMode: useIdealMetrics && !para.Runs.Any(run => run.Bold)
+                ? TextFormattingMode.Ideal
+                : TextFormattingMode.Display,
             pixelsPerDip: 1.0);
 
         if (wrap && maxWidth > 0)
