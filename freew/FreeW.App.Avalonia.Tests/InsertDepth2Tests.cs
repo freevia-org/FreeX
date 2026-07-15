@@ -738,9 +738,9 @@ public sealed class InsertDepth2Tests
         fontSizeScales[0].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
         fontSizeScales[2].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
         fontSizeScales[3].Should().Be(EquationVisualPlanner.ScriptFontSizeScale);
-        placedText.Should().Be($"a + b{EquationVisualPlanner.FractionBarText}c3{EquationVisualPlanner.RadicalSignText}x + 1");
-        placedGlyphCount.Should().Be(14,
-            "Avalonia should lay out fraction/radical display segments instead of the raw linear fallback parentheses");
+        placedText.Should().Be("\uFFFC\uFFFC");
+        placedGlyphCount.Should().Be(2,
+            "Avalonia should reserve one atomic layout cell for each structured equation form");
         kinds.Should().Equal(MathRunKind.Fraction, MathRunKind.Radical);
         linearText.Should().Be($"a + b/c3{EquationVisualPlanner.RadicalSignText}(x + 1)");
     }
@@ -799,9 +799,9 @@ public sealed class InsertDepth2Tests
         styles[1].BaselineRole.Should().Be(EquationVisualBaselineRole.Subscript);
         styles[2].BaselineRole.Should().Be(EquationVisualBaselineRole.Superscript);
         styles[3].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
-        placedText.Should().Be("\u2211i=1ni");
-        placedGlyphCount.Should().Be(6,
-            "Avalonia should lay out n-ary display segments instead of the raw linear fallback limits");
+        placedText.Should().Be("\uFFFC");
+        placedGlyphCount.Should().Be(1,
+            "Avalonia should reserve the n-ary operator and its limits as one structural layout cell");
         kinds.Should().Equal(MathRunKind.NAry);
         linearText.Should().Be("\u2211(i=1..n) i");
     }
@@ -871,12 +871,9 @@ public sealed class InsertDepth2Tests
             EquationVisualSegmentRole.MatrixCloseDelimiter);
         fontSizeScales[1].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
         fontSizeScales[3].Should().Be(EquationVisualPlanner.StructureFontSizeScale);
-        placedText.Should().Be(
-            $"{EquationVisualPlanner.MatrixOpenDelimiterText}1{EquationVisualPlanner.MatrixColumnSeparatorText}" +
-            $"0{EquationVisualPlanner.MatrixRowSeparatorText}0{EquationVisualPlanner.MatrixColumnSeparatorText}" +
-            $"1{EquationVisualPlanner.MatrixCloseDelimiterText}");
-        placedGlyphCount.Should().Be(12,
-            "Avalonia should lay out matrix display segments instead of the raw linear fallback with commas");
+        placedText.Should().Be("\uFFFC");
+        placedGlyphCount.Should().Be(1,
+            "Avalonia should reserve a matrix as one two-dimensional layout cell");
         kinds.Should().Equal(MathRunKind.Matrix);
         linearText.Should().Be("[1, 0; 0, 1]");
     }
@@ -960,9 +957,9 @@ public sealed class InsertDepth2Tests
         styles[1].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
         styles[3].FontSizeScale.Should().Be(EquationVisualPlanner.DecoratorFontSizeScale);
         styles[4].FontSizeScale.Should().Be(EquationVisualPlanner.DelimiterFontSizeScale);
-        placedText.Should().Be($"hatxy{EquationVisualPlanner.UnderbarCueText}[a + b]z\u23DF");
-        placedGlyphCount.Should().Be(15,
-            "Avalonia should lay out decorator display segments instead of raw linear fallback strings");
+        placedText.Should().Be("\uFFFC\uFFFC\uFFFC\uFFFC");
+        placedGlyphCount.Should().Be(4,
+            "Avalonia should reserve each decorator and delimiter form as one structural layout cell");
         kinds.Should().Equal(
             MathRunKind.Accent,
             MathRunKind.Bar,
@@ -1030,9 +1027,9 @@ public sealed class InsertDepth2Tests
         styles[2].Italic.Should().BeTrue();
         styles[0].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
         styles[2].FontSizeScale.Should().Be(EquationVisualPlanner.StructureFontSizeScale);
-        placedText.Should().Be("sin(x + y)");
-        placedGlyphCount.Should().Be(10,
-            "Avalonia should lay out function display segments instead of a single raw linear fallback segment");
+        placedText.Should().Be("\uFFFC");
+        placedGlyphCount.Should().Be(1,
+            "Avalonia should reserve a function application as one structural layout cell");
         kinds.Should().Equal(MathRunKind.FunctionApply);
         linearText.Should().Be("sin(x + y)");
     }

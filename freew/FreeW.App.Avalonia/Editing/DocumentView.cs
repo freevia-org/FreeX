@@ -4556,6 +4556,12 @@ public sealed class DocumentView : Control
             }
             // VV1: do NOT break — scan all runs.
         }
+        foreach (var cell in cells)
+        {
+            if (cell.EquationElement is { } equationElement)
+                firstLineNaturalH = Math.Max(firstLineNaturalH, MeasureEquationVisualElement(equationElement, cell.Fmt).Height);
+        }
+
         var firstLineHeight = ApplyLineSpacing(firstLineNaturalH * naturalLineHeightScale, pf);
         var anchorContentY = PeekFirstLineContentY(firstLineHeight);
         CollectFloatingObjects(blockIndex, paragraph, anchorContentY);
@@ -4599,6 +4605,16 @@ public sealed class DocumentView : Control
 
         for (var c = 0; c < cells.Count; c++)
         {
+            if (cells[c].EquationElement is { } equationElement)
+            {
+                var equationSize = MeasureEquationVisualElement(equationElement, cells[c].Fmt);
+                measured[c] = equationSize.Width;
+                heights[c] = equationSize.Height;
+                if (equationSize.Height > firstLineNaturalH)
+                    firstLineNaturalH = equationSize.Height;
+                continue;
+            }
+
             if (cells[c].Ch == '\t')
             {
                 // AV-TAB: tab width is determined lazily in the wrapping loop (depends on pen pos).
@@ -4926,7 +4942,7 @@ public sealed class DocumentView : Control
                 continue;
             }
 
-            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null));
+            _placed.Add(new PlacedChar(blockIndex, c, x, pageSpaceY, measured[c], lineHeight, cells[c].Fmt, cells[c].Ch, Sentinel: false, CommentId: cells[c].CommentId, Revision: cells[c].Revision, Link: cells[c].Link, HasFormatRevision: cells[c].FormatRevision is not null, EquationElement: cells[c].EquationElement));
             x += measured[c];
             // Extra inter-word gap for justify alignment: only for spaces before the last non-space cell.
             if (wordGap > 0 && cells[c].Ch == ' ' && c < lastNonSpaceIdx)
@@ -6492,6 +6508,16 @@ public sealed class DocumentView : Control
             var formatRevisionHighlighted = pc.HasFormatRevision && reviewPolicy.ShouldHighlightFormattingChanges;
             if (formatRevisionHighlighted && string.IsNullOrWhiteSpace(drawFmt.ColorHex))
                 drawFmt = drawFmt with { ColorHex = RevisionColorHex };
+
+            if (pc.EquationElement is { } equationElement)
+            {
+                DrawEquationVisualElement(
+                    context,
+                    equationElement,
+                    new Rect(pc.X, pc.Y, pc.W, pc.LineHeight),
+                    drawFmt);
+                continue;
+            }
 
             // AV-TAB: tab characters have no glyph — skip text drawing (leader was drawn separately).
             if (pc.Ch == '\t')
@@ -13885,6 +13911,16 @@ public sealed class DocumentView : Control
             element.FunctionName,
             element.FunctionArgument));
 
+        // Keep genuinely two-dimensional OfficeMath forms intact through pagination. Scripts stay
+        // character-level so the normal text/caret path continues to own their inline behavior.
+        if (element.Kind != EquationVisualElementKind.Segments)
+        {
+            foreach (var segment in element.Segments)
+                CaptureEquationVisualSegment(segment);
+            cells.Add(new Cell('\uFFFC', baseFormatting, EquationElement: element));
+            return;
+        }
+
         foreach (var segment in element.Segments)
             AddEquationVisualSegment(segment, baseFormatting, cells);
     }
@@ -13894,6 +13930,14 @@ public sealed class DocumentView : Control
         RunFormatting baseFormatting,
         List<Cell> cells)
     {
+        CaptureEquationVisualSegment(segment);
+        var fmt = ApplyEquationVisualStyle(baseFormatting, segment.Style);
+        foreach (var ch in segment.Text)
+            cells.Add(new Cell(ch, fmt));
+    }
+
+    private void CaptureEquationVisualSegment(EquationVisualSegment segment)
+    {
         _equationVisualSegments.Add((
             segment.Text,
             segment.Role,
@@ -13901,10 +13945,6 @@ public sealed class DocumentView : Control
             segment.Style.FontSizeScale,
             segment.Style.FontFamily,
             segment.Style.Italic));
-
-        var fmt = ApplyEquationVisualStyle(baseFormatting, segment.Style);
-        foreach (var ch in segment.Text)
-            cells.Add(new Cell(ch, fmt));
     }
 
     private static RunFormatting ApplyEquationVisualStyle(RunFormatting baseFormatting, EquationVisualStyle style)
@@ -14189,6 +14229,353 @@ public sealed class DocumentView : Control
 
     // ---- Text shaping helpers -------------------------------------------------------------------
 
+    private static readonly IPen EquationLinePen = new Pen(Brushes.Black, 1);
+
+    private Size MeasureEquationVisualElement(EquationVisualElement element, RunFormatting baseFormatting)
+    {
+        return element.Kind switch
+        {
+            EquationVisualElementKind.Fraction => MeasureEquationFraction(element, baseFormatting),
+            EquationVisualElementKind.Radical => MeasureEquationRadical(element, baseFormatting),
+            EquationVisualElementKind.NAry => MeasureEquationNAry(element, baseFormatting),
+            EquationVisualElementKind.Matrix => MeasureEquationMatrix(element, baseFormatting, includeDelimiters: true),
+            EquationVisualElementKind.EquationArray => MeasureEquationMatrix(element, baseFormatting, includeDelimiters: false),
+            EquationVisualElementKind.Accent or EquationVisualElementKind.GroupChar => MeasureEquationDecorator(element, baseFormatting),
+            EquationVisualElementKind.Bar => MeasureEquationBar(element, baseFormatting),
+            EquationVisualElementKind.Delimiter => MeasureEquationDelimiter(element, baseFormatting),
+            _ => MeasureEquationSegments(element.Segments, baseFormatting)
+        };
+    }
+
+    private Size MeasureEquationPlan(EquationVisualPlan plan, RunFormatting baseFormatting)
+    {
+        var width = 0.0;
+        var height = 0.0;
+        foreach (var element in plan.Elements)
+        {
+            var size = MeasureEquationVisualElement(element, baseFormatting);
+            width += size.Width;
+            height = Math.Max(height, size.Height);
+        }
+
+        return new Size(width, height);
+    }
+
+    private Size MeasureEquationSegments(IReadOnlyList<EquationVisualSegment> segments, RunFormatting baseFormatting)
+    {
+        var width = 0.0;
+        var height = 0.0;
+        foreach (var segment in segments)
+        {
+            var text = Build(segment.Text, EquationFormatting(baseFormatting, segment.Style));
+            width += text.WidthIncludingTrailingWhitespace;
+            height = Math.Max(height, text.Height);
+        }
+
+        return new Size(width, height);
+    }
+
+    private Size MeasureEquationSlot(EquationVisualPlan? plan, string text, RunFormatting baseFormatting, EquationVisualStyle style) =>
+        plan is null
+            ? MeasureEquationSegments([new EquationVisualSegment(text, EquationVisualSegmentRole.Text, style)], baseFormatting)
+            : MeasureEquationPlan(plan, EquationFormatting(baseFormatting, style));
+
+    private Size MeasureEquationFraction(EquationVisualElement element, RunFormatting baseFormatting)
+    {
+        var numerator = MeasureEquationSlot(element.NumeratorPlan, element.Numerator, baseFormatting, EquationStructureStyle);
+        var denominator = MeasureEquationSlot(element.DenominatorPlan, element.Denominator, baseFormatting, EquationStructureStyle);
+        return new Size(Math.Max(14, Math.Max(numerator.Width, denominator.Width) + 4), numerator.Height + denominator.Height + 3);
+    }
+
+    private Size MeasureEquationRadical(EquationVisualElement element, RunFormatting baseFormatting)
+    {
+        var degree = MeasureEquationSlot(element.DegreePlan, element.Degree, baseFormatting, EquationScriptStyle);
+        var sign = MeasureEquationText(EquationVisualPlanner.RadicalSignText, baseFormatting, EquationNormalStyle);
+        var radicand = MeasureEquationSlot(element.RadicandPlan, element.Radicand, baseFormatting, EquationStructureStyle);
+        return new Size(degree.Width + sign.Width + radicand.Width + 3, Math.Max(sign.Height, radicand.Height + 2) + degree.Height * 0.25);
+    }
+
+    private Size MeasureEquationNAry(EquationVisualElement element, RunFormatting baseFormatting)
+    {
+        var lower = MeasureEquationSlot(element.NAryLowerLimitPlan, element.LowerLimit, baseFormatting, EquationScriptStyle);
+        var upper = MeasureEquationSlot(element.NAryUpperLimitPlan, element.UpperLimit, baseFormatting, EquationScriptStyle);
+        var op = MeasureEquationText(element.Operator, baseFormatting, EquationLargeOperatorStyle);
+        var operand = MeasureEquationSlot(element.NAryOperandPlan, element.Operand, baseFormatting, EquationStructureStyle);
+        var operatorWidth = Math.Max(op.Width, Math.Max(lower.Width, upper.Width));
+        return new Size(operatorWidth + operand.Width + 4, lower.Height + op.Height + upper.Height - 2);
+    }
+
+    private Size MeasureEquationMatrix(EquationVisualElement element, RunFormatting baseFormatting, bool includeDelimiters)
+    {
+        var metrics = BuildEquationMatrixMetrics(element, baseFormatting);
+        var delimiterWidth = includeDelimiters
+            ? MeasureEquationText(EquationVisualPlanner.MatrixOpenDelimiterText, baseFormatting, EquationNormalStyle).Width * 2 + 4
+            : 0;
+        return new Size(metrics.Width + delimiterWidth, metrics.Height);
+    }
+
+    private Size MeasureEquationDecorator(EquationVisualElement element, RunFormatting baseFormatting)
+    {
+        var basePlan = element.Kind == EquationVisualElementKind.Accent ? element.AccentBasePlan : element.GroupCharBasePlan;
+        var baseText = MeasureEquationSlot(basePlan, element.BaseText, baseFormatting, EquationStructureStyle);
+        var markText = element.Kind == EquationVisualElementKind.Accent
+            ? EquationAccentText(element.Accent)
+            : element.GroupCharacter;
+        var mark = MeasureEquationText(markText, baseFormatting, EquationDecoratorStyle);
+        return new Size(Math.Max(baseText.Width, mark.Width) + 2, baseText.Height + mark.Height - 3);
+    }
+
+    private Size MeasureEquationBar(EquationVisualElement element, RunFormatting baseFormatting)
+    {
+        var baseText = MeasureEquationSlot(element.BarBasePlan, element.BaseText, baseFormatting, EquationStructureStyle);
+        return new Size(Math.Max(14, baseText.Width + 2), baseText.Height + 2);
+    }
+
+    private Size MeasureEquationDelimiter(EquationVisualElement element, RunFormatting baseFormatting)
+    {
+        var open = MeasureEquationText(element.OpenDelimiter, baseFormatting, EquationDelimiterStyle);
+        var content = MeasureEquationSlot(element.DelimiterContentPlan, element.BaseText, baseFormatting, EquationStructureStyle);
+        var close = MeasureEquationText(element.CloseDelimiter, baseFormatting, EquationDelimiterStyle);
+        return new Size(open.Width + content.Width + close.Width + 4, Math.Max(content.Height, Math.Max(open.Height, close.Height)));
+    }
+
+    private Size MeasureEquationText(string text, RunFormatting baseFormatting, EquationVisualStyle style)
+    {
+        var formatted = Build(text, EquationFormatting(baseFormatting, style));
+        return new Size(formatted.WidthIncludingTrailingWhitespace, formatted.Height);
+    }
+
+    private static RunFormatting EquationFormatting(RunFormatting baseFormatting, EquationVisualStyle style) =>
+        baseFormatting with
+        {
+            FontFamily = style.FontFamily,
+            FontSizePt = (baseFormatting.FontSizePt ?? DefaultFontSizePt) * style.FontSizeScale,
+            Italic = style.Italic,
+            VerticalAlign = VerticalAlign.Baseline
+        };
+
+    private void DrawEquationVisualElement(
+        DrawingContext context,
+        EquationVisualElement element,
+        Rect bounds,
+        RunFormatting baseFormatting)
+    {
+        switch (element.Kind)
+        {
+            case EquationVisualElementKind.Fraction:
+                DrawEquationFraction(context, element, bounds, baseFormatting);
+                return;
+            case EquationVisualElementKind.Radical:
+                DrawEquationRadical(context, element, bounds, baseFormatting);
+                return;
+            case EquationVisualElementKind.NAry:
+                DrawEquationNAry(context, element, bounds, baseFormatting);
+                return;
+            case EquationVisualElementKind.Matrix:
+                DrawEquationMatrix(context, element, bounds, baseFormatting, includeDelimiters: true);
+                return;
+            case EquationVisualElementKind.EquationArray:
+                DrawEquationMatrix(context, element, bounds, baseFormatting, includeDelimiters: false);
+                return;
+            case EquationVisualElementKind.Accent:
+            case EquationVisualElementKind.GroupChar:
+                DrawEquationDecorator(context, element, bounds, baseFormatting);
+                return;
+            case EquationVisualElementKind.Bar:
+                DrawEquationBar(context, element, bounds, baseFormatting);
+                return;
+            case EquationVisualElementKind.Delimiter:
+                DrawEquationDelimiter(context, element, bounds, baseFormatting);
+                return;
+            default:
+                DrawEquationSegments(context, element.Segments, bounds, baseFormatting);
+                return;
+        }
+    }
+
+    private void DrawEquationFraction(DrawingContext context, EquationVisualElement element, Rect bounds, RunFormatting baseFormatting)
+    {
+        var numerator = MeasureEquationSlot(element.NumeratorPlan, element.Numerator, baseFormatting, EquationStructureStyle);
+        var denominator = MeasureEquationSlot(element.DenominatorPlan, element.Denominator, baseFormatting, EquationStructureStyle);
+        var barY = bounds.Y + numerator.Height + 1;
+        DrawEquationSlot(context, element.NumeratorPlan, element.Numerator, new Rect(bounds.X, bounds.Y, bounds.Width, numerator.Height), baseFormatting, EquationStructureStyle, centered: true);
+        context.DrawLine(EquationLinePen, new Point(bounds.X + 1, barY), new Point(bounds.Right - 1, barY));
+        DrawEquationSlot(context, element.DenominatorPlan, element.Denominator, new Rect(bounds.X, barY + 2, bounds.Width, denominator.Height), baseFormatting, EquationStructureStyle, centered: true);
+    }
+
+    private void DrawEquationRadical(DrawingContext context, EquationVisualElement element, Rect bounds, RunFormatting baseFormatting)
+    {
+        var degree = MeasureEquationSlot(element.DegreePlan, element.Degree, baseFormatting, EquationScriptStyle);
+        var sign = MeasureEquationText(EquationVisualPlanner.RadicalSignText, baseFormatting, EquationNormalStyle);
+        var radicand = MeasureEquationSlot(element.RadicandPlan, element.Radicand, baseFormatting, EquationStructureStyle);
+        var radicandX = bounds.X + degree.Width + sign.Width;
+        DrawEquationSlot(context, element.DegreePlan, element.Degree, new Rect(bounds.X, bounds.Y, degree.Width, degree.Height), baseFormatting, EquationScriptStyle);
+        DrawEquationText(context, EquationVisualPlanner.RadicalSignText, new Rect(bounds.X + degree.Width, bounds.Bottom - sign.Height, sign.Width, sign.Height), baseFormatting, EquationNormalStyle);
+        context.DrawLine(EquationLinePen, new Point(radicandX, bounds.Y + degree.Height * 0.25), new Point(radicandX + radicand.Width + 1, bounds.Y + degree.Height * 0.25));
+        DrawEquationSlot(context, element.RadicandPlan, element.Radicand, new Rect(radicandX + 1, bounds.Bottom - radicand.Height, radicand.Width, radicand.Height), baseFormatting, EquationStructureStyle);
+    }
+
+    private void DrawEquationNAry(DrawingContext context, EquationVisualElement element, Rect bounds, RunFormatting baseFormatting)
+    {
+        var lower = MeasureEquationSlot(element.NAryLowerLimitPlan, element.LowerLimit, baseFormatting, EquationScriptStyle);
+        var upper = MeasureEquationSlot(element.NAryUpperLimitPlan, element.UpperLimit, baseFormatting, EquationScriptStyle);
+        var op = MeasureEquationText(element.Operator, baseFormatting, EquationLargeOperatorStyle);
+        var operand = MeasureEquationSlot(element.NAryOperandPlan, element.Operand, baseFormatting, EquationStructureStyle);
+        var operatorWidth = Math.Max(op.Width, Math.Max(lower.Width, upper.Width));
+        DrawEquationSlot(context, element.NAryUpperLimitPlan, element.UpperLimit, new Rect(bounds.X, bounds.Y, operatorWidth, upper.Height), baseFormatting, EquationScriptStyle, centered: true);
+        DrawEquationText(context, element.Operator, new Rect(bounds.X, bounds.Y + upper.Height - 1, operatorWidth, op.Height), baseFormatting, EquationLargeOperatorStyle, centered: true);
+        DrawEquationSlot(context, element.NAryLowerLimitPlan, element.LowerLimit, new Rect(bounds.X, bounds.Bottom - lower.Height, operatorWidth, lower.Height), baseFormatting, EquationScriptStyle, centered: true);
+        DrawEquationSlot(context, element.NAryOperandPlan, element.Operand, new Rect(bounds.X + operatorWidth + 3, bounds.Y + (bounds.Height - operand.Height) / 2, operand.Width, operand.Height), baseFormatting, EquationStructureStyle);
+    }
+
+    private void DrawEquationMatrix(DrawingContext context, EquationVisualElement element, Rect bounds, RunFormatting baseFormatting, bool includeDelimiters)
+    {
+        var metrics = BuildEquationMatrixMetrics(element, baseFormatting);
+        var delimiterWidth = includeDelimiters
+            ? MeasureEquationText(EquationVisualPlanner.MatrixOpenDelimiterText, baseFormatting, EquationNormalStyle).Width + 2
+            : 0;
+        var gridX = bounds.X + delimiterWidth;
+        var y = bounds.Y + (bounds.Height - metrics.Height) / 2;
+        for (var rowIndex = 0; rowIndex < element.MatrixRows.Count; rowIndex++)
+        {
+            var x = gridX;
+            var rowHeight = metrics.RowHeights[rowIndex];
+            for (var columnIndex = 0; columnIndex < metrics.ColumnWidths.Length; columnIndex++)
+            {
+                var cell = columnIndex < element.MatrixRows[rowIndex].Cells.Count ? element.MatrixRows[rowIndex].Cells[columnIndex] : null;
+                if (cell is not null)
+                    DrawEquationSlot(context, cell.CellPlan, cell.Text, new Rect(x, y, metrics.ColumnWidths[columnIndex], rowHeight), baseFormatting, EquationStructureStyle, centered: true);
+                x += metrics.ColumnWidths[columnIndex] + EquationVisualPlanner.MatrixColumnGapEm * FontSizePx(baseFormatting);
+            }
+            y += rowHeight + EquationVisualPlanner.MatrixRowGapEm * FontSizePx(baseFormatting);
+        }
+
+        if (includeDelimiters)
+        {
+            DrawEquationText(context, EquationVisualPlanner.MatrixOpenDelimiterText, new Rect(bounds.X, bounds.Y, delimiterWidth, bounds.Height), baseFormatting, EquationNormalStyle, centered: true);
+            DrawEquationText(context, EquationVisualPlanner.MatrixCloseDelimiterText, new Rect(gridX + metrics.Width + 2, bounds.Y, delimiterWidth, bounds.Height), baseFormatting, EquationNormalStyle, centered: true);
+        }
+    }
+
+    private void DrawEquationDecorator(DrawingContext context, EquationVisualElement element, Rect bounds, RunFormatting baseFormatting)
+    {
+        var basePlan = element.Kind == EquationVisualElementKind.Accent ? element.AccentBasePlan : element.GroupCharBasePlan;
+        var mark = element.Kind == EquationVisualElementKind.Accent ? EquationAccentText(element.Accent) : element.GroupCharacter;
+        var markSize = MeasureEquationText(mark, baseFormatting, EquationDecoratorStyle);
+        var baseSize = MeasureEquationSlot(basePlan, element.BaseText, baseFormatting, EquationStructureStyle);
+        var markOnTop = element.Kind == EquationVisualElementKind.Accent || element.GroupCharacterTop;
+        var baseY = markOnTop ? bounds.Bottom - baseSize.Height : bounds.Y;
+        var markY = markOnTop ? bounds.Y : bounds.Bottom - markSize.Height;
+        DrawEquationText(context, mark, new Rect(bounds.X, markY, bounds.Width, markSize.Height), baseFormatting, EquationDecoratorStyle, centered: true);
+        DrawEquationSlot(context, basePlan, element.BaseText, new Rect(bounds.X, baseY, bounds.Width, baseSize.Height), baseFormatting, EquationStructureStyle, centered: true);
+    }
+
+    private void DrawEquationBar(DrawingContext context, EquationVisualElement element, Rect bounds, RunFormatting baseFormatting)
+    {
+        var baseSize = MeasureEquationSlot(element.BarBasePlan, element.BaseText, baseFormatting, EquationStructureStyle);
+        var baseY = bounds.Y + (bounds.Height - baseSize.Height) / 2;
+        DrawEquationSlot(context, element.BarBasePlan, element.BaseText, new Rect(bounds.X, baseY, bounds.Width, baseSize.Height), baseFormatting, EquationStructureStyle, centered: true);
+        var lineY = element.BarTop ? baseY : baseY + baseSize.Height;
+        context.DrawLine(EquationLinePen, new Point(bounds.X + 1, lineY), new Point(bounds.Right - 1, lineY));
+    }
+
+    private void DrawEquationDelimiter(DrawingContext context, EquationVisualElement element, Rect bounds, RunFormatting baseFormatting)
+    {
+        var open = MeasureEquationText(element.OpenDelimiter, baseFormatting, EquationDelimiterStyle);
+        var close = MeasureEquationText(element.CloseDelimiter, baseFormatting, EquationDelimiterStyle);
+        DrawEquationText(context, element.OpenDelimiter, new Rect(bounds.X, bounds.Y, open.Width, bounds.Height), baseFormatting, EquationDelimiterStyle, centered: true);
+        DrawEquationSlot(context, element.DelimiterContentPlan, element.BaseText, new Rect(bounds.X + open.Width + 1, bounds.Y, bounds.Width - open.Width - close.Width - 2, bounds.Height), baseFormatting, EquationStructureStyle, centered: true);
+        DrawEquationText(context, element.CloseDelimiter, new Rect(bounds.Right - close.Width, bounds.Y, close.Width, bounds.Height), baseFormatting, EquationDelimiterStyle, centered: true);
+    }
+
+    private void DrawEquationSlot(DrawingContext context, EquationVisualPlan? plan, string text, Rect bounds, RunFormatting baseFormatting, EquationVisualStyle style, bool centered = false)
+    {
+        if (plan is not null)
+        {
+            DrawEquationPlan(context, plan, bounds, EquationFormatting(baseFormatting, style), centered);
+            return;
+        }
+
+        DrawEquationText(context, text, bounds, baseFormatting, style, centered);
+    }
+
+    private void DrawEquationPlan(DrawingContext context, EquationVisualPlan plan, Rect bounds, RunFormatting baseFormatting, bool centered = false)
+    {
+        var size = MeasureEquationPlan(plan, baseFormatting);
+        var x = bounds.X + (centered ? Math.Max(0, (bounds.Width - size.Width) / 2) : 0);
+        foreach (var element in plan.Elements)
+        {
+            var elementSize = MeasureEquationVisualElement(element, baseFormatting);
+            DrawEquationVisualElement(context, element, new Rect(x, bounds.Y + (bounds.Height - elementSize.Height) / 2, elementSize.Width, elementSize.Height), baseFormatting);
+            x += elementSize.Width;
+        }
+    }
+
+    private void DrawEquationSegments(DrawingContext context, IReadOnlyList<EquationVisualSegment> segments, Rect bounds, RunFormatting baseFormatting)
+    {
+        var x = bounds.X;
+        foreach (var segment in segments)
+        {
+            var size = MeasureEquationText(segment.Text, baseFormatting, segment.Style);
+            DrawEquationText(context, segment.Text, new Rect(x, bounds.Y, size.Width, bounds.Height), baseFormatting, segment.Style);
+            x += size.Width;
+        }
+    }
+
+    private void DrawEquationText(DrawingContext context, string text, Rect bounds, RunFormatting baseFormatting, EquationVisualStyle style, bool centered = false)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        var formatted = Build(text, EquationFormatting(baseFormatting, style));
+        var x = bounds.X + (centered ? Math.Max(0, (bounds.Width - formatted.WidthIncludingTrailingWhitespace) / 2) : 0);
+        var y = bounds.Y + Math.Max(0, (bounds.Height - formatted.Height) / 2) - style.BaselineOffsetEm * FontSizePx(baseFormatting);
+        context.DrawText(formatted, new Point(x, y));
+    }
+
+    private EquationMatrixMetrics BuildEquationMatrixMetrics(EquationVisualElement element, RunFormatting baseFormatting)
+    {
+        var columnCount = element.MatrixColumnCount;
+        var columnWidths = new double[columnCount];
+        var rowHeights = new double[element.MatrixRows.Count];
+        for (var rowIndex = 0; rowIndex < element.MatrixRows.Count; rowIndex++)
+        {
+            var row = element.MatrixRows[rowIndex];
+            for (var columnIndex = 0; columnIndex < row.Cells.Count; columnIndex++)
+            {
+                var cell = row.Cells[columnIndex];
+                var size = MeasureEquationSlot(cell.CellPlan, cell.Text, baseFormatting, EquationStructureStyle);
+                columnWidths[columnIndex] = Math.Max(columnWidths[columnIndex], size.Width);
+                rowHeights[rowIndex] = Math.Max(rowHeights[rowIndex], size.Height);
+            }
+        }
+
+        var fontSize = FontSizePx(baseFormatting);
+        var width = columnWidths.Sum() + Math.Max(0, columnCount - 1) * EquationVisualPlanner.MatrixColumnGapEm * fontSize;
+        var height = rowHeights.Sum() + Math.Max(0, rowHeights.Length - 1) * EquationVisualPlanner.MatrixRowGapEm * fontSize;
+        return new EquationMatrixMetrics(columnWidths, rowHeights, width, height);
+    }
+
+    private static string EquationAccentText(string accent) => accent switch
+    {
+        "\u0302" => "^",
+        "\u0303" => "~",
+        "\u0304" => EquationVisualPlanner.OverbarCueText,
+        "\u0307" => ".",
+        "\u0308" => "..",
+        "\u20d7" => "\u2192",
+        _ => string.IsNullOrEmpty(accent) ? "^" : accent
+    };
+
+    private readonly record struct EquationMatrixMetrics(double[] ColumnWidths, double[] RowHeights, double Width, double Height);
+
+    private static EquationVisualStyle EquationNormalStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, true, 1, EquationVisualBaselineRole.Normal, 0);
+    private static EquationVisualStyle EquationStructureStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, true, EquationVisualPlanner.StructureFontSizeScale, EquationVisualBaselineRole.Normal, 0);
+    private static EquationVisualStyle EquationScriptStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, true, EquationVisualPlanner.ScriptFontSizeScale, EquationVisualBaselineRole.Normal, 0);
+    private static EquationVisualStyle EquationLargeOperatorStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, false, EquationVisualPlanner.LargeOperatorFontSizeScale, EquationVisualBaselineRole.Normal, 0);
+    private static EquationVisualStyle EquationDecoratorStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, false, EquationVisualPlanner.DecoratorFontSizeScale, EquationVisualBaselineRole.Normal, 0);
+    private static EquationVisualStyle EquationDelimiterStyle { get; } = new(EquationVisualPlanner.DefaultMathFontFamily, false, EquationVisualPlanner.DelimiterFontSizeScale, EquationVisualBaselineRole.Normal, 0);
+
     private FormattedText Build(string text, RunFormatting fmt)
     {
         var typeface = new Typeface(
@@ -14287,7 +14674,8 @@ public sealed class DocumentView : Control
         // per-character so a hyperlink span survives the cell round-trip (ParaCells → edit → SetRuns) and so
         // SetRuns re-segments runs on a hyperlink boundary. null = this glyph is not inside a hyperlink.
         LinkInfo? Link = null,
-        FormatRevision? FormatRevision = null);
+        FormatRevision? FormatRevision = null,
+        EquationVisualElement? EquationElement = null);
 
     /// <summary>
     /// AV-LINK: a hyperlink target carried alongside a glyph/run. Exactly one of <see cref="Url"/> (external)
@@ -14326,7 +14714,8 @@ public sealed class DocumentView : Control
         // AV-LINK: the hyperlink target this glyph belongs to (null = not a hyperlink), so the render can
         // style it (blue + underline) and the pointer hit-test can follow it on Ctrl+Click.
         LinkInfo? Link = null,
-        bool HasFormatRevision = false)
+        bool HasFormatRevision = false,
+        EquationVisualElement? EquationElement = null)
     {
         /// <summary>True when this glyph is inside a table cell (as opposed to a body paragraph).</summary>
         public bool IsCell => CellRow >= 0;

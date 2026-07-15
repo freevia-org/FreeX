@@ -11,6 +11,9 @@ public sealed class EquationVisualPlannerSourceGuardTests
         source.Should().Contain("EquationVisualPlanner.Build(equation)");
         source.Should().Contain("AddEquationVisualElement");
         source.Should().Contain("ApplyEquationVisualStyle");
+        source.Should().Contain("EquationElement: element");
+        source.Should().Contain("MeasureEquationVisualElement");
+        source.Should().Contain("DrawEquationVisualElement");
         source.Should().Contain("EquationVisualElements");
         source.Should().Contain("LowerLimit");
         source.Should().Contain("UpperLimit");
@@ -20,7 +23,7 @@ public sealed class EquationVisualPlannerSourceGuardTests
         source.Should().Contain("GroupCharacterPosition");
         source.Should().Contain("FunctionName");
         source.Should().Contain("FunctionArgument");
-        source.Should().Contain("run.Equation is null");
+        source.Should().Contain("run.Equation is { } equation");
         source.Should().NotContain("hasInlineEquation");
     }
 
