@@ -135,6 +135,11 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.ContourSegments.Should().NotBeEmpty();
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 3).Should().Be(2);
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 4).Should().Be(2);
+        surfaceGeometry.RenderFacets.Should().HaveCount(6,
+            "imported PowerPoint Surface3D cells render as two visible triangles when complete");
+        surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
+        surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255,
+            "PowerPoint's imported Surface3D facets are opaque fills");
 
         var scatter = charts.Single(chart => chart.ChartType == ChartType.Scatter);
         scatter.Series.Should().OnlyContain(series => !series.OnSecondaryAxis,
