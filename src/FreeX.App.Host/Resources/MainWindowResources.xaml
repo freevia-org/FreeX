@@ -5,7 +5,6 @@
             <ResourceDictionary Source="ThemeResources.xaml"/>
             <ResourceDictionary Source="IconResources.xaml"/>
         </ResourceDictionary.MergedDictionaries>
-        <SolidColorBrush x:Key="FreeXTitleBarBrush" Color="#17324D"/>
         <!-- ── Ribbon button styles ─────────────────────────────────────── -->
 
         <Style x:Key="RibbonBtn" TargetType="Button">
