@@ -12,16 +12,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    $repoRoot = Split-Path -Parent $PSScriptRoot
-    return Join-Path $repoRoot $Path
-}
+$repoRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function New-PreflightCheck {
     param(
@@ -78,13 +70,13 @@ function Test-ForegroundCaptureEnvironment {
         Join-Path $repoRoot "src\FreeX.App.Host\bin\Release\net10.0-windows10.0.19041.0\FreeX.App.Host.exe"
     }
     else {
-        Resolve-RepoPath $FreeXExe
+        Resolve-ToolRepoPath -Path $FreeXExe -RepoRoot $repoRoot
     }
     $avaloniaCandidate = if ([string]::IsNullOrWhiteSpace($AvaloniaExe)) {
         Join-Path $repoRoot "src\FreeX.App.Avalonia\bin\Release\net10.0\FreeX.exe"
     }
     else {
-        Resolve-RepoPath $AvaloniaExe
+        Resolve-ToolRepoPath -Path $AvaloniaExe -RepoRoot $repoRoot
     }
 
     $checks = @(

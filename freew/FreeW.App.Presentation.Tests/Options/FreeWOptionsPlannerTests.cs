@@ -144,7 +144,7 @@ public sealed class FreeWOptionsPlannerTests
     [Fact]
     public void OptionsModelAndPlanner_LiveInPresentationNotWpfHost()
     {
-        var repoRoot = FindRepoRoot();
+        var repoRoot = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
 
         File.Exists(Path.Combine(repoRoot, "freew", "FreeW.App.Presentation", "Options", "FreeWOptions.cs"))
             .Should().BeTrue();
@@ -156,16 +156,4 @@ public sealed class FreeWOptionsPlannerTests
             .Should().BeFalse();
     }
 
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root.");
-    }
 }

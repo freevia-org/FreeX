@@ -7,7 +7,7 @@ public sealed class FilePickerPlannerSourceTests
     [Fact]
     public void MainWindow_RoutesPresentationPickerPolicyThroughSharedPlanner()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
         var source = File.ReadAllText(Path.Combine(
             root,
             "freep",
@@ -115,16 +115,4 @@ public sealed class FilePickerPlannerSourceTests
         project.Should().Contain(@"..\..\shared\Free.Shared.Shell.Avalonia\Free.Shared.Shell.Avalonia.csproj");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

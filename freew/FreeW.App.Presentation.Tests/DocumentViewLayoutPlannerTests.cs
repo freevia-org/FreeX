@@ -1117,21 +1117,9 @@ public sealed class DocumentViewLayoutPlannerSourceGuardTests
     private static string ReadSource(params string[] relativeParts)
     {
         var parts = new string[relativeParts.Length + 1];
-        parts[0] = FindRepositoryRoot();
+        parts[0] = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         Array.Copy(relativeParts, 0, parts, 1, relativeParts.Length);
         return File.ReadAllText(Path.Combine(parts));
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

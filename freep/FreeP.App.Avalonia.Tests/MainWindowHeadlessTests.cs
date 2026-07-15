@@ -5061,20 +5061,8 @@ public sealed class MainWindowHeadlessTests
     }
 
     private static string FindRepoFile(params string[] parts) =>
-        Path.Combine(FindRepoRoot(), Path.Combine(parts));
+        Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"), Path.Combine(parts));
 
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from the test output directory.");
-    }
 
     private static void AssertBefore(string source, string first, string second)
     {

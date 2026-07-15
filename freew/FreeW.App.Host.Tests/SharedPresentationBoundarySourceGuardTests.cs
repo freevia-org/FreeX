@@ -56,18 +56,6 @@ public sealed class SharedPresentationBoundarySourceGuardTests
     }
 
     private static string ReadSource(params string[] parts) =>
-        File.ReadAllText(Path.Combine(new[] { FindRepositoryRoot() }.Concat(parts).ToArray()));
+        File.ReadAllText(Path.Combine(new[] { TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx") }.Concat(parts).ToArray()));
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

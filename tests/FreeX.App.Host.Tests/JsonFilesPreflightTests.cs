@@ -12,7 +12,8 @@ public sealed class JsonFilesPreflightTests
         var script = WorkspaceFileLocator.ReadAllText("tools", "Test-JsonFiles.ps1");
 
         script.Should().Contain("[string[]]$JsonRoots = @()");
-        script.Should().Contain("git -C $repoRoot ls-files --deduplicate");
+        script.Should().Contain("ToolScriptSupport.ps1");
+        WorkspaceFileLocator.ReadAllText("tools", "ToolScriptSupport.ps1").Should().Contain("git -C $RepoRoot ls-files --deduplicate");
         script.Should().Contain("JSON path was not found");
         script.Should().Contain("$rootItem -is [System.IO.FileInfo]");
         script.Should().Contain("ConvertFrom-Json");

@@ -8,42 +8,7 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
-
-function Get-RelativeRepoPath {
-    param(
-        [Parameter(Mandatory = $true)][string]$RootPath,
-        [Parameter(Mandatory = $true)][string]$Path
-    )
-
-    $fullRootPath = [System.IO.Path]::GetFullPath($RootPath)
-    if (-not $fullRootPath.EndsWith([System.IO.Path]::DirectorySeparatorChar)) {
-        $fullRootPath += [System.IO.Path]::DirectorySeparatorChar
-    }
-
-    $rootUri = New-Object System.Uri($fullRootPath)
-    $pathUri = New-Object System.Uri([System.IO.Path]::GetFullPath($Path))
-    return [System.Uri]::UnescapeDataString($rootUri.MakeRelativeUri($pathUri).ToString())
-}
-
-function Test-IsIgnoredPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $segments = $Path -split '[\\/]'
-    return $segments -contains "bin" -or
-        $segments -contains "obj" -or
-        $segments -contains ".git" -or
-        $segments -contains ".worktrees" -or
-        $segments -contains ".claude"
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Add-CandidateFile {
     param(
@@ -63,7 +28,7 @@ function Add-CandidateFile {
     }
 }
 
-$resolvedProjectRoot = Resolve-RepoPath $ProjectRoot
+$resolvedProjectRoot = Resolve-ToolRepoPath -Path $ProjectRoot -RepoRoot $repoRoot
 if (-not (Test-Path -LiteralPath $resolvedProjectRoot -PathType Container)) {
     throw "Project root was not found: $resolvedProjectRoot"
 }
@@ -103,15 +68,15 @@ if ($SearchRoots.Count -eq 0) {
     }
 } else {
     foreach ($searchRoot in $SearchRoots) {
-        $resolvedSearchRoot = Resolve-RepoPath $searchRoot
+        $resolvedSearchRoot = Resolve-ToolRepoPath -Path $searchRoot -RepoRoot $repoRoot
         if (-not (Test-Path -LiteralPath $resolvedSearchRoot)) {
             continue
         }
 
         $rootItem = Get-Item -LiteralPath $resolvedSearchRoot
         if ($rootItem -is [System.IO.FileInfo]) {
-            $relativePath = Get-RelativeRepoPath -RootPath $resolvedProjectRoot -Path $rootItem.FullName
-            if (-not (Test-IsIgnoredPath $relativePath)) {
+            $relativePath = Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $rootItem.FullName
+            if (-not (Test-ToolExcludedPath -Path $relativePath -RepoRoot $resolvedProjectRoot -ExcludedDirectoryNames @("bin", "obj", ".git", ".worktrees", ".claude"))) {
                 Add-CandidateFile -Files $candidateFiles -SeenPaths $seenCandidatePaths -File $rootItem -Extensions $normalizedExtensions
             }
 
@@ -120,8 +85,8 @@ if ($SearchRoots.Count -eq 0) {
 
         Get-ChildItem -LiteralPath $rootItem.FullName -File -Recurse |
             Where-Object {
-                $relativePath = Get-RelativeRepoPath -RootPath $resolvedProjectRoot -Path $_.FullName
-                -not (Test-IsIgnoredPath $relativePath)
+                $relativePath = Get-ToolRelativePath -RootPath $resolvedProjectRoot -Path $_.FullName
+                -not (Test-ToolExcludedPath -Path $relativePath -RepoRoot $resolvedProjectRoot -ExcludedDirectoryNames @("bin", "obj", ".git", ".worktrees", ".claude"))
             } |
             Sort-Object FullName |
             ForEach-Object {

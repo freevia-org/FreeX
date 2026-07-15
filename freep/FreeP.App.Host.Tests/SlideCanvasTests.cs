@@ -991,7 +991,7 @@ public sealed class SlideCanvasTests
     public void SlideCanvas_LineSeriesRenderer_ConsumesSharedPathPrimitive()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Rendering.Wpf",
             "SlideCanvas.cs"));
@@ -1002,17 +1002,4 @@ public sealed class SlideCanvasTests
         source.Should().Contain("ChartLinePathSegmentKind.CubicBezier");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-
-            directory = directory.Parent;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root.");
-    }
 }

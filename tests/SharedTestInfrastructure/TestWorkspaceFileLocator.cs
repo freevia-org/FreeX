@@ -39,6 +39,16 @@ internal static class TestWorkspaceFileLocator
         ?? throw new DirectoryNotFoundException($"Could not find repository directory '{Path.Combine(relativeParts)}'.");
 
     /// <summary>
+    /// Walks up from <see cref="AppContext.BaseDirectory"/> looking for the directory
+    /// containing a required sentinel file. This keeps repository-root discovery neutral
+    /// across sister-app test projects while preserving directory failure semantics.
+    /// </summary>
+    public static string FindDirectoryContainingFileFromBaseDirectory(string sentinelFileName) =>
+        FindDirectoryContainingFile(new DirectoryInfo(AppContext.BaseDirectory), sentinelFileName)
+        ?? throw new DirectoryNotFoundException(
+            $"Could not locate directory containing '{sentinelFileName}' from {AppContext.BaseDirectory}.");
+
+    /// <summary>
     /// Walks up from <see cref="AppContext.BaseDirectory"/> looking for a file whose path,
     /// combined with <paramref name="relativeParts"/>, exists. The neutral engine behind per-app
     /// <c>RepositoryFileLocator.Find</c> shims.
@@ -145,6 +155,19 @@ internal static class TestWorkspaceFileLocator
             var candidate = Path.Combine([directory.FullName, .. relativeParts]);
             if (Directory.Exists(candidate))
                 return candidate;
+
+            directory = directory.Parent;
+        }
+
+        return null;
+    }
+
+    private static string? FindDirectoryContainingFile(DirectoryInfo? directory, string sentinelFileName)
+    {
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, sentinelFileName)))
+                return directory.FullName;
 
             directory = directory.Parent;
         }

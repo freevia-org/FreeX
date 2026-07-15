@@ -22,58 +22,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Get-RepoRoot {
-    return (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
-}
-
-function Get-GitValue {
-    param(
-        [string]$RepoRoot,
-        [string[]]$Arguments
-    )
-
-    try {
-        $value = & git -C $RepoRoot @Arguments 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            return ($value -join "`n").Trim()
-        }
-    }
-    catch {
-    }
-
-    return $null
-}
-
-function Resolve-FreeXExe {
-    param(
-        [string]$RepoRoot,
-        [string]$RequestedPath,
-        [switch]$SkipBuild
-    )
-
-    if (-not [string]::IsNullOrWhiteSpace($RequestedPath)) {
-        $resolved = (Resolve-Path $RequestedPath).Path
-        if (-not (Test-Path $resolved)) {
-            throw "FreeX executable was not found at $RequestedPath"
-        }
-        return $resolved
-    }
-
-    $candidate = Join-Path $RepoRoot "src/FreeX.App.Host/bin/Release/net10.0-windows10.0.19041.0/FreeX.App.Host.exe"
-    if (-not (Test-Path $candidate) -and -not $SkipBuild) {
-        $buildOutput = & dotnet build (Join-Path $RepoRoot "src/FreeX.App.Host/FreeX.App.Host.csproj") --configuration Release
-        $buildOutput | ForEach-Object { Write-Host $_ }
-        if ($LASTEXITCODE -ne 0) {
-            throw "FreeX host build failed with exit code $LASTEXITCODE"
-        }
-    }
-
-    if (-not (Test-Path $candidate)) {
-        throw "FreeX host executable was not found. Build Release or pass -FreeXExe. Expected: $candidate"
-    }
-
-    return (Resolve-Path $candidate).Path
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Resolve-ForegroundCaptureProject {
     param(
@@ -965,7 +914,7 @@ function Write-ScenarioContactSheet {
     }
 }
 
-$repoRoot = Get-RepoRoot
+$repoRoot = Get-RepoRoot -ScriptRoot $PSScriptRoot
 if ([string]::IsNullOrWhiteSpace($RunId)) {
     $RunId = Get-Date -Format "yyyyMMdd-HHmmss"
 }

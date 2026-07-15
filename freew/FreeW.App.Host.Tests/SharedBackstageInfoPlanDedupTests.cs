@@ -39,7 +39,7 @@ public sealed class SharedBackstageInfoPlanDedupTests
     [Fact]
     public void InfoPlanTypes_LiveInPortableShell_AndAvaloniaConsumesTheSamePlan()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var sharedInfo = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell", "BackstageInfoPaneSpec.cs"));
         var sharedPlanner = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell", "SisterBackstageInfoPanePlanner.cs"));
         var wpfComposer = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Shell.Wpf", "BackstagePaneComposer.cs"));
@@ -59,7 +59,7 @@ public sealed class SharedBackstageInfoPlanDedupTests
     [Fact]
     public void BackstageSidebarResources_HaveOneWpfOwner()
     {
-        var root = FindRepositoryRoot();
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
         var shellResource = Path.Combine(root, "shared", "Free.Shared.Shell.Wpf", "BackstageChromeResources.xaml");
         var ribbonResource = Path.Combine(root, "shared", "Free.Shared.Ribbon.Wpf", "SharedChromeResources.xaml");
         var ribbonChrome = File.ReadAllText(Path.Combine(root, "shared", "Free.Shared.Ribbon.Wpf", "BackstageRibbonChrome.cs"));
@@ -99,16 +99,4 @@ public sealed class SharedBackstageInfoPlanDedupTests
             .Select(attribute => attribute.Value)
             .ToArray();
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

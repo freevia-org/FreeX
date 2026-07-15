@@ -53,20 +53,8 @@ public sealed class FontDialogPolicySourceGuardTests
 
     private static string ReadHostSource(string fileName)
     {
-        var path = Path.Combine(FindRepositoryRoot(), "freew", "FreeW.App.Host", fileName);
+        var path = Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host", fileName);
         return File.ReadAllText(path);
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

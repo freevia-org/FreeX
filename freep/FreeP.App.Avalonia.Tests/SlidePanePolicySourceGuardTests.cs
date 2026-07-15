@@ -8,7 +8,7 @@ public sealed class SlidePanePolicySourceGuardTests
     public void MainWindow_DelegatesSlidePaneProjectionToPresentationPlanner()
     {
         var source = File.ReadAllText(Path.Combine(
-            FindRepositoryRoot(),
+            TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx"),
             "freep",
             "FreeP.App.Avalonia",
             "MainWindow.cs"));
@@ -103,16 +103,4 @@ public sealed class SlidePanePolicySourceGuardTests
         source.Should().NotContain("Editor.RemoveAllSections()");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeP.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

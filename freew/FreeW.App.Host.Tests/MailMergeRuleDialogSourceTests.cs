@@ -8,7 +8,7 @@ public sealed class MailMergeRuleDialogSourceTests
     public void FreeWRibbonCommands_DelegatesMergeRuleDialogPolicyToPresentationPlanner()
     {
         var source = File.ReadAllText(
-            Path.Combine(FindRepositoryRoot(), "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
+            Path.Combine(TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx"), "freew", "FreeW.App.Host", "Ribbon", "FreeWRibbonCommands.cs"));
 
         source.Should().Contain("MailMergeRuleDialogPlanner.GetConditionOperators()");
         source.Should().Contain("MailMergeRuleDialogPlanner.GetConditionOperator(");
@@ -21,16 +21,4 @@ public sealed class MailMergeRuleDialogSourceTests
         source.Should().NotContain("valueBox.IsEnabled = op != MergeConditionOperator.IsBlank");
     }
 
-    private static string FindRepositoryRoot()
-    {
-        for (var directory = new DirectoryInfo(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "FreeW.slnx")))
-                return directory.FullName;
-        }
-
-        throw new DirectoryNotFoundException("Could not locate repository root from test output directory.");
-    }
 }

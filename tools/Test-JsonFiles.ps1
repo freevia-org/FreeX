@@ -6,63 +6,13 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 
-function Resolve-RepoPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    return Join-Path $repoRoot $Path
-}
-
-function Test-IsExcludedPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    $relativePath = Get-RepositoryRelativePath $Path
-    $segments = $relativePath -split '[\\/]'
-    return $segments -contains "bin" -or
-        $segments -contains "obj" -or
-        $segments -contains ".worktrees" -or
-        $segments -contains ".claude"
-}
-
-function Get-RepositoryRelativePath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if (-not [System.IO.Path]::IsPathRooted($Path)) {
-        return $Path
-    }
-
-    $root = [System.IO.Path]::GetFullPath($repoRoot).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    $fullPath = [System.IO.Path]::GetFullPath($Path)
-    if ($fullPath.StartsWith($root, [System.StringComparison]::OrdinalIgnoreCase)) {
-        return $fullPath.Substring($root.Length).TrimStart([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
-    }
-
-    return $Path
-}
-
-function Get-TrackedRepositoryFiles {
-    $gitOutput = & git -C $repoRoot ls-files --deduplicate
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to enumerate tracked files with git ls-files."
-    }
-
-    foreach ($relativePath in $gitOutput) {
-        if ([string]::IsNullOrWhiteSpace($relativePath)) {
-            continue
-        }
-
-        $relativePath
-    }
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 $jsonPaths = New-Object System.Collections.Generic.List[string]
 if ($JsonRoots.Count -eq 0) {
-    foreach ($trackedPath in (Get-TrackedRepositoryFiles)) {
+    foreach ($trackedPath in (Get-ToolTrackedRepositoryFiles -RepoRoot $repoRoot)) {
         $resolvedTrackedPath = Join-Path $repoRoot $trackedPath
-        if ((Test-IsExcludedPath $trackedPath) -or -not (Test-Path -LiteralPath $resolvedTrackedPath -PathType Leaf)) {
+        if ((Test-ToolExcludedPath -Path $trackedPath -RepoRoot $repoRoot) -or -not (Test-Path -LiteralPath $resolvedTrackedPath -PathType Leaf)) {
             continue
         }
 
@@ -73,7 +23,7 @@ if ($JsonRoots.Count -eq 0) {
 }
 else {
     foreach ($jsonRoot in $JsonRoots) {
-        $resolvedJsonRoot = Resolve-RepoPath $jsonRoot
+        $resolvedJsonRoot = Resolve-ToolRepoPath -Path $jsonRoot -RepoRoot $repoRoot
         if (-not (Test-Path -LiteralPath $resolvedJsonRoot)) {
             throw "JSON path was not found: $resolvedJsonRoot"
         }
@@ -88,7 +38,7 @@ else {
         }
 
         Get-ChildItem -LiteralPath $rootItem.FullName -Filter "*.json" -File -Recurse |
-            Where-Object { -not (Test-IsExcludedPath $_.FullName) } |
+            Where-Object { -not (Test-ToolExcludedPath -Path $_.FullName -RepoRoot $repoRoot) } |
             ForEach-Object { $jsonPaths.Add($_.FullName) }
     }
 }

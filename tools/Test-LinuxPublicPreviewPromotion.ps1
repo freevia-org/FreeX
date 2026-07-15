@@ -19,20 +19,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $validationErrors = New-Object System.Collections.Generic.List[string]
 
-function Resolve-InputPath {
-    param([Parameter(Mandatory = $true)][string]$Path)
-
-    if ([System.IO.Path]::IsPathRooted($Path)) {
-        return [System.IO.Path]::GetFullPath($Path)
-    }
-
-    $currentDirectoryCandidate = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Path))
-    if (Test-Path -LiteralPath $currentDirectoryCandidate) {
-        return $currentDirectoryCandidate
-    }
-
-    return [System.IO.Path]::GetFullPath((Join-Path $repoRoot $Path))
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Add-ValidationError {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -123,7 +110,7 @@ $manifest = [ordered]@{
     accessibility_evidence = $accessibility
 }
 
-$manifestFull = Resolve-InputPath -Path $ManifestPath
+$manifestFull = Resolve-InputPath -Path $ManifestPath -RepoRoot $repoRoot
 $manifestDir = Split-Path -Parent $manifestFull
 if (-not (Test-Path -LiteralPath $manifestDir)) {
     New-Item -ItemType Directory -Path $manifestDir -Force | Out-Null
