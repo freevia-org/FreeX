@@ -14303,7 +14303,9 @@ public sealed class DocumentView : Control
         var op = MeasureEquationText(element.Operator, baseFormatting, EquationLargeOperatorStyle);
         var operand = MeasureEquationSlot(element.NAryOperandPlan, element.Operand, baseFormatting, EquationStructureStyle);
         var operatorWidth = Math.Max(op.Width, Math.Max(lower.Width, upper.Width));
-        return new Size(operatorWidth + operand.Width + 4, op.Height);
+        // Word allows the operator itself to overhang a compact text line; reserving the whole
+        // glyph box would push the following equation paragraph down by roughly one script band.
+        return new Size(operatorWidth + operand.Width + 4, Math.Max(1, op.Height - 6));
     }
 
     private Size MeasureEquationMatrix(EquationVisualElement element, RunFormatting baseFormatting, bool includeDelimiters)
