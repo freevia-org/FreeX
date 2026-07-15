@@ -440,9 +440,11 @@ public sealed class ResolvedShapeEffects
     public ResolvedBevel? BevelBottom { get; init; }
     /// <summary>Extrusion depth in DIP. 0 = none.</summary>
     public double ExtrusionDepthDip { get; init; }
+    /// <summary>Extrusion face colour. Null means the renderer derives it from the fill.</summary>
+    public SrgbColor? ExtrusionColor { get; init; }
     /// <summary>Contour width in DIP. 0 = none.</summary>
     public double ContourWidthDip { get; init; }
-    /// <summary>Extrusion colour (for contour outline rendering). Null = no override.</summary>
+    /// <summary>Contour outline colour. Null = no override.</summary>
     public SrgbColor? ContourColor { get; init; }
     /// <summary>
     /// Light direction hint (derived from scene3d lightRig dir=). Used to shift

@@ -277,7 +277,7 @@ public static class SlideCompositor
 
         bool hasBevel = fx.BevelTop is not null || fx.BevelBottom is not null;
         if (!fx.HasOuterShadow && !fx.HasGlow && !fx.HasSoftEdge
-            && !hasBevel && fx.ContourWidthEmu == 0 && fx.Scene3d is null)
+            && !hasBevel && fx.ExtrusionHeightEmu == 0 && fx.ContourWidthEmu == 0 && fx.Scene3d is null)
             return null;
 
         return new ResolvedShapeEffects
@@ -311,6 +311,7 @@ public static class SlideCompositor
                 PresetName = fx.BevelBottom.PresetName
             } : null,
             ExtrusionDepthDip = fx.ExtrusionHeightEmu / EmuPerDip,
+            ExtrusionColor    = fx.ExtrusionColor,
             ContourWidthDip   = fx.ContourWidthEmu    / EmuPerDip,
             ContourColor      = fx.ContourColor,
             LightDirDeg       = ResolveLightDir(fx.Scene3d),

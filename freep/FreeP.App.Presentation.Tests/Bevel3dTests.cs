@@ -189,6 +189,20 @@ public sealed class Bevel3dTests
     }
 
     [Fact]
+    public void Compositor_ShapeWithExtrusion_EmitsFaceColorOnDrawOp()
+    {
+        var shapeOp = ComposeShapeOp(new ShapeEffects
+        {
+            ExtrusionHeightEmu = 457200,
+            ExtrusionColor = new SrgbColor(0xA0, 0x30, 0x70),
+        });
+
+        shapeOp.Effects.Should().NotBeNull();
+        shapeOp.Effects!.ExtrusionDepthDip.Should().BeApproximately(457200.0 / 9525.0, 0.1);
+        shapeOp.Effects.ExtrusionColor.Should().Be(new SrgbColor(0xA0, 0x30, 0x70));
+    }
+
+    [Fact]
     public void Compositor_ShapeWithScene3d_EmitsLightDirDeg()
     {
         var effects = new ShapeEffects
