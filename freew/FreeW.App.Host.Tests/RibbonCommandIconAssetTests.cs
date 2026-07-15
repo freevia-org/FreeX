@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using System.Windows.Controls;
@@ -12,6 +13,19 @@ namespace FreeW.App.Host.Tests;
 
 public sealed class RibbonCommandIconAssetTests
 {
+    private static readonly string[] RemovedExactDuplicateSlugs =
+    [
+        "custom-paragraph-spacing", "customize-colors", "customize-fonts", "draftview",
+        "image-brightness-minus40", "image-brightness-plus40", "image-saturation-0", "image-saturation-200",
+        "image-transparency-25", "image-transparency-75", "shape-flip-horizontal", "shape-flip-vertical",
+        "shape-position", "shape-rotate-left90", "shape-rotate-right90", "shape-rotate",
+        "shape-wrap", "shape-wrap-behind", "shape-wrap-front", "shape-wrap-inline", "shape-wrap-square",
+        "shape-wrap-tight", "shape-wrap-top-bottom", "index-insert", "index-mark", "insert-quickpart",
+        "merge-rule-fill-in", "merge-rule-ref", "merge-rule-set", "merge-rule-skip-record-if",
+        "multilevel-list", "multilevel-preset-0", "multilevel-preset-1", "multilevel-preset-2", "printlayout",
+        "reset-style-set", "reviewingpane", "toc", "tof", "weblayout",
+    ];
+
     [Fact]
     public void FreeW_ribbon_commands_have_direct_svg_assets()
     {
@@ -83,6 +97,43 @@ public sealed class RibbonCommandIconAssetTests
             "reject-all.svg", "style-heading1.svg", "style-heading2.svg", "style-title.svg"
         })
             File.Exists(Path.Combine(root, "freew", "FreeW.App.Host", "Resources", "CommandIconsSvg", alias)).Should().BeFalse();
+    }
+
+    [Fact]
+    public void FreeW_exact_duplicate_aliases_resolve_through_Wpf_loader_and_publish()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeW.slnx");
+        var iconDirectory = Path.Combine(root, "freew", "FreeW.App.Host", "Resources", "CommandIconsSvg");
+        var project = XDocument.Load(Path.Combine(root, "freew", "FreeW.App.Host", "FreeW.App.Host.csproj"));
+        var localIcons = project
+            .Descendants("Content")
+            .Single(item => (string?)item.Attribute("Include") == @"Resources\CommandIconsSvg\**\*.svg");
+
+        ((string?)localIcons.Attribute("CopyToOutputDirectory")).Should().Be("PreserveNewest");
+        ((string?)localIcons.Attribute("CopyToPublishDirectory")).Should().Be("PreserveNewest");
+
+        var duplicateGroups = Directory
+            .EnumerateFiles(iconDirectory, "*.svg")
+            .GroupBy(path => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))), StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => string.Join(", ", group.Select(Path.GetFileName).Order(StringComparer.OrdinalIgnoreCase)))
+            .ToArray();
+        duplicateGroups.Should().BeEmpty("FreeW's app-local command SVG directory must contain one file per exact payload");
+
+        var candidateMethod = typeof(RibbonIconFactory).GetMethod(
+            "GetCommandIconSlugCandidates",
+            BindingFlags.NonPublic | BindingFlags.Static);
+        candidateMethod.Should().NotBeNull();
+
+        foreach (var alias in RemovedExactDuplicateSlugs)
+        {
+            var canonical = RibbonCommandIconSlugAliases.GetCandidates(alias).First();
+            var candidates = ((IEnumerable<string>)candidateMethod!.Invoke(null, [alias])!).ToArray();
+
+            candidates.First().Should().Be(canonical, alias);
+            File.Exists(Path.Combine(iconDirectory, canonical + ".svg")).Should().BeTrue(alias);
+            File.Exists(Path.Combine(iconDirectory, alias + ".svg")).Should().BeFalse(alias);
+        }
     }
 
     [Fact]

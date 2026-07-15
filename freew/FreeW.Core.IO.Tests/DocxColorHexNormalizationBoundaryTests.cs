@@ -11,8 +11,11 @@ public sealed class DocxColorHexNormalizationBoundaryTests
         reader.Should().Contain("Keep this WordprocessingML color boundary local");
         reader.Should().Contain("is null or \"auto\" ? null : \"#\" +");
         reader.Should().Contain("HighlightTokenToHex(highlightNamedToken)");
-        reader.Should().NotContain("using Free.Shared.Drawing;");
+        reader.Should().Contain("using Free.Shared.Drawing;");
+        reader.Should().Contain("DrawingMlThemeReader.TryReadThemePart(");
         reader.Should().NotContain("using Free.Shared.Theme;");
+        reader.Should().NotContain("DrawingMlRgbColor.TryParseHexRgb(");
+        reader.Should().NotContain("ThemeColor.FromHex(");
 
         var writer = ReadSource("freew", "FreeW.Core.IO", "DocxWriter.cs");
         writer.Should().Contain("Keep this WordprocessingML color boundary local");
@@ -20,6 +23,8 @@ public sealed class DocxColorHexNormalizationBoundaryTests
         writer.Should().Contain("new XAttribute(W + \"color\", \"auto\")");
         writer.Should().NotContain("using Free.Shared.Drawing;");
         writer.Should().NotContain("using Free.Shared.Theme;");
+        writer.Should().NotContain("DrawingMlRgbColor.TryParseHexRgb(");
+        writer.Should().NotContain("ThemeColor.FromHex(");
     }
 
     private static string ReadSource(params string[] relativePath)
