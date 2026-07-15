@@ -5211,7 +5211,7 @@ public static partial class ChartRenderPlanner
         double radius = Math.Min(plot.Width, plot.Height) / 2 * 0.85;
         double startAngle = ResolvePieStartAngle(chart);
         var position = labels.Position ?? DataLabelPosition.BestFit;
-        double labelRadius = position == DataLabelPosition.InsideEnd
+        double labelRadius = position is DataLabelPosition.InsideEnd or DataLabelPosition.Center or DataLabelPosition.BestFit
             ? radius * 0.65
             : radius * 1.15;
         var plans = new List<ChartDataLabelPlan>();
@@ -5228,11 +5228,12 @@ public static partial class ChartRenderPlanner
             {
                 double labelX = centerX + labelRadius * Math.Cos(midAngle);
                 double labelY = centerY + labelRadius * Math.Sin(midAngle);
+                double labelWidth = Math.Max(64, text.Length * 12.0);
                 plans.Add(new ChartDataLabelPlan(
                     SeriesIndex: 0,
                     CategoryIndex: visibleValue.PointIndex,
                     Text: text,
-                    Bounds: new ChartPlanRect(labelX - 32, labelY - ResolveDataLabelHeight(chart) / 2, 64, ResolveDataLabelHeight(chart)),
+                    Bounds: new ChartPlanRect(labelX - labelWidth / 2, labelY - ResolveDataLabelHeight(chart) / 2, labelWidth, ResolveDataLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Center));

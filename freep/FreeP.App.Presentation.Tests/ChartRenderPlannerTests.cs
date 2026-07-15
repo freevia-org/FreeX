@@ -3046,6 +3046,33 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildDataLabelPlans_PieBestFitKeepsValuePercentLabelsInsideSlices()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 45, 30, 15, 10 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            DataLabels = new ChartDataLabels
+            {
+                ShowValue = true,
+                ShowPercent = true,
+                Position = DataLabelPosition.BestFit
+            }
+        };
+        chart.Series.Add(series);
+
+        var labels = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 200, 200));
+
+        labels.Select(label => label.Text).Should().Equal("45 45%", "30 30%", "15 15%", "10 10%");
+        labels.Should().OnlyContain(label => label.Bounds.Width >= 72);
+        (labels[0].Bounds.X + labels[0].Bounds.Width / 2).Should().BeLessThan(160,
+            "PowerPoint resolves best-fit pie labels within their slices when they fit");
+    }
+
+    [Fact]
     public void BuildDataLabelPlans_StackedColumnPercentUsesCategoryTotal()
     {
         var labels = new ChartDataLabels

@@ -100,6 +100,7 @@ internal static class PptxChartReader
         var chartDataLabelsEl = firstChartTypeEl?.Element(C + "dLbls");
         shape.DataLabels = ReadDataLabels(chartDataLabelsEl);
         ApplyPowerPointPercentStackedDataLabelDefaults(firstChartTypeEl, chartDataLabelsEl, shape.DataLabels);
+        ApplyPowerPointPiePercentDataLabelDefaults(firstChartTypeEl, chartDataLabelsEl, shape.DataLabels);
         shape.DataTable = ReadDataTable(plotArea.Element(C + "dTable"), scheme);
 
         // Secondary value axis detection
@@ -1178,6 +1179,24 @@ internal static class PptxChartReader
         labels.ShowSeriesName = true;
         labels.ShowCategoryName = true;
         labels.ShowPercent = false;
+    }
+
+    private static void ApplyPowerPointPiePercentDataLabelDefaults(
+        XElement? chartTypeEl,
+        XElement? dataLabelsEl,
+        ChartDataLabels? labels)
+    {
+        if (chartTypeEl?.Name != C + "pieChart" ||
+            dataLabelsEl is null ||
+            dataLabelsEl.Element(C + "showVal") is not null ||
+            labels is not { ShowValue: false, ShowPercent: true, ShowSeriesName: false, ShowCategoryName: false })
+        {
+            return;
+        }
+
+        // PowerPoint exposes the sparse pie form (showPercent without showVal)
+        // as value-and-percent labels when it opens an imported presentation.
+        labels.ShowValue = true;
     }
 
     private static ChartDataTableSettings? ReadDataTable(XElement? dTableEl, PresentationColorScheme scheme)

@@ -140,6 +140,22 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartLabelsCorpusDeck_InfersPowerPointPieValueAndPercentDefaults()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var pie = presentation.Slides[1].Shapes.Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        pie.ChartType.Should().Be(ChartType.Pie);
+        pie.DataLabels.Should().NotBeNull();
+        pie.DataLabels!.ShowValue.Should().BeTrue(
+            "PowerPoint expands this imported pie label form to value-and-percent labels");
+        pie.DataLabels.ShowPercent.Should().BeTrue();
+        pie.DataLabels.ShowSeriesName.Should().BeFalse();
+        pie.DataLabels.ShowCategoryName.Should().BeFalse();
+    }
+
+    [Fact]
     public void FillsCorpusDeck_MaterializesInheritedLineAndFontReferences()
     {
         var presentation = PptxPackageReader.Read(Path.Combine(FindCorpusDirectory(), "12-fills.pptx"));
