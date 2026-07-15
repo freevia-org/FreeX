@@ -5009,10 +5009,22 @@ public sealed class DocumentView : RichTextBox
             PrintLayoutEnabled,
             PlainPadding.Left);
 
-        var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
-            _model,
-            surface,
-            columnCount: 1);
+        var snapshots = new List<DocumentFloatingObjectSnapshot>();
+        for (var blockIndex = 0; blockIndex < _model.Blocks.Count; blockIndex++)
+        {
+            if (_model.Blocks[blockIndex] is not ModelParagraph paragraph)
+                continue;
+
+            // Paragraph-anchored drawings use the paragraph's real document position in Word. The overlay
+            // is painted outside the FlowDocument, so pass the same leading-content estimate used by the
+            // host's planned table composition instead of collapsing every anchor to page origin.
+            snapshots.AddRange(DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+                paragraph,
+                blockIndex,
+                EstimateLeadingContentHeightDip(_model, blockIndex),
+                surface,
+                columnCount: 1));
+        }
         var drawOrder = DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: true)
             .Concat(DocumentViewLayoutPlanner.BuildFloatingObjectDrawOrder(snapshots, behindText: false));
 

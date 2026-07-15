@@ -140,6 +140,35 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingOverlay_ParagraphAnchorUsesLeadingContentPosition()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Leading paragraph places the next drawing anchor below page origin."));
+
+        var shape = new Shape(ShapeKind.Rectangle, 72, 36)
+        {
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                VerticalAnchor = VerticalAnchor.Paragraph,
+                VerticalOffsetPt = 0,
+            }
+        };
+        var anchor = new Paragraph();
+        anchor.Runs.Add(Run.FromShape(shape));
+        doc.Blocks.Add(anchor);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var rendered = canvas.Children.OfType<FrameworkElement>().Single();
+        Canvas.GetTop(rendered).Should().BeGreaterThan(0);
+    }
+
+    [StaFact]
     public void FloatingOverlay_RendersShapeFromSharedPlanWithActualGeometryFillOutlineAndEffect()
     {
         var shape = new Shape(ShapeKind.Ellipse, 72, 36, "#FF0000")

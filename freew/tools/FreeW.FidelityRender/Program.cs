@@ -287,44 +287,53 @@ static void RenderDocumentComposite(
     floatingCanvas.Arrange(new Rect(0, 0, pageWDip, pageHDip));
     floatingCanvas.UpdateLayout();
 
-    // Pre-rasterise each floating child to a composite bitmap.
-    RenderTargetBitmap? floatingBmp = null;
-    if (floatingCanvas.Children.Count > 0)
-    {
-        var floatDv = new DrawingVisual();
-        using (var dc = floatDv.RenderOpen())
-        {
-            foreach (System.Windows.UIElement child in floatingCanvas.Children)
-            {
-                double left = Canvas.GetLeft(child);
-                double top  = Canvas.GetTop(child);
-                if (double.IsNaN(left)) left = 0;
-                if (double.IsNaN(top))  top  = 0;
+    var floatingSurface = DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(
+        doc.Page,
+        bodyView.PrintLayoutEnabled,
+        plainInsetDip: 0);
 
-                // For Image controls (the primary floating-image type), extract the Source and
-                // draw it directly as an ImageBrush. For other FrameworkElements, use VisualBrush
-                // after ensuring the element is measured (they were arranged by floatingCanvas above).
-                if (child is System.Windows.Controls.Image img
-                    && img.Source is ImageSource src)
-                {
-                    double w = img.Width;
-                    double h = img.Height;
-                    if (!double.IsNaN(w) && !double.IsNaN(h) && w > 0 && h > 0)
-                        dc.DrawImage(src, new Rect(left, top, w, h));
-                }
-                else if (child is FrameworkElement fe
-                    && !double.IsNaN(fe.ActualWidth) && fe.ActualWidth > 0
-                    && !double.IsNaN(fe.ActualHeight) && fe.ActualHeight > 0)
-                {
-                    dc.DrawRectangle(
-                        new VisualBrush(fe) { Stretch = Stretch.Fill },
-                        null,
-                        new Rect(left, top, fe.ActualWidth, fe.ActualHeight));
-                }
+    void DrawFloatingObjectsForPage(DrawingContext dc, int pageIndex, double pageHeightDip)
+    {
+        if (floatingCanvas.Children.Count == 0)
+            return;
+
+        var pageTopDip = floatingSurface.PageTopDip(pageIndex);
+        var pageBottomDip = pageTopDip + pageHeightDip;
+        foreach (System.Windows.UIElement child in floatingCanvas.Children)
+        {
+            double left = Canvas.GetLeft(child);
+            double top = Canvas.GetTop(child);
+            if (double.IsNaN(left)) left = 0;
+            if (double.IsNaN(top)) top = 0;
+
+            var (width, height) = child switch
+            {
+                System.Windows.Controls.Image img => (img.Width, img.Height),
+                FrameworkElement fe => (fe.ActualWidth, fe.ActualHeight),
+                _ => (0, 0)
+            };
+            if (double.IsNaN(width) || double.IsNaN(height) || width <= 0 || height <= 0)
+                continue;
+
+            // The live overlay uses page-space coordinates for the whole document. Rasterize only the
+            // objects intersecting this paginator page and translate them back to local page coordinates;
+            // otherwise page 1 drawings are repeated on every exported page.
+            if (top + height <= pageTopDip || top >= pageBottomDip)
+                continue;
+
+            var localRect = new Rect(left, top - pageTopDip, width, height);
+            if (child is System.Windows.Controls.Image { Source: ImageSource source })
+            {
+                dc.DrawImage(source, localRect);
+            }
+            else if (child is FrameworkElement fe)
+            {
+                dc.DrawRectangle(
+                    new VisualBrush(fe) { Stretch = Stretch.Fill },
+                    null,
+                    localRect);
             }
         }
-        floatingBmp = new RenderTargetBitmap(pixW, pixH, 96, 96, PixelFormats.Pbgra32);
-        floatingBmp.Render(floatDv);
     }
 
     // ═══ LAYER 5: Headers / footers ══════════════════════════════════════════════════════════════
@@ -444,13 +453,13 @@ static void RenderDocumentComposite(
         }
 
         // ─ Layer 4: floating objects (pre-rasterised bitmap, composited via alpha blend) ─────────
-        // RenderTargetBitmap.Render composites with alpha blending when the bitmap has Pbgra32
-        // format, so floating objects that are semi-transparent render correctly.
-        if (floatingBmp is not null)
+        // Draw the page-filtered children through a DrawingVisual so semi-transparent object visuals
+        // retain the same alpha compositing as the live overlay.
+        if (floatingCanvas.Children.Count > 0)
         {
             var floatVisual = new DrawingVisual();
             using (var dc = floatVisual.RenderOpen())
-                dc.DrawImage(floatingBmp, new Rect(0, 0, thisPixW, thisPixH));
+                DrawFloatingObjectsForPage(dc, i, thisPageHDip);
             bmp.Render(floatVisual);
         }
 
