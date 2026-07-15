@@ -834,12 +834,24 @@ public static partial class ChartRenderPlanner
                 bounds.Width - 49.0,
                 bounds.Height - 87.0);
         }
+        else if (chart.ChartType == ChartType.Surface3D)
+        {
+            // PowerPoint's classic 3-D surface view reserves an explicit right
+            // series-axis band and a deep lower projection band.
+            plot = new ChartPlanRect(
+                bounds.X + 44.0,
+                bounds.Y + 57.0,
+                bounds.Width - 120.0,
+                bounds.Height - 99.0);
+        }
         if (TryResolveManualLayoutRect(chart.PlotAreaManualLayout, bounds, out var manualPlot))
             plot = manualPlot;
         ChartPlanRect? titleBounds = chart.Title is not null
             ? new ChartPlanRect(
                 bounds.X + margin,
-                UsesStockLineFallback(chart) ? bounds.Y + 7.0 : bounds.Y + margin,
+                UsesStockLineFallback(chart) || chart.ChartType == ChartType.Surface3D
+                    ? bounds.Y + 7.0
+                    : bounds.Y + margin,
                 bounds.Width - 2 * margin,
                 titleHeight)
             : null;

@@ -55,6 +55,9 @@ public sealed class ChartBaselineCorpusTests
                 ChartStockPriceMove.Unchanged);
 
         var surface = charts.Single(chart => chart.ChartType == ChartType.Surface3D);
+        ChartRenderPlanner.BuildFramePlan(surface, new ChartPlanRect(0, 0, 480, 288)).Plot
+            .Should().Be(new ChartPlanRect(44, 57, 360, 189),
+                "PowerPoint reserves a dedicated projected frame for classic Surface3D charts");
         var surfaceCells = ChartRenderPlanner.BuildSurfaceCellPrimitives(
             surface,
             new ChartPlanRect(0, 0, 360, 220));
