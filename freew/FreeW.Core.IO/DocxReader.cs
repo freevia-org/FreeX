@@ -2663,8 +2663,9 @@ public static class DocxReader
                 }
             }
 
-            // Cells in styled rows carry the style fill (header/banded) we wrote; recognise and strip it so
-            // it reads back as style-derived shading, not as an explicit per-cell colour.
+            // The writer emits legacy light fills as explicit cell shading so Word honours them even when a
+            // named table style is also present. Explicit OOXML shading must win over the catalog style on
+            // read, so only strip those legacy values for tables without a named catalog style.
             var isStyleHeader = headerRow && rowIndex == 0;
             var isStyleBanded = bandedRows
                 && !isStyleHeader
@@ -2680,10 +2681,12 @@ public static class DocxReader
                         cell.WidthPt = DxaToPoints(width);
                     var shading = tcPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
                     var normalized = shading is null or "auto" ? null : shading.TrimStart('#');
-                    // Drop the style-derived header/banded fill so it doesn't masquerade as cell shading.
+                    // A named style does not make an explicit w:shd style-derived; Word applies explicit
+                    // cell shading after the table style and the rendered fill must preserve that precedence.
                     if (normalized is not null
-                        && !(isStyleHeader && string.Equals(normalized, StyleHeaderFill, StringComparison.OrdinalIgnoreCase))
-                        && !(isStyleBanded && string.Equals(normalized, StyleBandedFill, StringComparison.OrdinalIgnoreCase)))
+                        && !(catalogStyle is null
+                            && ((isStyleHeader && string.Equals(normalized, StyleHeaderFill, StringComparison.OrdinalIgnoreCase))
+                                || (isStyleBanded && string.Equals(normalized, StyleBandedFill, StringComparison.OrdinalIgnoreCase)))))
                         cell.ShadingColorHex = "#" + normalized;
 
                     // Horizontal merge: w:gridSpan w:val="N". Absent (or <2) means no span.
