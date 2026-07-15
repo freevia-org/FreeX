@@ -34,7 +34,9 @@ public sealed record SlideShowPointerClickIntent(
     uint? TriggerShapeId = null,
     Hyperlink? Hyperlink = null)
 {
-    public bool IsHandled => Kind != SlideShowPointerClickIntentKind.NoOp;
+    public bool IsHandled => Kind is
+        SlideShowPointerClickIntentKind.Trigger or
+        SlideShowPointerClickIntentKind.Hyperlink;
 }
 
 public sealed record SlideShowSlideMetrics(double WidthDip, double HeightDip)
@@ -301,7 +303,7 @@ public static class SlideShowHostPlanner
 
         if (slide is null)
         {
-            return new SlideShowPointerClickIntent(SlideShowPointerClickIntentKind.NoOp);
+            return new SlideShowPointerClickIntent(SlideShowPointerClickIntentKind.Advance);
         }
 
         var triggerShapeId = HitTestTriggerShape(slide, slidePoint);

@@ -348,23 +348,25 @@ public sealed class SlideShowHostPlannerTests
         trigger.Kind.Should().Be(SlideShowPointerClickIntentKind.Trigger);
         trigger.TriggerShapeId.Should().Be(42);
         trigger.Hyperlink.Should().BeNull();
+        trigger.IsHandled.Should().BeTrue();
 
         slide.Animations.Clear();
         var hyperlink = SlideShowHostPlanner.PlanPointerClick(slide, inside);
         hyperlink.Kind.Should().Be(SlideShowPointerClickIntentKind.Hyperlink);
         hyperlink.Hyperlink.Should().BeSameAs(shape.Hyperlink);
+        hyperlink.IsHandled.Should().BeTrue();
 
         var advance = SlideShowHostPlanner.PlanPointerClick(slide, new SlideShowPoint(900, 500));
         advance.Kind.Should().Be(SlideShowPointerClickIntentKind.Advance);
-        advance.IsHandled.Should().BeTrue();
+        advance.IsHandled.Should().BeFalse();
     }
 
     [Fact]
-    public void PlanPointerClick_WithoutCurrentSlideReturnsNoOp()
+    public void PlanPointerClick_WithoutCurrentSlidePreservesAdvanceAndLeavesEventUnhandled()
     {
         var intent = SlideShowHostPlanner.PlanPointerClick(null, new SlideShowPoint(0, 0));
 
-        intent.Kind.Should().Be(SlideShowPointerClickIntentKind.NoOp);
+        intent.Kind.Should().Be(SlideShowPointerClickIntentKind.Advance);
         intent.IsHandled.Should().BeFalse();
     }
 
