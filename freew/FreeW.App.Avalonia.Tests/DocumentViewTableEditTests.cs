@@ -102,6 +102,35 @@ public sealed class DocumentViewTableEditTests
         after.Should().Be("A1X", "typing 'X' after 'A1' (at offset 2) should produce 'A1X'");
     }
 
+    [Fact]
+    public async Task Typing_inside_cell_hyperlink_extends_and_coalesces_the_link()
+    {
+        string? linkText = null;
+        var linkRunCount = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var (view, idx, table) = MakeTableView();
+            var paragraph = table.Rows[0].Cells[0].Paragraphs[0];
+            paragraph.Runs.Clear();
+            paragraph.Runs.Add(new Run("Acme", RunFormatting.Default)
+            {
+                HyperlinkUrl = "https://acme.example"
+            });
+            view.PlaceCaretInCell(idx, row: 0, col: 0, paraIdx: 0, offset: 2);
+            view.InsertText("X");
+
+            var linkRuns = paragraph.Runs
+                .Where(run => run.HyperlinkUrl == "https://acme.example")
+                .ToList();
+            linkRunCount = linkRuns.Count;
+            linkText = string.Concat(linkRuns.Select(run => run.Text));
+        });
+
+        if (!ran) return;
+        linkRunCount.Should().Be(1, "typing inside a cell hyperlink should keep one contiguous hyperlink run");
+        linkText.Should().Be("AcXme", "typing inside a cell hyperlink should extend the same link span");
+    }
+
     // ── test 3: InsertText + undo reverts cell text ───────────────────────────────────────────────
 
     [Fact]

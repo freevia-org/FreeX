@@ -252,8 +252,8 @@ public sealed class DocumentViewInlineFO4Tests
         if (!ran) return;
         geometry.Should().Be(ChartVisualGeometryKind.MarkerOnly,
             "scatter charts should not use the connected line geometry path");
-        firstColor.Should().Be("#ED7D31",
-            "Avalonia should consume the shared named chart palette");
+        firstColor.Should().Be("#214A82",
+            "Word's marker-only scatter renderer uses its built-in blue progression rather than authored point fills");
     }
 
     [Fact]

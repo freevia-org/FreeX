@@ -8859,6 +8859,7 @@ public sealed class DocumentView : Control
                 return;
             var offset = cc.Offset;
             var fmt = ActiveFormatting(para, offset);
+            var cellInsLink = ActiveLink(para, offset);
             _bus.Execute(new ReplaceCellParagraphRunsCommand(cc.TableBlock, cc.Row, cc.Col, cc.ParaIdx, p =>
             {
                 RevisionEditPlanner.InsertText(
@@ -8866,12 +8867,14 @@ public sealed class DocumentView : Control
                     offset,
                     text,
                     fmt,
-                    TrackChangesEnabled
-                        ? new RevisionEditPlanner.InsertOptions(
-                            RevisionKind.Inserted,
-                            RevisionAuthor,
-                            CurrentRevisionDateXml())
-                        : default);
+                    new RevisionEditPlanner.InsertOptions(
+                        TrackChangesEnabled ? RevisionKind.Inserted : RevisionKind.None,
+                        TrackChangesEnabled ? RevisionAuthor : null,
+                        TrackChangesEnabled ? CurrentRevisionDateXml() : null,
+                        cellInsLink?.Url,
+                        cellInsLink?.Anchor,
+                        cellInsLink?.Tooltip));
+                SetRuns(p, ParaCells(p));
             }));
             _cellCaret = cc with { Offset = offset + text.Length };
             _cellAnchor = _cellCaret;
@@ -8916,6 +8919,7 @@ public sealed class DocumentView : Control
                     insLink?.Url,
                     insLink?.Anchor,
                     insLink?.Tooltip));
+            SetRuns(p, ParaCells(p));
         }));
         _caret = new DocPosition(block, bodyOffset + text.Length);
         _selectionAnchor = _caret;

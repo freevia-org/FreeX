@@ -1,6 +1,4 @@
-using System.Reflection;
 using System.Xml.Linq;
-using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Ribbon.Icons;
 
 namespace FreeW.App.Avalonia.Tests;
@@ -69,15 +67,16 @@ public sealed class RibbonCommandIconPackagingTests
         var iconDirectory = Path.Combine(AppContext.BaseDirectory, "Resources", "CommandIconsSvg");
         Directory.Exists(iconDirectory).Should().BeTrue();
 
-        var candidateMethod = typeof(AvaloniaRibbonIcons).GetMethod(
-            "GetCommandIconSlugCandidates",
-            BindingFlags.NonPublic | BindingFlags.Static);
-        candidateMethod.Should().NotBeNull();
+        var loaderSource = File.ReadAllText(FindRepositoryFile(
+            "shared",
+            "Free.Shared.Ribbon.Avalonia",
+            "AvaloniaRibbonIcons.cs"));
+        loaderSource.Should().Contain("RibbonCommandIconPolicy.GetCommandIconSlugCandidates(slug)");
 
         foreach (var alias in RemovedExactDuplicateSlugs)
         {
             var canonical = RibbonCommandIconSlugAliases.GetCandidates(alias).First();
-            var candidates = ((IEnumerable<string>)candidateMethod!.Invoke(null, [alias])!).ToArray();
+            var candidates = RibbonCommandIconPolicy.GetCommandIconSlugCandidates(alias).ToArray();
 
             candidates.First().Should().Be(canonical, alias);
             File.Exists(Path.Combine(iconDirectory, canonical + ".svg")).Should().BeTrue(alias);
