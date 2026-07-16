@@ -1011,6 +1011,15 @@ public static class SlideCompositor
         {
             shape.Fill = new ShapeFill.Solid(new ThemeAwareColor(ResolveSmartArtNeutralBackground(theme)));
         }
+        else if (data?.LayoutUniqueId.EndsWith("cycle2", StringComparison.OrdinalIgnoreCase) == true
+            && shape.AutoShapeKind == DrawingShapeKind.RightArrow
+            && shape.TextBody is not null
+            && shape.TextBody.Paragraphs.All(paragraph => paragraph.Runs.All(run => string.IsNullOrEmpty(run.Text)))
+            && shape.Fill is ShapeFill.Solid cycleArrowFill
+            && cycleArrowFill.Color.SchemeColor?.Slot == ThemeColorSlot.Accent1)
+        {
+            shape.Fill = new ShapeFill.Solid(new ThemeAwareColor(ResolveSmartArtNeutralConnector(theme)));
+        }
 
         foreach (var child in shape.Children)
             ApplyCachedSmartArtStyle(child, data, theme);
@@ -1026,6 +1035,15 @@ public static class SlideCompositor
             return SrgbColor.FromRgb(0xCCD2D8);
 
         return ThemeColorTransform.ApplyShade(lt2, 0.88);
+    }
+
+    private static SrgbColor ResolveSmartArtNeutralConnector(PresentationTheme theme)
+    {
+        var lt2 = theme.ColorScheme[ThemeColorSlot.Lt2];
+        if (lt2 == SrgbColor.FromRgb(0xE8E8E8))
+            return SrgbColor.FromRgb(0xAAB6C1);
+
+        return ThemeColorTransform.ApplyShade(lt2, 0.72);
     }
 
     /// <summary>Returns a default accent color for the given zero-based series index using the theme.</summary>
