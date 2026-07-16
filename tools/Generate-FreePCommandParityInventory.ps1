@@ -12,32 +12,9 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 $resolvedInventoryPath = Resolve-ToolRepoPath -Path $InventoryPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
-$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-freep-command-inventory-" + [System.Guid]::NewGuid().ToString("N"))
-$tempJsonPath = Join-Path $tempRoot "freep-command-parity-inventory.json"
-$tempMarkdownPath = Join-Path $tempRoot "freep-command-parity-inventory.md"
+$definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath -Path "freep\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" -RepoRoot $repoRoot)
 
-New-Item -ItemType Directory -Path $tempRoot | Out-Null
-
-try {
-    $definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath -Path "freep\FreeP.Ribbon.Definitions\FreeP.Ribbon.Definitions.csproj" -RepoRoot $repoRoot)
-    $projectPath = Join-Path $tempRoot "FreeP.CommandInventory.Generator.csproj"
-    $programPath = Join-Path $tempRoot "Program.cs"
-
-    [IO.File]::WriteAllText($projectPath, @"
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="$definitionsProject" />
-  </ItemGroup>
-</Project>
-"@)
-
-    $programSource = @'
+$programSource = @'
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -1998,30 +1975,20 @@ internal sealed record CommandLocation(
 internal sealed record Classification(string Name, string Notes);
 '@
 
-    [IO.File]::WriteAllText($programPath, $programSource)
-
-    & dotnet run --project $projectPath --configuration Release -- $tempJsonPath $tempMarkdownPath
-    if ($LASTEXITCODE -ne 0) {
-        throw "FreeP command parity inventory generator failed."
+Invoke-ToolGeneratedProject @{
+    Prefix = "freex-freep-command-inventory"
+    Name = "FreeP.CommandInventory.Generator"
+    Reference = $definitionsProject
+    Source = $programSource
+    Outputs = [ordered]@{ $resolvedInventoryPath = $InventoryPath; $resolvedMarkdownPath = $MarkdownPath }
+    Arguments = {
+        param($outputPaths)
+        @($outputPaths[0].TempPath, $outputPaths[1].TempPath)
     }
-
-    if ($Check) {
-        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedInventoryPath -Label $InventoryPath -GeneratorScriptName "tools\Generate-FreePCommandParityInventory.ps1"
-        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label $MarkdownPath -GeneratorScriptName "tools\Generate-FreePCommandParityInventory.ps1"
-        Write-Host "FreeP command parity inventory docs are up to date."
-        return
-    }
-
-    $inventoryDirectory = Split-Path -Parent $resolvedInventoryPath
-    $markdownDirectory = Split-Path -Parent $resolvedMarkdownPath
-    New-Item -ItemType Directory -Path $inventoryDirectory -Force | Out-Null
-    New-Item -ItemType Directory -Path $markdownDirectory -Force | Out-Null
-    Copy-Item -LiteralPath $tempJsonPath -Destination $resolvedInventoryPath -Force
-    Copy-Item -LiteralPath $tempMarkdownPath -Destination $resolvedMarkdownPath -Force
-    Write-Host "Wrote $InventoryPath and $MarkdownPath."
-}
-finally {
-    if (Test-Path -LiteralPath $tempRoot) {
-        Remove-Item -LiteralPath $tempRoot -Recurse -Force
-    }
+    Script = "tools\Generate-FreePCommandParityInventory.ps1"
+    Failure = "FreeP command parity inventory generator failed."
+    Check = $Check
+    CheckMessage = "FreeP command parity inventory docs are up to date."
+    WriteMessage = "Wrote $InventoryPath and $MarkdownPath."
+    DotNetPath = "dotnet"
 }

@@ -104,6 +104,52 @@ function Invoke-DotNetRun([string]$ProjectPath, [string[]]$ToolArgs = @(), [stri
         -WorkingDirectory $WorkingDirectory `
         -FailureMessage "dotnet run failed for $ProjectPath"
 }
+
+function Invoke-ToolGeneratedProject {
+    param([Parameter(Mandatory = $true)][hashtable]$Options)
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ($Options.Prefix + "-" + [System.Guid]::NewGuid().ToString("N"))
+    try {
+        New-Item -ItemType Directory -Path $tempRoot | Out-Null
+        $projectPath = Join-Path $tempRoot "$($Options.Name).csproj"
+        $programPath = Join-Path $tempRoot "Program.cs"
+        [IO.File]::WriteAllText($projectPath, @"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$($Options.Reference)" />
+  </ItemGroup>
+</Project>
+"@)
+        [IO.File]::WriteAllText($programPath, $Options.Source)
+        $outputPaths = @($Options.Outputs.GetEnumerator() | ForEach-Object { [pscustomobject]@{ TempPath = Join-Path $tempRoot (Split-Path -Leaf $_.Key); DestinationPath = $_.Key; Label = $_.Value } })
+        & $Options.DotNetPath (@("run", "--project", $projectPath, "--configuration", "Release", "--") + @(& $Options.Arguments $outputPaths))
+        if ($LASTEXITCODE -ne 0) {
+            throw $Options.Failure
+        }
+        if ($Options.Check) {
+            foreach ($generatedFile in $outputPaths) {
+                Test-ToolGeneratedFileContentMatches -ExpectedPath $generatedFile.TempPath -ActualPath $generatedFile.DestinationPath -Label $generatedFile.Label -GeneratorScriptName $Options.Script
+            }
+            Write-Host $Options.CheckMessage
+            return
+        }
+        foreach ($generatedFile in $outputPaths) {
+            $destinationDirectory = Split-Path -Parent $generatedFile.DestinationPath
+            New-Item -ItemType Directory -Path $destinationDirectory -Force | Out-Null; Copy-Item -LiteralPath $generatedFile.TempPath -Destination $generatedFile.DestinationPath -Force
+        }
+        Write-Host $Options.WriteMessage
+    } finally {
+        if (Test-Path -LiteralPath $tempRoot) {
+            Remove-Item -LiteralPath $tempRoot -Recurse -Force
+        }
+    }
+}
+
 function Invoke-DotNetBuild([string]$ProjectPath, [string]$Configuration = "Release", [string]$WorkingDirectory, [string]$DotNetPath = "dotnet") {
     Invoke-ToolProcess -FilePath $DotNetPath `
         -Arguments @("build", $ProjectPath, "--configuration", $Configuration) `

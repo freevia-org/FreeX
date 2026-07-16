@@ -12,32 +12,9 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 
 $resolvedJsonPath = Resolve-ToolRepoPath -Path $JsonPath -RepoRoot $repoRoot
 $resolvedMarkdownPath = Resolve-ToolRepoPath -Path $MarkdownPath -RepoRoot $repoRoot
-$tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-freew-command-inventory-" + [System.Guid]::NewGuid().ToString("N"))
-$tempJsonPath = Join-Path $tempRoot "freew-command-inventory.json"
-$tempMarkdownPath = Join-Path $tempRoot "freew-command-inventory.md"
+$definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath -Path "freew\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" -RepoRoot $repoRoot)
 
-New-Item -ItemType Directory -Path $tempRoot | Out-Null
-
-try {
-    $definitionsProject = ConvertTo-ToolXmlAttribute (Resolve-ToolRepoPath -Path "freew\FreeW.Ribbon.Definitions\FreeW.Ribbon.Definitions.csproj" -RepoRoot $repoRoot)
-    $projectPath = Join-Path $tempRoot "FreeW.CommandInventory.Generator.csproj"
-    $programPath = Join-Path $tempRoot "Program.cs"
-
-    [IO.File]::WriteAllText($projectPath, @"
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-  <ItemGroup>
-    <ProjectReference Include="$definitionsProject" />
-  </ItemGroup>
-</Project>
-"@)
-
-    $programSource = @'
+$programSource = @'
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -1094,30 +1071,20 @@ internal sealed record ClassificationRule(string Name, string Description);
 internal sealed record SourceLiteralFile(string Id, string Label, string RelativePath);
 '@
 
-    [IO.File]::WriteAllText($programPath, $programSource)
-
-    & dotnet run --project $projectPath --configuration Release -- $repoRoot $tempJsonPath $tempMarkdownPath
-    if ($LASTEXITCODE -ne 0) {
-        throw "FreeW command inventory generator failed."
+Invoke-ToolGeneratedProject @{
+    Prefix = "freex-freew-command-inventory"
+    Name = "FreeW.CommandInventory.Generator"
+    Reference = $definitionsProject
+    Source = $programSource
+    Outputs = [ordered]@{ $resolvedJsonPath = $JsonPath; $resolvedMarkdownPath = $MarkdownPath }
+    Arguments = {
+        param($outputPaths)
+        @($repoRoot, $outputPaths[0].TempPath, $outputPaths[1].TempPath)
     }
-
-    if ($Check) {
-        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempJsonPath -ActualPath $resolvedJsonPath -Label $JsonPath -GeneratorScriptName "tools\Generate-FreeWCommandInventory.ps1"
-        Test-ToolGeneratedFileContentMatches -ExpectedPath $tempMarkdownPath -ActualPath $resolvedMarkdownPath -Label $MarkdownPath -GeneratorScriptName "tools\Generate-FreeWCommandInventory.ps1"
-        Write-Host "FreeW command inventory docs are up to date."
-        return
-    }
-
-    $jsonDirectory = Split-Path -Parent $resolvedJsonPath
-    $markdownDirectory = Split-Path -Parent $resolvedMarkdownPath
-    New-Item -ItemType Directory -Path $jsonDirectory -Force | Out-Null
-    New-Item -ItemType Directory -Path $markdownDirectory -Force | Out-Null
-    Copy-Item -LiteralPath $tempJsonPath -Destination $resolvedJsonPath -Force
-    Copy-Item -LiteralPath $tempMarkdownPath -Destination $resolvedMarkdownPath -Force
-    Write-Host "Wrote $JsonPath and $MarkdownPath."
-}
-finally {
-    if (Test-Path -LiteralPath $tempRoot) {
-        Remove-Item -LiteralPath $tempRoot -Recurse -Force
-    }
+    Script = "tools\Generate-FreeWCommandInventory.ps1"
+    Failure = "FreeW command inventory generator failed."
+    Check = $Check
+    CheckMessage = "FreeW command inventory docs are up to date."
+    WriteMessage = "Wrote $JsonPath and $MarkdownPath."
+    DotNetPath = "dotnet"
 }

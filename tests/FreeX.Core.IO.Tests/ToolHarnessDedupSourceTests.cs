@@ -143,6 +143,31 @@ public sealed class ToolHarnessDedupSourceTests
     }
 
     [Fact]
+    public void CommandInventoryGenerators_UseSharedGeneratedProjectOrchestration()
+    {
+        var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");
+        var generators = new[]
+        {
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreePCommandParityInventory.ps1"),
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreeWCommandInventory.ps1"),
+        };
+
+        support.Should().Contain("function Invoke-ToolGeneratedProject");
+        support.Should().Contain("<Project Sdk=\"Microsoft.NET.Sdk\">");
+        support.Should().Contain("<ProjectReference Include=\"$($Options.Reference)\" />");
+        support.Should().Contain("Test-ToolGeneratedFileContentMatches");
+        support.Should().Contain("Copy-Item -LiteralPath $generatedFile.TempPath");
+
+        generators.Should().OnlyContain(script =>
+            script.Contains("Invoke-ToolGeneratedProject @", StringComparison.Ordinal) &&
+            script.Contains("Outputs = [ordered]@", StringComparison.Ordinal) &&
+            script.Contains("Arguments = {", StringComparison.Ordinal) &&
+            !script.Contains("& dotnet run", StringComparison.Ordinal) &&
+            !script.Contains("Test-ToolGeneratedFileContentMatches", StringComparison.Ordinal) &&
+            !script.Contains("Copy-Item -LiteralPath $temp", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void FreePRenderCompare_UsesSharedWpfBitmapDecodeHelpers()
     {
         var project = TestWorkspaceFiles.ReadRepoText("tools", "FreeP.RenderCompare", "FreeP.RenderCompare.csproj");

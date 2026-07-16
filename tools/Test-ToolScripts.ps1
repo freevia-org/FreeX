@@ -31,6 +31,7 @@ function Assert-ToolSourceCentralization {
             "function ConvertTo-ToolMarkdownCell",
             "function Get-ToolCommandInventoryMenuTraversalSource",
             "function Test-ToolGeneratedContentMatches",
+            "function Invoke-ToolGeneratedProject",
             "function Invoke-FidelityCorpusDownload",
             "function Invoke-ToolProcess",
             "function Invoke-DotNetStep",
@@ -243,6 +244,170 @@ function Assert-CommandInventoryMenuTraversalCentralization {
     }
 
     Write-Host "Validated command inventory menu traversal centralization and nested-item behavior."
+}
+
+function Assert-CommandInventoryGeneratedProjectCentralization {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    $support = Get-Content -LiteralPath (Join-Path $ToolRoot "ToolScriptSupport.ps1") -Raw
+    foreach ($requiredSource in @(
+            "function Invoke-ToolGeneratedProject",
+            '<Project Sdk="Microsoft.NET.Sdk">',
+            '<ProjectReference Include="$($Options.Reference)" />',
+            "Test-ToolGeneratedFileContentMatches",
+            'Copy-Item -LiteralPath $generatedFile.TempPath')) {
+        if (-not $support.Contains($requiredSource)) {
+            throw "Shared generated-project helper is missing '$requiredSource'."
+        }
+    }
+
+    foreach ($generatorName in @("Generate-FreePCommandParityInventory.ps1", "Generate-FreeWCommandInventory.ps1")) {
+        $generator = Get-Content -LiteralPath (Join-Path $ToolRoot $generatorName) -Raw
+        if (([regex]::Matches($generator, "Invoke-ToolGeneratedProject")).Count -ne 1) {
+            throw "$generatorName must consume Invoke-ToolGeneratedProject exactly once."
+        }
+
+        foreach ($forbiddenSource in @(
+                "& dotnet run",
+                'New-Item -ItemType Directory -Path $tempRoot',
+                "Test-ToolGeneratedFileContentMatches",
+                'Copy-Item -LiteralPath $temp')) {
+            if ($generator.Contains($forbiddenSource)) {
+                throw "$generatorName still owns shared generated-project orchestration '$forbiddenSource'."
+            }
+        }
+
+        foreach ($requiredCall in @("Outputs = [ordered]@", "Arguments = {", 'Check = $Check')) {
+            if (-not $generator.Contains($requiredCall)) {
+                throw "$generatorName must pass '$requiredCall' to Invoke-ToolGeneratedProject."
+            }
+        }
+    }
+
+    Write-Host "Validated command inventory generated-project orchestration centralization."
+}
+
+function Assert-GeneratedProjectOrchestrationBehavior {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    . (Join-Path $ToolRoot "ToolScriptSupport.ps1")
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-generated-project-helper-" + [guid]::NewGuid().ToString("N"))
+    $shimRoot = Join-Path $tempRoot "shim"
+    $destinationRoot = Join-Path $tempRoot "destination"
+    New-Item -ItemType Directory -Force -Path $shimRoot, $destinationRoot | Out-Null
+
+    $shimScript = Join-Path $shimRoot "synthetic-dotnet.ps1"
+    $shimPath = Join-Path $shimRoot "synthetic-dotnet.cmd"
+    $capturePath = Join-Path $tempRoot "captured.json"
+    $projectCapturePath = Join-Path $tempRoot "project-path.txt"
+    $previousExitCode = $env:FREEX_TOOL_GENERATOR_EXIT_CODE
+    $previousCapturePath = $env:FREEX_TOOL_GENERATOR_CAPTURE
+    $previousProjectCapturePath = $env:FREEX_TOOL_GENERATOR_PROJECT
+
+    try {
+        @'
+$arguments = @($args)
+$projectIndex = [Array]::IndexOf([object[]]$arguments, "--project")
+$projectPath = $arguments[$projectIndex + 1]
+[IO.File]::WriteAllText($env:FREEX_TOOL_GENERATOR_PROJECT, $projectPath)
+[ordered]@{ Arguments = $arguments } | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:FREEX_TOOL_GENERATOR_CAPTURE
+$separatorIndex = [Array]::IndexOf([object[]]$arguments, "--")
+if ($env:FREEX_TOOL_GENERATOR_EXIT_CODE -ne "0") {
+    exit [int]$env:FREEX_TOOL_GENERATOR_EXIT_CODE
+}
+$outputPaths = @($arguments[($separatorIndex + 1)..($arguments.Count - 1)])
+[IO.File]::WriteAllText($outputPaths[0], "synthetic-json")
+[IO.File]::WriteAllText($outputPaths[1], "synthetic-markdown")
+exit 0
+'@ | Set-Content -LiteralPath $shimScript -Encoding UTF8
+        @"
+@echo off
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$shimScript" %*
+exit /b %ERRORLEVEL%
+"@ | Set-Content -LiteralPath $shimPath -Encoding ASCII
+
+        $env:FREEX_TOOL_GENERATOR_EXIT_CODE = "0"
+        $env:FREEX_TOOL_GENERATOR_CAPTURE = $capturePath
+        $env:FREEX_TOOL_GENERATOR_PROJECT = $projectCapturePath
+        $jsonDestination = Join-Path $destinationRoot "nested\inventory.json"
+        $markdownDestination = Join-Path $destinationRoot "nested\inventory.md"
+        $invokeArguments = @{
+            Prefix = "freex-generated-project-probe"
+            Name = "Synthetic.Generator"
+            Reference = "C:\repo\Definitions.csproj"
+            Source = "class Program { static void Main() {} }"
+            Outputs = [ordered]@{ $jsonDestination = "Synthetic JSON"; $markdownDestination = "Synthetic Markdown" }
+            Arguments = {
+            param($outputPaths)
+            @($outputPaths[0].TempPath, $outputPaths[1].TempPath)
+            }
+            Script = "synthetic-generator.ps1"
+            Failure = "Synthetic generator failed."
+            Check = $false
+            CheckMessage = "Synthetic generated files are up to date."
+            WriteMessage = "Wrote synthetic generated files."
+            DotNetPath = $shimPath
+        }
+
+        Invoke-ToolGeneratedProject $invokeArguments
+        if ((Get-Content -LiteralPath $jsonDestination -Raw) -cne "synthetic-json" -or
+            (Get-Content -LiteralPath $markdownDestination -Raw) -cne "synthetic-markdown") {
+            throw "Invoke-ToolGeneratedProject did not copy generated output bytes to nested destinations."
+        }
+
+        $capture = Get-Content -LiteralPath $capturePath -Raw | ConvertFrom-Json
+        if ($capture.Arguments[0] -cne "run" -or $capture.Arguments[1] -cne "--project" -or
+            $capture.Arguments[3] -cne "--configuration" -or $capture.Arguments[4] -cne "Release" -or
+            $capture.Arguments[5] -cne "--" -or $capture.Arguments.Count -ne 8) {
+            throw "Invoke-ToolGeneratedProject did not preserve dotnet run argument ordering."
+        }
+
+        $projectPath = Get-Content -LiteralPath $projectCapturePath -Raw
+        if (Test-Path -LiteralPath $projectPath) {
+            throw "Invoke-ToolGeneratedProject did not clean up its temporary project."
+        }
+
+        $invokeArguments.Check = $true
+        Invoke-ToolGeneratedProject $invokeArguments
+
+        [IO.File]::WriteAllText($jsonDestination, "mismatch")
+        $mismatchMessage = $null
+        try {
+            Invoke-ToolGeneratedProject $invokeArguments
+        }
+        catch {
+            $mismatchMessage = $_.Exception.Message
+        }
+        if ($mismatchMessage -ne "Synthetic JSON is out of date. Run synthetic-generator.ps1 to refresh it.") {
+            throw "Invoke-ToolGeneratedProject did not preserve check mismatch behavior: '$mismatchMessage'."
+        }
+
+        $invokeArguments.Check = $false
+        $env:FREEX_TOOL_GENERATOR_EXIT_CODE = "23"
+        $failureMessage = $null
+        try {
+            Invoke-ToolGeneratedProject $invokeArguments
+        }
+        catch {
+            $failureMessage = $_.Exception.Message
+        }
+        if ($failureMessage -ne "Synthetic generator failed.") {
+            throw "Invoke-ToolGeneratedProject did not preserve generator failure behavior: '$failureMessage'."
+        }
+
+        $failedProjectPath = Get-Content -LiteralPath $projectCapturePath -Raw
+        if (Test-Path -LiteralPath $failedProjectPath) {
+            throw "Invoke-ToolGeneratedProject did not clean up after a failed generator."
+        }
+    }
+    finally {
+        if ($null -eq $previousExitCode) { Remove-Item Env:FREEX_TOOL_GENERATOR_EXIT_CODE -ErrorAction SilentlyContinue } else { $env:FREEX_TOOL_GENERATOR_EXIT_CODE = $previousExitCode }
+        if ($null -eq $previousCapturePath) { Remove-Item Env:FREEX_TOOL_GENERATOR_CAPTURE -ErrorAction SilentlyContinue } else { $env:FREEX_TOOL_GENERATOR_CAPTURE = $previousCapturePath }
+        if ($null -eq $previousProjectCapturePath) { Remove-Item Env:FREEX_TOOL_GENERATOR_PROJECT -ErrorAction SilentlyContinue } else { $env:FREEX_TOOL_GENERATOR_PROJECT = $previousProjectCapturePath }
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "Validated generated-project copy, check, failure, argument, and cleanup behavior."
 }
 
 function Assert-CommandInventoryMenuTraversalBehavior {
@@ -946,7 +1111,9 @@ $resolvedDirectory = [System.IO.Path]::GetFullPath($resolvedScriptDirectory).Tri
 if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     Assert-ToolSourceCentralization -ToolRoot $resolvedDirectory
     Assert-CommandInventoryMenuTraversalCentralization -ToolRoot $resolvedDirectory
+    Assert-CommandInventoryGeneratedProjectCentralization -ToolRoot $resolvedDirectory
     Assert-CommandInventoryMenuTraversalBehavior -ToolRoot $resolvedDirectory
+    Assert-GeneratedProjectOrchestrationBehavior -ToolRoot $resolvedDirectory
     Assert-ScreenshotCaptureSupportBehavior -ToolRoot $resolvedDirectory
     Assert-SharedToolHelperBehavior -RepoRoot $repoRoot
     Assert-ToolProviderPathBehavior -ToolRoot $resolvedDirectory
