@@ -6023,6 +6023,10 @@ public static class DocxWriter
             new XElement(C + "order", new XAttribute("val", index)));
 
         ser.Add(BuildSeriesName(series, index));
+        if (UsesPerPointPalette(chart))
+            ser.Add(BuildDataPointProperties(chart, series));
+        else
+            ser.Add(BuildSeriesProperties(chart, index));
         ser.Add(BuildCategoryCache(chart.Categories));
         ser.Add(BuildValueCache(series.Values, index));
         return ser;
@@ -6040,6 +6044,10 @@ public static class DocxWriter
             new XElement(C + "order", new XAttribute("val", index)));
 
         ser.Add(BuildSeriesName(series, index));
+        if (UsesPerPointPalette(chart))
+            ser.Add(BuildDataPointProperties(chart, series));
+        else
+            ser.Add(BuildSeriesProperties(chart, index));
 
         var xValues = new List<double>(chart.Categories.Count);
         for (var i = 0; i < chart.Categories.Count; i++)
@@ -6055,6 +6063,50 @@ public static class DocxWriter
                 new XElement(C + "f", $"Sheet1!${ColumnLetter(index + 1)}$2:${ColumnLetter(index + 1)}${series.Values.Count + 1}"),
                 BuildNumCache(series.Values))));
         return ser;
+    }
+
+    private static bool UsesPerPointPalette(Chart chart) =>
+        chart.Series.Count == 1
+        && chart.Kind is ChartKind.Column or ChartKind.Bar or ChartKind.Scatter or ChartKind.Pie or ChartKind.Doughnut;
+
+    private static IReadOnlyList<XElement> BuildDataPointProperties(Chart chart, ChartSeries series)
+    {
+        var schemeId = chart.ColorSchemeId?.Trim();
+        var scheme = string.IsNullOrEmpty(schemeId) ? null : ChartColorScheme.FindById(schemeId);
+        if (scheme is null || scheme.Colors.Count == 0)
+            return [];
+
+        var points = new List<XElement>();
+        for (var index = 0; index < series.Values.Count; index++)
+        {
+            var color = scheme.Colors[index % scheme.Colors.Count].Trim().TrimStart('#');
+            points.Add(
+                new XElement(C + "dPt",
+                    new XElement(C + "idx", new XAttribute("val", index)),
+                    new XElement(C + "spPr",
+                        new XElement(A + "solidFill",
+                            new XElement(A + "srgbClr", new XAttribute("val", color))))));
+        }
+
+        return points;
+    }
+
+    /// <summary>
+    /// Persists an explicitly selected FreeW chart colour scheme in standard DrawingML. The extension remains
+    /// the lossless FreeW round-trip marker, but Word can only honour the palette when the series also carries
+    /// a normal c:spPr fill.
+    /// </summary>
+    private static XElement? BuildSeriesProperties(Chart chart, int index)
+    {
+        var schemeId = chart.ColorSchemeId?.Trim();
+        var scheme = string.IsNullOrEmpty(schemeId) ? null : ChartColorScheme.FindById(schemeId);
+        if (scheme is null || scheme.Colors.Count == 0)
+            return null;
+
+        var color = scheme.Colors[index % scheme.Colors.Count].Trim().TrimStart('#');
+        return new XElement(C + "spPr",
+            new XElement(A + "solidFill",
+                new XElement(A + "srgbClr", new XAttribute("val", color))));
     }
 
     /// <summary>Builds the optional c:tx (series display name) backed by a single-cell string cache + workbook ref.</summary>

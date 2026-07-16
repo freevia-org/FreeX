@@ -149,6 +149,19 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ColumnScene_UsesWordSizedCategoryBarSlots()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"], [1.0, 2.0, 1.5, 2.5]);
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 400, 224);
+
+        scene.Bars.Should().HaveCount(4);
+        var groupWidth = scene.PlotBounds.Width / 4;
+        scene.Bars.Select(bar => bar.Bounds.Width)
+            .Should().AllSatisfy(width => width.Should().BeApproximately(groupWidth * 0.4 - 1, 1.0));
+    }
+
+    [Fact]
     public void ChartPlan_QuickLayoutCanSuppressModelLegendAndAxisTitles()
     {
         var chart = Chart.Create(ChartKind.Line, ["A"], [1.0], title: "Hidden");

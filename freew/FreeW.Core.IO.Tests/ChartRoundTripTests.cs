@@ -416,6 +416,13 @@ public class ChartRoundTripTests
         XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
         var colorElem = chartXml.Descendants(freew + "colorScheme").Should().ContainSingle().Subject;
         colorElem.Attribute("id")!.Value.Should().Be("mono-blue");
+        var series = chartXml.Descendants(C + "ser").Should().ContainSingle().Subject;
+        series.Elements(C + "dPt").Should().HaveCount(2);
+        series
+            .Element(C + "dPt")!
+            .Descendants(A + "srgbClr")
+            .Should().ContainSingle()
+            .Which.Attribute("val")!.Value.Should().Be("214A82");
 
         // And the reader must recover it.
         var read = RoundTrip(doc);
