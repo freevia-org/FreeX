@@ -556,6 +556,9 @@ public sealed class TextBody
     /// </summary>
     public List<(string Name, string Formula)> WarpAdjusts { get; } = new();
 
+    /// <summary>Body-level WordArt 3-D material, bevel, extrusion, and lighting.</summary>
+    public ShapeEffects? Text3dEffects { get; set; }
+
     // ── Wave 22B: text columns ─────────────────────────────────────────────────
 
     /// <summary>

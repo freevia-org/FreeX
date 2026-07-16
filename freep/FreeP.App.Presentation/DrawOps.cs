@@ -197,6 +197,9 @@ public sealed class ResolvedTextLayout
     public IReadOnlyList<(string Name, string Formula)> WarpAdjusts { get; init; } =
         Array.Empty<(string Name, string Formula)>();
 
+    /// <summary>Resolved body-level WordArt 3-D material and lighting.</summary>
+    public ResolvedShapeEffects? Text3dEffects { get; init; }
+
     /// <summary>
     /// Text orientation for this body.  Renderers rotate the text block accordingly.
     /// <see cref="TextVerticalType.Horizontal"/> = no extra rotation (default).
