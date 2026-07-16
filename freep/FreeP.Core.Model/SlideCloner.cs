@@ -468,6 +468,7 @@ public static class SlideCloner
         {
             ObjectKind          = src.ObjectKind,
             ZoomTargetSlideNumericId = src.ZoomTargetSlideNumericId,
+            ZoomTargetSectionId  = src.ZoomTargetSectionId,
             RawXml              = src.RawXml,
             WasAlternateContent = src.WasAlternateContent,
             McRequiresToken     = src.McRequiresToken,

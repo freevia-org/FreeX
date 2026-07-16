@@ -52,4 +52,45 @@ public sealed class ZoomNavigationServiceTests
             new PreservedObjectInfo { ObjectKind = PreservedObjectKind.Model3d, ZoomTargetSlideNumericId = 256 },
             out _).Should().BeFalse();
     }
+
+    [Fact]
+    public void Resolves_section_zoom_to_the_first_live_slide_in_that_section()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "rId2", NumericId = 256 });
+        presentation.Slides.Add(new Slide { Id = "rId3", NumericId = 257 });
+        presentation.Sections.Add(new PresentationSection
+        {
+            Id = "{SECTION-ONE}",
+            Name = "Section One",
+        });
+        presentation.Sections[0].SlideIds.Add("rId3");
+        var zoom = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Zoom,
+            ZoomTargetSectionId = "{section-one}",
+        };
+
+        ZoomNavigationService.TryGetTargetSlideIndex(presentation, zoom, out var index)
+            .Should().BeTrue();
+        index.Should().Be(1);
+    }
+
+    [Fact]
+    public void Resolves_section_zoom_target_from_preserved_raw_xml()
+    {
+        var presentation = new Presentation();
+        presentation.Slides.Add(new Slide { Id = "rId2", NumericId = 256 });
+        presentation.Sections.Add(new PresentationSection { Id = "{SECTION-ONE}" });
+        presentation.Sections[0].SlideIds.Add("rId2");
+        var zoom = new PreservedObjectInfo
+        {
+            ObjectKind = PreservedObjectKind.Zoom,
+            RawXml = "<p:graphicFrame xmlns:p=\"urn:p\"><psez:sectionZmObj xmlns:psez=\"urn:section-zoom\" sectionId=\"{section-one}\"/></p:graphicFrame>",
+        };
+
+        ZoomNavigationService.TryGetTargetSlideIndex(presentation, zoom, out var index)
+            .Should().BeTrue();
+        index.Should().Be(0);
+    }
 }

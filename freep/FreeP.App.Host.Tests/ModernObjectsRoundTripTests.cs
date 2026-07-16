@@ -114,6 +114,38 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
             .PreservedObject!.ZoomTargetSlideNumericId.Should().Be(257);
     }
 
+    [Fact]
+    public void SectionZoom_CapturesTargetSectionId()
+    {
+        const string zoomXml = """
+            <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                            xmlns:psez="http://schemas.microsoft.com/office/powerpoint/2016/sectionzoom">
+              <p:nvGraphicFramePr>
+                <p:cNvPr id="10" name="Section Zoom 10"/>
+                <p:cNvGraphicFramePr/>
+                <p:nvPr/>
+              </p:nvGraphicFramePr>
+              <p:xfrm>
+                <a:off x="457200" y="274638"/>
+                <a:ext cx="2743200" cy="1828800"/>
+              </p:xfrm>
+              <a:graphic>
+                <a:graphicData uri="http://schemas.microsoft.com/office/powerpoint/2016/sectionzoom">
+                  <psez:sectionZm>
+                    <psez:sectionZmObj sectionId="{SECTION-ONE}"/>
+                  </psez:sectionZm>
+                </a:graphicData>
+              </a:graphic>
+            </p:graphicFrame>
+            """;
+
+        var presentation = PptxPackageReader.Read(BuildPptxWithShapeXml(zoomXml));
+        var zoom = presentation.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
+
+        zoom.PreservedObject!.ZoomTargetSectionId.Should().Be("{SECTION-ONE}");
+    }
+
     // ── Ink contentPart round-trip ────────────────────────────────────────────
 
     [Fact]

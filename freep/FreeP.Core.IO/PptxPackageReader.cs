@@ -1472,6 +1472,9 @@ public static class PptxPackageReader
             ZoomTargetSlideNumericId = kind == PreservedObjectKind.Zoom
                 ? ReadZoomTargetSlideNumericId(gfEl)
                 : null,
+            ZoomTargetSectionId = kind == PreservedObjectKind.Zoom
+                ? ReadZoomTargetSectionId(gfEl)
+                : null,
             RawXml              = gfEl.ToString(SaveOptions.DisableFormatting),
             WasAlternateContent = wasAlternateContent,
             McRequiresToken     = mcRequiresToken,
@@ -1512,6 +1515,12 @@ public static class PptxPackageReader
             ?.Attribute("sldId")?.Value;
         return uint.TryParse(target, out var slideId) ? slideId : null;
     }
+
+    private static string? ReadZoomTargetSectionId(XElement graphicFrame) =>
+        graphicFrame.Descendants()
+            .FirstOrDefault(element => string.Equals(
+                element.Name.LocalName, "sectionZmObj", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("sectionId")?.Value;
 
     /// <summary>
     /// Reads a p:contentPart element (ink annotation). May be wrapped in mc:AlternateContent.
