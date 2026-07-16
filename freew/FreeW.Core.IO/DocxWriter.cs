@@ -2272,6 +2272,36 @@ public static class DocxWriter
                 continue;
             }
 
+            // Word stores a hidden Mark Citation as a complex TA field without a separate/result run:
+            // begin, instrText, end. Keeping the field as sibling runs (rather than w:fldSimple) is
+            // important because Word otherwise treats the textless mark as an unterminated field and
+            // absorbs following paragraphs into its code range.
+            if (runs[i].Citation is { } citation)
+            {
+                var citationRun = runs[i++];
+                var rPr = BuildRunProperties(citationRun.Formatting);
+                XElement WithProps(XElement child)
+                {
+                    var r = new XElement(W + "r");
+                    if (rPr is not null)
+                        r.Add(new XElement(rPr));
+                    r.Add(child);
+                    return r;
+                }
+
+                Content(citationRun,
+                    WithProps(new XElement(W + "fldChar",
+                        new XAttribute(W + "fldCharType", "begin"))));
+                Content(citationRun,
+                    WithProps(new XElement(W + "instrText",
+                        new XAttribute(XNamespace.Xml + "space", "preserve"),
+                        SanitizeXmlText(CitationInstruction(citation)))));
+                Content(citationRun,
+                    WithProps(new XElement(W + "fldChar",
+                        new XAttribute(W + "fldCharType", "end"))));
+                continue;
+            }
+
             var url = runs[i].HyperlinkUrl;
             var anchor = runs[i].HyperlinkAnchor;
             var tooltip = runs[i].HyperlinkTooltip;
@@ -2576,7 +2606,7 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds the <c>w:fldSimple/@w:instr</c> for a Mark Citation (TA) field: <c> TA \l "long" \s "short"
+    /// Builds the <c>w:instrText</c> for a Mark Citation (TA) field: <c> TA \l "long" \s "short"
     /// \c N </c>, where <c>\l</c> is the full citation, <c>\s</c> the short form (omitted when blank) and
     /// <c>\c</c> Word's numeric category. The surrounding spaces match how Word writes field instructions.
     /// Embedded double-quotes in the citation text are dropped so the instruction stays well-formed.
@@ -2655,14 +2685,6 @@ public static class DocxWriter
             wr.Add(BuildWordArtDrawing(wordArt, drawings.Ids));
             return wr;
         }
-
-        // A Mark Citation (TA) field emits a hidden w:fldSimple whose w:instr is the TA instruction
-        // (" TA \l "long" \s "short" \c N "). It wraps an empty run so it produces no visible glyph, matching
-        // Word's hidden citation mark. The reader recovers the Citation from the instruction.
-        if (run.Citation is { } citation)
-            return new XElement(W + "fldSimple",
-                new XAttribute(W + "instr", CitationInstruction(citation)),
-                new XElement(W + "r"));
 
         // A cross-reference field (Word's References > Cross-reference) emits a w:fldSimple whose w:instr is
         // a REF/PAGEREF/NOTEREF instruction over a bookmark name or note id, with optional \w/\n/\p and \h

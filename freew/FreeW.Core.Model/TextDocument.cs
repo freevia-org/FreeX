@@ -736,8 +736,8 @@ public sealed class Run(string text, RunFormatting? formatting = null)
     /// <summary>
     /// When non-null, this run is a hidden Mark Citation field (Word's References &gt; Mark Citation) — the
     /// invisible <c>TA</c> field that records a legal citation for a Table of Authorities. It serialises as a
-    /// <c>w:fldSimple</c> whose <c>w:instr</c> is the TA instruction (<c> TA \l "long" \s "short" \c N </c>)
-    /// wrapping a vanished run, so it round-trips like Word's and produces no visible glyph. The same data is
+    /// complex field with <c>begin</c>, <c>instrText</c>, and <c>end</c> runs carrying the TA instruction
+    /// (<c> TA \l "long" \s "short" \c N </c>), so it round-trips like Word's and produces no visible glyph. The same data is
     /// also mirrored into <see cref="TextDocument.Citations"/> for building the table. Modelled as an optional
     /// run mark, mirroring <see cref="TableFormula"/>, so it round-trips without a new block type. The run
     /// carries no literal text, so it produces no visible glyph — matching Word's hidden TA field.
