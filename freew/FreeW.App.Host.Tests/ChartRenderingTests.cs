@@ -63,9 +63,9 @@ public sealed class ChartRenderingTests
     public void ColumnChart_DrawsValueGridlines()
     {
         var view = ViewWithChart(ChartKind.Column);
-        // 4 horizontal gridlines + 1 baseline axis line; without gridlines there would be just the axis.
+        // 3 Word-style horizontal major gridlines + 1 baseline axis line; without gridlines there would be just the axis.
         var lines = LogicalDescendants<System.Windows.Shapes.Line>(view.Document);
-        Assert.True(lines.Count >= 5, $"expected gridlines + axis (>= 5 lines), got {lines.Count}");
+        Assert.True(lines.Count >= 4, $"expected gridlines + axis (>= 4 lines), got {lines.Count}");
     }
 
     [StaFact]
@@ -331,8 +331,8 @@ public sealed class ChartRenderingTests
         Assert.Equal(20, textBlocks.Single(text => text.Text == "Quarter").FontSize);
 
         var axisTickLabels = textBlocks
-            .Where(text => text.Text is "0" or "0.75" or "1.5" or "2.25" or "3")
+            .Where(text => text.Text is "0" or "1" or "2" or "3")
             .ToList();
-        Assert.Equal(5, axisTickLabels.Count);
+        Assert.Equal(4, axisTickLabels.Count);
     }
 }

@@ -18,10 +18,10 @@ public sealed class ChartSmartArtVisualPlannerTests
         scene.FrameBounds.Should().Be(new ChartSceneRect(0, 0, 240, 180));
         scene.PlotBounds.Should().Be(new ChartSceneRect(32, 54, 200, 86));
         scene.Bars.Should().HaveCount(4);
-        scene.GridLines.Should().HaveCount(4);
+        scene.GridLines.Should().HaveCount(3);
         scene.AxisLines.Should().ContainSingle();
         scene.Legend.Should().HaveCount(2);
-        scene.Texts.Count(text => text.Kind == ChartSceneTextKind.ValueAxis).Should().Be(5);
+        scene.Texts.Count(text => text.Kind == ChartSceneTextKind.ValueAxis).Should().Be(4);
         scene.Texts.Count(text => text.Kind == ChartSceneTextKind.CategoryAxis).Should().Be(2);
         scene.Texts.Count(text => text.Kind == ChartSceneTextKind.DataLabel).Should().Be(4);
     }
@@ -194,6 +194,42 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartScene_WordAxisTitleLayoutReservesCompactPlotBand()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"],
+            [1.4, 1.8, 1.6, 2.2], seriesName: "Revenue", title: "Revenue by quarter");
+        chart.StyleId = 7;
+        chart.QuickLayoutId = 9;
+        chart.ShowLegend = true;
+        chart.CategoryAxisTitle = "Quarter";
+        chart.ValueAxisTitle = "USD";
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 400, 224);
+
+        scene.PlotBounds.Should().Be(new ChartSceneRect(68, 54, 316, 64));
+        scene.Texts.Single(text => text.Kind == ChartSceneTextKind.AxisTitle && text.Text == "Quarter")
+            .Y.Should().Be(145);
+        scene.Legend.Should().OnlyContain(entry => entry.SwatchY == 201 && entry.TextY == 201);
+    }
+
+    [Fact]
+    public void ChartScene_ScatterUsesWordPaddedNumericCategoryAxis()
+    {
+        var chart = Chart.Create(ChartKind.Scatter, ["155", "160", "165", "170"],
+            [52, 58, 62, 66], seriesName: "Sample", title: "Height and weight");
+        chart.CategoryAxisTitle = "Height";
+        chart.ValueAxisTitle = "Weight";
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 360, 200);
+
+        scene.PlotBounds.Should().Be(new ChartSceneRect(68, 54, 267, 72));
+        scene.Texts.Where(text => text.Kind == ChartSceneTextKind.CategoryAxis)
+            .Select(text => text.Text)
+            .Should().ContainInOrder("150", "155", "160", "165", "170", "175");
+        scene.AxisLines.Should().Contain(line => line.X1 == scene.PlotBounds.X && line.X2 == scene.PlotBounds.X);
+    }
+
+    [Fact]
     public void ChartDataSignatures_CaptureCategorySeriesAndValueShape()
     {
         var chart = Chart.Create(ChartKind.Line, ["Q1", "Q2"], [1.25, 2.5], seriesName: "Actual");
@@ -259,6 +295,7 @@ public sealed class ChartSmartArtVisualPlannerTests
         axis.Minimum.Should().Be(0);
         axis.Maximum.Should().Be(3);
         axis.Range.Should().Be(3);
+        axis.MajorUnit.Should().Be(1);
     }
 
     [Fact]
