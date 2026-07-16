@@ -439,7 +439,13 @@ internal sealed class BackstageView : Window
     private Control BuildInfoPane()
     {
         var document = _callbacks.GetDocument();
-        var safetyGroups = BackstageInfoSafetyPanePlanner.Build(document);
+        var safetySurface = BackstagePaneSurfacePlanner.BuildInfoPane(
+            [],
+            markAsFinal: () => { Close(); _callbacks.MarkAsFinal(); },
+            restrictEditing: () => { Close(); _callbacks.RestrictEditing(); },
+            inspectDocument: () => { Close(); _callbacks.InspectDocument(); },
+            checkAccessibility: () => { Close(); _callbacks.CheckAccessibility(); },
+            document);
         var plan = SisterBackstageInfoPanePlanner.Build(new SisterBackstageInfoPaneContext(
             DocumentKindLabel: BackstageViewTextResources.DocumentLabel,
             DisplayName: string.IsNullOrWhiteSpace(_callbacks.DisplayName)
@@ -453,7 +459,7 @@ internal sealed class BackstageView : Window
                 document.Properties.Subject,
                 document.Properties.Keywords),
             Statistics: BuildInfoDocumentStatistics(),
-            ActionGroups: ToInfoActionGroups(safetyGroups)));
+            ActionGroups: ToInfoActionGroups(safetySurface.SafetyGroups)));
 
         return BuildInfoPane(plan);
     }
@@ -681,23 +687,13 @@ internal sealed class BackstageView : Window
     }
 
     private IReadOnlyList<BackstageActionGroup> ToInfoActionGroups(
-        IReadOnlyList<BackstageInfoSafetyGroup> groups) =>
+        IReadOnlyList<BackstageSurfaceActionGroup> groups) =>
         groups.Select(group => new BackstageActionGroup(
             group.Heading,
             group.Actions.Select(action => new BackstageActionRow(
                 action.Label,
                 action.Description,
-                InfoSafetyAction(action.Kind))).ToArray())).ToArray();
-
-    private Action InfoSafetyAction(BackstageInfoSafetyActionKind kind) =>
-        kind switch
-        {
-            BackstageInfoSafetyActionKind.MarkAsFinal => () => { Close(); _callbacks.MarkAsFinal(); },
-            BackstageInfoSafetyActionKind.RestrictEditing => () => { Close(); _callbacks.RestrictEditing(); },
-            BackstageInfoSafetyActionKind.InspectDocument => () => { Close(); _callbacks.InspectDocument(); },
-            BackstageInfoSafetyActionKind.CheckAccessibility => () => { Close(); _callbacks.CheckAccessibility(); },
-            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, null)
-        };
+                action.Invoke ?? (() => { }))).ToArray())).ToArray();
 
     private static Control BuildPaneHeader(string title, string description) =>
         AvaloniaBackstageChrome.CreatePaneHeader(title, description, BackstageChromeStyle);

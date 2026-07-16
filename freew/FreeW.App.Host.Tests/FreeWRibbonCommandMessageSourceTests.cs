@@ -18,9 +18,9 @@ public sealed class FreeWRibbonCommandMessageSourceTests
         source.Should().Contain("\"Could not compare the documents:");
         source.Should().Contain("\"Could not combine the documents:");
         source.Should().Contain("\"Mail Merge\"");
-        source.Should().NotContain("MessageBox.Show(");
-        source.Should().NotContain("MessageBoxButton.");
-        source.Should().NotContain("MessageBoxImage.");
+        source.Split("MessageBox.Show(").Length.Should().Be(2,
+            "the source-management conflict prompt is the only command requiring a three-way choice");
+        source.Should().Contain("SourceManagementDialogPlanner.SourceConflictDialogTitle");
     }
 
     private static string ReadRibbonCommandsSource()

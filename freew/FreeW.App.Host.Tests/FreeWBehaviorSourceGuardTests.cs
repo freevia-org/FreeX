@@ -7,19 +7,17 @@ namespace FreeW.App.Host.Tests;
 public sealed class FreeWBehaviorSourceGuardTests
 {
     [Fact]
-    public void ChartHosts_ConsumeSharedSignedAxisPlan()
+    public void ChartHosts_ConsumeSharedChartScene()
     {
         var wpf = ReadSource("freew", "FreeW.App.Host", "Editing", "DocumentView.cs");
         var avalonia = ReadSource("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs");
 
-        wpf.Should().Contain("ChartValueAxisPlan ValueAxis");
-        wpf.Should().Contain("settings.ValueAxis");
-        wpf.Should().Contain("axis.ValueFraction");
-        avalonia.Should().Contain("ChartValueAxisPlan ValueAxis");
-        avalonia.Should().Contain("cd.ValueAxis");
-        avalonia.Should().Contain("axis.ValueFraction");
-        wpf.Should().NotContain("ChartMax");
+        wpf.Should().Contain("ChartSmartArtVisualPlanner.BuildChartScene(chart, widthPx, heightPx)");
+        avalonia.Should().Contain("ChartSmartArtVisualPlanner.BuildChartScene(chart, rect.Width, rect.Height)");
+        wpf.Should().Contain("ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart)");
+        avalonia.Should().Contain("ChartSmartArtVisualPlanner.BuildChartElementCommandState(chart)");
         avalonia.Should().NotContain("ComputeAxisRange");
+        wpf.Should().NotContain("ComputeAxisRange");
     }
 
     [Fact]
