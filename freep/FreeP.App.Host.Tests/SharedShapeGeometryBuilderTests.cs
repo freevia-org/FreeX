@@ -83,6 +83,45 @@ public sealed class SharedShapeGeometryBuilderTests
     }
 
     [Fact]
+    public void Chord_UsesPresetAnglesAndClosesBackToTheStart()
+    {
+        var geometry = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Chord,
+            new LayoutRect(0, 0, 100, 100),
+            new Dictionary<string, double>
+            {
+                ["adj1"] = 1168272,
+                ["adj2"] = 9631728
+            });
+
+        var contour = geometry.Contours.Should().ContainSingle().Subject;
+        contour.Closed.Should().BeTrue();
+        contour.Filled.Should().BeTrue();
+        contour.Segments.Should().HaveCount(2);
+        contour.Segments[0].Kind.Should().Be(ShapeSegmentKind.Arc);
+        contour.Segments[0].LargeArc.Should().BeFalse();
+        contour.Segments[0].SweepClockwise.Should().BeTrue();
+        contour.Segments[1].End.Should().Be(contour.Start);
+    }
+
+    [Fact]
+    public void Chord_EqualAnglesProduceFullEllipse()
+    {
+        var geometry = ShapeGeometryBuilder.Build(
+            DrawingShapeKind.Chord,
+            new LayoutRect(0, 0, 100, 100),
+            new Dictionary<string, double>
+            {
+                ["adj1"] = 16200000,
+                ["adj2"] = 16200000
+            });
+
+        geometry.Contours.Should().ContainSingle();
+        geometry.Contours[0].Segments.Should().OnlyContain(segment => segment.Kind == ShapeSegmentKind.Arc);
+        geometry.Contours[0].Segments.Should().HaveCount(2);
+    }
+
+    [Fact]
     public void Cylinder_EnumValue_Is44_NoRenumbering()
     {
         // Appended after HomePlate=43 — verify no renumbering occurred.

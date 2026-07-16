@@ -2770,7 +2770,7 @@ public static class PptxPackageWriter
         else
             geomEl = new XElement(A + "prstGeom",
                 new XAttribute("prst", forcePrst ?? PptxShapeKindMap.ToPreset(shape.AutoShapeKind)),
-                new XElement(A + "avLst"));
+                BuildPresetGeometryAdjustmentsEl(shape.PresetGeometryAdjustments));
 
         return new XElement(P + "spPr",
             xfrm,
@@ -2780,6 +2780,19 @@ public static class PptxPackageWriter
             shape.Effects is not null ? BuildEffectLstEl(shape.Effects) : null,
             shape.Effects is not null ? BuildScene3dEl(shape.Effects) : null,
             shape.Effects is not null ? BuildSp3dEl(shape.Effects) : null);
+    }
+
+    private static XElement BuildPresetGeometryAdjustmentsEl(IReadOnlyDictionary<string, double> adjustments)
+    {
+        var avLst = new XElement(A + "avLst");
+        foreach (var pair in adjustments)
+        {
+            avLst.Add(new XElement(A + "gd",
+                new XAttribute("name", pair.Key),
+                new XAttribute("fmla", $"val {pair.Value.ToString("0.########", CultureInfo.InvariantCulture)}")));
+        }
+
+        return avLst;
     }
 
     private static XElement BuildCustGeomEl(List<CustomGeometryPath> paths)

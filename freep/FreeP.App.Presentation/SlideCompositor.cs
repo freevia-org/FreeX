@@ -196,7 +196,7 @@ public static class SlideCompositor
         // Build geometry from the resolved bounds.
         var geometry = shape.CustomGeometry.Count > 0
             ? CustomGeometryBuilder.BuildCustom(shape.CustomGeometry, boundsDip)
-            : ShapeGeometryBuilder.Build(shape.AutoShapeKind, boundsDip);
+            : ShapeGeometryBuilder.Build(shape.AutoShapeKind, boundsDip, shape.PresetGeometryAdjustments);
 
         // Resolve fill.
         var fill = shape.Fill is not null

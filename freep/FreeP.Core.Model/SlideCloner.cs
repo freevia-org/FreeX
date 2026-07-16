@@ -83,6 +83,9 @@ public static class SlideCloner
             Hyperlink      = PresentationModelCloneHelper.CloneHyperlink(shape.Hyperlink),
         };
 
+        foreach (var pair in shape.PresetGeometryAdjustments)
+            copy.PresetGeometryAdjustments[pair.Key] = pair.Value;
+
         // Theme 21: OLE — byte arrays are treated as immutable once loaded; share reference.
         copy.OleObject = shape.OleObject is null ? null : CloneOleObject(shape.OleObject);
 

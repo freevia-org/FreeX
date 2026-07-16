@@ -342,6 +342,10 @@ public sealed class SlideShape
     /// </summary>
     public DrawingShapeKind AutoShapeKind { get; set; } = DrawingShapeKind.Rectangle;
 
+    /// <summary>DrawingML preset geometry guides, retained in their raw OOXML units.</summary>
+    public Dictionary<string, double> PresetGeometryAdjustments { get; } =
+        new(StringComparer.OrdinalIgnoreCase);
+
     // ── Anchor (absolute EMU positions) ─────────────────────────────────────────
 
     /// <summary>Horizontal offset from the slide left edge, in EMU.</summary>
