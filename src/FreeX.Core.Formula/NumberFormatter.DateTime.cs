@@ -36,40 +36,45 @@ public static partial class NumberFormatter
         WorkbookTheme? theme,
         bool uses1904DateSystem = false)
     {
-        var parsed = SelectDateTimeSection(oaDate, sections, indexedColors, theme);
+        var (parsed, displayValue) = SelectDateTimeSection(oaDate, sections, indexedColors, theme);
         if (parsed.Format == "")
             return new FormatResult("", parsed.ColorHex);
 
-        var text = FormatDateTime(oaDate, parsed.Format, uses1904DateSystem);
+        var text = FormatDateTime(displayValue, parsed.Format, uses1904DateSystem);
         text = ApplyAccountingTargetWidth(text, parsed.Format, targetWidthCharacters);
         return new FormatResult(text, parsed.ColorHex);
     }
 
-    private static ParsedSection SelectDateTimeSection(
+    private static (ParsedSection Section, double DisplayValue) SelectDateTimeSection(
         double value,
         string[] sections,
         WorkbookIndexedColorPalette? indexedColors,
         WorkbookTheme? theme)
     {
         var parsedSections = ParseSections(sections, indexedColors, theme, out var hasConditions);
+        // No explicit [condition] sections: fall back to Excel's positional pos/neg/zero rule
+        // (same as the numeric path's SelectPositionalSection) instead of always using section 0
+        // -- a date/time-typed value can carry a multi-section custom format too (e.g.
+        // "h:mm:ss;;\"midnight\"" or "m/d/yyyy;\"neg date\"") and must pick its section by sign
+        // just like a plain number does.
         if (!hasConditions)
-            return parsedSections[0];
+            return SelectPositionalSection(value, parsedSections);
 
         for (var i = 0; i < parsedSections.Length; i++)
         {
             var section = parsedSections[i];
             if (section.Condition is not null && section.Condition.Matches(value))
-                return section;
+                return (section, value);
         }
 
         for (var i = 0; i < parsedSections.Length; i++)
         {
             var section = parsedSections[i];
             if (section.Condition is null)
-                return section;
+                return (section, value);
         }
 
-        return parsedSections[0];
+        return (parsedSections[0], value);
     }
 
     private static string FormatDateTime(double oaDate, string format, bool uses1904DateSystem = false)

@@ -31,11 +31,11 @@ internal static class XlsxDrawingAnchorApplier
         chart.Top = anchor.AbsoluteTop ?? (SumRowPixels(sheet, 1, anchor.FromRowZeroBased) + anchor.FromRowOffset);
 
         var width = anchor.Width ?? (
-            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, anchor.ToColumnZeroBased!.Value - anchor.FromColumnZeroBased)
+            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, ZeroBasedSpan(anchor.FromColumnZeroBased, anchor.ToColumnZeroBased!.Value))
             + anchor.ToColumnOffset!.Value
             - anchor.FromColumnOffset);
         var height = anchor.Height ?? (
-            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, anchor.ToRowZeroBased!.Value - anchor.FromRowZeroBased)
+            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, ZeroBasedSpan(anchor.FromRowZeroBased, anchor.ToRowZeroBased!.Value))
             + anchor.ToRowOffset!.Value
             - anchor.FromRowOffset);
         if (width > 0)
@@ -130,15 +130,29 @@ internal static class XlsxDrawingAnchorApplier
     internal static (double Width, double Height) GetAnchorSize(XlsxDrawingAnchor anchor, Sheet sheet)
     {
         var width = anchor.Width ?? (
-            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, anchor.ToColumnZeroBased!.Value - anchor.FromColumnZeroBased)
+            SumColumnPixels(sheet, anchor.FromColumnZeroBased + 1, ZeroBasedSpan(anchor.FromColumnZeroBased, anchor.ToColumnZeroBased!.Value))
             + anchor.ToColumnOffset!.Value
             - anchor.FromColumnOffset);
         var height = anchor.Height ?? (
-            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, anchor.ToRowZeroBased!.Value - anchor.FromRowZeroBased)
+            SumRowPixels(sheet, anchor.FromRowZeroBased + 1, ZeroBasedSpan(anchor.FromRowZeroBased, anchor.ToRowZeroBased!.Value))
             + anchor.ToRowOffset!.Value
             - anchor.FromRowOffset);
         return (width, height);
     }
+
+    /// <summary>
+    /// Number of whole rows/columns spanned from <paramref name="fromZeroBased"/> to
+    /// <paramref name="toZeroBased"/>, clamped to zero when the 'to' marker does not come after the
+    /// 'from' marker on this axis. A twoCellAnchor whose markers are inverted on only one axis (e.g. a
+    /// hand-edited or non-Excel-authored file where <c>to/col</c> &lt; <c>from/col</c> but <c>to/row</c>
+    /// &gt; <c>from/row</c>) is accepted by the reader's validity check, which only rejects an anchor
+    /// invalid on BOTH axes at once. Without this clamp, the plain `to - from` subtraction on these
+    /// unsigned coordinates underflows to a value near <see cref="uint.MaxValue"/>, and the SumColumnPixels/
+    /// SumRowPixels loop below would then iterate on the order of 4 billion times -- hanging the app on
+    /// what should be a fast file load -- instead of simply treating the malformed span as zero-width.
+    /// </summary>
+    private static uint ZeroBasedSpan(uint fromZeroBased, uint toZeroBased) =>
+        toZeroBased > fromZeroBased ? toZeroBased - fromZeroBased : 0u;
 
     private static double SumColumnPixels(Sheet sheet, uint firstColumn, uint count)
     {

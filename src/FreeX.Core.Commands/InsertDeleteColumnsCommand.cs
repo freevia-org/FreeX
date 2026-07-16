@@ -56,6 +56,15 @@ public sealed class InsertColumnsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.InsertColumns) is { } protectedOutcome)
             return protectedOutcome;
 
+        // R47-sibling-guard-asymmetry-sweep-2: mirror InsertRowsCommand's CSE-array/dynamic-spill
+        // split guard (InsertDeleteRowsCommand.cs) on the column axis. Inserting columns shifts every
+        // occupied cell at or after _beforeCol right by _count across every row — an array/spill
+        // whose column extent straddles the insert point would have some members shift right while
+        // others (to the left of it) stay put, splitting it with no error.
+        var insertColumnsShiftRegion = new CellShiftRegion(1u, CellAddress.MaxRow, _beforeCol, CellAddress.MaxCol);
+        if (CommandGuards.RejectIfSplitsArray(sheet, InsertCellsCommand.ArrayMembersWithinShiftRegion(sheet, insertColumnsShiftRegion)) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         var (maxOccupied, movedSnapshot) = CaptureMovedCells(sheet);
         if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxCol)
             return new CommandOutcome(false,
@@ -356,6 +365,16 @@ public sealed class DeleteColumnsCommand : IWorkbookCommand
             return protectedOutcome;
 
         uint endCol = _startCol + _count - 1;
+
+        // R47-sibling-guard-asymmetry-sweep-2: mirror the delete-rows guard for columns. Deleting
+        // whole columns removes exactly the band [_startCol, endCol] across every row while every
+        // column to the right shifts left in lockstep — an array/spill straddling that band would
+        // have part of it deleted and part of it shifted, splitting it with no error. An array
+        // entirely inside the deleted band is removed as one atomic unit (fine); an array entirely
+        // outside the band just rides the uniform shift (also fine).
+        var deletedColumnsShiftRegion = new CellShiftRegion(1u, CellAddress.MaxRow, _startCol, endCol);
+        if (CommandGuards.RejectIfSplitsArray(sheet, InsertCellsCommand.ArrayMembersWithinShiftRegion(sheet, deletedColumnsShiftRegion)) is { } deleteSplitsArrayRejection)
+            return deleteSplitsArrayRejection;
 
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 

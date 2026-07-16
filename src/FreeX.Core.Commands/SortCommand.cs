@@ -187,6 +187,18 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
         uint endRow   = _range.End.Row;
         uint startCol = _range.Start.Col;
         uint endCol   = _range.End.Col;
+
+        // R47-sibling-guard-asymmetry-sweep-3: Sort rewrites the sort range's rows/cells in place,
+        // exactly the "clear then rewrite" primitive that ClearContentsCommand/FillCellsCommand/
+        // MoveRangeCommand/CopyRangeCommand/PasteCellsCommand/InsertDeleteCellsCommand all guard
+        // against a partially-covered CSE array or dynamic-array spill — reject if _range would
+        // carry only some members of an array along while leaving others outside the sort range
+        // untouched (Excel's "You cannot change part of an array"), matching the merged-cell overlap
+        // guard just above.
+        var sortShiftRegion = new CellShiftRegion(startRow, endRow, startCol, endCol);
+        if (CommandGuards.RejectIfSplitsArray(sheet, InsertCellsCommand.ArrayMembersWithinShiftRegion(sheet, sortShiftRegion)) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         uint colCount32 = endCol - startCol + 1;
         var keyLimit = _options.LeftToRight ? endRow - startRow + 1 : colCount32;
         if (_sortKeys.Any(key => key.ColumnOffset >= keyLimit))
