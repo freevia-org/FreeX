@@ -246,16 +246,21 @@ public static class ShapeGeometryBuilder
         var startRadians = startDegrees * Math.PI / 180;
         var endRadians = (startDegrees + sweepDegrees) * Math.PI / 180;
         var start = new LayoutPoint(cx + rx * Math.Cos(startRadians), cy + ry * Math.Sin(startRadians));
-        var end = new LayoutPoint(cx + rx * Math.Cos(endRadians), cy + ry * Math.Sin(endRadians));
 
-        return Single(new ShapeContour(
-            start,
-            [
-                ShapeSegment.ArcTo(end, rx, ry, sweepClockwise: true, largeArc: sweepDegrees > 180),
-                ShapeSegment.LineTo(start)
-            ],
-            Closed: true,
-            Filled: true));
+        // Sample non-full-circle chords so WPF and Avalonia do not reinterpret the
+        // preset angles through different ArcTo sweep conventions.
+        int arcSegments = Math.Max(8, (int)Math.Ceiling(sweepDegrees / 15.0));
+        var segments = new List<ShapeSegment>(arcSegments + 1);
+        for (int index = 1; index <= arcSegments; index++)
+        {
+            var angle = startRadians + (endRadians - startRadians) * index / arcSegments;
+            segments.Add(ShapeSegment.LineTo(new LayoutPoint(
+                cx + rx * Math.Cos(angle),
+                cy + ry * Math.Sin(angle))));
+        }
+
+        segments.Add(ShapeSegment.LineTo(start));
+        return Single(new ShapeContour(start, segments, Closed: true, Filled: true));
     }
 
     private static double GetAdjustment(

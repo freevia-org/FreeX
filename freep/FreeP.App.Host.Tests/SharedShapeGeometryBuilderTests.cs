@@ -97,11 +97,11 @@ public sealed class SharedShapeGeometryBuilderTests
         var contour = geometry.Contours.Should().ContainSingle().Subject;
         contour.Closed.Should().BeTrue();
         contour.Filled.Should().BeTrue();
-        contour.Segments.Should().HaveCount(2);
-        contour.Segments[0].Kind.Should().Be(ShapeSegmentKind.Arc);
-        contour.Segments[0].LargeArc.Should().BeFalse();
-        contour.Segments[0].SweepClockwise.Should().BeTrue();
-        contour.Segments[1].End.Should().Be(contour.Start);
+        contour.Segments.Should().HaveCount(11);
+        contour.Segments.Should().OnlyContain(segment => segment.Kind == ShapeSegmentKind.Line);
+        contour.Segments[0].End.X.Should().BeApproximately(91.657, 0.001);
+        contour.Segments[0].End.Y.Should().BeApproximately(77.653, 0.001);
+        contour.Segments[^1].End.Should().Be(contour.Start);
     }
 
     [Fact]
