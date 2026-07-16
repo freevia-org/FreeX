@@ -271,11 +271,22 @@ static void RenderDocumentComposite(
             section.HeadersFooters.Header is { IsEmpty: false }
             || section.HeadersFooters.EvenHeader is { IsEmpty: false }
             || section.HeadersFooters.FirstHeader is { IsEmpty: false });
+    // A multi-page table is emitted as explicit page-sized sections by DocumentView. Its table
+    // planner already accounts for the leading content on page 1, so applying the document-wide
+    // footnote reserve again would incorrectly shrink every later table segment. The compositor
+    // still paints the note only on the page box that owns it; ordinary flowing documents retain
+    // the reserve so body paragraphs cannot be painted underneath that note region.
+    var hasMultiPageTable = doc.Blocks
+        .OfType<FreeW.Core.Model.Table>()
+        .Any(table => DocumentViewLayoutPlanner
+            .BuildTableLayoutPlan(table, page: doc.Page, firstPageLeadingContentHeightDip: 0)
+            .Pagination.Pages.Count > 1);
+    var bodyFootnoteReserveDip = hasMultiPageTable ? 0 : footnoteReserveDip;
     flow.PagePadding = new Thickness(
         marginLeft,
         marginTop + (hasHeaderContent ? HeaderBodyReserveDip : 0),
         marginRight,
-        marginBottom + footnoteReserveDip);
+        marginBottom + bodyFootnoteReserveDip);
 
     // Layer 2: call ApplyColumnLayout so multi-column sections render with the correct column count.
     // The old path hard-coded ColumnWidth=pageW (single column). This fixes that miss.
