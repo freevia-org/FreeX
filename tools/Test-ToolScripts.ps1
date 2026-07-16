@@ -475,6 +475,9 @@ exit /b %ERRORLEVEL%
         Invoke-DotNetRunNoBuild "project.csproj" @("--sample", "value with spaces") "Debug" $workingRoot $syntheticShimPath
         & $assertWrapperCapture "Invoke-DotNetRunNoBuild" @("run", "--no-restore", "--no-build", "--project", "project.csproj", "--configuration", "Debug", "--", "--sample", "value with spaces")
 
+        Invoke-DotNetStep "Synthetic dotnet step" @("run", "--sample", "value with spaces") $workingRoot $syntheticShimPath
+        & $assertWrapperCapture "Invoke-DotNetStep" @("run", "--sample", "value with spaces")
+
         Invoke-PowerShellStep "Synthetic PowerShell step" $targetScriptPath @("--sample", "value with spaces") $workingRoot $syntheticShimPath
         & $assertWrapperCapture "Invoke-PowerShellStep" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $targetScriptPath, "--sample", "value with spaces")
 
@@ -488,6 +491,18 @@ exit /b %ERRORLEVEL%
         }
         if ($dotNetFailure -ne "dotnet run failed for project.csproj with exit code 23") {
             throw "Invoke-DotNetRun did not preserve synthetic nonzero failure behavior: '$dotNetFailure'."
+        }
+
+        $env:FREEX_TOOL_PROCESS_EXIT_CODE = "27"
+        $dotNetStepFailure = $null
+        try {
+            Invoke-DotNetStep "Synthetic dotnet step failure" @("test", "project.csproj") $workingRoot $syntheticShimPath
+        }
+        catch {
+            $dotNetStepFailure = $_.Exception.Message
+        }
+        if ($dotNetStepFailure -ne "Synthetic dotnet step failure with exit code 27") {
+            throw "Invoke-DotNetStep did not preserve synthetic nonzero failure behavior: '$dotNetStepFailure'."
         }
 
         $env:FREEX_TOOL_PROCESS_EXIT_CODE = "29"
