@@ -560,9 +560,9 @@ public static partial class ChartRenderPlanner
     public const double ImportedScatterPlotLeftInset = 14.25;
     public const double ImportedScatterPlotUpwardOffset = 10.5;
     public const double ImportedScatterPlotRightInset = 4.5;
-    public const double ImportedBarPlotLeftOffset = -4.5;
-    public const double ImportedBarPlotUpwardOffset = 4.5;
-    public const double ImportedBarPlotWidthReduction = 15.0;
+    public const double ImportedBarPlotLeftOffset = -6.5;
+    public const double ImportedBarPlotUpwardOffset = 5.5;
+    public const double ImportedBarPlotWidthReduction = 20.0;
     public const double ImportedBarPlotHeightExtension = 20.25;
     public const double ImportedPiePlotRightOffset = 6.5;
     public const double ImportedPiePlotUpwardOffset = 9.0;

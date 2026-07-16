@@ -421,7 +421,7 @@ public sealed class ChartBaselineCorpusTests
 
         bar.ChartType.Should().Be(ChartType.BarClustered);
         ChartRenderPlanner.BuildFramePlan(bar, new ChartPlanRect(0, 0, 480, 288)).Plot
-            .Should().Be(new ChartPlanRect(75.5, 15.5, 312.2, 220.25));
+            .Should().Be(new ChartPlanRect(73.5, 14.5, 307.2, 220.25));
         ChartRenderPlanner.ComputePrimaryValueAxisRange(bar).Should().Be((0, 120, 20));
     }
 
