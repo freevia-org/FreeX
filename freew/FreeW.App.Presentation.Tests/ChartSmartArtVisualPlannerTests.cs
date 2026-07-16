@@ -222,6 +222,8 @@ public sealed class ChartSmartArtVisualPlannerTests
         scene.PlotBounds.Should().Be(new ChartSceneRect(68, 54, 316, 64));
         scene.Texts.Single(text => text.Kind == ChartSceneTextKind.AxisTitle && text.Text == "Quarter")
             .Y.Should().Be(145);
+        scene.Texts.Single(text => text.Kind == ChartSceneTextKind.AxisTitle && text.Text == "USD")
+            .X.Should().Be(32);
         scene.Legend.Should().OnlyContain(entry => entry.SwatchY == 201 && entry.TextY == 201);
     }
 

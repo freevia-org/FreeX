@@ -11243,7 +11243,8 @@ public sealed class DocumentView : RichTextBox
         var label = new TextBlock
         {
             Text = text.Text,
-            FontSize = Math.Max(1, text.FontSize),
+            // Chart scene text sizes are expressed in points; WPF TextBlock.FontSize is DIPs.
+            FontSize = Math.Max(1, text.FontSize * PxPerPoint),
             Foreground = new SolidColorBrush(ParseSceneColor(text.ColorHex)),
             TextTrimming = TextTrimming.CharacterEllipsis
         };

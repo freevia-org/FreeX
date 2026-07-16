@@ -703,12 +703,14 @@ public static class ChartSmartArtVisualPlanner
         }
 
         if (plan.ShowTitle && !string.IsNullOrEmpty(chart.Title))
+            // ChartSceneText.FontSize is expressed in points; the host adapters convert to their native units.
             texts.Add(new ChartSceneText(chart.Title!, frame.CenterX, 8, ChartSceneTextAnchor.TopCenter,
-                ChartSceneTextKind.Title, textColor, 24));
+                ChartSceneTextKind.Title, textColor, 18));
         if (!isPie && plan.ShowAxisTitles)
         {
             if (!string.IsNullOrEmpty(plan.ValueAxisTitle))
-                texts.Add(new ChartSceneText(plan.ValueAxisTitle!, 12, plot.CenterY, ChartSceneTextAnchor.Center,
+                // Word centers the vertical title in the reserved value-axis band, just inside the chart frame.
+                texts.Add(new ChartSceneText(plan.ValueAxisTitle!, 32, plot.CenterY, ChartSceneTextAnchor.Center,
                     ChartSceneTextKind.AxisTitle, textColor, 20, -90));
             if (!string.IsNullOrEmpty(plan.CategoryAxisTitle))
                 texts.Add(new ChartSceneText(plan.CategoryAxisTitle!, plot.CenterX,

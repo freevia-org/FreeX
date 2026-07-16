@@ -172,6 +172,20 @@ public sealed class ChartRenderingTests
     }
 
     [StaFact]
+    public void ChartSceneText_ConvertsPointSizesToWpfDips()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A"], [1.0], title: "Title");
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 240, 180);
+        var canvas = DocumentView.BuildChartSceneCanvas(scene);
+
+        var title = canvas.Children
+            .OfType<TextBlock>()
+            .Single(text => text.Text == "Title");
+
+        Assert.Equal(18 * 96.0 / 72.0, title.FontSize, precision: 6);
+    }
+
+    [StaFact]
     public void QuickLayout7_HidesLegendAndGridlines()
     {
         // Layout 7: ShowTitle=false, ShowLegend=false, ShowDataLabels=true, ShowGridlines=false.
@@ -326,9 +340,9 @@ public sealed class ChartRenderingTests
 
         var textBlocks = LogicalDescendants<System.Windows.Controls.TextBlock>(view.Document);
         var title = textBlocks.Single(text => text.Text == "Revenue by quarter");
-        Assert.Equal(24, title.FontSize);
-        Assert.Equal(20, textBlocks.Single(text => text.Text == "USD").FontSize);
-        Assert.Equal(20, textBlocks.Single(text => text.Text == "Quarter").FontSize);
+        Assert.Equal(18 * 96.0 / 72.0, title.FontSize, precision: 6);
+        Assert.Equal(20 * 96.0 / 72.0, textBlocks.Single(text => text.Text == "USD").FontSize, precision: 6);
+        Assert.Equal(20 * 96.0 / 72.0, textBlocks.Single(text => text.Text == "Quarter").FontSize, precision: 6);
 
         var axisTickLabels = textBlocks
             .Where(text => text.Text is "0" or "1" or "2" or "3")
