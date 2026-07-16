@@ -110,6 +110,39 @@ public sealed class ToolHarnessDedupSourceTests
     }
 
     [Fact]
+    public void CommandInventoryGenerators_ConsumeSharedRecursiveMenuTraversalEmitter()
+    {
+        var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");
+        var generators = new[]
+        {
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreePCommandParityInventory.ps1"),
+            TestWorkspaceFiles.ReadRepoText("tools", "Generate-FreeWCommandInventory.ps1"),
+        };
+
+        support.Should().Contain("function Get-ToolCommandInventoryMenuTraversalSource");
+        support.Should().Contain("foreach (var child in MenuItems(item.Children))");
+        support.Should().Contain("yield return child");
+
+        generators.Should().OnlyContain(script =>
+            script.Contains("Get-ToolCommandInventoryMenuTraversalSource", StringComparison.Ordinal) &&
+            !script.Contains("private static IEnumerable<(string CommandId, CommandLocation Location)> MenuLocations", StringComparison.Ordinal) &&
+            !script.Contains("private static IEnumerable<RibbonMenuItem> MenuItems", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CommandInventoryMenuTraversal_EmitsParentBeforeNestedChildren()
+    {
+        var support = TestWorkspaceFiles.ReadRepoText("tools", "ToolScriptSupport.ps1");
+        var parentYield = support.IndexOf("yield return item", StringComparison.Ordinal);
+        var childTraversal = support.IndexOf("foreach (var child in MenuItems(item.Children))", StringComparison.Ordinal);
+        var childYield = support.IndexOf("yield return child", StringComparison.Ordinal);
+
+        parentYield.Should().BeGreaterThanOrEqualTo(0);
+        childTraversal.Should().BeGreaterThan(parentYield);
+        childYield.Should().BeGreaterThan(childTraversal);
+    }
+
+    [Fact]
     public void FreePRenderCompare_UsesSharedWpfBitmapDecodeHelpers()
     {
         var project = TestWorkspaceFiles.ReadRepoText("tools", "FreeP.RenderCompare", "FreeP.RenderCompare.csproj");

@@ -29,6 +29,7 @@ function Assert-ToolSourceCentralization {
             "function ConvertTo-ToolRepoRelativePath",
             "function Read-ToolJson",
             "function ConvertTo-ToolMarkdownCell",
+            "function Get-ToolCommandInventoryMenuTraversalSource",
             "function Test-ToolGeneratedContentMatches",
             "function Invoke-FidelityCorpusDownload",
             "function Invoke-ToolProcess",
@@ -206,6 +207,42 @@ function Assert-ToolSourceCentralization {
     }
 
     Write-Host "Validated shared tooling source guards."
+}
+
+function Assert-CommandInventoryMenuTraversalCentralization {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    $support = Get-Content -LiteralPath (Join-Path $ToolRoot "ToolScriptSupport.ps1") -Raw
+    $helper = Get-ToolCommandInventoryMenuTraversalSource
+    foreach ($requiredSource in @(
+            "private static IEnumerable<(string CommandId, CommandLocation Location)> MenuLocations",
+            "foreach (var item in MenuItems(menu.Items))",
+            "private static IEnumerable<RibbonMenuItem> MenuItems",
+            "foreach (var child in MenuItems(item.Children))",
+            "yield return child")) {
+        if (-not $helper.Contains($requiredSource)) {
+            throw "Shared command inventory menu helper is missing '$requiredSource'."
+        }
+    }
+
+    foreach ($generatorName in @("Generate-FreePCommandParityInventory.ps1", "Generate-FreeWCommandInventory.ps1")) {
+        $generator = Get-Content -LiteralPath (Join-Path $ToolRoot $generatorName) -Raw
+        if (([regex]::Matches($generator, "Get-ToolCommandInventoryMenuTraversalSource")).Count -ne 1) {
+            throw "$generatorName must consume Get-ToolCommandInventoryMenuTraversalSource exactly once."
+        }
+
+        if ($generator.Contains("private static IEnumerable<(string CommandId, CommandLocation Location)> MenuLocations") -or
+            $generator.Contains("private static IEnumerable<RibbonMenuItem> MenuItems")) {
+            throw "$generatorName still contains a private copy of the shared menu traversal helper."
+        }
+    }
+
+    if ($helper.IndexOf("yield return item", [System.StringComparison]::Ordinal) -ge
+        $helper.IndexOf("foreach (var child in MenuItems(item.Children))", [System.StringComparison]::Ordinal)) {
+        throw "Shared command inventory menu helper must yield a parent before recursively yielding nested children."
+    }
+
+    Write-Host "Validated command inventory menu traversal centralization and nested-item behavior."
 }
 
 function Assert-ScreenshotCaptureSupportBehavior {
@@ -732,6 +769,7 @@ $toolsRoot = [System.IO.Path]::GetFullPath((Resolve-ToolRepoPath -Path "tools" -
 $resolvedDirectory = [System.IO.Path]::GetFullPath($resolvedScriptDirectory).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     Assert-ToolSourceCentralization -ToolRoot $resolvedDirectory
+    Assert-CommandInventoryMenuTraversalCentralization -ToolRoot $resolvedDirectory
     Assert-ScreenshotCaptureSupportBehavior -ToolRoot $resolvedDirectory
     Assert-SharedToolHelperBehavior -RepoRoot $repoRoot
     Assert-ToolProviderPathBehavior -ToolRoot $resolvedDirectory

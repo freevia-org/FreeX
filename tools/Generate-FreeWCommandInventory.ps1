@@ -37,7 +37,7 @@ try {
 </Project>
 "@)
 
-    [IO.File]::WriteAllText($programPath, @'
+    $programSource = @'
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -747,48 +747,7 @@ internal static class FreeWCommandInventory
             AddLocation(locations, menuLocation.CommandId, menuLocation.Location);
     }
 
-    private static IEnumerable<(string CommandId, CommandLocation Location)> MenuLocations(
-        RibbonControl control,
-        RibbonTab tab,
-        RibbonGroup group,
-        string profile)
-    {
-        var menu = control switch
-        {
-            RibbonSplitButton splitButton => splitButton.Menu,
-            RibbonDropdown dropdown => dropdown.Menu,
-            _ => null,
-        };
-
-        if (menu is null)
-            yield break;
-
-        foreach (var item in MenuItems(menu.Items))
-        {
-            if (item.CommandId is null)
-                continue;
-
-            yield return (item.CommandId.Value.Value, new CommandLocation(
-                Profile: profile,
-                TabId: tab.Id,
-                Tab: tab.Header,
-                GroupId: group.Id,
-                Group: group.Header,
-                Label: item.Header,
-                ControlType: "RibbonMenuItem",
-                Layout: "Menu"));
-        }
-    }
-
-    private static IEnumerable<RibbonMenuItem> MenuItems(IEnumerable<RibbonMenuItem> items)
-    {
-        foreach (var item in items)
-        {
-            yield return item;
-            foreach (var child in MenuItems(item.Children))
-                yield return child;
-        }
-    }
+'@ + (Get-ToolCommandInventoryMenuTraversalSource) + @'
 
     private static void AddLocation(
         Dictionary<string, List<CommandLocation>> locations,
@@ -1133,7 +1092,9 @@ internal sealed record GapClassification(string Name, string Rule, string Notes)
 internal sealed record ClassificationRule(string Name, string Description);
 
 internal sealed record SourceLiteralFile(string Id, string Label, string RelativePath);
-'@)
+'@
+
+    [IO.File]::WriteAllText($programPath, $programSource)
 
     & dotnet run --project $projectPath --configuration Release -- $repoRoot $tempJsonPath $tempMarkdownPath
     if ($LASTEXITCODE -ne 0) {
