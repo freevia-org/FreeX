@@ -80,7 +80,7 @@ public sealed class SisterDialogTextResourceSourceTests
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildSharePane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildExportPane(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildPrintPane(");
-        source.Should().Contain("BackstagePaneSurfacePlanner.BuildInfoPane(");
+        source.Should().Contain("SisterBackstageInfoPanePlanner.Build(");
         source.Should().Contain("BackstagePaneSurfacePlanner.BuildAccountPane(");
         source.Should().Contain("surface.DeferredNote");
         source.Should().Contain("BuildPrintEvidenceSection(surface.Evidence)");
