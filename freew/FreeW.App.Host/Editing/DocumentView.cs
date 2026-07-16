@@ -7131,7 +7131,7 @@ public sealed class DocumentView : RichTextBox
                     ? existing.ToList()
                     : [];
                 var run = paragraph.Runs[snapshot.RunIndex];
-                list.Add(new LeadingWrapReservation(run, reservation));
+                list.Add(new LeadingWrapReservation(run, reservation, snapshot.Rect));
                 suppressedFloatingWrapRuns.Add(run);
                 result[firstFlowParagraphIndex] = list;
             }
@@ -7975,6 +7975,7 @@ public sealed class DocumentView : RichTextBox
                     wpf.Inlines.Add(BuildVisualOnlyWrapReservationFloater(
                         reservation.Run,
                         reservation.Plan,
+                        reservation.Rect,
                         document));
             }
 
@@ -8626,21 +8627,49 @@ public sealed class DocumentView : RichTextBox
         };
     }
 
-    private static Floater BuildVisualOnlyWrapReservationFloater(
+    private static Inline BuildVisualOnlyWrapReservationFloater(
         ModelRun run,
         DocumentFloatingWrapReservationPlan reservation,
+        DocumentFloatRect rect,
         TextDocument document)
     {
+        var widthDip = reservation.WidthDip;
+        var heightDip = reservation.HeightDip;
+        var horizontalOffsetDip = 0.0;
+        var verticalOffsetDip = 0.0;
+
+        if (run.Image is { IsFloating: true })
+        {
+            widthDip = Math.Max(1, rect.WidthDip);
+            heightDip = Math.Max(1, rect.HeightDip);
+            horizontalOffsetDip = rect.LeftDip;
+            verticalOffsetDip = rect.TopDip;
+        }
+
         var placeholder = new Border
         {
-            Width = reservation.WidthDip,
-            Height = reservation.HeightDip,
+            Width = widthDip,
+            Height = heightDip,
             Background = Brushes.Transparent,
             Opacity = 0,
             IsHitTestVisible = false,
             Focusable = false,
         };
         var block = new BlockUIContainer(placeholder) { Margin = new Thickness(0) };
+        if (run.Image is { IsFloating: true })
+        {
+            return new Figure(block)
+            {
+                Width = new FigureLength(widthDip, FigureUnitType.Pixel),
+                Height = new FigureLength(heightDip, FigureUnitType.Pixel),
+                HorizontalAnchor = FigureHorizontalAnchor.PageLeft,
+                VerticalAnchor = FigureVerticalAnchor.PageTop,
+                HorizontalOffset = horizontalOffsetDip,
+                VerticalOffset = verticalOffsetDip,
+                WrapDirection = WrapDirection.Both,
+            };
+        }
+
         return new Floater(block)
         {
             Width = reservation.WidthDip,
@@ -9260,7 +9289,8 @@ public sealed class DocumentView : RichTextBox
     // its model anchor. It has no marker, so ReadFloaterInlineContent ignores it during commit.
     private sealed record LeadingWrapReservation(
         ModelRun Run,
-        DocumentFloatingWrapReservationPlan Plan);
+        DocumentFloatingWrapReservationPlan Plan,
+        DocumentFloatRect Rect);
 
     /// <summary>
     /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged

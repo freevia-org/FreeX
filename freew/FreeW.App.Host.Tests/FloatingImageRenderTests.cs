@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Windows;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
 using System.Windows.Controls;
@@ -206,8 +207,14 @@ public sealed class FloatingImageRenderTests
 
         var paragraphs = view.Document.Blocks.OfType<WpfParagraph>().ToArray();
         paragraphs.Should().HaveCount(2);
-        paragraphs[0].Inlines.OfType<WpfFloater>().Should().ContainSingle()
-            .Which.Tag.Should().BeNull("the copied wrap band must be visual-only");
+        var visualOnlyFigure = paragraphs[0].Inlines.OfType<Figure>().Should().ContainSingle()
+            .Which;
+        visualOnlyFigure.Tag.Should().BeNull("the copied wrap band must be visual-only");
+        visualOnlyFigure.Width.Value.Should().BeApproximately(96, 0.01);
+        visualOnlyFigure.Height.Value.Should().BeApproximately(72, 0.01);
+        visualOnlyFigure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.PageLeft);
+        visualOnlyFigure.VerticalAnchor.Should().Be(FigureVerticalAnchor.PageTop);
+        visualOnlyFigure.WrapDirection.Should().Be(WrapDirection.Both);
         paragraphs[1].Inlines.OfType<WpfFloater>().Should().BeEmpty(
             "the source anchor must not reserve the same image a second time");
 
