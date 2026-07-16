@@ -90,6 +90,29 @@ public sealed class FloatingImageRenderTests
         return doc;
     }
 
+    private static TextDocument DocWithPageAnchoredImageAboveLaterAnchor(out InlineImage image)
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Clear();
+        var leadingParagraph = new Paragraph();
+        leadingParagraph.Runs.Add(new Run("leading paragraph text that should wrap around the page-anchored image."));
+        doc.Blocks.Add(leadingParagraph);
+
+        image = new InlineImage(MinimalPng(), widthPt: 72, heightPt: 54)
+        {
+            Wrapping = ImageWrapping.Square,
+            HorizontalAnchor = HorizontalAnchor.Margin,
+            VerticalAnchor = VerticalAnchor.Page,
+            HorizontalOffsetPt = 0,
+            VerticalOffsetPt = 0,
+        };
+        var anchorParagraph = new Paragraph();
+        anchorParagraph.Runs.Add(Run.FromImage(image));
+        anchorParagraph.Runs.Add(new Run("anchor paragraph text"));
+        doc.Blocks.Add(anchorParagraph);
+        return doc;
+    }
+
     private static TextDocument DocWithFloatingShapeText(out Shape shape)
     {
         var doc = new TextDocument();
@@ -172,6 +195,25 @@ public sealed class FloatingImageRenderTests
             committed.Runs[1].Image!.Wrapping.Should().Be(wrapping);
             committed.Runs[2].Text.Should().Be(" after");
         }
+    }
+
+    [StaFact]
+    public void PageAnchoredImageAboveLaterAnchor_UsesEarlierVisualReservationWithoutReorderingModel()
+    {
+        var original = DocWithPageAnchoredImageAboveLaterAnchor(out var image);
+        var view = new DocumentView();
+        view.LoadModel(original);
+
+        var paragraphs = view.Document.Blocks.OfType<WpfParagraph>().ToArray();
+        paragraphs.Should().HaveCount(2);
+        paragraphs[0].Inlines.OfType<WpfFloater>().Should().ContainSingle()
+            .Which.Tag.Should().BeNull("the copied wrap band must be visual-only");
+        paragraphs[1].Inlines.OfType<WpfFloater>().Should().BeEmpty(
+            "the source anchor must not reserve the same image a second time");
+
+        view.CommitToModel();
+        view.Model.Blocks.Should().HaveCount(2);
+        ((Paragraph)view.Model.Blocks[1]).Runs.Should().ContainSingle(run => ReferenceEquals(run.Image, image));
     }
 
     [StaFact]

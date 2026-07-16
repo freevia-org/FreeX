@@ -471,7 +471,10 @@ public readonly record struct ChartLegendItemPlan(
     ChartPlanRect SwatchBounds,
     ChartTextPlan Label,
     ChartFillPlan Fill,
-    bool IsLine = false);
+    bool IsLine = false)
+{
+    public ChartMarkerPrimitiveSymbol? MarkerSymbol { get; init; }
+}
 
 public readonly record struct ChartAxisTitlePlan(
     ChartTextPlan Label,
@@ -552,6 +555,10 @@ public static partial class ChartRenderPlanner
     public const double ImportedComboPlotTopOffset = 1.0;
     public const double ImportedComboSecondaryLabelCompensation = 8.0;
     public const double ImportedComboLegendRightCompensation = 8.0;
+    public const double ImportedCartesianGridLinePixelOffset = 0.5;
+    public const double ImportedCartesianCategoryLabelOffset = 16.0;
+    public const double ImportedCartesianValueLabelRightGap = 22.0;
+    public const double ImportedCartesianValueLabelVerticalOffset = 13.0;
     public const double LineMarkerRadius = 3.0;
     public const double ImportedLineMarkerRadius = 5.0;
     public const double LineMarkerStrokeThickness = 0.75;
@@ -562,6 +569,13 @@ public static partial class ChartRenderPlanner
     public const double ImportedScatterPlotLeftInset = 14.25;
     public const double ImportedScatterPlotUpwardOffset = 10.5;
     public const double ImportedScatterPlotRightInset = 4.5;
+    public const double ImportedSingleScatterPlotLeftInset = 43.0;
+    public const double ImportedSingleScatterPlotRightInset = 4.0;
+    public const double ImportedBubblePlotLeftInset = 36.0;
+    public const double ImportedScatterPlotBottomReduction = 33.0;
+    public const double ImportedSingleScatterLegendAreaWidth = 125.0;
+    public const double ImportedBubbleLegendAreaWidth = 120.0;
+    public const double ImportedScatterLegendRightGap = 30.0;
     public const double ImportedBarPlotLeftOffset = -6.5;
     public const double ImportedBarPlotUpwardOffset = 5.5;
     public const double ImportedBarPlotWidthReduction = 20.0;
@@ -644,6 +658,16 @@ public static partial class ChartRenderPlanner
         UsesImportedTextMetrics(chart) &&
         chart.ScatterStyle == ScatterStyle.SmoothMarker &&
         chart.Series.Count > 1;
+
+    private static bool UsesImportedSingleScatterDefaults(ChartShape chart) =>
+        chart.ChartType == ChartType.Scatter &&
+        UsesImportedTextMetrics(chart) &&
+        chart.ScatterStyle == ScatterStyle.LineMarker &&
+        chart.Series.Count == 1;
+
+    private static bool UsesImportedBubbleDefaults(ChartShape chart) =>
+        chart.ChartType == ChartType.Bubble &&
+        UsesImportedTextMetrics(chart);
 
     // PowerPoint opens imported percent-stacked charts without c:overlap with
     // clustered series slots but normalized stacked extents. Keep authored
@@ -927,6 +951,10 @@ public static partial class ChartRenderPlanner
             ? UsesImportedTextMetrics(chart)
                 ? family == ChartRenderFamily.Pie
                     ? Math.Min(137, bounds.Width * 0.12)
+                    : UsesImportedSingleScatterDefaults(chart)
+                        ? ImportedSingleScatterLegendAreaWidth
+                        : UsesImportedBubbleDefaults(chart)
+                            ? ImportedBubbleLegendAreaWidth
                     : Math.Min(120, bounds.Width * 0.11)
                 : Math.Min(90, bounds.Width * 0.20)
             : 0;
@@ -995,15 +1023,29 @@ public static partial class ChartRenderPlanner
         {
             // PowerPoint's imported scatter layout moves the plot above the
             // baseline category-label band and reserves a compact left gutter.
-            double upwardOffset = chart.ChartType == ChartType.Scatter &&
-                UsesImportedSmoothScatterDefaults(chart)
+            bool singleScatter = UsesImportedSingleScatterDefaults(chart);
+            bool bubble = UsesImportedBubbleDefaults(chart);
+            double leftInset = singleScatter
+                ? ImportedSingleScatterPlotLeftInset
+                : bubble
+                    ? ImportedBubblePlotLeftInset
+                    : ImportedScatterPlotLeftInset;
+            double upwardOffset = singleScatter || bubble
+                ? 0.0
+                : chart.ChartType == ChartType.Scatter && UsesImportedSmoothScatterDefaults(chart)
                     ? ImportedScatterPlotUpwardOffset + 3.0
                     : ImportedScatterPlotUpwardOffset;
+            double rightInset = singleScatter
+                ? ImportedSingleScatterPlotRightInset
+                : bubble ? 0.0 : ImportedScatterPlotRightInset;
+            double bottomReduction = singleScatter || bubble
+                ? ImportedScatterPlotBottomReduction
+                : 0.0;
             plot = new ChartPlanRect(
-                plot.X + ImportedScatterPlotLeftInset,
+                plot.X + leftInset,
                 plot.Y - upwardOffset,
-                plot.Width - ImportedScatterPlotLeftInset - ImportedScatterPlotRightInset,
-                plot.Height);
+                plot.Width - leftInset - rightInset,
+                plot.Height - bottomReduction);
         }
         if (chart.ChartType == ChartType.BarClustered && UsesImportedTextMetrics(chart))
         {
@@ -1250,7 +1292,7 @@ public static partial class ChartRenderPlanner
             Frame = frame,
             GeometryKind = geometryKind,
             Title = title,
-            DrawFlatGrid = !UsesProjectedSurfaceFrame(chart),
+            DrawFlatGrid = !UsesProjectedSurfaceFrame(chart) && !frame.IsScatterLike,
             GridLines = BuildMajorGridLinePrimitivePlan(chart, frame),
             AxisTicks = BuildMajorAxisTickPrimitivePlan(chart, frame),
             DataLabels = BuildDataLabelPlans(chart, plot, seriesColors, fillPlans),
@@ -1326,6 +1368,8 @@ public static partial class ChartRenderPlanner
                     : 0
             : chart.Series.Count;
         bool importedCombo = UsesImportedComboDefaults(chart);
+        bool importedMarkerLegend = UsesImportedTextMetrics(chart) &&
+            (UsesImportedSingleScatterDefaults(chart) || UsesImportedBubbleDefaults(chart));
         double legendLineHeight = importedCombo
             ? ImportedComboLegendLineHeight
             : ResolveLegendLineHeight(chart);
@@ -1347,16 +1391,27 @@ public static partial class ChartRenderPlanner
                 : frame.IsBar
                     ? itemCount - itemIndex - 1
                     : itemIndex;
-            double itemX = verticalLegend ? legendBounds.X : legendBounds.X + itemIndex * 80.0;
+            double itemX = verticalLegend
+                ? importedMarkerLegend
+                    ? plot.Right + (chart.ChartType == ChartType.Bubble ? 30.0 : 32.0)
+                    : legendBounds.X
+                : legendBounds.X + itemIndex * 80.0;
             double itemY = verticalLegend ? firstItemY + itemIndex * legendLineHeight : legendBounds.Y;
             bool lineSeries = !frame.IsPie &&
                 chart.Series[sourceItemIndex].OverrideChartType is ChartType.Line or ChartType.LineMarkers;
-            double swatchWidth = importedCombo ? ImportedComboLegendSwatchWidth : 8.0;
+            double swatchWidth = importedCombo
+                ? ImportedComboLegendSwatchWidth
+                : importedMarkerLegend ? 12.0 : 8.0;
             double swatchHeight = importedCombo
                 ? lineSeries ? 12.0 : ImportedComboLegendSwatchHeight
-                : 8.0;
+                : importedMarkerLegend ? 12.0 : 8.0;
+            double labelInset = importedCombo
+                ? ImportedComboLegendSwatchWidth + 4.0
+                : importedMarkerLegend ? 30.0 : 10.0;
             double textWidth = verticalLegend
-                ? Math.Max(0, legendWidth - 10)
+                ? importedMarkerLegend
+                    ? 120.0
+                    : Math.Max(0, legendBounds.Right - (itemX + labelInset))
                 : Math.Min(70, Math.Max(0, legendBounds.Right - itemX - 10));
             string text = frame.IsPie
                 ? sourceItemIndex < chart.Categories.Count
@@ -1367,7 +1422,7 @@ public static partial class ChartRenderPlanner
                 ? seriesColors[sourceItemIndex]
                 : FallbackSeriesColors[0];
 
-            items.Add(new ChartLegendItemPlan(
+            var legendItem = new ChartLegendItemPlan(
                 new ChartPlanRect(
                     itemX,
                     itemY + (importedCombo && lineSeries ? 2.0 : 3.0),
@@ -1389,7 +1444,15 @@ public static partial class ChartRenderPlanner
                             ShouldVaryPointColors(chart))
                         : ResolveSeriesFill(sourceItemIndex, seriesColors, alpha: 255, fillPlans)
                     : new ChartFillPlan(color, Alpha: 255),
-                IsLine: importedCombo && lineSeries));
+                IsLine: importedCombo && lineSeries)
+            {
+                MarkerSymbol = importedMarkerLegend
+                    ? chart.ChartType == ChartType.Bubble
+                        ? ChartMarkerPrimitiveSymbol.Circle
+                        : ResolveImportedLineMarkerSymbol(sourceItemIndex)
+                    : null
+            };
+            items.Add(legendItem);
         }
 
         return items;
@@ -1413,6 +1476,17 @@ public static partial class ChartRenderPlanner
                     frame.Bounds.Right,
                     plot.Right + 80.0 +
                     (UsesImportedComboDefaults(chart) ? ImportedComboLegendRightCompensation : 0.0));
+                return new ChartPlanRect(
+                    legendX,
+                    plot.Y,
+                    Math.Max(0, frame.Bounds.Right - legendX),
+                    plot.Height);
+            }
+
+            if (importedTextMetrics &&
+                (UsesImportedSingleScatterDefaults(chart) || UsesImportedBubbleDefaults(chart)))
+            {
+                double legendX = plot.Right + ImportedScatterLegendRightGap;
                 return new ChartPlanRect(
                     legendX,
                     plot.Y,
@@ -1531,7 +1605,10 @@ public static partial class ChartRenderPlanner
             }
             else
             {
-                double y = plot.Bottom - plot.Height * index / steps;
+                double y = plot.Bottom - plot.Height * index / steps +
+                    (UsesImportedCartesianAxisStrokes(chart) || UsesImportedComboDefaults(chart)
+                        ? ImportedCartesianGridLinePixelOffset
+                        : 0.0);
                 lines.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(plot.X, y),
                     new ChartPlanPoint(plot.Right, y)));
@@ -1626,12 +1703,15 @@ public static partial class ChartRenderPlanner
         else
         {
             double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
+            double labelOffset = UsesImportedTextMetrics(chart)
+                ? ImportedCartesianCategoryLabelOffset
+                : 2.0;
             for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
             {
                 double x = plot.X + categoryIndex * categoryStep;
                 labels.Add(new ChartTextPlan(
                     FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
-                    new ChartPlanRect(x, plot.Bottom + 2, categoryStep, ResolveCategoryLabelHeight(chart)),
+                    new ChartPlanRect(x, plot.Bottom + labelOffset, categoryStep, ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 7.0),
                     Alignment: ChartPlanTextAlignment.Center,
@@ -1714,9 +1794,16 @@ public static partial class ChartRenderPlanner
             else
             {
                 double y = plot.Bottom - plot.Height * tickIndex / steps;
+                double rightGap = UsesImportedTextMetrics(chart)
+                    ? ImportedCartesianValueLabelRightGap
+                    : 0.0;
+                double verticalOffset = UsesImportedTextMetrics(chart)
+                    ? ImportedCartesianValueLabelVerticalOffset
+                    : 6.0;
+                double labelWidth = ResolveAxisLabelWidth(chart) - GridlinePad;
                 labels.Add(new ChartTextPlan(
                     FormatChartAxisLabelValue(chart, value, chart.ValueAxis.NumberFormatCode),
-                    new ChartPlanRect(plot.X - ResolveAxisLabelWidth(chart), y - 6, ResolveAxisLabelWidth(chart) - GridlinePad, ResolveCategoryLabelHeight(chart)),
+                    new ChartPlanRect(plot.X - labelWidth - rightGap, y - verticalOffset, labelWidth, ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Right,
@@ -2136,6 +2223,9 @@ public static partial class ChartRenderPlanner
             1,
             (UsesImportedTextMetrics(chart) ? 72.0 : AxisLabelWidth) -
             AxisMajorTickLength - GridlinePad);
+        double labelVerticalOffset = UsesImportedTextMetrics(chart)
+            ? ImportedCartesianValueLabelVerticalOffset
+            : 6.0;
         for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
         {
             double value = niceMin + majorUnit * tickIndex;
@@ -2145,7 +2235,7 @@ public static partial class ChartRenderPlanner
                 new ChartPlanPoint(plot.Right + AxisMajorTickLength, y)));
             labels.Add(new ChartTextPlan(
                 FormatChartAxisLabelValue(chart, value, chart.SecondaryValueAxis.NumberFormatCode),
-                new ChartPlanRect(labelX, y - 6, labelWidth, UsesImportedTextMetrics(chart) ? 32.0 : 12.0),
+                new ChartPlanRect(labelX, y - labelVerticalOffset, labelWidth, UsesImportedTextMetrics(chart) ? 32.0 : 12.0),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Left,
@@ -4017,7 +4107,8 @@ public static partial class ChartRenderPlanner
             yUnit,
             BuildAxisLabelFormatPlan(chart.CategoryAxis),
             BuildAxisLabelFormatPlan(chart.ValueAxis),
-            UsesImportedSmoothScatterDefaults(chart));
+            UsesImportedSmoothScatterDefaults(chart),
+            chart.ValueAxis.HasMajorGridlines);
 
         var seriesPrimitives = new List<ChartScatterSeriesPrimitive>();
         var dataLabels = new List<ChartDataLabelPlan>();
@@ -4112,9 +4203,7 @@ public static partial class ChartRenderPlanner
 
         return new ChartScatterPrimitivePlan(
             gridLines,
-            UsesImportedSmoothScatterDefaults(chart)
-                ? DefaultGridLineStroke(chart)
-                : DefaultGridLineStroke(),
+            ResolveScatterGridLineStroke(chart),
             xLabels,
             yLabels,
             seriesPrimitives,
@@ -4200,11 +4289,13 @@ public static partial class ChartRenderPlanner
             yRange,
             yUnit,
             BuildAxisLabelFormatPlan(chart.CategoryAxis),
-            BuildAxisLabelFormatPlan(chart.ValueAxis));
+            BuildAxisLabelFormatPlan(chart.ValueAxis),
+            importedMinorValueGridlines: false,
+            includeXGridlines: chart.ValueAxis.HasMajorGridlines);
 
         return new ChartBubblePrimitivePlan(
             gridLines,
-            DefaultGridLineStroke(),
+            ResolveScatterGridLineStroke(chart),
             xLabels,
             yLabels,
             bubbles);
@@ -4656,6 +4747,22 @@ public static partial class ChartRenderPlanner
             chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
         {
             return ComputeNiceRange(min, max, targetIntervals: 6);
+        }
+        if (UsesImportedSingleScatterDefaults(chart) &&
+            chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
+        {
+            var range = ComputeNiceRange(min, max, targetIntervals: 8);
+            return range.max - max <= range.majorUnit * 0.25
+                ? (range.min, range.max + range.majorUnit, range.majorUnit)
+                : range;
+        }
+        if (UsesImportedBubbleDefaults(chart) &&
+            chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
+        {
+            var range = ComputeNiceRange(min, max, targetIntervals: 8);
+            return range.max - max <= range.majorUnit * 1.25
+                ? (range.min, range.max + range.majorUnit, range.majorUnit)
+                : range;
         }
         if (chart.ChartType is (ChartType.Line or ChartType.LineMarkers) &&
             UsesImportedTextMetrics(chart) &&
@@ -5510,7 +5617,8 @@ public static partial class ChartRenderPlanner
             double yUnit,
             ChartAxisLabelFormatPlan? xAxisLabelFormat,
             ChartAxisLabelFormatPlan? yAxisLabelFormat,
-            bool importedMinorValueGridlines = false)
+            bool importedMinorValueGridlines = false,
+            bool includeXGridlines = true)
     {
         double xSteps = xRange / xUnit;
         double ySteps = yRange / yUnit;
@@ -5530,9 +5638,12 @@ public static partial class ChartRenderPlanner
         for (int tickIndex = 0; tickIndex <= xTickCount; tickIndex++)
         {
             double x = plot.X + plot.Width * tickIndex / xSteps;
-            gridLines.Add(new ChartGridLinePlan(
-                new ChartPlanPoint(x, plot.Y),
-                new ChartPlanPoint(x, plot.Bottom)));
+            if (includeXGridlines)
+            {
+                gridLines.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(x, plot.Y),
+                    new ChartPlanPoint(x, plot.Bottom)));
+            }
 
             double value = xMin + xUnit * tickIndex;
             xLabels.Add(new ChartTextPlan(
@@ -5601,6 +5712,13 @@ public static partial class ChartRenderPlanner
             DefaultRadarSpokeStroke(),
             Array.Empty<ChartTextPlan>(),
             Array.Empty<ChartRadarSeriesPrimitive>());
+
+    private static ChartStrokePlan ResolveScatterGridLineStroke(ChartShape chart) =>
+        UsesImportedSingleScatterDefaults(chart) || UsesImportedBubbleDefaults(chart)
+            ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 1.0)
+            : UsesImportedSmoothScatterDefaults(chart)
+                ? DefaultGridLineStroke(chart)
+                : DefaultGridLineStroke();
 
     private static ChartMajorGridLinePrimitivePlan EmptyMajorGridLinePrimitivePlan() =>
         new(
@@ -5733,11 +5851,14 @@ public static partial class ChartRenderPlanner
           UsesImportedTextMetrics(chart)
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 1.0)
         : chart is not null &&
+          UsesImportedCartesianAxisStrokes(chart)
+            ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 1.0)
+        : chart is not null &&
         UsesClassicOfficeChartStyle(chart)
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.5)
             : chart is not null &&
               UsesImportedComboDefaults(chart)
-                ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 0.5)
+                ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 1.0)
             : new ChartStrokePlan(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
 
     private static ChartStrokePlan DefaultAxisTickStroke(ChartShape? chart = null) =>

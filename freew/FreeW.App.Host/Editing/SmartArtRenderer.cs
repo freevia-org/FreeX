@@ -108,7 +108,7 @@ internal static class SmartArtRenderer
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
-                FontSize = 11,
+                FontSize = Math.Max(1, node.FontSizeDip),
                 TextAlignment = System.Windows.TextAlignment.Center
             }
         };
@@ -136,7 +136,7 @@ internal static class SmartArtRenderer
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
-                FontSize = 11,
+                FontSize = Math.Max(1, node.FontSizeDip),
                 TextAlignment = System.Windows.TextAlignment.Center
             }
         };

@@ -15615,7 +15615,7 @@ public sealed class DocumentView : Control
             {
                 var nodeRect = new Rect(bx, boxY, boxW, nodeH);
                 DrawSmartArtNodeBox(context, sd, ni, nodeRect);
-                DrawSmartArtNodeText(context, sd.NodeTexts[ni], nodeRect, SmartArtTextColorAt(sd, ni));
+                DrawSmartArtNodeText(context, sd.NodeTexts[ni], nodeRect, SmartArtTextColorAt(sd, ni), SmartArtPlanAt(sd, ni));
                 bx += boxW;
 
                 // Arrow connector between process nodes.
@@ -15690,7 +15690,7 @@ public sealed class DocumentView : Control
                 DrawSmartArtNodePolygon(context, sd, node.NodeIndex, ScalePolygon(node));
             else
                 DrawSmartArtNodeBox(context, sd, node.NodeIndex, nodeRect);
-            DrawSmartArtNodeText(context, sd.NodeTexts[node.NodeIndex], nodeRect, SmartArtTextColorAt(sd, node.NodeIndex));
+            DrawSmartArtNodeText(context, sd.NodeTexts[node.NodeIndex], nodeRect, SmartArtTextColorAt(sd, node.NodeIndex), SmartArtPlanAt(sd, node.NodeIndex));
         }
     }
 
@@ -15772,7 +15772,7 @@ public sealed class DocumentView : Control
 
             var nodeRect = ScaleRect(node);
             DrawSmartArtNodeBox(context, sd, node.NodeIndex, nodeRect);
-            DrawSmartArtNodeText(context, sd.NodeTexts[node.NodeIndex], nodeRect, SmartArtTextColorAt(sd, node.NodeIndex));
+            DrawSmartArtNodeText(context, sd.NodeTexts[node.NodeIndex], nodeRect, SmartArtTextColorAt(sd, node.NodeIndex), SmartArtPlanAt(sd, node.NodeIndex));
         }
     }
 
@@ -15859,11 +15859,21 @@ public sealed class DocumentView : Control
         return new Pen(new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)), minimumThickness);
     }
 
-    private void DrawSmartArtNodeText(DrawingContext context, string text, Rect nodeRect, Color textColor)
+    private void DrawSmartArtNodeText(
+        DrawingContext context,
+        string text,
+        Rect nodeRect,
+        Color textColor,
+        SmartArtNodeVisualPlan? plan)
     {
         if (string.IsNullOrEmpty(text)) return;
-        var fmt = new RunFormatting { FontSizePt = 7.5, ColorHex = $"#{textColor.R:X2}{textColor.G:X2}{textColor.B:X2}", Bold = true };
-        var ft  = Build(text.Length > 12 ? text[..12] + "…" : text, fmt);
+        var fontSizePt = plan is null ? 11 : plan.FontSizeDip / PxPerPoint;
+        var fmt = new RunFormatting
+        {
+            FontSizePt = Math.Max(1, fontSizePt),
+            ColorHex = $"#{textColor.R:X2}{textColor.G:X2}{textColor.B:X2}"
+        };
+        var ft  = Build(text, fmt);
         var tx  = nodeRect.X + Math.Max(2, (nodeRect.Width  - ft.WidthIncludingTrailingWhitespace) / 2);
         var ty  = nodeRect.Y + Math.Max(0, (nodeRect.Height - ft.Height) / 2);
         using (context.PushClip(nodeRect))

@@ -6277,7 +6277,11 @@ public static class DocxWriter
             new XElement(W + "pgSz",
                 new XAttribute(W + "w", PointsToDxa(page.WidthPt)),
                 new XAttribute(W + "h", PointsToDxa(page.HeightPt)),
-                page.Landscape ? new XAttribute(W + "orient", "landscape") : null),
+                // Word requires the orientation token for wide page dimensions. Some generated
+                // fixtures set the dimensions directly instead of toggling PageSettings.Landscape.
+                page.Landscape || page.WidthPt > page.HeightPt
+                    ? new XAttribute(W + "orient", "landscape")
+                    : null),
             new XElement(W + "pgMar",
                 new XAttribute(W + "left", PointsToDxa(page.MarginLeftPt)),
                 new XAttribute(W + "right", PointsToDxa(page.MarginRightPt)),

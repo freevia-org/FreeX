@@ -226,7 +226,8 @@ public sealed record SmartArtNodeVisualPlan(
     double ShadowOpacity,
     double ShadowBlur,
     double ShadowDepth,
-    string ConnectorHex);
+    string ConnectorHex,
+    double FontSizeDip = 11 * 96.0 / 72.0);
 
 public sealed record SmartArtHierarchyNodeGeometry(
     int NodeIndex,
@@ -1154,7 +1155,8 @@ public static class ChartSmartArtVisualPlanner
                 ShadowOpacity = 0,
                 ShadowBlur = 0,
                 ShadowDepth = 0,
-                ConnectorHex = "#7F0000"
+                ConnectorHex = "#7F0000",
+                FontSizeDip = 18.48 * 96.0 / 72.0
             })
             .ToList();
 

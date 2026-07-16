@@ -80,7 +80,7 @@ public sealed class ChartBaselineCorpusTests
         scene.GridLines.Stroke.Should().Be(new ChartStrokePlan(
             new SrgbColor(0x89, 0x89, 0x89),
             Alpha: 255,
-            Thickness: 0.5));
+            Thickness: 1.0));
         scene.AxisTicks.Stroke.Should().Be(new ChartStrokePlan(
             new SrgbColor(0x89, 0x89, 0x89),
             Alpha: 255,
@@ -97,6 +97,27 @@ public sealed class ChartBaselineCorpusTests
         scene.LegendItems[2].IsLine.Should().BeTrue();
         (scene.LegendItems[1].Label.Bounds.Y - scene.LegendItems[0].Label.Bounds.Y)
             .Should().Be(ChartRenderPlanner.ImportedComboLegendLineHeight);
+    }
+
+    [Fact]
+    public void ChartLabelsCorpus_ImportedCartesianLabelsUsePowerPointGeometry()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[2].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+
+        scene.CategoryAxisLabels[0].Bounds.Y
+            .Should().Be(scene.Frame.Plot.Bottom + ChartRenderPlanner.ImportedCartesianCategoryLabelOffset);
+        scene.ValueAxisLabels[^1].Bounds.Right
+            .Should().Be(scene.Frame.Plot.X - ChartRenderPlanner.ImportedCartesianValueLabelRightGap);
+        scene.ValueAxisLabels[^1].Bounds.Y
+            .Should().Be(scene.Frame.Plot.Y - ChartRenderPlanner.ImportedCartesianValueLabelVerticalOffset);
+        scene.SecondaryAxis.Labels[^1].Bounds.Y
+            .Should().Be(scene.Frame.Plot.Y - ChartRenderPlanner.ImportedCartesianValueLabelVerticalOffset);
     }
 
     [Fact]
@@ -138,6 +159,50 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartTypesCorpus_ImportedLineMarkerScatterUsesPowerPointAxesAndMarkerLegend()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "18-chart-types.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[1].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        chart.ChartType.Should().Be(ChartType.Scatter);
+        chart.ScatterStyle.Should().Be(ScatterStyle.LineMarker);
+        chart.ValueAxis.HasMajorGridlines.Should().BeFalse(
+            "the imported bottom X axis has no major gridlines in PowerPoint");
+        chart.SecondaryValueAxis?.HasMajorGridlines.Should().BeTrue(
+            "the imported left Y axis carries the major gridline setting");
+        ChartRenderPlanner.ComputeScatterAxisRange(chart, useX: true)
+            .Should().Be((0, 6, 1));
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart)
+            .Should().Be((0, 4.5, 0.5));
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 1280, 720));
+
+        scene.Frame.Plot.Should().Be(new ChartPlanRect(63, 68, 1068, 599));
+        scene.DrawFlatGrid.Should().BeFalse(
+            "scatter primitives own the axis grid so the generic frame grid is not duplicated");
+        scene.Scatter.Should().NotBeNull();
+        scene.Scatter!.Value.GridLines.Should().HaveCount(10,
+            "PowerPoint renders ten horizontal Y-axis intervals and no vertical X-axis gridlines");
+        scene.Scatter.Value.XAxisLabels.Select(label => label.Text)
+            .Should().Equal("0", "1", "2", "3", "4", "5", "6");
+        scene.Scatter.Value.YAxisLabels.Select(label => label.Text)
+            .Should().Equal("0", "0.5", "1", "1.5", "2", "2.5", "3", "3.5", "4", "4.5");
+        scene.Scatter.Value.GridLineStroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0x89, 0x89, 0x89),
+            Alpha: 255,
+            Thickness: 1.0));
+
+        var legend = scene.LegendItems.Should().ContainSingle().Subject;
+        legend.Label.Text.Should().Be("Bubbles");
+        legend.MarkerSymbol.Should().Be(ChartMarkerPrimitiveSymbol.Diamond);
+        legend.SwatchBounds.Width.Should().Be(12);
+        legend.SwatchBounds.Height.Should().Be(12);
+    }
+
+    [Fact]
     public void ChartTypesCorpus_BubbleWithoutSizesKeepsAxesButDoesNotInventBubbles()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "18-chart-types.pptx");
@@ -157,7 +222,17 @@ public sealed class ChartBaselineCorpusTests
         scene.Bubble.Value.XAxisLabels.Select(label => label.Text)
             .Should().Equal("0", "1", "2", "3", "4", "5", "6");
         scene.Bubble.Value.YAxisLabels.Select(label => label.Text)
-            .Should().Equal("0", "10", "20", "30", "40", "50");
+            .Should().Equal("0", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50");
+        scene.Bubble.Value.GridLines.Should().HaveCount(11,
+            "PowerPoint renders eleven horizontal Y-axis intervals and no vertical X-axis gridlines");
+        scene.Bubble.Value.GridLineStroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0x89, 0x89, 0x89),
+            Alpha: 255,
+            Thickness: 1.0));
+        scene.DrawFlatGrid.Should().BeFalse();
+        var legend = scene.LegendItems.Should().ContainSingle().Subject;
+        legend.Label.Text.Should().Be("Series1");
+        legend.MarkerSymbol.Should().Be(ChartMarkerPrimitiveSymbol.Circle);
     }
 
     [Fact]
@@ -528,9 +603,14 @@ public sealed class ChartBaselineCorpusTests
             var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 960, 540));
 
             scene.GridLines.Stroke.Should().Be(new ChartStrokePlan(
-                new SrgbColor(0xD9, 0xD9, 0xD9),
+                new SrgbColor(0x89, 0x89, 0x89),
                 Alpha: 255,
-                Thickness: 0.5));
+                Thickness: 1.0));
+            if (!scene.Frame.IsBar)
+            {
+                scene.GridLines.GridLines[0].Start.Y
+                    .Should().Be(scene.Frame.Plot.Bottom + ChartRenderPlanner.ImportedCartesianGridLinePixelOffset);
+            }
             scene.AxisTicks.Stroke.Should().Be(new ChartStrokePlan(
                 new SrgbColor(0x89, 0x89, 0x89),
                 Alpha: 255,

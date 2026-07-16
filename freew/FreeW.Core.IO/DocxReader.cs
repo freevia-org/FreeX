@@ -999,7 +999,8 @@ public static class DocxReader
                 page.WidthPt = DxaToPoints(w.Value);
             if (pgSz.Attribute(W + "h") is { } h)
                 page.HeightPt = DxaToPoints(h.Value);
-            page.Landscape = pgSz.Attribute(W + "orient")?.Value == "landscape";
+            page.Landscape = pgSz.Attribute(W + "orient")?.Value == "landscape"
+                || page.WidthPt > page.HeightPt;
         }
 
         // Page margins (w:pgMar).
