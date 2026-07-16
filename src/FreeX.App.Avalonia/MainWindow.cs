@@ -984,6 +984,7 @@ public sealed partial class MainWindow : Window
                 CurrencyFormat = ApplySelectedRangeCurrencyFormat,
                 PercentFormat = ApplySelectedRangePercentFormat,
                 CommaStyle = ApplySelectedRangeCommaStyle,
+                SetNumberFormat = ApplyRibbonNumberFormat,
                 ExtraCommands = new Dictionary<string, Action>(StringComparer.Ordinal)
                 {
                     // Number Format dropdown items.
@@ -1208,7 +1209,6 @@ public sealed partial class MainWindow : Window
                     ["Accounting Number Format Japanese Yen"] = () => ApplySelectedRangeAccountingFormat("\u00A5"),
                     ["home.fontColor"] = () => ApplySelectedRangeFontColor(new CellColor(0, 0, 0)),
                     ["home.fillColor"] = () => ApplySelectedRangeFillColor(new CellColor(255, 235, 132)),
-                    ["home.numberFormat"] = () => _ = ShowFormatCellsDialogAsync(),
                     // Review: New Note / New Comment on the active cell.
                     ["review.newNote"] = () => _ = ShowNewNoteDialogAsync(),
                     ["review.newComment"] = () => _ = ShowNewThreadedCommentDialogAsync(),
@@ -7115,10 +7115,13 @@ public sealed partial class MainWindow : Window
             return false;
         }
 
+        var source = _session.SelectedRange;
+        BeginCellSelectionDrag(args, capture, source.Start);
+        // BeginCellSelectionDrag clears stale gesture state before establishing persistent pointer
+        // capture, so arm autofill only after capture has been initialized.
         _autofillDragging = true;
-        _autofillSourceRange = _session.SelectedRange;
-        _autofillTarget = _session.SelectedRange.End;
-        BeginCellSelectionDrag(args, capture, _session.SelectedRange.Start);
+        _autofillSourceRange = source;
+        _autofillTarget = source.End;
         return true;
     }
 
@@ -7160,13 +7163,13 @@ public sealed partial class MainWindow : Window
     {
         if (_autofillSourceRange is not { } source ||
             _autofillTarget is not { } target ||
-            GridAutofillPlanner.CalculateFillRange(source, target) is not { } fillRange)
+            (GridAutofillPlanner.CalculateFillRange(source, target) ??
+             GridAutofillPlanner.CalculateClearRange(source, target)) is not { } operationRange)
         {
             return;
         }
 
-        var completedSelection = GridAutofillPlanner.CalculateCompletedSelectionRange(source, fillRange);
-        var direction = ResolveAutofillDirection(source, fillRange);
+        var completedSelection = GridAutofillPlanner.CalculateCompletedSelectionRange(source, operationRange);
         ClearSelectedDrawingObject();
         // Unlike keyboard/menu Fill Down/Up/Left/Right (FillSelectedRange, which verbatim-copies
         // the source edge cell), the fill-handle drag gesture runs Excel-style series detection
@@ -7174,11 +7177,11 @@ public sealed partial class MainWindow : Window
         // host's OnAutofillRequested. Holding Ctrl while dragging flips the fill behavior (forces
         // a plain copy of the last value instead of continuing the series, or forces an
         // increment-by-1 series for a single plain number), matching Excel/the WPF host.
-        var result = _session.AutofillDragRange(source, fillRange, ctrlHeld);
+        var result = _session.AutofillDragRange(source, operationRange, ctrlHeld);
         _session.SelectRange(completedSelection);
         RefreshShell(result.Success
-            ? $"{FormatFillCellsAction(direction)} in {FormatRangeReference(completedSelection)}"
-            : result.ErrorMessage ?? $"{FormatFillCellsAction(direction)} failed.");
+            ? $"Autofilled {FormatRangeReference(completedSelection)}"
+            : result.ErrorMessage ?? "Autofill failed.");
     }
 
     /// <summary>
@@ -7220,11 +7223,14 @@ public sealed partial class MainWindow : Window
         }
 
         var source = _session.SelectedRange;
+        var startCell = GridSelectionMovePlanner.ClampDragStartCell(source, address);
+        BeginCellSelectionDrag(args, capture, source.Start);
+        // BeginCellSelectionDrag clears stale gesture state before establishing persistent pointer
+        // capture, so arm move/copy only after capture has been initialized.
         _selectionMoveDragging = true;
         _selectionMoveSourceRange = source;
-        _selectionMoveStartCell = GridSelectionMovePlanner.ClampDragStartCell(source, address);
+        _selectionMoveStartCell = startCell;
         _selectionMovePreviewRange = source;
-        BeginCellSelectionDrag(args, capture, source.Start);
         return true;
     }
 
@@ -7707,7 +7713,10 @@ public sealed partial class MainWindow : Window
             richRuns: richRuns,
             flowDirection: flowDirection,
             commentDisplay: commentDisplay,
-            fontFamily: fontFamily);
+            fontFamily: fontFamily,
+            suppressDefaultGridlines: CellSurfaceGridlinePlanner.HasVisibleFill(
+                style,
+                _session.Workbook.Theme));
 
         // Comment/note corner indicator + hover card: mirrors WPF's GridView.Rendering.cs
         // DrawCommentIndicator (small top-right triangle, red for a legacy note, purple for a
@@ -8771,7 +8780,8 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
         FlowDirection flowDirection = FlowDirection.LeftToRight,
         CellCommentDisplay? commentDisplay = null,
-        FontFamily? fontFamily = null)
+        FontFamily? fontFamily = null,
+        bool suppressDefaultGridlines = false)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -8919,10 +8929,13 @@ public sealed partial class MainWindow : Window
         // single RenderTransform (see MainWindow.ViewCommands.cs), instead of staying a razor-thin
         // fixed 1 DIP line at high zoom while everything else quadruples in size.
         var scaledBorderThickness = Math.Max(1, zoomFactor);
+        var defaultBorderBrush = suppressDefaultGridlines
+            ? background ?? patternBrush ?? Brushes.Transparent
+            : GridLine;
         return new Border
         {
             Background = background,
-            BorderBrush = showGridlines ? GridLine : Brushes.Transparent,
+            BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent,
             BorderThickness = showGridlines
                 ? new Thickness(scaledBorderThickness)
                 : new Thickness(0),
@@ -9432,38 +9445,24 @@ public sealed partial class MainWindow : Window
         return menuItem;
     }
 
-    private MenuFlyout CreateColorPaletteFlyout(ColorPaletteTarget target, bool includeClearFill)
+    private Flyout CreateColorPaletteFlyout(ColorPaletteTarget target, bool includeClearFill)
     {
-        var items = new List<MenuItem>();
-        if (includeClearFill)
-        {
-            var clearFillItem = new MenuItem { Header = "No Fill" };
-            clearFillItem.Click += (_, _) => ClearSelectedRangeFill();
-            items.Add(clearFillItem);
-        }
-
-        items.AddRange(CellColorPalettePlanner.BuildDefaultSwatches(_session.Workbook.Theme).Select(swatch => CreateColorSwatchMenuItem(swatch, target)));
-        var moreColorsItem = new MenuItem { Header = "More Colors..." };
-        moreColorsItem.Click += (_, _) =>
-        {
-            if (target == ColorPaletteTarget.Fill)
-                ShowMoreFillColorDialog();
-            else
-                ShowMoreFontColorDialog();
-        };
-        items.Add(moreColorsItem);
-        return new MenuFlyout { ItemsSource = items };
-    }
-
-    private MenuItem CreateColorSwatchMenuItem(CellColorSwatch swatch, ColorPaletteTarget target)
-    {
-        var menuItem = new MenuItem
-        {
-            Header = swatch.Hex,
-            Icon = CreateColorSwatchIcon(swatch.Color),
-        };
-        menuItem.Click += (_, _) => ApplySelectedRangePaletteColor(swatch.Color, target);
-        return menuItem;
+        var isFill = target == ColorPaletteTarget.Fill;
+        var initialColor = isFill
+            ? new CellColor(255, 235, 132)
+            : new CellColor(0, 0, 0);
+        return RibbonColorPaletteFlyout.Create(
+            _session.Workbook.Theme,
+            _recentColors,
+            includeClearFill ? "No Fill" : "Automatic",
+            includeClearFill
+                ? ClearSelectedRangeFill
+                : () => ApplySelectedRangeFontColor(CellColor.Black),
+            color => ApplySelectedRangePaletteColor(color, target),
+            "More Colors...",
+            () => ShowMoreColorsDialogAsync(
+                isFill ? "More Fill Colors" : "More Font Colors",
+                initialColor));
     }
 
     private NativeMenu CreateNativeColorPaletteMenu(ColorPaletteTarget target, bool includeClearFill)
@@ -21131,6 +21130,23 @@ public sealed partial class MainWindow : Window
             _ => ("Applied Number format to", "Number format failed."),
         };
         ApplySelectedRangeNumberFormat(NumberFormatShortcutService.GetFormat(shortcut), successAction, failureMessage);
+    }
+
+    private void ApplyRibbonNumberFormat(string? selectedLabel)
+    {
+        var option = HomeNumberFormatDropdownPlanner.Options.FirstOrDefault(candidate =>
+            string.Equals(candidate.Label, selectedLabel, StringComparison.Ordinal));
+        if (option is null)
+            return;
+
+        if (option.OpensFormatCellsDialog)
+        {
+            _ = ShowFormatCellsDialogAsync();
+            return;
+        }
+
+        if (option.Code is { } numberFormat)
+            ApplySelectedRangeNumberFormat(numberFormat, $"Applied {option.Label} format to", "Number format failed.");
     }
 
     private void ApplySelectedRangeNumberFormat(string numberFormat, string successAction, string failureMessage)

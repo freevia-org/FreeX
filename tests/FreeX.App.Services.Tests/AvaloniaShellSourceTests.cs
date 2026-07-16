@@ -843,7 +843,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var zoomFactor = GetActiveZoomFactor();");
         source.Should().Contain("var headerOffset = showHeadings ? 1 : 0;");
         source.Should().Contain("if (showHeadings)");
-        source.Should().Contain("showGridlines ? GridLine : Brushes.Transparent");
+        source.Should().Contain("CellSurfaceGridlinePlanner.HasVisibleFill(");
+        source.Should().Contain("BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent");
         source.Should().Contain("CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor)");
         source.Should().Contain("CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor)");
         source.Should().Contain("fontSize * zoomFactor");
@@ -3971,6 +3972,7 @@ public sealed class AvaloniaShellSourceTests
     public void MainWindow_WiresFillAndFontColorThroughSharedWorkbookSession()
     {
         var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var paletteSource = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "RibbonColorPaletteFlyout.cs"));
 
         source.Should().NotContain("DefaultFillColor");
         source.Should().NotContain("DefaultFontColor");
@@ -3983,11 +3985,11 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("_fontColorButton.Flyout = CreateColorPaletteFlyout(ColorPaletteTarget.Font, includeClearFill: false);");
         source.Should().Contain("_fillColorButton.IsEnabled = isIdle;");
         source.Should().Contain("_fontColorButton.IsEnabled = isIdle;");
-        source.Should().Contain("private MenuFlyout CreateColorPaletteFlyout(ColorPaletteTarget target, bool includeClearFill)");
-        source.Should().Contain("items.AddRange(CellColorPalettePlanner.BuildDefaultSwatches(_session.Workbook.Theme).Select(swatch => CreateColorSwatchMenuItem(swatch, target)));");
-        source.Should().Contain("private MenuItem CreateColorSwatchMenuItem(CellColorSwatch swatch, ColorPaletteTarget target)");
-        source.Should().Contain("Icon = CreateColorSwatchIcon(swatch.Color),");
-        source.Should().Contain("menuItem.Click += (_, _) => ApplySelectedRangePaletteColor(swatch.Color, target);");
+        source.Should().Contain("private Flyout CreateColorPaletteFlyout(ColorPaletteTarget target, bool includeClearFill)");
+        source.Should().Contain("return RibbonColorPaletteFlyout.Create(");
+        paletteSource.Should().Contain("CellColorPalettePlanner.BuildMenuPlan(");
+        paletteSource.Should().Contain("CreateThemeGrid(themeSection.ThemeColumns, Apply)");
+        paletteSource.Should().Contain("CreateSwatchRow(standardSection.Swatches, Apply, \"RibbonStandardColor\")");
         source.Should().Contain("private NativeMenu CreateNativeColorPaletteMenu(ColorPaletteTarget target, bool includeClearFill)");
         source.Should().Contain("menu.Items.Add(CreateNativeColorSwatchMenuItem(swatch, target));");
         source.Should().Contain("private NativeMenuItem CreateNativeColorSwatchMenuItem(CellColorSwatch swatch, ColorPaletteTarget target)");

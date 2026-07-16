@@ -11,6 +11,14 @@ public static class GridAutofillPlanner
 {
     public static CellAddress ConstrainTarget(GridRange source, CellAddress target)
     {
+        if (source.Contains(target))
+        {
+            if (source.RowCount >= 2 && source.ColCount == 1)
+                return new CellAddress(target.Sheet, target.Row, source.End.Col);
+            if (source.ColCount >= 2 && source.RowCount == 1)
+                return new CellAddress(target.Sheet, source.End.Row, target.Col);
+        }
+
         var upwardDistance = target.Row < source.Start.Row ? source.Start.Row - target.Row : 0;
         var downwardDistance = target.Row > source.End.Row ? target.Row - source.End.Row : 0;
         var leftwardDistance = target.Col < source.Start.Col ? source.Start.Col - target.Col : 0;
@@ -107,6 +115,27 @@ public static class GridAutofillPlanner
 
     public static GridRange CalculateCompletedSelectionRange(GridRange source, GridRange fillRange)
     {
+        if (source.Contains(fillRange) && fillRange != source)
+        {
+            if (fillRange.Start.Row > source.Start.Row &&
+                fillRange.Start.Col == source.Start.Col &&
+                fillRange.End.Col == source.End.Col)
+            {
+                return new GridRange(
+                    source.Start,
+                    new CellAddress(source.End.Sheet, fillRange.Start.Row - 1, source.End.Col));
+            }
+
+            if (fillRange.Start.Col > source.Start.Col &&
+                fillRange.Start.Row == source.Start.Row &&
+                fillRange.End.Row == source.End.Row)
+            {
+                return new GridRange(
+                    source.Start,
+                    new CellAddress(source.End.Sheet, source.End.Row, fillRange.Start.Col - 1));
+            }
+        }
+
         return new GridRange(
             new CellAddress(
                 source.Start.Sheet,
