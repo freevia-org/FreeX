@@ -960,6 +960,7 @@ public static class SlideCompositor
             {
                 var translated = SlideCloner.CloneShape(fallback);
                 TranslateCachedSmartArtShape(translated, shape.OffsetXEmu, shape.OffsetYEmu);
+                ApplyCachedSmartArtStyle(translated, smart.Data, theme);
                 ComposeShape(translated, slide, presentation, theme, ops, effectiveClrMap: effectiveClrMap);
             }
         }
@@ -989,6 +990,42 @@ public static class SlideCompositor
 
         foreach (var child in shape.Children)
             TranslateCachedSmartArtShape(child, offsetXEmu, offsetYEmu);
+    }
+
+    private static void ApplyCachedSmartArtStyle(
+        SlideShape shape,
+        SmartArtData? data,
+        PresentationTheme theme)
+    {
+        // IncreasingCircleProcess is outside the bounded live-layout set. Its
+        // cached background ellipses use the accent1 tint from the XML cache,
+        // while PowerPoint renders the bgShp role as the neutral Office gray.
+        // Keep this correction at the SmartArt cache boundary so normal DrawingML
+        // tint resolution remains unchanged for ordinary shapes.
+        if (data?.LayoutUniqueId.EndsWith("IncreasingCircleProcess", StringComparison.OrdinalIgnoreCase) == true
+            && shape.AutoShapeKind == DrawingShapeKind.Ellipse
+            && shape.TextBody is null
+            && shape.Fill is ShapeFill.Solid solid
+            && solid.Color.SchemeColor?.Slot == ThemeColorSlot.Accent1
+            && solid.Color.SchemeColor.Tint < 0.8)
+        {
+            shape.Fill = new ShapeFill.Solid(new ThemeAwareColor(ResolveSmartArtNeutralBackground(theme)));
+        }
+
+        foreach (var child in shape.Children)
+            ApplyCachedSmartArtStyle(child, data, theme);
+    }
+
+    private static SrgbColor ResolveSmartArtNeutralBackground(PresentationTheme theme)
+    {
+        // Office's default accent1_2 SmartArt background role rasterizes to this
+        // cool neutral. Preserve its role-independent appearance while allowing
+        // the non-default theme to keep a neutral light background.
+        var lt2 = theme.ColorScheme[ThemeColorSlot.Lt2];
+        if (lt2 == SrgbColor.FromRgb(0xE8E8E8))
+            return SrgbColor.FromRgb(0xCCD2D8);
+
+        return ThemeColorTransform.ApplyShade(lt2, 0.88);
     }
 
     /// <summary>Returns a default accent color for the given zero-based series index using the theme.</summary>
