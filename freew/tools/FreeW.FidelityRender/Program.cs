@@ -260,9 +260,20 @@ static void RenderDocumentComposite(
 
     flow.PageWidth   = pageWDip;
     flow.PageHeight  = pageHDip;
+    // Word reserves a compact header band inside the top margin when a header is present. The
+    // compositor paints that band separately below; reserve the same height here so column flow
+    // does not start one header line too high.
+    const double HeaderBodyReserveDip = 25.0;
+    var hasHeaderContent = doc.FinalSectionHeadersFooters.Header is { IsEmpty: false }
+        || doc.FinalSectionHeadersFooters.EvenHeader is { IsEmpty: false }
+        || doc.FinalSectionHeadersFooters.FirstHeader is { IsEmpty: false }
+        || doc.Sections.Any(section =>
+            section.HeadersFooters.Header is { IsEmpty: false }
+            || section.HeadersFooters.EvenHeader is { IsEmpty: false }
+            || section.HeadersFooters.FirstHeader is { IsEmpty: false });
     flow.PagePadding = new Thickness(
         marginLeft,
-        marginTop,
+        marginTop + (hasHeaderContent ? HeaderBodyReserveDip : 0),
         marginRight,
         marginBottom + footnoteReserveDip);
 
@@ -492,7 +503,8 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, 2, thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
+                                null, new Rect(thisMarginLeft, thisMarginTop + 2,
+                                    thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
                 }
@@ -514,7 +526,8 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, thisPixH - hfH - 2, thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
+                                null, new Rect(thisMarginLeft, thisPixH - thisMarginBottom + 2,
+                                    thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
                 }

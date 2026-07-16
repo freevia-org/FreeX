@@ -1343,6 +1343,8 @@ public static class DocxWriter
             fill,
             watermarkImage is null
                 ? new XElement(V + "textpath",
+                    new XAttribute("on", "t"),
+                    new XAttribute("fitshape", "t"),
                     new XAttribute("style", $"font-family:{options.FontFamily};font-size:1pt"),
                     new XAttribute("string", options.Text))
                 : null,

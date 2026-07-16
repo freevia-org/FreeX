@@ -1151,7 +1151,19 @@ public static class DocxReader
         // yields each content paragraph exactly once, in document order; we flatten any table/SDT structure to
         // the model's paragraph list (the model carries no per-header table) but preserve all text + runs.
         foreach (var p in root.Descendants(W + "p"))
+        {
+            // FreeW's page watermark is stored in a VML-only paragraph in the header. It is also
+            // represented by custom document properties, so keeping this empty layout paragraph in
+            // the model only consumes header height and can hide the real header text on render.
+            // Restrict the filter to FreeW's stable shape IDs so ordinary Word image/VML headers survive.
+            var isFreeWWatermarkParagraph = p.Descendants(V + "shape")
+                .Any(shape => shape.Attribute("id")?.Value is
+                    "PowerPlusWaterMarkObject" or "PowerPlusPictureWaterMarkObject");
+            if (isFreeWWatermarkParagraph)
+                continue;
+
             result.Paragraphs.Add(ReadParagraph(p, archive, partImageRelationships, hyperlinkRelationships, noNumbering));
+        }
         return result;
     }
 

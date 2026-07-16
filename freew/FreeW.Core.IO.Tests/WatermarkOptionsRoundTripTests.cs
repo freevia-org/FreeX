@@ -172,7 +172,25 @@ public class WatermarkOptionsRoundTripTests
         shape.Attribute("fillcolor")!.Value.Should().Be("123456");
         shape.Element(vml + "fill")!.Attribute("opacity")!.Value.Should().Be("0.5");
         textPath!.Attribute("string")!.Value.Should().Be("CONFIDENTIAL");
+        textPath.Attribute("on")!.Value.Should().Be("t");
+        textPath.Attribute("fitshape")!.Value.Should().Be("t");
         textPath.Attribute("style")!.Value.Should().Contain("font-family:Arial");
+    }
+
+    [Fact]
+    public void WatermarkOptions_DoesNotConsumeHeaderParagraph()
+    {
+        var doc = new TextDocument
+        {
+            Header = new HeaderFooter("Visible header")
+        };
+        doc.Page.WatermarkOptions = new WatermarkOptions("CONFIDENTIAL");
+
+        var loaded = RoundTrip(doc);
+
+        loaded.Header.Should().NotBeNull();
+        loaded.Header!.Paragraphs.Should().ContainSingle();
+        loaded.Header.Paragraphs[0].PlainText.Should().Be("Visible header");
     }
 
     [Fact]
