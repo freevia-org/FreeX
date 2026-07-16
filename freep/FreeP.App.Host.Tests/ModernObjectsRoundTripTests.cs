@@ -76,6 +76,44 @@ public sealed class ModernObjectsRoundTripTests : IDisposable
         zoom2.PreservedObject.RawXml.Should().Contain(zoomUri);
     }
 
+    [Fact]
+    public void SlideZoom_CapturesTargetSlideId_AndPreservesItOnWrite()
+    {
+        const string zoomXml = """
+            <p:graphicFrame xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                            xmlns:pslz="http://schemas.microsoft.com/office/powerpoint/2016/slidezoom">
+              <p:nvGraphicFramePr>
+                <p:cNvPr id="10" name="Slide Zoom 10"/>
+                <p:cNvGraphicFramePr/>
+                <p:nvPr/>
+              </p:nvGraphicFramePr>
+              <p:xfrm>
+                <a:off x="457200" y="274638"/>
+                <a:ext cx="2743200" cy="1828800"/>
+              </p:xfrm>
+              <a:graphic>
+                <a:graphicData uri="http://schemas.microsoft.com/office/powerpoint/2016/slidezoom">
+                  <pslz:sldZm>
+                    <pslz:sldZmObj sldId="257"/>
+                  </pslz:sldZm>
+                </a:graphicData>
+              </a:graphic>
+            </p:graphicFrame>
+            """;
+
+        var pres1 = PptxPackageReader.Read(BuildPptxWithShapeXml(zoomXml));
+        var zoom = pres1.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom);
+
+        pres1.Slides[0].NumericId.Should().Be(256);
+        zoom.PreservedObject!.ZoomTargetSlideNumericId.Should().Be(257);
+
+        var pres2 = PptxPackageReader.Read(WritePptxToMemory(pres1));
+        pres2.Slides[0].NumericId.Should().Be(256);
+        pres2.Slides[0].Shapes.Single(shape => shape.Kind == SlideShapeKind.Zoom)
+            .PreservedObject!.ZoomTargetSlideNumericId.Should().Be(257);
+    }
+
     // ── Ink contentPart round-trip ────────────────────────────────────────────
 
     [Fact]

@@ -123,6 +123,16 @@ public sealed class CanvasGestureHandler
                 e.Handled = true;
                 return;
             }
+            if (shape?.Kind == SlideShapeKind.Zoom &&
+                ZoomNavigationService.TryGetTargetSlideIndex(
+                    _editor.Presentation,
+                    shape.PreservedObject,
+                    out var targetSlideIndex))
+            {
+                _editor.SelectSlide(targetSlideIndex);
+                e.Handled = true;
+                return;
+            }
         }
 
         // Determine what was hit first for the existing selection (handles take priority)

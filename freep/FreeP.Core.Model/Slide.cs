@@ -556,6 +556,12 @@ public sealed class Slide
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
     /// <summary>
+    /// Numeric id from the presentation's p:sldId element. Null for newly authored slides
+    /// until the package writer assigns one.
+    /// </summary>
+    public uint? NumericId { get; set; }
+
+    /// <summary>
     /// Reference to the SlideLayout this slide uses (by layout name or index).
     /// Null if the layout is unknown or not yet resolved.
     /// </summary>

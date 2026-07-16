@@ -480,6 +480,7 @@ public static class PptxPackageWriter
         var presRels = new OpcRelationshipDocument();
         var sldIdElements = new List<XElement>();
         uint sldIdCounter = 256;
+        var usedSldIds = new HashSet<uint>();
 
         // Build the GLOBAL author map once before the slide loop so that every per-slide
         // BuildCommentsXml call uses consistent (globally-assigned) author ids.
@@ -670,8 +671,19 @@ public static class PptxPackageWriter
             WriteRels(archive, slidePath, slideRels, packageSnapshot);
 
             presRels.Add(slideRelId, SlideRelType, $"slides/slide{si + 1}.xml");
+            var numericSlideId = slide.NumericId.GetValueOrDefault();
+            if (numericSlideId == 0 || !usedSldIds.Add(numericSlideId))
+            {
+                do { numericSlideId = sldIdCounter++; }
+                while (!usedSldIds.Add(numericSlideId));
+            }
+            else if (numericSlideId >= sldIdCounter)
+            {
+                sldIdCounter = numericSlideId + 1;
+            }
+            slide.NumericId = numericSlideId;
             sldIdElements.Add(new XElement(P + "sldId",
-                new XAttribute("id", sldIdCounter++),
+                new XAttribute("id", numericSlideId),
                 new XAttribute(R + "id", slideRelId)));
         }
 
