@@ -4274,23 +4274,23 @@ public static class DocxWriter
     private static XDocument BuildDiagramData(SmartArt smartArt, string drawingRelId)
     {
         var docId = SmartArtModelId(0);
-        var isHierarchyLayout = string.Equals(SmartArtLayoutCategory(smartArt), "hierarchy", StringComparison.Ordinal);
+        var isHierarchyLayout = string.Equals(SmartArtLayoutCategory(smartArt), "hierarchy", StringComparison.Ordinal)
+            || UsesFlatSmartArtGallery(smartArt);
         var isPyramidLayout = string.Equals(SmartArtLayoutCategory(smartArt), "pyramid", StringComparison.Ordinal);
-        var isFlatLayout = !isHierarchyLayout && !isPyramidLayout;
         var ptLst = new XElement(Dgm + "ptLst",
             new XElement(Dgm + "pt",
                 new XAttribute("modelId", docId),
                 new XAttribute("type", "doc"),
-                isFlatLayout ? null : new XElement(Dgm + "prSet",
+                new XElement(Dgm + "prSet",
                     new XAttribute("loTypeId", SmartArtLayoutUrn(smartArt)),
                     new XAttribute("loCatId", SmartArtLayoutCategory(smartArt)),
                     new XAttribute("qsTypeId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/" + SmartArtQuickStyleSuffix(smartArt)),
                     new XAttribute("qsCatId", "simple"),
                     new XAttribute("csTypeId", "urn:microsoft.com/office/officeart/2005/8/colors/" + SmartArtColorGallerySuffix(smartArt)),
                     new XAttribute("csCatId", SmartArtColorCategory(smartArt.ColorSchemeId)),
-                    new XAttribute("phldr", isHierarchyLayout ? "0" : "1")),
-                isFlatLayout ? null : new XElement(Dgm + "spPr"),
-                isFlatLayout ? null : DiagramText(string.Empty)));
+                    new XAttribute("phldr", "0")),
+                new XElement(Dgm + "spPr"),
+                DiagramText(string.Empty)));
         var cxnLst = new XElement(Dgm + "cxnLst");
         var semanticNodes = new List<(string Id, string PresentationId, string ParentId, int Ordinal, int Depth)>();
         var presentationIds = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -4303,7 +4303,7 @@ public static class DocxWriter
 
         var nextId = 0;
         var nextCxn = 0;
-        void Emit(SmartArtNode node, string parentId, int ordinal, int depth)
+        string Emit(SmartArtNode node, string parentId, int ordinal, int depth)
         {
             var id = SmartArtModelId(++nextId);
             var presentationId = SmartArtModelId(3000 + nextId);
@@ -4311,8 +4311,8 @@ public static class DocxWriter
             semanticNodes.Add((id, presentationId, parentId, ordinal, depth));
             ptLst.Add(new XElement(Dgm + "pt",
                 new XAttribute("modelId", id),
-                isFlatLayout ? null : new XElement(Dgm + "prSet", new XAttribute("phldrT", "[Text]")),
-                isFlatLayout ? null : new XElement(Dgm + "spPr"),
+                new XElement(Dgm + "prSet", new XAttribute("phldrT", "[Text]")),
+                new XElement(Dgm + "spPr"),
                 DiagramText(node.Text)));
 
             var connectionId = SmartArtModelId(1000 + nextCxn);
@@ -4347,10 +4347,20 @@ public static class DocxWriter
             nextCxn++;
             for (var i = 0; i < node.Children.Count; i++)
                 Emit(node.Children[i], id, i, depth + 1);
+            return id;
         }
 
+        var flatParentId = docId;
         for (var i = 0; i < smartArt.Nodes.Count; i++)
-            Emit(smartArt.Nodes[i], docId, i, 0);
+        {
+            var node = smartArt.Nodes[i];
+            var parentId = UsesFlatSmartArtGallery(smartArt) && smartArt.Kind != SmartArtKind.Process
+                ? flatParentId
+                : docId;
+            var emittedId = Emit(node, parentId, i, parentId == docId ? 0 : i);
+            if (UsesFlatSmartArtGallery(smartArt) && smartArt.Kind != SmartArtKind.Process)
+                flatParentId = emittedId;
+        }
 
         var layoutUrn = SmartArtLayoutUrn(smartArt);
 
@@ -4529,8 +4539,14 @@ public static class DocxWriter
         }
         else
         {
+            AddPresentationPoint(presentationIds[docId], docId, "diagram");
+            AddPresentationConnection("presOf", docId, presentationIds[docId]);
             foreach (var node in semanticNodes)
+            {
                 AddPresentationPoint(node.PresentationId, node.Id, "node", "node0", 0, 1, includeTextBody: true);
+                AddPresentationConnection("presOf", node.Id, node.PresentationId);
+                AddPresentationConnection("presParOf", presentationIds[docId], node.PresentationId, node.Ordinal);
+            }
         }
 
         return new XDocument(
@@ -5000,10 +5016,9 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds a minimal-but-valid SmartArt LAYOUT part (word/diagrams/layoutN.xml — dgm:layoutDef). The
-    /// uniqueId records which stock layout the diagram intends (list / process / hierarchy); the layout body
-    /// remains intentionally small because the semantic data and cached drawing parts carry the document's
-    /// round-trip content.
+    /// Builds a SmartArt LAYOUT part (word/diagrams/layoutN.xml — dgm:layoutDef). Stock hierarchy/pyramid
+    /// templates are also used as the known Word presentation scaffold for flat galleries so Word materialises
+    /// visible nodes instead of falling back to the diagram's semantic text only.
     /// </summary>
     private static XDocument BuildDiagramLayout(SmartArt smartArt)
     {
@@ -5011,23 +5026,8 @@ public static class DocxWriter
         var category = SmartArtLayoutCategory(smartArt);
         var isHierarchy = string.Equals(category, "hierarchy", StringComparison.Ordinal);
         var isPyramid = string.Equals(category, "pyramid", StringComparison.Ordinal);
-        if (isHierarchy || isPyramid)
-            return LoadSmartArtLayoutTemplate(isHierarchy ? "hierarchy1.xml" : "pyramid1.xml", layoutUrn, category);
-        if (UsesFlatSmartArtGallery(smartArt))
-        {
-            return new XDocument(
-                new XElement(Dgm + "layoutDef",
-                    new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
-                    new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
-                    new XAttribute("uniqueId", layoutUrn),
-                    new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
-                    new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
-                    new XElement(Dgm + "catLst"),
-                    new XElement(Dgm + "sampData"),
-                    new XElement(Dgm + "styleData"),
-                    new XElement(Dgm + "clrData"),
-                    new XElement(Dgm + "layoutNode", new XAttribute("name", "diagram"))));
-        }
+        if (isHierarchy || isPyramid || UsesFlatSmartArtGallery(smartArt))
+            return LoadSmartArtLayoutTemplate(isHierarchy || UsesFlatSmartArtGallery(smartArt) ? "hierarchy1.xml" : "pyramid1.xml", layoutUrn, category);
         var rootAlgorithm = isHierarchy
             ? "hierRoot"
             : isPyramid
@@ -5170,7 +5170,7 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds a minimal-but-valid SmartArt QUICKSTYLE part (word/diagrams/quickStyleN.xml — dgm:styleDef).
+    /// Builds a SmartArt QUICKSTYLE part (word/diagrams/quickStyleN.xml — dgm:styleDef).
     /// Persists the FreeW <see cref="SmartArt.StyleId"/> as a <c>freewStyleId</c> extension attribute so
     /// the reader can recover the exact catalog entry on round-trip.
     /// </summary>
@@ -5194,7 +5194,7 @@ public static class DocxWriter
     private static XDocument BuildDiagramQuickStyle(SmartArt smartArt)
     {
         var labels = SmartArtGalleryStyleLabels;
-        var usesFlatGallery = UsesFlatSmartArtGallery(smartArt);
+        var usesFlatGallery = false;
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/quickstyle/";
         var uniqueId = BaseUrn + SmartArtQuickStyleSuffix(smartArt);
         var styleLabels = usesFlatGallery
@@ -5256,7 +5256,7 @@ public static class DocxWriter
     }
 
     /// <summary>
-    /// Builds a minimal-but-valid SmartArt COLORS part (word/diagrams/colorsN.xml — dgm:colorsDef).
+    /// Builds a SmartArt COLORS part (word/diagrams/colorsN.xml — dgm:colorsDef).
     /// Persists the FreeW <see cref="SmartArt.ColorSchemeId"/> as a <c>freewColorId</c> extension attribute
     /// so the reader can recover the exact catalog entry on round-trip.
     /// </summary>
@@ -5265,7 +5265,7 @@ public static class DocxWriter
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/colors/";
         var colorId = smartArt.ColorSchemeId ?? "accent1_2";
         var uniqueId = BaseUrn + SmartArtColorGallerySuffix(smartArt);
-        var usesFlatGallery = UsesFlatSmartArtGallery(smartArt);
+        var usesFlatGallery = false;
         var category = SmartArtColorCategory(colorId);
         var colorScheme = SmartArtColorScheme.FindById(smartArt.ColorSchemeId ?? string.Empty)
             ?? SmartArtColorScheme.Default;
