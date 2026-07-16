@@ -2623,6 +2623,7 @@ public static class PptxPackageReader
 
             var prst = aSpPr.Element(A + "prstGeom")?.Attribute("prst")?.Value;
             shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
+            ReadPresetGeometryAdjustments(aSpPr, shape);
         }
 
         // txBody
@@ -2889,6 +2890,7 @@ public static class PptxPackageReader
 
         var prst = spPr?.Element(A + "prstGeom")?.Attribute("prst")?.Value;
         shape.AutoShapeKind = PptxShapeKindMap.FromPreset(prst);
+        ReadPresetGeometryAdjustments(spPr, shape);
 
         var txBody = sp.Element(P + "txBody");
         if (txBody is not null) shape.TextBody = ReadTxBody(txBody, scheme, slideRels, allSlides, slideDir, slidePartPathToId, archive, partPath);
@@ -3612,6 +3614,33 @@ public static class PptxPackageReader
 
             if (cgp.Segments.Count > 0)
                 shape.CustomGeometry.Add(cgp);
+        }
+    }
+
+    private static void ReadPresetGeometryAdjustments(XElement? spPr, SlideShape shape)
+    {
+        var avLst = spPr?.Element(A + "prstGeom")?.Element(A + "avLst");
+        if (avLst is null)
+            return;
+
+        foreach (var guide in avLst.Elements(A + "gd"))
+        {
+            var name = guide.Attribute("name")?.Value;
+            var formula = guide.Attribute("fmla")?.Value;
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(formula))
+                continue;
+
+            var valueText = formula.StartsWith("val ", StringComparison.OrdinalIgnoreCase)
+                ? formula[4..].Trim()
+                : null;
+            if (valueText is not null && double.TryParse(
+                    valueText,
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out var value))
+            {
+                shape.PresetGeometryAdjustments[name] = value;
+            }
         }
     }
 

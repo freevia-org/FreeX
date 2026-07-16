@@ -89,7 +89,29 @@ public sealed class PptxRepairCorpusValidityTests
             .Contain(element =>
                 (string?)element.Attribute("PartName") == "/" + drawingPath &&
                 (string?)element.Attribute("ContentType") ==
-                    "application/vnd.ms-office.drawingml.diagramDrawing+xml");
+            "application/vnd.ms-office.drawingml.diagramDrawing+xml");
+    }
+
+    [Fact]
+    public void SmartArtLiveCorpus_PreservesChordPresetAdjustments()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var smartArt = presentation.Slides[0].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.SmartArt)
+            .SmartArt!;
+
+        var chords = smartArt.FallbackShapes
+            .Where(shape => shape.AutoShapeKind == DrawingShapeKind.Chord)
+            .ToArray();
+
+        chords.Should().HaveCount(3);
+        chords[0].PresetGeometryAdjustments["adj1"].Should().Be(1168272);
+        chords[0].PresetGeometryAdjustments["adj2"].Should().Be(9631728);
+        chords[1].PresetGeometryAdjustments["adj1"].Should().Be(20431728);
+        chords[1].PresetGeometryAdjustments["adj2"].Should().Be(11968272);
+        chords[2].PresetGeometryAdjustments["adj1"].Should().Be(16200000);
+        chords[2].PresetGeometryAdjustments["adj2"].Should().Be(16200000);
     }
 
     [Fact]

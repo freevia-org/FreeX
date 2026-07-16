@@ -50,7 +50,8 @@ public enum DrawingShapeKind
     LineCallout = 41,
     Chevron = 42,
     HomePlate = 43,
-    Cylinder = 44
+    Cylinder = 44,
+    Chord = 45
 }
 
 /// <summary>

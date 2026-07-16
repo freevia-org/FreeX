@@ -54,7 +54,8 @@ public static class DrawingMlPresetGeometryMap
             [DrawingShapeKind.LineCallout] = "lineCallout1",
             [DrawingShapeKind.Chevron] = "chevron",
             [DrawingShapeKind.HomePlate] = "homePlate",
-            [DrawingShapeKind.Cylinder] = "can"
+            [DrawingShapeKind.Cylinder] = "can",
+            [DrawingShapeKind.Chord] = "chord"
         };
 
     private static readonly IReadOnlyDictionary<string, DrawingShapeKind> ShapeKindsByPreset = BuildPresetMap();

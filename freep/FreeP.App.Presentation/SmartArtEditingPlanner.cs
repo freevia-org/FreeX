@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
 using Free.Shared.Drawing;
@@ -817,7 +818,11 @@ public static class SmartArtEditingPlanner
                     new XAttribute("cy", shape.ExtentCyEmu))),
             new XElement(A + "prstGeom",
                 new XAttribute("prst", ToPresetGeometry(shape.AutoShapeKind)),
-                new XElement(A + "avLst")));
+                new XElement(A + "avLst",
+                    shape.PresetGeometryAdjustments.Select(pair =>
+                        new XElement(A + "gd",
+                            new XAttribute("name", pair.Key),
+                            new XAttribute("fmla", $"val {pair.Value.ToString("0.########", CultureInfo.InvariantCulture)}"))))));
 
         if (shape.Fill is ShapeFill.Solid solid)
         {
@@ -885,6 +890,7 @@ public static class SmartArtEditingPlanner
             DrawingShapeKind.RoundedRectangle => "roundRect",
             DrawingShapeKind.Triangle => "triangle",
             DrawingShapeKind.Trapezoid => "trapezoid",
+            DrawingShapeKind.Chord => "chord",
             _ => "rect"
         };
 

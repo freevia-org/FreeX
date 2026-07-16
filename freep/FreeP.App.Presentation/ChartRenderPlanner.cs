@@ -4164,14 +4164,19 @@ public static partial class ChartRenderPlanner
                 double xValue = ResolveBubbleXValue(series, pointIndex);
                 double? yValue = pointIndex < series.Values.Count ? series.Values[pointIndex] : null;
                 double? bubbleValue = pointIndex < series.BubbleSizes.Count ? series.BubbleSizes[pointIndex] : null;
-                if (!yValue.HasValue)
+                // PowerPoint does not synthesize a radius when a bubble chart
+                // has no c:bubbleSize value. Keep the axes and legend, but do
+                // not invent visible points for an incomplete imported chart.
+                if (!yValue.HasValue || !bubbleValue.HasValue)
                     continue;
                 if (bubbleValue < 0 && !chart.ShowNegativeBubbles)
                     continue;
 
-                double radius = bubbleValue.HasValue
-                    ? ComputeBubbleRadius(Math.Abs(bubbleValue.Value), maxBubble, maxBubbleRadius, chart.BubbleSizeRepresents)
-                    : maxBubbleRadius * 0.3;
+                double radius = ComputeBubbleRadius(
+                    Math.Abs(bubbleValue.Value),
+                    maxBubble,
+                    maxBubbleRadius,
+                    chart.BubbleSizeRepresents);
                 radius = Math.Max(2, radius);
 
                 bubbles.Add(new ChartBubblePrimitive(

@@ -16,7 +16,17 @@ namespace Free.Shared.Drawing;
 public static class ShapeGeometryBuilder
 {
     /// <summary>Builds the outline of <paramref name="kind"/> within <paramref name="bounds"/>.</summary>
-    public static ShapeGeometry Build(DrawingShapeKind kind, LayoutRect bounds)
+    public static ShapeGeometry Build(DrawingShapeKind kind, LayoutRect bounds) =>
+        Build(kind, bounds, adjustments: null);
+
+    /// <summary>
+    /// Builds a preset shape while honoring DrawingML adjustment guides when supplied.
+    /// Values are the raw guide values stored by OOXML (for chord, 1/60000 degree).
+    /// </summary>
+    public static ShapeGeometry Build(
+        DrawingShapeKind kind,
+        LayoutRect bounds,
+        IReadOnlyDictionary<string, double>? adjustments)
     {
         var rect = Normalize(bounds);
 
@@ -90,6 +100,7 @@ public static class ShapeGeometryBuilder
             DrawingShapeKind.Chevron => Polygon(rect, [(0, 0), (0.76, 0), (1, 0.5), (0.76, 1), (0, 1), (0.24, 0.5)]),
             DrawingShapeKind.HomePlate => Polygon(rect, [(0, 0), (0.76, 0), (1, 0.5), (0.76, 1), (0, 1)]),
             DrawingShapeKind.Cylinder => CylinderShape(rect),
+            DrawingShapeKind.Chord => Chord(rect, adjustments),
             _ => Rectangle(rect)
         };
     }
@@ -211,6 +222,47 @@ public static class ShapeGeometryBuilder
         ];
         return new ShapeContour(start, segments, Closed: true, Filled: true);
     }
+
+    private static ShapeGeometry Chord(LayoutRect rect, IReadOnlyDictionary<string, double>? adjustments)
+    {
+        const double AngleUnitsPerDegree = 60000.0;
+        var startDegrees = GetAdjustment(adjustments, "adj1", 0) / AngleUnitsPerDegree;
+        var endDegrees = GetAdjustment(adjustments, "adj2", 180 * AngleUnitsPerDegree) / AngleUnitsPerDegree;
+        var sweepDegrees = endDegrees - startDegrees;
+        while (sweepDegrees < 0)
+            sweepDegrees += 360;
+        while (sweepDegrees > 360)
+            sweepDegrees -= 360;
+
+        // Equal start/end guides are PowerPoint's full-circle case. An ArcTo with
+        // identical endpoints would be treated as an empty arc by both host APIs.
+        if (sweepDegrees <= 0.001 || sweepDegrees >= 359.999)
+            return Ellipse(rect);
+
+        var rx = rect.Width / 2;
+        var ry = rect.Height / 2;
+        var cx = rect.Left + rx;
+        var cy = rect.Top + ry;
+        var startRadians = startDegrees * Math.PI / 180;
+        var endRadians = (startDegrees + sweepDegrees) * Math.PI / 180;
+        var start = new LayoutPoint(cx + rx * Math.Cos(startRadians), cy + ry * Math.Sin(startRadians));
+        var end = new LayoutPoint(cx + rx * Math.Cos(endRadians), cy + ry * Math.Sin(endRadians));
+
+        return Single(new ShapeContour(
+            start,
+            [
+                ShapeSegment.ArcTo(end, rx, ry, sweepClockwise: true, largeArc: sweepDegrees > 180),
+                ShapeSegment.LineTo(start)
+            ],
+            Closed: true,
+            Filled: true));
+    }
+
+    private static double GetAdjustment(
+        IReadOnlyDictionary<string, double>? adjustments,
+        string name,
+        double fallback) =>
+        adjustments is not null && adjustments.TryGetValue(name, out var value) ? value : fallback;
 
     /// <summary>
     /// Renders a <see cref="DrawingShapeKind.Line"/> shape. The path direction is inferred from

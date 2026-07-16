@@ -54,7 +54,8 @@ public static class DrawingShapeKindSupport
             DrawingShapeKind.LineCallout or
             DrawingShapeKind.Chevron or
             DrawingShapeKind.HomePlate or
-            DrawingShapeKind.Cylinder => true,
+            DrawingShapeKind.Cylinder or
+            DrawingShapeKind.Chord => true,
             _ => false
         };
 
