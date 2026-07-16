@@ -100,6 +100,27 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartLabelsCorpus_ImportedCartesianLabelsUsePowerPointGeometry()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[2].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+
+        scene.CategoryAxisLabels[0].Bounds.Y
+            .Should().Be(scene.Frame.Plot.Bottom + ChartRenderPlanner.ImportedCartesianCategoryLabelOffset);
+        scene.ValueAxisLabels[^1].Bounds.Right
+            .Should().Be(scene.Frame.Plot.X - ChartRenderPlanner.ImportedCartesianValueLabelRightGap);
+        scene.ValueAxisLabels[^1].Bounds.Y
+            .Should().Be(scene.Frame.Plot.Y - ChartRenderPlanner.ImportedCartesianValueLabelVerticalOffset);
+        scene.SecondaryAxis.Labels[^1].Bounds.Y
+            .Should().Be(scene.Frame.Plot.Y - ChartRenderPlanner.ImportedCartesianValueLabelVerticalOffset);
+    }
+
+    [Fact]
     public void ChartLabelsCorpus_PiePercentLabelsPreservePowerPointSeparatorAndAutomaticTitle()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");

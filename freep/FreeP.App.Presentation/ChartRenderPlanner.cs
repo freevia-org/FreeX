@@ -556,6 +556,9 @@ public static partial class ChartRenderPlanner
     public const double ImportedComboSecondaryLabelCompensation = 8.0;
     public const double ImportedComboLegendRightCompensation = 8.0;
     public const double ImportedCartesianGridLinePixelOffset = 0.5;
+    public const double ImportedCartesianCategoryLabelOffset = 16.0;
+    public const double ImportedCartesianValueLabelRightGap = 22.0;
+    public const double ImportedCartesianValueLabelVerticalOffset = 13.0;
     public const double LineMarkerRadius = 3.0;
     public const double ImportedLineMarkerRadius = 5.0;
     public const double LineMarkerStrokeThickness = 0.75;
@@ -1700,12 +1703,15 @@ public static partial class ChartRenderPlanner
         else
         {
             double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
+            double labelOffset = UsesImportedTextMetrics(chart)
+                ? ImportedCartesianCategoryLabelOffset
+                : 2.0;
             for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
             {
                 double x = plot.X + categoryIndex * categoryStep;
                 labels.Add(new ChartTextPlan(
                     FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
-                    new ChartPlanRect(x, plot.Bottom + 2, categoryStep, ResolveCategoryLabelHeight(chart)),
+                    new ChartPlanRect(x, plot.Bottom + labelOffset, categoryStep, ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 7.0),
                     Alignment: ChartPlanTextAlignment.Center,
@@ -1788,9 +1794,16 @@ public static partial class ChartRenderPlanner
             else
             {
                 double y = plot.Bottom - plot.Height * tickIndex / steps;
+                double rightGap = UsesImportedTextMetrics(chart)
+                    ? ImportedCartesianValueLabelRightGap
+                    : 0.0;
+                double verticalOffset = UsesImportedTextMetrics(chart)
+                    ? ImportedCartesianValueLabelVerticalOffset
+                    : 6.0;
+                double labelWidth = ResolveAxisLabelWidth(chart) - GridlinePad;
                 labels.Add(new ChartTextPlan(
                     FormatChartAxisLabelValue(chart, value, chart.ValueAxis.NumberFormatCode),
-                    new ChartPlanRect(plot.X - ResolveAxisLabelWidth(chart), y - 6, ResolveAxisLabelWidth(chart) - GridlinePad, ResolveCategoryLabelHeight(chart)),
+                    new ChartPlanRect(plot.X - labelWidth - rightGap, y - verticalOffset, labelWidth, ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Right,
@@ -2210,6 +2223,9 @@ public static partial class ChartRenderPlanner
             1,
             (UsesImportedTextMetrics(chart) ? 72.0 : AxisLabelWidth) -
             AxisMajorTickLength - GridlinePad);
+        double labelVerticalOffset = UsesImportedTextMetrics(chart)
+            ? ImportedCartesianValueLabelVerticalOffset
+            : 6.0;
         for (int tickIndex = 0; tickIndex <= tickCount; tickIndex++)
         {
             double value = niceMin + majorUnit * tickIndex;
@@ -2219,7 +2235,7 @@ public static partial class ChartRenderPlanner
                 new ChartPlanPoint(plot.Right + AxisMajorTickLength, y)));
             labels.Add(new ChartTextPlan(
                 FormatChartAxisLabelValue(chart, value, chart.SecondaryValueAxis.NumberFormatCode),
-                new ChartPlanRect(labelX, y - 6, labelWidth, UsesImportedTextMetrics(chart) ? 32.0 : 12.0),
+                new ChartPlanRect(labelX, y - labelVerticalOffset, labelWidth, UsesImportedTextMetrics(chart) ? 32.0 : 12.0),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Left,
