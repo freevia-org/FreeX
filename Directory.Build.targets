@@ -1,8 +1,14 @@
 <Project>
   <ItemGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').EndsWith('.Tests'))">
     <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\*.cs"
-             Exclude="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\RecordingUserMessageService.cs"
+             Exclude="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\LocalizationWrapperContractTestSupport.cs;
+                      $(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\RecordingUserMessageService.cs"
              Link="%(Filename)%(Extension)" />
+    <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\LocalizationWrapperContractTestSupport.cs"
+             Link="%(Filename)%(Extension)"
+             Condition="'$(MSBuildProjectName)' == 'FreeX.App.Localization.Tests' Or
+                        '$(MSBuildProjectName)' == 'FreeW.App.Localization.Tests' Or
+                        '$(MSBuildProjectName)' == 'FreeP.App.Localization.Tests'" />
     <Compile Include="$(MSBuildThisFileDirectory)tests\SharedTestInfrastructure\RecordingUserMessageService.cs"
              Link="%(Filename)%(Extension)"
              Condition="'$(MSBuildProjectName)' == 'FreeW.App.Host.Tests' Or
