@@ -3566,6 +3566,26 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void WidePageDimensions_EmitLandscapeOrientationForWord()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("wide page"));
+        doc.Page.WidthPt = 612;
+        doc.Page.HeightPt = 396;
+        doc.Page.Landscape = false;
+
+        var xml = WriteDocumentXml(doc);
+        var w = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var pgSz = xml.Root!.Element(w + "body")!.Element(w + "sectPr")!.Element(w + "pgSz")!;
+        pgSz.Attribute(w + "orient")!.Value.Should().Be("landscape");
+
+        var read = RoundTrip(doc).Page;
+        read.Landscape.Should().BeTrue();
+        read.WidthPt.Should().BeApproximately(612, 0.01);
+        read.HeightPt.Should().BeApproximately(396, 0.01);
+    }
+
+    [Fact]
     public void SingleSection_RoundTripsIdentically_WithNoParagraphLevelSectPr()
     {
         // Regression guard: a document with no section breaks must behave exactly as before — one
