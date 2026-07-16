@@ -2405,6 +2405,22 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void TextWatermarkLayoutPlanner_UsesWordsFixedVmlShape()
+    {
+        var plan = WatermarkVisualPlanner.BuildTextLayout(
+            new WatermarkOptions("TABLE REVIEW") { Layout = WatermarkLayout.Diagonal },
+            pageWidthDip: 816,
+            pageHeightDip: 528);
+
+        plan.Should().NotBeNull();
+        plan!.WidthDip.Should().Be(624);
+        plan.HeightDip.Should().Be(156);
+        plan.XDip.Should().Be(96);
+        plan.YDip.Should().Be(186);
+        plan.RotationDegrees.Should().Be(-45);
+    }
+
+    [Fact]
     public void ComputePixelStats_AndTrustGuard_RejectBlankAllBackgroundCapture()
     {
         var blank = new byte[20 * 20 * 4];

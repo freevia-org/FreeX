@@ -162,13 +162,15 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
     }
 
     [Fact]
-    public void AvaloniaDocumentView_RendersPictureWatermarkThroughSharedPlanner()
+    public void AvaloniaDocumentView_RendersWatermarksThroughSharedPlanner()
     {
         var source = File.ReadAllText(RepositoryFile("freew", "FreeW.App.Avalonia", "Editing", "DocumentView.cs"));
 
         source.Should().Contain("DrawPictureWatermark(context, pageRect, wm)");
+        source.Should().Contain("WatermarkVisualPlanner.BuildTextLayout(wm, pageRect.Width, pageRect.Height)");
         source.Should().Contain("WatermarkVisualPlanner.BuildPictureLayout(");
         source.Should().Contain("context.PushOpacity(plan.Opacity)");
+        source.Should().Contain("FontStyle.Normal, FontWeight.Normal");
         source.Should().NotContain("wm.IsPicture || string.IsNullOrWhiteSpace(wm.Text)");
     }
 

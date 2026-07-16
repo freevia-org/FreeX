@@ -169,7 +169,8 @@ public class WatermarkOptionsRoundTripTests
         var textPath = shape.Element(vml + "textpath");
 
         shape.Attribute("style")!.Value.Should().Contain("rotation:0");
-        shape.Attribute("fillcolor")!.Value.Should().Be("123456");
+        shape.Attribute("fillcolor")!.Value.Should().Be("#123456");
+        shape.Element(vml + "fill")!.Attribute("color")!.Value.Should().Be("#123456");
         shape.Element(vml + "fill")!.Attribute("opacity")!.Value.Should().Be("0.5");
         textPath!.Attribute("string")!.Value.Should().Be("CONFIDENTIAL");
         textPath.Attribute("on")!.Value.Should().Be("t");

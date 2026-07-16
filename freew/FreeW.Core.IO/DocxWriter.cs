@@ -1325,9 +1325,12 @@ public static class DocxWriter
                 new XAttribute("text", "t"),
                 new XAttribute("shapetype", "t")));
 
+        // VML colors are CSS values. Word treats an unprefixed six-digit value as
+        // invalid and falls back to white, so retain the leading hash from the model.
+        var vmlColor = $"#{color}";
         var fill = watermarkImage is null
             ? new XElement(V + "fill",
-                new XAttribute("color", color),
+                new XAttribute("color", vmlColor),
                 new XAttribute("opacity", opacity))
             : new XElement(V + "fill",
                 new XAttribute(R + "id", watermarkImage.RelationshipId),
@@ -1342,7 +1345,7 @@ public static class DocxWriter
             new XAttribute("style", $"position:absolute;margin-left:0;margin-top:0;{shapeSize};rotation:{rotation};z-index:-251654144;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin"),
             new XAttribute(O + "allowincell", "f"),
             new XAttribute("stroked", "f"),
-            watermarkImage is null ? new XAttribute("fillcolor", color) : null,
+            watermarkImage is null ? new XAttribute("fillcolor", vmlColor) : null,
             fill,
             watermarkImage is null
                 ? new XElement(V + "textpath",

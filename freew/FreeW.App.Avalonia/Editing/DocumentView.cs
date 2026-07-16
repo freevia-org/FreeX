@@ -5092,9 +5092,14 @@ public sealed class DocumentView : Control
         }
         colOffsets[cols] = running;
 
-        const double pad = 5;
         var cellSpacingDip = Math.Max(0, PageLayout.PointsToDip(table.CellSpacingPt ?? 0));
         var rowAdvanceExtraDip = cellSpacingDip * 2;
+        var tableLeftInset = table.Alignment switch
+        {
+            TableAlignment.Center => Math.Max(0, (textWidth - running) / 2),
+            TableAlignment.Right => Math.Max(0, textWidth - running),
+            _ => 0
+        };
         var borders = table.Formatting.Borders || _showTableGridlines;
         var firstPageLeadingContentHeight = _layoutTextAreaHeight > 0
             ? _layoutContentY % _layoutTextAreaHeight
@@ -5117,6 +5122,16 @@ public sealed class DocumentView : Control
                 ? null
                 : BrushFor(fillPlan.EffectiveFillHex);
 
+        (double Left, double Top, double Right, double Bottom) CellInsets(TableCell cell)
+        {
+            var margins = cell.Margins ?? table.DefaultCellMargins ?? TableCellMargins.Default;
+            return (
+                Math.Max(0, PageLayout.PointsToDip(margins.LeftPt)),
+                Math.Max(0, PageLayout.PointsToDip(margins.TopPt)),
+                Math.Max(0, PageLayout.PointsToDip(margins.RightPt)),
+                Math.Max(0, PageLayout.PointsToDip(margins.BottomPt)));
+        }
+
         // AV-TBL: glyphOffset is unique within this table block and is used as PlacedChar.Offset so
         // TryGetCaretRect can match (Block == tableBlockIndex && Offset == glyphOffset).
         var glyphOffset = 0;
@@ -5131,7 +5146,7 @@ public sealed class DocumentView : Control
         for (var pr = 0; pr < table.Rows.Count; pr++)
         {
             var prRow = table.Rows[pr];
-            var prRowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
+            var prRowHeight = Build("Ag", RunFormatting.Default).Height;
             var prCol = 0;
             for (var cellIndex = 0; cellIndex < prRow.Cells.Count; cellIndex++)
             {
@@ -5143,17 +5158,19 @@ public sealed class DocumentView : Control
                 for (var s = 0; s < prSpan; s++)
                     prCellWidth += colWidths[prCol + s];
 
-                var prFmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
-                    ? cell.Paragraphs[0].Runs[0].Formatting
-                    : RunFormatting.Default;
+                var prParagraph = cell.Paragraphs.Count > 0 ? cell.Paragraphs[0] : null;
+                var prFmt = prParagraph is not null && prParagraph.Runs.Count > 0
+                    ? ResolveRunFmt(prParagraph.Runs[0].Formatting, prParagraph)
+                    : _doc.DefaultRun;
                 if (EffectiveFillFor(pr, cellIndex).EffectiveBold)
                     prFmt = prFmt with { Bold = true };
 
-                var prInnerW = Math.Max(10, prCellWidth - 2 * pad);
+                var prInsets = CellInsets(cell);
+                var prInnerW = Math.Max(10, prCellWidth - 2 * cellSpacingDip - prInsets.Left - prInsets.Right);
                 var prLines = cell.Paragraphs.Count > 0
                     ? cell.Paragraphs.SelectMany(p => WrapCellLines(p.PlainText, prFmt, prInnerW)).ToList()
                     : WrapCellLines(string.Empty, prFmt, prInnerW);
-                var prCellHeight = prLines.Sum(l => l.Height) + 2 * pad;
+                var prCellHeight = prLines.Sum(l => l.Height) + prInsets.Top + prInsets.Bottom;
                 if (prCellHeight > prRowHeight)
                     prRowHeight = prCellHeight;
 
@@ -5173,7 +5190,7 @@ public sealed class DocumentView : Control
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
             // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
             var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W)> Chars)>> CellParas, RunFormatting Fmt)>();
-            var measuredRowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
+            var measuredRowHeight = Build("Ag", RunFormatting.Default).Height;
             var col = 0;
             for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
             {
@@ -5185,21 +5202,23 @@ public sealed class DocumentView : Control
                 for (var s = 0; s < span; s++)
                     cellWidth += colWidths[col + s];
 
-                var fmt = cell.Paragraphs.Count > 0 && cell.Paragraphs[0].Runs.Count > 0
-                    ? cell.Paragraphs[0].Runs[0].Formatting
-                    : RunFormatting.Default;
+                var cellParagraph = cell.Paragraphs.Count > 0 ? cell.Paragraphs[0] : null;
+                var fmt = cellParagraph is not null && cellParagraph.Runs.Count > 0
+                    ? ResolveRunFmt(cellParagraph.Runs[0].Formatting, cellParagraph)
+                    : _doc.DefaultRun;
                 var cellAppearance = EffectiveFillFor(r, cellIndex);
                 if (cellAppearance.EffectiveBold)
                     fmt = fmt with { Bold = true };
 
                 // BE2: wrap each cell paragraph independently so multi-paragraph cells render on
                 // separate visual lines instead of collapsing onto one line via a '\n' glyph.
-                var innerW = Math.Max(10, cellWidth - 2 * pad);
+                var insets = CellInsets(cell);
+                var innerW = Math.Max(10, cellWidth - 2 * cellSpacingDip - insets.Left - insets.Right);
                 var cellParas = cell.Paragraphs.Count > 0
                     ? cell.Paragraphs.Select(p => WrapCellLines(p.PlainText, fmt, innerW)).ToList()
                     : new List<List<(double Height, List<(char Ch, double W)> Chars)>> { WrapCellLines(string.Empty, fmt, innerW) };
                 var lines = cellParas.SelectMany(pl => pl).ToList(); // flattened for height calc
-                var cellHeight = lines.Sum(l => l.Height) + 2 * pad;
+                var cellHeight = lines.Sum(l => l.Height) + insets.Top + insets.Bottom;
                 if (cellHeight > measuredRowHeight)
                     measuredRowHeight = cellHeight;
 
@@ -5234,15 +5253,17 @@ public sealed class DocumentView : Control
             var rowPageSpaceY = ContentYToPageSpaceY(rowContentY);
 
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
-            var rowColLeft = ColumnLeftFor(rowContentY);
+            var rowColLeft = ColumnLeftFor(rowContentY) + tableLeftInset;
 
             foreach (var (cellModel, cellIndex, startCol, span, cellParas, fmt) in measured)
             {
                 double cellWidth = 0;
                 for (var s = 0; s < span; s++)
                     cellWidth += colWidths[startCol + s];
-                var cellX = rowColLeft + colOffsets[startCol];
-                var rect = new Rect(cellX, rowPageSpaceY + cellSpacingDip, cellWidth, rowHeight);
+                var insets = CellInsets(cellModel);
+                var cellX = rowColLeft + colOffsets[startCol] + cellSpacingDip;
+                var visualCellWidth = Math.Max(1, cellWidth - 2 * cellSpacingDip);
+                var rect = new Rect(cellX, rowPageSpaceY + cellSpacingDip, visualCellWidth, rowHeight);
                 var fill = EffectiveFillBrush(EffectiveFillFor(r, cellIndex));
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint);
                 _rects.Add((rect, fill, borders, cellBorderPlan.HasVisibleEdges ? cellBorderPlan : null));
@@ -5279,7 +5300,7 @@ public sealed class DocumentView : Control
                         mergedSpanHeight += mr == r ? rowHeight : rowHeights[mr];
                     }
                 }
-                var cellAvailableHeight = mergedSpanHeight - 2 * pad;
+                var cellAvailableHeight = mergedSpanHeight - insets.Top - insets.Bottom;
                 var vAlignOffset = cellModel.VerticalAlignment switch
                 {
                     TableCellVerticalAlignment.Center =>
@@ -5288,7 +5309,7 @@ public sealed class DocumentView : Control
                         Math.Max(0.0, cellAvailableHeight - contentHeight),
                     _ => 0.0  // Top (default)
                 };
-                var contentTopY = rowPageSpaceY + pad + vAlignOffset;
+                var contentTopY = rowPageSpaceY + cellSpacingDip + insets.Top + vAlignOffset;
 
                 var ty = contentTopY;
                 // BE2+BE1: iterate paragraphs independently — each paragraph's wrapped lines render
@@ -5302,7 +5323,7 @@ public sealed class DocumentView : Control
 
                     foreach (var (lineHeight, chars) in paraLines)
                     {
-                        var tx = cellX + pad;
+                        var tx = cellX + insets.Left;
                         foreach (var (ch, w) in chars)
                         {
                             _placed.Add(new PlacedChar(blockIndex, glyphOffset, tx, ty, w, lineHeight, fmt, ch,
@@ -5317,7 +5338,7 @@ public sealed class DocumentView : Control
 
                     // BE1: sentinel at end of this paragraph (at the end of its last visual line).
                     (double Height, List<(char Ch, double W)> Chars)? lastParaLine = paraLines.Count > 0 ? paraLines[^1] : null;
-                    var sentinelX = cellX + pad + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
+                    var sentinelX = cellX + insets.Left + (lastParaLine.HasValue ? lastParaLine.Value.Chars.Sum(c => c.W) : 0);
                     var sentinelY = lastParaLine.HasValue
                         ? ty - lastParaLine.Value.Height
                         : contentTopY;
@@ -6210,13 +6231,20 @@ public sealed class DocumentView : Control
         var opacity = Math.Clamp(wm.Opacity, 0.0, 1.0);
         var brush = new SolidColorBrush(color, opacity);
 
-        // Size the text to span most of the page width (Word auto-scales). Cap the point size sensibly.
+        var plan = WatermarkVisualPlanner.BuildTextLayout(wm, pageRect.Width, pageRect.Height);
+        if (plan is null)
+            return;
+
+        // Word emits a non-bold VML text-path and scales it to its fixed watermark shape.
         var typeface = new Typeface(
             wm.FontFamily is { Length: > 0 } family ? new FontFamily(family) : FontFamily.Default,
-            FontStyle.Normal, FontWeight.Bold);
-        var fontSize = Math.Min(pageRect.Width, 480) / Math.Max(4, wm.Text.Length) * 1.6;
-        fontSize = Math.Clamp(fontSize, 24, 130);
+            FontStyle.Normal, FontWeight.Normal);
 
+        // The VML text path uses fitshape="t". Measure at one DIP and fit it to the declared
+        // VML shape width so the FreeW label follows Word's auto-scaling rather than a heuristic.
+        var unitText = new FormattedText(
+            wm.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, 1, brush);
+        var fontSize = Math.Clamp(plan.WidthDip / Math.Max(1, unitText.Width), 1, 130);
         var ft = new FormattedText(
             wm.Text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
 
@@ -6225,11 +6253,11 @@ public sealed class DocumentView : Control
         // so they never overflow the page — mirror that here with a hard clip to pageRect.
         using var clip = context.PushClip(pageRect);
 
-        var center = pageRect.Center;
+        var center = new Point(pageRect.X + plan.CenterXDip, pageRect.Y + plan.CenterYDip);
         using var _ = context.PushTransform(
             Matrix.CreateTranslation(-ft.Width / 2, -ft.Height / 2)
-            * (wm.Layout == WatermarkLayout.Diagonal
-                ? Matrix.CreateRotation(-Math.PI / 4)
+            * (Math.Abs(plan.RotationDegrees) > 0.01
+                ? Matrix.CreateRotation(plan.RotationDegrees * Math.PI / 180)
                 : Matrix.Identity)
             * Matrix.CreateTranslation(center.X, center.Y));
         context.DrawText(ft, new Point(0, 0));

@@ -217,6 +217,42 @@ public sealed class DocumentViewTableStructureTests
             "legacy style spacing values are valid Word formatting even when their explicit-set flags are absent");
     }
 
+    [Fact]
+    public async Task CenteredFixedWidthTable_uses_declared_width_and_cell_spacing()
+    {
+        double firstCellX = -1;
+        double firstCellWidth = -1;
+        double secondCellX = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            var table = Table.Create(1, 2);
+            table.Alignment = TableAlignment.Center;
+            table.CellSpacingPt = 2;
+            table.ColumnWidthsPt.AddRange([180, 180]);
+            table.Rows[0].Cells[0] = new TableCell("Left");
+            table.Rows[0].Cells[1] = new TableCell("Right");
+            doc.Blocks.Add(table);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 2000));
+            var cells = GetTableCellHits(view).OrderBy(hit => hit.Rect.X).ToList();
+            firstCellX = cells[0].Rect.X;
+            firstCellWidth = cells[0].Rect.Width;
+            secondCellX = cells[1].Rect.X;
+        });
+        if (!ran) return;
+
+        var page = TextDocument.CreateEmpty().Page;
+        var surface = DocumentViewLayoutPlanner.BuildSurfacePlan(page, DocumentViewLayoutKind.PrintLayout, 900);
+        var tableWidth = PageLayout.PointsToDip(360);
+        var spacing = PageLayout.PointsToDip(2);
+        firstCellX.Should().BeApproximately(surface.ContentLeftDip + (surface.ContentWidthDip - tableWidth) / 2 + spacing, 0.01);
+        firstCellWidth.Should().BeApproximately(PageLayout.PointsToDip(180) - 2 * spacing, 0.01);
+        secondCellX.Should().BeApproximately(firstCellX + PageLayout.PointsToDip(180), 0.01);
+    }
+
     // ── row insert below ──────────────────────────────────────────────────────────────────────
 
     [Fact]
