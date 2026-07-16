@@ -42,7 +42,8 @@ public sealed class LinuxPackagingMetadataTests
             .Should().Contain("Office").And.Contain("WordProcessor");
 
         foreach (var script in new[] { "package-linux-app.sh", "build-appimage.sh", "build-deb.sh" })
-            File.ReadAllText(PackagingFile(script)).Should().Contain("share/metainfo");
+            File.ReadAllText(PackagingFile(script)).Should().Contain("package-linux.sh");
+        File.ReadAllText(SharedPackagingFile()).Should().Contain("share/metainfo");
     }
 
     private static Dictionary<string, string> ParseDesktopEntry(string path)
@@ -73,6 +74,9 @@ public sealed class LinuxPackagingMetadataTests
 
     private static string PackagingFile(string name) =>
         Path.Combine(FindRepositoryRoot(), "freew", "FreeW.App.Avalonia", "Packaging", "linux", name);
+
+    private static string SharedPackagingFile() =>
+        Path.Combine(FindRepositoryRoot(), "tools", "packaging", "linux", "package-linux.sh");
 
     private static string FindRepositoryRoot()
     {

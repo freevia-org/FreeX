@@ -8,7 +8,8 @@ param(
     [string]$SolutionProjectsScriptPath = "tools\Test-SolutionProjects.ps1",
     [string]$MacOsAppReadinessScriptPath = "tools\Test-MacOsAppReadiness.ps1",
     [string]$GeneratedDocsScriptPath = "tools\Test-GeneratedDocs.ps1",
-    [string]$ConflictMarkersScriptPath = "tools\Test-ConflictMarkers.ps1"
+    [string]$ConflictMarkersScriptPath = "tools\Test-ConflictMarkers.ps1",
+    [string]$LinuxPackagingScriptsScriptPath = "tools\Test-LinuxPackagingScripts.ps1"
 )
 
 $ErrorActionPreference = "Stop"
@@ -54,6 +55,7 @@ Invoke-RepositoryPreflight -ScriptPath $SolutionProjectsScriptPath -Label "FreeP
     ProjectPathPrefixes = @("freep/")
 }
 Invoke-RepositoryPreflight -ScriptPath $MacOsAppReadinessScriptPath -Label "macOS app readiness"
+Invoke-RepositoryPreflight -ScriptPath $LinuxPackagingScriptsScriptPath -Label "Linux packaging scripts"
 Invoke-RepositoryPreflight -ScriptPath $GeneratedDocsScriptPath -Label "generated docs"
 Invoke-RepositoryPreflight -ScriptPath $ConflictMarkersScriptPath -Label "Git conflict markers"
 
