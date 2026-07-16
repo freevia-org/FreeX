@@ -13,10 +13,15 @@ namespace FreeX.Core.Model.Tests;
 /// </summary>
 public sealed class FilterStateIntegrity3Tests
 {
-    // ── H1: SortCommand must permute ValueFilterHiddenRows in lockstep with FilterHiddenRows ──────
+    // ── H1 / R45-commands-sort-filter-interaction-3-1: a row ValueFilterHiddenRows/FilterHiddenRows
+    // is hiding must never be moved by Sort at all — real Excel's Sort documentation states hidden
+    // rows in a filtered range are not sorted. These scenarios were originally written to pin the
+    // (buggy) "hidden flag follows the row's relocated data" contract; they now assert the
+    // corrected contract — the hidden rows stay exactly where they were, and only the rows that
+    // were actually visible get reordered among themselves.
 
     [Fact]
-    public void Sort_PermutesValueFilterHiddenRowsInLockstepWithFilterHiddenRowsAndUndoRestores()
+    public void Sort_LeavesValueFilterHiddenRowsPinnedInPlaceAndUndoRestores()
     {
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
@@ -36,26 +41,34 @@ public sealed class FilterStateIntegrity3Tests
         var command = new SortCommand(sheet.Id, range, sortByColOffset: 0, ascending: true);
         command.Apply(ctx).Success.Should().BeTrue();
 
-        // Sorted ascending: 5(r6),10(r3),20(r4),30(r2),40(r5) land at physical rows 2..6 respectively.
-        // The two originally-hidden values (10 and 40) are now at physical rows 3 and 6.
-        sheet.GetValue(3, 1).Should().Be(new NumberValue(10));
-        sheet.GetValue(6, 1).Should().Be(new NumberValue(40));
-        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
-        // ValueFilterHiddenRows must be permuted identically — not left stale at the pre-sort {3,5}.
-        sheet.ValueFilterHiddenRows.Should().BeEquivalentTo([3u, 6u]);
+        // Rows 3 (10) and 5 (40) are filter-hidden and must stay exactly where they are. Only the
+        // three VISIBLE rows (30@r2, 20@r4, 5@r6) are reordered among their own three slots,
+        // ascending: 5(r2), 20(r4), 30(r6).
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(5));
+        sheet.GetValue(3, 1).Should().Be(new NumberValue(10)); // hidden — untouched
+        sheet.GetValue(4, 1).Should().Be(new NumberValue(20));
+        sheet.GetValue(5, 1).Should().Be(new NumberValue(40)); // hidden — untouched
+        sheet.GetValue(6, 1).Should().Be(new NumberValue(30));
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 5u]);
+        // ValueFilterHiddenRows must likewise stay put — nothing to permute since the hidden rows
+        // were excluded from the sort entirely.
+        sheet.ValueFilterHiddenRows.Should().BeEquivalentTo([3u, 5u]);
 
         command.Revert(ctx);
 
+        sheet.GetValue(2, 1).Should().Be(new NumberValue(30));
+        sheet.GetValue(4, 1).Should().Be(new NumberValue(20));
+        sheet.GetValue(6, 1).Should().Be(new NumberValue(5));
         sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 5u]);
         sheet.ValueFilterHiddenRows.Should().BeEquivalentTo([3u, 5u]);
     }
 
     [Fact]
-    public void Sort_ThenWideningValueFilter_UnhidesRowThatNowPassesInsteadOfStrandingIt()
+    public void Sort_ThenWideningValueFilter_UnhidesRowThatNowPasses()
     {
-        // End-to-end reproduction of the H1 failure scenario: after a sort relocates a hidden row,
-        // widening the value filter to allow it must actually unhide it (the ownership guard in
-        // FilterCommand.RecomputeHiddenRows must recognize the row at its NEW physical index).
+        // A filter-hidden row must stay at its own physical row through a Sort (Excel never moves
+        // it), so widening the value filter afterward to allow that row's value must unhide it at
+        // that same, never-changed physical row.
         var wb = new Workbook("test");
         var sheet = wb.AddSheet("Sheet1");
         var ctx = new TestCommandContext(wb);
@@ -76,13 +89,14 @@ public sealed class FilterStateIntegrity3Tests
         var dataRange = new GridRange(new CellAddress(sheet.Id, 2, 1), new CellAddress(sheet.Id, 6, 1));
         new SortCommand(sheet.Id, dataRange, sortByColOffset: 0, ascending: true)
             .Apply(ctx).Success.Should().BeTrue();
-        // 10 (previously hidden) now sits at physical row 3; 40 (previously hidden) now at row 6.
+        // Rows 3 (10) and 5 (40) are filter-hidden and stay exactly where they were — Sort never
+        // moves them.
         sheet.GetValue(3, 1).Should().Be(new NumberValue(10));
-        sheet.GetValue(6, 1).Should().Be(new NumberValue(40));
+        sheet.GetValue(5, 1).Should().Be(new NumberValue(40));
+        sheet.FilterHiddenRows.Should().BeEquivalentTo([3u, 5u]);
 
-        // Widen the filter to also allow 40 — the row currently holding 40 (physical row 6) must
-        // become visible. Before the fix, ValueFilterHiddenRows still named the stale row 5, so the
-        // ownership guard would refuse to unhide row 6, stranding it forever.
+        // Widen the filter to also allow 40 — the row holding 40 (physical row 5, unchanged by the
+        // sort) must become visible, leaving only row 3 (value 10, still excluded) hidden.
         new FilterCommand(sheet.Id, range, filterColOffset: 0, ["30", "20", "5", "40"])
             .Apply(ctx).Success.Should().BeTrue();
 

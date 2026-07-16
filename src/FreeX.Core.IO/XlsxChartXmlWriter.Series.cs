@@ -177,6 +177,7 @@ internal static partial class XlsxChartXmlWriter
                     ? ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs)
                     : null,
                 ToSeriesInvertIfNegativeXml(chart, seriesIndex, chartNs),
+                ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToAdditionalTrendlinesXml(chart, seriesIndex),
@@ -334,6 +335,7 @@ internal static partial class XlsxChartXmlWriter
                 txElement,
                 ToScatterSeriesLineShapeProperties(chart, seriesIndex, chartNs, drawingNs),
                 ToSeriesMarkerXml(chart, seriesIndex, chartNs, drawingNs),
+                ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToAdditionalTrendlinesXml(chart, seriesIndex),
@@ -438,6 +440,7 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "order", new XAttribute("val", seriesIndex)),
                 txElement,
                 ToSeriesShapeProperties(chart, seriesIndex, chartNs, drawingNs),
+                ToDataPointsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToPointDataLabelsXml(chart, seriesIndex, chartNs, drawingNs),
                 ToTrendlineXml(chart, seriesIndex, chartNs, drawingNs),
                 ToAdditionalTrendlinesXml(chart, seriesIndex),

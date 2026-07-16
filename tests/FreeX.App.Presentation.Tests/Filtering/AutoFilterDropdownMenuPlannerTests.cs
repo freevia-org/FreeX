@@ -201,6 +201,10 @@ public sealed class AutoFilterDropdownMenuPlannerTests
         sheet.SetCell(new CellAddress(SheetId, 3, 1), new TextValue("Banana"));
         sheet.SetCell(new CellAddress(SheetId, 4, 1), new TextValue("Cherry"));
         sheet.FilterHiddenRows.Add(3);
+        // This column's OWN persisted value-filter selection is what the checklist reflects
+        // (R45-commands-autofilter-topbottom-3-1) -- register it alongside the raw hidden-row
+        // flag so this fixture exercises the same state a real FilterCommand.Apply would leave.
+        sheet.ActiveValueFilterColumns[1] = ["Apple", "Cherry"];
 
         var plan = new AutoFilterDropdownPlan(
             new GridRange(

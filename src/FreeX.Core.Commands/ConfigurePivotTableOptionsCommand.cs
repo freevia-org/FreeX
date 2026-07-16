@@ -1,3 +1,4 @@
+using System.Globalization;
 using FreeX.Core.Model;
 
 namespace FreeX.Core.Commands;
@@ -49,6 +50,8 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
     private readonly bool _updateAltText;
     private PivotOptionsSnapshot? _snapshot;
     private List<(CellAddress Address, Cell? Cell)>? _targetSnapshot;
+    private GridRange? _autofitAppliedRange;
+    private Dictionary<uint, double>? _autofitColumnWidthsSnapshot;
 
     public ConfigurePivotTableOptionsCommand(
         SheetId sheetId,
@@ -225,6 +228,20 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
         }
 
         PivotTableRefreshService.Refresh(ctx.Workbook, sheet, pivotTable);
+
+        // R45-roundtrip-not-consumed-sweep-4: AutofitColumnsOnUpdate round-tripped through this
+        // dialog/XLSX but no refresh path ever consulted it, so toggling "Autofit column widths on
+        // update" had no observable effect. This command's own trigger of PivotTableRefreshService.Refresh
+        // (immediately above) is the natural point to honor it: when true (Excel's default), the
+        // pivot's rendered range is autofit to its freshly-refreshed content, matching Excel's Refresh
+        // behavior; when false, manually-set column widths are left untouched, as Excel does.
+        if (pivotTable.AutofitColumnsOnUpdate && pivotTable.LastRenderedRange is { } renderedRange)
+        {
+            _autofitAppliedRange = renderedRange;
+            _autofitColumnWidthsSnapshot = RangeSnapshot.Capture(sheet.ColumnWidths, renderedRange.Start.Col, renderedRange.End.Col);
+            AutofitPivotColumns(sheet, renderedRange);
+        }
+
         return new CommandOutcome(true, AffectedCells: [pivotTable.TargetRange.Start]);
     }
 
@@ -238,9 +255,45 @@ public sealed class ConfigurePivotTableOptionsCommand : IWorkbookCommand
             _snapshot.Restore(pivotTable, cache);
         }
         AddPivotTableCommand.Restore(sheet, _targetSnapshot);
+        if (_autofitAppliedRange is { } autofitRange && _autofitColumnWidthsSnapshot is not null)
+            RangeSnapshot.Restore(sheet.ColumnWidths, autofitRange.Start.Col, autofitRange.End.Col, _autofitColumnWidthsSnapshot);
         _snapshot = null;
         _targetSnapshot = null;
+        _autofitAppliedRange = null;
+        _autofitColumnWidthsSnapshot = null;
     }
+
+    /// <summary>
+    /// Resizes each column spanned by <paramref name="range"/> to fit its freshly-refreshed cell
+    /// content, mirroring Excel's "Autofit column widths on update" behavior. Uses the same
+    /// character-count based <see cref="AutoFitSizingService"/> that backs the Home ▸ Cells ▸
+    /// Format ▸ AutoFit Column Width command — no true glyph metrics, consistent with the rest of
+    /// this codebase's headless AutoFit approximation.
+    /// </summary>
+    private static void AutofitPivotColumns(Sheet sheet, GridRange range)
+    {
+        for (var col = range.Start.Col; col <= range.End.Col; col++)
+        {
+            var texts = new List<string>();
+            for (var row = range.Start.Row; row <= range.End.Row; row++)
+            {
+                if (sheet.GetCell(row, col)?.Value is { } value and not BlankValue)
+                    texts.Add(FormatValueForAutofit(value));
+            }
+
+            sheet.ColumnWidths[col] = AutoFitSizingService.EstimateColumnWidth(texts, sheet.DefaultColumnWidth);
+        }
+    }
+
+    private static string FormatValueForAutofit(ScalarValue value) => value switch
+    {
+        NumberValue number => number.Value.ToString("G15", CultureInfo.InvariantCulture),
+        DateTimeValue dateTime => dateTime.Value.ToString("G15", CultureInfo.InvariantCulture),
+        TextValue text => text.Value,
+        BoolValue boolean => boolean.Value ? "TRUE" : "FALSE",
+        ErrorValue error => error.Code,
+        _ => value.ToString() ?? ""
+    };
 
     private sealed record PivotOptionsSnapshot(
         bool ShowRowGrandTotals,

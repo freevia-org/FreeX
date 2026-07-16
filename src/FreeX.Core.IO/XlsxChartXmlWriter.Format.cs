@@ -268,10 +268,10 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "legendPos",
                 new XAttribute("val", ToXlsxLegendPosition(legendPosition))),
             chart.LegendEntries
-                .Where(entry => entry.Index >= 0 && entry.IsDeleted is not null)
-                .Select(entry => new XElement(chartNs + "legendEntry",
-                    new XElement(chartNs + "idx", new XAttribute("val", entry.Index)),
-                    new XElement(chartNs + "delete", new XAttribute("val", entry.IsDeleted == true ? "1" : "0")))),
+                // R45-io-chart-datatable-legend-3-1: re-emit an entry that carries ONLY per-entry
+                // text formatting (no delete), not just entries that hide a legend key.
+                .Where(entry => entry.Index >= 0 && (entry.IsDeleted is not null || entry.HasTextFormatting))
+                .Select(entry => ToLegendEntryXml(entry, chartNs, drawingNs)),
             ToManualLayoutXml(chart.LegendLayout, chartNs),
             new XElement(chartNs + "overlay",
                 new XAttribute("val", chart.LegendOverlay ? "1" : "0")),
@@ -292,12 +292,51 @@ internal static partial class XlsxChartXmlWriter
             : chart.ChartTitleFontSize;
 
     private static ChartLegendPosition ToEffectiveLegendPosition(ChartModel chart) =>
+        // R45-io-chart-datatable-legend-3-2: never let this default-mimicking heuristic overwrite
+        // a position that the source file genuinely declared explicitly (chart.LegendPositionExplicit
+        // == true). Only apply it for a chart that was never round-tripped through the XLSX reader
+        // (LegendPositionExplicit is null), matching Excel's own default for a freshly-authored
+        // stacked bar/column chart.
+        chart.LegendPositionExplicit != true &&
         IsClassicStackedBarOrColumnChart(chart.Type) &&
         chart.LegendPosition == ChartLegendPosition.Right &&
         chart.LegendLayout is null &&
         !chart.LegendOverlay
             ? ChartLegendPosition.Bottom
             : chart.LegendPosition;
+
+    /// <summary>
+    /// R45-io-chart-datatable-legend-3-1: builds a single &lt;c:legendEntry&gt;, re-emitting both
+    /// the &lt;c:delete&gt; child (when the entry has an explicit hide/show state) and a per-entry
+    /// &lt;c:txPr&gt; (when the entry carries its own text formatting) -- CT_LegendEntry allows both
+    /// to coexist on the same entry.
+    /// </summary>
+    private static XElement ToLegendEntryXml(ChartLegendEntryModel entry, XNamespace chartNs, XNamespace drawingNs) =>
+        new XElement(chartNs + "legendEntry",
+            new XElement(chartNs + "idx", new XAttribute("val", entry.Index)),
+            entry.IsDeleted is { } isDeleted
+                ? new XElement(chartNs + "delete", new XAttribute("val", isDeleted ? "1" : "0"))
+                : null,
+            ToLegendEntryTextProperties(entry, chartNs, drawingNs));
+
+    private static XElement? ToLegendEntryTextProperties(ChartLegendEntryModel entry, XNamespace chartNs, XNamespace drawingNs)
+    {
+        if (!entry.HasTextFormatting)
+            return null;
+
+        var fontSize = entry.TextFontSize ?? 12;
+        return new XElement(chartNs + "txPr",
+            ToTextBodyProperties(0, drawingNs),
+            new XElement(drawingNs + "p",
+                new XElement(drawingNs + "pPr",
+                    new XElement(drawingNs + "defRPr",
+                        entry.TextFontSize is null
+                            ? null
+                            : new XAttribute("sz", Math.Clamp((int)Math.Round(fontSize * 100), 600, 7200)),
+                        entry.TextBold is { } bold ? new XAttribute("b", bold ? "1" : "0") : null,
+                        entry.TextItalic is { } italic ? new XAttribute("i", italic ? "1" : "0") : null,
+                        ToTextRunPropertiesContent(entry.TextThemeColor, entry.TextColor, fontSize, drawingNs)))));
+    }
 
     private static XElement? ToManualLayoutXml(ChartManualLayoutModel? layout, XNamespace chartNs)
     {
@@ -333,7 +372,8 @@ internal static partial class XlsxChartXmlWriter
 
     private static XElement? ToLegendTextProperties(ChartModel chart, XNamespace chartNs, XNamespace drawingNs)
     {
-        if (chart.LegendTextColor is null && chart.LegendTextThemeColor is null && chart.LegendFontSize == 12)
+        if (chart.LegendTextColor is null && chart.LegendTextThemeColor is null && chart.LegendFontSize == 12
+            && chart.LegendBold is null && chart.LegendItalic is null)
             return null;
 
         return new XElement(chartNs + "txPr",
@@ -342,6 +382,9 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(drawingNs + "pPr",
                     new XElement(drawingNs + "defRPr",
                         new XAttribute("sz", Math.Clamp((int)Math.Round(chart.LegendFontSize * 100), 600, 7200)),
+                        // R45-io-chart-datatable-legend-3-3: legend-wide Bold/Italic.
+                        chart.LegendBold is { } bold ? new XAttribute("b", bold ? "1" : "0") : null,
+                        chart.LegendItalic is { } italic ? new XAttribute("i", italic ? "1" : "0") : null,
                         ToTextRunPropertiesContent(chart.LegendTextThemeColor, chart.LegendTextColor, chart.LegendFontSize, drawingNs)))));
     }
 

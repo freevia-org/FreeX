@@ -112,22 +112,47 @@ public static class AutoFilterDropdownMenuPlanner
         string blankDisplayText)
     {
         var items = CreateChecklistItems(sheet, plan, blankDisplayText);
-        if (items.Count == 0 || !HasActiveFilter(sheet, plan.Range))
+        if (items.Count == 0)
             return items.Select(item => new AutoFilterMenuEntry(item)).ToList();
 
-        var visibleValues = CollectVisibleFilterValues(sheet, plan);
-        return items
-            .Select(item => new AutoFilterMenuEntry(item with { IsChecked = visibleValues.Contains(item.Value) }))
-            .ToList();
+        var filterColumn = plan.Range.Start.Col + plan.FilterColumnOffset;
+
+        // R45-commands-autofilter-topbottom-3-1: reopening a column's dropdown must reflect THIS
+        // column's own persisted filter selection, never rows an unrelated column's filter happens
+        // to be hiding. Excel ANDs criteria across columns via sheet.FilterHiddenRows (the recomputed
+        // union), but each column's own checklist stays scoped to its own mechanism -- see
+        // sheet.ActiveValueFilterColumns / sheet.ColumnFilterOwnedRows for the per-column state.
+        if (sheet.ActiveValueFilterColumns.TryGetValue(filterColumn, out var allowedValues))
+        {
+            var allowedSet = new HashSet<string>(allowedValues, StringComparer.Ordinal);
+            return items
+                .Select(item => new AutoFilterMenuEntry(item with { IsChecked = allowedSet.Contains(item.Value) }))
+                .ToList();
+        }
+
+        if (sheet.ColumnFilterOwnedRows.TryGetValue(filterColumn, out var ownedHiddenRows) && ownedHiddenRows.Count > 0)
+        {
+            var visibleValues = CollectValuesNotOwnedHidden(sheet, plan, filterColumn, ownedHiddenRows);
+            return items
+                .Select(item => new AutoFilterMenuEntry(item with { IsChecked = visibleValues.Contains(item.Value) }))
+                .ToList();
+        }
+
+        // No filter mechanism is owned by this column: every value stays checked, regardless of
+        // whether some OTHER column's filter is currently hiding rows in the range.
+        return items.Select(item => new AutoFilterMenuEntry(item with { IsChecked = true })).ToList();
     }
 
-    private static HashSet<string> CollectVisibleFilterValues(Sheet sheet, AutoFilterDropdownPlan plan)
+    private static HashSet<string> CollectValuesNotOwnedHidden(
+        Sheet sheet,
+        AutoFilterDropdownPlan plan,
+        uint filterColumn,
+        HashSet<uint> ownedHiddenRows)
     {
         var values = new HashSet<string>(StringComparer.Ordinal);
-        var filterColumn = plan.Range.Start.Col + plan.FilterColumnOffset;
         for (var row = plan.Range.Start.Row + 1; row <= plan.Range.End.Row; row++)
         {
-            if (sheet.FilterHiddenRows.Contains(row))
+            if (ownedHiddenRows.Contains(row))
                 continue;
 
             values.Add(AutoFilterChecklistPlanner.ToFilterText(sheet.GetValue(row, filterColumn)));

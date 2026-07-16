@@ -841,7 +841,43 @@ internal static class XlsxWorkbookMetadataPreserver
             var isModelRepresentable = !string.IsNullOrWhiteSpace(sourceNameAttr) &&
                 workbook.ValidateNamedRangeName(sourceNameAttr) is null &&
                 !XlsxNamedRangeMapper.IsUnmodelableDefinedNameRefersTo(candidate.Value);
-            if (isModelRepresentable &&
+
+            if (TryGetPrintSettingKind(sourceNameAttr, out var printSettingKind) &&
+                localSheetIdAttr is not null &&
+                int.TryParse(localSheetIdAttr.Value, out var scopeSheetIndex) &&
+                scopeSheetIndex >= 0 &&
+                scopeSheetIndex < workbook.Sheets.Count)
+            {
+                // Print_Area/Print_Titles ARE modeled (Sheet.PrintAreas / Sheet.PrintTitleRows|
+                // PrintTitleColumns) even though they are Excel-reserved names, unlike the OTHER
+                // reserved names (_FilterDatabase, Criteria, Database, Extract, Consolidate_Area,
+                // _xlchart.*) which FreeX never loads into the model at all and therefore always
+                // preserves verbatim below via the reserved-name exemption. liveModelDefinedNameKeys
+                // can't help distinguish "live" from "cleared" here either -
+                // XlsxNamedRangeMapper.CreateDefinedNameEntries deliberately excludes ALL reserved
+                // names from that set (it feeds the general Name-Manager write-back, not print
+                // settings), so it never contains a Print_Area/Print_Titles key even when the
+                // sheet's print area/titles are still set - which is exactly what let the reserved-
+                // name exemption below unconditionally resurrect a print area/titles the user just
+                // cleared (Sheet.SetPrintAreas([]) / PrintTitleRows=null), even though the
+                // full-rebuild write-back above (XlsxFileAdapter.Save.cs) correctly omits the
+                // _xlnm.Print_Area/_xlnm.Print_Titles name for a cleared sheet. So for these two
+                // names specifically, check the CURRENT model state of the sheet this candidate is
+                // scoped to directly - using localSheetIdAttr's value, which was already remapped
+                // above (by sheet name, or by Sheet.Id on rename) to the CURRENT sheet position -
+                // instead of exempting it from the gate. When it IS still live, the full rebuild
+                // will already have re-emitted it under the same key, so this candidate would have
+                // been caught by the existingKeys branch above; reaching here with isLive true only
+                // happens if that emission is somehow missing, in which case falling through to
+                // resurrect the pristine value (below) is still the safest match to the model.
+                var scopeSheet = workbook.Sheets[scopeSheetIndex];
+                var isLive = printSettingKind == PrintSettingKind.PrintArea
+                    ? scopeSheet.PrintAreas.Count > 0
+                    : scopeSheet.PrintTitleRows is not null || scopeSheet.PrintTitleColumns is not null;
+                if (!isLive)
+                    continue;
+            }
+            else if (isModelRepresentable &&
                 !liveModelDefinedNameKeys.Contains(key) &&
                 !XlsxNamedRangeMapper.IsExcelReservedDefinedName(sourceNameAttr))
             {
@@ -867,6 +903,43 @@ internal static class XlsxWorkbookMetadataPreserver
             var localSheetId = element.Attribute("localSheetId")?.Value ?? string.Empty;
             return $"{name}\u001f{localSheetId}";
         }
+    }
+
+    private enum PrintSettingKind
+    {
+        PrintArea,
+        PrintTitles,
+    }
+
+    // Matches the reserved defined-name identifying a sheet's print area or print titles
+    // (repeat rows/columns), whether stored with the standard OOXML "_xlnm." built-in-name
+    // prefix (e.g. "_xlnm.Print_Area") or, for oddly-authored/legacy files, bare
+    // ("Print_Area") - mirroring the two forms XlsxNamedRangeMapper.IsExcelReservedDefinedName
+    // itself recognizes.
+    private static bool TryGetPrintSettingKind(string? name, out PrintSettingKind kind)
+    {
+        kind = default;
+        if (string.IsNullOrWhiteSpace(name))
+            return false;
+
+        var trimmed = name.Trim();
+        var unprefixed = trimmed.StartsWith("_xlnm.", StringComparison.OrdinalIgnoreCase)
+            ? trimmed["_xlnm.".Length..]
+            : trimmed;
+
+        if (string.Equals(unprefixed, "Print_Area", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = PrintSettingKind.PrintArea;
+            return true;
+        }
+
+        if (string.Equals(unprefixed, "Print_Titles", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = PrintSettingKind.PrintTitles;
+            return true;
+        }
+
+        return false;
     }
 
     private static void InsertCustomWorkbookViewsInOrder(

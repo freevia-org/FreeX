@@ -55,8 +55,9 @@ internal static class XlsxChartLevelReader
         chart.LegendLayout = XlsxChartMetadataReader.ReadManualLayout(legend.Element(chartNs + "layout"));
         // Classic charts use a <c:legendPos val="..."/> child; chartEx uses a "pos" attribute on
         // <cx:legend> directly.
-        chart.LegendPosition = (legend.Element(chartNs + "legendPos")?.Attribute("val")?.Value
-            ?? legend.Attribute("pos")?.Value) switch
+        var explicitLegendPositionValue = legend.Element(chartNs + "legendPos")?.Attribute("val")?.Value
+            ?? legend.Attribute("pos")?.Value;
+        chart.LegendPosition = explicitLegendPositionValue switch
         {
             "l" => ChartLegendPosition.Left,
             "t" => ChartLegendPosition.Top,
@@ -64,6 +65,10 @@ internal static class XlsxChartLevelReader
             "r" => ChartLegendPosition.Right,
             _ => ChartLegendPosition.Right
         };
+        // R45-io-chart-datatable-legend-3-2: remember whether the file actually declared a
+        // position, so the writer's stacked-chart bottom-default heuristic never overwrites a
+        // genuinely explicit "Right" loaded from a real file.
+        chart.LegendPositionExplicit = explicitLegendPositionValue is not null;
         // Classic: <c:overlay val="1"/> child. chartEx: "overlay" attribute on <cx:legend>.
         chart.LegendOverlay = XlsxChartScalarReader.IsTrue(
             legend.Element(chartNs + "overlay")?.Attribute("val")?.Value
@@ -74,11 +79,40 @@ internal static class XlsxChartLevelReader
 
     private static List<ChartLegendEntryModel> ReadLegendEntries(XElement legend, XNamespace chartNs) =>
         legend.Elements(chartNs + "legendEntry")
-            .Select(entry => new ChartLegendEntryModel(
-                XlsxChartScalarReader.ReadOptionalInt(entry.Element(chartNs + "idx")?.Attribute("val")?.Value) ?? -1,
-                XlsxChartScalarReader.ReadOptionalBool(entry.Element(chartNs + "delete")?.Attribute("val")?.Value)))
-            .Where(entry => entry.Index >= 0 && entry.IsDeleted is not null)
+            .Select(entry => ReadLegendEntry(entry, chartNs))
+            // R45-io-chart-datatable-legend-3-1: keep an entry that carries ONLY per-entry text
+            // formatting (no <c:delete>), not just entries that hide a legend key.
+            .Where(entry => entry.Index >= 0 && (entry.IsDeleted is not null || entry.HasTextFormatting))
             .ToList();
+
+    private static ChartLegendEntryModel ReadLegendEntry(XElement entry, XNamespace chartNs)
+    {
+        var index = XlsxChartScalarReader.ReadOptionalInt(entry.Element(chartNs + "idx")?.Attribute("val")?.Value) ?? -1;
+        var isDeleted = XlsxChartScalarReader.ReadOptionalBool(entry.Element(chartNs + "delete")?.Attribute("val")?.Value);
+
+        var textProperties = FirstDefaultRunProperties(entry.Element(chartNs + "txPr"));
+        if (textProperties is null)
+            return new ChartLegendEntryModel(index, isDeleted);
+
+        var bold = XlsxChartScalarReader.ReadOptionalBool(textProperties.Attribute("b")?.Value);
+        var italic = XlsxChartScalarReader.ReadOptionalBool(textProperties.Attribute("i")?.Value);
+        double? fontSize = int.TryParse(textProperties.Attribute("sz")?.Value, out var size)
+            ? Math.Clamp(size / 100.0, 6, 72)
+            : null;
+
+        CellColor? textColor = null;
+        WorkbookThemeColorReference? textThemeColor = null;
+        var textFill = textProperties.Element(DrawingNs + "solidFill");
+        if (textFill is not null)
+        {
+            if (XlsxDrawingColorReader.TryReadThemeColorReference(textFill, DrawingNs, out var themeColor))
+                textThemeColor = themeColor;
+            else if (XlsxDrawingColorReader.TryReadConcreteColor(textFill, DrawingNs, out var concreteColor))
+                textColor = concreteColor;
+        }
+
+        return new ChartLegendEntryModel(index, isDeleted, bold, italic, fontSize, textColor, textThemeColor);
+    }
 
     private static ChartDataTableModel? ReadChartDataTable(XElement? dataTable)
     {
@@ -231,6 +265,10 @@ internal static class XlsxChartLevelReader
 
         if (int.TryParse(textProperties.Attribute("sz")?.Value, out var size))
             chart.LegendFontSize = Math.Clamp(size / 100.0, 6, 72);
+
+        // R45-io-chart-datatable-legend-3-3: legend-wide Bold/Italic from the defRPr attributes.
+        chart.LegendBold = XlsxChartScalarReader.ReadOptionalBool(textProperties.Attribute("b")?.Value);
+        chart.LegendItalic = XlsxChartScalarReader.ReadOptionalBool(textProperties.Attribute("i")?.Value);
 
         var textFill = textProperties.Element(DrawingNs + "solidFill");
         if (textFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(textFill, DrawingNs, out var textThemeColor))

@@ -54,7 +54,31 @@ public enum ChartTrendlineType { Linear, Exponential, Logarithmic, Power, Moving
 
 public enum ChartLineDashStyle { Solid, Dash, Dot }
 
-public sealed record ChartLegendEntryModel(int Index, bool? IsDeleted);
+/// <summary>
+/// A single &lt;c:legendEntry&gt; override: hiding one legend key (<see cref="IsDeleted"/>),
+/// applying per-entry text formatting (bold/italic/size/color) via a &lt;c:txPr&gt; child, or
+/// both together in the same element.
+/// </summary>
+/// <remarks>
+/// R45-io-chart-datatable-legend-3-1: real Excel writes a &lt;c:legendEntry&gt; with a
+/// &lt;c:txPr&gt; but NO &lt;c:delete&gt; child when the user selects a single legend key and
+/// changes only its font (the entry is never hidden). That entry must still round-trip -- it
+/// must not be discarded just because <see cref="IsDeleted"/> is null.
+/// </remarks>
+public sealed record ChartLegendEntryModel(
+    int Index,
+    bool? IsDeleted,
+    bool? TextBold = null,
+    bool? TextItalic = null,
+    double? TextFontSize = null,
+    CellColor? TextColor = null,
+    WorkbookThemeColorReference? TextThemeColor = null)
+{
+    /// <summary>Whether this entry carries any per-entry text-formatting override.</summary>
+    public bool HasTextFormatting =>
+        TextBold is not null || TextItalic is not null || TextFontSize is not null ||
+        TextColor is not null || TextThemeColor is not null;
+}
 
 /// <summary>
 /// Maps a chart series (identified by its chart-XML <c>&lt;c:idx&gt;</c>) to the worksheet

@@ -174,17 +174,36 @@ public static partial class PrintRenderer
         var renderText = CellTextOrientationLayoutPlanner.PrepareDisplayText(displayText, textRotation);
         var hasOrientation = CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation);
         var textBrush = ResolvePrintedTextBrush(style, out var textColor);
+        var wrapText = style?.WrapText == true;
+
+        // Read the cell's own font (size/name/bold/italic) instead of a fixed print font, so a
+        // 24pt Bold title prints exactly as it displays on screen (GridView.Rendering.cs:305).
+        var typeface = ResolvePrintedCellTypeface(style);
+        var fontSize = ResolvePrintedCellFontSizeDip(style);
+
+        var maxTextWidth = Math.Max(1, rect.Width - 4);
+
+        // Shrink-to-fit is honored on screen (GridView.Rendering.cs:309) — mirror the same
+        // width-driven font shrink here so a shrink-to-fit cell prints shrunk instead of
+        // overflowing/ellipsis-truncated at the fixed print font size.
+        if (style?.ShrinkToFit == true && !wrapText)
+        {
+            fontSize = GridView.ResolveShrinkFontSize(
+                fontSize,
+                maxTextWidth,
+                size => MeasurePrintedSingleLineText(renderText, typeface, size).Width,
+                PointsToPrintedFontSizeDip(6));
+        }
 
         var ft = new FormattedText(
             renderText,
             CultureInfo.CurrentCulture,
             FlowDirection.LeftToRight,
-            PrintedCellTypeface,
-            PrintFontSize,
+            typeface,
+            fontSize,
             textBrush,
             1.0);
 
-        var maxTextWidth = Math.Max(1, rect.Width - 4);
         var canOverflow = !hasOrientation &&
             GridView.CanOverflowCellText(style, cell.RawValue, displayText, merge: null);
         if (canOverflow && ft.Width > maxTextWidth)
@@ -195,9 +214,19 @@ public static partial class PrintRenderer
         }
 
         ft.MaxTextWidth = Math.Max(1, maxTextWidth);
-        if (!CellTextOrientationLayoutPlanner.IsStackedTextRotation(textRotation))
-            ft.MaxLineCount = 1;
-        ft.Trimming = TextTrimming.CharacterEllipsis;
+        if (wrapText)
+        {
+            // Allow full multi-line wrapping within the cell width instead of forcing a single
+            // ellipsis-truncated line — mirrors GridView.Rendering.cs, which never caps WrapText
+            // cells to one line either (the row was already sized to fit the wrapped text).
+            ft.Trimming = TextTrimming.None;
+        }
+        else
+        {
+            if (!CellTextOrientationLayoutPlanner.IsStackedTextRotation(textRotation))
+                ft.MaxLineCount = 1;
+            ft.Trimming = TextTrimming.CharacterEllipsis;
+        }
 
         Point textPoint;
         double rotationAngle = 0;
@@ -230,15 +259,21 @@ public static partial class PrintRenderer
         if (isRotated)
             dc.Pop();
 
-        var overlayText = BoundPrintedCellOverlayText(displayText, ft.MaxTextWidth);
+        // The single-line ellipsis-bound overlay text only matches what's drawn when the cell is
+        // actually capped to one line; a WrapText cell now draws its full paragraph across
+        // multiple lines, so its PDF-selectable text should carry the full text too instead of a
+        // truncated single-line fragment.
+        var overlayText = wrapText
+            ? displayText
+            : BoundPrintedCellOverlayText(displayText, ft.MaxTextWidth, typeface, fontSize);
         textOverlays.Add(new PdfTextOverlay(
             overlayText,
             textPoint.X,
             textPoint.Y,
-            PrintFontSize,
-            PrintedCellTypeface.FontFamily.Source,
-            Bold: false,
-            Italic: false,
+            fontSize,
+            typeface.FontFamily.Source,
+            Bold: style?.Bold == true,
+            Italic: style?.Italic == true,
             textColor)
         {
             RotationDegrees = rotationAngle

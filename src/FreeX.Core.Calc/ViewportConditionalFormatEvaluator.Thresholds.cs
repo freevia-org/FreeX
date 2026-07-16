@@ -463,6 +463,17 @@ internal static partial class ViewportConditionalFormatEvaluator
                 continue;
             }
 
+            // Excel's Data Bar "Bar Direction" setting (x14:dataBar/@direction) has three values:
+            // "rightToLeft" and "leftToRight" force a fixed direction regardless of the sheet's
+            // reading order, while the default "Context" (absent attribute, or the literal value
+            // "context") follows the worksheet's own reading order -- i.e. it mirrors automatically
+            // on a sheet authored right-to-left (Sheet.IsRightToLeft, from sheetView/@rightToLeft).
+            // Every fraction computed below (StartFraction/EndFraction/AxisFraction) is built as a
+            // left-to-right layout; when the resolved direction is right-to-left the whole bar is
+            // mirrored about the cell's horizontal center before being returned.
+            var isRightToLeftBar = string.Equals(cf.DataBarDirection, "rightToLeft", StringComparison.OrdinalIgnoreCase)
+                || (sheet.IsRightToLeft && !string.Equals(cf.DataBarDirection, "leftToRight", StringComparison.OrdinalIgnoreCase));
+
             if (!TryResolveThreshold(
                     cf.DataBarMinThresholdType,
                     cf.DataBarMinThresholdValue,
@@ -547,18 +558,20 @@ internal static partial class ViewportConditionalFormatEvaluator
                         return null;
                     }
 
-                    return new ConditionalFormatDataBar(
-                        axisFraction,
-                        axisFraction + length,
-                        cf.DataBarColor,
-                        cf.DataBarGradient,
-                        cf.DataBarBorder,
-                        cf.DataBarShowValue,
-                        IsNegative: false,
-                        AxisFraction: axisFraction,
-                        NegativeFillColor: cf.DataBarNegativeFillColor,
-                        AxisColor: cf.DataBarAxisColor,
-                        BorderColor: cf.DataBarBorderColor);
+                    return MirrorDataBarIfRightToLeft(
+                        isRightToLeftBar,
+                        new ConditionalFormatDataBar(
+                            axisFraction,
+                            axisFraction + length,
+                            cf.DataBarColor,
+                            cf.DataBarGradient,
+                            cf.DataBarBorder,
+                            cf.DataBarShowValue,
+                            IsNegative: false,
+                            AxisFraction: axisFraction,
+                            NegativeFillColor: cf.DataBarNegativeFillColor,
+                            AxisColor: cf.DataBarAxisColor,
+                            BorderColor: cf.DataBarBorderColor));
                 }
                 else
                 {
@@ -578,18 +591,20 @@ internal static partial class ViewportConditionalFormatEvaluator
                     // For negative bars use the negative border color when available, otherwise fall
                     // back to the positive border color.
                     var negBorderColor = cf.DataBarNegativeBorderColor ?? cf.DataBarBorderColor;
-                    return new ConditionalFormatDataBar(
-                        axisFraction - length,
-                        axisFraction,
-                        negColor,
-                        cf.DataBarGradient,
-                        cf.DataBarBorder,
-                        cf.DataBarShowValue,
-                        IsNegative: true,
-                        AxisFraction: axisFraction,
-                        NegativeFillColor: cf.DataBarNegativeFillColor,
-                        AxisColor: cf.DataBarAxisColor,
-                        BorderColor: negBorderColor);
+                    return MirrorDataBarIfRightToLeft(
+                        isRightToLeftBar,
+                        new ConditionalFormatDataBar(
+                            axisFraction - length,
+                            axisFraction,
+                            negColor,
+                            cf.DataBarGradient,
+                            cf.DataBarBorder,
+                            cf.DataBarShowValue,
+                            IsNegative: true,
+                            AxisFraction: axisFraction,
+                            NegativeFillColor: cf.DataBarNegativeFillColor,
+                            AxisColor: cf.DataBarAxisColor,
+                            BorderColor: negBorderColor));
                 }
             }
 
@@ -604,17 +619,41 @@ internal static partial class ViewportConditionalFormatEvaluator
                 return null;
             }
 
-            return new ConditionalFormatDataBar(
-                0d,
-                Math.Clamp(barLength, 0d, 1d),
-                cf.DataBarColor,
-                cf.DataBarGradient,
-                cf.DataBarBorder,
-                cf.DataBarShowValue,
-                BorderColor: cf.DataBarBorderColor);
+            return MirrorDataBarIfRightToLeft(
+                isRightToLeftBar,
+                new ConditionalFormatDataBar(
+                    0d,
+                    Math.Clamp(barLength, 0d, 1d),
+                    cf.DataBarColor,
+                    cf.DataBarGradient,
+                    cf.DataBarBorder,
+                    cf.DataBarShowValue,
+                    BorderColor: cf.DataBarBorderColor));
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Mirrors a left-to-right data-bar layout about the cell's horizontal center so it renders
+    /// growing from the right edge instead, matching Excel's "Bar Direction" = Right-to-Left (or
+    /// "Context" on a right-to-left-authored sheet). <see cref="ConditionalFormatDataBar.StartFraction"/>/
+    /// <see cref="ConditionalFormatDataBar.EndFraction"/>/<see cref="ConditionalFormatDataBar.AxisFraction"/>
+    /// are all expressed as a 0..1 fraction of the cell measured from its left edge, so mirroring is a
+    /// simple 1-x reflection; every other field (colors, gradient, border, IsNegative, ShowValue) is
+    /// direction-independent and passes through unchanged.
+    /// </summary>
+    private static ConditionalFormatDataBar MirrorDataBarIfRightToLeft(bool isRightToLeftBar, ConditionalFormatDataBar bar)
+    {
+        if (!isRightToLeftBar)
+            return bar;
+
+        return bar with
+        {
+            StartFraction = 1d - bar.EndFraction,
+            EndFraction = 1d - bar.StartFraction,
+            AxisFraction = bar.AxisFraction is > 0d and < 1d ? 1d - bar.AxisFraction : bar.AxisFraction,
+        };
     }
 
     internal static bool TryResolveThreshold(

@@ -242,7 +242,25 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             rows.Add((payloadCapture.Rows[ri], hasRowHeight, rowHeight, isHidden, isFilterHidden, isValueFilterHidden, ownedFilterColumns, ri));
         }
 
-        rows.Sort((a, b) =>
+        // R45-commands-sort-filter-interaction-3-1: Excel's Sort never moves a row that the
+        // active AutoFilter (or one of its Top-N/Average/condition/color column filters) is
+        // currently hiding — per Microsoft's own Sort documentation, hidden rows in a filtered
+        // range are not sorted. Such a row must stay pinned at its own physical row with its
+        // content completely untouched; only the VISIBLE rows among the range are reordered,
+        // and only into the physical slots that were themselves visible before the sort. Filter-
+        // hidden rows are therefore excluded from the sort worklist entirely here so they never
+        // enter the comparator and never receive another row's content.
+        var visibleSlots = new List<int>(rowCount);
+        var sortable = new List<(SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, List<uint>? OwnedFilterColumns, int OriginalIndex)>(rowCount);
+        for (int ri = 0; ri < rowCount; ri++)
+        {
+            if (rows[ri].IsFilterHidden || rows[ri].IsValueFilterHidden)
+                continue;
+            visibleSlots.Add(ri);
+            sortable.Add(rows[ri]);
+        }
+
+        sortable.Sort((a, b) =>
         {
             foreach (var (index, ascending, sortOn, targetColor, customOrder) in keyColIndexes)
             {
@@ -301,26 +319,36 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             return a.OriginalIndex.CompareTo(b.OriginalIndex); // stable tiebreaker
         });
 
+        // Reassemble the full per-slot row list: filter-hidden rows default to themselves
+        // (OriginalIndex == ri, so no permutation/formula-rewrite happens for them below), and
+        // the sorted visible rows are dropped back into exactly the physical slots that were
+        // visible before the sort, in their new order.
+        var finalRows = new (SortCellPayload[] Payloads, bool HasRowHeight, double RowHeight, bool IsHidden, bool IsFilterHidden, bool IsValueFilterHidden, List<uint>? OwnedFilterColumns, int OriginalIndex)[rowCount];
+        for (int ri = 0; ri < rowCount; ri++)
+            finalRows[ri] = rows[ri];
+        for (int k = 0; k < visibleSlots.Count; k++)
+            finalRows[visibleSlots[k]] = sortable[k];
+
         // Write sorted rows back
         var affected = new List<CellAddress>(rowCount * colCount);
         for (int ri = 0; ri < rowCount; ri++)
         {
             uint row = startRow + (uint)ri;
             sheet.RowHeights.Remove(row);
-            if (rows[ri].HasRowHeight)
-                sheet.RowHeights[row] = rows[ri].RowHeight;
+            if (finalRows[ri].HasRowHeight)
+                sheet.RowHeights[row] = finalRows[ri].RowHeight;
             sheet.HiddenRows.Remove(row);
-            if (rows[ri].IsHidden)
+            if (finalRows[ri].IsHidden)
                 sheet.HiddenRows.Add(row);
             sheet.FilterHiddenRows.Remove(row);
-            if (rows[ri].IsFilterHidden)
+            if (finalRows[ri].IsFilterHidden)
                 sheet.FilterHiddenRows.Add(row);
             // sheet.ValueFilterHiddenRows must be permuted in lockstep with FilterHiddenRows — it
             // records exactly which of those rows the value-filter mechanism (sheet.ActiveValueFilterColumns)
             // currently owns, and FilterCommand.RecomputeHiddenRows uses it to decide which rows it may
             // safely un-hide. Left unpermuted, it would name the wrong rows the moment Sort reorders them.
             sheet.ValueFilterHiddenRows.Remove(row);
-            if (rows[ri].IsValueFilterHidden)
+            if (finalRows[ri].IsValueFilterHidden)
                 sheet.ValueFilterHiddenRows.Add(row);
 
             // R21-autofilter-sort-state-1: sheet.ColumnFilterOwnedRows must be permuted in
@@ -330,7 +358,7 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
             // Left unpermuted, it would keep naming the pre-sort row positions after the rows move.
             foreach (var col in _columnFilterOwnedRowsSnapshot.Keys)
                 sheet.ColumnFilterOwnedRows[col].Remove(row);
-            if (rows[ri].OwnedFilterColumns is { } ownedFilterColumns)
+            if (finalRows[ri].OwnedFilterColumns is { } ownedFilterColumns)
             {
                 foreach (var col in ownedFilterColumns)
                     sheet.ColumnFilterOwnedRows[col].Add(row);
@@ -338,14 +366,17 @@ public sealed class SortCommand : IWorkbookCommand, IAffectedCellsCommand
 
             // N37: rows are permuted from OriginalIndex to ri — Excel rewrites each moved
             // formula's relative references the same way a cut/paste to the new row would,
-            // so the row delta a cell actually moved must be applied to its formula text.
-            int rowDelta = ri - rows[ri].OriginalIndex;
+            // so the row delta a cell actually moved must be applied to its formula text. A
+            // filter-hidden row's finalRows[ri].OriginalIndex is always ri itself (see above),
+            // so rowDelta is always 0 for it — its formula text (and everything else) is
+            // written back completely unchanged.
+            int rowDelta = ri - finalRows[ri].OriginalIndex;
 
             for (int ci = 0; ci < colCount; ci++)
             {
                 uint col  = startCol + (uint)ci;
                 var addr  = new CellAddress(_sheetId, row, col);
-                WriteCellPayload(sheet, addr, rows[ri].Payloads[ci], rowDelta, 0, sheet.Name);
+                WriteCellPayload(sheet, addr, finalRows[ri].Payloads[ci], rowDelta, 0, sheet.Name);
                 affected.Add(addr);
             }
         }

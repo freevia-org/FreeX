@@ -159,6 +159,16 @@ public sealed class ChartModel
     public WorkbookThemeColorReference? LegendBorderThemeColor { get; set; }
     public double LegendBorderThickness { get; set; }
     public double LegendFontSize { get; set; } = 12;
+
+    /// <summary>
+    /// R45-io-chart-datatable-legend-3-3: legend-wide Bold/Italic, read from the &lt;c:legend&gt;'s
+    /// &lt;c:txPr&gt;&lt;a:defRPr b="1"/i="1"&gt; attributes. Null when the source file left the
+    /// attribute unspecified (Excel's own default -- neither forced bold nor forced non-bold).
+    /// </summary>
+    public bool? LegendBold { get; set; }
+
+    /// <summary>See <see cref="LegendBold"/>.</summary>
+    public bool? LegendItalic { get; set; }
     public List<ChartLegendEntryModel> LegendEntries { get; set; } = [];
     public double DoughnutHoleSize { get; set; } = 0.55;
     public double FirstSliceAngle { get; set; }
@@ -284,6 +294,18 @@ public sealed class ChartModel
     public double? SecondaryAxisCrossesAt { get; set; }
     public ChartAxisCrossBetween? SecondaryAxisCrossBetween { get; set; }
     public ChartLegendPosition LegendPosition { get; set; } = ChartLegendPosition.Right;
+
+    /// <summary>
+    /// R45-io-chart-datatable-legend-3-2: true when the source file's &lt;c:legend&gt; actually
+    /// declared an explicit position (&lt;c:legendPos val="..."/&gt; or chartEx "pos" attribute),
+    /// as opposed to <see cref="LegendPosition"/> merely holding its C# default. The writer's
+    /// classic-stacked-chart "legend defaults to bottom" heuristic (see
+    /// <c>ToEffectiveLegendPosition</c> in XlsxChartXmlWriter.Format.cs) must never override a
+    /// genuinely explicit "Right" choice loaded from a real file. Null for a chart that was never
+    /// round-tripped through the XLSX reader (freshly created in FreeX), in which case the writer
+    /// keeps applying its classic-Excel-default heuristic for stacked charts.
+    /// </summary>
+    public bool? LegendPositionExplicit { get; set; }
     public bool LegendOverlay { get; set; }
     public bool ShowLegend { get; set; } = true;
     public bool ShowDataLabels { get; set; }

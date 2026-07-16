@@ -169,8 +169,12 @@ public sealed partial class FormulaEvaluator
 
     private static ScalarValue ReplaceRangeErrors(RangeValue range, ScalarValue fallback, Func<ErrorValue, bool> catches)
     {
+        // A fallback array need not match the error range's shape exactly — Excel broadcasts a
+        // fallback whose row and/or column extent is 1 across every position (e.g. a 1x1 range like
+        // B1:B1, or a 1xN / Nx1 vector), the same broadcasting convention IF/CHOOSE already apply via
+        // CanBroadcast/BroadcastElementAt. Only a genuinely incompatible shape is #VALUE!.
         RangeValue? fallbackRange = fallback as RangeValue;
-        if (fallbackRange is not null && (fallbackRange.RowCount != range.RowCount || fallbackRange.ColCount != range.ColCount))
+        if (fallbackRange is not null && (!CanBroadcast(range.RowCount, fallbackRange.RowCount) || !CanBroadcast(range.ColCount, fallbackRange.ColCount)))
             return ErrorValue.Value;
 
         var cells = new ScalarValue[range.RowCount, range.ColCount];
@@ -179,7 +183,7 @@ public sealed partial class FormulaEvaluator
             {
                 var value = range.Cells[r, c];
                 cells[r, c] = value is ErrorValue error && catches(error)
-                    ? fallbackRange?.Cells[r, c] ?? fallback
+                    ? fallbackRange is not null ? BroadcastElementAt(fallbackRange, r, c, range.RowCount, range.ColCount) : fallback
                     : value;
             }
 
@@ -262,13 +266,11 @@ public sealed partial class FormulaEvaluator
 
     private static ScalarValue PickRangeElementForArrayResult(RangeValue range, int row, int col, int targetRows, int targetCols)
     {
-        if (range.RowCount == targetRows && range.ColCount == targetCols)
-            return range.Cells[row, col];
-
-        if (range.RowCount == 1 && range.ColCount == 1)
-            return range.Cells[0, 0];
-
-        return ErrorValue.Value;
+        // Delegate to the shared broadcast helper: this accepts an exact-shape match, a fully-1x1
+        // range, AND a partially-broadcastable range (row extent 1 with matching column count, or
+        // column extent 1 with matching row count) — matching Excel's per-axis broadcasting for
+        // IFS/SWITCH condition/value/result arrays, the same rule IF and CHOOSE already apply.
+        return BroadcastElementAt(range, row, col, targetRows, targetCols);
     }
 
     private int? CoerceChooseIndex(ScalarValue value, int argumentCount)
