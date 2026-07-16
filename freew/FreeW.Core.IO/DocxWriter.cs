@@ -1,5 +1,6 @@
 using System.IO;
 using System.IO.Compression;
+using System.Text;
 using System.Xml.Linq;
 using Free.Shared.Opc;
 using FreeW.Core.Model;
@@ -61,6 +62,7 @@ public static class DocxWriter
         var preservedParts = options.IncludeMacroParts
             ? (IReadOnlyList<PreservedPart>)document.Preserved.Parts
             : document.Preserved.Parts.Where(p => !DocxWriteOptions.IsMacroPart(p.PartName)).ToList();
+        preservedParts = RemoveCurrentBibliographyCustomXml(preservedParts);
         var usedPartNames = CreateUsedPartNameSet(preservedParts);
 
         // Assign a relationship + media id to every inline image up front so document.xml, the
@@ -170,6 +172,13 @@ public static class DocxWriter
         // selected BibliographyStyle. Emitted whenever there are sources or a non-default style to record, so a
         // document that has never touched citations round-trips exactly as before (no bibliography part).
         var hasBibliography = document.Sources.Count > 0 || document.BibliographyStyle != CitationStyle.Apa;
+        if (hasBibliography)
+        {
+            var itemName = NextCustomXmlItemName(preservedParts);
+            preservedParts = preservedParts
+                .Concat(BuildCurrentBibliographyParts(document, itemName))
+                .ToList();
+        }
 
         // A word/theme/theme1.xml part is always emitted (real Word documents always carry one); it
         // serialises the document's DocumentTheme as a real clrScheme/fontScheme/fmtScheme.
@@ -1187,12 +1196,14 @@ public static class DocxWriter
         private int _bookmarkId;
         private int _revisionId;
         private int _shapeDrawingId;
+        private int _contentControlId;
 
         public IdAllocator(int shapeDrawingSeed = 0) => _shapeDrawingId = shapeDrawingSeed;
 
         public int NextBookmarkId() => ++_bookmarkId;
         public int NextRevisionId() => ++_revisionId;
         public int NextShapeDrawingId() => ++_shapeDrawingId;
+        public int NextContentControlId() => ++_contentControlId;
     }
 
     /// <summary>
@@ -2227,14 +2238,35 @@ public static class DocxWriter
                     r.Add(children);
                     return r;
                 }
-                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))));
-                Content(fieldRun, WithProps(new XElement(W + "instrText",
-                    new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(complex.Instruction))));
-                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate"))));
+
+                var fieldElements = new List<XElement>
+                {
+                    WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "begin"))),
+                    WithProps(new XElement(W + "instrText",
+                        new XAttribute(XNamespace.Xml + "space", "preserve"), SanitizeXmlText(complex.Instruction))),
+                    WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "separate")))
+                };
                 if (fieldRun.Text.Length > 0)
-                    Content(fieldRun, WithProps(new XElement(W + "t",
+                    fieldElements.Add(WithProps(new XElement(W + "t",
                         new XAttribute(XNamespace.Xml + "space", "preserve"), fieldRun.Text)));
-                Content(fieldRun, WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "end"))));
+                fieldElements.Add(WithProps(new XElement(W + "fldChar", new XAttribute(W + "fldCharType", "end"))));
+
+                if (complex.Keyword == "CITATION")
+                {
+                    // Word stores a CITATION field inside a citation content control. Without this wrapper,
+                    // Word may treat adjacent citation fields as one malformed field and hide later results.
+                    var citationSdt = new XElement(W + "sdt",
+                        new XElement(W + "sdtPr",
+                            new XAttribute(W + "id", drawings.Ids.NextContentControlId()),
+                            new XElement(W + "citation")),
+                        new XElement(W + "sdtContent", fieldElements));
+                    Content(fieldRun, citationSdt);
+                }
+                else
+                {
+                    foreach (var fieldElement in fieldElements)
+                        Content(fieldRun, fieldElement);
+                }
                 continue;
             }
 
@@ -6956,6 +6988,136 @@ public static class DocxWriter
         SourceType.Case => "Case",
         _ => "Book",
     };
+
+    private static IReadOnlyList<PreservedPart> RemoveCurrentBibliographyCustomXml(
+        IReadOnlyList<PreservedPart> preservedParts)
+    {
+        var bibliographyItems = preservedParts
+            .Where(IsBibliographyCustomXmlItem)
+            .Select(GetCustomXmlItemNumber)
+            .Where(number => number is not null)
+            .Select(number => number!.Value)
+            .ToHashSet();
+
+        if (bibliographyItems.Count == 0)
+            return preservedParts;
+
+        return preservedParts
+            .Where(part => !BelongsToCustomXmlItem(part, bibliographyItems))
+            .ToList();
+    }
+
+    private static bool IsBibliographyCustomXmlItem(PreservedPart part)
+    {
+        var number = GetCustomXmlItemNumber(part);
+        if (number is null)
+            return false;
+
+        try
+        {
+            using var stream = new MemoryStream(part.Bytes, writable: false);
+            return XDocument.Load(stream).Root?.Name == B + "Sources";
+        }
+        catch (System.Xml.XmlException)
+        {
+            return false;
+        }
+    }
+
+    private static int? GetCustomXmlItemNumber(PreservedPart part)
+    {
+        var path = NormalizePartName(part.PartName);
+        if (!path.StartsWith("customXml/", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var fileName = path["customXml/".Length..];
+        if (!fileName.StartsWith("item", StringComparison.Ordinal)
+            || fileName.Contains("/", StringComparison.Ordinal)
+            || !fileName.EndsWith(".xml", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var digits = fileName["item".Length..^".xml".Length];
+        return int.TryParse(digits, out var number) && number > 0 ? number : null;
+    }
+
+    private static bool BelongsToCustomXmlItem(PreservedPart part, IReadOnlySet<int> itemNumbers)
+    {
+        var path = NormalizePartName(part.PartName);
+        foreach (var number in itemNumbers)
+        {
+            if (path == $"customXml/item{number}.xml"
+                || path == $"customXml/itemProps{number}.xml"
+                || path == $"customXml/_rels/item{number}.xml.rels")
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string NextCustomXmlItemName(IReadOnlyList<PreservedPart> preservedParts)
+    {
+        var existing = preservedParts
+            .Select(GetCustomXmlItemNumber)
+            .Where(number => number is not null)
+            .Select(number => number!.Value)
+            .ToHashSet();
+
+        for (var number = 1; ; number++)
+        {
+            if (!existing.Contains(number))
+                return $"/customXml/item{number}.xml";
+        }
+    }
+
+    private static IReadOnlyList<PreservedPart> BuildCurrentBibliographyParts(
+        TextDocument document,
+        string itemName)
+    {
+        var itemNumber = GetCustomXmlItemNumber(new PreservedPart(itemName, []))
+            ?? throw new InvalidOperationException($"Invalid custom XML item name: {itemName}");
+        var itemFileName = $"item{itemNumber}.xml";
+        var itemPropsName = $"/customXml/itemProps{itemNumber}.xml";
+        var itemRelsName = $"/customXml/_rels/{itemFileName}.rels";
+
+        var itemRoot = new XElement(BuildBibliographySources(document).Root!);
+        var styleName = Citations.StyleName(document.BibliographyStyle);
+        itemRoot.SetAttributeValue("SelectedStyle", $"\\{styleName}.XSL");
+        itemRoot.SetAttributeValue("StyleName", styleName);
+        itemRoot.SetAttributeValue(
+            "URI",
+            $"http://schemas.openxmlformats.org/bibliographicStyle/{styleName}");
+        itemRoot.SetAttributeValue("xmlns", B.NamespaceName);
+
+        var itemProps = new XDocument(
+            new XElement(CustomXmlDataStore + "dataStoreItem",
+                new XAttribute(CustomXmlDataStore + "itemID", "{00000000-0000-0000-0000-000000000001}"),
+                new XElement(CustomXmlDataStore + "schemaRefs",
+                    new XElement(CustomXmlDataStore + "schemaRef",
+                        new XAttribute(CustomXmlDataStore + "uri", B.NamespaceName)))));
+
+        var itemRels = new XDocument(
+            new XElement(Rel + "Relationships",
+                new XElement(Rel + "Relationship",
+                    new XAttribute("Id", "rId1"),
+                    new XAttribute("Type", CustomXmlPropsRelType),
+                    new XAttribute("Target", $"itemProps{itemNumber}.xml"))));
+
+        return
+        [
+            new PreservedPart(itemName, XmlBytes(new XDocument(itemRoot)), CustomXmlItemContentType, CustomXmlRelType),
+            new PreservedPart(itemPropsName, XmlBytes(itemProps), CustomXmlPropsContentType),
+            new PreservedPart(itemRelsName, XmlBytes(itemRels))
+        ];
+
+        static byte[] XmlBytes(XDocument document) =>
+            Encoding.UTF8.GetBytes(document.ToString(SaveOptions.DisableFormatting));
+    }
 
     /// <summary>
     /// Builds word/bibliography/sources.xml: a b:Sources element carrying the document's selected

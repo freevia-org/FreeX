@@ -85,6 +85,7 @@ public static class DocxReader
         ReadTheme(archive, document);
         ReadEmbeddedFonts(archive, document);
         ReadPreservedParts(archive, document);
+        NormalizeWordReferencePageBreaks(document);
 
         return document;
     }
@@ -463,21 +464,26 @@ public static class DocxReader
         => ResolveDocumentRelPartPath(archive, "/settings");
 
     /// <summary>
-    /// Loads word/bibliography/sources.xml (if present) into <see cref="TextDocument.Sources"/> and
-    /// <see cref="TextDocument.BibliographyStyle"/>: the b:Sources/@SelectedStyle attribute restores the
-    /// chosen citation style (via <see cref="Citations.ParseStyle"/>), and each b:Source restores a
+    /// Loads Word's current b:Sources custom XML item, falling back to word/bibliography/sources.xml, into
+    /// <see cref="TextDocument.Sources"/> and <see cref="TextDocument.BibliographyStyle"/>: the
+    /// b:Sources/@StyleName or @SelectedStyle attribute restores the chosen citation style (via
+    /// <see cref="Citations.ParseStyle"/>), and each b:Source restores a
     /// <see cref="Source"/> with its tag, type and fields (the author read from the single corporate-author
     /// the writer emits). A missing part leaves the document at its defaults (APA, no sources). Inverse of
     /// <c>DocxWriter.BuildBibliographySources</c>.
     /// </summary>
     private static void ReadBibliography(ZipArchive archive, TextDocument document)
     {
-        var xml = LoadPart(archive, ResolveBibliographyPartPath(archive) ?? "word/bibliography/sources.xml");
+        var xml = LoadPart(archive, ResolveCurrentBibliographyPartPath(archive)
+            ?? ResolveBibliographyPartPath(archive)
+            ?? "word/bibliography/sources.xml");
         var root = xml?.Root;
         if (root is null || root.Name != B + "Sources")
             return;
 
-        document.BibliographyStyle = Citations.ParseStyle(root.Attribute("SelectedStyle")?.Value);
+        document.BibliographyStyle = Citations.ParseStyle(
+            root.Attribute("StyleName")?.Value
+            ?? root.Attribute("SelectedStyle")?.Value);
 
         foreach (var element in root.Elements(B + "Source"))
         {
@@ -561,6 +567,52 @@ public static class DocxReader
             var value = source.Element(B + localName)?.Value;
             return string.IsNullOrEmpty(value) ? null : value;
         }
+    }
+
+    /// <summary>
+    /// Word relocates a page break represented by an empty page-break-before paragraph to the start of the
+    /// contiguous citation/authority run immediately before it. This is visible in Word's in-memory
+    /// WordOpenXML and in its rendered pages, although Word may leave the original empty paragraph in the
+    /// stored package. Mirror that layout normalization so a FreeW render of the same package starts the
+    /// citation block on the same page as Word.
+    /// </summary>
+    private static void NormalizeWordReferencePageBreaks(TextDocument document)
+    {
+        for (var index = 0; index < document.Blocks.Count; index++)
+        {
+            if (document.Blocks[index] is not Paragraph { Runs.Count: 0 } pageBreakParagraph
+                || !pageBreakParagraph.Formatting.PageBreakBefore)
+            {
+                continue;
+            }
+
+            var firstReference = index - 1;
+            var hasCitationField = false;
+            while (firstReference >= 0
+                && document.Blocks[firstReference] is Paragraph paragraph
+                && HasCitationOrAuthority(paragraph))
+            {
+                hasCitationField |= HasCitationField(paragraph);
+                firstReference--;
+            }
+
+            firstReference++;
+            if (firstReference >= index || !hasCitationField)
+                continue;
+
+            if (document.Blocks[firstReference] is not Paragraph firstParagraph)
+                continue;
+
+            firstParagraph.Formatting = firstParagraph.Formatting with { PageBreakBefore = true };
+            pageBreakParagraph.Formatting = pageBreakParagraph.Formatting with { PageBreakBefore = false };
+        }
+
+        static bool HasCitationOrAuthority(Paragraph paragraph) => paragraph.Runs.Any(run =>
+            run.Citation is not null
+            || string.Equals(run.ComplexField?.Keyword, "CITATION", StringComparison.OrdinalIgnoreCase));
+
+        static bool HasCitationField(Paragraph paragraph) => paragraph.Runs.Any(run =>
+            string.Equals(run.ComplexField?.Keyword, "CITATION", StringComparison.OrdinalIgnoreCase));
     }
 
     private static BibliographyAuthorInfo ReadBibliographyAuthor(XElement source)
@@ -665,6 +717,30 @@ public static class DocxReader
         => ResolveDocumentRelationshipPartPath(
             archive,
             relationship => relationship.Target.EndsWith("bibliography/sources.xml", StringComparison.Ordinal));
+
+    /// <summary>
+    /// Finds Word's current document bibliography store. Word reads citation sources from a bibliography
+    /// <c>b:Sources</c> custom XML item, not from the legacy <c>word/bibliography/sources.xml</c> mirror.
+    /// The item name is not fixed, so inspect custom XML item roots rather than assuming item1.xml.
+    /// </summary>
+    private static string? ResolveCurrentBibliographyPartPath(ZipArchive archive)
+    {
+        foreach (var entry in archive.Entries)
+        {
+            if (!entry.FullName.StartsWith("customXml/item", StringComparison.Ordinal)
+                || !entry.FullName.EndsWith(".xml", StringComparison.Ordinal)
+                || entry.FullName.Contains("itemProps", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var xml = LoadPart(archive, entry.FullName);
+            if (xml?.Root?.Name == B + "Sources")
+                return entry.FullName;
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Loads word/comments.xml (if present) into <see cref="TextDocument.Comments"/>, reconstructing
@@ -2237,10 +2313,16 @@ public static class DocxReader
         string? hyperlinkAnchor = null,
         string? hyperlinkTooltip = null)
     {
-        var control = ReadContentControl(sdt.Element(W + "sdtPr"));
+        var sdtPr = sdt.Element(W + "sdtPr");
         var sdtContent = sdt.Element(W + "sdtContent");
         if (sdtContent is null)
             return;
+
+        // Word's citation content control is structural field metadata, not an editable text control.
+        // Keep the complex field run unwrapped so the writer can emit the native <w:citation/> SDT again.
+        var control = sdtPr?.Element(W + "citation") is not null
+            ? inheritedControl
+            : ReadContentControl(sdtPr);
 
         AddParagraphRuns(
             paragraph,

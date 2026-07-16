@@ -188,6 +188,8 @@ public class TableOfAuthoritiesRoundTripTests
         var docx = WriteDocx(doc);
         var documentXml = EntryXml(docx, "word/document.xml");
         var sourcesXml = EntryXml(docx, "word/bibliography/sources.xml");
+        var currentSourcesXml = EntryXml(docx, "customXml/item1.xml");
+        var currentSourcesPropsXml = EntryXml(docx, "customXml/itemProps1.xml");
 
         var fieldInstructions = documentXml.Descendants(W + "instrText").Select(e => e.Value).ToList();
         fieldInstructions.Should().Contain(instruction => instruction.Contains("CITATION Knuth1997"));
@@ -195,6 +197,19 @@ public class TableOfAuthoritiesRoundTripTests
         fieldInstructions.Should().Contain(instruction => instruction.Contains("CITATION W3C2025"));
         fieldInstructions.Should().Contain(instruction => instruction.Contains("BIBLIOGRAPHY"));
         fieldInstructions.Should().Contain(instruction => instruction.Contains("TOA"));
+
+        var citationControls = documentXml.Descendants(W + "sdt")
+            .Where(control => control.Element(W + "sdtPr")?.Element(W + "citation") is not null)
+            .ToList();
+        citationControls.Should().HaveCount(5);
+        foreach (var citationControl in citationControls)
+        {
+            var content = citationControl.Element(W + "sdtContent");
+            content.Should().NotBeNull();
+            content!.Descendants(W + "fldChar")
+                .Any(fieldChar => fieldChar.Attribute(W + "fldCharType")?.Value == "begin")
+                .Should().BeTrue();
+        }
 
         var taInstructions = documentXml.Descendants(W + "fldSimple")
             .Select(field => field.Attribute(W + "instr")?.Value ?? string.Empty)
@@ -212,6 +227,15 @@ public class TableOfAuthoritiesRoundTripTests
             .ToList();
         sourceTags.Should().Equal("Knuth1997", "Doe2024", "W3C2025");
         sourcesXml.Root!.Attribute("SelectedStyle")!.Value.Should().Be("IEEE");
+        currentSourcesXml.Root!.Name.Should().Be(B + "Sources");
+        currentSourcesXml.Root!.Attribute("SelectedStyle")!.Value.Should().Be("\\IEEE.XSL");
+        currentSourcesXml.Root!.Attribute("StyleName")!.Value.Should().Be("IEEE");
+        currentSourcesXml.Root!.Attribute("URI")!.Value
+            .Should().Be("http://schemas.openxmlformats.org/bibliographicStyle/IEEE");
+        currentSourcesXml.Root!.Elements(B + "Source")
+            .Select(source => source.Element(B + "Tag")!.Value)
+            .Should().Equal("Knuth1997", "Doe2024", "W3C2025");
+        currentSourcesPropsXml.Root!.Name.LocalName.Should().Be("dataStoreItem");
 
         var reopened = ReadDocx(docx);
         reopened.BibliographyStyle.Should().Be(CitationStyle.Ieee);
@@ -221,12 +245,24 @@ public class TableOfAuthoritiesRoundTripTests
             SourceType.JournalArticle,
             SourceType.WebSite);
 
+        var reopenedParagraphs = reopened.Blocks.OfType<Paragraph>().ToList();
+        reopenedParagraphs.Any(paragraph =>
+            paragraph.Runs.Any(run => run.ComplexField is { Keyword: "CITATION" })
+            && paragraph.Formatting.PageBreakBefore).Should().BeTrue();
+        reopenedParagraphs.Any(paragraph =>
+            paragraph.Runs.Count == 0
+            && !paragraph.Formatting.PageBreakBefore).Should().BeTrue();
+
+        var rewritten = WriteDocx(reopened);
+        EntryXml(rewritten, "customXml/item1.xml").Root!.Name.Should().Be(B + "Sources");
+
         var complexFields = reopened.Blocks.OfType<Paragraph>()
             .SelectMany(paragraph => paragraph.Runs)
             .Where(run => run.ComplexField is not null)
             .ToList();
         complexFields.Select(run => run.ComplexField!.Keyword)
             .Should().Contain(["CITATION", "BIBLIOGRAPHY", "TOA"]);
+        complexFields.Count(run => run.ComplexField!.Keyword == "CITATION").Should().Be(5);
         complexFields.Should().Contain(run =>
             run.ComplexField!.Keyword == "BIBLIOGRAPHY"
             && run.Text == "References");
@@ -248,9 +284,11 @@ public class TableOfAuthoritiesRoundTripTests
             .Where(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId)
             .Select(paragraph => paragraph.PlainText)
             .ToList();
+        // Word relocates the explicit break to the first citation paragraph, so both authority marks render
+        // on page 2 even though the cached generated TOA paragraphs retain their original sentinel values.
         rebuiltToaEntries.Should().Contain([
-            "Example v. FreeW, 123 F.4th 456 (2026)\t1, 2",
-            "Free Software Evidence Act, 42 U.S.C. 2026\t1"
+            "Example v. FreeW, 123 F.4th 456 (2026)\t2",
+            "Free Software Evidence Act, 42 U.S.C. 2026\t2"
         ]);
     }
 

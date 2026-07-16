@@ -220,11 +220,9 @@ internal static class Ooxml
     public const string SettingsPartName = "/word/settings.xml";
 
     /// <summary>
-    /// The bibliography namespace (b), used by word/bibliography/sources.xml — Word's store for the
-    /// document's citation sources (b:Sources/b:Source) and the selected bibliography style
-    /// (b:Sources/@SelectedStyle). FreeW persists its <see cref="Source"/> list and
-    /// <see cref="TextDocument.BibliographyStyle"/> here so both survive a save/load. The part is referenced
-    /// from word/document.xml.rels via the bibliography relationship type.
+    /// The bibliography namespace (b), used by word/bibliography/sources.xml — the legacy mirror for the
+    /// document's citation sources (b:Sources/b:Source) and selected bibliography style. Word's active
+    /// current-source store is the matching b:Sources custom XML item emitted by DocxWriter.
     /// </summary>
     public static readonly XNamespace B = "http://schemas.openxmlformats.org/officeDocument/2006/bibliography";
     public const string BibliographyContentType = "application/vnd.openxmlformats-officedocument.bibliography+xml";
@@ -244,6 +242,9 @@ internal static class Ooxml
     // Each item references its own customXml/itemPropsN.xml (the data-store item id/schema) via the item's
     // own customXml/_rels/itemN.xml.rels. The document→item relationship uses the customXml rel type.
     public const string CustomXmlRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml";
+    public const string CustomXmlPropsRelType = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps";
+    public static readonly XNamespace CustomXmlDataStore = "http://schemas.openxmlformats.org/officeDocument/2006/customXml";
+    public const string CustomXmlItemContentType = "application/xml";
     public const string CustomXmlPropsContentType = "application/vnd.openxmlformats-officedocument.customXmlProperties+xml";
 
     // word/vbaProject.bin (+ word/vbaData.xml and the part-local word/_rels/vbaProject.bin.rels) carry a
