@@ -556,6 +556,7 @@ public static partial class ChartRenderPlanner
     public const double ImportedComboSecondaryLabelCompensation = 8.0;
     public const double ImportedComboLegendRightCompensation = 8.0;
     public const double ImportedCartesianGridLinePixelOffset = 0.5;
+    public const double ImportedPercentStackedGridEdgeOffsetX = 19.0;
     public const double ImportedCartesianCategoryLabelOffset = 16.0;
     public const double ImportedCartesianValueLabelRightGap = 22.0;
     public const double ImportedCartesianValueLabelVerticalOffset = 13.0;
@@ -1627,6 +1628,17 @@ public static partial class ChartRenderPlanner
             for (int index = 0; index < chart.Categories.Count; index++)
             {
                 double x = plot.X + index * categoryStep + categoryStep / 2.0;
+                lines.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(x, plot.Y),
+                    new ChartPlanPoint(x, plot.Bottom)));
+            }
+
+            foreach (double x in new[]
+            {
+                plot.X + ImportedPercentStackedGridEdgeOffsetX,
+                plot.Right + ImportedPercentStackedGridEdgeOffsetX
+            })
+            {
                 lines.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(x, plot.Y),
                     new ChartPlanPoint(x, plot.Bottom)));

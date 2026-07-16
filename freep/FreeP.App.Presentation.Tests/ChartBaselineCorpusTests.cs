@@ -480,7 +480,15 @@ public sealed class ChartBaselineCorpusTests
             .Equal("0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%");
         stackedScene.GridLines.GridLines
             .Count(line => Math.Abs(line.Start.X - line.End.X) < 0.0001)
-            .Should().Be(stacked.Categories.Count);
+            .Should().Be(stacked.Categories.Count + 2,
+                "PowerPoint adds two registered plot-edge strokes to the category grid");
+        stackedScene.GridLines.GridLines
+            .Where(line => Math.Abs(line.Start.X - line.End.X) < 0.0001)
+            .TakeLast(2)
+            .Select(line => line.Start.X)
+            .Should().Equal(
+                stackedScene.Frame.Plot.X + ChartRenderPlanner.ImportedPercentStackedGridEdgeOffsetX,
+                stackedScene.Frame.Plot.Right + ChartRenderPlanner.ImportedPercentStackedGridEdgeOffsetX);
         var stackedFrame = ChartRenderPlanner.BuildFramePlan(
             stacked,
             new ChartPlanRect(0, 0, 480, 288));
