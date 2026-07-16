@@ -440,6 +440,7 @@ public readonly record struct ChartPieSlicePrimitive(
     public bool IsLargeArc => SweepAngle > Math.PI;
     public double VerticalScale { get; init; }
     public double DepthOffsetY { get; init; }
+    public bool DrawDepthSidewalls { get; init; }
     public double EffectiveVerticalScale => VerticalScale > 0 ? VerticalScale : 1.0;
     public bool HasThreeDDepth => DepthOffsetY > 0 || Math.Abs(EffectiveVerticalScale - 1.0) > 1e-9;
     public double InnerRadiusY => InnerRadius * EffectiveVerticalScale;
@@ -597,6 +598,11 @@ public static partial class ChartRenderPlanner
     public const double ImportedRadarCenterOffsetX = 6.0;
     public const double ImportedRadarCenterOffsetY = 19.0;
     public const double ThreeDPieVerticalScale = 0.72;
+    public const double ImportedThreeDPieHorizontalScale = 0.98;
+    public const double ImportedThreeDPieVerticalScale = 0.18;
+    public const double ImportedThreeDPieDepthScale = 0.34;
+    public const double ImportedThreeDPieCenterOffsetFactor = 0.1425;
+    public const double ImportedThreeDPieTopShadeFactor = 0.92;
     public const byte ThreeDPieDepthFillAlpha = 140;
     public const double ClassicThreeDDepthScale = 0.045;
     public const double StockTickWidthFraction = 0.32;
@@ -4623,8 +4629,11 @@ public static partial class ChartRenderPlanner
         if (chart.Series.Count == 0 || !plot.HasPositiveArea)
             return Array.Empty<ChartPieSlicePrimitive>();
 
-        double outerRadius = Math.Min(plot.Width, plot.Height) / 2 * 0.85;
-        return BuildSlicePrimitivesForSeries(
+        bool importedThreeDPie = chart.ThreeDStyle == ChartThreeDStyle.Pie && UsesImportedTextMetrics(chart);
+        double outerRadius = importedThreeDPie
+            ? plot.Width / 2 * ImportedThreeDPieHorizontalScale
+            : Math.Min(plot.Width, plot.Height) / 2 * 0.85;
+        var slices = BuildSlicePrimitivesForSeries(
             chart.Series[0],
             seriesIndex: 0,
             plot,
@@ -4636,6 +4645,19 @@ public static partial class ChartRenderPlanner
             ShouldVaryPointColors(chart),
             ResolvePieVerticalScale(chart),
             ResolvePieDepthOffset(chart, outerRadius));
+        if (!importedThreeDPie)
+            return slices;
+
+        double centerOffsetY = plot.Height * ImportedThreeDPieCenterOffsetFactor;
+        return slices
+            .Select(slice => slice with
+            {
+                Center = new ChartPlanPoint(slice.Center.X, slice.Center.Y - centerOffsetY),
+                Fill = DarkenImportedThreeDPieTop(slice.Fill!.Value),
+                DrawDepthSidewalls = true,
+                DepthFill = slice.Fill!.Value
+            })
+            .ToArray();
     }
 
     public static IReadOnlyList<ChartPieSlicePrimitive> BuildDoughnutSlicePrimitives(
@@ -5591,13 +5613,31 @@ public static partial class ChartRenderPlanner
 
     public static double ResolvePieVerticalScale(ChartShape chart) =>
         chart.ChartType == ChartType.Pie && chart.ThreeDStyle == ChartThreeDStyle.Pie
-            ? ThreeDPieVerticalScale
+            ? UsesImportedTextMetrics(chart)
+                ? ImportedThreeDPieVerticalScale
+                : ThreeDPieVerticalScale
             : 1.0;
 
     public static double ResolvePieDepthOffset(ChartShape chart, double outerRadius) =>
         chart.ChartType == ChartType.Pie && chart.ThreeDStyle == ChartThreeDStyle.Pie
-            ? Math.Round(Math.Clamp(outerRadius * 0.22, 2.0, 14.0), 4)
+            ? UsesImportedTextMetrics(chart)
+                ? Math.Round(outerRadius * ImportedThreeDPieDepthScale, 4)
+                : Math.Round(Math.Clamp(outerRadius * 0.22, 2.0, 14.0), 4)
             : 0;
+
+    private static ChartFillPlan DarkenImportedThreeDPieTop(ChartFillPlan fill)
+    {
+        const double factor = ImportedThreeDPieTopShadeFactor;
+        return new ChartFillPlan(
+            new SrgbColor(
+                ScalePieDepthChannel(fill.Color.R, factor),
+                ScalePieDepthChannel(fill.Color.G, factor),
+                ScalePieDepthChannel(fill.Color.B, factor)),
+            Alpha: 255);
+    }
+
+    private static byte ScalePieDepthChannel(byte channel, double factor) =>
+        (byte)Math.Round(Math.Clamp(channel * factor, 0, 255));
 
     public static ChartClassicThreeDDepthPlan? BuildClassicThreeDDepthPlan(
         ChartShape chart,
