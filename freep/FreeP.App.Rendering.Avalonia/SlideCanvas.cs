@@ -2019,13 +2019,14 @@ public sealed class SlideCanvas : Control
         string txt = sb.Length == 0 ? " " : sb.ToString();
 
         var firstRun = para.Runs[0];
+        double fontScale = ResolvePowerPointFontScale(firstRun.FontFamily);
         var typeface = new Typeface(
             ResolvePowerPointFontFamily(firstRun.FontFamily),
             firstRun.Italic ? FontStyle.Italic : FontStyle.Normal,
             firstRun.Bold   ? FontWeight.Bold  : FontWeight.Normal,
             FontStretch.Normal);
 
-        double emSizePx = firstRun.FontSizePt * (96.0 / 72.0);
+        double emSizePx = firstRun.FontSizePt * (96.0 / 72.0) * fontScale;
         var brush = new SolidColorBrush(
             Color.FromRgb(firstRun.Color.R, firstRun.Color.G, firstRun.Color.B));
 
@@ -2038,7 +2039,9 @@ public sealed class SlideCanvas : Control
             brush);
 
         // PowerPoint's default paragraph leading is slightly tighter than Avalonia's automatic line height.
-        ft.LineHeight = ResolvePowerPointLineHeight(emSizePx, autoFitKind);
+        ft.LineHeight = ResolvePowerPointLineHeight(
+            firstRun.FontSizePt * (96.0 / 72.0),
+            autoFitKind);
 
         if (wrap && maxWidth > 0)
             ft.MaxTextWidth = maxWidth;
@@ -2061,7 +2064,8 @@ public sealed class SlideCanvas : Control
             if (run.Underline)    ft.SetTextDecorations(TextDecorations.Underline, pos, len);
             if (run.Strikethrough)ft.SetTextDecorations(TextDecorations.Strikethrough, pos, len);
             ft.SetFontFamily(ResolvePowerPointFontFamily(run.FontFamily), pos, len);
-            ft.SetFontSize(run.FontSizePt * (96.0 / 72.0), pos, len);
+            double runFontScale = ResolvePowerPointFontScale(run.FontFamily);
+            ft.SetFontSize(run.FontSizePt * (96.0 / 72.0) * runFontScale, pos, len);
             ft.SetForegroundBrush(
                 new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B)),
                 pos, len);
@@ -2070,12 +2074,17 @@ public sealed class SlideCanvas : Control
         return ft;
     }
 
-    // The host does not provide the Office theme's Aptos families. Cambria is
-    // the calibrated fallback for imported body-text metrics.
+    // The host does not provide the Office theme's Aptos families. Arial is the
+    // installed sans-serif fallback closest to the Office text silhouette.
     internal static string ResolvePowerPointFontFamily(string fontFamily) =>
         string.Equals(fontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
-            ? "Cambria"
+            ? "Arial"
             : fontFamily;
+
+    internal static double ResolvePowerPointFontScale(string fontFamily) =>
+        string.Equals(fontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+            ? 0.95
+            : 1.0;
 
     internal static double ResolvePowerPointLineHeight(double fontSizePx) =>
         fontSizePx * PowerPointDefaultLineSpacingFactor;

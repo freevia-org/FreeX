@@ -39,8 +39,8 @@ public sealed class SlideCanvasLineSpacingTests
     }
 
     [Theory]
-    [InlineData("Aptos", "Cambria")]
-    [InlineData("aptos", "Cambria")]
+    [InlineData("Aptos", "Arial")]
+    [InlineData("aptos", "Arial")]
     [InlineData("Aptos Display", "Aptos Display")]
     [InlineData("Calibri", "Calibri")]
     public void ResolvePowerPointFontFamily_UsesAvaloniaAptosFallback(
@@ -48,5 +48,18 @@ public sealed class SlideCanvasLineSpacingTests
         string expected)
     {
         SlideCanvas.ResolvePowerPointFontFamily(source).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("Aptos", 0.95)]
+    [InlineData("aptos", 0.95)]
+    [InlineData("Aptos Display", 1.0)]
+    [InlineData("Calibri", 1.0)]
+    public void ResolvePowerPointFontScale_OnlyCalibratesAptosFallback(
+        string source,
+        double expected)
+    {
+        SlideCanvas.ResolvePowerPointFontScale(source)
+            .Should().BeApproximately(expected, 0.000001);
     }
 }
