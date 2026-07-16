@@ -338,6 +338,7 @@ public sealed class SmartArtRenderingTests
             .Single(border => ReferenceEquals(border.Tag, sa));
         Assert.Equal(0, outer.BorderThickness.Left);
         Assert.Null(outer.BorderBrush);
+        Assert.Equal(new Thickness(2, 4, 0, 6), outer.Margin);
 
         foreach (var text in new[] { "Top", "Middle", "Lower", "Base" })
         {
