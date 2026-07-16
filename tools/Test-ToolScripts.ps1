@@ -30,6 +30,12 @@ function Assert-ToolSourceCentralization {
             "function ConvertTo-ToolMarkdownCell",
             "function Test-ToolGeneratedContentMatches",
             "function Invoke-FidelityCorpusDownload",
+            "function Invoke-ToolProcess",
+            "function Invoke-DotNetStep",
+            "function Invoke-PowerShellStep",
+            "function Invoke-DotNetRun",
+            "function Invoke-DotNetBuild",
+            "function Invoke-DotNetRunNoBuild",
             "function Get-RepoRoot",
             "function Get-GitValue",
             "function Resolve-FreeXExe")) {
@@ -81,6 +87,26 @@ function Assert-ToolSourceCentralization {
         $script = Get-Content -LiteralPath $scriptPath -Raw
         if (-not $script.Contains("ToolScriptSupport.ps1")) {
             throw "$($entry.Key) must dot-source ToolScriptSupport.ps1 for shared helpers."
+        }
+
+        foreach ($helperName in $entry.Value) {
+            if ($script -match "function\s+$([regex]::Escape($helperName))\b") {
+                throw "$($entry.Key) redeclares shared helper '$helperName'."
+            }
+        }
+    }
+
+    $repoRoot = Split-Path -Parent $ToolRoot
+    $orderedToolScripts = [ordered]@{
+        "freew-fidelity-corpus\tools\Run-FreeWVisualEvidence.ps1" = @("Resolve-RepositoryPath", "Invoke-DotNetStep", "Invoke-PowerShellStep")
+        "tools\Run-FreeWWordBaselineEvidence.ps1" = @("Resolve-FullPath", "Invoke-DotNetRun", "Invoke-DotNetBuild", "Invoke-DotNetRunNoBuild")
+        "tools\FreeW.RenderCompare\Export-WordPdfsVisible.ps1" = @("Resolve-FullPath")
+    }
+    foreach ($entry in $orderedToolScripts.GetEnumerator()) {
+        $scriptPath = Join-Path $repoRoot $entry.Key
+        $script = Get-Content -LiteralPath $scriptPath -Raw
+        if (-not $script.Contains("ToolScriptSupport.ps1")) {
+            throw "$($entry.Key) must dot-source ToolScriptSupport.ps1."
         }
 
         foreach ($helperName in $entry.Value) {
@@ -290,6 +316,95 @@ function Assert-SharedToolHelperBehavior {
     Write-Host "Validated shared repository helper behavior."
 }
 
+function Assert-ToolProcessBehavior {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    . (Join-Path $ToolRoot "ToolScriptSupport.ps1")
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-tool-process-behavior-" + [guid]::NewGuid().ToString("N"))
+    $cwdRoot = Join-Path $tempRoot "cwd-root"
+    $syntheticRepoRoot = Join-Path $tempRoot "repo-root"
+    $workingRoot = Join-Path $tempRoot "working-root"
+    New-Item -ItemType Directory -Force -Path $cwdRoot, $syntheticRepoRoot, $workingRoot | Out-Null
+    $originalLocation = Get-Location
+    try {
+        Set-Location -LiteralPath $cwdRoot
+        $cwdResolved = Resolve-ToolFullPath -Path "child\cwd.txt"
+        $expectedCwdPath = Join-Path $cwdRoot "child\cwd.txt"
+        if (-not [System.IO.Path]::GetFullPath($cwdResolved).Equals([System.IO.Path]::GetFullPath($expectedCwdPath), [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Resolve-ToolFullPath did not preserve cwd-relative resolution: '$cwdResolved'."
+        }
+
+        $repoPath = Resolve-ToolRepoPath -Path "src/tools\child.txt" -RepoRoot $syntheticRepoRoot.Replace([string][char]92, "/")
+        $expectedRepoPath = Join-Path $syntheticRepoRoot "src\tools\child.txt"
+        if (-not [System.IO.Path]::GetFullPath($repoPath).Equals([System.IO.Path]::GetFullPath($expectedRepoPath), [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Resolve-ToolRepoPath did not preserve repo-relative resolution or slash handling: '$repoPath'."
+        }
+
+        $probePath = Join-Path $tempRoot "tool-process-probe.ps1"
+        $probeOutputPath = Join-Path $tempRoot "probe-output.json"
+        @'
+param(
+    [Parameter(Mandatory = $true)][string]$OutputPath,
+    [Parameter(Mandatory = $true)][string]$First,
+    [Parameter(Mandatory = $true)][string]$Second
+)
+
+Write-Output "synthetic stdout"
+[Console]::Error.WriteLine("synthetic stderr")
+[ordered]@{
+    WorkingDirectory = (Get-Location).Path
+    First = $First
+    Second = $Second
+} | ConvertTo-Json | Set-Content -LiteralPath $OutputPath
+'@ | Set-Content -LiteralPath $probePath -Encoding UTF8
+
+        $powerShell = (Get-Command powershell.exe -ErrorAction Stop).Path
+        Invoke-ToolProcess `
+            -FilePath $powerShell `
+            -Arguments @(
+                "-NoProfile",
+                "-ExecutionPolicy", "Bypass",
+                "-File", $probePath,
+                "-OutputPath", $probeOutputPath,
+                "first value",
+                "second value with spaces"
+            ) `
+            -WorkingDirectory ($workingRoot.Replace([string][char]92, "/")) `
+            -FailureMessage "synthetic process probe"
+
+        $probe = Get-Content -LiteralPath $probeOutputPath -Raw | ConvertFrom-Json
+        if (-not [System.IO.Path]::GetFullPath($probe.WorkingDirectory).Equals([System.IO.Path]::GetFullPath($workingRoot), [System.StringComparison]::OrdinalIgnoreCase) -or
+            $probe.First -cne "first value" -or $probe.Second -cne "second value with spaces") {
+            throw "Invoke-ToolProcess did not preserve working directory or argument-array forwarding: $($probe | ConvertTo-Json -Compress)."
+        }
+
+        if (-not (Get-Location).Path.Equals($cwdRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Invoke-ToolProcess did not restore the parent working directory."
+        }
+
+        $nonzeroMessage = $null
+        try {
+            Invoke-ToolProcess `
+                -FilePath $powerShell `
+                -Arguments @("-NoProfile", "-Command", "exit 17") `
+                -FailureMessage "synthetic nonzero process"
+        }
+        catch {
+            $nonzeroMessage = $_.Exception.Message
+        }
+
+        if ($nonzeroMessage -ne "synthetic nonzero process with exit code 17" -or $LASTEXITCODE -ne 17) {
+            throw "Invoke-ToolProcess did not preserve nonzero exit propagation: message='$nonzeroMessage', exit=$LASTEXITCODE."
+        }
+    }
+    finally {
+        Set-Location $originalLocation
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "Validated synthetic tool process forwarding and failure behavior."
+}
+
 function Assert-GeneratedDocCheckNewlineSemantics {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -466,6 +581,7 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-ToolSourceCentralization -ToolRoot $resolvedDirectory
     Assert-ScreenshotCaptureSupportBehavior -ToolRoot $resolvedDirectory
     Assert-SharedToolHelperBehavior -RepoRoot $repoRoot
+    Assert-ToolProcessBehavior -ToolRoot $resolvedDirectory
     Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
     Assert-FidelityCorpusDownloaderBehavior -ToolRoot $resolvedDirectory
 }

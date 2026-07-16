@@ -11,6 +11,8 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+. (Join-Path $PSScriptRoot "..\ToolScriptSupport.ps1")
+
 Add-Type @'
 using System;
 using System.Text;
@@ -26,10 +28,6 @@ public static class WordPdfVisibleUi32 {
   [DllImport("user32.dll", SetLastError=true)] public static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
 }
 '@
-
-function Resolve-FullPath([string]$Path) {
-    $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
-}
 
 function Get-PublishDialogHandle {
     $handles = New-Object System.Collections.Generic.List[IntPtr]
@@ -189,8 +187,8 @@ function Get-WordApplication {
     }
 }
 
-$corpusDirFull = Resolve-FullPath $CorpusDir
-$outDirFull = Resolve-FullPath $OutDir
+$corpusDirFull = Resolve-ToolFullPath $CorpusDir
+$outDirFull = Resolve-ToolFullPath $OutDir
 $logPath = Join-Path $outDirFull 'word-export-visible-ui.csv'
 New-Item -ItemType Directory -Force -Path $outDirFull | Out-Null
 

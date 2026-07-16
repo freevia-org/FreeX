@@ -44,6 +44,76 @@ function Resolve-ToolRepoPath {
     return Resolve-ToolFullPath -Path $Path -BasePath $fullRepoRoot
 }
 
+function Invoke-ToolProcess {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [Parameter(Mandatory = $true)][string]$FailureMessage,
+        [string]$WorkingDirectory
+    )
+
+    $previousLocation = $null
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($WorkingDirectory)) {
+            $previousLocation = Get-Location
+            Set-Location -LiteralPath (Resolve-ToolFullPath -Path $WorkingDirectory)
+        }
+
+        & $FilePath @Arguments
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        if ($null -ne $previousLocation) {
+            Set-Location $previousLocation
+        }
+    }
+
+    if ($exitCode -ne 0) {
+        throw "$FailureMessage with exit code $exitCode"
+    }
+}
+
+function Invoke-DotNetStep([string]$Label, [string[]]$Arguments) {
+    Write-Host ""
+    Write-Host "== $Label ==" -ForegroundColor Cyan
+    Invoke-ToolProcess -FilePath "dotnet" -Arguments $Arguments -FailureMessage $Label
+}
+
+function Invoke-PowerShellStep([string]$Label, [string]$ScriptPath, [string[]]$Arguments) {
+    $powerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
+    if (-not $powerShell) {
+        throw "$Label requires powershell.exe because MS Word COM automation is Windows-only."
+    }
+
+    Write-Host ""
+    Write-Host "== $Label ==" -ForegroundColor Cyan
+    Invoke-ToolProcess `
+        -FilePath $powerShell.Path `
+        -Arguments (@("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $ScriptPath) + $Arguments) `
+        -FailureMessage $Label
+}
+
+function Invoke-DotNetRun([string]$ProjectPath, [string[]]$ToolArgs = @(), [string]$Configuration = "Release") {
+    Invoke-ToolProcess `
+        -FilePath "dotnet" `
+        -Arguments (@("run", "--project", $ProjectPath, "--configuration", $Configuration, "--") + $ToolArgs) `
+        -FailureMessage "dotnet run failed for $ProjectPath"
+}
+
+function Invoke-DotNetBuild([string]$ProjectPath, [string]$Configuration = "Release") {
+    Invoke-ToolProcess `
+        -FilePath "dotnet" `
+        -Arguments @("build", $ProjectPath, "--configuration", $Configuration) `
+        -FailureMessage "dotnet build failed for $ProjectPath"
+}
+
+function Invoke-DotNetRunNoBuild([string]$ProjectPath, [string[]]$ToolArgs = @(), [string]$Configuration = "Release") {
+    Invoke-ToolProcess `
+        -FilePath "dotnet" `
+        -Arguments (@("run", "--no-restore", "--no-build", "--project", $ProjectPath, "--configuration", $Configuration, "--") + $ToolArgs) `
+        -FailureMessage "dotnet run --no-build failed for $ProjectPath"
+}
+
 function Resolve-InputPath {
     param(
         [Parameter(Mandatory = $true)][string]$Path,

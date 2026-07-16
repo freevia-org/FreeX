@@ -10,10 +10,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-
-function Resolve-FullPath([string]$Path) {
-    $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
-}
+. (Join-Path $PSScriptRoot "ToolScriptSupport.ps1")
 
 function Test-ComProgIdAvailable([string]$ProgId) {
     if ([string]::IsNullOrWhiteSpace($ProgId)) {
@@ -22,27 +19,6 @@ function Test-ComProgIdAvailable([string]$ProgId) {
 
     $type = [type]::GetTypeFromProgID($ProgId, $false)
     return $null -ne $type
-}
-
-function Invoke-DotNetRun([string]$ProjectPath, [string[]]$ToolArgs) {
-    & dotnet run --project $ProjectPath --configuration $Configuration -- @ToolArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet run failed for $ProjectPath with exit code $LASTEXITCODE"
-    }
-}
-
-function Invoke-DotNetBuild([string]$ProjectPath) {
-    & dotnet build $ProjectPath --configuration $Configuration
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet build failed for $ProjectPath with exit code $LASTEXITCODE"
-    }
-}
-
-function Invoke-DotNetRunNoBuild([string]$ProjectPath, [string[]]$ToolArgs) {
-    & dotnet run --no-restore --no-build --project $ProjectPath --configuration $Configuration -- @ToolArgs
-    if ($LASTEXITCODE -ne 0) {
-        throw "dotnet run --no-build failed for $ProjectPath with exit code $LASTEXITCODE"
-    }
 }
 
 function Get-PngDimensions([string]$Path) {
@@ -199,7 +175,7 @@ function Write-WordBaselineUnavailableSummary([string]$Reason) {
         "--allow-no-word-fallback-evidence",
         "--word-baseline-unavailable-reason", $Reason,
         "--output-json", $summaryJson,
-        "--output-md", $summaryMd)
+        "--output-md", $summaryMd) -Configuration $Configuration
 
     Write-Host "summary json: $summaryJson"
     Write-Host "summary markdown: $summaryMd"
@@ -207,8 +183,8 @@ function Write-WordBaselineUnavailableSummary([string]$Reason) {
     exit 0
 }
 
-$repoRoot = Resolve-FullPath (Join-Path $PSScriptRoot "..")
-$runRootFull = Resolve-FullPath $RunRoot
+$repoRoot = Resolve-ToolFullPath (Join-Path $PSScriptRoot "..")
+$runRootFull = Resolve-ToolFullPath $RunRoot
 $fixtureDir = Join-Path $runRootFull "fixtures"
 $wpfDir = Join-Path $runRootFull "wpf"
 $avaloniaDir = Join-Path $runRootFull "avalonia"
@@ -229,10 +205,10 @@ $wordExportScript = if ($UseVisibleWordPublish) {
 New-Item -ItemType Directory -Force -Path $runRootFull, $fixtureDir, $wpfDir, $avaloniaDir, $wordPdfDir, $wordBaselineDir | Out-Null
 
 if (-not $SkipEvidenceRender) {
-    Invoke-DotNetBuild $fidelityRenderProject
-    Invoke-DotNetRunNoBuild $fidelityRenderProject @("--generate-f2-corpus", $fixtureDir)
-    Invoke-DotNetRunNoBuild $fidelityRenderProject @($fixtureDir, $wpfDir, $MaxPagesPerDocument.ToString([Globalization.CultureInfo]::InvariantCulture), "--composite", "--software-fallback")
-    Invoke-DotNetRun $pageLayoutShotProject @($avaloniaDir)
+    Invoke-DotNetBuild $fidelityRenderProject -Configuration $Configuration
+    Invoke-DotNetRunNoBuild $fidelityRenderProject @("--generate-f2-corpus", $fixtureDir) -Configuration $Configuration
+    Invoke-DotNetRunNoBuild $fidelityRenderProject @($fixtureDir, $wpfDir, $MaxPagesPerDocument.ToString([Globalization.CultureInfo]::InvariantCulture), "--composite", "--software-fallback") -Configuration $Configuration
+    Invoke-DotNetRun $pageLayoutShotProject @($avaloniaDir) -Configuration $Configuration
 }
 
 $wpfManifest = Join-Path $wpfDir "freew_visual_evidence_manifest.json"
@@ -278,7 +254,7 @@ try {
                 ([int]($dimensions.Height * 1.25)))
         }
 
-        Invoke-DotNetRun $pdfRasterizeProject $rasterArgs
+        Invoke-DotNetRun $pdfRasterizeProject $rasterArgs -Configuration $Configuration
     }
 
     foreach ($page in 1..[Math]::Max(1, $MaxPagesPerDocument)) {
@@ -307,7 +283,7 @@ Invoke-DotNetRun $summaryProject @(
     "--word-baseline-scope", "generated-corpus",
     "--baseline-tolerance", "word-png-default",
     "--output-json", $summaryJson,
-    "--output-md", $summaryMd)
+    "--output-md", $summaryMd) -Configuration $Configuration
 
 Write-Host "fixtures: $((Get-ChildItem -Path $fixtureDir -Filter *.docx).Count)"
 Write-Host "word baseline PNGs: $((Get-ChildItem -Path $wordBaselineDir -Filter *.png).Count)"
