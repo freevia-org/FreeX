@@ -469,12 +469,21 @@ internal static partial class ViewportConditionalFormatEvaluator
     {
         var result = (baseStyle ?? CellStyle.Default).Clone();
 
+        // A CF rule that specifies any fill (a flat color and/or a pattern) fully replaces the
+        // base cell's background in Excel - a gradient fill or pattern hatch on the base cell
+        // never shows through a matching CF fill, even when the CF itself only specifies a flat
+        // color (the common case: dxf patternType omitted/"solid" -> FillPatternStyle stays None).
+        // Clear the stale gradient and adopt the CF's pattern fields verbatim (including "None")
+        // instead of only conditionally overwriting them, so a plain solid CF fill doesn't leave
+        // the base cell's pattern hatch or gradient visible on top of/instead of the CF color.
+        if (cfStyle.FillColor.HasValue || cfStyle.FillPatternStyle != CellFillPatternStyle.None)
+        {
+            result.GradientFill = null;
+            result.FillPatternStyle = cfStyle.FillPatternStyle;
+            result.FillPatternColor = cfStyle.FillPatternColor;
+        }
         if (cfStyle.FillColor.HasValue)
             result.FillColor = cfStyle.FillColor;
-        if (cfStyle.FillPatternStyle != CellFillPatternStyle.None)
-            result.FillPatternStyle = cfStyle.FillPatternStyle;
-        if (cfStyle.FillPatternColor.HasValue)
-            result.FillPatternColor = cfStyle.FillPatternColor;
 
         if (cfStyle.Bold)
             result.Bold = true;

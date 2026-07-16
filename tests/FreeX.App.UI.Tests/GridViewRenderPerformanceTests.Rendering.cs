@@ -302,8 +302,11 @@ public sealed partial class GridViewRenderPerformanceTests
         isHeaderSelected.Should().Contain("while (intervalIndex < intervals.Count && index > intervals[intervalIndex].End)");
         renderSelectedHeaders.Should().NotContain(".Any(");
         renderSelectedHeaders.Should().NotContain("foreach (var range in selectedRanges)");
-        renderFreezeDivider.Should().Contain("FindRowMetric(Viewport.RowMetrics, fp.Rows)");
-        renderFreezeDivider.Should().Contain("FindColMetric(Viewport.ColMetrics, fp.Cols)");
+        // R43-render-frozen-header-2-3: the exact-match lookup was replaced with a
+        // nearest-preceding-entry fallback so the divider still draws when the
+        // frozen-boundary row/column is hidden and absent from RowMetrics/ColMetrics.
+        renderFreezeDivider.Should().Contain("FindLastRowMetricAtOrBefore(Viewport.RowMetrics, fp.Rows)");
+        renderFreezeDivider.Should().Contain("FindLastColMetricAtOrBefore(Viewport.ColMetrics, fp.Cols)");
         renderFreezeDivider.Should().NotContain("FirstOrDefault");
     }
 

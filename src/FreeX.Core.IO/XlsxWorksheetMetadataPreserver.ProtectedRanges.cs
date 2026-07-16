@@ -135,23 +135,92 @@ internal static partial class XlsxWorksheetMetadataPreserver
             return true;
         }
 
-        if (parts.Length == 2 &&
-            CellAddress.TryParse(parts[0], sheet, out var start) &&
+        if (parts.Length != 2)
+            return false;
+
+        if (CellAddress.TryParse(parts[0], sheet, out var start) &&
             CellAddress.TryParse(parts[1], sheet, out var end))
         {
             range = new GridRange(start, end);
             return true;
         }
 
+        // Whole-column ("A:A") or whole-row ("1:1") sqref -- neither endpoint has both a column
+        // letter and a row number, so CellAddress.TryParse above rejects both. Model it as the full
+        // column/row span (matching how full-column/row references are modeled everywhere else in
+        // FreeX, e.g. Parser.cs/FormulaEvaluator.References.cs using CellAddress.MaxRow/MaxCol).
+        return TryParseWholeColumnOrRowSqrefRange(parts[0], parts[1], sheet, out range);
+    }
+
+    private static bool TryParseWholeColumnOrRowSqrefRange(
+        string startToken,
+        string endToken,
+        SheetId sheet,
+        out GridRange range)
+    {
+        range = default;
+
+        var startCol = CellAddress.ColumnNameToNumber(startToken);
+        var endCol = CellAddress.ColumnNameToNumber(endToken);
+        if (startCol is > 0 and <= CellAddress.MaxCol && endCol is > 0 and <= CellAddress.MaxCol)
+        {
+            range = new GridRange(
+                new CellAddress(sheet, 1, startCol),
+                new CellAddress(sheet, CellAddress.MaxRow, endCol));
+            return true;
+        }
+
+        if (IsAsciiDigitsOnly(startToken) && IsAsciiDigitsOnly(endToken) &&
+            uint.TryParse(startToken, out var startRow) && uint.TryParse(endToken, out var endRow) &&
+            startRow is > 0 and <= CellAddress.MaxRow && endRow is > 0 and <= CellAddress.MaxRow)
+        {
+            range = new GridRange(
+                new CellAddress(sheet, startRow, 1),
+                new CellAddress(sheet, endRow, CellAddress.MaxCol));
+            return true;
+        }
+
         return false;
     }
+
+    private static bool IsAsciiDigitsOnly(string value)
+    {
+        if (value.Length == 0)
+            return false;
+
+        foreach (var c in value)
+        {
+            if (c is < '0' or > '9')
+                return false;
+        }
+
+        return true;
+    }
+
+    // "sqref" is the join key (handled separately) and the per-range password quartet
+    // (legacy "password" or modern "algorithmName"/"hashValue"/"saltValue"/"spinCount") is fully
+    // modeled via Sheet.AllowEditRangePasswords: XlsxAllowEditRangeMapper.Save has already rebuilt
+    // targetRange's password attributes from the CURRENT model state (including a password having
+    // been cleared or changed). None of it may be blindly copied back from the stale pre-edit
+    // source element -- that would resurrect a removed/changed range password's old verifier, the
+    // same bug class ModeledSheetProtectionAttributes guards against for sheet-level protection
+    // (see XlsxWorksheetMetadataPreserver.MergeHelpers.cs).
+    private static readonly HashSet<string> ModeledProtectedRangePasswordAttributes = new(StringComparer.Ordinal)
+    {
+        "sqref",
+        "password",
+        "algorithmName",
+        "hashValue",
+        "saltValue",
+        "spinCount",
+    };
 
     private static bool MergeProtectedRangeMetadata(XElement sourceRange, XElement targetRange)
     {
         var changed = false;
         foreach (var sourceAttribute in sourceRange.Attributes())
         {
-            if (sourceAttribute.Name == "sqref")
+            if (ModeledProtectedRangePasswordAttributes.Contains(sourceAttribute.Name.LocalName))
                 continue;
 
             if (targetRange.Attribute(sourceAttribute.Name)?.Value == sourceAttribute.Value)

@@ -114,7 +114,10 @@ public sealed class ExcelParityDateSerialTests
         var sheet = workbook.AddSheet("S");
 
         _eval.Evaluate("=DATEVALUE(\"1904-01-01\")", sheet, workbook).Should().Be(new NumberValue(0));
-        _eval.Evaluate("=DATEVALUE(\"1903-12-31\")", sheet, workbook).Should().Be(ErrorValue.Num);
+        // R43-formula-datetime-parse-2-4: a syntactically valid date_text before the current
+        // date base's epoch floor is Excel's documented #VALUE! case, not #NUM! - the epoch
+        // floor itself shifts with the workbook's 1904 date system, but the error code does not.
+        _eval.Evaluate("=DATEVALUE(\"1903-12-31\")", sheet, workbook).Should().Be(ErrorValue.Value);
         _eval.Evaluate("=EDATE(DATE(1904,1,31),1)", sheet, workbook)
             .Should().Be(new NumberValue(Serial1904(new DateTime(1904, 2, 29))));
         _eval.Evaluate("=EOMONTH(DATE(1904,1,1),0)", sheet, workbook)
@@ -203,9 +206,20 @@ public sealed class ExcelParityDateSerialTests
     [InlineData("=TIMEVALUE(\"1/2/2024\")")]
     [InlineData("=TIMEVALUE(\"2024-01-02\")")]
     [InlineData("=TIMEVALUE(\"2/29/1900\")")]
-    public void TimeValue_DateOnlyText_ReturnsValueError(string formula)
+    public void TimeValue_DateOnlyText_ReturnsZero(string formula)
     {
-        _eval.Evaluate(formula, Sheet()).Should().Be(ErrorValue.Value);
+        // R43-formula-datetime-parse-2-2: TIMEVALUE strips any date portion and returns only the
+        // time-of-day fraction, which real Excel gives as 0 (midnight) for a date-only string -
+        // it does not reject the input as #VALUE!.
+        _eval.Evaluate(formula, Sheet()).Should().Be(new NumberValue(0));
+    }
+
+    [Fact]
+    public void TimeValue_PlainNonDateNonTimeText_StillReturnsValueError()
+    {
+        // No-regression sibling: text with neither a recognizable date nor time component must
+        // still be rejected as #VALUE!, not silently coerced to 0.
+        _eval.Evaluate("=TIMEVALUE(\"not a date or time\")", Sheet()).Should().Be(ErrorValue.Value);
     }
 
     [Theory]

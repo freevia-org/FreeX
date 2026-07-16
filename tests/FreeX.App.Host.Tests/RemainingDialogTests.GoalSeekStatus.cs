@@ -30,7 +30,11 @@ public sealed partial class RemainingDialogTests
         source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_KeepResult\")");
         source.Should().Contain("Content = UiText.Get(\"GoalSeekStatus_RestoreOriginalValues\")");
         source.Should().Contain("DialogButtonRowFactory.Create(keepButton, restoreButton)");
-        source.Should().Contain("DialogButtonRowFactory.CreateOkOnly(() => DialogResult = false, 76);");
+        // R43-commands-goalseek-datatable-3-2: the non-converged branch now offers Excel's real
+        // OK/Cancel pair (OK keeps the closest approximate value, Cancel restores the original)
+        // instead of a single OK-only button that could never accept the result.
+        source.Should().Contain("DialogButtonRowFactory.Create(() =>");
+        source.Should().NotContain("DialogButtonRowFactory.CreateOkOnly");
     }
 
     [Fact]

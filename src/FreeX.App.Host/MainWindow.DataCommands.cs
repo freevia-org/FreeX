@@ -704,7 +704,24 @@ public partial class MainWindow
         {
             var cmd = new GoalSeekCommand(changingCell, result.FoundValue);
             if (TryExecuteCommand(cmd, "Goal Seek"))
+            {
                 RecalculateIfAutomatic([changingCell]);
+
+                // Excel always refreshes the set cell (and the rest of the dependency chain from
+                // the changing cell) once Goal Seek applies its result, even when the workbook is
+                // in Manual calculation mode -- Goal Seek's recalculation is a deliberate one-time
+                // action, not subject to the "only recalc on F9" rule that otherwise governs Manual
+                // mode. RecalculateIfAutomatic above is a no-op outside Automatic/
+                // AutomaticExceptDataTables mode, so force the recalculation here when it was
+                // skipped, or the set cell would keep displaying its pre-seek value. Mirrors
+                // WorkbookCellEditService.ExecuteGoalSeek (FreeX.App.Services), which the WPF host's
+                // Goal Seek command does not route through.
+                if (_workbook.CalculationMode is not (WorkbookCalculationMode.Automatic or WorkbookCalculationMode.AutomaticExceptDataTables))
+                {
+                    _recalcEngine.Recalculate(_workbook, [changingCell]);
+                    InvalidateNavigationCaches();
+                }
+            }
         }
     }
 

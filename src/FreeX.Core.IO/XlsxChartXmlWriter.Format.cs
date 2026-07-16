@@ -82,6 +82,14 @@ internal static partial class XlsxChartXmlWriter
             chartXml.Root?.SetAttributeValue(XNamespace.Xmlns + "r", relNs.NamespaceName);
     }
 
+    /// <summary>
+    /// R43-io-chart-axis-title-numfmt-3-2: <paramref name="vertical"/> is true for a title on a
+    /// left/right (vertical) axis. Excel's own default for a plain (non-rich) axis title on a
+    /// vertical axis is rotated -90 degrees with the run laid out horizontally within that rotated
+    /// frame (&lt;a:bodyPr rot="-5400000" vert="horz"/&gt;) -- e.g. the standard "Primary Vertical"
+    /// axis title. Reproducing that default here (instead of an always-bare &lt;a:bodyPr/&gt;) keeps
+    /// a round-tripped vertical-axis title reading vertically instead of flattening to horizontal.
+    /// </summary>
     private static XElement? ToAxisTitleXml(
         string? title,
         ChartManualLayoutModel? layout,
@@ -89,13 +97,16 @@ internal static partial class XlsxChartXmlWriter
         CellColor? textColor,
         double fontSize,
         XNamespace chartNs,
-        XNamespace drawingNs) =>
+        XNamespace drawingNs,
+        bool vertical = false) =>
         string.IsNullOrWhiteSpace(title)
             ? null
             : new XElement(chartNs + "title",
                 new XElement(chartNs + "tx",
                     new XElement(chartNs + "rich",
-                        new XElement(drawingNs + "bodyPr"),
+                        vertical
+                            ? new XElement(drawingNs + "bodyPr", new XAttribute("rot", -5400000), new XAttribute("vert", "horz"))
+                            : new XElement(drawingNs + "bodyPr"),
                         new XElement(drawingNs + "p",
                             new XElement(drawingNs + "r",
                                 ToTextRunProperties(textThemeColor, textColor, fontSize, drawingNs),

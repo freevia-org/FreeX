@@ -127,7 +127,7 @@ public static partial class BuiltInFunctions
         try
         {
             if (occurrence == 0)
-                return TextResult(regex.Replace(text, replacement));
+                return TextResult(regex.Replace(text, m => ExpandRe2Replacement(m, replacement)));
 
             var matches = regex.Matches(text);
             var matchIndex = occurrence > 0 ? occurrence - 1 : matches.Count + occurrence;
@@ -137,13 +137,92 @@ public static partial class BuiltInFunctions
             var match = matches[matchIndex];
             return TextResult(
                 text[..match.Index] +
-                match.Result(replacement) +
+                ExpandRe2Replacement(match, replacement) +
                 text[(match.Index + match.Length)..]);
         }
         catch (RegexMatchTimeoutException)
         {
             return ErrorValue.Value;
         }
+    }
+
+    /// <summary>
+    /// Expands a REGEXREPLACE replacement template against a match using RE2/Go's
+    /// regexp.Expand semantics (which is what real Excel's REGEXREPLACE runs on), not .NET's
+    /// Match.Result semantics. The two differ on unresolved group references: RE2 replaces a
+    /// reference to an out-of-range or unmatched group (numeric or named) with an empty string,
+    /// while .NET leaves the literal '$N' text untouched. '$$' is a literal '$'; '$name' or
+    /// '${name}' expands to that capture group.
+    /// </summary>
+    private static string ExpandRe2Replacement(Match match, string replacement)
+    {
+        if (replacement.IndexOf('$') < 0)
+            return replacement;
+
+        var sb = new System.Text.StringBuilder(replacement.Length);
+        for (var i = 0; i < replacement.Length; i++)
+        {
+            var c = replacement[i];
+            if (c != '$' || i + 1 >= replacement.Length)
+            {
+                sb.Append(c);
+                continue;
+            }
+
+            var next = replacement[i + 1];
+            if (next == '$')
+            {
+                sb.Append('$');
+                i++;
+                continue;
+            }
+
+            if (next == '{')
+            {
+                var close = replacement.IndexOf('}', i + 2);
+                if (close < 0)
+                {
+                    sb.Append(c); // unterminated '${' -- leave the lone '$' literal
+                    continue;
+                }
+
+                sb.Append(ResolveReplacementGroup(match, replacement[(i + 2)..close]));
+                i = close;
+                continue;
+            }
+
+            if (IsReplacementNameChar(next))
+            {
+                var j = i + 1;
+                while (j < replacement.Length && IsReplacementNameChar(replacement[j]))
+                    j++;
+
+                sb.Append(ResolveReplacementGroup(match, replacement[(i + 1)..j]));
+                i = j - 1;
+                continue;
+            }
+
+            // '$' not followed by a name char, '{', or another '$' -- literal '$'.
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
+    private static bool IsReplacementNameChar(char c) =>
+        c is '_' or (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9');
+
+    private static string ResolveReplacementGroup(Match match, string groupRef)
+    {
+        if (int.TryParse(groupRef, out var index))
+        {
+            return index >= 0 && index < match.Groups.Count && match.Groups[index].Success
+                ? match.Groups[index].Value
+                : "";
+        }
+
+        var group = match.Groups[groupRef];
+        return group.Success ? group.Value : "";
     }
 
     private static bool TryCreateRegex(
@@ -184,6 +263,20 @@ public static partial class BuiltInFunctions
         // doesn't spuriously fail here with #VALUE!.
         patternText = TranslatePythonNamedGroups(patternText);
 
+        // RE2/Excel's $ (without a /m multiline flag, which these functions never expose) is a
+        // strict end-of-text anchor -- equivalent to \z. .NET's default (non-Multiline) $ instead
+        // matches either the true end of the string OR immediately before a single trailing '\n'.
+        // Rewrite bare, unescaped, out-of-class '$' to '\z' so a source string ending in a
+        // newline behaves like real Excel instead of silently matching one character early.
+        patternText = NormalizeEndOfTextAnchor(patternText);
+
+        // RE2/Excel's \p{Name} accepts Unicode *script* names (e.g. \p{Greek}) in addition to
+        // general categories; .NET's \p{} only recognizes general-category abbreviations and
+        // "Is"-prefixed named *blocks* (e.g. \p{IsGreek}). Translate the common RE2 script names
+        // real spreadsheets are likely to use to their nearest .NET named-block equivalent so
+        // these don't spuriously throw ArgumentException/#VALUE! for patterns Excel accepts.
+        patternText = TranslateRe2ScriptNames(patternText);
+
         try
         {
             regex = new Regex(patternText, options, FormulaSafetyLimits.RegexTimeout);
@@ -200,6 +293,92 @@ public static partial class BuiltInFunctions
 
     private static string TranslatePythonNamedGroups(string pattern) =>
         PythonNamedGroupSyntax.IsMatch(pattern) ? PythonNamedGroupSyntax.Replace(pattern, "(?<") : pattern;
+
+    /// <summary>
+    /// Rewrites bare (unescaped, out-of-character-class) '$' meta-characters to '\z' so the anchor
+    /// matches RE2/Excel's strict end-of-text semantics rather than .NET's default "end of string,
+    /// or immediately before a single trailing newline" behavior.
+    /// </summary>
+    private static string NormalizeEndOfTextAnchor(string pattern)
+    {
+        if (pattern.IndexOf('$') < 0)
+            return pattern;
+
+        var sb = new System.Text.StringBuilder(pattern.Length + 4);
+        var inClass = false;
+        for (var i = 0; i < pattern.Length; i++)
+        {
+            var c = pattern[i];
+            if (c == '\\' && i + 1 < pattern.Length)
+            {
+                sb.Append(c).Append(pattern[i + 1]);
+                i++;
+                continue;
+            }
+
+            if (!inClass && c == '[')
+            {
+                inClass = true;
+                sb.Append(c);
+                continue;
+            }
+            if (inClass && c == ']')
+            {
+                inClass = false;
+                sb.Append(c);
+                continue;
+            }
+
+            if (!inClass && c == '$')
+            {
+                sb.Append(@"\z");
+                continue;
+            }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
+    // RE2 Unicode *script* names (as opposed to .NET's general-category / "Is"-block names) that
+    // real spreadsheet patterns are most likely to reference, mapped to their nearest .NET named
+    // Unicode block. Deliberately not exhaustive of RE2's full script list -- only translating
+    // names we can map faithfully; anything not listed here is left as-is (and still throws, same
+    // as before this fix, rather than risk mistranslating a script we cannot represent in .NET).
+    private static readonly Dictionary<string, string> Re2ScriptNameToDotNetBlock = new(StringComparer.Ordinal)
+    {
+        ["Greek"] = "IsGreek",
+        ["Cyrillic"] = "IsCyrillic",
+        ["Hebrew"] = "IsHebrew",
+        ["Arabic"] = "IsArabic",
+        ["Armenian"] = "IsArmenian",
+        ["Georgian"] = "IsGeorgian",
+        ["Hiragana"] = "IsHiragana",
+        ["Katakana"] = "IsKatakana",
+        ["Thai"] = "IsThai",
+        ["Devanagari"] = "IsDevanagari",
+        ["Bengali"] = "IsBengali",
+        ["Tamil"] = "IsTamil",
+        ["Hangul"] = "IsHangulSyllables",
+        ["Han"] = "IsCJKUnifiedIdeographs",
+    };
+
+    private static readonly Regex UnicodePropertyName = new(@"\\([pP])\{([A-Za-z][A-Za-z0-9_]*)\}", RegexOptions.Compiled);
+
+    private static string TranslateRe2ScriptNames(string pattern)
+    {
+        if (pattern.IndexOf(@"\p", StringComparison.Ordinal) < 0 && pattern.IndexOf(@"\P", StringComparison.Ordinal) < 0)
+            return pattern;
+
+        return UnicodePropertyName.Replace(pattern, m =>
+        {
+            var name = m.Groups[2].Value;
+            return Re2ScriptNameToDotNetBlock.TryGetValue(name, out var dotNetBlock)
+                ? $@"\{m.Groups[1].Value}{{{dotNetBlock}}}"
+                : m.Value;
+        });
+    }
 
     /// <summary>
     /// Detects the two RE2-unsupported construct families that .NET's regex engine happily
@@ -242,6 +421,8 @@ public static partial class BuiltInFunctions
                         return true; // (?=...) or (?!...) lookahead
                     if (afterQuestion == '<' && i + 3 < pattern.Length && pattern[i + 3] is '=' or '!')
                         return true; // (?<=...) or (?<!...) lookbehind
+                    if (afterQuestion == '>')
+                        return true; // (?>...) atomic group -- no RE2 equivalent
                 }
             }
         }
