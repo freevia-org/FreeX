@@ -32,6 +32,7 @@ namespace FreeP.App.Rendering.Avalonia;
 public sealed class SlideCanvas : Control
 {
     private const double PowerPointDefaultLineSpacingFactor = 1.18;
+    private const double PowerPointFixedTextLineSpacingFactor = 1.20;
 
     // ── Styled / direct properties ──────────────────────────────────────────
 
@@ -908,7 +909,7 @@ public sealed class SlideCanvas : Control
         {
             var para = text.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, area.Width, text.Wrap);
+            var ft = BuildFormattedText(para, area.Width, text.Wrap, text.AutoFitKind);
             formatted[i] = ft;
             measures.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
@@ -1578,7 +1579,8 @@ public sealed class SlideCanvas : Control
         {
             var para = text.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, initialColumnLayout.ColumnWidthDip, text.Wrap);
+            var ft = BuildFormattedText(
+                para, initialColumnLayout.ColumnWidthDip, text.Wrap, text.AutoFitKind);
             initialMeasured.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
                 ft.Height,
@@ -1599,7 +1601,8 @@ public sealed class SlideCanvas : Control
         {
             var para = renderText.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, columnLayout.ColumnWidthDip, renderText.Wrap);
+            var ft = BuildFormattedText(
+                para, columnLayout.ColumnWidthDip, renderText.Wrap, renderText.AutoFitKind);
             formatted[i] = ft;
             measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
@@ -1652,7 +1655,7 @@ public sealed class SlideCanvas : Control
         {
             var para = text.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, area.Width, text.Wrap);
+            var ft = BuildFormattedText(para, area.Width, text.Wrap, text.AutoFitKind);
             initialMeasured.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
                 ft.Height,
@@ -1670,7 +1673,7 @@ public sealed class SlideCanvas : Control
         {
             var para = renderText.Paragraphs[i];
             if (para.Runs.Count == 0) continue;
-            var ft = BuildFormattedText(para, area.Width, renderText.Wrap);
+            var ft = BuildFormattedText(para, area.Width, renderText.Wrap, renderText.AutoFitKind);
             formatted[i] = ft;
             measured.Add(TextLayoutPlanner.CreateParagraphMeasure(
                 i,
@@ -2005,7 +2008,11 @@ public sealed class SlideCanvas : Control
             TextSoftEdge = run.TextSoftEdge
         };
 
-    private static FormattedText BuildFormattedText(ResolvedParagraph para, double maxWidth, bool wrap)
+    private static FormattedText BuildFormattedText(
+        ResolvedParagraph para,
+        double maxWidth,
+        bool wrap,
+        TextAutoFitKind autoFitKind = TextAutoFitKind.None)
     {
         var sb = new System.Text.StringBuilder();
         foreach (var run in para.Runs) sb.Append(run.Text);
@@ -2031,7 +2038,7 @@ public sealed class SlideCanvas : Control
             brush);
 
         // PowerPoint's default paragraph leading is slightly tighter than Avalonia's automatic line height.
-        ft.LineHeight = ResolvePowerPointLineHeight(emSizePx);
+        ft.LineHeight = ResolvePowerPointLineHeight(emSizePx, autoFitKind);
 
         if (wrap && maxWidth > 0)
             ft.MaxTextWidth = maxWidth;
@@ -2063,8 +2070,8 @@ public sealed class SlideCanvas : Control
         return ft;
     }
 
-    // This host does not provide Aptos. Cambria is the local fallback whose
-    // Avalonia metrics best match the PowerPoint body-text baseline.
+    // The host does not provide the Office theme's Aptos families. Cambria is
+    // the calibrated fallback for imported body-text metrics.
     internal static string ResolvePowerPointFontFamily(string fontFamily) =>
         string.Equals(fontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
             ? "Cambria"
@@ -2072,6 +2079,13 @@ public sealed class SlideCanvas : Control
 
     internal static double ResolvePowerPointLineHeight(double fontSizePx) =>
         fontSizePx * PowerPointDefaultLineSpacingFactor;
+
+    internal static double ResolvePowerPointLineHeight(
+        double fontSizePx,
+        TextAutoFitKind autoFitKind) =>
+        fontSizePx * (autoFitKind == TextAutoFitKind.None
+            ? PowerPointFixedTextLineSpacingFactor
+            : PowerPointDefaultLineSpacingFactor);
 
     // ── Text-effects geometry helpers (Wave 16A) ──────────────────────────────
 
