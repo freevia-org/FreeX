@@ -330,7 +330,8 @@ internal static class PptxChartWriter
             _ => "clustered"
         };
 
-        var chartElementName = chart.BarGapDepthPercent.HasValue ? "bar3DChart" : "barChart";
+        var chartElementName = chart.ThreeDStyle is ChartThreeDStyle.Column or ChartThreeDStyle.Bar ||
+            chart.BarGapDepthPercent.HasValue ? "bar3DChart" : "barChart";
 
         return new XElement(C + chartElementName,
             new XElement(C + "barDir", new XAttribute("val", isBar ? "bar" : "col")),

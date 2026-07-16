@@ -367,7 +367,10 @@ internal static class PptxChartReader
 
         shape.BarGapWidthPercent = ReadBarGapWidth(el);
         shape.BarOverlapPercent = ReadBarOverlap(el);
-        shape.BarGapDepthPercent = ReadBarGapDepth(el);
+        shape.BarGapDepthPercent = ReadBarGapDepth(el) ??
+            (el.Name.LocalName == "bar3DChart" ? 150 : null);
+        if (el.Name.LocalName == "bar3DChart")
+            shape.ThreeDStyle = barDir == "bar" ? ChartThreeDStyle.Bar : ChartThreeDStyle.Column;
 
         ReadSeriesFromChart(el, shape, scheme, idxMap);
     }

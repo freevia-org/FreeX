@@ -68,7 +68,7 @@ public enum ChartManualLayoutMode { Factor, Edge, Unsupported }
 public enum ChartDisplayBlanksAs { Span, Gap, Zero }
 
 /// <summary>Authored classic 3-D chart family read from OOXML chart-type elements.</summary>
-public enum ChartThreeDStyle { None, Pie, Line, Area }
+public enum ChartThreeDStyle { None, Pie, Line, Area, Column, Bar }
 
 /// <summary>Small modeled subset of OOXML chart <c>c:manualLayout</c>.</summary>
 public sealed class ChartManualLayout

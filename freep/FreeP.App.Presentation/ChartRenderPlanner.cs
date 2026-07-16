@@ -250,7 +250,14 @@ public readonly record struct ChartBarDepthPlan(
     double OffsetX,
     double OffsetY,
     bool IsHorizontalBar,
-    bool IsStacked);
+    bool IsStacked)
+{
+    public bool IsThreeD { get; init; }
+    public double CategorySkewY { get; init; }
+    public double HeightScaleBase { get; init; } = 1.0;
+    public double HeightScaleStep { get; init; }
+    public double BaseLift { get; init; }
+}
 
 public readonly record struct ChartRectPrimitive(
     int SeriesIndex,
@@ -492,6 +499,7 @@ public sealed class ChartScenePlan
     public ChartSceneGeometryKind GeometryKind { get; init; }
     public ChartTextPlan? Title { get; init; }
     public bool DrawFlatGrid { get; init; }
+    public bool DrawProjectedThreeDBarFrame { get; init; }
     public ChartMajorGridLinePrimitivePlan GridLines { get; init; }
     public ChartMajorAxisTickPrimitivePlan AxisTicks { get; init; }
     public IReadOnlyList<ChartDataLabelPlan> DataLabels { get; init; } = Array.Empty<ChartDataLabelPlan>();
@@ -584,6 +592,15 @@ public static partial class ChartRenderPlanner
     public const double ImportedBarPlotUpwardOffset = 5.5;
     public const double ImportedBarPlotWidthReduction = 20.0;
     public const double ImportedBarPlotHeightExtension = 20.25;
+    public const double ImportedThreeDBarBaseLift = 111.0;
+    public const double ImportedThreeDBarCategorySkewY = 24.0;
+    public const double ImportedThreeDBarHeightScaleBase = 0.764;
+    public const double ImportedThreeDBarHeightScaleStep = 0.0318;
+    public const double ImportedThreeDBarWidthScale = 0.82;
+    public const double ImportedThreeDBarPerspectiveX0 = 38.0;
+    public const double ImportedThreeDBarPerspectiveX1 = -38.5;
+    public const double ImportedThreeDBarPerspectiveX2 = 4.0;
+    public const double ImportedThreeDBarPerspectiveX3 = 0.5;
     public const double ImportedPiePlotRightOffset = 6.5;
     public const double ImportedPiePlotUpwardOffset = 9.0;
     public const double ImportedPiePlotHeightExtension = 62.0;
@@ -661,6 +678,10 @@ public static partial class ChartRenderPlanner
     // font defaults below.
     private static bool UsesImportedTextMetrics(ChartShape chart) =>
         chart.TextStyle?.FontSizePt is >= 12.0;
+
+    private static bool UsesImportedThreeDColumnDefaults(ChartShape chart) =>
+        UsesImportedTextMetrics(chart) &&
+        chart.ThreeDStyle == ChartThreeDStyle.Column;
 
     private static bool UsesImportedSmoothScatterDefaults(ChartShape chart) =>
         chart.ChartType == ChartType.Scatter &&
@@ -1066,6 +1087,16 @@ public static partial class ChartRenderPlanner
                 plot.Width - ImportedBarPlotWidthReduction,
                 plot.Height + ImportedBarPlotHeightExtension);
         }
+        if (UsesImportedThreeDColumnDefaults(chart))
+        {
+            // 3-D bar/column charts reserve a projected floor rather than the
+            // full flat Cartesian plot band used by their 2-D counterparts.
+            plot = new ChartPlanRect(
+                plot.X + 58.0,
+                plot.Y + 8.0,
+                Math.Max(1.0, plot.Width - 138.0),
+                Math.Max(1.0, plot.Height - 8.0));
+        }
         if (family == ChartRenderFamily.Pie &&
             UsesImportedTextMetrics(chart) &&
             chart.HasAutomaticTitle &&
@@ -1301,7 +1332,10 @@ public static partial class ChartRenderPlanner
             Frame = frame,
             GeometryKind = geometryKind,
             Title = title,
-            DrawFlatGrid = !UsesProjectedSurfaceFrame(chart) && !frame.IsScatterLike,
+            DrawFlatGrid = !UsesProjectedSurfaceFrame(chart) &&
+                !UsesImportedThreeDColumnDefaults(chart) &&
+                !frame.IsScatterLike,
+            DrawProjectedThreeDBarFrame = UsesImportedThreeDColumnDefaults(chart),
             GridLines = BuildMajorGridLinePrimitivePlan(chart, frame),
             AxisTicks = BuildMajorAxisTickPrimitivePlan(chart, frame),
             DataLabels = BuildDataLabelPlans(chart, plot, seriesColors, fillPlans),
@@ -1677,6 +1711,8 @@ public static partial class ChartRenderPlanner
     {
         if (!frame.HasPlot || frame.IsPie || frame.IsRadar || frame.IsScatterLike)
             return EmptyMajorAxisTickPrimitivePlan();
+        if (UsesImportedThreeDColumnDefaults(chart))
+            return EmptyMajorAxisTickPrimitivePlan();
 
         var categoryTicks = chart.CategoryAxis.Delete
             ? Array.Empty<ChartGridLinePlan>()
@@ -1701,6 +1737,8 @@ public static partial class ChartRenderPlanner
             return Array.Empty<ChartTextPlan>();
         if (chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart))
             return BuildImportedSurface3DCategoryAxisLabelPlans(chart, frame);
+        if (UsesImportedThreeDColumnDefaults(chart))
+            return BuildImportedThreeDBarCategoryAxisLabelPlans(chart, frame);
 
         var labels = new List<ChartTextPlan>(chart.Categories.Count);
         var plot = frame.Plot;
@@ -1738,6 +1776,34 @@ public static partial class ChartRenderPlanner
                     Alignment: ChartPlanTextAlignment.Center,
                     AxisLabelFormat: BuildAxisLabelFormatPlan(chart.CategoryAxis)));
             }
+        }
+
+        return labels;
+    }
+
+    private static IReadOnlyList<ChartTextPlan> BuildImportedThreeDBarCategoryAxisLabelPlans(
+        ChartShape chart,
+        ChartFramePlan frame)
+    {
+        var plot = frame.Plot;
+        double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
+        var labels = new List<ChartTextPlan>(chart.Categories.Count);
+        for (int categoryIndex = 0; categoryIndex < chart.Categories.Count; categoryIndex++)
+        {
+            double perspectiveOffset =
+                ImportedThreeDBarPerspectiveX0 +
+                ImportedThreeDBarPerspectiveX1 * categoryIndex +
+                ImportedThreeDBarPerspectiveX2 * categoryIndex * categoryIndex +
+                ImportedThreeDBarPerspectiveX3 * categoryIndex * categoryIndex * categoryIndex;
+            double centerX = plot.X + (categoryIndex + 0.5) * categoryStep + perspectiveOffset * 0.5;
+            double labelTop = plot.Bottom - 75.0 + categoryIndex * ImportedThreeDBarCategorySkewY;
+            labels.Add(new ChartTextPlan(
+                FormatCategoryAxisLabel(chart.Categories[categoryIndex], chart.CategoryAxis),
+                new ChartPlanRect(centerX - categoryStep / 2.0, labelTop, categoryStep, ResolveCategoryLabelHeight(chart)),
+                IsBold: false,
+                FontSize: ResolveTextFontSize(chart, 7.0),
+                Alignment: ChartPlanTextAlignment.Center,
+                AxisLabelFormat: BuildAxisLabelFormatPlan(chart.CategoryAxis)));
         }
 
         return labels;
@@ -1814,7 +1880,11 @@ public static partial class ChartRenderPlanner
             }
             else
             {
-                double y = plot.Bottom - plot.Height * tickIndex / steps;
+                double axisY = UsesImportedThreeDColumnDefaults(chart)
+                    ? plot.Bottom - (ImportedThreeDBarBaseLift - 8.0)
+                    : plot.Bottom;
+                double axisTop = plot.Y;
+                double y = axisY - (axisY - axisTop) * tickIndex / steps;
                 double rightGap = UsesImportedTextMetrics(chart)
                     ? ImportedCartesianValueLabelRightGap
                     : 0.0;
@@ -1822,9 +1892,12 @@ public static partial class ChartRenderPlanner
                     ? ImportedCartesianValueLabelVerticalOffset
                     : 6.0;
                 double labelWidth = ResolveAxisLabelWidth(chart) - GridlinePad;
+                double labelRight = UsesImportedThreeDColumnDefaults(chart)
+                    ? plot.X + 21.0 - 4.0
+                    : plot.X - rightGap;
                 labels.Add(new ChartTextPlan(
                     FormatChartAxisLabelValue(chart, value, chart.ValueAxis.NumberFormatCode),
-                    new ChartPlanRect(plot.X - labelWidth - rightGap, y - verticalOffset, labelWidth, ResolveCategoryLabelHeight(chart)),
+                    new ChartPlanRect(labelRight - labelWidth, y - verticalOffset, labelWidth, ResolveCategoryLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
                     Alignment: ChartPlanTextAlignment.Right,
@@ -2377,9 +2450,11 @@ public static partial class ChartRenderPlanner
                         seriesCount,
                         isHorizontalBar: false,
                         stacked && !importedPercentStackedCluster);
-                    var bounds = ApplyBarGapDepthOffset(
+                    var bounds = ApplyColumnDepthProjection(
                         new ChartPlanRect(x, stackedY - height, drawWidth, height),
-                        depth);
+                        depth,
+                        categoryIndex,
+                        columnSeriesIndex);
                     primitives.Add(new ChartRectPrimitive(
                         seriesIndex,
                         categoryIndex,
@@ -2415,7 +2490,11 @@ public static partial class ChartRenderPlanner
                         seriesCount,
                         isHorizontalBar: false,
                         stacked);
-                    var bounds = ApplyBarGapDepthOffset(new ChartPlanRect(x, y, drawWidth, height), depth);
+                    var bounds = ApplyColumnDepthProjection(
+                        new ChartPlanRect(x, y, drawWidth, height),
+                        depth,
+                        categoryIndex,
+                        columnSeriesIndex);
                     primitives.Add(new ChartRectPrimitive(
                         seriesIndex,
                         categoryIndex,
@@ -4777,6 +4856,13 @@ public static partial class ChartRenderPlanner
         double max = chart.ValueAxis.Max ?? dataMax;
         if (UsesStockLineFallback(chart) && chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
             return ComputeStockFallbackValueAxisRange(min, max);
+        if (UsesImportedThreeDColumnDefaults(chart) &&
+            chart.ValueAxis.Min is null && chart.ValueAxis.Max is null)
+        {
+            var range = ComputeNiceRange(min, max, targetIntervals: 10);
+            double cappedMax = Math.Ceiling(max / range.majorUnit) * range.majorUnit;
+            return (range.min, Math.Max(range.min + range.majorUnit, cappedMax), range.majorUnit);
+        }
         if (chart.ChartType == ChartType.ColumnClustered &&
             UsesImportedTextMetrics(chart) &&
             chart.Series.Any(series => series.OnSecondaryAxis) &&
@@ -6701,10 +6787,30 @@ public static partial class ChartRenderPlanner
         bool isHorizontalBar,
         bool stacked)
     {
-        if (chart.BarGapDepthPercent is not { } rawDepth)
+        bool isThreeD = chart.ThreeDStyle is ChartThreeDStyle.Column or ChartThreeDStyle.Bar;
+        if (!isThreeD && chart.BarGapDepthPercent is not { })
             return null;
 
-        int gapDepth = Math.Clamp(rawDepth, 0, 500);
+        int gapDepth = Math.Clamp(chart.BarGapDepthPercent ?? 150, 0, 500);
+        if (isThreeD)
+        {
+            double depthX = Math.Min(Math.Max(categorySize * 0.12, 14.0), 18.0);
+            double depthY = -depthX * 0.55;
+            return new ChartBarDepthPlan(
+                gapDepth,
+                depthX,
+                depthY,
+                isHorizontalBar,
+                stacked)
+            {
+                IsThreeD = true,
+                CategorySkewY = ImportedThreeDBarCategorySkewY,
+                HeightScaleBase = ImportedThreeDBarHeightScaleBase,
+                HeightScaleStep = ImportedThreeDBarHeightScaleStep,
+                BaseLift = ImportedThreeDBarBaseLift
+            };
+        }
+
         if (gapDepth == 0 || categorySize <= 0)
         {
             return new ChartBarDepthPlan(
@@ -6740,6 +6846,33 @@ public static partial class ChartRenderPlanner
             bounds.Y + depth.Value.OffsetY,
             bounds.Width,
             bounds.Height);
+    }
+
+    private static ChartPlanRect ApplyColumnDepthProjection(
+        ChartPlanRect bounds,
+        ChartBarDepthPlan? depth,
+        int categoryIndex,
+        int seriesIndex)
+    {
+        if (depth is not { IsThreeD: true } threeD)
+            return ApplyBarGapDepthOffset(bounds, depth);
+
+        double baselineShift = -threeD.BaseLift + categoryIndex * threeD.CategorySkewY;
+        double heightScale = threeD.HeightScaleBase + categoryIndex * threeD.HeightScaleStep;
+        double projectedHeight = Math.Max(0.5, bounds.Height * heightScale);
+        double projectedBottom = bounds.Bottom + baselineShift;
+        double perspectiveOffset =
+            ImportedThreeDBarPerspectiveX0 +
+            ImportedThreeDBarPerspectiveX1 * categoryIndex +
+            ImportedThreeDBarPerspectiveX2 * categoryIndex * categoryIndex +
+            ImportedThreeDBarPerspectiveX3 * categoryIndex * categoryIndex * categoryIndex;
+        double projectedWidth = Math.Max(1.0, bounds.Width * ImportedThreeDBarWidthScale);
+        double widthDelta = bounds.Width - projectedWidth;
+        return new ChartPlanRect(
+            bounds.X + perspectiveOffset - seriesIndex * widthDelta * 0.35,
+            projectedBottom - projectedHeight,
+            projectedWidth,
+            projectedHeight);
     }
 
     private static ChartBarClusterSlot ResolveBarClusterSlot(
