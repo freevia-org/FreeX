@@ -131,6 +131,15 @@ public static class SlideCloner
             BarOverlapPercent = src.BarOverlapPercent,
             BarGapDepthPercent = src.BarGapDepthPercent,
             ThreeDStyle = src.ThreeDStyle,
+            View3D = src.View3D is null ? null : new Chart3DView
+            {
+                RotationX = src.View3D.RotationX,
+                RotationY = src.View3D.RotationY,
+                RightAngleAxes = src.View3D.RightAngleAxes,
+                Perspective = src.View3D.Perspective,
+                HeightPercent = src.View3D.HeightPercent,
+                DepthPercent = src.View3D.DepthPercent,
+            },
             DoughnutHolePercent = src.DoughnutHolePercent,
             FirstSliceAngleDegrees = src.FirstSliceAngleDegrees,
             ScatterStyle = src.ScatterStyle,

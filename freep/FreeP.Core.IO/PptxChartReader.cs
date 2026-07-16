@@ -61,6 +61,7 @@ internal static class PptxChartReader
             chartEl.Element(C + "dispBlanksAs")?.Attribute("val")?.Value);
         shape.ShowDataLabelsOverMaximum = ParseNullableBoolElement(
             chartEl.Element(C + "showDLblsOverMax"));
+        shape.View3D = ReadView3D(chartEl.Element(C + "view3D"));
 
         // plotArea
         var plotArea = chartEl.Element(C + "plotArea");
@@ -1366,6 +1367,30 @@ internal static class PptxChartReader
         var val = el.Attribute("val")?.Value;
         // No val attribute = true (OOXML boolean element default)
         return val is null || val == "1" || val == "true";
+    }
+
+    private static Chart3DView? ReadView3D(XElement? view3DEl)
+    {
+        if (view3DEl is null) return null;
+
+        var view = new Chart3DView
+        {
+            RotationX = ParseNullableInt(view3DEl.Element(C + "rotX")?.Attribute("val")?.Value),
+            HeightPercent = ParseNullableInt(view3DEl.Element(C + "hPercent")?.Attribute("val")?.Value),
+            RotationY = ParseNullableInt(view3DEl.Element(C + "rotY")?.Attribute("val")?.Value),
+            DepthPercent = ParseNullableInt(view3DEl.Element(C + "depthPercent")?.Attribute("val")?.Value),
+            RightAngleAxes = ParseNullableBoolElement(view3DEl.Element(C + "rAngAx")),
+            Perspective = ParseNullableInt(view3DEl.Element(C + "perspective")?.Attribute("val")?.Value),
+        };
+
+        return view.RotationX is null
+            && view.HeightPercent is null
+            && view.RotationY is null
+            && view.DepthPercent is null
+            && view.RightAngleAxes is null
+            && view.Perspective is null
+                ? null
+                : view;
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
