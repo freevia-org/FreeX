@@ -14958,6 +14958,8 @@ public sealed class DocumentView : Control
         public SmartArtKind     Kind;
         public string           LayoutId = "list1";
         public SmartArtStyle    Style = SmartArtStyle.Default;
+        public SmartArtColorScheme ColorScheme = SmartArtColorScheme.Default;
+        public bool              UsesWordLayeredGalleryStyle;
         // Flattened node texts (first-level nodes + their children depth-first).
         public List<string>     NodeTexts = [];
         public List<SmartArtNodeVisualPlan> NodePlans = [];
@@ -15066,6 +15068,8 @@ public sealed class DocumentView : Control
             Kind = plan.Kind,
             LayoutId = plan.LayoutId,
             Style = plan.Style,
+            ColorScheme = plan.ColorScheme,
+            UsesWordLayeredGalleryStyle = plan.UsesWordLayeredGalleryStyle,
             NodeTexts = plan.Nodes.Select(n => n.Text).ToList(),
             NodePlans = plan.Nodes.ToList(),
             HierarchyGeometry = plan.HierarchyGeometry,
@@ -15563,6 +15567,12 @@ public sealed class DocumentView : Control
     {
         var rect = sd.Rect;
 
+        if (sd.UsesWordLayeredGalleryStyle)
+        {
+            DrawWordLayeredSmartArt(context, sd, rect);
+            return;
+        }
+
         // Frame.
         context.FillRectangle(ChartFrameFill, rect);
         context.DrawRectangle(null, ChartFramePen, rect);
@@ -15633,6 +15643,283 @@ public sealed class DocumentView : Control
                 }
             }
         }
+    }
+
+    private void DrawWordLayeredSmartArt(
+        DrawingContext context,
+        FloatingSmartArtData sd,
+        Rect target)
+    {
+        if (sd.NodeTexts.Count == 0)
+            return;
+
+        var baseColor = ToAvaloniaChartColor(sd.ColorScheme.Color1Hex);
+        var frontColor = BlendSmartArtWithWhite(baseColor, 0.10);
+        var connectorPen = new Pen(new SolidColorBrush(baseColor), 1);
+
+        switch (sd.LayoutId.ToLowerInvariant())
+        {
+            case "list1":
+                DrawWordLayeredList(context, sd, target, baseColor, frontColor, connectorPen);
+                break;
+            case "process1":
+                DrawWordLayeredProcess(context, sd, target, baseColor, frontColor);
+                break;
+            case "hierarchy1":
+                DrawWordLayeredHierarchy(context, sd, target, baseColor, frontColor, connectorPen);
+                break;
+            case "cycle1":
+                DrawWordLayeredVerticalGallery(context, sd, target, baseColor, frontColor, connectorPen, false);
+                break;
+            case "radial1":
+                DrawWordLayeredVerticalGallery(context, sd, target, baseColor, frontColor, connectorPen, true);
+                break;
+            default:
+                DrawSmartArtNodeBox(context, sd, 0, target);
+                DrawWordLayeredText(context, sd.NodeTexts[0], target, 11);
+                break;
+        }
+    }
+
+    private void DrawWordLayeredList(
+        DrawingContext context,
+        FloatingSmartArtData sd,
+        Rect target,
+        Color baseColor,
+        Color frontColor,
+        Pen connectorPen)
+    {
+        const double naturalWidth = 624;
+        const double naturalHeight = 288;
+        var sx = target.Width / naturalWidth;
+        var sy = target.Height / naturalHeight;
+        var frontX = 0.455 * naturalWidth * sx;
+        const double frontWidth = 60;
+        const double frontHeight = 35;
+        const double offsetX = 8;
+        const double offsetY = 8;
+        const double gap = 24;
+
+        for (var i = 0; i < sd.NodeTexts.Count; i++)
+        {
+            var frontY = (6 + i * (frontHeight + gap)) * sy;
+            if (i > 0)
+            {
+                var lineX = target.X + frontX - offsetX * sx / 2;
+                context.DrawLine(
+                    connectorPen,
+                    new Point(lineX, target.Y + (frontY - gap * sy)),
+                    new Point(lineX, target.Y + frontY));
+            }
+
+            DrawWordLayeredNode(
+                context,
+                sd.NodeTexts[i],
+                new Rect(target.X + frontX, target.Y + frontY, frontWidth * sx, frontHeight * sy),
+                offsetX * sx,
+                offsetY * sy,
+                baseColor,
+                frontColor,
+                6);
+        }
+    }
+
+    private void DrawWordLayeredProcess(
+        DrawingContext context,
+        FloatingSmartArtData sd,
+        Rect target,
+        Color baseColor,
+        Color frontColor)
+    {
+        const double naturalWidth = 624;
+        const double naturalHeight = 240;
+        var sx = target.Width / naturalWidth;
+        var sy = target.Height / naturalHeight;
+        const double frontWidth = 120;
+        const double frontHeight = 72;
+        const double offsetX = 16;
+        const double offsetY = 14;
+        const double gap = 40;
+
+        for (var i = 0; i < sd.NodeTexts.Count; i++)
+        {
+            var frontX = (16 + i * (frontWidth + gap)) * sx;
+            var frontY = 84 * sy;
+            DrawWordLayeredNode(
+                context,
+                sd.NodeTexts[i],
+                new Rect(target.X + frontX, target.Y + frontY, frontWidth * sx, frontHeight * sy),
+                offsetX * sx,
+                offsetY * sy,
+                baseColor,
+                frontColor,
+                18);
+        }
+    }
+
+    private void DrawWordLayeredHierarchy(
+        DrawingContext context,
+        FloatingSmartArtData sd,
+        Rect target,
+        Color baseColor,
+        Color frontColor,
+        Pen connectorPen)
+    {
+        const double naturalWidth = 576;
+        const double naturalHeight = 267;
+        var sx = target.Width / naturalWidth;
+        var sy = target.Height / naturalHeight;
+        const double frontWidth = 160;
+        const double frontHeight = 101;
+        const double offsetX = 18;
+        const double offsetY = 18;
+        var rootX = (naturalWidth - frontWidth) / 2 + 9;
+        var childY = naturalHeight - frontHeight;
+        var childXs = new[] { 21d, 217d, 413d };
+        var childCount = Math.Min(childXs.Length, Math.Max(0, sd.NodeTexts.Count - 1));
+        var rootCenterX = rootX + frontWidth / 2;
+        var childCenterY = childY - 31;
+        var childCenters = childXs.Take(childCount).Select(x => x + frontWidth / 2).ToArray();
+
+        if (childCount > 0)
+        {
+            context.DrawLine(
+                connectorPen,
+                new Point(target.X + rootCenterX * sx, target.Y + (frontHeight - offsetY) * sy),
+                new Point(target.X + rootCenterX * sx, target.Y + childCenterY * sy));
+            context.DrawLine(
+                connectorPen,
+                new Point(target.X + childCenters[0] * sx, target.Y + childCenterY * sy),
+                new Point(target.X + childCenters[^1] * sx, target.Y + childCenterY * sy));
+            foreach (var childCenter in childCenters)
+            {
+                context.DrawLine(
+                    connectorPen,
+                    new Point(target.X + childCenter * sx, target.Y + childCenterY * sy),
+                    new Point(target.X + childCenter * sx, target.Y + childY * sy));
+            }
+        }
+
+        DrawWordLayeredNode(
+            context,
+            sd.NodeTexts[0],
+            new Rect(target.X + rootX * sx, target.Y + offsetY * sy, frontWidth * sx, frontHeight * sy),
+            offsetX * sx,
+            offsetY * sy,
+            baseColor,
+            frontColor,
+            36);
+        for (var i = 1; i <= childCount; i++)
+        {
+            DrawWordLayeredNode(
+                context,
+                sd.NodeTexts[i],
+                new Rect(target.X + childXs[i - 1] * sx, target.Y + childY * sy, frontWidth * sx, frontHeight * sy),
+                offsetX * sx,
+                offsetY * sy,
+                baseColor,
+                frontColor,
+                36);
+        }
+    }
+
+    private void DrawWordLayeredVerticalGallery(
+        DrawingContext context,
+        FloatingSmartArtData sd,
+        Rect target,
+        Color baseColor,
+        Color frontColor,
+        Pen connectorPen,
+        bool radial)
+    {
+        var naturalWidth = radial ? 381d : 356d;
+        var naturalHeight = radial ? 279d : 267d;
+        var sx = target.Width / naturalWidth;
+        var sy = target.Height / naturalHeight;
+        var frontWidth = radial ? 66d : 76d;
+        var frontHeight = radial ? 43d : 49d;
+        var offsetX = radial ? 8d : 9d;
+        var offsetY = radial ? 7d : 8d;
+        var gap = radial ? 17d : 21d;
+        var frontX = (naturalWidth - frontWidth) / 2;
+        var frontY = radial ? 7d : 9d;
+        var fontSize = radial ? 7d : 16d;
+
+        for (var i = 1; i < sd.NodeTexts.Count; i++)
+        {
+            var lineX = target.X + (frontX - offsetX / 2) * sx;
+            var lineY = (frontY + i * (frontHeight + gap) - gap) * sy;
+            context.DrawLine(
+                connectorPen,
+                new Point(lineX, target.Y + lineY),
+                new Point(lineX, target.Y + lineY + gap * sy));
+        }
+
+        for (var i = 0; i < sd.NodeTexts.Count; i++)
+        {
+            DrawWordLayeredNode(
+                context,
+                sd.NodeTexts[i],
+                new Rect(
+                    target.X + frontX * sx,
+                    target.Y + (frontY + i * (frontHeight + gap)) * sy,
+                    frontWidth * sx,
+                    frontHeight * sy),
+                offsetX * sx,
+                offsetY * sy,
+                baseColor,
+                frontColor,
+                fontSize);
+        }
+    }
+
+    private void DrawWordLayeredNode(
+        DrawingContext context,
+        string text,
+        Rect front,
+        double offsetX,
+        double offsetY,
+        Color baseColor,
+        Color frontColor,
+        double fontSizePt)
+    {
+        var radius = Math.Min(5, Math.Min(front.Width, front.Height) / 5);
+        var backing = new Rect(front.X - offsetX, front.Y - offsetY, front.Width, front.Height);
+        context.DrawRectangle(
+            new SolidColorBrush(baseColor),
+            null,
+            new RoundedRect(backing, radius));
+        context.DrawRectangle(
+            new SolidColorBrush(frontColor),
+            new Pen(new SolidColorBrush(baseColor), 1),
+            new RoundedRect(front, radius));
+        DrawWordLayeredText(context, text, front, fontSizePt);
+    }
+
+    private void DrawWordLayeredText(DrawingContext context, string text, Rect rect, double fontSizePt)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        var fmt = new RunFormatting
+        {
+            FontSizePt = Math.Max(1, fontSizePt),
+            ColorHex = "#000000"
+        };
+        var ft = Build(text, fmt);
+        var tx = rect.X + Math.Max(2, (rect.Width - ft.WidthIncludingTrailingWhitespace) / 2);
+        var ty = rect.Y + Math.Max(0, (rect.Height - ft.Height) / 2);
+        using (context.PushClip(rect))
+            context.DrawText(ft, new Point(tx, ty));
+    }
+
+    private static Color BlendSmartArtWithWhite(Color color, double baseWeight)
+    {
+        var weight = Math.Clamp(baseWeight, 0, 1);
+        return Color.FromRgb(
+            (byte)Math.Round(color.R * weight + 255 * (1 - weight), MidpointRounding.AwayFromZero),
+            (byte)Math.Round(color.G * weight + 255 * (1 - weight), MidpointRounding.AwayFromZero),
+            (byte)Math.Round(color.B * weight + 255 * (1 - weight), MidpointRounding.AwayFromZero));
     }
 
     private void DrawSmartArtLayoutGeometry(

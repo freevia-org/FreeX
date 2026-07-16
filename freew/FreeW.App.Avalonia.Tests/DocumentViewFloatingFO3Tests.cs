@@ -70,6 +70,79 @@ public sealed class DocumentViewFloatingFO3Tests
         source.Should().Contain("DrawFloatingSmartArt(context, smartArt)");
     }
 
+    [Fact]
+    public void Word_authored_smartart_uses_layered_gallery_path_without_editor_frame()
+    {
+        var source = File.ReadAllText(RepositoryFile(
+            "freew",
+            "FreeW.App.Avalonia",
+            "Editing",
+            "DocumentView.cs"));
+
+        source.Should().Contain("UsesWordLayeredGalleryStyle = plan.UsesWordLayeredGalleryStyle");
+        source.Should().Contain("if (sd.UsesWordLayeredGalleryStyle)");
+        source.Should().Contain("DrawWordLayeredSmartArt(context, sd, rect)");
+        source.Should().Contain("DrawWordLayeredNode(");
+        source.Should().Contain("BlendSmartArtWithWhite");
+    }
+
+    [Fact]
+    public async Task Word_authored_smartart_capture_contains_gallery_fill()
+    {
+        byte[]? pngBytes = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingSmartArt(
+                SmartArtKind.Process,
+                ImageWrapping.InFront,
+                0,
+                0,
+                configure: smartArt =>
+                {
+                    smartArt.WidthPt = 360;
+                    smartArt.HeightPt = 140;
+                    smartArt.LayoutId = "process1";
+                    smartArt.ColorSchemeId = "accent0_1";
+                    smartArt.StyleId = "simple1";
+                });
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+
+            var window = new Window { Width = 816, Height = 1100, Content = view };
+            window.Show();
+            window.Measure(new Size(816, 1100));
+            window.Arrange(new Rect(0, 0, 816, 1100));
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+            var frame = window.CaptureRenderedFrame();
+            if (frame is not null)
+                pngBytes = WriteableBitmapToPng(frame);
+
+            window.Close();
+        });
+
+        if (!ran || pngBytes is null || pngBytes.Length == 0)
+            return;
+
+        using var bitmap = SKBitmap.Decode(pngBytes);
+        bitmap.Should().NotBeNull();
+
+        var galleryFillPixels = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Red == 0x15 && pixel.Green == 0x60 && pixel.Blue == 0x82)
+                    galleryFillPixels++;
+            }
+        }
+
+        galleryFillPixels.Should().BeGreaterThan(200,
+            "the authored Word gallery path should paint its dark layered backing rectangles");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────────
 
     private static TextDocument DocWithFloatingChart(
