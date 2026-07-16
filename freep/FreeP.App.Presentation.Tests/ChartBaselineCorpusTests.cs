@@ -373,8 +373,8 @@ public sealed class ChartBaselineCorpusTests
             "PowerPoint's imported Surface3D baseline uses the projected frame and wireframe without contour overlays");
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 3).Should().Be(2);
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 4).Should().Be(2);
-        surfaceGeometry.RenderFacets.Should().HaveCount(8,
-            "imported PowerPoint Surface3D cells render a continuous triangulated surface, including blank-cell fallbacks");
+        surfaceGeometry.RenderFacets.Should().HaveCount(12,
+            "imported PowerPoint Surface3D cells render a continuous triangulated surface and projected boundary faces");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
         var firstSurfaceCellFacets = surfaceGeometry.RenderFacets
             .Where(facet => facet.SeriesIndex == 0 && facet.CategoryIndex == 0)
@@ -386,6 +386,13 @@ public sealed class ChartBaselineCorpusTests
         firstSurfaceCellFacets[1].Points.Select(point => point.X)
             .Should().Equal(new[] { 2.0, 196.8, 64.0 },
                 "the paired imported blank-cell triangle closes the 0-2 split");
+        firstSurfaceCellFacets
+            .SelectMany(facet => facet.Points)
+            .Single(point => point.X == 149.6)
+            .Y
+            .Should()
+            .BeApproximately(163.1, 0.0001,
+                "PowerPoint registers the imported blank low-band vertex below the interpolated surface");
         surfaceGeometry.Points.Single(point => point.SeriesIndex == 2 && point.CategoryIndex == 0).Point.X
             .Should().BeApproximately(126.0, 0.0001,
                 "PowerPoint's rear-left surface vertex follows the projected frame depth wall");
@@ -394,6 +401,7 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Stroke.Alpha == 0,
             "PowerPoint's imported Surface3D faces do not draw opaque white facet outlines");
         surfaceGeometry.RenderFacets
+            .Take(8)
             .Select(facet => facet.Fill.Color)
             .Should()
             .Equal(
@@ -405,6 +413,15 @@ public sealed class ChartBaselineCorpusTests
                 new SrgbColor(0xA3, 0xC9, 0x89),
                 new SrgbColor(0x97, 0xBD, 0x80),
                 new SrgbColor(0x99, 0xBD, 0x80));
+        surfaceGeometry.RenderFacets
+            .Skip(8)
+            .Select(facet => facet.Fill.Color)
+            .Should()
+            .Equal(
+                new SrgbColor(0x34, 0x58, 0x97),
+                new SrgbColor(0x8B, 0xAB, 0x74),
+                new SrgbColor(0xE7, 0xAD, 0x00),
+                new SrgbColor(0x81, 0xA1, 0x6E));
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
         surfaceGeometry.FrameSegments[0].Start.X
