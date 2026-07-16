@@ -752,6 +752,9 @@ public sealed class SlideCanvas : FrameworkElement
                 dc.DrawLine(gridPen, ToPoint(gridLine.Start), ToPoint(gridLine.End));
         }
 
+        if (scene.DrawProjectedThreeDBarFrame)
+            RenderProjectedThreeDBarFrame(dc, scene);
+
         switch (scene.GeometryKind)
         {
             case ChartSceneGeometryKind.Column:
@@ -910,12 +913,60 @@ public sealed class SlideCanvas : FrameworkElement
     {
         foreach (var primitive in scene.Rectangles)
         {
+            if (primitive.Depth is { IsThreeD: true } depth)
+            {
+                RenderThreeDColumn(dc, primitive, depth);
+                continue;
+            }
+
             dc.DrawRectangle(
                 ToBrush(primitive.Fill),
                 primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
                 ToRect(primitive.Bounds));
         }
     }
+
+    private static void RenderThreeDColumn(
+        DrawingContext dc,
+        ChartRectPrimitive primitive,
+        ChartBarDepthPlan depth)
+    {
+        var rect = primitive.Bounds;
+        double right = rect.Right;
+        double bottom = rect.Bottom;
+        var top = new[]
+        {
+            new ChartPlanPoint(rect.X, rect.Y),
+            new ChartPlanPoint(right, rect.Y),
+            new ChartPlanPoint(right + depth.OffsetX, rect.Y + depth.OffsetY),
+            new ChartPlanPoint(rect.X + depth.OffsetX, rect.Y + depth.OffsetY)
+        };
+        var side = new[]
+        {
+            new ChartPlanPoint(right, rect.Y),
+            new ChartPlanPoint(right + depth.OffsetX, rect.Y + depth.OffsetY),
+            new ChartPlanPoint(right + depth.OffsetX, bottom + depth.OffsetY),
+            new ChartPlanPoint(right, bottom)
+        };
+
+        dc.DrawGeometry(ToBrush(ShadeThreeDBarFill(primitive.Fill, 0.60)), null, ToPolygonGeometry(side));
+        dc.DrawGeometry(ToBrush(ShadeThreeDBarFill(primitive.Fill, 0.75)), null, ToPolygonGeometry(top));
+        dc.DrawRectangle(
+            ToBrush(primitive.Fill),
+            primitive.Stroke.HasValue ? ToPen(primitive.Stroke.Value) : null,
+            ToRect(rect));
+    }
+
+    private static ChartFillPlan ShadeThreeDBarFill(ChartFillPlan fill, double factor) =>
+        new(
+            new SrgbColor(
+                ScaleThreeDBarChannel(fill.Color.R, factor),
+                ScaleThreeDBarChannel(fill.Color.G, factor),
+                ScaleThreeDBarChannel(fill.Color.B, factor)),
+            fill.Alpha);
+
+    private static byte ScaleThreeDBarChannel(byte channel, double factor) =>
+        (byte)Math.Round(Math.Clamp(channel * factor, 0, 255));
 
     // ── Combo-chart secondary series overlay ─────────────────────────────────
     /// <summary>
@@ -944,6 +995,43 @@ public sealed class SlideCanvas : FrameworkElement
     }
 
     // ── Line chart ────────────────────────────────────────────────────────────
+
+    private static void RenderProjectedThreeDBarFrame(DrawingContext dc, ChartScenePlan scene)
+    {
+        var plot = scene.Frame.Plot;
+        int lineCount = scene.ValueAxisLabels.Count;
+        if (lineCount < 2)
+            return;
+
+        var pen = ToPen(scene.GridLines.Stroke);
+        double leftX = plot.X + 21.0;
+        double leftBaseline = plot.Bottom - (ChartRenderPlanner.ImportedThreeDBarBaseLift - 8.0);
+        double depthY = Math.Min(plot.Height * 0.18, 94.0);
+        double rightBaseline = leftBaseline + depthY;
+        double rightTop = plot.Y + depthY * 0.39;
+
+        for (int index = 0; index < lineCount; index++)
+        {
+            double fraction = index / (double)(lineCount - 1);
+            dc.DrawLine(
+                pen,
+                new Point(leftX, leftBaseline - (leftBaseline - plot.Y) * fraction),
+                new Point(plot.Right, rightBaseline - (rightBaseline - rightTop) * fraction));
+        }
+
+        dc.DrawLine(pen, new Point(leftX, leftBaseline), new Point(leftX, plot.Y));
+        double frontRightX = plot.Right - 49.0;
+        dc.DrawLine(pen, new Point(leftX, leftBaseline), new Point(frontRightX, rightBaseline));
+
+        int categoryCount = Math.Max(1, scene.CategoryAxisLabels.Count);
+        for (int index = 0; index <= categoryCount; index++)
+        {
+            double fraction = index / (double)categoryCount;
+            double x = leftX + (frontRightX - leftX) * fraction;
+            double y = leftBaseline + depthY * fraction;
+            dc.DrawLine(pen, new Point(x, y), new Point(x, y + 5.0));
+        }
+    }
 
     private static void RenderLineChart(DrawingContext dc, ChartScenePlan scene)
     {
@@ -3048,6 +3136,22 @@ public sealed class SlideCanvas : FrameworkElement
             }
         }
 
+        if (geometry.CanFreeze) geometry.Freeze();
+        return geometry;
+    }
+
+    private static StreamGeometry ToPolygonGeometry(IReadOnlyList<ChartPlanPoint> points)
+    {
+        var geometry = new StreamGeometry();
+        using (var ctx = geometry.Open())
+        {
+            if (points.Count > 0)
+            {
+                ctx.BeginFigure(ToPoint(points[0]), isFilled: true, isClosed: true);
+                for (int index = 1; index < points.Count; index++)
+                    ctx.LineTo(ToPoint(points[index]), isStroked: false, isSmoothJoin: false);
+            }
+        }
         if (geometry.CanFreeze) geometry.Freeze();
         return geometry;
     }

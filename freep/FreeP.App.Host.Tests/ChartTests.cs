@@ -462,6 +462,7 @@ public sealed class ChartTests : IDisposable
     [InlineData(ChartThreeDStyle.Pie, "pie3DChart")]
     [InlineData(ChartThreeDStyle.Line, "line3DChart")]
     [InlineData(ChartThreeDStyle.Area, "area3DChart")]
+    [InlineData(ChartThreeDStyle.Column, "bar3DChart")]
     public void RoundTrip_Classic3DChartGroup_PreservedInPackageAndModel(
         ChartThreeDStyle threeDStyle,
         string expectedElementName)
