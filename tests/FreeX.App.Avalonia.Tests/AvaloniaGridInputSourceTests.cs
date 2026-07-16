@@ -19,13 +19,21 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("AddRowResizeHandle(header, row, metric, zoomFactor)");
         source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Column");
         source.Should().Contain("BeginHeaderResize(args, handle, HeaderResizeKind.Row");
+        source.Should().Contain("IsHeaderResizeHotspot(point.Position, header.Bounds, HeaderResizeKind.Column)");
+        source.Should().Contain("IsHeaderResizeHotspot(point.Position, header.Bounds, HeaderResizeKind.Row)");
+        source.Should().Contain("private const double HeaderResizeHitThickness = 9;");
         source.Should().Contain("args.Pointer.Capture(_sheetGridHost)");
         source.Should().Contain("_sheetGridHost.PointerMoved += HeaderResizeCapturePointerMoved;");
         source.Should().Contain("_sheetGridHost.PointerReleased += HeaderResizeCapturePointerReleased;");
         source.Should().Contain("GridResizeSizePlanner.ClampColumnSize(requestedSize)");
         source.Should().Contain("GridResizeSizePlanner.ClampRowSize(requestedSize)");
-        source.Should().Contain("_session.SetSelectedColumnsWidth(ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize))");
-        source.Should().Contain("_session.SetSelectedRowsHeight(clampedSize)");
+        source.Should().Contain("new SetColumnWidthCommand(");
+        source.Should().Contain("new SetRowHeightCommand(");
+        var commitResize = source[
+            source.IndexOf("private void CommitHeaderResize(", StringComparison.Ordinal)..
+            source.IndexOf("private void PreviewHeaderResize(", StringComparison.Ordinal)];
+        commitResize.Should().NotContain("SelectEntireColumn(");
+        commitResize.Should().NotContain("SelectEntireRow(");
     }
 
     [Fact]
@@ -181,6 +189,8 @@ public sealed class AvaloniaGridInputSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("border.DoubleTapped += (_, args) =>");
+        source.Should().Contain("point.Properties.IsLeftButtonPressed && IsCellDoubleClick(address, args.ClickCount)");
+        source.Should().Contain("Stopwatch.GetElapsedTime(_lastCellPointerPressTimestamp, now).TotalMilliseconds");
         source.Should().Contain("CalculateInlineCellCaretIndex(");
         source.Should().Contain("BeginInlineCellEdit(address, editText, caretIndex);");
         source.Should().Contain("private TextBox CreateInlineCellEditor(");
@@ -188,6 +198,7 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("editor.Focus();");
         source.Should().Contain("editor.CaretIndex = caret;");
         source.Should().Contain("new FormattedText(");
+        source.Should().Contain("BeginInlineCellEdit(address, editText, editText.Length);");
     }
 
     [Fact]

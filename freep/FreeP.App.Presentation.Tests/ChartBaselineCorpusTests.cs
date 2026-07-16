@@ -539,7 +539,10 @@ public sealed class ChartBaselineCorpusTests
             stacked,
             new ChartPlanRect(0, 0, 360, 220));
         stackedLabels[0].Text.Should().Be("Actual, Q1, 20");
-        stackedLabels.Should().OnlyContain(label => label.Bounds.Width >= 100);
+        stackedLabels.Select(label => label.Bounds.Width)
+            .Should()
+            .OnlyContain(width => Math.Abs(width - ChartRenderPlanner.ImportedPercentStackedDataLabelWidth) < 0.0001);
+        stackedLabels.Should().OnlyContain(label => label.WrapText);
         stackedLabels.Should().OnlyContain(label =>
             label.TextBounds.HasValue &&
             label.LegendKeyBounds.HasValue &&

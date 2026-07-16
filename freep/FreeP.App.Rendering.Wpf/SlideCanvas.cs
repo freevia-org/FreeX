@@ -818,7 +818,8 @@ public sealed class SlideCanvas : FrameworkElement
             DrawChartLabel(dc, label.Text, ToRect(label.TextBounds ?? label.Bounds),
                 label.IsBold,
                 label.FontSize,
-                ToTextAlignment(label.Alignment));
+                ToTextAlignment(label.Alignment),
+                maxLineCount: label.WrapText ? 2 : 1);
         }
 
         RenderChartDataTable(dc, scene.DataTable);
@@ -1420,7 +1421,8 @@ public sealed class SlideCanvas : FrameworkElement
         bool isBold, double fontSize, TextAlignment align,
         bool isItalic = false,
         SrgbColor? textColor = null,
-        string? fontFamily = null)
+        string? fontFamily = null,
+        int maxLineCount = 1)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         if (rect.Width <= 0 || rect.Height <= 0) return;
@@ -1444,7 +1446,7 @@ public sealed class SlideCanvas : FrameworkElement
             pixelsPerDip: 1.0)
         {
             MaxTextWidth   = rect.Width,
-            MaxLineCount   = 1,
+            MaxLineCount   = maxLineCount,
             TextAlignment  = align,
             Trimming       = TextTrimming.CharacterEllipsis
         };
