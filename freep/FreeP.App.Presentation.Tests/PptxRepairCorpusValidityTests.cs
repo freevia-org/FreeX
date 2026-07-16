@@ -136,6 +136,25 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
+    public void SmartArtLiveCorpus_ComposesCachedCycleArrowsAsOfficeNeutral()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+
+        var composedShapes = SlideCompositor.Compose(presentation, presentation.Slides[2])
+            .OfType<DrawOp.Shape>()
+            .ToArray();
+
+        var neutralArrows = composedShapes
+            .Select(shape => shape.Fill)
+            .OfType<ResolvedFill.Solid>()
+            .Where(fill => fill.Color == SrgbColor.FromRgb(0xAAB6C1))
+            .ToArray();
+
+        neutralArrows.Should().HaveCount(5);
+    }
+
+    [Fact]
     public void CommentsNotesCorpus_UsesUniqueNotesShapeIds()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "21-comments-notes.pptx");
