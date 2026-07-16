@@ -637,6 +637,12 @@ public static partial class ChartRenderPlanner
     private static bool UsesImportedTextMetrics(ChartShape chart) =>
         chart.TextStyle?.FontSizePt is >= 12.0;
 
+    private static bool UsesImportedSmoothScatterDefaults(ChartShape chart) =>
+        chart.ChartType == ChartType.Scatter &&
+        UsesImportedTextMetrics(chart) &&
+        chart.ScatterStyle == ScatterStyle.SmoothMarker &&
+        chart.Series.Count > 1;
+
     // PowerPoint opens imported percent-stacked charts without c:overlap with
     // clustered series slots but normalized stacked extents. Keep authored
     // models on the explicit stacked path while matching that Office default.
@@ -970,9 +976,13 @@ public static partial class ChartRenderPlanner
         {
             // PowerPoint's imported scatter layout moves the plot above the
             // baseline category-label band and reserves a compact left gutter.
+            double upwardOffset = chart.ChartType == ChartType.Scatter &&
+                UsesImportedSmoothScatterDefaults(chart)
+                    ? ImportedScatterPlotUpwardOffset + 3.0
+                    : ImportedScatterPlotUpwardOffset;
             plot = new ChartPlanRect(
                 plot.X + ImportedScatterPlotLeftInset,
-                plot.Y - ImportedScatterPlotUpwardOffset,
+                plot.Y - upwardOffset,
                 plot.Width - ImportedScatterPlotLeftInset - ImportedScatterPlotRightInset,
                 plot.Height);
         }
@@ -3928,7 +3938,8 @@ public static partial class ChartRenderPlanner
             yRange,
             yUnit,
             BuildAxisLabelFormatPlan(chart.CategoryAxis),
-            BuildAxisLabelFormatPlan(chart.ValueAxis));
+            BuildAxisLabelFormatPlan(chart.ValueAxis),
+            UsesImportedSmoothScatterDefaults(chart));
 
         var seriesPrimitives = new List<ChartScatterSeriesPrimitive>();
         var dataLabels = new List<ChartDataLabelPlan>();
@@ -4023,7 +4034,9 @@ public static partial class ChartRenderPlanner
 
         return new ChartScatterPrimitivePlan(
             gridLines,
-            DefaultGridLineStroke(),
+            UsesImportedSmoothScatterDefaults(chart)
+                ? DefaultGridLineStroke(chart)
+                : DefaultGridLineStroke(),
             xLabels,
             yLabels,
             seriesPrimitives,
@@ -5413,7 +5426,8 @@ public static partial class ChartRenderPlanner
             double yRange,
             double yUnit,
             ChartAxisLabelFormatPlan? xAxisLabelFormat,
-            ChartAxisLabelFormatPlan? yAxisLabelFormat)
+            ChartAxisLabelFormatPlan? yAxisLabelFormat,
+            bool importedMinorValueGridlines = false)
     {
         double xSteps = xRange / xUnit;
         double ySteps = yRange / yUnit;
@@ -5425,7 +5439,8 @@ public static partial class ChartRenderPlanner
 
         int xTickCount = (int)Math.Round(xSteps);
         int yTickCount = (int)Math.Round(ySteps);
-        var gridLines = new List<ChartGridLinePlan>(xTickCount + yTickCount + 2);
+        int yGridTickCount = importedMinorValueGridlines ? yTickCount * 2 : yTickCount;
+        var gridLines = new List<ChartGridLinePlan>(xTickCount + yGridTickCount + 2);
         var xLabels = new List<ChartTextPlan>(xTickCount + 1);
         var yLabels = new List<ChartTextPlan>(yTickCount + 1);
 
@@ -5446,21 +5461,26 @@ public static partial class ChartRenderPlanner
                 AxisLabelFormat: xAxisLabelFormat));
         }
 
-        for (int tickIndex = 0; tickIndex <= yTickCount; tickIndex++)
+        for (int tickIndex = 0; tickIndex <= yGridTickCount; tickIndex++)
         {
-            double y = plot.Bottom - plot.Height * tickIndex / ySteps;
+            double y = plot.Bottom - plot.Height * tickIndex / yGridTickCount;
             gridLines.Add(new ChartGridLinePlan(
                 new ChartPlanPoint(plot.X, y),
                 new ChartPlanPoint(plot.Right, y)));
 
-            double value = yMin + yUnit * tickIndex;
-            yLabels.Add(new ChartTextPlan(
-                FormatAxisLabelValue(value, yAxisLabelFormat?.FormatCode),
-                new ChartPlanRect(plot.X - 38, y - 6, 36, 12),
-                IsBold: false,
-                FontSize: 6.5,
-                Alignment: ChartPlanTextAlignment.Right,
-                AxisLabelFormat: yAxisLabelFormat));
+            if (!importedMinorValueGridlines || tickIndex % 2 == 0)
+            {
+                double value = yMin + yUnit * (importedMinorValueGridlines
+                    ? tickIndex / 2
+                    : tickIndex);
+                yLabels.Add(new ChartTextPlan(
+                    FormatAxisLabelValue(value, yAxisLabelFormat?.FormatCode),
+                    new ChartPlanRect(plot.X - 38, y - 6, 36, 12),
+                    IsBold: false,
+                    FontSize: 6.5,
+                    Alignment: ChartPlanTextAlignment.Right,
+                    AxisLabelFormat: yAxisLabelFormat));
+            }
         }
 
         return (gridLines, xLabels, yLabels);
@@ -5621,6 +5641,10 @@ public static partial class ChartRenderPlanner
         chart.ChartType == ChartType.Stock &&
         UsesImportedTextMetrics(chart)
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 1.0)
+        : chart is not null &&
+          chart.ChartType == ChartType.Scatter &&
+          UsesImportedSmoothScatterDefaults(chart)
+            ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.5)
         : chart is not null &&
         UsesClassicOfficeChartStyle(chart)
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.5)

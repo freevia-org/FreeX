@@ -300,7 +300,7 @@ public sealed class ChartBaselineCorpusTests
         scatter.Series.Should().OnlyContain(series => !series.OnSecondaryAxis,
             "scatter uses two independent value axes for X and Y, not a secondary series axis");
         ChartRenderPlanner.BuildFramePlan(scatter, new ChartPlanRect(0, 0, 480, 288)).Plot
-            .Should().Be(new ChartPlanRect(34.25, 57.5, 421.25, 200),
+            .Should().Be(new ChartPlanRect(34.25, 54.5, 421.25, 200),
                 "PowerPoint places imported scatter plots above the category-label band with a compact left axis gutter");
         ChartRenderPlanner.ComputeScatterAxisRange(scatter, useX: true)
             .Should().Be((0, 120, 20));
@@ -326,6 +326,13 @@ public sealed class ChartBaselineCorpusTests
         scatterPlan.Series[1].LinePaths.Single().Stroke.Color.Should().Be(scatterColors[1]);
         scatterPlan.Series[1].Markers.Select(marker => marker.Fill!.Value.Color)
             .Should().OnlyContain(color => color == scatterColors[1]);
+        scatterPlan.GridLines.Should().HaveCount(18,
+            "imported smooth scatter uses 11 value gridlines and 7 category gridlines");
+        scatterPlan.YAxisLabels.Should().HaveCount(6);
+        scatterPlan.GridLineStroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0x00, 0x00, 0x00),
+            Alpha: 255,
+            Thickness: 0.5));
 
         var stacked = charts.Single(chart => chart.ChartType == ChartType.ColumnStacked100);
         stacked.DataLabels.Should().NotBeNull();
