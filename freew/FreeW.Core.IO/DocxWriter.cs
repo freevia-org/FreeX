@@ -1318,7 +1318,7 @@ public static class DocxWriter
                     new XAttribute("position", "#10800,bottomRight"),
                     new XAttribute("xrange", "6629,14971"))),
             new XElement(O + "lock",
-                new XAttribute("ext", "edit"),
+                new XAttribute(V + "ext", "edit"),
                 new XAttribute("text", "t"),
                 new XAttribute("shapetype", "t")));
 
@@ -5456,11 +5456,7 @@ public static class DocxWriter
         return layout;
     }
 
-    /// <summary>
-    /// Builds a SmartArt QUICKSTYLE part (word/diagrams/quickStyleN.xml — dgm:styleDef).
-    /// Persists the FreeW <see cref="SmartArt.StyleId"/> as a <c>freewStyleId</c> extension attribute so
-    /// the reader can recover the exact catalog entry on round-trip.
-    /// </summary>
+    /// <summary>Builds a SmartArt QUICKSTYLE part (word/diagrams/quickStyleN.xml — dgm:styleDef).</summary>
     private static readonly string[] SmartArtGalleryStyleLabels =
     [
         "node0", "lnNode1", "vennNode1", "alignNode1", "node1", "node2", "node3", "node4",
@@ -5473,7 +5469,8 @@ public static class DocxWriter
         "fgAcc4", "bgShp", "dkBgShp", "trBgShp", "fgShp", "revTx"
     ];
 
-    private static string SmartArtQuickStyleSuffix(SmartArt smartArt) => "simple1";
+    private static string SmartArtQuickStyleSuffix(SmartArt smartArt) =>
+        string.IsNullOrWhiteSpace(smartArt.StyleId) ? "simple1" : smartArt.StyleId;
 
     private static bool UsesFlatSmartArtGallery(SmartArt smartArt) =>
         SmartArtLayoutCategory(smartArt) is "list" or "process";
@@ -5528,7 +5525,6 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute("uniqueId", uniqueId),
-            smartArt.StyleId is null ? null : new XAttribute("freewStyleId", smartArt.StyleId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
             usesFlatGallery
@@ -5542,11 +5538,7 @@ public static class DocxWriter
         return new XDocument(elem);
     }
 
-    /// <summary>
-    /// Builds a SmartArt COLORS part (word/diagrams/colorsN.xml — dgm:colorsDef).
-    /// Persists the FreeW <see cref="SmartArt.ColorSchemeId"/> as a <c>freewColorId</c> extension attribute
-    /// so the reader can recover the exact catalog entry on round-trip.
-    /// </summary>
+    /// <summary>Builds a SmartArt COLORS part (word/diagrams/colorsN.xml — dgm:colorsDef).</summary>
     private static XDocument BuildDiagramColors(SmartArt smartArt)
     {
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/colors/";
@@ -5710,7 +5702,6 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute("uniqueId", uniqueId),
-            smartArt.ColorSchemeId is null ? null : new XAttribute("freewColorId", smartArt.ColorSchemeId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
             usesFlatGallery

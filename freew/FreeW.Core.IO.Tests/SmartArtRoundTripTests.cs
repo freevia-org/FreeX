@@ -616,7 +616,7 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
-    public void GalleryIds_PresentInDiagramParts_AsUniqueIdSuffixAndFreewExtension()
+    public void GalleryIds_PresentInDiagramParts_AsStandardUniqueIdSuffixes()
     {
         var smartArt = SmartArt.Create(SmartArtKind.List, ["A"]);
         smartArt.LayoutId = "radial1";
@@ -634,7 +634,7 @@ public class SmartArtRoundTripTests
         colorsXml.Root!.Attribute("uniqueId")!.Value.Should().EndWith("mono1");
 
         var qsXml = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
-        qsXml.Root!.Attribute("uniqueId")!.Value.Should().EndWith("simple1");
+        qsXml.Root!.Attribute("uniqueId")!.Value.Should().EndWith("flat1");
     }
 
     [Fact]
@@ -696,7 +696,7 @@ public class SmartArtRoundTripTests
         var docPoint = ptList.Elements(Dgm + "pt").Single(pt => pt.Attribute("type")?.Value == "doc");
         var docPrSet = docPoint.Element(Dgm + "prSet")!;
 
-        docPrSet.Attribute("qsTypeId")!.Value.Should().EndWith("/quickstyle/simple1");
+        docPrSet.Attribute("qsTypeId")!.Value.Should().EndWith("/quickstyle/intense1");
         docPrSet.Attribute("phldr")!.Value.Should().Be("0");
         ptList.Elements(Dgm + "pt").Count(pt => pt.Attribute("type")?.Value == "pres").Should().Be(21);
 
@@ -717,8 +717,8 @@ public class SmartArtRoundTripTests
         pres("Name111").Attribute("presStyleCnt")!.Value.Should().Be("1");
 
         var quickStyle = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
-        quickStyle.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/quickstyle/simple1");
-        quickStyle.Root.Attribute("freewStyleId")!.Value.Should().Be("intense1");
+        quickStyle.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/quickstyle/intense1");
+        quickStyle.Root.Attribute("freewStyleId").Should().BeNull();
         var colors = EntryXml(bytes, "word/diagrams/colors1.xml");
         colors.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/colors/accent1_2");
         colors.Descendants(Dgm + "styleLbl").Single(label => label.Attribute("name")!.Value == "fgAcc0")
@@ -753,7 +753,7 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
-    public void WordColorGalleryIds_UseNativeSuffixAndPreserveFreeWId()
+    public void WordColorGalleryIds_UseNativeSuffixWithoutCustomAttributes()
     {
         var smartArt = SmartArt.Create(SmartArtKind.Hierarchy, ["Root"]);
         smartArt.ColorSchemeId = "accent1";
@@ -767,7 +767,7 @@ public class SmartArtRoundTripTests
 
         var colors = EntryXml(bytes, "word/diagrams/colors1.xml");
         colors.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/accent1_2");
-        colors.Root.Attribute("freewColorId")!.Value.Should().Be("accent1");
+        colors.Root.Attribute("freewColorId").Should().BeNull();
     }
 
     [Fact]

@@ -4221,9 +4221,8 @@ public static class DocxReader
 
     /// <summary>
     /// Recovers the FreeW gallery preset ids (LayoutId / ColorSchemeId / StyleId) from the three diagram
-    /// parts (layout / colors / quickStyle). When a FreeW extension attribute (<c>freewLayoutId</c> /
-    /// <c>freewColorId</c> / <c>freewStyleId</c>) is present it is used directly for lossless round-trip;
-    /// otherwise the uniqueId suffix is used as a best-effort fallback.
+    /// parts (layout / colors / quickStyle). Legacy FreeW extension attributes are accepted for backward
+    /// compatibility; new packages use the standard uniqueId values.
     /// </summary>
     private static void ReadSmartArtGalleryIds(
         XElement? relIds,
@@ -4284,10 +4283,7 @@ public static class DocxReader
                     target.ColorSchemeId = freewId;
                 else
                 {
-                    var uniqueId = csRoot.Attribute("uniqueId")?.Value ?? string.Empty;
-                    var lastSlash = uniqueId.LastIndexOf('/');
-                    if (lastSlash >= 0 && lastSlash < uniqueId.Length - 1)
-                        target.ColorSchemeId = uniqueId[(lastSlash + 1)..];
+                    target.ColorSchemeId = NormalizeSmartArtColorId(GallerySuffix(csRoot.Attribute("uniqueId")?.Value));
                 }
             }
         }
@@ -4306,7 +4302,7 @@ public static class DocxReader
                 if (target.StyleId is null)
                     target.StyleId = GallerySuffix(prSet?.Attribute("qsTypeId")?.Value);
                 if (target.ColorSchemeId is null)
-                    target.ColorSchemeId = GallerySuffix(prSet?.Attribute("csTypeId")?.Value);
+                    target.ColorSchemeId = NormalizeSmartArtColorId(GallerySuffix(prSet?.Attribute("csTypeId")?.Value));
             }
         }
     }
@@ -4320,6 +4316,13 @@ public static class DocxReader
             ? uniqueId[(lastSlash + 1)..]
             : null;
     }
+
+    private static string? NormalizeSmartArtColorId(string? colorId) => colorId?.ToLowerInvariant() switch
+    {
+        // Word's built-in accent1_2 is FreeW's named Accent 1 gallery entry.
+        "accent1_2" => "accent1",
+        _ => colorId
+    };
 
     /// <summary>
     /// Reads the literal string cache (c:strRef/c:strCache or a bare c:strCache) under <paramref name="parent"/>
