@@ -5093,8 +5093,16 @@ public sealed class DocumentView : Control
         colOffsets[cols] = running;
 
         const double pad = 5;
+        var cellSpacingDip = Math.Max(0, PageLayout.PointsToDip(table.CellSpacingPt ?? 0));
+        var rowAdvanceExtraDip = cellSpacingDip * 2;
         var borders = table.Formatting.Borders || _showTableGridlines;
-        var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(table, page: _doc.Page);
+        var firstPageLeadingContentHeight = _layoutTextAreaHeight > 0
+            ? _layoutContentY % _layoutTextAreaHeight
+            : 0;
+        var tableLayoutPlan = DocumentViewLayoutPlanner.BuildTableLayoutPlan(
+            table,
+            page: _doc.Page,
+            firstPageLeadingContentHeightDip: firstPageLeadingContentHeight);
         var cellEffectiveFills = tableLayoutPlan.Cells.ToDictionary(
             cell => (cell.RowIndex, cell.CellIndex),
             cell => cell.EffectiveFill);
@@ -5151,30 +5159,13 @@ public sealed class DocumentView : Control
 
                 prCol += prSpan;
             }
-            rowHeights[pr] = prRowHeight;
+            rowHeights[pr] = ResolveTableRowHeight(prRow, prRowHeight);
         }
 
-        var plannedPagesByFirstSourceRow = _viewMode == DocumentViewMode.PrintLayout
-            ? tableLayoutPlan.Pagination.Pages
-                .Where(page => page.PageNumber > 1 && page.SourceRowIndexes.Count > 0)
-                .ToDictionary(page => page.SourceRowIndexes[0])
-            : new Dictionary<int, DocumentTablePaginationPagePlan>();
-
-        double NextPhysicalPageStartContentY()
-        {
-            if (_layoutTextAreaHeight <= 0)
-                return _layoutContentY;
-
-            var slotsPerPage = Math.Max(1, _colCount);
-            var currentSlot = Math.Max(0, (int)(_layoutContentY / _layoutTextAreaHeight));
-            var currentPage = currentSlot / slotsPerPage;
-            var currentPageStart = currentPage * slotsPerPage * _layoutTextAreaHeight;
-            return _layoutContentY <= currentPageStart + 0.5
-                ? _layoutContentY
-                : (currentPage + 1) * slotsPerPage * _layoutTextAreaHeight;
-        }
-
-        void RenderTableRow(int r, double? reservedContentY = null)
+        void RenderTableRow(
+            int r,
+            double? reservedContentY = null,
+            bool renderRepeatedHeaderWhenPageBreak = true)
         {
             var row = table.Rows[r];
 
@@ -5182,7 +5173,7 @@ public sealed class DocumentView : Control
             // per-paragraph, per-character cell-aware PlacedChars for caret routing.
             // BE2: CellParas holds wrapped lines per-paragraph (outer list = para, inner = wrapped lines).
             var measured = new List<(TableCell Cell, int CellIndex, int StartCol, int Span, List<List<(double Height, List<(char Ch, double W)> Chars)>> CellParas, RunFormatting Fmt)>();
-            var rowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
+            var measuredRowHeight = Build("Ag", RunFormatting.Default).Height + 2 * pad;
             var col = 0;
             for (var cellIndex = 0; cellIndex < row.Cells.Count; cellIndex++)
             {
@@ -5209,15 +5200,37 @@ public sealed class DocumentView : Control
                     : new List<List<(double Height, List<(char Ch, double W)> Chars)>> { WrapCellLines(string.Empty, fmt, innerW) };
                 var lines = cellParas.SelectMany(pl => pl).ToList(); // flattened for height calc
                 var cellHeight = lines.Sum(l => l.Height) + 2 * pad;
-                if (cellHeight > rowHeight)
-                    rowHeight = cellHeight;
+                if (cellHeight > measuredRowHeight)
+                    measuredRowHeight = cellHeight;
 
                 measured.Add((cell, cellIndex, col, span, cellParas, fmt));
                 col += span;
             }
 
+            var rowHeight = ResolveTableRowHeight(row, measuredRowHeight);
+            var rowAdvance = rowHeight + rowAdvanceExtraDip;
+
             // Treat the row as a unit: reserve space on the current page (or push to next).
-            var rowContentY = reservedContentY ?? ReserveContentY(rowHeight);
+            var previousPageIndex = _layoutTextAreaHeight > 0
+                ? Math.Max(0, (int)(_layoutContentY / (_layoutTextAreaHeight * Math.Max(1, _colCount))))
+                : 0;
+            var rowContentY = reservedContentY ?? ReserveContentY(rowAdvance);
+            var rowPageIndex = _layoutTextAreaHeight > 0
+                ? Math.Max(0, (int)(rowContentY / (_layoutTextAreaHeight * Math.Max(1, _colCount))))
+                : 0;
+
+            // Pagination is ultimately governed by measured row geometry and per-page footnote bands.
+            // When that measured reservation moves a body row, repeat the Word header row before it.
+            if (renderRepeatedHeaderWhenPageBreak &&
+                reservedContentY is null &&
+                r > 0 &&
+                table.Formatting.RepeatHeaderRow &&
+                table.Rows.Count > 0 &&
+                rowPageIndex > previousPageIndex)
+            {
+                RenderTableRow(0, rowContentY, renderRepeatedHeaderWhenPageBreak: false);
+                rowContentY = ReserveContentY(rowAdvance);
+            }
             var rowPageSpaceY = ContentYToPageSpaceY(rowContentY);
 
             // AV-COL-NONTXT AG1: use the column band that this row's content-Y falls in.
@@ -5229,7 +5242,7 @@ public sealed class DocumentView : Control
                 for (var s = 0; s < span; s++)
                     cellWidth += colWidths[startCol + s];
                 var cellX = rowColLeft + colOffsets[startCol];
-                var rect = new Rect(cellX, rowPageSpaceY, cellWidth, rowHeight);
+                var rect = new Rect(cellX, rowPageSpaceY + cellSpacingDip, cellWidth, rowHeight);
                 var fill = EffectiveFillBrush(EffectiveFillFor(r, cellIndex));
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(cellModel.Borders, PxPerPoint);
                 _rects.Add((rect, fill, borders, cellBorderPlan.HasVisibleEdges ? cellBorderPlan : null));
@@ -5318,37 +5331,27 @@ public sealed class DocumentView : Control
                 }
             }
 
-            _layoutContentY = rowContentY + rowHeight;
+            _layoutContentY = rowContentY + rowAdvance;
         }
 
         for (var r = 0; r < table.Rows.Count; r++)
-        {
-            if (plannedPagesByFirstSourceRow.TryGetValue(r, out var plannedPage))
-            {
-                var nextPageStart = NextPhysicalPageStartContentY();
-                if (nextPageStart > _layoutContentY)
-                    _layoutContentY = nextPageStart;
-
-                var openingRows = plannedPage.RenderRows
-                    .TakeWhile(row => row.IsRepeatedHeader || row.SourceRowIndex == r)
-                    .ToList();
-                var openingRowsHeight = openingRows.Sum(row =>
-                    row.SourceRowIndex >= 0 && row.SourceRowIndex < rowHeights.Length
-                        ? rowHeights[row.SourceRowIndex]
-                        : Math.Max(0, row.EstimatedHeightDip));
-                _layoutContentY = ReserveContentY(openingRowsHeight);
-
-                foreach (var repeatedHeaderRow in openingRows.Where(row => row.IsRepeatedHeader))
-                {
-                    if (repeatedHeaderRow.SourceRowIndex >= 0 && repeatedHeaderRow.SourceRowIndex < table.Rows.Count)
-                        RenderTableRow(repeatedHeaderRow.SourceRowIndex, _layoutContentY);
-                }
-            }
-
             RenderTableRow(r);
-        }
 
         _layoutContentY += 8;
+    }
+
+    private static double ResolveTableRowHeight(TableRow row, double measuredHeightDip)
+    {
+        var authoredHeightDip = row.HeightPt is { } heightPt && heightPt > 0
+            ? PageLayout.PointsToDip(heightPt)
+            : 0;
+
+        return row.HeightRule switch
+        {
+            TableRowHeightRule.Exact when authoredHeightDip > 0 => authoredHeightDip,
+            TableRowHeightRule.AtLeast when authoredHeightDip > 0 => Math.Max(measuredHeightDip, authoredHeightDip),
+            _ => measuredHeightDip
+        };
     }
 
     private void LayoutImageParagraphPaged(int blockIndex, Paragraph paragraph, double textWidth)
@@ -14168,14 +14171,21 @@ public sealed class DocumentView : Control
         AllCaps = baseRun.AllCaps || over.AllCaps,
     };
 
-    private static ParagraphFormatting OverlayParagraph(ParagraphFormatting baseParagraph, ParagraphFormatting over) => baseParagraph with
+    private static ParagraphFormatting OverlayParagraph(ParagraphFormatting baseParagraph, ParagraphFormatting over)
     {
-        Alignment = over.Alignment == TextAlignment.Left ? baseParagraph.Alignment : over.Alignment,
-        SpaceBeforePt = over.SpaceBeforeIsSet ? over.SpaceBeforePt : baseParagraph.SpaceBeforePt,
-        SpaceBeforeIsSet = baseParagraph.SpaceBeforeIsSet || over.SpaceBeforeIsSet,
-        SpaceAfterPt = over.SpaceAfterIsSet ? over.SpaceAfterPt : baseParagraph.SpaceAfterPt,
-        SpaceAfterIsSet = baseParagraph.SpaceAfterIsSet || over.SpaceAfterIsSet,
-    };
+        // Earlier built-in and imported styles expressed nonzero spacing without the newer
+        // explicit-set flags. Word honors those style values, so preserve them during display cascades.
+        var setsSpaceBefore = over.SpaceBeforeIsSet || over.SpaceBeforePt != 0;
+        var setsSpaceAfter = over.SpaceAfterIsSet || over.SpaceAfterPt != 0;
+        return baseParagraph with
+        {
+            Alignment = over.Alignment == TextAlignment.Left ? baseParagraph.Alignment : over.Alignment,
+            SpaceBeforePt = setsSpaceBefore ? over.SpaceBeforePt : baseParagraph.SpaceBeforePt,
+            SpaceBeforeIsSet = baseParagraph.SpaceBeforeIsSet || setsSpaceBefore,
+            SpaceAfterPt = setsSpaceAfter ? over.SpaceAfterPt : baseParagraph.SpaceAfterPt,
+            SpaceAfterIsSet = baseParagraph.SpaceAfterIsSet || setsSpaceAfter,
+        };
+    }
 
     private static RunFormatting ActiveFormatting(Paragraph paragraph, int offset)
     {

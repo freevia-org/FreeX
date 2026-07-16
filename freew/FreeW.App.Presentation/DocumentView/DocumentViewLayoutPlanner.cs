@@ -860,7 +860,7 @@ public static class DocumentViewLayoutPlanner
             : [];
         var headerRowSet = headerRowIndexes.ToHashSet();
         var estimatedHeights = table.Rows
-            .Select(EstimateTableRowHeightDip)
+            .Select(row => EstimateTableRowHeightDip(table, row))
             .ToArray();
         var headerHeightDip = RoundDip(headerRowIndexes.Sum(index => estimatedHeights[index]));
 
@@ -2004,16 +2004,20 @@ public static class DocumentViewLayoutPlanner
         return modelObject is InlineImage or Shape or Chart or WordArt or SmartArt or DrawingGroup;
     }
 
-    private static double EstimateTableRowHeightDip(TableRow row)
+    private static double EstimateTableRowHeightDip(Table table, TableRow row)
     {
         var authoredHeight = row.HeightPt is { } heightPt && heightPt > 0
             ? PageLayout.PointsToDip(heightPt)
             : 0;
         var textHeight = EstimateTableRowTextHeightDip(row);
 
-        return row.HeightRule == TableRowHeightRule.Exact && authoredHeight > 0
+        var rowHeight = row.HeightRule == TableRowHeightRule.Exact && authoredHeight > 0
             ? RoundDip(Math.Max(MinimumTableRowHeightDip, authoredHeight))
             : RoundDip(Math.Max(DefaultTableRowHeightDip, Math.Max(authoredHeight, textHeight)));
+        // Word's tblCellSpacing is outside each cell box, so it contributes a leading and trailing
+        // vertical gap to the occupied row slot as well as visible gaps between adjacent rows.
+        var verticalCellSpacing = Math.Max(0, PageLayout.PointsToDip(table.CellSpacingPt ?? 0)) * 2;
+        return RoundDip(rowHeight + verticalCellSpacing);
     }
 
     private static double EstimateTableRowTextHeightDip(TableRow row)

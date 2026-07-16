@@ -153,6 +153,70 @@ public sealed class DocumentViewTableStructureTests
             "the first shared-plan page-2 body row should start on a later physical page");
     }
 
+    [Fact]
+    public async Task ExactTableRowHeight_uses_authored_height_even_when_cell_text_is_taller()
+    {
+        double renderedHeight = -1;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            var table = Table.Create(1, 1);
+            table.Rows[0].HeightPt = 24;
+            table.Rows[0].HeightRule = TableRowHeightRule.Exact;
+            table.Rows[0].Cells[0] = new TableCell(new string('W', 800));
+            doc.Blocks.Add(table);
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(900, 2000));
+            renderedHeight = GetTableCellHits(view).Single().Rect.Height;
+        });
+        if (!ran) return;
+
+        renderedHeight.Should().BeApproximately(PageLayout.PointsToDip(24), 0.01,
+            "Word's exact table row height fixes the row box even when the cell content overflows it");
+    }
+
+    [Fact]
+    public async Task LegacyStyleSpacing_without_explicit_flags_moves_following_table()
+    {
+        double unstyledTableY = -1;
+        double styledTableY = -1;
+        var ran = await OnUiThread(() =>
+        {
+            TextDocument BuildDocument(string? styleId)
+            {
+                var doc = TextDocument.CreateEmpty();
+                doc.Styles["LegacySpacing"] = new DocumentStyle
+                {
+                    Id = "LegacySpacing",
+                    Name = "Legacy spacing",
+                    Paragraph = new ParagraphFormatting { SpaceBeforePt = 12, SpaceAfterPt = 8 }
+                };
+                doc.Blocks.Add(new Paragraph("Lead paragraph") { StyleId = styleId });
+                var table = Table.Create(1, 1);
+                table.Rows[0].Cells[0] = new TableCell("Table");
+                doc.Blocks.Add(table);
+                return doc;
+            }
+
+            var unstyledView = new DocumentView();
+            unstyledView.LoadDocument(BuildDocument(null));
+            unstyledView.Measure(new Size(900, 2000));
+            unstyledTableY = GetTableCellHits(unstyledView).Single().Rect.Y;
+
+            var styledView = new DocumentView();
+            styledView.LoadDocument(BuildDocument("LegacySpacing"));
+            styledView.Measure(new Size(900, 2000));
+            styledTableY = GetTableCellHits(styledView).Single().Rect.Y;
+        });
+        if (!ran) return;
+
+        styledTableY.Should().BeGreaterThan(
+            unstyledTableY + PageLayout.PointsToDip(12),
+            "legacy style spacing values are valid Word formatting even when their explicit-set flags are absent");
+    }
+
     // ── row insert below ──────────────────────────────────────────────────────────────────────
 
     [Fact]

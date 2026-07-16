@@ -1098,11 +1098,28 @@ static DocumentNoteRegionPlan? BuildEvidenceNoteRegionPlan(
 static bool ShouldCaptureWordComparablePageSurface(string scenarioId) =>
     string.Equals(scenarioId, "f2-footnotes", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "f2-endnotes", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "f2-hf-images", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "f2-section-landscape", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "f2-tracked-changes", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "f2-comments", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "field-page-number-variants", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "references-heavy-fields", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "legal-reference-section-page-numbers", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "equation-structures", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "review-proofing-visual-depth", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "review-protection-proofing-comments-only", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "review-compare-visual-proof", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "review-combine-visual-proof", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "table-layout-complex", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "table-pagination-repeat-header", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "table-page-composition-stress", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "drawing-objects-complex", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "chart-smartart-complex", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "object-format-position-size-style", StringComparison.OrdinalIgnoreCase) ||
     string.Equals(scenarioId, "wordart-watermark-stress", StringComparison.OrdinalIgnoreCase) ||
-    string.Equals(scenarioId, "wordart-picture-watermark-layout", StringComparison.OrdinalIgnoreCase);
+    string.Equals(scenarioId, "wordart-picture-watermark-layout", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "backstage-print-preview-fidelity", StringComparison.OrdinalIgnoreCase) ||
+    string.Equals(scenarioId, "backstage-pdf-export-fidelity", StringComparison.OrdinalIgnoreCase);
 
 static int WordComparableContentOffsetY(string scenarioId, int pageNumber)
 {
