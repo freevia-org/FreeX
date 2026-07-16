@@ -1240,10 +1240,23 @@ public sealed class SlideCanvas : Control
             var fill = primitive.Fill!.Value;
             if (primitive.DepthFill is { } depthFill)
             {
-                dc.DrawGeometry(
-                    ToBrush(depthFill),
-                    null,
-                    ToPieSliceGeometry(primitive, primitive.DepthOffsetY));
+                if (primitive.DrawDepthSidewalls)
+                {
+                    foreach (var interval in GetPieDepthArcIntervals(primitive))
+                    {
+                        dc.DrawGeometry(
+                            ToBrush(ShadeImportedThreeDPieSidewall(depthFill, interval.Start, interval.End)),
+                            null,
+                            ToPieSliceDepthGeometry(primitive, interval.Start, interval.End));
+                    }
+                }
+                else
+                {
+                    dc.DrawGeometry(
+                        ToBrush(depthFill),
+                        null,
+                        ToPieSliceGeometry(primitive, primitive.DepthOffsetY));
+                }
             }
 
             var brush = ToBrush(fill);
@@ -1274,6 +1287,76 @@ public sealed class SlideCanvas : Control
 
         return geo;
     }
+
+    private static IEnumerable<(double Start, double End)> GetPieDepthArcIntervals(
+        ChartPieSlicePrimitive primitive)
+    {
+        for (int turn = -1; turn <= 1; turn++)
+        {
+            double frontStart = turn * 2 * Math.PI;
+            double frontEnd = frontStart + Math.PI;
+            double start = Math.Max(primitive.StartAngle, frontStart);
+            double end = Math.Min(primitive.EndAngle, frontEnd);
+            if (end - start > 1e-6)
+                yield return (start, end);
+        }
+    }
+
+    private static StreamGeometry ToPieSliceDepthGeometry(
+        ChartPieSlicePrimitive primitive,
+        double startAngle,
+        double endAngle)
+    {
+        var topStart = PointOnPieOuter(primitive, startAngle);
+        var topEnd = PointOnPieOuter(primitive, endAngle);
+        var bottomStart = new ChartPlanPoint(topStart.X, topStart.Y + primitive.DepthOffsetY);
+        var bottomEnd = new ChartPlanPoint(topEnd.X, topEnd.Y + primitive.DepthOffsetY);
+        var geo = new StreamGeometry();
+        using (var ctx = geo.Open())
+        {
+            ctx.BeginFigure(ToPoint(topStart), isFilled: true);
+            ctx.ArcTo(
+                ToPoint(topEnd),
+                new Size(primitive.OuterRadius, primitive.OuterRadiusY),
+                0,
+                isLargeArc: false,
+                SweepDirection.Clockwise);
+            ctx.LineTo(ToPoint(bottomEnd));
+            ctx.ArcTo(
+                ToPoint(bottomStart),
+                new Size(primitive.OuterRadius, primitive.OuterRadiusY),
+                0,
+                isLargeArc: false,
+                SweepDirection.CounterClockwise);
+            ctx.EndFigure(isClosed: true);
+        }
+        return geo;
+    }
+
+    private static ChartPlanPoint PointOnPieOuter(
+        ChartPieSlicePrimitive primitive,
+        double angle) =>
+        new(
+            primitive.Center.X + primitive.OuterRadius * Math.Cos(angle),
+            primitive.Center.Y + primitive.OuterRadiusY * Math.Sin(angle));
+
+    private static ChartFillPlan ShadeImportedThreeDPieSidewall(
+        ChartFillPlan fill,
+        double startAngle,
+        double endAngle)
+    {
+        double midpoint = (startAngle + endAngle) / 2;
+        double factor = 0.35 + 0.4 * Math.Clamp(Math.Sin(midpoint), 0, 1);
+        return new ChartFillPlan(
+            new SrgbColor(
+                ScalePieSidewallChannel(fill.Color.R, factor),
+                ScalePieSidewallChannel(fill.Color.G, factor),
+                ScalePieSidewallChannel(fill.Color.B, factor)),
+            fill.Alpha);
+    }
+
+    private static byte ScalePieSidewallChannel(byte channel, double factor) =>
+        (byte)Math.Round(Math.Clamp(channel * factor, 0, 255));
 
     private static void RenderAreaChart(DrawingContext dc, ChartScenePlan scene)
     {
