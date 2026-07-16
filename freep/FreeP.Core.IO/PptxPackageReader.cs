@@ -196,7 +196,16 @@ public static class PptxPackageReader
         // Create placeholder slides (with Id set) for the allSlides reference list.
         var allSlides = new List<Slide>(slideInfos.Count);
         foreach (var (rId, _) in slideInfos)
-            allSlides.Add(new Slide { Id = rId });
+        {
+            var numericId = sldIdList
+                .FirstOrDefault(el => string.Equals(el.Attribute(R + "id")?.Value, rId, StringComparison.OrdinalIgnoreCase))
+                ?.Attribute("id")?.Value;
+            allSlides.Add(new Slide
+            {
+                Id = rId,
+                NumericId = uint.TryParse(numericId, out var parsedId) ? parsedId : null,
+            });
+        }
 
         // Build a map from normalized slide part path → Slide.Id (= presentation-level rId).
         // This is used by ResolveHlinkClick to resolve internal slide-jump hyperlinks by part
@@ -210,6 +219,7 @@ public static class PptxPackageReader
         {
             var (rId, slidePath) = slideInfos[si];
             var slide = ReadSlide(archive, slidePath, rId, presentation.Theme.ColorScheme, presentation.Layouts, tableStyles, allSlides, slidePartPathToId);
+            slide.NumericId = allSlides[si].NumericId;
             // Replace the placeholder so hyperlinks referencing this slide still get the same object.
             allSlides[si] = slide;
             presentation.Slides.Add(slide);
@@ -1459,6 +1469,12 @@ public static class PptxPackageReader
         var info = new PreservedObjectInfo
         {
             ObjectKind          = kind,
+            ZoomTargetSlideNumericId = kind == PreservedObjectKind.Zoom
+                ? ReadZoomTargetSlideNumericId(gfEl)
+                : null,
+            ZoomTargetSectionId = kind == PreservedObjectKind.Zoom
+                ? ReadZoomTargetSectionId(gfEl)
+                : null,
             RawXml              = gfEl.ToString(SaveOptions.DisableFormatting),
             WasAlternateContent = wasAlternateContent,
             McRequiresToken     = mcRequiresToken,
@@ -1491,6 +1507,20 @@ public static class PptxPackageReader
             PreservedObject = info,
         };
     }
+
+    private static uint? ReadZoomTargetSlideNumericId(XElement graphicFrame)
+    {
+        var target = graphicFrame.Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "sldZmObj", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("sldId")?.Value;
+        return uint.TryParse(target, out var slideId) ? slideId : null;
+    }
+
+    private static string? ReadZoomTargetSectionId(XElement graphicFrame) =>
+        graphicFrame.Descendants()
+            .FirstOrDefault(element => string.Equals(
+                element.Name.LocalName, "sectionZmObj", StringComparison.OrdinalIgnoreCase))
+            ?.Attribute("sectionId")?.Value;
 
     /// <summary>
     /// Reads a p:contentPart element (ink annotation). May be wrapped in mc:AlternateContent.

@@ -360,6 +360,29 @@ public sealed partial class XlsxFileAdapter
                 }
             }
 
+            // Save merged regions BEFORE hyperlinks: ClosedXML's Range.Merge() clears every
+            // non-anchor cell of the merged region (including anything just assigned to it), so a
+            // hyperlink written to a non-anchor cell first (the shape ClosedXML's own loader
+            // produces for a real Excel range hyperlink -- one hyperlink object per cell in the
+            // range) would be silently wiped out the moment the region is merged. Applying the
+            // merge first means the hyperlink loop below is writing to the already-merged
+            // worksheet, so every cell's hyperlink assignment survives.
+            foreach (var region in sheet.MergedRegions)
+            {
+                try
+                {
+                    var rangeStr = $"{CellAddress.NumberToColumnName(region.Start.Col)}{region.Start.Row}" +
+                                   $":{CellAddress.NumberToColumnName(region.End.Col)}{region.End.Row}";
+                    xlSheet.Range(rangeStr).Merge();
+                }
+                catch (Exception ex)
+                {
+                    var regionDesc = $"{CellAddress.NumberToColumnName(region.Start.Col)}{region.Start.Row}:{CellAddress.NumberToColumnName(region.End.Col)}{region.End.Row}";
+                    System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping merged-region save for sheet '{sheet.Name}' region '{regionDesc}': {ex.Message}");
+                    warnings?.Add($"[merged-region] Merged region '{regionDesc}' on sheet '{sheet.Name}' could not be saved and was skipped.");
+                }
+            }
+
             foreach (var (address, target) in sheet.Hyperlinks)
             {
                 try
@@ -511,23 +534,6 @@ public sealed partial class XlsxFileAdapter
             if (!XlsxDataValidationNativeMetadataMapper.HasNativeMetadata(sheet))
             {
                 XlsxDataValidationClosedXmlMapper.Save(sheet, xlSheet, warnings);
-            }
-
-            // Save merged regions
-            foreach (var region in sheet.MergedRegions)
-            {
-                try
-                {
-                    var rangeStr = $"{CellAddress.NumberToColumnName(region.Start.Col)}{region.Start.Row}" +
-                                   $":{CellAddress.NumberToColumnName(region.End.Col)}{region.End.Row}";
-                    xlSheet.Range(rangeStr).Merge();
-                }
-                catch (Exception ex)
-                {
-                    var regionDesc = $"{CellAddress.NumberToColumnName(region.Start.Col)}{region.Start.Row}:{CellAddress.NumberToColumnName(region.End.Col)}{region.End.Row}";
-                    System.Diagnostics.Debug.WriteLine($"[XlsxFileAdapter] Skipping merged-region save for sheet '{sheet.Name}' region '{regionDesc}': {ex.Message}");
-                    warnings?.Add($"[merged-region] Merged region '{regionDesc}' on sheet '{sheet.Name}' could not be saved and was skipped.");
-                }
             }
         }
 

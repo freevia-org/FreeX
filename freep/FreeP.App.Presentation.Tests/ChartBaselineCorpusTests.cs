@@ -407,6 +407,12 @@ public sealed class ChartBaselineCorpusTests
                 new SrgbColor(0x99, 0xBD, 0x80));
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
+        surfaceGeometry.FrameSegments[0].Start.X
+            .Should().BeApproximately(8.0, 0.0001,
+                "the imported PowerPoint front frame edge starts inside the plot gutter");
+        surfaceGeometry.FrameSegments[0].End.X
+            .Should().BeApproximately(312.0, 0.0001,
+                "the imported PowerPoint front frame edge uses the measured projected width");
         surfaceGeometry.FrameSegments.Select(segment => segment.Stroke.Alpha)
             .Should().OnlyContain(alpha => alpha == 255,
                 "imported PowerPoint Surface3D uses an opaque projected-frame stroke");
@@ -612,8 +618,8 @@ public sealed class ChartBaselineCorpusTests
             .Should().Be(new ChartPlanRect(70.0, 21.0, 775.4, 467.0),
                 "PowerPoint's imported style-2 column chart uses the wider plot band captured by the COM baseline");
         ChartRenderPlanner.BuildFramePlan(charts[1], new ChartPlanRect(0, 0, 960, 540)).Plot
-            .Should().Be(new ChartPlanRect(70.0, 21.0, 775.4, 467.0),
-                "PowerPoint's imported style-2 line chart shares the column chart plot geometry");
+            .Should().Be(new ChartPlanRect(70.0, 21.0, 781.0, 467.0),
+                "PowerPoint's imported style-2 line chart reserves a narrower right legend band than the column chart");
 
         foreach (var chart in charts)
         {

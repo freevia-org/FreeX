@@ -52,6 +52,18 @@ public static class StructuredTableStyleService
             return false;
         }
 
+        // R46-io-table-style-bands-2-1: when the table's style name resolves to a registered custom
+        // table style (one defined in the workbook's own styles.xml <tableStyles>), the load pipeline
+        // already painted its exact header/totals/stripe/border formatting onto these cells via
+        // XlsxStructuredTableModelMapper.MaterializeStyle (called earlier, per-sheet, during the load
+        // loop). StructuredTableStyleBandingResolver only recognizes Excel's built-in
+        // TableStyleLight/Medium/Dark name families, so a custom name would otherwise fall through to
+        // DefaultLightBanding() and this generic materializer would stomp the already-correct custom
+        // header/totals formatting with Excel's generic gray/black default. Skip the generic banding
+        // entirely for a table using a recognized custom style — nothing more to paint here.
+        if (HasCustomTableStyle(workbook, table.StyleName))
+            return false;
+
         var banding = StructuredTableStyleBandingResolver.Resolve(table.StyleName, workbook.Theme);
 
         var hasHeaderRow = table.HeaderRowCount is null or > 0;
@@ -78,6 +90,17 @@ public static class StructuredTableStyleService
         // ── Data body rows (row banding, or body fill when row stripes off) ─
         if (dataStartRow <= dataEndRow)
         {
+            // R46-io-table-style-bands-2-2: capture, BEFORE either banding pass below writes
+            // anything, which body cells already carry an explicit fill (a user-set fill loaded
+            // straight from the source file, or one materialized by a custom table style). The
+            // column-stripe pass still needs to win over the row-banding pass's own fill (written
+            // immediately below, in this same call) via forceFill, but it must not also clobber a
+            // fill that was already on the cell before this table was styled at all — that fill
+            // always wins over dynamic banding, in both Excel and this method's own body-cell rule.
+            var originalBodyFill = table.ShowColumnStripes
+                ? CaptureBodyFillState(workbook, sheet, dataStartRow, dataEndRow, range.Start.Col, range.End.Col)
+                : null;
+
             for (var row = dataStartRow; row <= dataEndRow; row++)
             {
                 // Match Excel's (and the table-creation command's) banding parity: the first data row
@@ -93,9 +116,10 @@ public static class StructuredTableStyleService
             // ── Column stripes (overrides row fill per column, mirrors StructuredTableCommand) ──
             // When ShowColumnStripes is true Excel draws vertical bands instead of (or layered over)
             // row bands.  Mirror the apply-command: iterate columns and paint even/odd column fills
-            // onto the data body range.  forceFill=true so column banding wins over any row fill
-            // already written by the row-banding pass above (the row-fill pass may have set a non-null
-            // white fill, which the keepExistingFill guard would otherwise preserve).
+            // onto the data body range.  forceFill bypasses the keepExistingFill guard only for a
+            // cell that had NO explicit fill before this call started (i.e. the only fill it could be
+            // preserving is the one the row-banding pass above just wrote); a cell that already had an
+            // explicit fill before this table was styled keeps it, matching Excel and body-cell parity.
             if (table.ShowColumnStripes)
             {
                 for (var col = range.Start.Col; col <= range.End.Col; col++)
@@ -103,7 +127,10 @@ public static class StructuredTableStyleService
                     var colOffset = col - range.Start.Col;
                     var colFill = colOffset % 2 == 0 ? evenFill : oddFill;
                     for (var row = dataStartRow; row <= dataEndRow; row++)
-                        styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, colFill, isHeaderOrTotals: false, banding: banding, forceFill: true);
+                    {
+                        var hadExplicitFillBeforeStyling = originalBodyFill!.Contains((row, col));
+                        styledAny |= MergeStyleOntoCell(workbook, sheet, row, col, colFill, isHeaderOrTotals: false, banding: banding, forceFill: !hadExplicitFillBeforeStyling);
+                    }
                 }
             }
         }
@@ -134,6 +161,50 @@ public static class StructuredTableStyleService
         }
 
         return styledAny;
+    }
+
+    /// <summary>
+    /// True when <paramref name="styleName"/> matches a workbook-registered custom table style
+    /// (an entry in <see cref="Workbook.StructuredTableStyles"/> with <c>AppliesToTables</c> set) —
+    /// i.e. one XlsxStructuredTableModelMapper.MaterializeStyle already painted onto this table's
+    /// cells at load time, using the exact dxf-defined formatting from the workbook's own styles.xml.
+    /// Mirrors that mapper's own lookup (case-insensitive name match).
+    /// </summary>
+    private static bool HasCustomTableStyle(Workbook workbook, string? styleName)
+    {
+        if (string.IsNullOrWhiteSpace(styleName))
+            return false;
+
+        foreach (var candidate in workbook.StructuredTableStyles)
+        {
+            if (candidate.AppliesToTables && string.Equals(candidate.Name, styleName, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Snapshots which cells in [<paramref name="startRow"/>, <paramref name="endRow"/>] ×
+    /// [<paramref name="startCol"/>, <paramref name="endCol"/>] already carry an explicit fill,
+    /// captured before either banding pass in <see cref="ApplyTableStyle"/> writes anything — used so
+    /// the column-stripe pass can tell "fill the row-banding pass just wrote" (safe to override) apart
+    /// from "fill that was already there" (must be preserved, per R46-io-table-style-bands-2-2).
+    /// </summary>
+    private static HashSet<(uint Row, uint Col)> CaptureBodyFillState(
+        Workbook workbook, Sheet sheet, uint startRow, uint endRow, uint startCol, uint endCol)
+    {
+        var present = new HashSet<(uint Row, uint Col)>();
+        for (var row = startRow; row <= endRow; row++)
+        {
+            for (var col = startCol; col <= endCol; col++)
+            {
+                if (sheet.GetCell(row, col) is { } cell && workbook.GetStyle(cell.StyleId).FillColor is not null)
+                    present.Add((row, col));
+            }
+        }
+
+        return present;
     }
 
     /// <summary>

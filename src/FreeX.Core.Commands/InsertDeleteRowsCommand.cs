@@ -54,6 +54,19 @@ public sealed class InsertRowsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.InsertRows) is { } protectedOutcome)
             return protectedOutcome;
 
+        // R46-commands-insert-delete-shift-2-1: whole-row insert shifts every occupied cell at or
+        // below _beforeRow down by _count, which silently splits a legacy CSE array or a live
+        // dynamic-array spill whose row extent straddles the insert point (e.g. inserting a row
+        // through the middle of a SEQUENCE spill) — the array's anchor moves/stays independent of its
+        // still-computed member rows, desyncing the array from the sheet's shifted row numbering with
+        // no error shown. Mirror the identical guard the band-scoped Insert/Delete Cells command
+        // already applies: treat every row at or below the insert point as the "shifted" region (the
+        // whole width of the sheet, since a row insert affects every column) and reject if that region
+        // would carry only *some* members of an array along while leaving the rest behind.
+        var shiftRegion = new CellShiftRegion(_beforeRow, Model.CellAddress.MaxRow, 1u, Model.CellAddress.MaxCol);
+        if (CommandGuards.RejectIfSplitsArray(sheet, InsertCellsCommand.ArrayMembersWithinShiftRegion(sheet, shiftRegion)) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         var (maxOccupied, movedSnapshot) = CaptureMovedCells(sheet);
         if (maxOccupied > 0 && maxOccupied + _count > Model.CellAddress.MaxRow)
             return new CommandOutcome(false,

@@ -31,7 +31,8 @@ public enum PreservedObjectKind
 ///
 /// Rendering: the fallback/preview image (if any) is stored in the parent
 /// <see cref="SlideShape.Picture"/> field and drawn by the compositor exactly like an OLE
-/// object — no live zoom navigation / 3D interaction / ink replay (all deferred).
+/// object — live Slide Zoom and Section Zoom navigation use the target metadata captured below;
+/// 3D interaction and ink replay remain deferred.
 /// </summary>
 public sealed class PreservedObjectInfo
 {
@@ -41,6 +42,16 @@ public sealed class PreservedObjectInfo
     /// Which modern-object kind this is. Used to choose the badge text in the fallback render.
     /// </summary>
     public PreservedObjectKind ObjectKind { get; set; } = PreservedObjectKind.Unknown;
+
+    /// <summary>
+    /// Numeric presentation slide id targeted by a Slide Zoom's sldZmObj, when present.
+    /// This is distinct from <see cref="Slide.Id"/>, which stores the presentation-level
+    /// relationship id used by the rest of the model.
+    /// </summary>
+    public uint? ZoomTargetSlideNumericId { get; set; }
+
+    /// <summary>Stable section GUID targeted by a Section Zoom, when present.</summary>
+    public string? ZoomTargetSectionId { get; set; }
 
     // ── Verbatim XML round-trip ───────────────────────────────────────────────────
 

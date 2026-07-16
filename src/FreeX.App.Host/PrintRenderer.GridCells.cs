@@ -250,6 +250,16 @@ public static partial class PrintRenderer
             textPoint = new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2);
         }
 
+        // WrapText mirrors GridView.Rendering.cs, which never caps a wrapped cell to one line
+        // either -- but when the row wasn't actually resized to fit the wrapped text (FreeX has
+        // no automatic row-grow-on-WrapText), the taller-than-the-row FormattedText block must be
+        // clipped to the cell's own rect, exactly like CellTextOrientationLayoutPlanner.ShouldClip
+        // does for the interactive grid (wrapText && textHeight > clipRect.Height + tolerance), so
+        // it doesn't bleed into the row below on the printout.
+        var shouldClipWrappedText = wrapText && !hasOrientation && ft.Height > rect.Height + 0.5;
+        if (shouldClipWrappedText)
+            dc.PushClip(new RectangleGeometry(rect));
+
         var isRotated = Math.Abs(rotationAngle) > 0.001;
         if (isRotated)
             dc.PushTransform(new RotateTransform(rotationAngle, textPoint.X, textPoint.Y));
@@ -257,6 +267,9 @@ public static partial class PrintRenderer
         dc.DrawText(ft, textPoint);
 
         if (isRotated)
+            dc.Pop();
+
+        if (shouldClipWrappedText)
             dc.Pop();
 
         // The single-line ellipsis-bound overlay text only matches what's drawn when the cell is

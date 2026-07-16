@@ -203,9 +203,20 @@ internal static class XlsxDataValidationClosedXmlMapper
         if (string.IsNullOrWhiteSpace(formula))
             return formula;
 
-        var trimmed = formula.Trim();
+        // Load (above) re-adds a leading '=' onto a range/defined-name List source purely as an
+        // in-memory marker so DataValidationService.ListSources' "starts with '='" gate resolves
+        // the reference instead of treating the raw text as one literal list item. Real Excel
+        // never writes that marker to <formula1> for a range/name source (R36's own regression
+        // test documents the un-prefixed on-disk convention) -- strip it back off here before
+        // serializing. A quoted inline literal (e.g. "Red,Green,Blue") never carries the marker,
+        // so only unmark when the second character isn't the opening quote of a literal.
+        var unmarked = formula.Length > 1 && formula[0] == '=' && formula[1] != '"'
+            ? formula.Substring(1)
+            : formula;
+
+        var trimmed = unmarked.Trim();
         if (trimmed.Length < 2 || !trimmed.Contains(',', StringComparison.Ordinal))
-            return formula;
+            return unmarked;
 
         if (trimmed.StartsWith('"') && trimmed.EndsWith('"') ||
             trimmed.StartsWith('=') ||
@@ -213,7 +224,7 @@ internal static class XlsxDataValidationClosedXmlMapper
             trimmed.Contains(':', StringComparison.Ordinal) ||
             trimmed.Contains('$', StringComparison.Ordinal))
         {
-            return formula;
+            return unmarked;
         }
 
         return $"\"{trimmed.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";

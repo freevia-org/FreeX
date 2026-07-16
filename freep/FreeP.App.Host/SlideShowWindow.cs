@@ -390,11 +390,16 @@ public sealed class SlideShowWindow : Window
                 clickPt.Y,
                 _slideCanvas.ActualWidth,
                 _slideCanvas.ActualHeight,
-                CurrentSlideMetrics()));
+                CurrentSlideMetrics()),
+            _presentation);
         switch (pointerIntent.Kind)
         {
             case SlideShowPointerClickIntentKind.Trigger when pointerIntent.TriggerShapeId is uint triggerShapeId:
                 PlayTriggerGroup(triggerShapeId);
+                break;
+            case SlideShowPointerClickIntentKind.Zoom when pointerIntent.TargetSlideIndex is int targetSlideIndex:
+                ApplyHostCommand(SlideShowHostPlanner.PlanZoomNavigation(
+                    _controller, _presentation.Slides, targetSlideIndex));
                 break;
             case SlideShowPointerClickIntentKind.Hyperlink when pointerIntent.Hyperlink is not null:
                 ActivateHyperlink(pointerIntent.Hyperlink);

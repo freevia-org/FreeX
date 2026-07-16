@@ -24,6 +24,7 @@ public static class SlideCloner
         var copy = new Slide
         {
             Id      = Guid.NewGuid().ToString("N"), // new identity so it is truly a distinct slide
+            NumericId = null, // a duplicated slide receives a fresh package id when written
             LayoutId   = slide.LayoutId,
             Background = slide.Background,           // ShapeFill is immutable — share reference
             Notes      = PresentationModelCloneHelper.CloneTextBody(slide.Notes),
@@ -466,6 +467,8 @@ public static class SlideCloner
         var copy = new PreservedObjectInfo
         {
             ObjectKind          = src.ObjectKind,
+            ZoomTargetSlideNumericId = src.ZoomTargetSlideNumericId,
+            ZoomTargetSectionId  = src.ZoomTargetSectionId,
             RawXml              = src.RawXml,
             WasAlternateContent = src.WasAlternateContent,
             McRequiresToken     = src.McRequiresToken,

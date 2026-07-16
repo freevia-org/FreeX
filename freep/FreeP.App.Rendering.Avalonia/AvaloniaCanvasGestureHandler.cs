@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using Free.Shared.Drawing;
 
 namespace FreeP.App.Rendering.Avalonia;
 
@@ -144,8 +145,36 @@ public sealed class AvaloniaCanvasGestureHandler
 
         if (slide is null || _editor.Presentation is null) return;
 
-        // Double-click is handled by InCanvasTextEditor; skip here.
-        if (e.ClickCount >= 2) return;
+        if (e.ClickCount >= 2)
+        {
+            var slidePoint = xf.ScreenToSlide(pt.X, pt.Y);
+            var oleHitId = ShapeHitTester.HitTest(
+                slide,
+                _editor.Presentation,
+                slidePoint.X,
+                slidePoint.Y);
+            var shape = oleHitId.HasValue
+                ? slide.Shapes.FirstOrDefault(candidate => candidate.Id == oleHitId.Value)
+                : null;
+            if (shape?.Kind == SlideShapeKind.Ole)
+            {
+                OleActivationService.TryActivate(shape.OleObject);
+                e.Handled = true;
+                return;
+            }
+            if (shape?.Kind == SlideShapeKind.Zoom &&
+                ZoomNavigationService.TryGetTargetSlideIndex(
+                    _editor.Presentation,
+                    shape.PreservedObject,
+                    out var targetSlideIndex))
+            {
+                _editor.SelectSlide(targetSlideIndex);
+                e.Handled = true;
+            }
+
+            // Text editing remains the responsibility of InCanvasTextEditor.
+            return;
+        }
 
         // Handle single selection: check handles first.
         if (_editor.SelectedShapeIds.Count == 1)

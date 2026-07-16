@@ -23,7 +23,9 @@ public enum OleObjectLayout
 /// The fallback preview image (what PowerPoint shows when the object is not activated) is
 /// stored in the parent SlideShape.Picture field, exactly like a regular Picture shape.
 ///
-/// Live OLE activation is NOT supported (deferred); only the fallback image is rendered.
+/// The fallback image is rendered in the slide. Host interaction can materialize
+/// the embedded payload for external activation, but in-place OLE hosting is not
+/// supported.
 /// </summary>
 public sealed class OleObjectInfo
 {

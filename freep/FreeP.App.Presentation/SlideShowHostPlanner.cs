@@ -25,6 +25,7 @@ public enum SlideShowPointerClickIntentKind
 {
     NoOp,
     Trigger,
+    Zoom,
     Hyperlink,
     Advance
 }
@@ -32,10 +33,12 @@ public enum SlideShowPointerClickIntentKind
 public sealed record SlideShowPointerClickIntent(
     SlideShowPointerClickIntentKind Kind,
     uint? TriggerShapeId = null,
-    Hyperlink? Hyperlink = null)
+    Hyperlink? Hyperlink = null,
+    int? TargetSlideIndex = null)
 {
     public bool IsHandled => Kind is
         SlideShowPointerClickIntentKind.Trigger or
+        SlideShowPointerClickIntentKind.Zoom or
         SlideShowPointerClickIntentKind.Hyperlink;
 }
 
@@ -297,7 +300,8 @@ public static class SlideShowHostPlanner
 
     public static SlideShowPointerClickIntent PlanPointerClick(
         Slide? slide,
-        SlideShowPoint slidePoint)
+        SlideShowPoint slidePoint,
+        Presentation? presentation = null)
     {
         ArgumentNullException.ThrowIfNull(slidePoint);
 
@@ -314,12 +318,30 @@ public static class SlideShowHostPlanner
                 TriggerShapeId: triggerShapeId);
         }
 
+        if (presentation is not null &&
+            TryGetZoomTargetSlideIndex(presentation, slide, slidePoint, out var targetSlideIndex))
+        {
+            return new SlideShowPointerClickIntent(
+                SlideShowPointerClickIntentKind.Zoom,
+                TargetSlideIndex: targetSlideIndex);
+        }
+
         var hyperlink = HitTestHyperlink(slide, slidePoint);
         return hyperlink is null
             ? new SlideShowPointerClickIntent(SlideShowPointerClickIntentKind.Advance)
             : new SlideShowPointerClickIntent(
                 SlideShowPointerClickIntentKind.Hyperlink,
                 Hyperlink: hyperlink);
+    }
+
+    public static SlideShowHostCommand PlanZoomNavigation(
+        SlideShowController controller,
+        IReadOnlyList<Slide> slides,
+        int targetSlideIndex)
+    {
+        ArgumentNullException.ThrowIfNull(controller);
+        ArgumentNullException.ThrowIfNull(slides);
+        return PlanJump(controller, slides, targetSlideIndex, animateSlide: false, stopAutoAdvance: true);
     }
 
     public static SlideShowHostCommand PlanInternalSlideJump(
@@ -499,6 +521,68 @@ public static class SlideShowHostPlanner
         }
 
         return null;
+    }
+
+    private static bool TryGetZoomTargetSlideIndex(
+        Presentation presentation,
+        Slide slide,
+        SlideShowPoint slidePoint,
+        out int targetSlideIndex)
+    {
+        foreach (var shape in slide.Shapes)
+        {
+            if (!HitTestShape(shape, slidePoint))
+                continue;
+
+            if (shape.Kind == SlideShapeKind.Zoom &&
+                ZoomNavigationService.TryGetTargetSlideIndex(
+                    presentation,
+                    shape.PreservedObject,
+                    out targetSlideIndex))
+            {
+                return true;
+            }
+
+            if (shape.Children.Count > 0 && TryGetZoomTargetSlideIndexInShapes(
+                    presentation, shape.Children, slidePoint, out targetSlideIndex))
+            {
+                return true;
+            }
+        }
+
+        targetSlideIndex = -1;
+        return false;
+    }
+
+    private static bool TryGetZoomTargetSlideIndexInShapes(
+        Presentation presentation,
+        IReadOnlyList<SlideShape> shapes,
+        SlideShowPoint slidePoint,
+        out int targetSlideIndex)
+    {
+        foreach (var shape in shapes)
+        {
+            if (!HitTestShape(shape, slidePoint))
+                continue;
+
+            if (shape.Kind == SlideShapeKind.Zoom &&
+                ZoomNavigationService.TryGetTargetSlideIndex(
+                    presentation,
+                    shape.PreservedObject,
+                    out targetSlideIndex))
+            {
+                return true;
+            }
+
+            if (shape.Children.Count > 0 && TryGetZoomTargetSlideIndexInShapes(
+                    presentation, shape.Children, slidePoint, out targetSlideIndex))
+            {
+                return true;
+            }
+        }
+
+        targetSlideIndex = -1;
+        return false;
     }
 
     private static SlideShowHostCommand PlanJump(

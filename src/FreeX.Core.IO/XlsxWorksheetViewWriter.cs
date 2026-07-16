@@ -117,6 +117,7 @@ internal static class XlsxWorksheetViewWriter
         changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "showZeros", sheet.ShowZeros ? null : "0");
         changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "rightToLeft", sheet.IsRightToLeft ? "1" : null);
         changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(sheetView, "topLeftCell", ToOptionalA1(sheet.ViewTopRow, sheet.ViewLeftCol));
+
         if (ToOptionalA1(sheet.ActiveRow, sheet.ActiveCol) is { } activeCell)
         {
             // A frozen/split sheetView can carry one <selection> per pane (topLeft/topRight/
@@ -126,9 +127,26 @@ internal static class XlsxWorksheetViewWriter
             // updated from the model; the other panes' <selection> elements must be carried
             // through untouched, or a full-rebuild save silently destroys their cursor positions.
             var paneElement = sheetView.Element(worksheetNs + "pane");
-            var activePaneName = paneElement?.Attribute("activePane")?.Value;
-            if (string.IsNullOrWhiteSpace(activePaneName))
+            string activePaneName;
+            if (paneElement is not null)
+            {
+                // Recompute which quadrant the cursor is actually in from the model's active cell
+                // and the freeze/split boundaries, rather than blindly trusting whatever
+                // activePane the pane element already carries -- otherwise moving the cursor
+                // across the freeze/split boundary (e.g. clicking into the frozen rows) writes a
+                // self-contradictory pane/selection pair: a stale activePane (say "bottomLeft")
+                // paired with a selection whose activeCell can only ever be rendered in a
+                // different pane ("topLeft").
+                activePaneName = ComputeActivePaneName(sheet, sheet.ActiveRow!.Value, sheet.ActiveCol!.Value);
+                changed |= XlsxXmlNormalizationHelpers.SetOrRemoveAttributeIfChanged(
+                    paneElement,
+                    "activePane",
+                    string.Equals(activePaneName, "topLeft", StringComparison.Ordinal) ? null : activePaneName);
+            }
+            else
+            {
                 activePaneName = "topLeft";
+            }
 
             var selections = sheetView.Elements(worksheetNs + "selection").ToList();
             XElement? activeSelection = null;
@@ -205,6 +223,39 @@ internal static class XlsxWorksheetViewWriter
         }
 
         return changed;
+    }
+
+    // Determines which pane quadrant (topLeft/topRight/bottomLeft/bottomRight) a given active
+    // cell falls into, given the sheet's freeze or split boundary. Matches Excel's convention:
+    // frozen boundaries (FrozenRows/FrozenCols) are literal row/column counts that are themselves
+    // still part of the top/left pane, while a genuine split's SplitRow/SplitColumn model the
+    // first row/column BELOW/RIGHT of the divider (see SplitRowToTwips/SplitColumnToTwips above),
+    // so its boundary (the last row/column still in the top/left pane) is one less.
+    private static string ComputeActivePaneName(Sheet sheet, uint row, uint col)
+    {
+        uint boundaryRow;
+        uint boundaryCol;
+        if (sheet.FrozenRows > 0 || sheet.FrozenCols > 0)
+        {
+            boundaryRow = sheet.FrozenRows;
+            boundaryCol = sheet.FrozenCols;
+        }
+        else
+        {
+            boundaryRow = sheet.SplitRow is > 0 ? sheet.SplitRow.Value - 1 : 0;
+            boundaryCol = sheet.SplitColumn is > 0 ? sheet.SplitColumn.Value - 1 : 0;
+        }
+
+        var isBottom = boundaryRow > 0 && row > boundaryRow;
+        var isRight = boundaryCol > 0 && col > boundaryCol;
+
+        return (isBottom, isRight) switch
+        {
+            (false, false) => "topLeft",
+            (false, true) => "topRight",
+            (true, false) => "bottomLeft",
+            (true, true) => "bottomRight",
+        };
     }
 
     private static string? ToOptionalA1(uint? row, uint? col)
