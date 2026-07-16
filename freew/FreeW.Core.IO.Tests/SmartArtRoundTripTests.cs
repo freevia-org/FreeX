@@ -568,6 +568,62 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
+    public void WordHierarchy_UsesCanonicalGalleryAndPresentationMetadata()
+    {
+        var smartArt = new SmartArt
+        {
+            Kind = SmartArtKind.Hierarchy,
+            LayoutId = "orgchart1",
+            ColorSchemeId = "accent1",
+            StyleId = "intense1"
+        };
+        var root = new SmartArtNode("Plan");
+        smartArt.Nodes.Add(root);
+        var child = root.AddChild("Build");
+        child.AddChild("Verify");
+
+        var bytes = WriteBytes(SingleDiagramDocument(smartArt));
+        var data = EntryXml(bytes, "word/diagrams/data1.xml");
+        var ptList = data.Root!.Element(Dgm + "ptLst")!;
+        var docPoint = ptList.Elements(Dgm + "pt").Single(pt => pt.Attribute("type")?.Value == "doc");
+        var docPrSet = docPoint.Element(Dgm + "prSet")!;
+
+        docPrSet.Attribute("qsTypeId")!.Value.Should().EndWith("/quickstyle/simple1");
+        docPrSet.Attribute("phldr")!.Value.Should().Be("0");
+        ptList.Elements(Dgm + "pt").Count(pt => pt.Attribute("type")?.Value == "pres").Should().Be(18);
+
+        XElement pres(string name) => ptList.Elements(Dgm + "pt")
+            .Single(pt => pt.Element(Dgm + "prSet")?.Attribute("presName")?.Value == name)
+            .Element(Dgm + "prSet")!;
+
+        pres("hierChild1").Element(Dgm + "presLayoutVars")!
+            .Element(Dgm + "chPref")!.Attribute("val")!.Value.Should().Be("1");
+        pres("background").Attributes().Should().Contain(attribute => attribute.Name.LocalName == "presStyleLbl" && attribute.Value == "node0");
+        pres("background").Attribute("presStyleCnt")!.Value.Should().Be("1");
+        pres("text").Attribute("presStyleLbl")!.Value.Should().Be("fgAcc0");
+        pres("text").Element(Dgm + "presLayoutVars")!.Element(Dgm + "chPref")!
+            .Attribute("val")!.Value.Should().Be("3");
+        pres("background2").Attribute("presStyleLbl")!.Value.Should().Be("node2");
+        pres("background2").Attribute("presStyleCnt")!.Value.Should().Be("2");
+        pres("Name10").Attribute("presStyleLbl")!.Value.Should().Be("parChTrans1D2");
+        pres("Name10").Attribute("presStyleIdx")!.Value.Should().Be("0");
+        pres("Name10").Attribute("presStyleCnt")!.Value.Should().Be("2");
+
+        var quickStyle = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
+        quickStyle.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/quickstyle/simple1");
+        quickStyle.Root.Attribute("freewStyleId")!.Value.Should().Be("intense1");
+        var colors = EntryXml(bytes, "word/diagrams/colors1.xml");
+        colors.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/colors/accent1_2");
+        colors.Descendants(Dgm + "styleLbl").Single(label => label.Attribute("name")!.Value == "fgAcc0")
+            .Element(Dgm + "fillClrLst")!.Element(A + "schemeClr")!.Attribute("val")!.Value.Should().Be("lt1");
+        colors.Descendants(Dgm + "styleLbl").Single(label => label.Attribute("name")!.Value == "fgAcc0")
+            .Element(Dgm + "fillClrLst")!.Element(A + "schemeClr")!.Element(A + "alpha")!
+            .Attribute("val")!.Value.Should().Be("90000");
+        colors.Descendants(Dgm + "styleLbl").Single(label => label.Attribute("name")!.Value == "fgAcc0")
+            .Element(Dgm + "txFillClrLst")!.Element(A + "schemeClr")!.Attribute("val")!.Value.Should().Be("dk1");
+    }
+
+    [Fact]
     public void WordColorGalleryIds_UseNativeSuffixAndPreserveFreeWId()
     {
         var smartArt = SmartArt.Create(SmartArtKind.Hierarchy, ["Root"]);

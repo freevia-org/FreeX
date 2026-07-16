@@ -4274,6 +4274,8 @@ public static class DocxWriter
     private static XDocument BuildDiagramData(SmartArt smartArt, string drawingRelId)
     {
         var docId = SmartArtModelId(0);
+        var isHierarchyLayout = string.Equals(SmartArtLayoutCategory(smartArt), "hierarchy", StringComparison.Ordinal);
+        var isPyramidLayout = string.Equals(SmartArtLayoutCategory(smartArt), "pyramid", StringComparison.Ordinal);
         var ptLst = new XElement(Dgm + "ptLst",
             new XElement(Dgm + "pt",
                 new XAttribute("modelId", docId),
@@ -4281,11 +4283,11 @@ public static class DocxWriter
                 new XElement(Dgm + "prSet",
                     new XAttribute("loTypeId", SmartArtLayoutUrn(smartArt)),
                     new XAttribute("loCatId", SmartArtLayoutCategory(smartArt)),
-                    new XAttribute("qsTypeId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/" + (smartArt.StyleId ?? "simple1")),
+                    new XAttribute("qsTypeId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/" + SmartArtQuickStyleSuffix(smartArt)),
                     new XAttribute("qsCatId", "simple"),
                     new XAttribute("csTypeId", "urn:microsoft.com/office/officeart/2005/8/colors/" + SmartArtColorGallerySuffix(smartArt.ColorSchemeId)),
                     new XAttribute("csCatId", SmartArtColorCategory(smartArt.ColorSchemeId)),
-                    new XAttribute("phldr", "1")),
+                    new XAttribute("phldr", isHierarchyLayout ? "0" : "1")),
                 new XElement(Dgm + "spPr"),
                 DiagramText(string.Empty)));
         var cxnLst = new XElement(Dgm + "cxnLst");
@@ -4337,8 +4339,6 @@ public static class DocxWriter
             Emit(smartArt.Nodes[i], docId, i, 0);
 
         var layoutUrn = SmartArtLayoutUrn(smartArt);
-        var isHierarchyLayout = string.Equals(SmartArtLayoutCategory(smartArt), "hierarchy", StringComparison.Ordinal);
-        var isPyramidLayout = string.Equals(SmartArtLayoutCategory(smartArt), "pyramid", StringComparison.Ordinal);
 
         void AddPresentationPoint(
             string id,
@@ -4346,7 +4346,8 @@ public static class DocxWriter
             string name,
             string? styleLabel = null,
             int? styleIndex = null,
-            int styleCount = 0)
+            int styleCount = 0,
+            XElement? presentationLayoutVars = null)
         {
             var prSet = new XElement(Dgm + "prSet",
                 new XAttribute("presAssocID", assocId),
@@ -4356,6 +4357,8 @@ public static class DocxWriter
                 prSet.Add(new XAttribute("presStyleLbl", styleLabel));
             if (styleIndex is not null)
                 prSet.Add(new XAttribute("presStyleIdx", styleIndex.Value));
+            if (presentationLayoutVars is not null)
+                prSet.Add(presentationLayoutVars);
             ptLst.Add(new XElement(Dgm + "pt",
                 new XAttribute("modelId", id),
                 new XAttribute("type", "pres"),
@@ -4382,7 +4385,18 @@ public static class DocxWriter
             var nodePresentationId = 9000;
 
             var documentName = isHierarchyLayout ? "hierChild1" : "Name0";
-            AddPresentationPoint(presentationIds[docId], docId, documentName);
+            AddPresentationPoint(
+                presentationIds[docId],
+                docId,
+                documentName,
+                presentationLayoutVars: isHierarchyLayout
+                    ? new XElement(Dgm + "presLayoutVars",
+                        new XElement(Dgm + "chPref", new XAttribute("val", "1")),
+                        new XElement(Dgm + "dir"),
+                        new XElement(Dgm + "animOne", new XAttribute("val", "branch")),
+                        new XElement(Dgm + "animLvl", new XAttribute("val", "lvl")),
+                        new XElement(Dgm + "resizeHandles"))
+                    : null);
             AddPresentationConnection("presOf", docId, presentationIds[docId]);
 
             foreach (var node in semanticNodes)
@@ -4412,10 +4426,26 @@ public static class DocxWriter
                 rootIds[node.Id] = rootId;
                 containerIds[node.Id] = childId;
                 var suffix = depth == 0 ? string.Empty : (depth + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var hierarchyStyleIndex = depth == 0 ? 0 : depth + 1;
+                var hierarchyStyleCount = depth + 1;
                 AddPresentationPoint(rootId, node.Id, "hierRoot" + (depth + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
                 AddPresentationPoint(compositeId, node.Id, "composite" + suffix);
-                AddPresentationPoint(backgroundId, node.Id, "background" + suffix, "node" + depth.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                AddPresentationPoint(textId, node.Id, "text" + suffix, "fgAcc" + depth.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                AddPresentationPoint(
+                    backgroundId,
+                    node.Id,
+                    "background" + suffix,
+                    "node" + hierarchyStyleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    0,
+                    hierarchyStyleCount);
+                AddPresentationPoint(
+                    textId,
+                    node.Id,
+                    "text" + suffix,
+                    "fgAcc" + hierarchyStyleIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    0,
+                    hierarchyStyleCount,
+                    new XElement(Dgm + "presLayoutVars",
+                        new XElement(Dgm + "chPref", new XAttribute("val", "3"))));
                 AddPresentationPoint(childId, node.Id, "hierChild" + (depth + 2).ToString(System.Globalization.CultureInfo.InvariantCulture));
                 AddPresentationConnection("presOf", node.Id, textId);
                 AddPresentationConnection("presParOf", rootId, compositeId);
@@ -4448,7 +4478,14 @@ public static class DocxWriter
                             var parentTransitionId = SmartArtModelId(4000 + semanticNodes.IndexOf(child));
                             var parentTransitionPresentationId = parentTransitionPresentationIds[parentTransitionId];
                             var transitionName = "Name" + (10 + Math.Max(0, child.Depth - 1) * 7).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                            AddPresentationPoint(parentTransitionPresentationId, parentTransitionId, transitionName, "parChTrans1D" + Math.Max(2, child.Depth + 1).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            var parentTransitionStyleCount = Math.Max(2, child.Depth + 1);
+                            AddPresentationPoint(
+                                parentTransitionPresentationId,
+                                parentTransitionId,
+                                transitionName,
+                                "parChTrans1D" + parentTransitionStyleCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                                0,
+                                parentTransitionStyleCount);
                             AddPresentationConnection("presOf", parentTransitionId, parentTransitionPresentationId);
                             AddPresentationConnection("presParOf", sourceId, parentTransitionPresentationId, i * 2);
                             AddPresentationConnection("presParOf", parentTransitionPresentationId, childRoot);
@@ -4458,7 +4495,14 @@ public static class DocxWriter
                             var transitionId = SmartArtModelId(5000 + semanticNodes.IndexOf(child));
                             var transitionPresentationId = transitionPresentationIds[transitionId];
                             var transitionName = "Name" + (10 + transitionDepths[transitionId] * 7).ToString(System.Globalization.CultureInfo.InvariantCulture);
-                            AddPresentationPoint(transitionPresentationId, transitionId, transitionName, "parChTrans1D" + (transitionDepths[transitionId] + 2).ToString(System.Globalization.CultureInfo.InvariantCulture));
+                            var siblingTransitionStyleCount = transitionDepths[transitionId] + 2;
+                            AddPresentationPoint(
+                                transitionPresentationId,
+                                transitionId,
+                                transitionName,
+                                "parChTrans1D" + siblingTransitionStyleCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                                0,
+                                siblingTransitionStyleCount);
                             AddPresentationConnection("presOf", transitionId, transitionPresentationId);
                             AddPresentationConnection("presParOf", sourceId, transitionPresentationId, i * 2 + 1);
                             AddPresentationConnection("presParOf", transitionPresentationId, rootIds[children[i + 1].Id]);
@@ -4652,6 +4696,12 @@ public static class DocxWriter
             ?? SmartArtStyle.Default;
         var textHex = colorScheme.TextHex.TrimStart('#').ToUpperInvariant();
 
+        XElement SchemeSolidFill(string scheme, params (string Name, string Value)[] modifiers) =>
+            new(A + "solidFill",
+                new XElement(A + "schemeClr",
+                    new XAttribute("val", scheme),
+                    modifiers.Select(modifier => new XElement(A + modifier.Name, new XAttribute("val", modifier.Value)))));
+
         var spTree = new XElement(Dsp + "spTree",
             new XElement(Dsp + "nvGrpSpPr",
                 new XElement(Dsp + "cNvPr",
@@ -4674,11 +4724,19 @@ public static class DocxWriter
             string shapeKind,
             string fillHex,
             bool noFill = false,
-            string? text = null)
+            string? text = null,
+            string? fillScheme = null,
+            string? fillAlpha = null,
+            string? lineScheme = null,
+            string? lineShade = null)
         {
             var line = new XElement(A + "ln",
                 new XAttribute("w", Math.Max(1L, PointsToEmu(0.75))),
-                SolidFill("808080"));
+                lineScheme is null
+                    ? SolidFill("808080")
+                    : SchemeSolidFill(
+                        lineScheme,
+                        lineShade is null ? Array.Empty<(string, string)>() : new[] { ("shade", lineShade) }));
             var geometryAdjustments = shapeKind switch
             {
                 "trapezoid" => new XElement(A + "avLst",
@@ -4696,7 +4754,13 @@ public static class DocxWriter
                     new XElement(A + "off", new XAttribute("x", x), new XAttribute("y", y)),
                     new XElement(A + "ext", new XAttribute("cx", width), new XAttribute("cy", height))),
                 new XElement(A + "prstGeom", new XAttribute("prst", shapeKind), geometryAdjustments),
-                noFill ? new XElement(A + "noFill") : SolidFill(fillHex),
+                noFill
+                    ? new XElement(A + "noFill")
+                    : fillScheme is null
+                        ? SolidFill(fillHex)
+                        : SchemeSolidFill(
+                            fillScheme,
+                            fillAlpha is null ? Array.Empty<(string, string)>() : new[] { ("alpha", fillAlpha) }),
                 line,
                 new XElement(A + "effectLst"));
             var textSize = shapeKind == "trapezoid"
@@ -4807,15 +4871,46 @@ public static class DocxWriter
                     var y = Math.Min(parent.Y + hierarchyBoxH, child.Y);
                     var width = Math.Max(1L, Math.Abs((parent.X + hierarchyBoxW / 2) - (child.X + hierarchyBoxW / 2)));
                     var height = Math.Max(1L, Math.Abs(child.Y - (parent.Y + hierarchyBoxH)));
-                    AddCachedShape(SmartArtModelId(7500 + i), x, y, width, height, "line", "808080", true);
+                    AddCachedShape(
+                        SmartArtModelId(7500 + i),
+                        x,
+                        y,
+                        width,
+                        height,
+                        "line",
+                        "808080",
+                        true,
+                        lineScheme: "accent1",
+                        lineShade: "80000");
                 }
 
                 for (var i = 0; i < nodes.Count; i++)
                 {
                     var position = positions[i];
                     var fillHex = colorScheme.FillHexAt(i).TrimStart('#').ToUpperInvariant();
-                    AddCachedShape(SmartArtModelId(9000 + i * 5 + 2), position.X, position.Y, hierarchyBoxW, hierarchyBoxH, "roundRect", fillHex, text: nodes[i].Node.Text);
-                    AddCachedShape(SmartArtModelId(9000 + i * 5 + 3), position.X, position.Y, hierarchyBoxW, hierarchyBoxH, "roundRect", fillHex, true);
+                    // Word's hierarchy drawing pairs a filled backing shape with a light foreground/text shape.
+                    AddCachedShape(
+                        SmartArtModelId(9000 + i * 5 + 2),
+                        position.X,
+                        position.Y,
+                        hierarchyBoxW,
+                        hierarchyBoxH,
+                        "roundRect",
+                        fillHex,
+                        fillScheme: "accent1",
+                        lineScheme: "accent1");
+                    AddCachedShape(
+                        SmartArtModelId(9000 + i * 5 + 3),
+                        position.X,
+                        position.Y,
+                        hierarchyBoxW,
+                        hierarchyBoxH,
+                        "roundRect",
+                        textHex,
+                        text: nodes[i].Node.Text,
+                        fillScheme: "lt1",
+                        fillAlpha: "90000",
+                        lineScheme: "accent1");
                 }
             }
             else
@@ -5081,13 +5176,37 @@ public static class DocxWriter
         "fgAcc4", "bgShp", "dkBgShp", "trBgShp", "fgShp", "revTx"
     ];
 
+    private static string SmartArtQuickStyleSuffix(SmartArt smartArt) =>
+        string.Equals(SmartArtLayoutCategory(smartArt), "hierarchy", StringComparison.Ordinal)
+            ? "simple1"
+            : smartArt.StyleId ?? "simple1";
+
     private static XDocument BuildDiagramQuickStyle(SmartArt smartArt)
     {
         var labels = SmartArtGalleryStyleLabels;
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/quickstyle/";
-        var uniqueId = BaseUrn + (smartArt.StyleId ?? "simple1");
+        var uniqueId = BaseUrn + SmartArtQuickStyleSuffix(smartArt);
         var styleLabels = labels.Select(name =>
-            new XElement(Dgm + "styleLbl",
+        {
+            var lineIndex = name is "sibTrans2D1" or "fgSibTrans2D1" or "bgSibTrans2D1"
+                ? 0
+                : name is "sibTrans1D1" or "trAlignAcc1"
+                    ? 1
+                    : name is "bgShp" or "dkBgShp" or "trBgShp" or "revTx"
+                        ? 0
+                        : 2;
+            var fillIndex = name is "sibTrans1D1" or "parChTrans1D1" or "parChTrans1D2" or "parChTrans1D3" or "parChTrans1D4" or "revTx"
+                ? 0
+                : 1;
+            var fontValue = name == "vennNode1"
+                ? "tx1"
+                : name is "node0" or "lnNode1" or "alignNode1" or "node1" or "node2" or "node3" or "node4"
+                    or "sibTrans2D1" or "fgSibTrans2D1" or "bgSibTrans2D1"
+                    or "asst0" or "asst1" or "asst2" or "asst3" or "asst4"
+                    or "parChTrans2D1" or "parChTrans2D2" or "parChTrans2D3" or "parChTrans2D4"
+                    ? "lt1"
+                    : null;
+            return new XElement(Dgm + "styleLbl",
                 new XAttribute("name", name),
                 new XElement(Dgm + "scene3d",
                     new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
@@ -5095,18 +5214,21 @@ public static class DocxWriter
                 new XElement(Dgm + "sp3d"),
                 new XElement(Dgm + "txPr"),
                 new XElement(Dgm + "style",
-                    new XElement(A + "lnRef", new XAttribute("idx", 2),
+                    new XElement(A + "lnRef", new XAttribute("idx", lineIndex),
                         new XElement(A + "scrgbClr", new XAttribute("r", 0), new XAttribute("g", 0), new XAttribute("b", 0))),
-                    new XElement(A + "fillRef", new XAttribute("idx", 1),
+                    new XElement(A + "fillRef", new XAttribute("idx", fillIndex),
                         new XElement(A + "scrgbClr", new XAttribute("r", 0), new XAttribute("g", 0), new XAttribute("b", 0))),
                     new XElement(A + "effectRef", new XAttribute("idx", 0),
                         new XElement(A + "scrgbClr", new XAttribute("r", 0), new XAttribute("g", 0), new XAttribute("b", 0))),
-                    new XElement(A + "fontRef", new XAttribute("idx", "minor"),
-                        new XElement(A + "schemeClr", new XAttribute("val", "lt1")))))).ToList();
+                    new XElement(A + "fontRef",
+                        new XAttribute("idx", "minor"),
+                        fontValue is null ? null : new XElement(A + "schemeClr", new XAttribute("val", fontValue)))));
+        }).ToList();
         var elem = new XElement(Dgm + "styleDef",
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute("uniqueId", uniqueId),
+            smartArt.StyleId is null ? null : new XAttribute("freewStyleId", smartArt.StyleId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "catLst",
@@ -5129,16 +5251,140 @@ public static class DocxWriter
         var colorId = smartArt.ColorSchemeId ?? "accent1_2";
         var uniqueId = BaseUrn + SmartArtColorGallerySuffix(smartArt.ColorSchemeId);
         var category = SmartArtColorCategory(colorId);
+        XElement Scheme(string value, params (string Name, string Value)[] modifiers) =>
+            new(A + "schemeClr",
+                new XAttribute("val", value),
+                modifiers.Select(modifier => new XElement(A + modifier.Name, new XAttribute("val", modifier.Value))));
+
+        XElement ColorList(string name, string value, params (string Name, string Value)[] modifiers) =>
+            new(Dgm + name,
+                new XAttribute("meth", "repeat"),
+                Scheme(value, modifiers));
+
+        XElement EmptyList(string name) => new(Dgm + name);
+
+        IEnumerable<(string Value, (string Name, string Value)[] Modifiers)> ColorRule(string name)
+        {
+            var fill = (Value: category, Modifiers: Array.Empty<(string Name, string Value)>());
+            var line = (Value: "lt1", Modifiers: Array.Empty<(string Name, string Value)>());
+            var textFill = (Value: (string?)null, Modifiers: Array.Empty<(string Name, string Value)>());
+
+            if (name == "vennNode1")
+                fill = (category, new[] { ("alpha", "50000") });
+            else if (name is "fgImgPlace1" or "alignImgPlace1" or "bgImgPlace1")
+            {
+                fill = (category, new[] { ("tint", "50000") });
+                textFill = ("lt1", Array.Empty<(string, string)>());
+            }
+            else if (name is "sibTrans2D1" or "fgSibTrans2D1" or "bgSibTrans2D1")
+            {
+                fill = (category, new[] { ("tint", "60000") });
+                line = (category, new[] { ("tint", "60000") });
+            }
+            else if (name == "sibTrans1D1")
+            {
+                line = (category, new[] { ("shade", "60000") });
+                textFill = ("tx1", Array.Empty<(string, string)>());
+            }
+            else if (name == "callout")
+            {
+                line = (category, new[] { ("tint", "50000") });
+                textFill = ("tx1", Array.Empty<(string, string)>());
+            }
+            else if (name == "parChTrans2D1")
+            {
+                fill = (category, new[] { ("tint", "60000") });
+                line = (category, new[] { ("tint", "60000") });
+                textFill = ("lt1", Array.Empty<(string, string)>());
+            }
+            else if (name is "parChTrans2D2" or "parChTrans2D3" or "parChTrans2D4")
+            {
+                line = (category, Array.Empty<(string, string)>());
+                textFill = ("lt1", Array.Empty<(string, string)>());
+            }
+            else if (name is "parChTrans1D1" or "parChTrans1D2")
+            {
+                line = (category, new[] { ("shade", "60000") });
+                textFill = ("tx1", Array.Empty<(string, string)>());
+            }
+            else if (name is "parChTrans1D3" or "parChTrans1D4")
+            {
+                line = (category, new[] { ("shade", "80000") });
+                textFill = ("tx1", Array.Empty<(string, string)>());
+            }
+            else if (name is "fgAcc1" or "conFgAcc1" or "alignAcc1" or "bgAcc1" or "fgAcc0" or "fgAcc2" or "fgAcc3" or "fgAcc4")
+            {
+                fill = ("lt1", new[] { ("alpha", "90000") });
+                line = (category, Array.Empty<(string, string)>());
+                textFill = ("dk1", Array.Empty<(string, string)>());
+            }
+            else if (name == "trAlignAcc1")
+            {
+                fill = ("lt1", new[] { ("alpha", "40000") });
+                line = (category, Array.Empty<(string, string)>());
+                textFill = ("dk1", Array.Empty<(string, string)>());
+            }
+            else if (name is "solidFgAcc1" or "solidAlignAcc1" or "solidBgAcc1")
+            {
+                fill = ("lt1", Array.Empty<(string, string)>());
+                line = (category, Array.Empty<(string, string)>());
+                textFill = ("dk1", Array.Empty<(string, string)>());
+            }
+            else if (name is "fgAccFollowNode1" or "alignAccFollowNode1" or "bgAccFollowNode1")
+            {
+                fill = (category, new[] { ("alpha", "90000"), ("tint", "40000") });
+                line = (category, new[] { ("alpha", "90000"), ("tint", "40000") });
+                textFill = ("dk1", Array.Empty<(string, string)>());
+            }
+            else if (name == "bgShp")
+            {
+                fill = (category, new[] { ("tint", "40000") });
+                line = (category, Array.Empty<(string, string)>());
+                textFill = ("dk1", Array.Empty<(string, string)>());
+            }
+            else if (name == "dkBgShp")
+            {
+                fill = (category, new[] { ("shade", "80000") });
+                line = (category, Array.Empty<(string, string)>());
+                textFill = ("lt1", Array.Empty<(string, string)>());
+            }
+            else if (name == "trBgShp")
+            {
+                fill = (category, new[] { ("tint", "50000"), ("alpha", "40000") });
+                line = (category, Array.Empty<(string, string)>());
+                textFill = ("lt1", Array.Empty<(string, string)>());
+            }
+            else if (name == "fgShp")
+            {
+                fill = (category, new[] { ("tint", "60000") });
+                textFill = ("dk1", Array.Empty<(string, string)>());
+            }
+            else if (name == "revTx")
+            {
+                fill = ("lt1", new[] { ("alpha", "0") });
+                line = ("dk1", new[] { ("alpha", "0") });
+                textFill = ("tx1", Array.Empty<(string, string)>());
+            }
+
+            yield return (fill.Value, fill.Modifiers);
+            yield return (line.Value, line.Modifiers);
+            yield return (textFill.Value ?? string.Empty, textFill.Modifiers);
+        }
+
         var styleLabels = SmartArtGalleryStyleLabels.Select(name =>
-            new XElement(Dgm + "styleLbl", new XAttribute("name", name),
-                new XElement(Dgm + "fillClrLst", new XAttribute("meth", "repeat"),
-                    new XElement(A + "schemeClr", new XAttribute("val", category))),
-                new XElement(Dgm + "linClrLst", new XAttribute("meth", "repeat"),
-                    new XElement(A + "schemeClr", new XAttribute("val", "lt1"))),
-                new XElement(Dgm + "effectClrLst"),
-                new XElement(Dgm + "txLinClrLst"),
-                new XElement(Dgm + "txFillClrLst"),
-                new XElement(Dgm + "txEffectClrLst"))).ToList();
+        {
+            var rules = ColorRule(name).ToArray();
+            var fill = rules[0];
+            var line = rules[1];
+            var textFill = rules[2];
+            return new XElement(Dgm + "styleLbl", new XAttribute("name", name),
+                ColorList("fillClrLst", fill.Value, fill.Modifiers),
+                ColorList("linClrLst", line.Value, line.Modifiers),
+                EmptyList("effectClrLst"),
+                EmptyList("txLinClrLst"),
+                string.IsNullOrEmpty(textFill.Value) ? EmptyList("txFillClrLst") : ColorList("txFillClrLst", textFill.Value, textFill.Modifiers),
+                EmptyList("txEffectClrLst"));
+        }).ToList();
         var elem = new XElement(Dgm + "colorsDef",
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
