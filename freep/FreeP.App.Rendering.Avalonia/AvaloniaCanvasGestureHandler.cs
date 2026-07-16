@@ -160,6 +160,16 @@ public sealed class AvaloniaCanvasGestureHandler
             {
                 OleActivationService.TryActivate(shape.OleObject);
                 e.Handled = true;
+                return;
+            }
+            if (shape?.Kind == SlideShapeKind.Zoom &&
+                ZoomNavigationService.TryGetTargetSlideIndex(
+                    _editor.Presentation,
+                    shape.PreservedObject,
+                    out var targetSlideIndex))
+            {
+                _editor.SelectSlide(targetSlideIndex);
+                e.Handled = true;
             }
 
             // Text editing remains the responsibility of InCanvasTextEditor.

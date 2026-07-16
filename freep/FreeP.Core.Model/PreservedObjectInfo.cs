@@ -42,6 +42,13 @@ public sealed class PreservedObjectInfo
     /// </summary>
     public PreservedObjectKind ObjectKind { get; set; } = PreservedObjectKind.Unknown;
 
+    /// <summary>
+    /// Numeric presentation slide id targeted by a Slide Zoom's sldZmObj, when present.
+    /// This is distinct from <see cref="Slide.Id"/>, which stores the presentation-level
+    /// relationship id used by the rest of the model.
+    /// </summary>
+    public uint? ZoomTargetSlideNumericId { get; set; }
+
     // ── Verbatim XML round-trip ───────────────────────────────────────────────────
 
     /// <summary>
