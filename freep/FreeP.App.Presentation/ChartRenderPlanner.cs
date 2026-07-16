@@ -639,6 +639,8 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceReferencePlotWidth = 360.0;
     private const double ImportedSurfaceDepthWallX = 124.0;
     private const double ImportedSurfaceFrontCategoryWidth = 295.2;
+    private const double ImportedSurfaceFrameFrontLeftX = 8.0;
+    private const double ImportedSurfaceFrameFrontRightX = 312.0;
     private const double ImportedSurfaceLightBaseFactor = 1.02;
     private const double ImportedSurfaceDepthDimming = 0.12;
     private const double ImportedSurfaceNearRowFalloff = 0.25;
@@ -3066,11 +3068,17 @@ public static partial class ChartRenderPlanner
     {
         double scaleX = plot.Width / 360.0;
         double scaleY = plot.Height / 189.0;
+        double frontLeftX = usesImportedTextMetrics
+            ? ImportedSurfaceFrameFrontLeftX
+            : -7.0;
+        double frontRightX = usesImportedTextMetrics
+            ? ImportedSurfaceFrameFrontRightX
+            : 308.0;
         var frontLeft = new ChartPlanPoint(
-            plot.X - 7.0 * scaleX,
+            plot.X + frontLeftX * scaleX,
             plot.Bottom - 37.0 * scaleY);
         var frontRight = new ChartPlanPoint(
-            plot.X + 308.0 * scaleX,
+            plot.X + frontRightX * scaleX,
             plot.Bottom + 2.0 * scaleY);
         var valueTop = new ChartPlanPoint(frontLeft.X, plot.Y + 45.0 * scaleY);
         var backTopLeft = new ChartPlanPoint(plot.X + 124.0 * scaleX, plot.Y + 1.0 * scaleY);
