@@ -66,6 +66,42 @@ public sealed class GridSelectionMovePlannerTests
     }
 
     [Fact]
+    public void IsOnMoveBorder_UsesScaledMetricsAndTheRenderedHandleHitTarget()
+    {
+        var sheet = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+        var viewport = CreateViewport();
+
+        GridSelectionMovePlanner.IsOnMoveBorder(
+                viewport,
+                range,
+                null,
+                new GridPoint(150, 48),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                metricScale: 1.5,
+                handleSize: 10,
+                handleHitPadding: 6)
+            .Should()
+            .BeTrue("the scaled top edge remains draggable");
+
+        GridSelectionMovePlanner.IsOnMoveBorder(
+                viewport,
+                range,
+                null,
+                new GridPoint(210, 108),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                metricScale: 1.5,
+                handleSize: 10,
+                handleHitPadding: 6)
+            .Should()
+            .BeFalse("the visible fill handle and its padded hit target keep priority");
+    }
+
+    [Fact]
     public void IsOnMoveBorder_ReturnsFalseWhenViewportOrSelectionIsMissing()
     {
         var sheet = SheetId.New();

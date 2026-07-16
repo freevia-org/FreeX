@@ -16,26 +16,46 @@ public static class GridSelectionMovePlanner
         GridPoint pointer,
         double rowHeaderWidth,
         double columnHeaderHeight,
-        double borderHitThickness = 4)
+        double borderHitThickness = 4,
+        double metricScale = 1,
+        double handleSize = 6,
+        double handleHitPadding = 3)
     {
         if (viewport is null || selectedRange is not { } range)
-            return false;
-
-        if (selectedRanges is { Count: > 0 })
-            return false;
-
-        if (GridAutofillPlanner.IsOnHandle(viewport, range, pointer, rowHeaderWidth, columnHeaderHeight))
             return false;
 
         var layout = GridSelectionLayoutPlanner.CalculateVisibleSelectionLayout(
             viewport,
             range,
             rowHeaderWidth,
-            columnHeaderHeight);
-        if (layout is null)
+            columnHeaderHeight,
+            metricScale);
+        return IsOnMoveBorder(
+            layout,
+            selectedRanges,
+            pointer,
+            borderHitThickness,
+            handleSize,
+            handleHitPadding);
+    }
+
+    public static bool IsOnMoveBorder(
+        GridSelectionLayout? selectionLayout,
+        IReadOnlyList<GridRange>? selectedRanges,
+        GridPoint pointer,
+        double borderHitThickness = 4,
+        double handleSize = 6,
+        double handleHitPadding = 3)
+    {
+        if (selectionLayout is not { } visible)
             return false;
 
-        var visible = layout.Value;
+        if (selectedRanges is { Count: > 0 })
+            return false;
+
+        if (GridAutofillPlanner.IsOnHandle(visible, pointer, handleSize, handleHitPadding))
+            return false;
+
         var rect = visible.Rect;
         var insideHorizontalSpan = pointer.X >= rect.Left - borderHitThickness &&
             pointer.X <= rect.Right + borderHitThickness;

@@ -74,6 +74,25 @@ public sealed class GridSelectionLayoutPlannerTests
             .BeNull();
     }
 
+    [Fact]
+    public void CalculateVisibleSelectionLayout_ScalesMetricGeometryWithoutScalingHeaders()
+    {
+        var sheet = SheetId.New();
+        var range = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+
+        var layout = GridSelectionLayoutPlanner.CalculateVisibleSelectionLayout(
+            CreateViewport(),
+            range,
+            rowHeaderWidth: 30,
+            columnHeaderHeight: 18,
+            metricScale: 1.5);
+
+        layout.Should().NotBeNull();
+        layout!.Value.Rect.Should().Be(new GridRect(90, 48, 120, 60));
+    }
+
     private static ViewportModel CreateViewport() =>
         new(
             [],
