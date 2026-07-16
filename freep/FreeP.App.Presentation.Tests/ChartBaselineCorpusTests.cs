@@ -80,7 +80,7 @@ public sealed class ChartBaselineCorpusTests
         scene.GridLines.Stroke.Should().Be(new ChartStrokePlan(
             new SrgbColor(0x89, 0x89, 0x89),
             Alpha: 255,
-            Thickness: 0.5));
+            Thickness: 1.0));
         scene.AxisTicks.Stroke.Should().Be(new ChartStrokePlan(
             new SrgbColor(0x89, 0x89, 0x89),
             Alpha: 255,
@@ -582,9 +582,14 @@ public sealed class ChartBaselineCorpusTests
             var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 960, 540));
 
             scene.GridLines.Stroke.Should().Be(new ChartStrokePlan(
-                new SrgbColor(0xD9, 0xD9, 0xD9),
+                new SrgbColor(0x89, 0x89, 0x89),
                 Alpha: 255,
-                Thickness: 0.5));
+                Thickness: 1.0));
+            if (!scene.Frame.IsBar)
+            {
+                scene.GridLines.GridLines[0].Start.Y
+                    .Should().Be(scene.Frame.Plot.Bottom + ChartRenderPlanner.ImportedCartesianGridLinePixelOffset);
+            }
             scene.AxisTicks.Stroke.Should().Be(new ChartStrokePlan(
                 new SrgbColor(0x89, 0x89, 0x89),
                 Alpha: 255,

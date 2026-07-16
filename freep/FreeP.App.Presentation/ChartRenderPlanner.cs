@@ -555,6 +555,7 @@ public static partial class ChartRenderPlanner
     public const double ImportedComboPlotTopOffset = 1.0;
     public const double ImportedComboSecondaryLabelCompensation = 8.0;
     public const double ImportedComboLegendRightCompensation = 8.0;
+    public const double ImportedCartesianGridLinePixelOffset = 0.5;
     public const double LineMarkerRadius = 3.0;
     public const double ImportedLineMarkerRadius = 5.0;
     public const double LineMarkerStrokeThickness = 0.75;
@@ -1601,7 +1602,10 @@ public static partial class ChartRenderPlanner
             }
             else
             {
-                double y = plot.Bottom - plot.Height * index / steps;
+                double y = plot.Bottom - plot.Height * index / steps +
+                    (UsesImportedCartesianAxisStrokes(chart) || UsesImportedComboDefaults(chart)
+                        ? ImportedCartesianGridLinePixelOffset
+                        : 0.0);
                 lines.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(plot.X, y),
                     new ChartPlanPoint(plot.Right, y)));
@@ -5831,11 +5835,14 @@ public static partial class ChartRenderPlanner
           UsesImportedTextMetrics(chart)
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 1.0)
         : chart is not null &&
+          UsesImportedCartesianAxisStrokes(chart)
+            ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 1.0)
+        : chart is not null &&
         UsesClassicOfficeChartStyle(chart)
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.5)
             : chart is not null &&
               UsesImportedComboDefaults(chart)
-                ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 0.5)
+                ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 1.0)
             : new ChartStrokePlan(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
 
     private static ChartStrokePlan DefaultAxisTickStroke(ChartShape? chart = null) =>
