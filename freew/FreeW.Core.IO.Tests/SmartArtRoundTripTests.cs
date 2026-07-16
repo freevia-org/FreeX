@@ -312,6 +312,36 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
+    public void WordHierarchy_DefaultDrawingUsesNativeOfficeAccentInsteadOfThemeBlack()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Hierarchy, ["Root", "Child"]);
+
+        var drawing = EntryXml(WriteBytes(SingleDiagramDocument(smartArt)), "word/diagrams/drawing1.xml");
+        var cachedShapeColors = drawing.Descendants(Dsp + "sp")
+            .SelectMany(shape => shape.Element(Dsp + "spPr")!.Descendants(A + "srgbClr"))
+            .Select(color => color.Attribute("val")!.Value)
+            .ToList();
+
+        cachedShapeColors.Should().Contain("156082");
+        drawing.Descendants(A + "schemeClr")
+            .Should().NotContain(color => color.Attribute("val")!.Value == "accent1");
+    }
+
+    [Fact]
+    public void WordHierarchy_ExplicitColorSchemeUsesPaletteRgbInColorsPart()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Hierarchy, ["Root"]);
+        smartArt.ColorSchemeId = "accent1";
+
+        var colors = EntryXml(WriteBytes(SingleDiagramDocument(smartArt)), "word/diagrams/colors1.xml");
+        var nodeColors = colors.Descendants(Dgm + "styleLbl")
+            .Single(label => label.Attribute("name")!.Value == "node0");
+
+        nodeColors.Element(Dgm + "fillClrLst")!.Element(A + "srgbClr")!.Attribute("val")!.Value.Should().Be("1F3864");
+        nodeColors.Element(Dgm + "linClrLst")!.Element(A + "srgbClr")!.Attribute("val")!.Value.Should().Be("1F3864");
+    }
+
+    [Fact]
     public void Pyramid_RenderedDrawing_CarriesNodeTextInEachBand()
     {
         var smartArt = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
