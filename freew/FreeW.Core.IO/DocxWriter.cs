@@ -4684,6 +4684,11 @@ public static class DocxWriter
         var style = SmartArtStyle.FindById(smartArt.StyleId ?? string.Empty)
             ?? SmartArtStyle.Default;
         var textHex = colorScheme.TextHex.TrimStart('#').ToUpperInvariant();
+        var hierarchyAccentHex = (smartArt.ColorSchemeId is null
+                ? "156082"
+                : colorScheme.FillHexAt(0))
+            .TrimStart('#')
+            .ToUpperInvariant();
 
         XElement SchemeSolidFill(string scheme, params (string Name, string Value)[] modifiers) =>
             new(A + "solidFill",
@@ -4717,15 +4722,18 @@ public static class DocxWriter
             string? fillScheme = null,
             string? fillAlpha = null,
             string? lineScheme = null,
-            string? lineShade = null)
+            string? lineShade = null,
+            string? lineHex = null)
         {
             var line = new XElement(A + "ln",
                 new XAttribute("w", Math.Max(1L, PointsToEmu(0.75))),
-                lineScheme is null
-                    ? SolidFill("808080")
-                    : SchemeSolidFill(
-                        lineScheme,
-                        lineShade is null ? Array.Empty<(string, string)>() : new[] { ("shade", lineShade) }));
+                lineHex is not null
+                    ? SolidFill(lineHex)
+                    : lineScheme is null
+                        ? SolidFill("808080")
+                        : SchemeSolidFill(
+                            lineScheme,
+                            lineShade is null ? Array.Empty<(string, string)>() : new[] { ("shade", lineShade) }));
             var geometryAdjustments = shapeKind switch
             {
                 "trapezoid" => new XElement(A + "avLst",
@@ -4869,8 +4877,7 @@ public static class DocxWriter
                         "line",
                         "808080",
                         true,
-                        lineScheme: "accent1",
-                        lineShade: "80000");
+                        lineHex: hierarchyAccentHex);
                 }
 
                 for (var i = 0; i < nodes.Count; i++)
@@ -4885,9 +4892,8 @@ public static class DocxWriter
                         hierarchyBoxW,
                         hierarchyBoxH,
                         "roundRect",
-                        fillHex,
-                        fillScheme: "accent1",
-                        lineScheme: "accent1");
+                        hierarchyAccentHex,
+                        lineHex: hierarchyAccentHex);
                     AddCachedShape(
                         SmartArtModelId(9000 + i * 5 + 3),
                         position.X,
@@ -4899,7 +4905,7 @@ public static class DocxWriter
                         text: nodes[i].Node.Text,
                         fillScheme: "lt1",
                         fillAlpha: "90000",
-                        lineScheme: "accent1");
+                        lineHex: hierarchyAccentHex);
                 }
             }
             else
@@ -5261,6 +5267,11 @@ public static class DocxWriter
         var uniqueId = BaseUrn + SmartArtColorGallerySuffix(smartArt);
         var usesFlatGallery = UsesFlatSmartArtGallery(smartArt);
         var category = SmartArtColorCategory(colorId);
+        var colorScheme = SmartArtColorScheme.FindById(smartArt.ColorSchemeId ?? string.Empty)
+            ?? SmartArtColorScheme.Default;
+        var accentHex = (smartArt.ColorSchemeId is null ? "156082" : colorScheme.FillHexAt(0))
+            .TrimStart('#')
+            .ToUpperInvariant();
         XElement Scheme(string value, params (string Name, string Value)[] modifiers) =>
             new(A + "schemeClr",
                 new XAttribute("val", value),
@@ -5269,7 +5280,11 @@ public static class DocxWriter
         XElement ColorList(string name, string value, params (string Name, string Value)[] modifiers) =>
             new(Dgm + name,
                 new XAttribute("meth", "repeat"),
-                Scheme(value, modifiers));
+                !usesFlatGallery && string.Equals(value, category, StringComparison.OrdinalIgnoreCase)
+                    ? new XElement(A + "srgbClr",
+                        new XAttribute("val", accentHex),
+                        modifiers.Select(modifier => new XElement(A + modifier.Name, new XAttribute("val", modifier.Value))))
+                    : Scheme(value, modifiers));
 
         XElement EmptyList(string name) => new(Dgm + name);
 
@@ -5283,6 +5298,10 @@ public static class DocxWriter
             {
                 line = (category, Array.Empty<(string, string)>());
                 textFill = ("lt1", Array.Empty<(string, string)>());
+            }
+            else if (!usesFlatGallery && name is "node0" or "node1" or "node2" or "node3" or "node4")
+            {
+                line = (category, Array.Empty<(string, string)>());
             }
             else if (name == "vennNode1")
                 fill = (category, new[] { ("alpha", "50000") });

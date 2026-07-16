@@ -18,15 +18,16 @@ public static partial class BuiltInFunctions
         @"^(?:2/29/1900|02/29/1900|1900-02-29)(?:\s+(.+))?$",
         RegexOptions.IgnoreCase);
 
-    // Excel's two-digit-year pivot is 29 (00-29 -> 2000-2029, 30-99 -> 1930-1999),
-    // unlike .NET's default calendar cutoff of 2049. Clone invariant culture with
-    // that pivot for DATEVALUE's free-form DateTime.TryParse.
-    private static readonly CultureInfo ExcelTwoDigitYearCulture = CreateExcelTwoDigitYearCulture();
-
+    // Excel's DATEVALUE resolves ambiguous slash/dash dates using the current locale's
+    // short-date month/day order (e.g. en-GB "03/04/2024" -> 3-Apr, not 4-Mar), matching
+    // CellEntryParser.TryParseCurrentCultureDate. The culture is cloned fresh on every call
+    // (not cached) because CultureInfo.CurrentCulture can change at runtime. Excel's
+    // two-digit-year pivot is also 29 (00-29 -> 2000-2029, 30-99 -> 1930-1999), unlike
+    // .NET's default calendar cutoff of 2049, so that pivot is applied to the clone too.
     private static CultureInfo CreateExcelTwoDigitYearCulture()
     {
-        var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
-        culture.Calendar.TwoDigitYearMax = 2029;
+        var culture = (CultureInfo)CultureInfo.CurrentCulture.Clone();
+        culture.DateTimeFormat.Calendar.TwoDigitYearMax = 2029;
         return culture;
     }
 
@@ -402,15 +403,48 @@ public static partial class BuiltInFunctions
     private static ScalarValue TimevalueScalar(ScalarValue value)
     {
         var text = ToText(value);
-        if (!TextHasTimeComponent(text)) return ErrorValue.Value;
+        var hasTimeComponent = TextHasTimeComponent(text);
+        // TIMEVALUE ignores any date portion and returns just the time-of-day fraction, so a
+        // date-only string (no time component) is still valid input - it yields 0 (midnight) -
+        // as long as it at least looks like a date/time text; a bare non-date/time string is #VALUE!.
+        if (!hasTimeComponent && !TextHasDateComponent(text)) return ErrorValue.Value;
         if (TryParseExcelFakeLeapDayValueText(text, CultureInfo.InvariantCulture, out var fakeLeapSerial))
             return new NumberValue(fakeLeapSerial - Math.Floor(fakeLeapSerial));
-        if (TimeSpan.TryParse(text, System.Globalization.CultureInfo.InvariantCulture, out var ts) && ts.Days == 0)
-            return new NumberValue(ts.TotalDays);
+        // Parse a plain "H:MM[:SS[.f]]" elapsed-time literal directly rather than via
+        // TimeSpan.TryParse: .NET's general TimeSpan parser reinterprets a 3-field "H:MM:SS"
+        // string as "D:HH:MM" (days:hours:minutes) once H exceeds 23 (e.g. "36:00:00" parses
+        // to 36 *days*, and "25:30:00" fails outright because the reinterpreted "30" hours
+        // field is itself out of range) - neither matches Excel, which always reads the first
+        // field as an unbounded elapsed-hours count and returns the fraction mod 1 day
+        // (so "36:00:00" -> 0.5, "25:30:00" -> 0.0625).
+        if (hasTimeComponent && TryParseElapsedHmsText(text, out var elapsedFraction))
+            return new NumberValue(elapsedFraction);
         if (DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var dt))
             return new NumberValue(dt.TimeOfDay.TotalDays);
         return ErrorValue.Value;
+    }
+
+    private static readonly Regex ElapsedHmsTextRegex = new(
+        @"^\s*(\d+)\s*:\s*([0-5]?\d)(?:\s*:\s*([0-5]?\d(?:\.\d+)?))?\s*$");
+
+    private static bool TryParseElapsedHmsText(string text, out double fraction)
+    {
+        fraction = 0;
+        var match = ElapsedHmsTextRegex.Match(text);
+        if (!match.Success) return false;
+        if (!double.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var hours))
+            return false;
+        if (!double.TryParse(match.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var minutes))
+            return false;
+        double seconds = 0;
+        if (match.Groups[3].Success &&
+            !double.TryParse(match.Groups[3].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds))
+            return false;
+
+        var totalDays = (hours * 3600 + minutes * 60 + seconds) / 86400.0;
+        fraction = totalDays - Math.Floor(totalDays);
+        return true;
     }
 
     private static ScalarValue Datevalue(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
@@ -428,7 +462,7 @@ public static partial class BuiltInFunctions
         if (!TextHasDateComponent(text)) return ErrorValue.Value;
         if (TryParseMonthYearDateValueText(text, out var monthYearDate))
             return DateValueSerialOrNum(monthYearDate, uses1904DateSystem);
-        if (DateTime.TryParse(text, ExcelTwoDigitYearCulture,
+        if (DateTime.TryParse(text, CreateExcelTwoDigitYearCulture(),
                 System.Globalization.DateTimeStyles.None, out var dt))
             return DateValueSerialOrNum(dt, uses1904DateSystem);
         return ErrorValue.Value;
@@ -436,8 +470,11 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue DateValueSerialOrNum(DateTime date, bool uses1904DateSystem)
     {
+        // Excel's documented behavior: a syntactically valid date_text outside the current
+        // date base's representable range yields #VALUE!, not #NUM! (#NUM! is reserved for
+        // out-of-range *numeric* arguments elsewhere in the date functions).
         var serial = Math.Floor(DateToSerial(date, uses1904DateSystem));
-        return serial < (uses1904DateSystem ? 0 : 1) ? ErrorValue.Num : new NumberValue(serial);
+        return serial < (uses1904DateSystem ? 0 : 1) ? ErrorValue.Value : new NumberValue(serial);
     }
 
     private static bool TextHasTimeComponent(string text) =>

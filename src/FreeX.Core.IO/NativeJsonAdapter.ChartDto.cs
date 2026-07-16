@@ -72,14 +72,18 @@ public sealed partial class NativeJsonAdapter
         public double AxisTitleFontSize { get; set; } = 12;
         public CellColor? ChartAreaFillColor { get; set; }
         public ThemeColorReferenceDto? ChartAreaFillThemeColor { get; set; }
+        public bool? ChartAreaNoFill { get; set; }
         public CellColor? ChartAreaBorderColor { get; set; }
         public ThemeColorReferenceDto? ChartAreaBorderThemeColor { get; set; }
         public double? ChartAreaBorderThickness { get; set; }
+        public bool? ChartAreaNoLine { get; set; }
         public CellColor? PlotAreaFillColor { get; set; }
         public ThemeColorReferenceDto? PlotAreaFillThemeColor { get; set; }
+        public bool? PlotAreaNoFill { get; set; }
         public CellColor? PlotAreaBorderColor { get; set; }
         public ThemeColorReferenceDto? PlotAreaBorderThemeColor { get; set; }
         public double PlotAreaBorderThickness { get; set; } = 1;
+        public bool? PlotAreaNoLine { get; set; }
         public CellColor? LegendTextColor { get; set; }
         public ThemeColorReferenceDto? LegendTextThemeColor { get; set; }
         public CellColor? LegendFillColor { get; set; }

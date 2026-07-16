@@ -64,11 +64,24 @@ public sealed class GoalSeekStatusDialog : Window
         }
         else
         {
-            buttons = DialogButtonRowFactory.CreateOkOnly(() => DialogResult = false, 76);
+            // Excel's Goal Seek Status dialog keeps its OK/Cancel pair even when a solution "may
+            // not have been found": OK accepts the last-iterated (closest) changing-cell value,
+            // Cancel restores the original value. Collapsing this to an OK-only button (as before)
+            // left the user no click-through way to accept the approximation.
+            buttons = DialogButtonRowFactory.Create(() =>
+            {
+                ApplyResult = true;
+                DialogResult = true;
+            }, 76);
             var okButton = (Button)buttons.Children[0];
             AutomationProperties.SetName(okButton, UiText.Get("GoalSeekStatus_Ok"));
             AutomationProperties.SetAutomationId(okButton, "GoalSeekStatusOkButton");
-            AutomationProperties.SetHelpText(okButton, UiText.Get("GoalSeekStatus_CloseTheGoalSeekStatusDialog"));
+            AutomationProperties.SetHelpText(okButton, UiText.Get("GoalSeekStatus_KeepTheGoalSeekResultInTheChangingCell"));
+
+            var cancelButton = (Button)buttons.Children[1];
+            AutomationProperties.SetName(cancelButton, UiText.Get("GoalSeekStatus_RestoreOriginalValues2"));
+            AutomationProperties.SetAutomationId(cancelButton, "GoalSeekStatusCancelButton");
+            AutomationProperties.SetHelpText(cancelButton, UiText.Get("GoalSeekStatus_RestoreTheOriginalWorkbookValuesBeforeGoalSeekRan"));
         }
 
         stack.Children.Add(buttons);

@@ -43,9 +43,9 @@ internal static partial class XlsxChartXmlWriter
                 chart.XAxisLabelFontSize,
                 chart.XAxisLabelAngle,
                 chart.XAxisLabelTextThemeColor,
-                chart.AxisTitleTextThemeColor,
-                chart.AxisTitleTextColor,
-                chart.AxisTitleFontSize,
+                chart.XAxisTitleTextThemeColor ?? chart.AxisTitleTextThemeColor,
+                chart.XAxisTitleTextColor ?? chart.AxisTitleTextColor,
+                chart.XAxisTitleFontSize ?? chart.AxisTitleFontSize,
                 chart.XAxisCrosses,
                 chart.XAxisCrossesAt,
                 chart.XAxisCrossBetween,
@@ -87,9 +87,9 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLabelFontSize,
                 chart.YAxisLabelAngle,
                 chart.YAxisLabelTextThemeColor,
-                chart.AxisTitleTextThemeColor,
-                chart.AxisTitleTextColor,
-                chart.AxisTitleFontSize,
+                chart.YAxisTitleTextThemeColor ?? chart.AxisTitleTextThemeColor,
+                chart.YAxisTitleTextColor ?? chart.AxisTitleTextColor,
+                chart.YAxisTitleFontSize ?? chart.AxisTitleFontSize,
                 chart.YAxisCrosses,
                 chart.YAxisCrossesAt,
                 chart.YAxisCrossBetween,
@@ -134,9 +134,9 @@ internal static partial class XlsxChartXmlWriter
                     chart.YAxisLabelFontSize,
                     chart.YAxisLabelAngle,
                     chart.YAxisLabelTextThemeColor,
-                    chart.AxisTitleTextThemeColor,
-                    chart.AxisTitleTextColor,
-                    chart.AxisTitleFontSize,
+                    chart.YAxisTitleTextThemeColor ?? chart.AxisTitleTextThemeColor,
+                    chart.YAxisTitleTextColor ?? chart.AxisTitleTextColor,
+                    chart.YAxisTitleFontSize ?? chart.AxisTitleFontSize,
                     chart.YAxisCrosses,
                     chart.YAxisCrossesAt,
                     chart.YAxisCrossBetween,
@@ -204,9 +204,9 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisLabelFontSize,
             chart.YAxisLabelAngle,
             chart.YAxisLabelTextThemeColor,
-            chart.AxisTitleTextThemeColor,
-            chart.AxisTitleTextColor,
-            chart.AxisTitleFontSize,
+            chart.YAxisTitleTextThemeColor ?? chart.AxisTitleTextThemeColor,
+            chart.YAxisTitleTextColor ?? chart.AxisTitleTextColor,
+            chart.YAxisTitleFontSize ?? chart.AxisTitleFontSize,
             chart.YAxisCrosses,
             chart.YAxisCrossesAt,
             valueAxisCrossBetween,
@@ -276,9 +276,9 @@ internal static partial class XlsxChartXmlWriter
                 chart.YAxisLabelFontSize,
                 chart.YAxisLabelAngle,
                 chart.YAxisLabelTextThemeColor,
-                chart.AxisTitleTextThemeColor,
-                chart.AxisTitleTextColor,
-                chart.AxisTitleFontSize,
+                chart.YAxisTitleTextThemeColor ?? chart.AxisTitleTextThemeColor,
+                chart.YAxisTitleTextColor ?? chart.AxisTitleTextColor,
+                chart.YAxisTitleFontSize ?? chart.AxisTitleFontSize,
                 secondaryAxisCrosses,
                 secondaryAxisCrossesAt,
                 secondaryAxisCrossBetween,
@@ -300,16 +300,32 @@ internal static partial class XlsxChartXmlWriter
         // valueAxisOnX) — for bar-family charts the category axis is physically on Y, so its
         // reverse-order flag was captured into YAxisReverseOrder on read, not XAxisReverseOrder.
         var categoryAxisReverseOrder = IsHorizontalBarChart(chart.Type) ? chart.YAxisReverseOrder : chart.XAxisReverseOrder;
+        var categoryAxisPosition = ToXlsxCategoryAxisPosition(chart);
         return new XElement(chartNs + (isDateAxis ? "dateAx" : "catAx"),
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
             new XElement(chartNs + "scaling",
                 new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(categoryAxisReverseOrder)))),
             new XElement(chartNs + "delete", new XAttribute("val", chart.HideXAxis ? "1" : "0")),
-            new XElement(chartNs + "axPos", new XAttribute("val", ToXlsxCategoryAxisPosition(chart))),
+            new XElement(chartNs + "axPos", new XAttribute("val", categoryAxisPosition)),
             ToAxisGridlinesXml("majorGridlines", chart.ShowXAxisMajorGridlines, chart.XAxisMajorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
             TryParseVerbatimAxisTitleXml(chart.XAxisTitleVerbatimXml)
-                ?? ToAxisTitleXml(chart.XAxisTitle, chart.XAxisTitleLayout, chart.AxisTitleTextThemeColor, chart.AxisTitleTextColor, chart.AxisTitleFontSize, chartNs, drawingNs),
+                ?? ToAxisTitleXml(
+                    chart.XAxisTitle,
+                    chart.XAxisTitleLayout,
+                    chart.XAxisTitleTextThemeColor ?? chart.AxisTitleTextThemeColor,
+                    chart.XAxisTitleTextColor ?? chart.AxisTitleTextColor,
+                    chart.XAxisTitleFontSize ?? chart.AxisTitleFontSize,
+                    chartNs,
+                    drawingNs,
+                    vertical: IsVerticalAxisPosition(categoryAxisPosition)),
+            // R43-io-chart-axis-title-numfmt-3-1: category/date axes carry their OWN <c:numFmt>
+            // (e.g. a date axis's custom "mmm-yy"), independent of the value axis's numFmt emitted
+            // below in ToValueAxisXml. Without this, a round-tripped custom category/date axis
+            // number format reverted to Excel's default source-cell format on reopen.
+            new XElement(chartNs + "numFmt",
+                new XAttribute("formatCode", ToXlsxNumberFormatCode(chart.XAxisNumberFormat, chart.XAxisNumberFormatCode)),
+                new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(chart.XAxisNumberFormat, chart.XAxisNumberFormatSourceLinked))),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(ToEffectiveAxisMajorTickStyle(chart.Type, chart.XAxisMajorTickStyle)))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
             new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels, chart.XAxisTickLabelPosition))),
@@ -385,7 +401,7 @@ internal static partial class XlsxChartXmlWriter
             new XElement(chartNs + "axPos", new XAttribute("val", axisPosition)),
             ToAxisGridlinesXml("majorGridlines", showMajorGridlines, majorGridlineColor, gridlineThickness, chartNs, drawingNs, useExcelNativeMajorGridlineStyle),
             ToAxisGridlinesXml("minorGridlines", showMinorGridlines, minorGridlineColor, gridlineThickness, chartNs, drawingNs),
-            verbatimTitle ?? ToAxisTitleXml(title, titleLayout, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs),
+            verbatimTitle ?? ToAxisTitleXml(title, titleLayout, axisTitleTextThemeColor, axisTitleTextColor, axisTitleFontSize, chartNs, drawingNs, vertical: IsVerticalAxisPosition(axisPosition)),
             new XElement(chartNs + "numFmt",
                 new XAttribute("formatCode", ToXlsxNumberFormatCode(numberFormat, numberFormatCode)),
                 new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(numberFormat, numberFormatSourceLinked))),
@@ -503,6 +519,13 @@ internal static partial class XlsxChartXmlWriter
         IsHorizontalBarChart(chart.Type) && chart.YAxisPosition == ChartAxisPosition.Left
             ? "b"
             : ToXlsxAxisPosition(chart.YAxisPosition, IsHorizontalBarChart(chart.Type) ? "b" : "l");
+
+    // R43-io-chart-axis-title-numfmt-3-2: true for a left/right (vertical) axis, whose title Excel
+    // renders rotated -90 degrees by default. Shared by both ToCategoryAxisXml (category axis, which
+    // is vertical for horizontal Bar charts) and ToValueAxisXml (value/secondary axis, which is
+    // vertical everywhere except horizontal Bar charts and Scatter/Bubble's X axis).
+    private static bool IsVerticalAxisPosition(string axisPosition) =>
+        axisPosition is "l" or "r";
 
     private static bool IsHorizontalBarChart(ChartType chartType) =>
         chartType is ChartType.Bar

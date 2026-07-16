@@ -114,6 +114,7 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
             return splitsArrayRejection;
 
         _snapshot = [];
+        var affected = new List<CellAddress>(cells.Count);
         foreach (var (address, cell, sourceAddress) in cells)
         {
             var hadRichTextRuns = sheet.RichTextRuns.TryGetValue(address, out var oldRuns);
@@ -129,6 +130,17 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                 oldHyperlink,
                 hadHyperlinkMetadata,
                 oldHyperlinkMetadata));
+
+            // A destination cell that is a non-anchor (hidden/covered) member of an existing merged
+            // region must stay empty, matching Excel: only the merge's top-left anchor cell ever
+            // carries a value. Writing into a covered cell would silently plant a live value that the
+            // grid never displays (the merge only renders the anchor), yet formulas like =SUM or
+            // unmerging later would suddenly surface it. So skip the mutation entirely for those cells,
+            // same guard as PasteCellsCommand.Apply for plain Ctrl+V paste.
+            var mergeRegion = sheet.GetMergeRegion(address);
+            if (mergeRegion is { } region && !region.Start.Equals(address))
+                continue;
+
             sheet.SetCell(address, cell);
 
             // An arithmetic Operation paste only changes the destination cell's numeric value (see
@@ -153,9 +165,11 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
                 else
                     sheet.HyperlinkMetadata.Remove(address);
             }
+
+            affected.Add(address);
         }
 
-        return new CommandOutcome(true, AffectedCells: cells.Select(c => c.Address).ToList());
+        return new CommandOutcome(true, AffectedCells: affected);
     }
 
     public void Revert(ICommandContext ctx)
@@ -237,9 +251,11 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
     /// <summary>
     /// Builds the destination cell for an arithmetic Paste Special operation. Returns false (leaving
     /// <paramref name="cell"/> unset) when the operation is a no-op — e.g. the destination is
-    /// non-numeric text/error (Excel leaves it untouched rather than writing #VALUE!) or both source
+    /// non-numeric text (Excel leaves it untouched rather than writing #VALUE!) or both source
     /// and destination are blank (Excel leaves it blank rather than writing a literal 0) — so the
-    /// caller skips this cell entirely: no value/style/rich-text/hyperlink change.
+    /// caller skips this cell entirely: no value/style/rich-text/hyperlink change. When either operand
+    /// is an error value, the destination is instead updated to that error (errors propagate through
+    /// arithmetic, unlike text).
     /// </summary>
     private bool TryBuildCell(Workbook workbook, Sheet sheet, CellAddress destination, Cell sourceCell, out Cell cell)
     {
@@ -290,13 +306,22 @@ public sealed class PasteSpecialCellsCommand : IWorkbookCommand
 internal static class PasteArithmetic
 {
     /// <summary>
-    /// Applies the Paste Special arithmetic operation, matching Excel: non-numeric, non-blank
-    /// operands (text, errors) leave the destination cell entirely unchanged rather than producing
+    /// Applies the Paste Special arithmetic operation, matching Excel: a non-numeric, non-blank,
+    /// non-error operand (text) leaves the destination cell entirely unchanged rather than producing
     /// a #VALUE! error, and a blank source combined with a blank destination stays blank rather than
-    /// materializing a literal 0. Returns null to signal "leave the destination cell unchanged".
+    /// materializing a literal 0. Errors, unlike text, are "poison" values that propagate through
+    /// arithmetic everywhere else in Excel, so either operand being an error makes the result that
+    /// same error (destination/left operand checked first, matching Excel's left-to-right evaluation
+    /// order) rather than being treated as a no-op. Returns null to signal "leave the destination
+    /// cell unchanged".
     /// </summary>
     public static ScalarValue? ApplyOperation(ScalarValue destination, ScalarValue source, PasteSpecialOperation operation)
     {
+        if (destination is ErrorValue destinationError)
+            return destinationError;
+        if (source is ErrorValue sourceError)
+            return sourceError;
+
         if (!TryNumber(destination, out var left) || !TryNumber(source, out var right))
             return null;
 

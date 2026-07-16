@@ -60,7 +60,12 @@ public enum PageTextAlignment
 /// text + font + horizontal alignment, the four border edges, and a vertically-centered text origin
 /// (top-left of the text block, measured via the supplied text measurer) the renderer can draw from.
 /// A merged cell is reported once as the anchor block, sized to span the merged region clipped to the
-/// page.
+/// page. <see cref="Fill"/> and <see cref="Font"/>'s color already carry the cell's conditional-format
+/// result merged over its raw style (see <c>PageContentRenderModelBuilder.EvaluateConditionalFormat</c>);
+/// <see cref="DataBar"/>/<see cref="IconSet"/> carry the resolved data-bar/icon-set conditional format
+/// (when the cell's highest-priority matching rule of that kind produced one) for a renderer to paint
+/// as its own overlay glyph -- no current renderer paints them yet, so they render as absent (fill/text
+/// only) until a PDF renderer adds that drawing step.
 /// </summary>
 public sealed record PageCellBlock(
     LayoutRect Bounds,
@@ -71,7 +76,9 @@ public sealed record PageCellBlock(
     PageTextFont Font,
     PageTextAlignment Alignment,
     PageCellBorders Borders,
-    LayoutPoint TextOrigin);
+    LayoutPoint TextOrigin,
+    DataBarLayout? DataBar = null,
+    IconSetResult? IconSet = null);
 
 /// <summary>A single straight gridline segment between two pixel-space endpoints.</summary>
 public readonly record struct PageGridLine(LayoutPoint Start, LayoutPoint End);

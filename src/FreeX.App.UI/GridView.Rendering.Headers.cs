@@ -61,23 +61,48 @@ public partial class GridView
 
         if (fp.Rows > 0)
         {
-            var lastFrozenRow = FindRowMetric(Viewport.RowMetrics, fp.Rows);
-            if (lastFrozenRow != null)
-            {
-                double y = lastFrozenRow.TopOffset + lastFrozenRow.Height + columnHeaderHeight;
-                dc.DrawLine(FreezePen, new Point(0, y), new Point(GetLogicalViewportWidth(), y));
-            }
+            var lastFrozenRow = FindLastRowMetricAtOrBefore(Viewport.RowMetrics, fp.Rows);
+            double y = columnHeaderHeight + (lastFrozenRow != null ? lastFrozenRow.TopOffset + lastFrozenRow.Height : 0);
+            dc.DrawLine(FreezePen, new Point(0, y), new Point(GetLogicalViewportWidth(), y));
         }
 
         if (fp.Cols > 0)
         {
-            var lastFrozenCol = FindColMetric(Viewport.ColMetrics, fp.Cols);
-            if (lastFrozenCol != null)
-            {
-                double x = lastFrozenCol.LeftOffset + lastFrozenCol.Width + rowHeaderWidth;
-                dc.DrawLine(FreezePen, new Point(x, 0), new Point(x, GetLogicalViewportHeight()));
-            }
+            var lastFrozenCol = FindLastColMetricAtOrBefore(Viewport.ColMetrics, fp.Cols);
+            double x = rowHeaderWidth + (lastFrozenCol != null ? lastFrozenCol.LeftOffset + lastFrozenCol.Width : 0);
+            dc.DrawLine(FreezePen, new Point(x, 0), new Point(x, GetLogicalViewportHeight()));
         }
+    }
+
+    // The exact frozen-boundary row/column can be absent from RowMetrics/ColMetrics
+    // (e.g. hidden without being a merge anchor, so BuildRowMetrics/BuildColMetrics
+    // drops it entirely). Fall back to the nearest preceding entry so the freeze
+    // divider still draws at the frozen block's actual visible extent, matching
+    // Excel, instead of vanishing outright.
+    internal static RowMetric? FindLastRowMetricAtOrBefore(IReadOnlyList<RowMetric> metrics, uint row)
+    {
+        RowMetric? result = null;
+        foreach (var metric in metrics)
+        {
+            if (metric.Row > row)
+                break;
+            result = metric;
+        }
+
+        return result;
+    }
+
+    internal static ColMetric? FindLastColMetricAtOrBefore(IReadOnlyList<ColMetric> metrics, uint column)
+    {
+        ColMetric? result = null;
+        foreach (var metric in metrics)
+        {
+            if (metric.Col > column)
+                break;
+            result = metric;
+        }
+
+        return result;
     }
 
     private void RenderHeaders(DrawingContext dc)
@@ -417,6 +442,8 @@ public partial class GridView
     {
         var rect = new Rect(col.LeftOffset + rowHeaderWidth, columnOutlineHeight, col.Width, ColHeaderHeight);
         dc.DrawRectangle(background, GridPen, rect);
+        if (!ShouldDrawColumnHeaderText(rect))
+            return;
 
         var textValue = FormatColumnHeader(col.Col, UseR1C1ReferenceStyle);
         var text = GetDefaultFormattedText(textValue, 11, pixelsPerDip);
@@ -825,7 +852,14 @@ public partial class GridView
     }
 
     internal static bool ShouldDrawRowHeaderText(Rect rowHeaderRect, double visibleBottom) =>
-        rowHeaderRect.Bottom <= visibleBottom;
+        rowHeaderRect.Height > 0 && rowHeaderRect.Bottom <= visibleBottom;
+
+    // A hidden merge-anchor column is still kept in ColMetrics with Width=0 so the
+    // merge's value/style stay reachable for cell rendering; its header slot must
+    // stay visually empty (matching Excel), not draw the column letter centered on
+    // a zero-width rect where it bleeds into the neighboring header cell.
+    internal static bool ShouldDrawColumnHeaderText(Rect columnHeaderRect) =>
+        columnHeaderRect.Width > 0;
 
     private double GetRenderVisibleBottom()
     {

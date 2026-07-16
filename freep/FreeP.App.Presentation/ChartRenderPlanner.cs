@@ -556,9 +556,9 @@ public static partial class ChartRenderPlanner
     public const double ScatterMarkerRadius = 3.5;
     public const double ScatterDataLabelWidth = 40.0;
     public const double ScatterDataLabelHeight = 11.0;
-    public const double ImportedScatterPlotLeftInset = 10.5;
+    public const double ImportedScatterPlotLeftInset = 14.25;
     public const double ImportedScatterPlotUpwardOffset = 10.5;
-    public const double ImportedScatterPlotRightInset = 3.0;
+    public const double ImportedScatterPlotRightInset = 4.5;
     public const double ImportedBarPlotLeftOffset = -4.5;
     public const double ImportedBarPlotUpwardOffset = 4.5;
     public const double ImportedBarPlotWidthReduction = 15.0;
@@ -4636,7 +4636,9 @@ public static partial class ChartRenderPlanner
 
         double min = dataMin >= 0 ? 0 : dataMin;
         double max = dataMax;
-        return ComputeNiceRange(min, max);
+        return useX && UsesImportedTextMetrics(chart)
+            ? ComputeNiceRange(min, max, targetIntervals: 6)
+            : ComputeNiceRange(min, max);
     }
 
     public static string FormatAxisValue(double value) =>

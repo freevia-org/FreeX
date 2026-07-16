@@ -1,17 +1,25 @@
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Media;
+using FreeX.App.UI;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
+using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 
 namespace FreeX.App.Host;
 
 public static partial class PrintRenderer
 {
-    // The WPF print path renders only black text on a white page background with optional
-    // light-gray gridlines — it never renders cell fill colours or coloured fonts.
-    // Black-and-white mode is therefore satisfied by construction on this path; there is
-    // no blackAndWhite parameter here (unlike the Avalonia/Skia path which does render
-    // fills and must suppress them when B&W is requested).
+    // The WPF print path renders cell fills, per-cell borders, font colors, rotated text, and
+    // overflow-into-blank-neighbor text the same way the interactive grid (GridView.Rendering.cs)
+    // does, reading DisplayCell.Style — which the viewport already merges conditional formatting
+    // into — so CF highlight/colorscale fills and dxf font colors print exactly as displayed.
+    // NOTE: RenderPageVisual (PrintRenderer.HeaderFooter.cs, owned by a different fix bucket)
+    // already threads a `blackAndWhite` flag (from Sheet.PrintBlackAndWhite) to sibling drawing
+    // helpers such as DrawDisplayedComments, but does not currently pass it into this method —
+    // so Page Setup > Sheet > "Black and white" is not yet honored for cell fills/borders/font
+    // color on this path. That wiring lives in the caller and is out of scope here.
     private static void DrawPrintedGridCells(
         DrawingContext dc,
         ICollection<PdfTextOverlay> textOverlays,
@@ -38,12 +46,26 @@ public static partial class PrintRenderer
                 var col = pageColumns[colIndex];
                 var colWidth = measurement.ColumnWidthAt(colIndex);
                 var x = gridLeft + measurement.ColumnOffset(colIndex);
+                var cellRect = new Rect(x, y, colWidth, rowHeight);
+
+                cellLookup.TryGetValue((row, col), out var cell);
+                var style = cell.Style;
+
+                if (style is not null && HasVisiblePrintedFill(style))
+                {
+                    DrawPrintedCellFill(dc, cellRect, style);
+                }
 
                 if (printGridlines)
                 {
                     dc.DrawRectangle(null,
                         new Pen(Brushes.LightGray, 0.5),
-                        new Rect(x, y, colWidth, rowHeight));
+                        cellRect);
+                }
+
+                if (style is not null && HasVisiblePrintedBorder(style))
+                {
+                    DrawPrintedCellBorders(dc, cellRect, style);
                 }
 
                 if (hyperlinkLookup.TryGetValue((row, col), out var link))
@@ -69,8 +91,7 @@ public static partial class PrintRenderer
                         rowHeight));
                 }
 
-                if (!cellLookup.TryGetValue((row, col), out var cell) ||
-                    string.IsNullOrEmpty(cell.DisplayText))
+                if (string.IsNullOrEmpty(cell.DisplayText))
                 {
                     continue;
                 }
@@ -79,36 +100,360 @@ public static partial class PrintRenderer
                 if (string.IsNullOrEmpty(displayText))
                     continue;
 
-                var textBrush = Brushes.Black;
-                var textColor = Colors.Black;
-
-                var ft = new FormattedText(
+                DrawPrintedCellText(
+                    dc,
+                    textOverlays,
+                    cell,
+                    style,
                     displayText,
-                    CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight,
-                    PrintedCellTypeface,
-                    PrintFontSize,
-                    textBrush,
-                    1.0)
-                {
-                    MaxTextWidth = Math.Max(1, colWidth - 4),
-                    MaxLineCount = 1,
-                    Trimming = TextTrimming.CharacterEllipsis
-                };
-
-                var textPoint = new Point(x + 2, y + (rowHeight - ft.Height) / 2);
-                dc.DrawText(ft, textPoint);
-                var overlayText = BoundPrintedCellOverlayText(displayText, ft.MaxTextWidth);
-                textOverlays.Add(new PdfTextOverlay(
-                    overlayText,
-                    textPoint.X,
-                    textPoint.Y,
-                    PrintFontSize,
-                    PrintedCellTypeface.FontFamily.Source,
-                    Bold: false,
-                    Italic: false,
-                    textColor));
+                    cellRect,
+                    measurement,
+                    pageColumns,
+                    colIndex,
+                    row,
+                    cellLookup);
             }
         }
+    }
+
+    private static void DrawPrintedCellText(
+        DrawingContext dc,
+        ICollection<PdfTextOverlay> textOverlays,
+        DisplayCell cell,
+        CellStyle? style,
+        string displayText,
+        Rect rect,
+        PrintGridMeasurement measurement,
+        IReadOnlyList<uint> pageColumns,
+        int colIndex,
+        uint row,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup)
+    {
+        var textRotation = style?.TextRotation ?? 0;
+        var renderText = CellTextOrientationLayoutPlanner.PrepareDisplayText(displayText, textRotation);
+        var hasOrientation = CellTextOrientationLayoutPlanner.HasTextOrientation(textRotation);
+        var textBrush = ResolvePrintedTextBrush(style, out var textColor);
+
+        var ft = new FormattedText(
+            renderText,
+            CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight,
+            PrintedCellTypeface,
+            PrintFontSize,
+            textBrush,
+            1.0);
+
+        var maxTextWidth = Math.Max(1, rect.Width - 4);
+        var canOverflow = !hasOrientation &&
+            GridView.CanOverflowCellText(style, cell.RawValue, displayText, merge: null);
+        if (canOverflow && ft.Width > maxTextWidth)
+        {
+            var overflowWidth = ComputePrintedOverflowWidth(measurement, pageColumns, colIndex, row, cellLookup) - 4;
+            if (overflowWidth > maxTextWidth)
+                maxTextWidth = overflowWidth;
+        }
+
+        ft.MaxTextWidth = Math.Max(1, maxTextWidth);
+        if (!CellTextOrientationLayoutPlanner.IsStackedTextRotation(textRotation))
+            ft.MaxLineCount = 1;
+        ft.Trimming = TextTrimming.CharacterEllipsis;
+
+        Point textPoint;
+        double rotationAngle = 0;
+        if (hasOrientation)
+        {
+            var isNumeric = cell.RawValue is NumberValue or DateTimeValue;
+            var layout = CellTextOrientationLayoutPlanner.CalculateLayout(
+                new CellTextLayoutRect(rect.Left, rect.Top, rect.Width, rect.Height),
+                ft.Width,
+                ft.Height,
+                style?.HorizontalAlignment ?? CellHAlign.General,
+                style?.VerticalAlignment,
+                isNumeric,
+                indentPixels: 0,
+                textRotation);
+            textPoint = new Point(layout.TextPoint.X, layout.TextPoint.Y);
+            rotationAngle = layout.TransformAngle;
+        }
+        else
+        {
+            textPoint = new Point(rect.Left + 2, rect.Top + (rect.Height - ft.Height) / 2);
+        }
+
+        var isRotated = Math.Abs(rotationAngle) > 0.001;
+        if (isRotated)
+            dc.PushTransform(new RotateTransform(rotationAngle, textPoint.X, textPoint.Y));
+
+        dc.DrawText(ft, textPoint);
+
+        if (isRotated)
+            dc.Pop();
+
+        var overlayText = BoundPrintedCellOverlayText(displayText, ft.MaxTextWidth);
+        textOverlays.Add(new PdfTextOverlay(
+            overlayText,
+            textPoint.X,
+            textPoint.Y,
+            PrintFontSize,
+            PrintedCellTypeface.FontFamily.Source,
+            Bold: false,
+            Italic: false,
+            textColor)
+        {
+            RotationDegrees = rotationAngle
+        });
+    }
+
+    /// <summary>
+    /// Extends the available draw width for a cell's text into consecutive blank columns to its
+    /// right on the same printed page — mirroring GridView.Rendering.cs's overflow logic — so long
+    /// unwrapped text spills across empty neighbor cells on the printout instead of being hard-cut
+    /// with an ellipsis at its own column boundary.
+    /// </summary>
+    private static double ComputePrintedOverflowWidth(
+        PrintGridMeasurement measurement,
+        IReadOnlyList<uint> pageColumns,
+        int colIndex,
+        uint row,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellLookup)
+    {
+        var width = measurement.ColumnWidthAt(colIndex);
+        var nextIndex = colIndex + 1;
+        while (nextIndex < pageColumns.Count)
+        {
+            var nextCol = pageColumns[nextIndex];
+            if (cellLookup.TryGetValue((row, nextCol), out var nextCell) && !string.IsNullOrEmpty(nextCell.DisplayText))
+                break;
+
+            width += measurement.ColumnWidthAt(nextIndex);
+            nextIndex++;
+        }
+
+        return width;
+    }
+
+    private static Brush ResolvePrintedTextBrush(CellStyle? style, out Color textColor)
+    {
+        if (style?.FontColor is { } fontColor && !fontColor.IsBlack)
+        {
+            textColor = Color.FromRgb(fontColor.R, fontColor.G, fontColor.B);
+            return new SolidColorBrush(textColor);
+        }
+
+        textColor = Colors.Black;
+        return Brushes.Black;
+    }
+
+    private static bool HasVisiblePrintedFill(CellStyle style) =>
+        style.FillColor.HasValue ||
+        style.FillPatternStyle != CellFillPatternStyle.None ||
+        style.GradientFill is not null;
+
+    private static void DrawPrintedCellFill(DrawingContext dc, Rect rect, CellStyle style)
+    {
+        Brush? fill = style.GradientFill is { } gradient
+            ? BuildPrintedGradientBrush(gradient)
+            : style.FillColor is { } fillColor
+                ? new SolidColorBrush(Color.FromRgb(fillColor.R, fillColor.G, fillColor.B))
+                : null;
+
+        if (fill is not null)
+            dc.DrawRectangle(fill, null, rect);
+
+        if (style.GradientFill is null)
+            DrawPrintedFillPattern(dc, rect, style);
+    }
+
+    private static Brush BuildPrintedGradientBrush(CellGradientFill gradient)
+    {
+        if (gradient.Type == CellGradientFillType.Path)
+        {
+            var originX = gradient.Left + (1.0 - gradient.Left - gradient.Right) / 2.0;
+            var originY = gradient.Top + (1.0 - gradient.Top - gradient.Bottom) / 2.0;
+            var radial = new RadialGradientBrush
+            {
+                Center = new Point(originX, originY),
+                GradientOrigin = new Point(originX, originY),
+                RadiusX = Math.Max(originX, 1.0 - originX),
+                RadiusY = Math.Max(originY, 1.0 - originY),
+                MappingMode = BrushMappingMode.RelativeToBoundingBox,
+            };
+            foreach (var stop in gradient.Stops.OrderBy(s => s.Position))
+                radial.GradientStops.Add(new GradientStop(Color.FromRgb(stop.Color.R, stop.Color.G, stop.Color.B), stop.Position));
+            return radial;
+        }
+
+        var radians = gradient.Degree * Math.PI / 180.0;
+        var dx = Math.Cos(radians);
+        var dy = Math.Sin(radians);
+        var start = new Point(0.5 - 0.5 * dx, 0.5 - 0.5 * dy);
+        var end = new Point(0.5 + 0.5 * dx, 0.5 + 0.5 * dy);
+        var linear = new LinearGradientBrush { StartPoint = start, EndPoint = end };
+        foreach (var stop in gradient.Stops.OrderBy(s => s.Position))
+            linear.GradientStops.Add(new GradientStop(Color.FromRgb(stop.Color.R, stop.Color.G, stop.Color.B), stop.Position));
+        return linear;
+    }
+
+    private static void DrawPrintedFillPattern(DrawingContext dc, Rect rect, CellStyle style)
+    {
+        if (style.FillPatternStyle is CellFillPatternStyle.None or CellFillPatternStyle.Solid)
+            return;
+
+        var color = style.FillPatternColor ?? CellColor.Black;
+        var brush = new SolidColorBrush(Color.FromRgb(color.R, color.G, color.B));
+        var pen = new Pen(brush, 0.75);
+        const double step = 6;
+
+        dc.PushClip(new RectangleGeometry(rect));
+        switch (style.FillPatternStyle)
+        {
+            case CellFillPatternStyle.Gray0625:
+            case CellFillPatternStyle.Gray125:
+            case CellFillPatternStyle.LightGray:
+            case CellFillPatternStyle.MediumGray:
+            case CellFillPatternStyle.DarkGray:
+                var opacity = style.FillPatternStyle switch
+                {
+                    CellFillPatternStyle.Gray0625 => 0.12,
+                    CellFillPatternStyle.Gray125 => 0.18,
+                    CellFillPatternStyle.LightGray => 0.28,
+                    CellFillPatternStyle.MediumGray => 0.45,
+                    _ => 0.62
+                };
+                dc.DrawRectangle(new SolidColorBrush(Color.FromArgb((byte)(opacity * 255), color.R, color.G, color.B)), null, rect);
+                break;
+            case CellFillPatternStyle.LightHorizontal:
+            case CellFillPatternStyle.DarkHorizontal:
+                DrawPrintedHorizontalPattern(dc, rect, pen, step);
+                break;
+            case CellFillPatternStyle.LightVertical:
+            case CellFillPatternStyle.DarkVertical:
+                DrawPrintedVerticalPattern(dc, rect, pen, step);
+                break;
+            case CellFillPatternStyle.LightGrid:
+            case CellFillPatternStyle.DarkGrid:
+                DrawPrintedHorizontalPattern(dc, rect, pen, step);
+                DrawPrintedVerticalPattern(dc, rect, pen, step);
+                break;
+            case CellFillPatternStyle.LightDown:
+            case CellFillPatternStyle.DarkDown:
+                DrawPrintedDiagonalPattern(dc, rect, pen, descending: true);
+                break;
+            case CellFillPatternStyle.LightUp:
+            case CellFillPatternStyle.DarkUp:
+                DrawPrintedDiagonalPattern(dc, rect, pen, descending: false);
+                break;
+            case CellFillPatternStyle.LightTrellis:
+            case CellFillPatternStyle.DarkTrellis:
+                DrawPrintedDiagonalPattern(dc, rect, pen, descending: true);
+                DrawPrintedDiagonalPattern(dc, rect, pen, descending: false);
+                break;
+        }
+        dc.Pop();
+    }
+
+    private static void DrawPrintedHorizontalPattern(DrawingContext dc, Rect rect, Pen pen, double step)
+    {
+        for (var lineY = rect.Top + step; lineY < rect.Bottom; lineY += step)
+            dc.DrawLine(pen, new Point(rect.Left, lineY), new Point(rect.Right, lineY));
+    }
+
+    private static void DrawPrintedVerticalPattern(DrawingContext dc, Rect rect, Pen pen, double step)
+    {
+        for (var lineX = rect.Left + step; lineX < rect.Right; lineX += step)
+            dc.DrawLine(pen, new Point(lineX, rect.Top), new Point(lineX, rect.Bottom));
+    }
+
+    private static void DrawPrintedDiagonalPattern(DrawingContext dc, Rect rect, Pen pen, bool descending)
+    {
+        const double step = 8;
+        for (var offset = -rect.Height; offset < rect.Width; offset += step)
+        {
+            var start = descending
+                ? new Point(rect.Left + offset, rect.Top)
+                : new Point(rect.Left + offset, rect.Bottom);
+            var end = descending
+                ? new Point(rect.Left + offset + rect.Height, rect.Bottom)
+                : new Point(rect.Left + offset + rect.Height, rect.Top);
+            dc.DrawLine(pen, start, end);
+        }
+    }
+
+    private static bool HasVisiblePrintedBorder(CellStyle style) =>
+        style.BorderTop.Style != BorderStyle.None ||
+        style.BorderBottom.Style != BorderStyle.None ||
+        style.BorderLeft.Style != BorderStyle.None ||
+        style.BorderRight.Style != BorderStyle.None ||
+        style.BorderDiagonalDown.Style != BorderStyle.None ||
+        style.BorderDiagonalUp.Style != BorderStyle.None;
+
+    private static void DrawPrintedCellBorders(DrawingContext dc, Rect rect, CellStyle style)
+    {
+        DrawPrintedBorderEdge(dc, style.BorderTop, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Top));
+        DrawPrintedBorderEdge(dc, style.BorderBottom, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Bottom));
+        DrawPrintedBorderEdge(dc, style.BorderLeft, new Point(rect.Left, rect.Top), new Point(rect.Left, rect.Bottom));
+        DrawPrintedBorderEdge(dc, style.BorderRight, new Point(rect.Right, rect.Top), new Point(rect.Right, rect.Bottom));
+        if (style.BorderDiagonalDown.Style != BorderStyle.None)
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalDown, new Point(rect.Left, rect.Top), new Point(rect.Right, rect.Bottom));
+        if (style.BorderDiagonalUp.Style != BorderStyle.None)
+            DrawPrintedBorderEdge(dc, style.BorderDiagonalUp, new Point(rect.Left, rect.Bottom), new Point(rect.Right, rect.Top));
+    }
+
+    private static void DrawPrintedBorderEdge(DrawingContext dc, CellBorder border, Point p1, Point p2)
+    {
+        if (border.Style == BorderStyle.None) return;
+
+        double thickness = border.Style switch
+        {
+            BorderStyle.Hair => 0.25,
+            BorderStyle.Thin => 0.5,
+            BorderStyle.Medium or BorderStyle.MediumDashed or BorderStyle.MediumDashDot or BorderStyle.MediumDashDotDot => 1.5,
+            BorderStyle.Thick => 2.5,
+            _ => 0.5
+        };
+
+        DashStyle dash = border.Style switch
+        {
+            BorderStyle.Dashed or BorderStyle.MediumDashed => DashStyles.Dash,
+            BorderStyle.Dotted => DashStyles.Dot,
+            BorderStyle.DashDot or BorderStyle.MediumDashDot => DashStyles.DashDot,
+            BorderStyle.DashDotDot or BorderStyle.MediumDashDotDot => DashStyles.DashDotDot,
+            BorderStyle.SlantDashDot => DashStyles.DashDot,
+            BorderStyle.Hair => DashStyles.Solid,
+            _ => DashStyles.Solid
+        };
+
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(border.Color.R, border.Color.G, border.Color.B)), thickness)
+        {
+            DashStyle = dash
+        };
+
+        if (border.Style == BorderStyle.Double)
+        {
+            DrawPrintedDoubleBorderLines(dc, pen, p1, p2);
+            return;
+        }
+
+        dc.DrawLine(pen, p1, p2);
+    }
+
+    private static void DrawPrintedDoubleBorderLines(DrawingContext dc, Pen pen, Point p1, Point p2)
+    {
+        const double gap = 1.0;
+
+        var dx = p2.X - p1.X;
+        var dy = p2.Y - p1.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 1e-6)
+        {
+            dc.DrawLine(pen, p1, p2);
+            return;
+        }
+
+        var offsetX = -dy / length * (gap / 2.0);
+        var offsetY = dx / length * (gap / 2.0);
+
+        dc.DrawLine(pen, new Point(p1.X + offsetX, p1.Y + offsetY), new Point(p2.X + offsetX, p2.Y + offsetY));
+        dc.DrawLine(pen, new Point(p1.X - offsetX, p1.Y - offsetY), new Point(p2.X - offsetX, p2.Y - offsetY));
     }
 }

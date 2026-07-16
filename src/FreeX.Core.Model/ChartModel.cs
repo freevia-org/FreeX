@@ -91,6 +91,27 @@ public sealed class ChartModel
     public CellColor? AxisTitleTextColor { get; set; }
     public WorkbookThemeColorReference? AxisTitleTextThemeColor { get; set; }
     public double AxisTitleFontSize { get; set; } = 12;
+
+    /// <summary>
+    /// R43-io-chart-axis-title-numfmt-3-3: per-axis overrides for the X (category) axis title's
+    /// font size/color/theme-color, distinct from the shared <see cref="AxisTitleFontSize"/>/
+    /// <see cref="AxisTitleTextColor"/>/<see cref="AxisTitleTextThemeColor"/> fields (which a
+    /// second read of the Y axis title formatting always clobbers). Null means "use the shared
+    /// fields", preserving prior behavior for charts that never populate these overrides.
+    /// </summary>
+    public double? XAxisTitleFontSize { get; set; }
+    public CellColor? XAxisTitleTextColor { get; set; }
+    public WorkbookThemeColorReference? XAxisTitleTextThemeColor { get; set; }
+
+    /// <summary>
+    /// R43-io-chart-axis-title-numfmt-3-3: per-axis overrides for the Y (value) axis title's
+    /// font size/color/theme-color. Also used as the fallback for the secondary value axis title,
+    /// mirroring the existing "own captured value, else clone primary Y axis" pattern used for
+    /// other secondary-axis fields in this model. Null means "use the shared fields".
+    /// </summary>
+    public double? YAxisTitleFontSize { get; set; }
+    public CellColor? YAxisTitleTextColor { get; set; }
+    public WorkbookThemeColorReference? YAxisTitleTextThemeColor { get; set; }
     public CellColor? ChartAreaFillColor { get; set; }
     public WorkbookThemeColorReference? ChartAreaFillThemeColor { get; set; }
     public CellColor? ChartAreaBorderColor { get; set; }

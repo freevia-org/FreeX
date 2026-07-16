@@ -8473,6 +8473,19 @@ public sealed partial class XlsxFileAdapter
             cell.Element(worksheetNs + "v")?.Remove();
             cell.Element(worksheetNs + "is")?.Remove();
 
+            // A rich value (linked data type, IMAGE()-produced value, etc.) propagated onto a formula
+            // cell is stored as a vm/cm attribute indexing into xl/metadata.xml's
+            // valueMetadata/cellMetadata, describing exactly the cached <t>/<v> this rewrite is about to
+            // replace. This helper is only ever invoked (via RewriteFormulaCachedCellValue /
+            // RewriteFormulaTextAndCachedCellValue) when the formula's cached value -- or the formula
+            // text itself -- has actually changed, so any existing vm/cm is now stale and must be
+            // dropped to avoid the fast patch-save path silently reattaching mismatched rich-value
+            // metadata to the cell's new value. Mirrors the RewriteLiteralCellValue guard above and the
+            // full-save CellValueMatchesCapturedNativeMetadata guard in
+            // XlsxWorksheetMetadataPreserver.CellMetadata.cs.
+            cell.Attribute("vm")?.Remove();
+            cell.Attribute("cm")?.Remove();
+
             switch (value)
             {
                 case BlankValue:
