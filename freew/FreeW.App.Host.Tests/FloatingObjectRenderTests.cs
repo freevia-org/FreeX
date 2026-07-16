@@ -498,7 +498,8 @@ public sealed class FloatingObjectRenderTests
         texts.Should().Contain("Sales");
         texts.Should().Contain("Q1");
 
-        var plot = LogicalDescendants<Canvas>(root).First(c => c.Width > 24 && c.Height > 24);
+        var plot = LogicalDescendants<Border>(root)
+            .First(border => border != root && border.Width > 24 && border.Height > 24);
         plot.Background.Should().BeOfType<SolidColorBrush>()
             .Which.Color.Should().Be(Color.FromRgb(0xD9, 0xE2, 0xF3));
 
