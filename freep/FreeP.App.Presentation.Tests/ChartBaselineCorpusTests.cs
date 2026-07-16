@@ -277,7 +277,7 @@ public sealed class ChartBaselineCorpusTests
             .Should().Be(new ChartPlanRect(30.5, 57.5, 426.5, 200),
                 "PowerPoint places imported scatter plots above the category-label band with a compact left axis gutter");
         ChartRenderPlanner.ComputeScatterAxisRange(scatter, useX: true)
-            .Should().Be((0, 125, 25));
+            .Should().Be((0, 120, 20));
         ChartRenderPlanner.ComputePrimaryValueAxisRange(scatter)
             .Should().Be((0, 50, 10));
         var scatterColors = new[]

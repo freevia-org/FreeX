@@ -4636,7 +4636,9 @@ public static partial class ChartRenderPlanner
 
         double min = dataMin >= 0 ? 0 : dataMin;
         double max = dataMax;
-        return ComputeNiceRange(min, max);
+        return useX && UsesImportedTextMetrics(chart)
+            ? ComputeNiceRange(min, max, targetIntervals: 6)
+            : ComputeNiceRange(min, max);
     }
 
     public static string FormatAxisValue(double value) =>
