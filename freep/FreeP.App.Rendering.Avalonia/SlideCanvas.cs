@@ -2712,7 +2712,7 @@ public sealed class SlideCanvas : Control
         var fg = Color.FromRgb(pat.ForegroundColor.R, pat.ForegroundColor.G, pat.ForegroundColor.B);
         var bg = Color.FromRgb(pat.BackgroundColor.R, pat.BackgroundColor.G, pat.BackgroundColor.B);
 
-        int tileSize = pat.Preset == "cross" ? 12 : 6;
+        int tileSize = pat.Preset == "cross" ? 8 : 6;
         int S = tileSize;
         var pixels = new byte[S * S * 4]; // BGRA layout
 
