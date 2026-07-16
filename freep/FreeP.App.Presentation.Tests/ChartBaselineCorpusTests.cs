@@ -262,7 +262,8 @@ public sealed class ChartBaselineCorpusTests
                 "Surface3D height follows the PowerPoint value axis instead of normalizing to the smallest data value");
         surfaceGeometry.Facets.Should().HaveCount(4);
         surfaceGeometry.WireframeSegments.Should().HaveCountGreaterThan(surfaceGeometry.Facets.Count);
-        surfaceGeometry.ContourSegments.Should().NotBeEmpty();
+        surfaceGeometry.ContourSegments.Should().BeEmpty(
+            "PowerPoint's imported Surface3D baseline uses the projected frame and wireframe without contour overlays");
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 3).Should().Be(2);
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 4).Should().Be(2);
         surfaceGeometry.RenderFacets.Should().HaveCount(8,
