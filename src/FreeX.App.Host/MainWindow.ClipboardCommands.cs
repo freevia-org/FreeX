@@ -295,7 +295,7 @@ public partial class MainWindow
                                 "Paste Special",
                                 [
                                     sheetPasteCommand,
-                                    new PasteColumnWidthsCommand(sheetId, clip.SourceRange, sheetDestinationRange.Start.Col)
+                                    new PasteColumnWidthsCommand(sheetId, clip.SourceRange, sheetDestinationRange.Start.Col, sheetDestinationRange.ColCount)
                                 ]);
                         }
 
@@ -927,7 +927,7 @@ public partial class MainWindow
                 sheetId =>
                 {
                     var currentRange = SheetGrid.SelectedRange ?? range;
-                    return new PasteColumnWidthsCommand(sheetId, clip.SourceRange, currentRange.Start.Col);
+                    return new PasteColumnWidthsCommand(sheetId, clip.SourceRange, currentRange.Start.Col, currentRange.ColCount);
                 },
                 out var outcome))
             return;
@@ -1075,7 +1075,7 @@ public partial class MainWindow
                     "Paste Link",
                     [
                         linkCommand,
-                        new PasteColumnWidthsCommand(_currentSheetId, clip.SourceRange, currentRange.Start.Col)
+                        new PasteColumnWidthsCommand(_currentSheetId, clip.SourceRange, currentRange.Start.Col, currentRange.ColCount)
                     ])
                 : linkCommand;
         }

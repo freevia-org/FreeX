@@ -491,6 +491,8 @@ internal static partial class ViewportConditionalFormatEvaluator
             result.Italic = true;
         if (cfStyle.Underline)
             result.Underline = true;
+        if (cfStyle.Strikethrough)
+            result.Strikethrough = true;
         if (cfStyle.FontColor != CellColor.Black)
             result.FontColor = cfStyle.FontColor;
 
@@ -532,6 +534,8 @@ internal static partial class ViewportConditionalFormatEvaluator
             result.Italic = true;
         if (cfStyle.Underline)
             result.Underline = true;
+        if (cfStyle.Strikethrough)
+            result.Strikethrough = true;
         if (result.FontColor == CellColor.Black && cfStyle.FontColor != CellColor.Black)
             result.FontColor = cfStyle.FontColor;
 

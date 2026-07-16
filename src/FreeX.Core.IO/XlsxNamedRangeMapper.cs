@@ -374,6 +374,20 @@ internal static class XlsxNamedRangeMapper
                         existing.Value = entry.Text;
                         changed = true;
                     }
+
+                    var desiredHidden = entry.Hidden ? "1" : null;
+                    if (!string.Equals(existing.Attribute("hidden")?.Value, desiredHidden, StringComparison.Ordinal))
+                    {
+                        existing.SetAttributeValue("hidden", desiredHidden);
+                        changed = true;
+                    }
+
+                    var desiredComment = string.IsNullOrEmpty(entry.Comment) ? null : entry.Comment;
+                    if (!string.Equals(existing.Attribute("comment")?.Value, desiredComment, StringComparison.Ordinal))
+                    {
+                        existing.SetAttributeValue("comment", desiredComment);
+                        changed = true;
+                    }
                     continue;
                 }
 

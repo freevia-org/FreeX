@@ -5262,7 +5262,11 @@ public sealed partial class AccessibilityCheckerServiceTests
         // FormulaFinancialDdbScalar): B8's row no longer crosses the >300 threshold, so it is no longer a
         // low-contrast cell. Previously pinned the buggy integer-only DDB output.
         AssertFormulaFinancialDepreciationFunctionContrastLocations("DDB($A1,$C1,$D1,$E1)>300", "B1");
-        AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1,$G1)>300", "B1", "B2", "B8");
+        // VDB corrected to Excel's carry-forward book value (r46, see BuiltInFunctions.Financial.Depreciation
+        // VdbScalar): for the "Later period" row (start_period=1) VDB now depletes book value across the
+        // periods before start_period, so VDB(1000,100,5,1,2)=240 (was the buggy 400 that used the full
+        // undepreciated cost). 240 no longer crosses >300, so B2 is no longer a low-contrast cell.
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("VDB($A1,$C1,$D1,$F1,$G1)>300", "B1", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORDEGRC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1,0)>140", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORLINC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1)>=100", "B1", "B2", "B8");
     }
@@ -5283,7 +5287,10 @@ public sealed partial class AccessibilityCheckerServiceTests
         // threshold (was pinning the buggy integer-only DDB output).
         AssertFormulaFinancialDepreciationFunctionContrastLocations("DDB($A1,$C1,$D1,$E1,$H1)>=300", "B1");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("DB($A1,$C1,$D1,$E1,$I1)>180", "B1", "B2", "B8");
-        AssertFormulaFinancialDepreciationFunctionContrastLocations("AND($O1,VDB($A1,$C1,$D1,$F1,$G1,$H1,$J1)>250)", "B1", "B2", "B8");
+        // VDB corrected to carry book value forward (r46): the "Later period" row (start_period=1) now
+        // yields VDB(1000,100,5,1,2,2,FALSE)=240 (was the buggy 400), which no longer clears >250, so the
+        // AND(...) predicate is false for B2 and it is no longer a low-contrast cell.
+        AssertFormulaFinancialDepreciationFunctionContrastLocations("AND($O1,VDB($A1,$C1,$D1,$F1,$G1,$H1,$J1)>250)", "B1", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("SUM(SLN($A1,$C1,$D1),SYD($A1,$C1,$D1,$E1))>400", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("IF(EFFECT($K1,$L1)>0.1,TRUE,FALSE)", "B1", "B2", "B8");
         AssertFormulaFinancialDepreciationFunctionContrastLocations("AMORLINC($A1,DATE(2020,1,1),DATE(2020,12,31),$C1,$E1,$K1)>100", "B2", "B8");
