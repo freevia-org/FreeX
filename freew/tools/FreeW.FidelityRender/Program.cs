@@ -260,17 +260,6 @@ static void RenderDocumentComposite(
 
     flow.PageWidth   = pageWDip;
     flow.PageHeight  = pageHDip;
-    // Word reserves a compact header band inside the top margin when a header is present. The
-    // compositor paints that band separately below; reserve the same height here so column flow
-    // does not start one header line too high.
-    const double HeaderBodyReserveDip = 25.0;
-    var hasHeaderContent = doc.FinalSectionHeadersFooters.Header is { IsEmpty: false }
-        || doc.FinalSectionHeadersFooters.EvenHeader is { IsEmpty: false }
-        || doc.FinalSectionHeadersFooters.FirstHeader is { IsEmpty: false }
-        || doc.Sections.Any(section =>
-            section.HeadersFooters.Header is { IsEmpty: false }
-            || section.HeadersFooters.EvenHeader is { IsEmpty: false }
-            || section.HeadersFooters.FirstHeader is { IsEmpty: false });
     // A multi-page table is emitted as explicit page-sized sections by DocumentView. Its table
     // planner already accounts for the leading content on page 1, so applying the document-wide
     // footnote reserve again would incorrectly shrink every later table segment. The compositor
@@ -282,11 +271,22 @@ static void RenderDocumentComposite(
             .BuildTableLayoutPlan(table, page: doc.Page, firstPageLeadingContentHeightDip: 0)
             .Pagination.Pages.Count > 1);
     var bodyFootnoteReserveDip = hasMultiPageTable ? 0 : footnoteReserveDip;
+    // Word lets the last body line use the lower part of the nominal bottom margin while the
+    // footer remains in its own half-inch band. A small overlap keeps WPF's paragraph-bottom
+    // margin from moving a complete two-line paragraph to the next page.
+    const double FooterBodyOverlapDip = 12.0;
+    var hasFooterContent = doc.FinalSectionHeadersFooters.Footer is { IsEmpty: false }
+        || doc.FinalSectionHeadersFooters.EvenFooter is { IsEmpty: false }
+        || doc.FinalSectionHeadersFooters.FirstFooter is { IsEmpty: false }
+        || doc.Sections.Any(section =>
+            section.HeadersFooters.Footer is { IsEmpty: false }
+            || section.HeadersFooters.EvenFooter is { IsEmpty: false }
+            || section.HeadersFooters.FirstFooter is { IsEmpty: false });
     flow.PagePadding = new Thickness(
         marginLeft,
-        marginTop + (hasHeaderContent ? HeaderBodyReserveDip : 0),
+        marginTop,
         marginRight,
-        marginBottom + bodyFootnoteReserveDip);
+        Math.Max(0, marginBottom + bodyFootnoteReserveDip - (hasFooterContent ? FooterBodyOverlapDip : 0)));
 
     // Layer 2: call ApplyColumnLayout so multi-column sections render with the correct column count.
     // The old path hard-coded ColumnWidth=pageW (single column). This fixes that miss.
@@ -587,7 +587,7 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, thisMarginTop + 2,
+                                null, new Rect(thisMarginLeft, Math.Max(0, thisMarginTop - hfH - 12),
                                     thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
@@ -610,7 +610,7 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, thisPixH - thisMarginBottom + 2,
+                                null, new Rect(thisMarginLeft, thisPixH - thisMarginBottom + 16,
                                     thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
