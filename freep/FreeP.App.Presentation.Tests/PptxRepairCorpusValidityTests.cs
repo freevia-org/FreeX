@@ -3,7 +3,9 @@ using System.Xml.Linq;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Validation;
+using FreeP.App.Compositor;
 using FreeP.Core.IO;
+using FreeP.Core.Model;
 
 namespace FreeP.App.Compositor.Tests;
 
@@ -112,6 +114,25 @@ public sealed class PptxRepairCorpusValidityTests
         chords[1].PresetGeometryAdjustments["adj2"].Should().Be(11968272);
         chords[2].PresetGeometryAdjustments["adj1"].Should().Be(16200000);
         chords[2].PresetGeometryAdjustments["adj2"].Should().Be(16200000);
+    }
+
+    [Fact]
+    public void SmartArtLiveCorpus_ComposesCachedProcessBackgroundAsOfficeNeutral()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+
+        var shapes = SlideCompositor.Compose(presentation, presentation.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .ToArray();
+
+        var backgroundEllipses = shapes
+            .Select(shape => shape.Fill)
+            .OfType<ResolvedFill.Solid>()
+            .Where(fill => fill.Color == SrgbColor.FromRgb(0xCCD2D8))
+            .ToArray();
+
+        backgroundEllipses.Should().HaveCount(3);
     }
 
     [Fact]
