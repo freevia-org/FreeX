@@ -13,11 +13,6 @@ namespace FreeW.App.Host.Editing;
 /// </summary>
 internal static class PaginationEngine
 {
-    // WPF's FlowDocument paginator needs a small printable-frame clearance in addition to the
-    // measured note rows. Word keeps the body frame above that clearance, which is what makes a
-    // reference near the bottom of a page move together with its footnote.
-    private const double FootnoteFrameClearanceDip = 24.0;
-
     /// <summary>
     /// Paginates <paramref name="editor"/>'s current content at the model's page geometry and returns
     /// the page count and inter-page Y offsets in the editor's DIP coordinate space.
@@ -42,7 +37,6 @@ internal static class PaginationEngine
     {
         // --- Step 1: paginate a scratch clone via the authoritative print path ------------------
         var flow = PrintLayout.BuildPaginatedDocument(editor);
-        ApplyFootnoteBodyReserve(flow, editor.Model);
 
         // Post-process: a NextPage/EvenPage/OddPage section break is stored on the last paragraph
         // of the *preceding* section (the FreeW/docx convention). The XAML round-trip in
@@ -265,7 +259,6 @@ internal static class PaginationEngine
         try
         {
             flow = PrintLayout.BuildPaginatedDocument(editor);
-            ApplyFootnoteBodyReserve(flow, editor.Model);
             ApplySectionBreakFlags(editor, flow);
 
             var page = editor.Model.Page;
@@ -322,28 +315,6 @@ internal static class PaginationEngine
         }
 
         return assignment;
-    }
-
-    private static void ApplyFootnoteBodyReserve(FlowDocument flow, TextDocument document)
-    {
-        if (document.Footnotes.Count == 0)
-            return;
-
-        var (_, contentWidthDip) = PageLayout.ContentAreaDip(document.Page);
-        var noteIds = document.Footnotes.Keys.OrderBy(id => id).ToList();
-        var notePlan = DocumentNoteRegionPlanner.BuildFootnoteRegion(
-            document,
-            noteIds,
-            pageNumber: 1,
-            contentWidthDip);
-        if (notePlan.EstimatedHeightDip <= 0)
-            return;
-
-        flow.PagePadding = new Thickness(
-            flow.PagePadding.Left,
-            flow.PagePadding.Top,
-            flow.PagePadding.Right,
-            flow.PagePadding.Bottom + notePlan.EstimatedHeightDip + FootnoteFrameClearanceDip);
     }
 
     private static void ApplySectionBreakFlags(DocumentView editor, FlowDocument flow)
