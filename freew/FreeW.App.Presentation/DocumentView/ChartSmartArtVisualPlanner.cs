@@ -526,7 +526,9 @@ public static class ChartSmartArtVisualPlanner
             if (chart.Kind == ChartKind.Column)
             {
                 var groupWidth = plot.Width / cats;
-                var pad = Math.Max(1, groupWidth * 0.1);
+                // Word leaves a broad gap around clustered columns.  A 30% group inset gives a single
+                // series the roughly 40% slot width used by Word's default column chart layout.
+                var pad = Math.Max(1, groupWidth * 0.3);
                 var seriesWidth = Math.Max(1, (groupWidth - 2 * pad) / seriesCount);
                 var zeroY = plot.Bottom - axis.ZeroFraction * plot.Height;
                 for (var category = 0; category < cats; category++)
