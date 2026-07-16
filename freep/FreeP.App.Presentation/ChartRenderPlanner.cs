@@ -1608,7 +1608,8 @@ public static partial class ChartRenderPlanner
             else
             {
                 double y = plot.Bottom - plot.Height * index / steps +
-                    (UsesImportedCartesianAxisStrokes(chart) || UsesImportedComboDefaults(chart)
+                    ((UsesImportedCartesianAxisStrokes(chart) && chart.ChartType != ChartType.Stock) ||
+                        UsesImportedComboDefaults(chart)
                         ? ImportedCartesianGridLinePixelOffset
                         : 0.0);
                 lines.Add(new ChartGridLinePlan(

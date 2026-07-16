@@ -31,6 +31,15 @@ public sealed class ChartBaselineCorpusTests
             Thickness: 1.0);
 
         scene.GridLines.Stroke.Should().Be(expectedStroke);
+        scene.GridLines.GridLines.Should().HaveCount(14,
+            "PowerPoint renders ten stock value lines plus four category boundaries");
+        var stockValueGridLines = scene.GridLines.GridLines.Take(10).ToArray();
+        stockValueGridLines[0].Start.Y
+            .Should().BeApproximately(scene.Frame.Plot.Bottom, 0.0001,
+                "PowerPoint rasterizes imported stock value gridlines on integer pixel rows");
+        stockValueGridLines[^1].Start.Y
+            .Should().BeApproximately(scene.Frame.Plot.Y, 0.0001,
+                "the imported stock value grid spans the complete plot height");
         scene.AxisTicks.Stroke.Should().Be(expectedStroke);
         scene.AxisTicks.CategoryTicks.Should().HaveCount(7,
             "PowerPoint renders three category-center ticks plus four minor boundary ticks");
