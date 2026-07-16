@@ -1142,6 +1142,7 @@ public static class TableCellEditPlanner
         ItalicSet = source.ItalicSet,
         Underline = source.Underline,
         Strikethrough = source.Strikethrough,
+        Caps = source.Caps,
         Color = source.Color,
         Hyperlink = source.Hyperlink,
         Field = source.Field,
@@ -1161,6 +1162,7 @@ public static class TableCellEditPlanner
         && a.ItalicSet == b.ItalicSet
         && a.Underline == b.Underline
         && a.Strikethrough == b.Strikethrough
+        && a.Caps == b.Caps
         && TextBodyModelCloner.ColorsEqual(a.Color, b.Color)
         && a.Hyperlink == b.Hyperlink
         && a.Field == b.Field

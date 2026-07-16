@@ -3718,6 +3718,8 @@ public static class PptxPackageWriter
         else if (run.Italic) rPr.Add(new XAttribute("i", "1"));
         if (run.Underline) rPr.Add(new XAttribute("u", "sng"));
         if (run.Strikethrough) rPr.Add(new XAttribute("strike", "sngStrike"));
+        if (run.Caps != RunTextCaps.None)
+            rPr.Add(new XAttribute("cap", run.Caps == RunTextCaps.All ? "all" : "small"));
         if (run.FontSizePt.HasValue)
             rPr.Add(new XAttribute("sz", (int)Math.Round(run.FontSizePt.Value * 100)));
 

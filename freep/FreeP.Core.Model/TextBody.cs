@@ -234,6 +234,14 @@ public sealed class RunTextSoftEdge
     public double RadiusPt { get; set; }
 }
 
+/// <summary>DrawingML character capitalization.</summary>
+public enum RunTextCaps
+{
+    None,
+    Small,
+    All,
+}
+
 /// <summary>
 /// A single text run: a span of text with uniform character properties.
 /// </summary>
@@ -266,6 +274,7 @@ public sealed class Run
 
     public bool Underline { get; set; }
     public bool Strikethrough { get; set; }
+    public RunTextCaps Caps { get; set; }
 
     /// <summary>Run color, or null to inherit.</summary>
     public ThemeAwareColor? Color { get; set; }
