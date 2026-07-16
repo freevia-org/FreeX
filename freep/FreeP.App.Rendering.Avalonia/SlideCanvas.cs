@@ -2204,6 +2204,27 @@ public sealed class SlideCanvas : Control
                     case TextRunEffectPass.Reflection reflection:
                     {
                         using var transformScope = dc.PushTransform(BuildTextReflectionMatrix(reflection, plan.GlyphBoundsDip));
+                        double reflectionScale = Math.Abs(reflection.ScaleY) < 0.001 ? 1.0 : Math.Abs(reflection.ScaleY);
+                        double reflectionY = reflection.ScaleY < 0
+                            ? plan.GlyphBoundsDip.Y + plan.GlyphBoundsDip.Height + reflection.OffsetY
+                            : plan.GlyphBoundsDip.Y + reflection.OffsetY;
+                        var reflectionMask = new LinearGradientBrush
+                        {
+                            StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
+                            EndPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative),
+                            GradientStops = new GradientStops
+                            {
+                                new AvGradientStop(Colors.White, 0),
+                                new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1),
+                            }
+                        };
+                        using var maskScope = dc.PushOpacityMask(
+                            reflectionMask,
+                            new Rect(
+                                plan.GlyphBoundsDip.X + reflection.OffsetX,
+                                reflectionY,
+                                plan.GlyphBoundsDip.Width,
+                                plan.GlyphBoundsDip.Height * reflectionScale));
                         using var opacityScope = dc.PushOpacity(reflection.Alpha / 255.0);
                         dc.DrawGeometry(MakeFillBrushForText(reflection.FillBrush), null, geo);
                         break;

@@ -731,6 +731,7 @@ public sealed class WordArtTests : IDisposable
             source.Should().Contain("TextRunEffectRenderPlanner.Plan(");
             source.Should().Contain("case TextRunEffectPass.Glow");
             source.Should().Contain("case TextRunEffectPass.SoftEdge");
+            source.Should().Contain("PushOpacityMask");
             source.Should().NotContain("TextShadow is { } ts");
             source.Should().NotContain("TextGlow is { }");
             source.Should().NotContain("TextSoftEdge is { }");
