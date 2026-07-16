@@ -90,6 +90,21 @@ public sealed class ChartSmartArtVisualPlannerTests
             ChartSceneMarkerKind.Square,
             ChartSceneMarkerKind.Triangle,
             ChartSceneMarkerKind.Cross);
+        scatterScene.Markers.Select(marker => marker.FillHex).Should().ContainInOrder(
+            "#214A82", "#2E5FAA", "#4472C4", "#6C8FD1");
+    }
+
+    [Fact]
+    public void ChartScene_ScatterUsesWordMarkerPaletteEvenWhenAuthoredSchemeIsColorful()
+    {
+        var chart = Chart.Create(ChartKind.Scatter, ["155", "160", "165", "170"], [52, 58, 62, 66]);
+        chart.ColorSchemeId = "colorful1";
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 300, 200);
+
+        scene.PaletteHex.Take(4).Should().Equal("#214A82", "#2E5FAA", "#4472C4", "#6C8FD1");
+        scene.Markers.Select(marker => marker.FillHex).Should().Equal(
+            "#214A82", "#2E5FAA", "#4472C4", "#6C8FD1");
     }
 
     [Fact]

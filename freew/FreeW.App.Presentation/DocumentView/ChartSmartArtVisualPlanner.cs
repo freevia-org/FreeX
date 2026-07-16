@@ -363,6 +363,8 @@ public static class ChartSmartArtVisualPlanner
     // These values are calibrated against the live Word COM raster for the authored native gallery probes.
     private const double WordOrgChartRenderedTextSizePt = 22;
     private const double WordPyramidRenderedTextSizePt = 14;
+    private static readonly IReadOnlyList<string> WordScatterMarkerPaletteHex =
+        ChartColorScheme.FindById("mono-blue")!.Colors;
 
     public static ChartVisualPlan BuildChartPlan(Chart chart)
     {
@@ -433,6 +435,11 @@ public static class ChartSmartArtVisualPlanner
         ArgumentNullException.ThrowIfNull(chart);
 
         var plan = BuildChartPlan(chart);
+        // Word's marker-only scatter style ignores c:dPt fills and uses its built-in blue progression.
+        // Keep the authored scheme in the plan for round-trip semantics, but match Word in the scene.
+        var scenePalette = chart.Kind == ChartKind.Scatter
+            ? WordScatterMarkerPaletteHex
+            : plan.PaletteHex;
         var frame = new ChartSceneRect(0, 0, Math.Max(24, width), Math.Max(24, height));
         var isPie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
         var categoryCount = Math.Max(
@@ -625,7 +632,7 @@ public static class ChartSmartArtVisualPlanner
                         var y = plot.Bottom - axis.ValueFraction(plan.Series[series].Values[category]) * plot.Height;
                         var paletteIndex = plan.Series.Count == 1 ? category : series;
                         markers.Add(new ChartSceneMarker(x, y, 4, (ChartSceneMarkerKind)(category % 4),
-                            plan.PaletteHex[paletteIndex % plan.PaletteHex.Count]));
+                            scenePalette[paletteIndex % scenePalette.Count]));
                         if (plan.ShowDataLabels)
                             AddDataText(texts, plan.Series[series].Values[category], x + 6, y - 10);
                     }
@@ -740,7 +747,7 @@ public static class ChartSmartArtVisualPlanner
 
         return new ChartScene(chart.Kind, plan.GeometryKind, frame, plot,
             plan.PlotAreaFill && !isPie ? "#D9E2F3" : null,
-            plan.PaletteHex, chart.Categories.ToList(), plan.Series.Count,
+            scenePalette, chart.Categories.ToList(), plan.Series.Count,
             gridLines, axisLines, bars, lineSeries, markers, slices, texts, legend);
     }
 
