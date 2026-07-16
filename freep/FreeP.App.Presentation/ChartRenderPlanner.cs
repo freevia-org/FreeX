@@ -559,6 +559,8 @@ public static partial class ChartRenderPlanner
     public const double ImportedCartesianCategoryLabelOffset = 16.0;
     public const double ImportedCartesianValueLabelRightGap = 22.0;
     public const double ImportedCartesianValueLabelVerticalOffset = 13.0;
+    public const double ImportedSurfacePointOffsetX = 2.0;
+    public const double ImportedSurfacePointOffsetY = -4.0;
     public const double LineMarkerRadius = 3.0;
     public const double ImportedLineMarkerRadius = 5.0;
     public const double LineMarkerStrokeThickness = 0.75;
@@ -2951,7 +2953,9 @@ public static partial class ChartRenderPlanner
         double x = plot.X + categoryT * categoryWidth + seriesT * depthX;
         double y = plot.Bottom + categoryT * categorySlopeY - seriesT * depthY - normalized * lift;
 
-        return new ChartPlanPoint(Math.Round(x, 4), Math.Round(y, 4));
+        return new ChartPlanPoint(
+            Math.Round(x + (usesImportedTextMetrics ? ImportedSurfacePointOffsetX : 0.0), 4),
+            Math.Round(y + (usesImportedTextMetrics ? ImportedSurfacePointOffsetY : 0.0), 4));
     }
 
     private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceFrameSegments(

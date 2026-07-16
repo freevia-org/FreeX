@@ -356,7 +356,7 @@ public sealed class ChartBaselineCorpusTests
             surface,
             new ChartPlanRect(0, 0, 360, 189));
         surfaceGeometry.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 0).Point.Y
-            .Should().BeApproximately(146.5, 0.0001,
+            .Should().BeApproximately(142.5, 0.0001,
                 "Surface3D height follows the PowerPoint value axis instead of normalizing to the smallest data value");
         surfaceGeometry.Facets.Should().HaveCount(4);
         surfaceGeometry.WireframeSegments.Should().HaveCountGreaterThan(surfaceGeometry.Facets.Count);
@@ -372,13 +372,13 @@ public sealed class ChartBaselineCorpusTests
             .ToArray();
         firstSurfaceCellFacets.Should().HaveCount(2);
         firstSurfaceCellFacets[0].Points.Select(point => point.X)
-            .Should().Equal(new[] { 0.0, 147.6, 62.0 },
+            .Should().Equal(new[] { 2.0, 149.6, 64.0 },
                 "PowerPoint splits the first imported surface cell along the 0-3 diagonal");
         firstSurfaceCellFacets[1].Points.Select(point => point.X)
-            .Should().Equal(new[] { 147.6, 194.8, 62.0 },
+            .Should().Equal(new[] { 149.6, 196.8, 64.0 },
                 "the paired imported surface triangle shares the alternate diagonal");
         surfaceGeometry.Points.Single(point => point.SeriesIndex == 2 && point.CategoryIndex == 0).Point.X
-            .Should().BeApproximately(124.0, 0.0001,
+            .Should().BeApproximately(126.0, 0.0001,
                 "PowerPoint's rear-left surface vertex follows the projected frame depth wall");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255,
             "PowerPoint's imported Surface3D facets are opaque fills");
