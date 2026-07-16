@@ -18,6 +18,7 @@ function Assert-ToolSourceCentralization {
             "function Test-ToolPathRooted",
             "function ConvertTo-ToolPlatformPath",
             "function Resolve-ToolFullPath",
+            "function Resolve-ToolProviderPath",
             "function Resolve-InputPath",
             "function Get-ToolRelativePath",
             "function ConvertTo-ToolNormalizedRelativePath",
@@ -98,9 +99,21 @@ function Assert-ToolSourceCentralization {
 
     $repoRoot = Split-Path -Parent $ToolRoot
     $orderedToolScripts = [ordered]@{
-        "freew-fidelity-corpus\tools\Run-FreeWVisualEvidence.ps1" = @("Resolve-RepositoryPath", "Invoke-DotNetStep", "Invoke-PowerShellStep")
-        "tools\Run-FreeWWordBaselineEvidence.ps1" = @("Resolve-FullPath", "Invoke-DotNetRun", "Invoke-DotNetBuild", "Invoke-DotNetRunNoBuild")
-        "tools\FreeW.RenderCompare\Export-WordPdfsVisible.ps1" = @("Resolve-FullPath")
+        "freew-fidelity-corpus\tools\Run-FreeWVisualEvidence.ps1" = [ordered]@{
+            ForbiddenDeclarations = @("Resolve-RepositoryPath")
+            RequiredPathCalls = @('Resolve-ToolFullPath (Join-Path $scriptDir "..\..")', 'Resolve-ToolRepoPath -Path $OutDir -RepoRoot $repoRoot')
+            RequiredProcessCalls = @("Invoke-DotNetStep", "Invoke-PowerShellStep")
+        }
+        "tools\Run-FreeWWordBaselineEvidence.ps1" = [ordered]@{
+            ForbiddenDeclarations = @("Resolve-FullPath")
+            RequiredPathCalls = @('Resolve-ToolProviderPath (Join-Path $PSScriptRoot "..")', 'Resolve-ToolProviderPath $RunRoot')
+            RequiredProcessCalls = @("Invoke-DotNetRun", "Invoke-DotNetBuild", "Invoke-DotNetRunNoBuild")
+        }
+        "tools\FreeW.RenderCompare\Export-WordPdfsVisible.ps1" = [ordered]@{
+            ForbiddenDeclarations = @("Resolve-FullPath")
+            RequiredPathCalls = @('Resolve-ToolProviderPath $CorpusDir', 'Resolve-ToolProviderPath $OutDir')
+            RequiredProcessCalls = @()
+        }
     }
     foreach ($entry in $orderedToolScripts.GetEnumerator()) {
         $scriptPath = Join-Path $repoRoot $entry.Key
@@ -109,9 +122,21 @@ function Assert-ToolSourceCentralization {
             throw "$($entry.Key) must dot-source ToolScriptSupport.ps1."
         }
 
-        foreach ($helperName in $entry.Value) {
+        foreach ($helperName in $entry.Value.ForbiddenDeclarations) {
             if ($script -match "function\s+$([regex]::Escape($helperName))\b") {
                 throw "$($entry.Key) redeclares shared helper '$helperName'."
+            }
+        }
+
+        foreach ($pathCall in $entry.Value.RequiredPathCalls) {
+            if (-not $script.Contains($pathCall)) {
+                throw "$($entry.Key) must call shared path helper with '$pathCall'."
+            }
+        }
+
+        foreach ($processCall in $entry.Value.RequiredProcessCalls) {
+            if ($script -notmatch "(?m)^\s*$([regex]::Escape($processCall))(?:\s|`$)") {
+                throw "$($entry.Key) must call shared process helper '$processCall'."
             }
         }
     }
@@ -316,6 +341,26 @@ function Assert-SharedToolHelperBehavior {
     Write-Host "Validated shared repository helper behavior."
 }
 
+function Assert-ToolProviderPathBehavior {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    . (Join-Path $ToolRoot "ToolScriptSupport.ps1")
+    $probeRelativePath = "freex-provider-path-probe\child"
+    $expectedTildePath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("~\$probeRelativePath")
+    $resolvedTildePath = Resolve-ToolProviderPath "~\$probeRelativePath"
+    if (-not $resolvedTildePath.Equals($expectedTildePath, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Resolve-ToolProviderPath did not preserve tilde expansion: '$resolvedTildePath' versus '$expectedTildePath'."
+    }
+
+    $expectedProviderPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("FileSystem::~\$probeRelativePath")
+    $resolvedProviderPath = Resolve-ToolProviderPath "FileSystem::~\$probeRelativePath"
+    if (-not $resolvedProviderPath.Equals($expectedProviderPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Resolve-ToolProviderPath did not preserve provider-qualified path resolution: '$resolvedProviderPath' versus '$expectedProviderPath'."
+    }
+
+    Write-Host "Validated provider-path and tilde resolution behavior."
+}
+
 function Assert-ToolProcessBehavior {
     param([Parameter(Mandatory = $true)][string]$ToolRoot)
 
@@ -324,8 +369,12 @@ function Assert-ToolProcessBehavior {
     $cwdRoot = Join-Path $tempRoot "cwd-root"
     $syntheticRepoRoot = Join-Path $tempRoot "repo-root"
     $workingRoot = Join-Path $tempRoot "working-root"
-    New-Item -ItemType Directory -Force -Path $cwdRoot, $syntheticRepoRoot, $workingRoot | Out-Null
+    $shimRoot = Join-Path $tempRoot "shims"
+    New-Item -ItemType Directory -Force -Path $cwdRoot, $syntheticRepoRoot, $workingRoot, $shimRoot | Out-Null
     $originalLocation = Get-Location
+    $previousPath = $env:Path
+    $previousProcessOutput = $env:FREEX_TOOL_PROCESS_OUTPUT
+    $previousProcessExitCode = $env:FREEX_TOOL_PROCESS_EXIT_CODE
     try {
         Set-Location -LiteralPath $cwdRoot
         $cwdResolved = Resolve-ToolFullPath -Path "child\cwd.txt"
@@ -382,6 +431,77 @@ Write-Output "synthetic stdout"
             throw "Invoke-ToolProcess did not restore the parent working directory."
         }
 
+        $capturePath = Join-Path $shimRoot "capture-process.ps1"
+        $wrapperOutputPath = Join-Path $tempRoot "wrapper-output.json"
+        @'
+$outputPath = $env:FREEX_TOOL_PROCESS_OUTPUT
+[ordered]@{
+    WorkingDirectory = (Get-Location).Path
+    Arguments = @($args)
+} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $outputPath
+exit ([int]$env:FREEX_TOOL_PROCESS_EXIT_CODE)
+'@ | Set-Content -LiteralPath $capturePath -Encoding UTF8
+
+        $syntheticShimPath = Join-Path $shimRoot "synthetic-tool.cmd"
+        @"
+@echo off
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$capturePath" %*
+exit /b %ERRORLEVEL%
+"@ | Set-Content -LiteralPath $syntheticShimPath -Encoding ASCII
+        $targetScriptPath = Join-Path $tempRoot "synthetic-target.ps1"
+        New-Item -ItemType File -Path $targetScriptPath | Out-Null
+        $env:Path = "$shimRoot;$previousPath"
+        $env:FREEX_TOOL_PROCESS_OUTPUT = $wrapperOutputPath
+        $env:FREEX_TOOL_PROCESS_EXIT_CODE = "0"
+
+        $assertWrapperCapture = {
+            param([string]$Label, [string[]]$ExpectedArguments)
+            $capture = Get-Content -LiteralPath $wrapperOutputPath -Raw | ConvertFrom-Json
+            $actualArguments = @($capture.Arguments | ForEach-Object { [string]$_ })
+            $expectedSerialized = $ExpectedArguments -join "`0"
+            $actualSerialized = $actualArguments -join "`0"
+            if (-not [System.IO.Path]::GetFullPath($capture.WorkingDirectory).Equals([System.IO.Path]::GetFullPath($workingRoot), [System.StringComparison]::OrdinalIgnoreCase) -or
+                $actualSerialized -cne $expectedSerialized) {
+                throw "$Label did not preserve wrapper argument ordering or working directory: $($capture | ConvertTo-Json -Compress)."
+            }
+        }
+
+        Invoke-DotNetRun "project.csproj" @("--sample", "value with spaces") "Debug" $workingRoot $syntheticShimPath
+        & $assertWrapperCapture "Invoke-DotNetRun" @("run", "--project", "project.csproj", "--configuration", "Debug", "--", "--sample", "value with spaces")
+
+        Invoke-DotNetBuild "project.csproj" "Debug" $workingRoot $syntheticShimPath
+        & $assertWrapperCapture "Invoke-DotNetBuild" @("build", "project.csproj", "--configuration", "Debug")
+
+        Invoke-DotNetRunNoBuild "project.csproj" @("--sample", "value with spaces") "Debug" $workingRoot $syntheticShimPath
+        & $assertWrapperCapture "Invoke-DotNetRunNoBuild" @("run", "--no-restore", "--no-build", "--project", "project.csproj", "--configuration", "Debug", "--", "--sample", "value with spaces")
+
+        Invoke-PowerShellStep "Synthetic PowerShell step" $targetScriptPath @("--sample", "value with spaces") $workingRoot $syntheticShimPath
+        & $assertWrapperCapture "Invoke-PowerShellStep" @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $targetScriptPath, "--sample", "value with spaces")
+
+        $env:FREEX_TOOL_PROCESS_EXIT_CODE = "23"
+        $dotNetFailure = $null
+        try {
+            Invoke-DotNetRun "project.csproj" @() "Debug" $workingRoot $syntheticShimPath
+        }
+        catch {
+            $dotNetFailure = $_.Exception.Message
+        }
+        if ($dotNetFailure -ne "dotnet run failed for project.csproj with exit code 23") {
+            throw "Invoke-DotNetRun did not preserve synthetic nonzero failure behavior: '$dotNetFailure'."
+        }
+
+        $env:FREEX_TOOL_PROCESS_EXIT_CODE = "29"
+        $powerShellFailure = $null
+        try {
+            Invoke-PowerShellStep "Synthetic PowerShell failure" $targetScriptPath @() $workingRoot $syntheticShimPath
+        }
+        catch {
+            $powerShellFailure = $_.Exception.Message
+        }
+        if ($powerShellFailure -ne "Synthetic PowerShell failure with exit code 29") {
+            throw "Invoke-PowerShellStep did not preserve synthetic nonzero failure behavior: '$powerShellFailure'."
+        }
+
         $nonzeroMessage = $null
         try {
             Invoke-ToolProcess `
@@ -398,6 +518,24 @@ Write-Output "synthetic stdout"
         }
     }
     finally {
+        if ($null -eq $previousPath) {
+            Remove-Item Env:Path -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:Path = $previousPath
+        }
+        if ($null -eq $previousProcessOutput) {
+            Remove-Item Env:FREEX_TOOL_PROCESS_OUTPUT -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:FREEX_TOOL_PROCESS_OUTPUT = $previousProcessOutput
+        }
+        if ($null -eq $previousProcessExitCode) {
+            Remove-Item Env:FREEX_TOOL_PROCESS_EXIT_CODE -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:FREEX_TOOL_PROCESS_EXIT_CODE = $previousProcessExitCode
+        }
         Set-Location $originalLocation
         Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
     }
@@ -581,6 +719,7 @@ if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgno
     Assert-ToolSourceCentralization -ToolRoot $resolvedDirectory
     Assert-ScreenshotCaptureSupportBehavior -ToolRoot $resolvedDirectory
     Assert-SharedToolHelperBehavior -RepoRoot $repoRoot
+    Assert-ToolProviderPathBehavior -ToolRoot $resolvedDirectory
     Assert-ToolProcessBehavior -ToolRoot $resolvedDirectory
     Assert-GeneratedDocCheckNewlineSemantics -ToolRoot $resolvedDirectory
     Assert-FidelityCorpusDownloaderBehavior -ToolRoot $resolvedDirectory

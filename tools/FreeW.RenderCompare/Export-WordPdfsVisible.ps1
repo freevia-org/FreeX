@@ -187,8 +187,8 @@ function Get-WordApplication {
     }
 }
 
-$corpusDirFull = Resolve-ToolFullPath $CorpusDir
-$outDirFull = Resolve-ToolFullPath $OutDir
+$corpusDirFull = Resolve-ToolProviderPath $CorpusDir
+$outDirFull = Resolve-ToolProviderPath $OutDir
 $logPath = Join-Path $outDirFull 'word-export-visible-ui.csv'
 New-Item -ItemType Directory -Force -Path $outDirFull | Out-Null
 

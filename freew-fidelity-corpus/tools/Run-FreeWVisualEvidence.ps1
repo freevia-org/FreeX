@@ -92,7 +92,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 . (Join-Path $scriptDir '..\..\tools\ToolScriptSupport.ps1')
-$repoRoot = Resolve-ToolFullPath (Join-Path $scriptDir '..\..')
+$repoRoot = Resolve-ToolFullPath (Join-Path $scriptDir "..\..")
 
 if (-not $OutDir) {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'

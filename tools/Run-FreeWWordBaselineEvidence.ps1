@@ -183,8 +183,8 @@ function Write-WordBaselineUnavailableSummary([string]$Reason) {
     exit 0
 }
 
-$repoRoot = Resolve-ToolFullPath (Join-Path $PSScriptRoot "..")
-$runRootFull = Resolve-ToolFullPath $RunRoot
+$repoRoot = Resolve-ToolProviderPath (Join-Path $PSScriptRoot "..")
+$runRootFull = Resolve-ToolProviderPath $RunRoot
 $fixtureDir = Join-Path $runRootFull "fixtures"
 $wpfDir = Join-Path $runRootFull "wpf"
 $avaloniaDir = Join-Path $runRootFull "avalonia"
