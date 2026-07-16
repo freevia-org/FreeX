@@ -219,9 +219,10 @@ foreach ($configName in @('freex.conf', 'freew.conf')) {
     $newScriptLineCount += (Get-Content -LiteralPath (Join-Path $repoRoot "tools/packaging/linux/$configName")).Count
 }
 
-# Fixed counts are the reviewed pre-dedup fixture; this keeps the reduction assertion independent of moving refs.
-$baselineLineCount = 543
-Assert-Packaging ($newScriptLineCount -lt $baselineLineCount) "Linux packaging source no longer has a net reduction: $newScriptLineCount new lines vs $baselineLineCount fixed baseline lines."
+# Fixed count is the reviewed six-script pre-dedup fixture, independent of moving refs.
+$baselineLineCount = 637
+$reductionPercent = 100.0 * ($baselineLineCount - $newScriptLineCount) / $baselineLineCount
+Assert-Packaging ($reductionPercent -ge 15) "Linux packaging source reduction fell below 15%: $newScriptLineCount new lines vs $baselineLineCount baseline lines."
 
 $configExpectations = @{
     "freex.conf" = @{ product_key = "freex"; display_name = "FreeX"; binary_name = "FreeX"; launcher_name = "freex"; library_dir = "freex"; app_id = "io.github.tony-xmelon.freex"; appimage_prefix = "FreeX"; stage_prefix = "freex"; package_name = "freex"; cache_mime = "true"; mime_asset = "io.github.tony-xmelon.freex.xml" }
