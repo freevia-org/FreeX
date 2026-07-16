@@ -12854,23 +12854,16 @@ public sealed class DocumentView : RichTextBox
         CommitToModel();
 
         var sourceBlock = CaretBlockIndex();
-        var resolved = target;
-        var fieldKind = CrossReferences.FieldKindFor(type, insertAs);
+        var plan = CrossReferences.PlanInsertion(_model, type, target, insertAs, hyperlink, sourceBlock);
 
-        // Body targets (REF/PAGEREF) need a bookmark anchor to resolve; ensure one on the target paragraph.
-        if (fieldKind != CrossRefFieldKind.NoteRef
-            && string.IsNullOrEmpty(resolved.Anchor)
-            && resolved.BlockIndex is { } targetBlock
-            && targetBlock >= 0 && targetBlock < _model.Blocks.Count
+        // The shared plan chooses the anchor; WPF owns the direct model mutation and keeps the existing
+        // commit/render lifecycle intact.
+        if (plan.BookmarkNameToAdd is { } anchor
+            && plan.Target.BlockIndex is { } targetBlock
             && _model.Blocks[targetBlock] is ModelParagraph targetParagraph)
         {
-            var anchor = EnsureCrossReferenceAnchor(targetParagraph);
-            resolved = resolved with { Anchor = anchor };
+            targetParagraph.BookmarkName = anchor;
         }
-
-        var field = CrossReferences.BuildField(type, resolved, insertAs, hyperlink);
-        var cached = CrossReferences.ResolveText(_model, type, resolved, insertAs, sourceBlock);
-        var run = ModelRun.CrossReferenceFieldRun(field, cached);
 
         // Append the field run to the caret's paragraph in the model (or the last paragraph / a fresh one),
         // then re-render. Working at the model level keeps the just-added target bookmark from being clobbered
@@ -12882,33 +12875,8 @@ public sealed class DocumentView : RichTextBox
             if (!_model.Blocks.Contains(host))
                 _model.Blocks.Add(host);
         }
-        host.Runs.Add(run);
+        host.Runs.Add(plan.FieldRun);
         Render();
-    }
-
-    // Returns the target paragraph's existing bookmark name, or assigns a fresh hidden "_Ref<n>" one (the
-    // smallest unused index) so a cross-reference field can resolve to it — mirroring Word's auto-bookmarks.
-    private string EnsureCrossReferenceAnchor(ModelParagraph paragraph)
-    {
-        if (paragraph.BookmarkName is { Length: > 0 } existing)
-            return existing;
-
-        var used = new HashSet<string>(
-            _model.Blocks.OfType<ModelParagraph>()
-                .Select(p => p.BookmarkName)
-                .Where(n => n is { Length: > 0 })!,
-            StringComparer.Ordinal);
-        var index = 1;
-        string name;
-        do
-        {
-            name = "_Ref" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            index++;
-        }
-        while (used.Contains(name));
-
-        paragraph.BookmarkName = name;
-        return name;
     }
 
     /// <summary>
