@@ -70,6 +70,23 @@ public enum ChartDisplayBlanksAs { Span, Gap, Zero }
 /// <summary>Authored classic 3-D chart family read from OOXML chart-type elements.</summary>
 public enum ChartThreeDStyle { None, Pie, Line, Area, Column, Bar }
 
+/// <summary>Authored chart camera and projection settings from <c>c:view3D</c>.</summary>
+public sealed class Chart3DView
+{
+    /// <summary>Elevation in degrees from <c>c:rotX</c>.</summary>
+    public int? RotationX { get; set; }
+    /// <summary>Azimuth in degrees from <c>c:rotY</c>.</summary>
+    public int? RotationY { get; set; }
+    /// <summary>Whether the chart uses right-angle axes from <c>c:rAngAx</c>.</summary>
+    public bool? RightAngleAxes { get; set; }
+    /// <summary>Perspective strength percentage from <c>c:perspective</c>.</summary>
+    public int? Perspective { get; set; }
+    /// <summary>Chart height percentage from <c>c:hPercent</c>.</summary>
+    public int? HeightPercent { get; set; }
+    /// <summary>Chart depth percentage from <c>c:depthPercent</c>.</summary>
+    public int? DepthPercent { get; set; }
+}
+
 /// <summary>Small modeled subset of OOXML chart <c>c:manualLayout</c>.</summary>
 public sealed class ChartManualLayout
 {
@@ -489,6 +506,9 @@ public sealed class ChartShape
     /// <c>area3DChart</c> without introducing renderer-specific policy.
     /// </summary>
     public ChartThreeDStyle ThreeDStyle { get; set; } = ChartThreeDStyle.None;
+
+    /// <summary>Authored 3-D camera and projection settings, or null when c:view3D was absent.</summary>
+    public Chart3DView? View3D { get; set; }
 
     // ── Type-specific auxiliary fields ───────────────────────────────────────────
 

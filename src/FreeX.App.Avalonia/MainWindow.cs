@@ -379,6 +379,9 @@ public sealed partial class MainWindow : Window
     private static readonly IBrush PrimaryInk = Brush(25, 31, 40);
     private static readonly IBrush SecondaryInk = Brush(94, 103, 116);
     private static readonly IBrush SelectionBorder = Brush(33, 115, 70);
+    private const double SelectionOutlineThickness = 2;
+    private const double AutofillHandleSize = 10;
+    private const double AutofillHandleHitPadding = 6;
     // Shared selection-fill token — byte-identical to the WPF grid's SelectionBrush
     // (GridView.cs: MakeBrushAlpha(32, 33, 115, 70)). A light translucent green laid over the
     // selected range so multi-cell selections read like Windows (a faint green wash that keeps the
@@ -414,6 +417,12 @@ public sealed partial class MainWindow : Window
     // so a screen reader (Orca/AT-SPI, VoiceOver) actually observes a focus change while navigating
     // the grid, instead of focus sitting statically on _sheetGridHost the whole time.
     private Border? _activeCellBorder;
+    private Border? _activeSelectionOutlineVisual;
+    private Border? _autofillHandleVisual;
+    private bool _activeSelectionHasTopEdge;
+    private bool _activeSelectionHasLeftEdge;
+    private bool _activeSelectionHasBottomEdge;
+    private bool _activeSelectionHasRightEdge;
     private readonly ContentControl _sheetTabsHost = new();
     private readonly ScrollViewer _sheetScrollViewer = new();
     private readonly ScrollViewer _sheetTabsScroller = new();
@@ -1516,6 +1525,8 @@ public sealed partial class MainWindow : Window
         _sheetGridHost.Focusable = true;
         AutomationProperties.SetName(_sheetGridHost, "Worksheet");
         AutomationProperties.SetHelpText(_sheetGridHost, "Shows the active workbook sheet.");
+        _sheetGridHost.PointerMoved += SheetGridHost_PointerMoved;
+        _sheetGridHost.PointerExited += (_, _) => _sheetGridHost.Cursor = Cursor.Default;
 
         _sheetScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _sheetScrollViewer.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
@@ -4208,6 +4219,8 @@ public sealed partial class MainWindow : Window
     {
         _activeDataValidationDropdown = null;
         _activeCellBorder = null;
+        _activeSelectionOutlineVisual = null;
+        _autofillHandleVisual = null;
         var viewport = _session.Viewport;
         var showHeadings = _session.ActiveSheet.ShowHeadings;
         var zoomFactor = GetActiveZoomFactor();
@@ -4349,6 +4362,12 @@ public sealed partial class MainWindow : Window
 
         if (splitRowCount > 0 || splitColCount > 0)
             AddSplitPaneDividerOverlayToGrid(grid, rowMetrics, colMetrics, splitRowCount, splitColCount, headerOffset);
+        AddSelectionOverlayToGrid(
+            grid,
+            rowMetrics,
+            colMetrics,
+            headerOffset,
+            zoomFactor);
 
         var overlay = BuildDrawingObjectOverlay(viewport);
         AddDataValidationDropdownOverlay(overlay, viewport, showHeadings, zoomFactor);
@@ -6723,15 +6742,27 @@ public sealed partial class MainWindow : Window
 
     private bool IsPointerOnAutofillHandle(PointerEventArgs args)
     {
-        var pos = args.GetPosition(_sheetGridHost);
+        if (_autofillHandleVisual is not { } handle)
+            return false;
+
+        var size = handle.Bounds.Width > 0 ? handle.Bounds.Width : handle.Width;
+        if (size <= 0)
+            return false;
+
+        var pos = args.GetPosition(handle);
+        var hitPadding = Math.Max(
+            AutofillHandleHitPadding,
+            AutofillHandleHitPadding * GetActiveZoomFactor());
         return GridAutofillPlanner.IsOnHandle(
-            _session.Viewport,
-            _session.SelectedRange,
+            new GridSelectionLayout(
+                new GridRect(-(size / 2), -(size / 2), size, size),
+                HasTopEdge: true,
+                HasLeftEdge: true,
+                HasBottomEdge: true,
+                HasRightEdge: true),
             new GridPoint(pos.X, pos.Y),
-            _session.ActiveSheet.ShowHeadings ? GetRowHeaderWidth(_session.Viewport, GetActiveZoomFactor()) : 0,
-            _session.ActiveSheet.ShowHeadings ? HeaderRowHeight * GetActiveZoomFactor() : 0,
-            handleSize: Math.Max(8, 8 * GetActiveZoomFactor()),
-            hitPadding: Math.Max(5, 5 * GetActiveZoomFactor()));
+            handleSize: size,
+            hitPadding: hitPadding);
     }
 
     private void ContinueAutofillDrag(PointerEventArgs args, CellAddress target)
@@ -6817,15 +6848,30 @@ public sealed partial class MainWindow : Window
 
     private bool IsPointerOnSelectionMoveBorder(PointerEventArgs args)
     {
-        var pos = args.GetPosition(_sheetGridHost);
+        if (IsPointerOnAutofillHandle(args))
+            return false;
+
+        if (_activeSelectionOutlineVisual is not { } outline ||
+            outline.Bounds.Width <= 0 ||
+            outline.Bounds.Height <= 0)
+        {
+            return false;
+        }
+
+        var pos = args.GetPosition(outline);
         var zoomFactor = GetActiveZoomFactor();
+        var layout = new GridSelectionLayout(
+            new GridRect(0, 0, outline.Bounds.Width, outline.Bounds.Height),
+            _activeSelectionHasTopEdge,
+            _activeSelectionHasLeftEdge,
+            _activeSelectionHasBottomEdge,
+            _activeSelectionHasRightEdge);
         return GridSelectionMovePlanner.IsOnMoveBorder(
-            _session.Viewport,
-            _session.SelectedRange,
+            layout,
             _session.SelectedRanges.Count > 1 ? _session.SelectedRanges : null,
             new GridPoint(pos.X, pos.Y),
-            _session.ActiveSheet.ShowHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0,
-            _session.ActiveSheet.ShowHeadings ? HeaderRowHeight * zoomFactor : 0);
+            handleSize: Math.Max(AutofillHandleSize, AutofillHandleSize * zoomFactor),
+            handleHitPadding: Math.Max(AutofillHandleHitPadding, AutofillHandleHitPadding * zoomFactor));
     }
 
     private void ContinueSelectionMoveDrag(PointerEventArgs args, CellAddress target)
@@ -7260,9 +7306,6 @@ public sealed partial class MainWindow : Window
             flowDirection: flowDirection,
             commentDisplay: commentDisplay);
 
-        if (selected)
-            AddSelectionOutlineAdorner(border, address, mergeRegion, zoomFactor);
-
         // Comment/note corner indicator + hover card: mirrors WPF's GridView.Rendering.cs
         // DrawCommentIndicator (small top-right triangle, red for a legacy note, purple for a
         // threaded comment or a cell that mixes both) and GridView.CommentPreview.cs (hover shows
@@ -7298,20 +7341,8 @@ public sealed partial class MainWindow : Window
             _activeCellBorder = border;
         }
 
-        // Excel treats a merged region as a single unit for the fill handle: if the selection's
-        // bottom-right corner lands anywhere inside this cell's merge (not just on the merge's own
-        // anchor), the handle belongs on the merge's rendered Border — otherwise a selection whose
-        // corner resolves to a non-anchor member (which never gets its own Border; see BuildSheetGrid)
-        // would lose the fill-handle affordance entirely.
-        var isAutofillCorner = mergeRegion is { } handleMerge
-            ? handleMerge.Contains(_session.SelectedRange.End)
-            : address == _session.SelectedRange.End;
-        if (isAutofillCorner)
-            AddAutofillHandleAdorner(border, zoomFactor);
-
-        border.Cursor = _borderDrawModeActive
-            ? new Cursor(StandardCursorType.Cross)
-            : new Cursor(StandardCursorType.Hand);
+        if (_borderDrawModeActive)
+            border.Cursor = new Cursor(StandardCursorType.Cross);
         border.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(border);
@@ -7659,114 +7690,163 @@ public sealed partial class MainWindow : Window
         return fontSize;
     }
 
-    private void AddSelectionOutlineAdorner(
-        Border border,
-        CellAddress address,
-        GridRange? mergeRegion,
+    private void AddSelectionOverlayToGrid(
+        AvaloniaGrid grid,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        int headerOffset,
         double zoomFactor)
     {
-        var visualRange = mergeRegion ?? new GridRange(address, address);
-        var top = false;
-        var right = false;
-        var bottom = false;
-        var left = false;
+        var thickness = Math.Max(SelectionOutlineThickness, SelectionOutlineThickness * zoomFactor);
+        var halfThickness = thickness / 2;
 
         foreach (var range in _session.SelectedRanges)
         {
-            if (!range.Overlaps(visualRange))
+            if (range.Start.Sheet != _session.ActiveSheet.Id ||
+                !TryResolveVisibleSelectionGridSpan(
+                    range,
+                    rowMetrics,
+                    colMetrics,
+                    out var rowIndex,
+                    out var rowSpan,
+                    out var colIndex,
+                    out var colSpan,
+                    out var hasTopEdge,
+                    out var hasLeftEdge,
+                    out var hasBottomEdge,
+                    out var hasRightEdge))
+            {
+                continue;
+            }
+
+            var outline = new Border
+            {
+                BorderBrush = SelectionBorder,
+                BorderThickness = new Thickness(
+                    hasLeftEdge ? thickness : 0,
+                    hasTopEdge ? thickness : 0,
+                    hasRightEdge ? thickness : 0,
+                    hasBottomEdge ? thickness : 0),
+                Margin = new Thickness(
+                    hasLeftEdge ? -halfThickness : 0,
+                    hasTopEdge ? -halfThickness : 0,
+                    hasRightEdge ? -halfThickness : 0,
+                    hasBottomEdge ? -halfThickness : 0),
+                IsHitTestVisible = false,
+                ClipToBounds = false,
+                ZIndex = 100,
+            };
+            AutomationProperties.SetAutomationId(outline, "WorksheetSelectionOutline");
+            AvaloniaGrid.SetRow(outline, rowIndex + headerOffset);
+            AvaloniaGrid.SetRowSpan(outline, rowSpan);
+            AvaloniaGrid.SetColumn(outline, colIndex + headerOffset);
+            AvaloniaGrid.SetColumnSpan(outline, colSpan);
+            grid.Children.Add(outline);
+
+            if (!range.Equals(_session.SelectedRange))
                 continue;
 
-            top |= visualRange.Start.Row <= range.Start.Row && range.Start.Row <= visualRange.End.Row;
-            bottom |= visualRange.Start.Row <= range.End.Row && range.End.Row <= visualRange.End.Row;
-            left |= visualRange.Start.Col <= range.Start.Col && range.Start.Col <= visualRange.End.Col;
-            right |= visualRange.Start.Col <= range.End.Col && range.End.Col <= visualRange.End.Col;
+            _activeSelectionOutlineVisual = outline;
+            _activeSelectionHasTopEdge = hasTopEdge;
+            _activeSelectionHasLeftEdge = hasLeftEdge;
+            _activeSelectionHasBottomEdge = hasBottomEdge;
+            _activeSelectionHasRightEdge = hasRightEdge;
+
+            if (!hasRightEdge || !hasBottomEdge)
+                continue;
+
+            var handleSize = Math.Max(AutofillHandleSize, AutofillHandleSize * zoomFactor);
+            var handle = new Border
+            {
+                Width = handleSize,
+                Height = handleSize,
+                Background = Brushes.White,
+                BorderBrush = SelectionBorder,
+                BorderThickness = new Thickness(Math.Max(1, zoomFactor)),
+                HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
+                VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, -(handleSize / 2), -(handleSize / 2)),
+                IsHitTestVisible = false,
+                ClipToBounds = false,
+                ZIndex = 101,
+                Child = new Border
+                {
+                    Background = SelectionBorder,
+                    Margin = new Thickness(Math.Max(1, zoomFactor)),
+                },
+            };
+            AutomationProperties.SetAutomationId(handle, "WorksheetAutofillHandle");
+            AvaloniaGrid.SetRow(handle, rowIndex + rowSpan - 1 + headerOffset);
+            AvaloniaGrid.SetColumn(handle, colIndex + colSpan - 1 + headerOffset);
+            grid.Children.Add(handle);
+            _autofillHandleVisual = handle;
         }
-
-        if (!top && !right && !bottom && !left)
-            return;
-
-        var existing = border.Child;
-        border.Child = null;
-        var layer = new AvaloniaGrid { ClipToBounds = true };
-        layer.Children.Add(existing!);
-
-        var thickness = Math.Max(2, 2 * zoomFactor);
-        if (top)
-            layer.Children.Add(CreateSelectionOutlineEdge(thickness, horizontal: true, start: true));
-        if (right)
-            layer.Children.Add(CreateSelectionOutlineEdge(thickness, horizontal: false, start: false));
-        if (bottom)
-            layer.Children.Add(CreateSelectionOutlineEdge(thickness, horizontal: true, start: false));
-        if (left)
-            layer.Children.Add(CreateSelectionOutlineEdge(thickness, horizontal: false, start: true));
-
-        border.Child = layer;
     }
 
-    private static AvaloniaRectangle CreateSelectionOutlineEdge(
-        double thickness,
-        bool horizontal,
-        bool start) =>
-        new()
-        {
-            Fill = SelectionBorder,
-            Width = horizontal ? double.NaN : thickness,
-            Height = horizontal ? thickness : double.NaN,
-            HorizontalAlignment = horizontal
-                ? AvaloniaHorizontalAlignment.Stretch
-                : start
-                    ? AvaloniaHorizontalAlignment.Left
-                    : AvaloniaHorizontalAlignment.Right,
-            VerticalAlignment = horizontal
-                ? start
-                    ? AvaloniaVerticalAlignment.Top
-                    : AvaloniaVerticalAlignment.Bottom
-                : AvaloniaVerticalAlignment.Stretch,
-            IsHitTestVisible = false,
-        };
-
-    private static void AddAutofillHandleAdorner(Border border, double zoomFactor)
+    private static bool TryResolveVisibleSelectionGridSpan(
+        GridRange range,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        out int rowIndex,
+        out int rowSpan,
+        out int colIndex,
+        out int colSpan,
+        out bool hasTopEdge,
+        out bool hasLeftEdge,
+        out bool hasBottomEdge,
+        out bool hasRightEdge)
     {
-        var existing = border.Child;
-        var handleSize = Math.Max(8, 8 * zoomFactor);
-        // Detach 'existing' from 'border' before re-parenting it into the new layer Grid.
-        // Avalonia (unlike WPF) throws InvalidOperationException if a control still has a
-        // visual parent when it is added to a second parent's Children collection.
-        border.Child = null;
-        // Fill handle (autofill grip): a full solid-green square straddling the cell's bottom-right
-        // corner so it covers the edge and is easy to grab — matching the WPF grid handle, which is
-        // centred on the corner (DrawSelectionHandle: hx = right - size/2, hy = bottom - size/2, so
-        // half the square overhangs each edge). The negative right/bottom margin pushes it out by half
-        // its size; ClipToBounds is disabled on the layer so the overhang is not cropped.
-        var overhang = handleSize / 2;
-        var layer = new AvaloniaGrid
-        {
-            ClipToBounds = false,
-            Children =
-            {
-                existing!,
-                new Border
-                {
-                    Width = handleSize,
-                    Height = handleSize,
-                    Background = Brushes.White,
-                    BorderBrush = SelectionBorder,
-                    BorderThickness = new Thickness(Math.Max(1, zoomFactor)),
-                    HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
-                    VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
-                    IsHitTestVisible = false,
-                    Margin = new Thickness(0, 0, -overhang, -overhang),
-                    Child = new Border
-                    {
-                        Background = SelectionBorder,
-                        Margin = new Thickness(Math.Max(1, zoomFactor)),
-                    },
-                }
-            }
-        };
+        rowIndex = -1;
+        rowSpan = 0;
+        colIndex = -1;
+        colSpan = 0;
+        hasTopEdge = false;
+        hasLeftEdge = false;
+        hasBottomEdge = false;
+        hasRightEdge = false;
 
-        border.Child = layer;
-        border.ClipToBounds = false;
+        for (var i = 0; i < rowMetrics.Count; i++)
+        {
+            var row = rowMetrics[i].Row;
+            if (row < range.Start.Row || row > range.End.Row)
+                continue;
+
+            if (rowIndex < 0)
+                rowIndex = i;
+            rowSpan = i - rowIndex + 1;
+            hasTopEdge |= row == range.Start.Row;
+            hasBottomEdge |= row == range.End.Row;
+        }
+
+        for (var i = 0; i < colMetrics.Count; i++)
+        {
+            var col = colMetrics[i].Col;
+            if (col < range.Start.Col || col > range.End.Col)
+                continue;
+
+            if (colIndex < 0)
+                colIndex = i;
+            colSpan = i - colIndex + 1;
+            hasLeftEdge |= col == range.Start.Col;
+            hasRightEdge |= col == range.End.Col;
+        }
+
+        return rowIndex >= 0 && rowSpan > 0 && colIndex >= 0 && colSpan > 0;
+    }
+
+    private void SheetGridHost_PointerMoved(object? sender, PointerEventArgs args)
+    {
+        if (_borderDrawModeActive)
+        {
+            _sheetGridHost.Cursor = new Cursor(StandardCursorType.Cross);
+            return;
+        }
+
+        _sheetGridHost.Cursor = IsPointerOnAutofillHandle(args)
+            ? new Cursor(StandardCursorType.Hand)
+            : IsPointerOnSelectionMoveBorder(args)
+                ? new Cursor(StandardCursorType.SizeAll)
+                : Cursor.Default;
     }
 
     private bool TryInsertFormulaPointReference(CellAddress address)

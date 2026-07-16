@@ -289,31 +289,32 @@ public static class GridAutofillPlanner
         double rowHeaderWidth,
         double columnHeaderHeight,
         double handleSize = 6,
-        double hitPadding = 3)
+        double hitPadding = 3,
+        double metricScale = 1)
     {
         if (viewport is null || !selectedRange.HasValue)
             return false;
 
-        var range = selectedRange.Value;
-        RowMetric? endRow = null;
-        foreach (var row in viewport.RowMetrics)
-        {
-            if (row.Row == range.End.Row)
-                endRow = row;
-        }
+        var layout = GridSelectionLayoutPlanner.CalculateVisibleSelectionLayout(
+            viewport,
+            selectedRange.Value,
+            rowHeaderWidth,
+            columnHeaderHeight,
+            metricScale);
+        return IsOnHandle(layout, pointer, handleSize, hitPadding);
+    }
 
-        ColMetric? endColumn = null;
-        foreach (var column in viewport.ColMetrics)
-        {
-            if (column.Col == range.End.Col)
-                endColumn = column;
-        }
-
-        if (endRow is null || endColumn is null)
+    public static bool IsOnHandle(
+        GridSelectionLayout? selectionLayout,
+        GridPoint pointer,
+        double handleSize = 6,
+        double hitPadding = 3)
+    {
+        if (selectionLayout is not { HasRightEdge: true, HasBottomEdge: true } layout)
             return false;
 
-        var left = endColumn.LeftOffset + endColumn.Width + rowHeaderWidth - handleSize / 2;
-        var top = endRow.TopOffset + endRow.Height + columnHeaderHeight - handleSize / 2;
+        var left = layout.Rect.Right - handleSize / 2;
+        var top = layout.Rect.Bottom - handleSize / 2;
         return pointer.X >= left - hitPadding &&
             pointer.X <= left + handleSize + hitPadding &&
             pointer.Y >= top - hitPadding &&
