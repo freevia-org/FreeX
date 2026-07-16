@@ -5598,17 +5598,22 @@ public static partial class ChartRenderPlanner
 
     private static ChartStrokePlan DefaultGridLineStroke(ChartShape? chart = null) =>
         chart is not null &&
-        (UsesClassicOfficeChartStyle(chart) || UsesImportedComboDefaults(chart))
+        UsesClassicOfficeChartStyle(chart)
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.5)
+            : chart is not null &&
+              UsesImportedComboDefaults(chart)
+                ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 0.5)
             : new ChartStrokePlan(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
 
     private static ChartStrokePlan DefaultAxisTickStroke(ChartShape? chart = null) =>
         chart is not null && UsesImportedCartesianAxisStrokes(chart)
             ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 0.75)
             : chart is not null &&
-              (UsesClassicOfficeChartStyle(chart) || UsesImportedComboDefaults(chart))
-                ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.75)
-                : new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 0.75);
+              UsesClassicOfficeChartStyle(chart)
+                  ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.75)
+              : chart is not null && UsesImportedComboDefaults(chart)
+                  ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 0.75)
+              : new ChartStrokePlan(new SrgbColor(0x7F, 0x7F, 0x7F), Alpha: 255, Thickness: 0.75);
 
     private static ChartStrokePlan DefaultDataTableBorderStroke() =>
         new(new SrgbColor(0xB7, 0xB7, 0xB7), Alpha: 255, Thickness: 0.5);

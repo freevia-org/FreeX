@@ -49,11 +49,11 @@ public sealed class ChartBaselineCorpusTests
             new ChartPlanRect(0, 0, 960, 540));
 
         scene.GridLines.Stroke.Should().Be(new ChartStrokePlan(
-            new SrgbColor(0x00, 0x00, 0x00),
+            new SrgbColor(0x89, 0x89, 0x89),
             Alpha: 255,
             Thickness: 0.5));
         scene.AxisTicks.Stroke.Should().Be(new ChartStrokePlan(
-            new SrgbColor(0x00, 0x00, 0x00),
+            new SrgbColor(0x89, 0x89, 0x89),
             Alpha: 255,
             Thickness: 0.75));
         scene.SecondaryAxis.TickStroke.Should().Be(scene.AxisTicks.Stroke);
