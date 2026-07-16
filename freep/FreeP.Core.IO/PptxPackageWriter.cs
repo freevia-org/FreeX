@@ -1920,7 +1920,10 @@ public static class PptxPackageWriter
         var outerPar = new XElement(P + "par",
             new XElement(P + "cTn",
                 new XAttribute("id", nodeId++),
+                new XAttribute("dur", "indefinite"),
+                new XAttribute("restart", "never"),
                 new XAttribute("fill", "hold"),
+                new XAttribute("nodeType", "tmRoot"),
                 new XElement(P + "stCondLst",
                     new XElement(P + "cond", new XAttribute("delay", "0"))),
                 rootChildTnLst));

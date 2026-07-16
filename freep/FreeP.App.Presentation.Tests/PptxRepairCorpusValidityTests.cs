@@ -42,6 +42,31 @@ public sealed class PptxRepairCorpusValidityTests
     }
 
     [Fact]
+    public void MotionPathRoundTrip_UsesPowerPointTimingRoot()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "10-motionpath.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        using var stream = new MemoryStream();
+        PptxPackageWriter.Write(presentation, stream);
+        stream.Position = 0;
+
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: false);
+        var slideXml = LoadXml(archive, "ppt/slides/slide1.xml");
+        XNamespace presentationNamespace = PresentationNamespace;
+        var rootTimingNode = slideXml
+            .Element(presentationNamespace + "sld")!
+            .Element(presentationNamespace + "timing")!
+            .Element(presentationNamespace + "tnLst")!
+            .Element(presentationNamespace + "par")!
+            .Element(presentationNamespace + "cTn")!;
+
+        rootTimingNode.Attribute("dur")?.Value.Should().Be("indefinite");
+        rootTimingNode.Attribute("restart")?.Value.Should().Be("never");
+        rootTimingNode.Attribute("fill")?.Value.Should().Be("hold");
+        rootTimingNode.Attribute("nodeType")?.Value.Should().Be("tmRoot");
+    }
+
+    [Fact]
     public void SmartArtLiveCorpus_ExposesDrawingRelationshipAndPart()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "14-smartart-live.pptx");
