@@ -296,6 +296,7 @@ public class ChartRoundTripTests
     public void ScatterChart_EmitsScatterChartWithXValAndYVal()
     {
         var chart = Chart.Create(ChartKind.Scatter, ["1", "2"], [3.0, 4.0], seriesName: "S");
+        chart.ColorSchemeId = "mono-blue";
         var doc = new TextDocument();
         var paragraph = new Paragraph();
         paragraph.Runs.Add(Run.FromChart(chart));
@@ -307,6 +308,21 @@ public class ChartRoundTripTests
         var scatter = chartXml.Descendants(C + "scatterChart").Should().ContainSingle().Subject;
         scatter.Element(C + "scatterStyle")!.Attribute("val")!.Value.Should().Be("marker");
         var ser = scatter.Elements(C + "ser").Should().ContainSingle().Subject;
+        ser.Element(C + "spPr")!
+            .Element(A + "ln")!
+            .Element(A + "noFill")
+            .Should()
+            .NotBeNull("Word otherwise adds a connecting line to marker-only scatter charts");
+        var points = ser.Elements(C + "dPt").ToList();
+        points.Should().HaveCount(2);
+        foreach (var point in points)
+        {
+            point.Element(C + "spPr")!
+                .Element(A + "ln")!
+                .Element(A + "noFill")
+                .Should()
+                .NotBeNull("Word can inherit the connector from per-point shape properties");
+        }
         ser.Element(C + "xVal")!.Descendants(C + "numCache").Should().ContainSingle();
         ser.Element(C + "yVal")!.Descendants(C + "numCache").Should().ContainSingle();
     }

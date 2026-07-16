@@ -6044,6 +6044,10 @@ public static class DocxWriter
             new XElement(C + "order", new XAttribute("val", index)));
 
         ser.Add(BuildSeriesName(series, index));
+        // Word still draws a connecting line for marker-only scatter charts unless the
+        // series line is explicitly disabled in standard DrawingML.
+        ser.Add(new XElement(C + "spPr",
+            new XElement(A + "ln", new XElement(A + "noFill"))));
         if (UsesPerPointPalette(chart))
             ser.Add(BuildDataPointProperties(chart, series));
         else
@@ -6080,12 +6084,20 @@ public static class DocxWriter
         for (var index = 0; index < series.Values.Count; index++)
         {
             var color = scheme.Colors[index % scheme.Colors.Count].Trim().TrimStart('#');
+            var pointProperties = new XElement(C + "spPr",
+                new XElement(A + "solidFill",
+                    new XElement(A + "srgbClr", new XAttribute("val", color))));
+            if (chart.Kind == ChartKind.Scatter)
+            {
+                // Word inherits a connector line from each point's shape properties unless
+                // the per-point line is explicitly disabled as well as the series line.
+                pointProperties.Add(new XElement(A + "ln", new XElement(A + "noFill")));
+            }
+
             points.Add(
                 new XElement(C + "dPt",
                     new XElement(C + "idx", new XAttribute("val", index)),
-                    new XElement(C + "spPr",
-                        new XElement(A + "solidFill",
-                            new XElement(A + "srgbClr", new XAttribute("val", color))))));
+                    pointProperties));
         }
 
         return points;
