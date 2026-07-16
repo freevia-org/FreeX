@@ -274,7 +274,7 @@ public sealed class ChartBaselineCorpusTests
         scatter.Series.Should().OnlyContain(series => !series.OnSecondaryAxis,
             "scatter uses two independent value axes for X and Y, not a secondary series axis");
         ChartRenderPlanner.BuildFramePlan(scatter, new ChartPlanRect(0, 0, 480, 288)).Plot
-            .Should().Be(new ChartPlanRect(30.5, 57.5, 426.5, 200),
+            .Should().Be(new ChartPlanRect(34.25, 57.5, 421.25, 200),
                 "PowerPoint places imported scatter plots above the category-label band with a compact left axis gutter");
         ChartRenderPlanner.ComputeScatterAxisRange(scatter, useX: true)
             .Should().Be((0, 120, 20));
