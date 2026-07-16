@@ -15261,8 +15261,10 @@ public sealed class DocumentView : Control
         var formatted = Build(text.Text, new RunFormatting { FontSizePt = text.FontSize, ColorHex = text.ColorHex });
         if (text.RotationDegrees != 0)
         {
-            using var rotation = context.PushTransform(Matrix.CreateTranslation(text.X, text.Y) *
-                Matrix.CreateRotation(text.RotationDegrees * Math.PI / 180));
+            // Avalonia applies matrix composition left-to-right. Rotate the local glyphs before
+            // moving them to the scene anchor so the anchor itself is not rotated into the plot.
+            using var rotation = context.PushTransform(Matrix.CreateRotation(text.RotationDegrees * Math.PI / 180) *
+                Matrix.CreateTranslation(text.X, text.Y));
             context.DrawText(formatted, new Point(-formatted.WidthIncludingTrailingWhitespace / 2, -formatted.Height / 2));
             return;
         }
