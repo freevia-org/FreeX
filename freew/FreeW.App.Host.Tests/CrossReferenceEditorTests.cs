@@ -50,6 +50,30 @@ public sealed class CrossReferenceEditorTests
     }
 
     [StaFact]
+    public void InsertCrossReference_WpfMutationPreservesExistingBookmarksAndCachesText()
+    {
+        var doc = HeadingModel();
+        var heading = (Paragraph)doc.Blocks[0];
+        heading.BookmarkNames.Add("chapter");
+        heading.BookmarkNames.Add("_Ref2");
+        ((Paragraph)doc.Blocks[1]).BookmarkName = "_Ref1";
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+        view.InsertCrossReference(
+            CrossRefType.Heading,
+            new CrossRefTarget("Chapter One", Anchor: null, BlockIndex: 0),
+            CrossRefInsertAs.Text,
+            hyperlink: false);
+        view.CommitToModel();
+
+        var field = InsertedField(view);
+        field.Text.Should().Be("Chapter One");
+        field.CrossReference!.Target.Should().Be("_Ref3");
+        ((Paragraph)view.Model.Blocks[0]).BookmarkNames.Should().Equal("chapter", "_Ref2", "_Ref3");
+    }
+
+    [StaFact]
     public void InsertCrossReference_PageNumber_WritesPageRefField()
     {
         var view = new DocumentView();

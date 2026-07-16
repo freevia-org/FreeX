@@ -350,6 +350,52 @@ public class CrossReferencesTests
     }
 
     [Fact]
+    public void PlanInsertion_AllocatesGapAcrossAllBookmarkNames()
+    {
+        var doc = new TextDocument();
+        var target = new Paragraph("Heading");
+        target.BookmarkNames.Add("heading");
+        target.BookmarkNames.Add("_Ref2");
+        doc.Blocks.Add(target);
+        doc.Blocks.Add(new Paragraph("Existing one") { BookmarkName = "_Ref1" });
+        doc.Blocks.Add(new Paragraph("Existing four") { BookmarkName = "_Ref4" });
+
+        var plan = CrossReferences.PlanInsertion(
+            doc,
+            CrossRefType.Heading,
+            new CrossRefTarget("Heading", null, 0),
+            CrossRefInsertAs.Text,
+            hyperlink: false,
+            sourceBlockIndex: 3);
+
+        plan.BookmarkNameToAdd.Should().Be("_Ref3");
+        plan.FieldRun.CrossReference!.Target.Should().Be("_Ref3");
+        target.BookmarkNames.Should().Equal("heading", "_Ref2");
+    }
+
+    [Fact]
+    public void PlanInsertion_AllocatesSmallestGapWhenSecondaryNameUsesRefOne()
+    {
+        var doc = new TextDocument();
+        var target = new Paragraph("Heading");
+        target.BookmarkNames.Add("heading");
+        target.BookmarkNames.Add("_Ref1");
+        doc.Blocks.Add(target);
+        doc.Blocks.Add(new Paragraph("Existing three") { BookmarkName = "_Ref3" });
+
+        var plan = CrossReferences.PlanInsertion(
+            doc,
+            CrossRefType.Heading,
+            new CrossRefTarget("Heading", null, 0),
+            CrossRefInsertAs.Text,
+            hyperlink: false,
+            sourceBlockIndex: 2);
+
+        plan.BookmarkNameToAdd.Should().Be("_Ref2");
+        target.BookmarkNames.Should().Equal("heading", "_Ref1");
+    }
+
+    [Fact]
     public void PlanInsertion_ExistingBodyAnchorIsReused()
     {
         var doc = new TextDocument();

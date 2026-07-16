@@ -6279,7 +6279,7 @@ public sealed class DocumentView : RichTextBox
     /// <summary>
     /// Side-band paragraph data carried on a WPF <see cref="WpfParagraph.Tag"/> so it survives an
     /// edit/commit cycle even though the FlowDocument paragraph has no native slot for it. Holds the
-    /// model's tab stops (not representable in WPF), the paragraph's bookmark name (an invisible
+    /// model's tab stops (not representable in WPF), the paragraph's bookmark names (invisible
     /// marker), and whether a page break is forced before the paragraph (rendered as a separator, but
     /// otherwise invisible in the FlowDocument). Any field may be empty/null/false; the Tag is only
     /// stamped when at least one is set.
@@ -6299,7 +6299,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, string? BookmarkName, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null);
 
     private sealed record RenderedTabStopSpan(
         ParagraphTabStopPlacementPlan Plan,
@@ -6515,16 +6515,18 @@ public sealed class DocumentView : RichTextBox
 
     private static ModelParagraph ReadParagraph(WpfParagraph wpfParagraph, TextDocument document)
     {
+        var tag = wpfParagraph.Tag as ParagraphTag;
         var modelParagraph = new ModelParagraph
         {
             Formatting = ReadParagraphFormatting(wpfParagraph, document),
-            // The bookmark name, style id, and section break (invisible markers with no FlowDocument slot)
+            // The bookmark names, style id, and section break (invisible markers with no FlowDocument slot)
             // are preserved across edits via the paragraph Tag (see ParagraphTag).
-            BookmarkName = wpfParagraph.Tag is ParagraphTag { BookmarkName: { Length: > 0 } name } ? name : null,
-            StyleId = wpfParagraph.Tag is ParagraphTag { StyleId: { Length: > 0 } styleId } ? styleId : null,
-            SectionBreak = wpfParagraph.Tag is ParagraphTag { SectionBreak: { } sec } ? sec : null,
-            DropCap = wpfParagraph.Tag is ParagraphTag { DropCap: { } dropCap } ? dropCap : null
+            StyleId = tag?.StyleId is { Length: > 0 } styleId ? styleId : null,
+            SectionBreak = tag?.SectionBreak,
+            DropCap = tag?.DropCap
         };
+        if (tag?.BookmarkNames is { Count: > 0 } bookmarkNames)
+            modelParagraph.BookmarkNames.AddRange(bookmarkNames);
         foreach (var inline in wpfParagraph.Inlines)
             ReadInline(modelParagraph, inline, hyperlinkUrl: null, hyperlinkAnchor: null);
         return modelParagraph;
@@ -7727,7 +7729,7 @@ public sealed class DocumentView : RichTextBox
         // edit/commit cycle, we carry them on the paragraph's Tag (a ParagraphTag) and read them back
         // verbatim on commit; the round-trip is exact.
         // WidowControl has no FlowDocument property either, so it joins the Tag alongside tab stops,
-        // bookmark name and page-break-before; carried verbatim and recovered on commit.
+        // bookmark names and page-break-before; carried verbatim and recovered on commit.
         // The list nesting depth is carried on the Tag too: the editor flattens a list run into one WPF
         // List, so depth has no structural slot and would otherwise reset to 0 on commit (see ParagraphTag).
         // The border's line style / per-edge flags and the shading pattern have no WPF Border equivalent,
@@ -7736,9 +7738,9 @@ public sealed class DocumentView : RichTextBox
         var borderNeedsTag = paraFmt.Border is { } b
             && (b.LineStyle != BorderLineStyle.Single || !b.Top || !b.Left || !b.Bottom || !b.Right);
         var shadingNeedsTag = paraFmt.ShadingColorHex is { Length: > 0 } && paraFmt.ShadingPattern != ShadingPattern.Clear;
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkName is { Length: > 0 } || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag || paraFmt.SuppressAutoHyphens || paragraph.SectionBreak is not null || paragraph.DropCap is not null)
+        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkNames.Count > 0 || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag || paraFmt.SuppressAutoHyphens || paragraph.SectionBreak is not null || paragraph.DropCap is not null)
             wpf.Tag = new ParagraphTag(
-                paraFmt.TabStops, paragraph.BookmarkName, paraFmt.PageBreakBefore, paraFmt.WidowControl,
+                paraFmt.TabStops, [.. paragraph.BookmarkNames], paraFmt.PageBreakBefore, paraFmt.WidowControl,
                 paragraph.StyleId, paraFmt.ListLevel,
                 borderNeedsTag ? paraFmt.Border : null,
                 shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
@@ -8789,7 +8791,7 @@ public sealed class DocumentView : RichTextBox
     }
 
     // Scroll the paragraph carrying the linked bookmark into view (best-effort). Matches on the
-    // model BookmarkName preserved via each WPF paragraph's ParagraphTag, searching the FlowDocument
+    // model bookmark names preserved via each WPF paragraph's ParagraphTag, searching the FlowDocument
     // that hosts the clicked link.
     private static void OnInternalLinkClick(object sender, RoutedEventArgs e)
     {
@@ -8797,7 +8799,7 @@ public sealed class DocumentView : RichTextBox
             return;
         var flow = FindFlowDocument(link);
         var target = flow?.Blocks.OfType<WpfParagraph>()
-            .FirstOrDefault(p => p.Tag is ParagraphTag { BookmarkName: { } name } && name == anchor);
+            .FirstOrDefault(p => p.Tag is ParagraphTag { BookmarkNames: { } names } && names.Contains(anchor));
         target?.BringIntoView();
     }
 
@@ -12862,7 +12864,8 @@ public sealed class DocumentView : RichTextBox
             && plan.Target.BlockIndex is { } targetBlock
             && _model.Blocks[targetBlock] is ModelParagraph targetParagraph)
         {
-            targetParagraph.BookmarkName = anchor;
+            if (!targetParagraph.BookmarkNames.Contains(anchor))
+                targetParagraph.BookmarkNames.Add(anchor);
         }
 
         // Append the field run to the caret's paragraph in the model (or the last paragraph / a fresh one),

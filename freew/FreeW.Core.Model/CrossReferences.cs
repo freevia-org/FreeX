@@ -533,7 +533,7 @@ public static class CrossReferences
     {
         var used = new HashSet<string>(
             doc.Blocks.OfType<Paragraph>()
-                .Select(paragraph => paragraph.BookmarkName)
+                .SelectMany(paragraph => paragraph.BookmarkNames)
                 .Where(name => name is { Length: > 0 })!,
             StringComparer.Ordinal);
         for (var index = 1; ; index++)
