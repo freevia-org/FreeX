@@ -311,13 +311,13 @@ public class SmartArtRoundTripTests
         var drawing = EntryXml(docx, "word/diagrams/drawing1.xml");
 
         // 4 nodes total (CEO, VP Eng, Lead, VP Sales) → 4 shapes.
-        drawing.Descendants(Dsp + "sp").Should().HaveCount(11);
+        drawing.Descendants(Dsp + "sp").Should().HaveCount(7);
         drawing.Descendants(Dsp + "sp").Select(sp => sp.Attribute("modelId")!.Value)
             .Should().Contain(
-                "{4F4B0000-0000-4000-8000-000000009002}",
-                "{4F4B0000-0000-4000-8000-000000009007}",
-                "{4F4B0000-0000-4000-8000-000000009012}",
-                "{4F4B0000-0000-4000-8000-000000009017}");
+                "{4F4B0000-0000-4000-8000-000000009003}",
+                "{4F4B0000-0000-4000-8000-000000009008}",
+                "{4F4B0000-0000-4000-8000-000000009013}",
+                "{4F4B0000-0000-4000-8000-000000009018}");
         drawing.Descendants(A + "t").Select(t => t.Value)
             .Should().Contain(["CEO", "VP Eng", "Lead", "VP Sales"]);
     }
@@ -464,9 +464,45 @@ public class SmartArtRoundTripTests
             .Should().OnlyContain(geometry => geometry.Attribute("prst")!.Value == "trapezoid"
                 && geometry.Element(A + "avLst")!.Element(A + "gd")!.Attribute("fmla")!.Value == "val 68182");
 
-        hierarchyDrawing.Descendants(Dsp + "sp").Count()
-            .Should().BeGreaterThan(hierarchyData.Descendants(Dgm + "pt")
-                .Count(pt => pt.Element(Dgm + "prSet")?.Attribute("presName")?.Value == "background"));
+        var hierarchyPresentationIds = hierarchyData.Descendants(Dgm + "pt")
+            .Where(point => point.Attribute("type")?.Value == "pres")
+            .Select(point => point.Attribute("modelId")!.Value)
+            .ToHashSet(StringComparer.Ordinal);
+        hierarchyDrawing.Descendants(Dsp + "sp")
+            .Select(shape => shape.Attribute("modelId")!.Value)
+            .Should().OnlyContain(id => hierarchyPresentationIds.Contains(id),
+                "cached hierarchy shapes must identify points from the presentation graph");
+    }
+
+    [Fact]
+    public void OrganizationChartChain_CachedShapesUseNativePresentationTextAndTransitionIds()
+    {
+        var root = new SmartArtNode("Plan");
+        var build = root.AddChild("Build");
+        build.AddChild("Verify");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy, LayoutId = "orgchart1" };
+        smartArt.Nodes.Add(root);
+
+        var bytes = WriteBytes(SingleDiagramDocument(smartArt));
+        var data = EntryXml(bytes, "word/diagrams/data1.xml");
+        var drawing = EntryXml(bytes, "word/diagrams/drawing1.xml");
+        var presentationIds = data.Descendants(Dgm + "pt")
+            .Where(point => point.Attribute("type")?.Value == "pres")
+            .Select(point => point.Attribute("modelId")!.Value)
+            .ToHashSet(StringComparer.Ordinal);
+        var shapes = drawing.Descendants(Dsp + "sp").ToList();
+
+        shapes.Should().HaveCount(5, "the native chain has three text nodes and two parent transitions");
+        shapes.Select(shape => shape.Attribute("modelId")!.Value)
+            .Should().OnlyContain(id => presentationIds.Contains(id));
+        shapes.Where(shape => shape.Descendants(A + "t").Any()).Select(shape => shape.Attribute("modelId")!.Value)
+            .Should().Equal("{4F4B0000-0000-4000-8000-000000009003}",
+                "{4F4B0000-0000-4000-8000-000000009008}",
+                "{4F4B0000-0000-4000-8000-000000009013}");
+        shapes.Where(shape => shape.Element(Dsp + "spPr")!.Element(A + "prstGeom")!.Attribute("prst")!.Value == "line")
+            .Select(shape => shape.Attribute("modelId")!.Value)
+            .Should().Equal("{4F4B0000-0000-4000-8000-000000007501}",
+                "{4F4B0000-0000-4000-8000-000000007502}");
     }
 
     [Fact]
