@@ -371,6 +371,52 @@ public sealed class SlideShowHostPlannerTests
     }
 
     [Fact]
+    public void PlanPointerClick_Resolves_slide_zoom_before_hyperlink_fallback()
+    {
+        var presentation = MakePresentation(2);
+        presentation.Slides[0].NumericId = 256;
+        presentation.Slides[1].NumericId = 257;
+        var shape = new SlideShape
+        {
+            Id = 42,
+            Kind = SlideShapeKind.Zoom,
+            ExtentCxEmu = 914400,
+            ExtentCyEmu = 914400,
+            PreservedObject = new PreservedObjectInfo
+            {
+                ObjectKind = PreservedObjectKind.Zoom,
+                ZoomTargetSlideNumericId = 257,
+            },
+        };
+        presentation.Slides[0].Shapes.Add(shape);
+
+        var intent = SlideShowHostPlanner.PlanPointerClick(
+            presentation.Slides[0],
+            new SlideShowPoint(48, 48),
+            presentation);
+
+        intent.Kind.Should().Be(SlideShowPointerClickIntentKind.Zoom);
+        intent.TargetSlideIndex.Should().Be(1);
+        intent.IsHandled.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlanZoomNavigation_jumps_controller_to_resolved_slide()
+    {
+        var presentation = MakePresentation(3);
+        var controller = new SlideShowController(presentation.Slides, startIndex: 0);
+
+        var command = SlideShowHostPlanner.PlanZoomNavigation(
+            controller,
+            presentation.Slides,
+            targetSlideIndex: 2);
+
+        command.Kind.Should().Be(SlideShowHostCommandKind.NavigateToSlide);
+        command.SlideIndex.Should().Be(2);
+        command.AnimateSlide.Should().BeFalse();
+    }
+
+    [Fact]
     public void PlanInternalSlideJump_NavigatesBySlideIdWithoutHostLookup()
     {
         var pres = MakePresentation(3);
