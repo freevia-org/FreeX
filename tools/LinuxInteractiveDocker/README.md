@@ -80,7 +80,9 @@ through a Windows bind mount.
 
 ## Environment Boundaries
 
-This is an X11 software-rendering session using Xvfb and Openbox. It is suitable
+This is an X11 software-rendering session using Xvfb, Openbox, and the XRender
+backend of picom. When a VNC client connects, the harness briefly refreshes the
+maximized app window to clear stale X11 damage regions. The harness is suitable
 for deterministic interaction and layout comparisons, but it does not validate
 Wayland, GPU rendering, distribution-specific desktop integration, accessibility
 screen readers, or real monitor scaling.

@@ -59,6 +59,7 @@ public sealed class LinuxAppReadinessPreflightTests
         var runner = File.ReadAllText(RepositoryFileLocator.Find("tools", "Run-LinuxInteractiveDocker.ps1"));
         var dockerfile = File.ReadAllText(RepositoryFileLocator.Find("tools", "LinuxInteractiveDocker", "Dockerfile"));
         var entrypoint = File.ReadAllText(RepositoryFileLocator.Find("tools", "LinuxInteractiveDocker", "entrypoint.sh"));
+        var refreshAfterVnc = File.ReadAllText(RepositoryFileLocator.Find("tools", "LinuxInteractiveDocker", "refresh-after-vnc.sh"));
         var readme = File.ReadAllText(RepositoryFileLocator.Find("tools", "LinuxInteractiveDocker", "README.md"));
 
         runner.Should().Contain("[ValidateSet(\"FreeX\", \"FreeW\", \"FreeP\")]");
@@ -76,14 +77,21 @@ public sealed class LinuxAppReadinessPreflightTests
         dockerfile.Should().Contain("FROM ubuntu:24.04");
         dockerfile.Should().Contain("novnc");
         dockerfile.Should().Contain("openbox");
+        dockerfile.Should().Contain("picom");
         dockerfile.Should().Contain("x11vnc");
         dockerfile.Should().Contain("xvfb");
 
         entrypoint.Should().Contain("Xvfb :99");
+        entrypoint.Should().Contain("picom");
+        entrypoint.Should().Contain("--backend xrender");
+        entrypoint.Should().Contain("-afteraccept /usr/local/bin/freex-refresh-after-vnc");
         entrypoint.Should().Contain("websockify");
         entrypoint.Should().Contain("xdotool search --onlyvisible");
         entrypoint.Should().Contain("/work/ready.json");
         entrypoint.Should().Contain("scrot /work/screenshots/initial.png");
+
+        refreshAfterVnc.Should().Contain("remove,maximized_vert,maximized_horz");
+        refreshAfterVnc.Should().Contain("add,maximized_vert,maximized_horz");
 
         readme.Should().Contain("http://127.0.0.1:6080/vnc.html");
         readme.Should().Contain("-Action Screenshot");

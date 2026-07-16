@@ -23,6 +23,7 @@ RUN apt-get update -qq \
         libxrender1 \
         novnc \
         openbox \
+        picom \
         scrot \
         shared-mime-info \
         websockify \
@@ -36,7 +37,10 @@ RUN apt-get update -qq \
     && rm -rf /var/lib/apt/lists/*
 
 COPY entrypoint.sh /usr/local/bin/freex-linux-interactive
-RUN chmod 0755 /usr/local/bin/freex-linux-interactive
+COPY refresh-after-vnc.sh /usr/local/bin/freex-refresh-after-vnc
+RUN chmod 0755 \
+        /usr/local/bin/freex-linux-interactive \
+        /usr/local/bin/freex-refresh-after-vnc
 
 EXPOSE 6080
 

@@ -37,6 +37,11 @@ openbox > /work/logs/openbox.log 2>&1 &
 child_pids+=("$!")
 xsetroot -solid "#d9e1e8"
 
+picom \
+    --backend xrender \
+    > /work/logs/picom.log 2>&1 &
+child_pids+=("$!")
+
 x11vnc \
     -display :99 \
     -forever \
@@ -44,6 +49,7 @@ x11vnc \
     -nopw \
     -localhost \
     -rfbport 5900 \
+    -afteraccept /usr/local/bin/freex-refresh-after-vnc \
     -o /work/logs/x11vnc.log \
     > /dev/null 2>&1 &
 child_pids+=("$!")
