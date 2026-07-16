@@ -1,6 +1,8 @@
 using System.Linq;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
+using System.Windows.Controls;
+using System.Windows.Documents;
 using WpfFloater = System.Windows.Documents.Floater;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 
@@ -157,6 +159,9 @@ public sealed class FloatingImageRenderTests
             {
                 floater.Width.Should().BeApproximately(96, 0.01);
             }
+
+            var placeholder = floater.Blocks.OfType<BlockUIContainer>().Single().Child.Should().BeOfType<Border>().Subject;
+            placeholder.Height.Should().BeApproximately(72, 0.01);
 
             view.CommitToModel();
 
