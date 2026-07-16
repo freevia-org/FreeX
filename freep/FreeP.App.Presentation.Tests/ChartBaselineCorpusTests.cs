@@ -244,11 +244,14 @@ public sealed class ChartBaselineCorpusTests
             .ToArray();
         firstSurfaceCellFacets.Should().HaveCount(2);
         firstSurfaceCellFacets[0].Points.Select(point => point.X)
-            .Should().Equal(new[] { 0.0, 147.6, 32.4 },
+            .Should().Equal(new[] { 0.0, 147.6, 62.0 },
                 "PowerPoint splits the first imported surface cell along the 0-3 diagonal");
         firstSurfaceCellFacets[1].Points.Select(point => point.X)
-            .Should().Equal(new[] { 147.6, 180.0, 32.4 },
+            .Should().Equal(new[] { 147.6, 194.8, 62.0 },
                 "the paired imported surface triangle shares the alternate diagonal");
+        surfaceGeometry.Points.Single(point => point.SeriesIndex == 2 && point.CategoryIndex == 0).Point.X
+            .Should().BeApproximately(124.0, 0.0001,
+                "PowerPoint's rear-left surface vertex follows the projected frame depth wall");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255,
             "PowerPoint's imported Surface3D facets are opaque fills");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Stroke.Alpha == 0,
@@ -260,7 +263,7 @@ public sealed class ChartBaselineCorpusTests
                 new SrgbColor(0x45, 0x74, 0xC8),
                 new SrgbColor(0xF2, 0x80, 0x32),
                 new SrgbColor(0xB6, 0x60, 0x26),
-                new SrgbColor(0xB6, 0x60, 0x26),
+                new SrgbColor(0xD5, 0x71, 0x2C),
                 new SrgbColor(0xD5, 0x71, 0x2C),
                 new SrgbColor(0x98, 0xBC, 0x80),
                 new SrgbColor(0x98, 0xBC, 0x80),

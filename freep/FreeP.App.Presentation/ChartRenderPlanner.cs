@@ -594,6 +594,9 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceBlueBandUpperBound = 0.20;
     private const double ImportedSurfaceOrangeBandUpperBound = 0.53;
     private const double ImportedSurfaceGreenBandUpperBound = 0.75;
+    private const double ImportedSurfaceReferencePlotWidth = 360.0;
+    private const double ImportedSurfaceDepthWallX = 124.0;
+    private const double ImportedSurfaceFrontCategoryWidth = 295.2;
     private const double ImportedSurfaceLightBaseFactor = 1.02;
     private const double ImportedSurfaceDepthDimming = 0.12;
     private const double ImportedSurfaceNearRowFalloff = 0.25;
@@ -2782,14 +2785,20 @@ public static partial class ChartRenderPlanner
                 Math.Round(plot.Bottom - seriesT * plot.Height, 4));
         }
 
-        double depthX = Math.Min(plot.Width * 0.18, 72.0);
+        double depthX = usesImportedTextMetrics
+            ? plot.Width * (ImportedSurfaceDepthWallX / ImportedSurfaceReferencePlotWidth)
+            : Math.Min(plot.Width * 0.18, 72.0);
         double depthY = Math.Min(plot.Height * 0.26, 52.0);
         double categorySlopeY = Math.Min(plot.Height * 0.20, 40.0);
         double lift = Math.Min(
             plot.Height * (usesImportedTextMetrics ? 0.90 : 0.50),
             usesImportedTextMetrics ? 170.0 : 88.0);
         double drawableWidth = Math.Max(1, plot.Width - depthX);
-        double x = plot.X + categoryT * drawableWidth + seriesT * depthX;
+        double categoryWidth = usesImportedTextMetrics
+            ? plot.Width * (ImportedSurfaceFrontCategoryWidth / ImportedSurfaceReferencePlotWidth) -
+                seriesT * (plot.Width * (ImportedSurfaceFrontCategoryWidth / ImportedSurfaceReferencePlotWidth) - drawableWidth)
+            : drawableWidth;
+        double x = plot.X + categoryT * categoryWidth + seriesT * depthX;
         double y = plot.Bottom + categoryT * categorySlopeY - seriesT * depthY - normalized * lift;
 
         return new ChartPlanPoint(Math.Round(x, 4), Math.Round(y, 4));
@@ -2940,8 +2949,9 @@ public static partial class ChartRenderPlanner
                     }
                     : new[] { facetPoints.ToArray() };
 
-                foreach (var renderPoints in renderPointSets)
+                for (int renderIndex = 0; renderIndex < renderPointSets.Length; renderIndex++)
                 {
+                    var renderPoints = renderPointSets[renderIndex];
                     double averageValue = renderPoints.Average(point => point.Value);
                     double averageNormalized = renderPoints.Average(point => point.NormalizedValue);
                     var color = ResolveSurfaceFacetColor(
@@ -2951,7 +2961,8 @@ public static partial class ChartRenderPlanner
                         seriesCount,
                         categoryCount,
                         seriesColors,
-                        averageNormalized);
+                        averageNormalized,
+                        renderIndex);
                     byte facetAlpha = chart.ChartType == ChartType.Surface3D
                         ? UsesImportedTextMetrics(chart) ? (byte)255 : (byte)220
                         : (byte)185;
@@ -3001,7 +3012,8 @@ public static partial class ChartRenderPlanner
         int seriesCount,
         int categoryCount,
         IReadOnlyList<SrgbColor>? seriesColors,
-        double normalized)
+        double normalized,
+        int triangleIndex = 0)
     {
         var color = chart.VaryColors
             ? ResolveSurfaceVaryColor(normalized)
@@ -3010,7 +3022,7 @@ public static partial class ChartRenderPlanner
                 normalized);
 
         return chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
-            ? ApplyImportedSurfaceLighting(color, seriesIndex, categoryIndex, seriesCount, categoryCount)
+            ? ApplyImportedSurfaceLighting(color, seriesIndex, categoryIndex, seriesCount, categoryCount, triangleIndex)
             : color;
     }
 
@@ -3019,7 +3031,8 @@ public static partial class ChartRenderPlanner
         int seriesIndex,
         int categoryIndex,
         int seriesCount,
-        int categoryCount)
+        int categoryCount,
+        int triangleIndex)
     {
         // PowerPoint's default 3-D light is strongest on the near-left surface
         // and falls off across the front row before leveling on the rear row.
@@ -3037,6 +3050,8 @@ public static partial class ChartRenderPlanner
             baseLight - nearRowFalloff,
             ImportedSurfaceMinimumLightFactor,
             ImportedSurfaceMaximumLightFactor);
+        if (triangleIndex == 1)
+            factor = Math.Max(factor, 0.90);
 
         return new SrgbColor(
             ScaleSurfaceChannel(color.R, factor),
