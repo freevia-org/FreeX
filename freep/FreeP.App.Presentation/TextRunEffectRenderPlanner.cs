@@ -121,14 +121,19 @@ public static class TextRunEffectRenderPlanner
         double rad = shadow.DirDeg * Math.PI / 180.0;
         double dx = Math.Cos(rad) * shadow.DistDip;
         double dy = Math.Sin(rad) * shadow.DistDip;
+        byte coreAlpha = shadow.Alpha;
 
         if (shadow.BlurDip > 0.5)
         {
             int blurPasses = Math.Min(3, (int)Math.Ceiling(shadow.BlurDip / 1.5));
+            // Spread the requested opacity across the blur samples. A full-opacity
+            // copy plus several quarter-opacity rings compounds into a dark halo.
+            byte passAlpha = (byte)Math.Max(1, Math.Round(
+                shadow.Alpha / (blurPasses * 8.0 + 1.0)));
+            coreAlpha = passAlpha;
             for (int pi = 1; pi <= blurPasses; pi++)
             {
                 double spread = shadow.BlurDip * pi / blurPasses;
-                byte passAlpha = (byte)(shadow.Alpha / (blurPasses + 1));
                 for (int ox = -1; ox <= 1; ox++)
                 for (int oy = -1; oy <= 1; oy++)
                 {
@@ -151,7 +156,7 @@ public static class TextRunEffectRenderPlanner
             dx,
             dy,
             shadow.Color,
-            shadow.Alpha,
+            coreAlpha,
             shadow.BlurDip,
             SpreadDip: 0,
             IsBlurPass: false));

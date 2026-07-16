@@ -550,7 +550,8 @@ public sealed class WordArtTests : IDisposable
         shadows.Should().HaveCount(17);
         shadows[^1].OffsetX.Should().BeApproximately(8, 0.001);
         shadows[^1].OffsetY.Should().BeApproximately(0, 0.001);
-        shadows[^1].Alpha.Should().Be(160);
+        shadows[^1].Alpha.Should().Be(9);
+        shadows.Should().OnlyContain(shadow => shadow.Alpha == 9);
         shadows[^1].BlurDip.Should().Be(3);
         shadows[^1].IsBlurPass.Should().BeFalse();
         shadows[0].IsBlurPass.Should().BeTrue();
