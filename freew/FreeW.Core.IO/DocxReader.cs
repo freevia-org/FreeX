@@ -4037,9 +4037,31 @@ public static class DocxReader
             if (!childIds.Contains(id))
                 topLevel.Add(nodeById[id]);
 
-        var smartArt = new SmartArt { Kind = ReadSmartArtKind(relIds, relationships, archive) };
+        var kind = ReadSmartArtKind(relIds, relationships, archive);
+        var smartArt = new SmartArt { Kind = kind };
         ReadSmartArtGalleryIds(relIds, relationships, archive, smartArt);
-        smartArt.Nodes.AddRange(topLevel);
+        // Word's flat List/Process galleries may use a presentation scaffold that represents the visual
+        // flow as a parent chain. The authored model remains a flat node list, so recover that shape here;
+        // hierarchy diagrams keep their semantic tree intact.
+        if (kind is SmartArtKind.List or SmartArtKind.Process)
+        {
+            var flattened = new List<SmartArtNode>();
+            void Flatten(IEnumerable<SmartArtNode> nodes)
+            {
+                foreach (var node in nodes)
+                {
+                    flattened.Add(new SmartArtNode(node.Text));
+                    Flatten(node.Children);
+                }
+            }
+
+            Flatten(topLevel);
+            smartArt.Nodes.AddRange(flattened);
+        }
+        else
+        {
+            smartArt.Nodes.AddRange(topLevel);
+        }
 
         // Size: the inline or anchor extent (EMU) maps back to points.
         var extent = container.Element(Wp + "extent");

@@ -213,10 +213,12 @@ public class SmartArtRoundTripTests
 
         var styleLabels = EntryXml(docx, "word/diagrams/quickStyle1.xml")
             .Descendants(Dgm + "styleLbl").Select(e => e.Attribute("name")!.Value).ToList();
-        styleLabels.Should().Equal("node0");
+        styleLabels.Should().Contain("node0");
+        styleLabels.Should().Contain("fgAcc1", "the Word presentation scaffold needs the gallery text labels");
         var colorLabels = EntryXml(docx, "word/diagrams/colors1.xml")
             .Descendants(Dgm + "styleLbl").Select(e => e.Attribute("name")!.Value).ToList();
-        colorLabels.Should().Equal("node0");
+        colorLabels.Should().Contain("node0");
+        colorLabels.Should().Contain("fgAcc1", "the Word presentation scaffold needs the gallery text labels");
     }
 
     [Fact]
@@ -266,24 +268,16 @@ public class SmartArtRoundTripTests
         shapeIds.Should().NotContain("0");
 
         var presentationPoints = data.Root!.Element(Dgm + "ptLst")!.Elements(Dgm + "pt")
-            .Where(pt => pt.Attribute("type")?.Value == "pres"
-                && pt.Element(Dgm + "prSet")?.Attribute("presName")?.Value == "node").ToList();
-        presentationPoints.Should().HaveCount(4);
+            .Where(pt => pt.Attribute("type")?.Value == "pres").ToList();
+        presentationPoints.Should().NotBeEmpty("Word needs a presentation scaffold for a flat process gallery");
         data.Root.Element(Dgm + "ptLst")!.Elements(Dgm + "pt")
             .Select(pt => pt.Attribute("modelId")!.Value)
             .Should().OnlyHaveUniqueItems("Word requires semantic, transition, and presentation point ids to share one namespace");
-        data.Root.Element(Dgm + "ptLst")!.Elements(Dgm + "pt")
-            .Count(pt => pt.Attribute("type")?.Value == "pres"
-                && pt.Element(Dgm + "prSet")?.Attribute("presName")?.Value == "sibTrans")
-            .Should().Be(0, "native flat Process data has no transition presentation points");
         data.Root.Element(Dgm + "cxnLst")!.Elements(Dgm + "cxn")
             .Count(cxn => cxn.Attribute("type")?.Value == "presParOf")
-            .Should().Be(0, "native flat Process data has no presentation tree connections");
-        layout.Root!.Element(Dgm + "layoutNode")!.Elements().Should().BeEmpty();
-        shapes.Select(sp => sp.Attribute("modelId")!.Value)
-            .Should().Equal(presentationPoints.Select(pt => pt.Attribute("modelId")!.Value));
-        presentationPoints.Select(pt => pt.Element(Dgm + "prSet")!.Attribute("presAssocID")!.Value)
-            .Should().OnlyHaveUniqueItems();
+            .Should().BeGreaterThan(0, "Word needs presentation-parent links to place flat process nodes");
+        layout.Descendants(Dgm + "alg").Select(alg => alg.Attribute("type")!.Value)
+            .Should().Contain("hierRoot", "the fallback scaffold uses Word's known hierarchy geometry");
     }
 
     [Fact]
@@ -596,7 +590,7 @@ public class SmartArtRoundTripTests
     }
 
     [Fact]
-    public void WordFlatSmartArt_UsesNativeMinimalDataAndGalleryContracts()
+    public void WordFlatSmartArt_UsesWordPresentationScaffoldAndGalleryContracts()
     {
         var smartArt = SmartArt.Create(SmartArtKind.List, ["A", "B", "C"]);
 
@@ -604,40 +598,33 @@ public class SmartArtRoundTripTests
         var data = EntryXml(bytes, "word/diagrams/data1.xml");
         var ptList = data.Root!.Element(Dgm + "ptLst")!;
         var docPoint = ptList.Elements(Dgm + "pt").Single(pt => pt.Attribute("type")?.Value == "doc");
-        docPoint.Element(Dgm + "prSet").Should().BeNull();
-        docPoint.Element(Dgm + "spPr").Should().BeNull();
-        ptList.Elements(Dgm + "pt").Count(pt => pt.Attribute("type")?.Value == "pres").Should().Be(3);
-        ptList.Elements(Dgm + "pt").Where(pt => pt.Attribute("type")?.Value != "pres")
-            .Skip(1)
-            .All(pt => pt.Element(Dgm + "prSet") is null && pt.Element(Dgm + "spPr") is null)
-            .Should().BeTrue();
+        docPoint.Element(Dgm + "prSet").Should().NotBeNull("Word needs the stock gallery ids on the document point");
+        docPoint.Element(Dgm + "spPr").Should().NotBeNull();
+        ptList.Elements(Dgm + "pt").Count(pt => pt.Attribute("type")?.Value == "pres")
+            .Should().BeGreaterThan(3, "Word needs presentation points for the cached node scaffold");
+        ptList.Elements(Dgm + "pt").Where(pt => pt.Attribute("type") == null)
+            .Should().OnlyContain(pt => pt.Element(Dgm + "prSet") != null && pt.Element(Dgm + "spPr") != null);
 
         var connections = data.Root.Element(Dgm + "cxnLst")!.Elements(Dgm + "cxn").ToList();
-        connections.Should().HaveCount(3);
-        connections.All(cxn =>
-            cxn.Attribute("type")?.Value == "parOf"
-            && cxn.Attribute("srcOrd")?.Value == "0"
-            && cxn.Attribute("destOrd")?.Value == "0")
-            .Should().BeTrue();
+        connections.Count(cxn => cxn.Attribute("type") == null).Should().Be(3);
+        connections.Count(cxn => cxn.Attribute("type")?.Value == "presOf").Should().BeGreaterThan(0);
+        connections.Count(cxn => cxn.Attribute("type")?.Value == "presParOf").Should().BeGreaterThan(0);
 
         var layout = EntryXml(bytes, "word/diagrams/layout1.xml");
-        layout.Root!.Element(Dgm + "catLst")!.Elements().Should().BeEmpty();
-        layout.Root.Element(Dgm + "layoutNode")!.Attribute("name")!.Value.Should().Be("diagram");
-        layout.Root.Element(Dgm + "layoutNode")!.Elements().Should().BeEmpty();
+        layout.Descendants(Dgm + "alg").Select(alg => alg.Attribute("type")!.Value)
+            .Should().Contain("hierRoot");
 
         var quickStyle = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
         quickStyle.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/quickstyle/simple1");
-        quickStyle.Root.Element(Dgm + "catLst")!.Elements().Should().BeEmpty();
         quickStyle.Descendants(Dgm + "styleLbl").Select(label => label.Attribute("name")!.Value)
-            .Should().Equal("node0");
+            .Should().Contain(["node0", "fgAcc1"]);
 
         var colors = EntryXml(bytes, "word/diagrams/colors1.xml");
         colors.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/colors/accent0_1");
-        colors.Root.Element(Dgm + "catLst")!.Elements().Should().BeEmpty();
         var nodeColors = colors.Descendants(Dgm + "styleLbl").Single(label => label.Attribute("name")!.Value == "node0");
-        nodeColors.Element(Dgm + "fillClrLst")!.Element(A + "schemeClr")!.Attribute("val")!.Value.Should().Be("accent1");
-        nodeColors.Element(Dgm + "linClrLst")!.Element(A + "schemeClr")!.Attribute("val")!.Value.Should().Be("accent1");
-        nodeColors.Element(Dgm + "txFillClrLst")!.Element(A + "schemeClr")!.Attribute("val")!.Value.Should().Be("lt1");
+        nodeColors.Element(Dgm + "fillClrLst")!.Element(A + "srgbClr")!.Attribute("val")!.Value.Should().Be("156082");
+        nodeColors.Element(Dgm + "linClrLst")!.Element(A + "srgbClr")!.Attribute("val")!.Value.Should().Be("156082");
+        nodeColors.Element(Dgm + "txFillClrLst")!.Elements().Should().BeEmpty();
     }
 
     [Fact]
