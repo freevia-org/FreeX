@@ -11,6 +11,9 @@ public sealed class LinuxPackagingMetadataTests
     private static string PackagingFile(string name) =>
         RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "Packaging", "linux", name);
 
+    private static string SharedPackagingFile() =>
+        RepositoryFileLocator.Find("tools", "packaging", "linux", "package-linux.sh");
+
     private static Dictionary<string, string> ParseDesktopEntry(string path)
     {
         var entries = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -103,23 +106,24 @@ public sealed class LinuxPackagingMetadataTests
 
         // All three packagers install the metainfo under share/metainfo.
         foreach (var script in new[] { "package-linux-app.sh", "build-appimage.sh", "build-deb.sh" })
-            File.ReadAllText(PackagingFile(script)).Should().Contain("share/metainfo");
+            File.ReadAllText(PackagingFile(script)).Should().Contain("package-linux.sh");
+        File.ReadAllText(SharedPackagingFile()).Should().Contain("share/metainfo");
     }
 
     [Fact]
     public void PackagingScripts_AssembleRelocatableLayout()
     {
-        var packageScript = File.ReadAllText(PackagingFile("package-linux-app.sh"));
+        var packageScript = File.ReadAllText(SharedPackagingFile());
         packageScript.Should().Contain("#!/usr/bin/env bash");
         packageScript.Should().Contain("set -euo pipefail");
-        packageScript.Should().Contain("lib/freex");
+        packageScript.Should().Contain("library_dir");
         packageScript.Should().Contain("install.sh");
         packageScript.Should().Contain("uninstall.sh");
         packageScript.Should().Contain("update-desktop-database");
         packageScript.Should().Contain("update-mime-database");
         packageScript.Should().Contain("tar -C");
 
-        var appImageScript = File.ReadAllText(PackagingFile("build-appimage.sh"));
+        var appImageScript = File.ReadAllText(SharedPackagingFile());
         appImageScript.Should().Contain("AppRun");
         appImageScript.Should().Contain("appimagetool");
         appImageScript.Should().Contain("x86_64");
@@ -129,12 +133,12 @@ public sealed class LinuxPackagingMetadataTests
     [Fact]
     public void DebBuilder_DeclaresControlMaintainerScriptsAndArchMapping()
     {
-        var deb = File.ReadAllText(PackagingFile("build-deb.sh"));
+        var deb = File.ReadAllText(SharedPackagingFile());
 
         deb.Should().Contain("dpkg-deb");
         deb.Should().Contain("DEBIAN/control");
-        deb.Should().Contain("Package: freex");
-        deb.Should().Contain("Architecture: $deb_arch");
+        deb.Should().Contain("Package: %s");
+        deb.Should().Contain("Architecture: %s");
         deb.Should().Contain("linux-x64) deb_arch=\"amd64\"");
         deb.Should().Contain("linux-arm64) deb_arch=\"arm64\"");
         // Maintainer scripts refresh the desktop/MIME/icon caches on install and removal.

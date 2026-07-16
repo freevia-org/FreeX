@@ -20,6 +20,7 @@ public sealed class RepositoryPreflightTests
         script.Should().Contain("FreeX.DefaultTests.slnx");
         script.Should().Contain("ExcludedProjectPathPrefixes");
         script.Should().Contain("Test-MacOsAppReadiness.ps1");
+        script.Should().Contain("Test-LinuxPackagingScripts.ps1");
         script.Should().Contain("Test-GeneratedDocs.ps1");
         script.Should().Contain("Test-ConflictMarkers.ps1");
         script.Should().Contain("Repository preflight checks passed.");
@@ -38,6 +39,7 @@ public sealed class RepositoryPreflightTests
         var projectReferencesScript = CreatePassingPreflightScript(temp.Path, "Test-DotNetProjectReferences.ps1");
         var solutionProjectsScript = CreatePassingPreflightScript(temp.Path, "Test-SolutionProjects.ps1");
         var macOsAppReadinessScript = CreatePassingPreflightScript(temp.Path, "Test-MacOsAppReadiness.ps1");
+        var linuxPackagingScriptsScript = CreatePassingPreflightScript(temp.Path, "Test-LinuxPackagingScripts.ps1");
         var generatedDocsScript = CreatePassingPreflightScript(temp.Path, "Test-GeneratedDocs.ps1");
         var conflictMarkersScript = CreatePassingPreflightScript(temp.Path, "Test-ConflictMarkers.ps1");
 
@@ -51,6 +53,7 @@ public sealed class RepositoryPreflightTests
             $"-DotNetProjectReferencesScriptPath \"{projectReferencesScript}\" " +
             $"-SolutionProjectsScriptPath \"{solutionProjectsScript}\" " +
             $"-MacOsAppReadinessScriptPath \"{macOsAppReadinessScript}\" " +
+            $"-LinuxPackagingScriptsScriptPath \"{linuxPackagingScriptsScript}\" " +
             $"-GeneratedDocsScriptPath \"{generatedDocsScript}\" " +
             $"-ConflictMarkersScriptPath \"{conflictMarkersScript}\"");
 
@@ -66,6 +69,7 @@ public sealed class RepositoryPreflightTests
         result.Output.Should().Contain("Running FreeW solution projects preflight...");
         result.Output.Should().Contain("Running FreeP solution projects preflight...");
         result.Output.Should().Contain("Running macOS app readiness preflight...");
+        result.Output.Should().Contain("Running Linux packaging scripts preflight...");
         result.Output.Should().Contain("Running generated docs preflight...");
         result.Output.Should().Contain("Running Git conflict markers preflight...");
         result.Output.Should().Contain("Repository preflight checks passed.");

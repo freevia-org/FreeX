@@ -79,19 +79,32 @@ Assert-FileContains -Path $mimeFile -Needles @(
 $iconFile = Join-Path $packagingDir "$appId.svg"
 Assert-True (Test-Path -LiteralPath $iconFile) "Linux app icon '$iconFile' was not found."
 
-$packageScript = Join-Path $packagingDir "package-linux-app.sh"
+$packageEntrypoint = Join-Path $packagingDir "package-linux-app.sh"
+Assert-FileContains -Path $packageEntrypoint -Needles @(
+    "package-linux.sh",
+    "--operation tarball"
+)
+
+$packageScript = Get-RepoFile @("tools", "packaging", "linux", "package-linux.sh")
 Assert-FileContains -Path $packageScript -Needles @(
     "--runtime",
     "--published",
     "--output",
-    "lib/freex",
+    'lib/$library_dir',
     "install.sh",
     "uninstall.sh",
     "tar -C",
-    'exec "$here/../lib/freex/FreeX"'
+    'library_dir',
+    'binary_name'
 )
 
-$appImageScript = Join-Path $packagingDir "build-appimage.sh"
+$appImageEntrypoint = Join-Path $packagingDir "build-appimage.sh"
+Assert-FileContains -Path $appImageEntrypoint -Needles @(
+    "package-linux.sh",
+    "--operation appimage"
+)
+
+$appImageScript = Get-RepoFile @("tools", "packaging", "linux", "package-linux.sh")
 Assert-FileContains -Path $appImageScript -Needles @(
     "AppDir",
     "AppRun",
