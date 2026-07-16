@@ -255,11 +255,37 @@ public sealed class ChartSmartArtVisualPlannerTests
 
         var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 360, 200);
 
-        scene.PlotBounds.Should().Be(new ChartSceneRect(68, 54, 267, 72));
+        scene.PlotBounds.Should().Be(new ChartSceneRect(73, 54, 262, 72));
         scene.Texts.Where(text => text.Kind == ChartSceneTextKind.CategoryAxis)
             .Select(text => text.Text)
             .Should().ContainInOrder("150", "155", "160", "165", "170", "175");
         scene.AxisLines.Should().Contain(line => line.X1 == scene.PlotBounds.X && line.X2 == scene.PlotBounds.X);
+    }
+
+    [Fact]
+    public void ChartScene_Style4ScatterMatchesWordCleanPlotArea()
+    {
+        var chart = Chart.Create(ChartKind.Scatter, ["155", "160", "165", "170"], [52, 58, 62, 66]);
+        chart.StyleId = 4;
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 360, 200);
+
+        scene.GridLines.Should().BeEmpty();
+        scene.AxisLines.Should().Contain(line => line.Y1 == scene.PlotBounds.Bottom && line.Y2 == scene.PlotBounds.Bottom);
+    }
+
+    [Fact]
+    public void ChartScene_Style7QuickLayout9ColumnMatchesWordFilledPlot()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"], [1.4, 1.8, 1.6, 2.2]);
+        chart.StyleId = 7;
+        chart.QuickLayoutId = 9;
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 300, 168);
+
+        scene.GridLines.Should().BeEmpty();
+        scene.AxisLines.Count(line => line.Y1 == scene.PlotBounds.Bottom && line.Y2 == scene.PlotBounds.Bottom + 4)
+            .Should().Be(7);
     }
 
     [Fact]

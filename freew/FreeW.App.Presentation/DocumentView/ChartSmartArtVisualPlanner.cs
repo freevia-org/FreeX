@@ -440,6 +440,11 @@ public static class ChartSmartArtVisualPlanner
         var scenePalette = chart.Kind == ChartKind.Scatter
             ? WordScatterMarkerPaletteHex
             : plan.PaletteHex;
+        // These Word gallery combinations retain their authored style flags but render a clean plot
+        // area in the live COM baseline, so this is intentionally a scene-only override.
+        var renderGridlines = plan.ShowGridlines
+            && !(chart.Kind == ChartKind.Scatter && chart.QuickLayoutId <= 0 && chart.StyleId == 4)
+            && !(chart.Kind == ChartKind.Column && chart.StyleId == 7 && chart.QuickLayoutId == 9);
         var frame = new ChartSceneRect(0, 0, Math.Max(24, width), Math.Max(24, height));
         var isPie = chart.Kind is ChartKind.Pie or ChartKind.Doughnut;
         var categoryCount = Math.Max(
@@ -464,7 +469,9 @@ public static class ChartSmartArtVisualPlanner
         var annotationBottomReserve = hasAxisTitles
             ? 62 + (legendCount > 0 ? 14 : 0)
             : 30;
-        var plotLeft = hasAxisTitles ? 44 + valueTitleWidth : 32 + valueTitleWidth;
+        var plotLeft = hasAxisTitles
+            ? (chart.Kind == ChartKind.Scatter ? 49 : 44) + valueTitleWidth
+            : 32 + valueTitleWidth;
         var plotRightMargin = hasAxisTitles ? chart.Kind == ChartKind.Scatter ? 25 : 16 : 8;
         var plot = new ChartSceneRect(
             plotLeft,
@@ -491,7 +498,7 @@ public static class ChartSmartArtVisualPlanner
             for (var value = axis.Minimum; value <= axis.Maximum + axis.MajorUnit / 2; value += axis.MajorUnit)
             {
                 var fraction = (value - axis.Minimum) / axis.Range;
-                if (plan.ShowGridlines && value > axis.Minimum + axis.MajorUnit / 2)
+                if (renderGridlines && value > axis.Minimum + axis.MajorUnit / 2)
                 {
                     if (horizontalGrid)
                     {
@@ -579,6 +586,12 @@ public static class ChartSmartArtVisualPlanner
                         plot.X + category * groupWidth + groupWidth / 2, plot.Bottom,
                         plot.X + category * groupWidth + groupWidth / 2, plot.Bottom + 4,
                         axisStroke, 1));
+                    if (category + 1 < cats)
+                    {
+                        var minorX = plot.X + (category + 0.5) * groupWidth;
+                        axisLines.Add(new ChartSceneLine(minorX, plot.Bottom, minorX, plot.Bottom + 4,
+                            axisStroke, 1));
+                    }
                 }
             }
             else
