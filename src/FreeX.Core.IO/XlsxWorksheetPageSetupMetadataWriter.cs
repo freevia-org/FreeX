@@ -94,11 +94,24 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
 
     private static bool ApplyPageSetupProperties(XElement root, XNamespace workbookNs, Sheet sheet)
     {
+        // sheet.FitToPage is an independent, load-time flag that the Page Setup dialog's
+        // fit-to-page/scale-% toggle (SetPageSetupCommand) never updates -- it only ever writes
+        // sheet.ScaleToFit. Deriving the effective flag from ScaleToFit (mirroring exactly how
+        // XlsxFileAdapter.Save picks between xlSheet.PageSetup.Scale and .FitToPages(...) at
+        // save time -- see XlsxFileAdapter.Save.cs) keeps this post-processing pass from
+        // clobbering a correct ClosedXML-written pageSetUpPr/@fitToPage with a stale value, and
+        // from injecting a fitToPage="1" element for a sheet that is really in scale-% mode.
+        var effectiveFitToPage = DetermineEffectiveFitToPage(sheet);
+
         var sheetProperties = root.Element(workbookNs + "sheetPr");
         var pageSetupProperties = sheetProperties?.Element(workbookNs + "pageSetUpPr");
         if (pageSetupProperties is null)
         {
-            if (sheet.FitToPage is null && sheet.AutoPageBreaks is null)
+            // Only force-create the element for an explicit fit-to-page mode (true) or an
+            // explicit auto-page-breaks flag. A derived "false" (scale mode) needs no element:
+            // omission already means fitToPage=false per the OOXML schema default, matching how
+            // ClosedXML (and Excel itself) omit pageSetUpPr for scale-only page setups.
+            if (effectiveFitToPage is not true && sheet.AutoPageBreaks is null)
                 return false;
 
             sheetProperties ??= new XElement(workbookNs + "sheetPr");
@@ -110,10 +123,30 @@ internal static class XlsxWorksheetPageSetupMetadataWriter
         }
 
         var changed = false;
-        changed |= SetOptionalBoolAttribute(pageSetupProperties, "fitToPage", sheet.FitToPage);
+        changed |= SetOptionalBoolAttribute(pageSetupProperties, "fitToPage", effectiveFitToPage);
         changed |= SetOptionalBoolAttribute(pageSetupProperties, "autoPageBreaks", sheet.AutoPageBreaks);
         changed |= XlsxWorksheetPageLayoutNormalizer.NormalizeSheetPropertiesPageLayout(sheetProperties!);
         return changed;
+    }
+
+    /// <summary>
+    /// Resolves the effective <c>fitToPage</c> flag from the sheet's actual print-scaling mode
+    /// instead of trusting the possibly-stale <see cref="Sheet.FitToPage"/> field. An explicit
+    /// scale percentage always means scale mode (fitToPage must be false so Excel honors
+    /// <c>&lt;pageSetup scale="..."/&gt;</c> instead of stale fitToWidth/fitToHeight attributes);
+    /// an explicit fit-to-page axis (wide and/or tall) always means fit-to-page mode. Only falls
+    /// back to the raw <see cref="Sheet.FitToPage"/> value when neither signal is present, which
+    /// in practice cannot happen because <see cref="Sheet.ScaleToFit"/> always resolves to one of
+    /// the two modes on load (see XlsxFileAdapter.cs) or defaults to 100% scale.
+    /// </summary>
+    private static bool? DetermineEffectiveFitToPage(Sheet sheet)
+    {
+        var scaleToFit = sheet.ScaleToFit;
+        if (scaleToFit.ScalePercent is not null)
+            return false;
+        if (scaleToFit.FitToPagesWide is not null || scaleToFit.FitToPagesTall is not null)
+            return true;
+        return sheet.FitToPage;
     }
 
     private static bool ApplyOutlineProperties(XElement root, XNamespace workbookNs, Sheet sheet)

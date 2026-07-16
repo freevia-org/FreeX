@@ -174,6 +174,11 @@ public partial class GridView
 
     private void DrawChartObjectBackground(DrawingContext dc, ChartModel chart, Rect rect)
     {
+        // R44-meta-1: "No Fill" is an explicit user choice distinct from "nothing set" -- paint
+        // nothing (transparent) instead of falling back to the opaque default chart-area brush.
+        if (chart.IsChartAreaFillSuppressed)
+            return;
+
         var fill = chart.ResolveChartAreaFillColor(WorkbookTheme) is { } fillColor
             ? GetDrawingObjectBrush(255, fillColor)
             : ChartObjectBackgroundBrush;
@@ -182,6 +187,11 @@ public partial class GridView
 
     private void DrawChartObjectBorder(DrawingContext dc, ChartModel chart, Rect rect)
     {
+        // R44-meta-1: "No Line" is an explicit user choice -- draw no border at all rather than
+        // falling back to the default chart-area border pen.
+        if (chart.IsChartAreaLineSuppressed)
+            return;
+
         var borderThickness = chart.ChartAreaBorderThickness is { } thickness &&
             double.IsFinite(thickness) &&
             thickness > 0

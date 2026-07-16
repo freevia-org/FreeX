@@ -103,10 +103,19 @@ internal static class XlsxChartSeriesRangeReader
         var bang = local.LastIndexOf('!');
         if (bang >= 0)
         {
+            // Unquote single-quoted sheet names: 'Sheet Name' → Sheet Name, or bare SheetName
+            var sheetPrefix = local[..bang].Trim('\'');
+
+            // A bracketed prefix (e.g. '[1]Sheet1' or '[Budget.xlsx]Sheet1') is Excel's external-
+            // workbook reference form addressing xl/workbook.xml's externalReferences list. It must
+            // never be silently reinterpreted as a same-workbook sheet reference: doing so would
+            // discard the external link and rebind the chart series to unrelated local-sheet cells
+            // on save. Report unparsable so callers preserve the formula verbatim instead.
+            if (sheetPrefix.Length > 0 && sheetPrefix[0] == '[')
+                return false;
+
             if (sheetNameResolver is not null)
             {
-                // Unquote single-quoted sheet names: 'Sheet Name' → Sheet Name, or bare SheetName
-                var sheetPrefix = local[..bang].Trim('\'');
                 // Also handle doubled single-quotes inside quoted names per OOXML spec
                 sheetPrefix = sheetPrefix.Replace("''", "'", StringComparison.Ordinal);
                 if (sheetNameResolver.TryGetValue(sheetPrefix, out var resolvedId))

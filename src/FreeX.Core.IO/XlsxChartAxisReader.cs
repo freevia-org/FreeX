@@ -183,18 +183,48 @@ internal static class XlsxChartAxisReader
             return;
 
         if (int.TryParse(runProperties.Attribute("sz")?.Value, out var size))
-            chart.AxisTitleFontSize = Math.Clamp(size / 100.0, 6, 72);
+        {
+            var fontSize = Math.Clamp(size / 100.0, 6, 72);
+            // R44-meta-3: keep the shared field for back-compat (last axis read wins, as before),
+            // but ALSO route into the per-axis override field per the isXAxis param so the X and Y
+            // axis titles no longer clobber each other into a single shared value.
+            chart.AxisTitleFontSize = fontSize;
+            if (isXAxis)
+                chart.XAxisTitleFontSize = fontSize;
+            else
+                chart.YAxisTitleFontSize = fontSize;
+        }
 
         var solidFill = runProperties.Element(DrawingNs + "solidFill");
         if (solidFill is not null && XlsxDrawingColorReader.TryReadThemeColorReference(solidFill, DrawingNs, out var themeColor))
         {
             chart.AxisTitleTextThemeColor = themeColor;
             chart.AxisTitleTextColor = null;
+            if (isXAxis)
+            {
+                chart.XAxisTitleTextThemeColor = themeColor;
+                chart.XAxisTitleTextColor = null;
+            }
+            else
+            {
+                chart.YAxisTitleTextThemeColor = themeColor;
+                chart.YAxisTitleTextColor = null;
+            }
         }
         else if (solidFill is not null && XlsxDrawingColorReader.TryReadConcreteColor(solidFill, DrawingNs, out var color))
         {
             chart.AxisTitleTextColor = color;
             chart.AxisTitleTextThemeColor = null;
+            if (isXAxis)
+            {
+                chart.XAxisTitleTextColor = color;
+                chart.XAxisTitleTextThemeColor = null;
+            }
+            else
+            {
+                chart.YAxisTitleTextColor = color;
+                chart.YAxisTitleTextThemeColor = null;
+            }
         }
 
         // Capture verbatim title XML when formatting is richer than the model fields can represent.

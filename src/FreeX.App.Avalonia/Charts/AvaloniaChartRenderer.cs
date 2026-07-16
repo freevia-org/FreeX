@@ -77,9 +77,13 @@ public sealed class AvaloniaChartRenderer
         ArgumentNullException.ThrowIfNull(layout);
 
         // Resolve chart-area fill (canvas background).
-        IBrush canvasBackground = _chart.ResolveChartAreaFillColor(_theme) is { } chartFill
-            ? SolidBrush(chartFill)
-            : SolidBrush(0xFF, 0xFF, 0xFF);
+        // R44-meta-1: "No Fill" is an explicit user choice distinct from "nothing set" -- paint
+        // nothing (transparent) instead of falling back to the opaque default white background.
+        IBrush canvasBackground = _chart.IsChartAreaFillSuppressed
+            ? Brushes.Transparent
+            : _chart.ResolveChartAreaFillColor(_theme) is { } chartFill
+                ? SolidBrush(chartFill)
+                : SolidBrush(0xFF, 0xFF, 0xFF);
 
         var canvas = new Canvas
         {
@@ -146,6 +150,10 @@ public sealed class AvaloniaChartRenderer
 
     private void AddChartAreaBorder(Canvas canvas, double width, double height)
     {
+        // R44-meta-1: "No Line" is an explicit user choice -- draw no border at all.
+        if (_chart.IsChartAreaLineSuppressed)
+            return;
+
         var borderColor = _chart.ResolveChartAreaBorderColor(_theme);
         var thickness = _chart.ChartAreaBorderThickness ?? 0;
         if (borderColor is null || thickness <= 0)
@@ -224,15 +232,21 @@ public sealed class AvaloniaChartRenderer
         if (plot.Width <= 0 || plot.Height <= 0)
             return;
 
-        IBrush fill = _chart.ResolvePlotAreaFillColor(_theme) is { } plotFill
-            ? SolidBrush(plotFill)
-            : DefaultPlotBackground;
+        // R44-meta-1: "No Fill"/"No Line" are explicit user choices distinct from "nothing set" --
+        // paint nothing (transparent) instead of falling back to the default plot-area brushes.
+        IBrush fill = _chart.IsPlotAreaFillSuppressed
+            ? Brushes.Transparent
+            : _chart.ResolvePlotAreaFillColor(_theme) is { } plotFill
+                ? SolidBrush(plotFill)
+                : DefaultPlotBackground;
 
-        IBrush borderBrush = _chart.ResolvePlotAreaBorderColor(_theme) is { } plotBorder
-            ? SolidBrush(plotBorder)
-            : DefaultPlotBorderBrush;
+        IBrush borderBrush = _chart.IsPlotAreaLineSuppressed
+            ? Brushes.Transparent
+            : _chart.ResolvePlotAreaBorderColor(_theme) is { } plotBorder
+                ? SolidBrush(plotBorder)
+                : DefaultPlotBorderBrush;
 
-        double borderThickness = _chart.PlotAreaBorderThickness;
+        double borderThickness = _chart.IsPlotAreaLineSuppressed ? 0 : _chart.PlotAreaBorderThickness;
 
         var rect = new AvaloniaRectangle
         {

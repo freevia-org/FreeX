@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Xml.Linq;
@@ -332,6 +333,23 @@ public sealed partial class XlsxFileAdapter
             XlsxSourceDrawingGeometryRewriter.Save(packageStream, workbook, GetWorksheetPathMap());
         }
 
+        // P8 (R44-io-pivot-filter-page-3-1): on this source-package path, XlsxPivotTableWriter.Save --
+        // the only code that regenerates <pivotFields>/<items> hidden flags and <pageFields> from the
+        // current PivotTableModel -- is gated behind !hasSourcePackage above, so it never runs here. The
+        // pivotTableDefinition part(s) PreserveSourcePackageParts (and the generic unknown-part
+        // passthrough it drives) just restored are the workbook's ORIGINAL, pre-edit XML, copied
+        // verbatim. Rewrite ONLY the page/report-filter selection and the manual item-filter (per-item
+        // hidden flags) on those preserved parts in place from the model, so an in-app edit to either
+        // survives save; mirrors the P7 slicer/timeline selection rewrite immediately below. Must run
+        // after PreserveSourcePackageParts (the parts must already be at their final path). Axis
+        // reassignment (moving a field between Rows/Columns/Filters) needs a structural rewrite of
+        // pivotFields/rowFields/colFields/pageFields together and is intentionally out of scope here.
+        if (featurePlan.HasPivotTables)
+        {
+            packageStream.Position = 0;
+            RewritePivotTableFilterState(packageStream, workbook);
+        }
+
         // P7: slicer/timeline selection/range/level lives in preserved native parts. PreserveSourcePackageParts
         // restored the ORIGINAL slicer/timeline/slicerCache/timelineCache XML, replaying the original selection
         // state; rewrite ONLY those selection/range/level values in place from the model so an in-app change to a
@@ -442,6 +460,267 @@ public sealed partial class XlsxFileAdapter
             packageStream.Position = 0;
             XlsxDrawingSchemaNormalizer.NormalizePackage(packageStream);
         }
+    }
+
+    // P8 (R44-io-pivot-filter-page-3-1): rewrites just the page/report-filter selection and the manual
+    // item-filter (per-item hidden flags) on each PRESERVED pivotTableDefinition part so edits made to
+    // the loaded PivotTableModel after Load() survive Save() on the hasSourcePackage path, where
+    // XlsxPivotTableWriter.Save never runs. Matches a pivot table part to its model purely via
+    // PivotTableModel.PackagePart (the exact archive path the pivot table was loaded from); a pivot
+    // table added since Load() has no PackagePart yet and is intentionally skipped -- a brand-new pivot
+    // table needs a fully regenerated part, not a patch of a part that doesn't exist yet.
+    private static void RewritePivotTableFilterState(Stream packageStream, Workbook workbook)
+    {
+        XNamespace workbookNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Update, leaveOpen: true);
+
+        var cachesById = new Dictionary<int, PivotCacheModel>();
+        foreach (var cache in workbook.PivotCaches)
+        {
+            if (cache.CacheId > 0)
+                cachesById[cache.CacheId] = cache;
+        }
+
+        foreach (var sheet in workbook.Sheets)
+        {
+            foreach (var pivot in sheet.PivotTables)
+            {
+                if (string.IsNullOrWhiteSpace(pivot.PackagePart))
+                    continue;
+
+                var pivotPath = XlsxPackagePath.NormalizePackagePath(pivot.PackagePart);
+                var entry = archive.GetEntry(pivotPath);
+                if (entry is null)
+                    continue;
+
+                var pivotXml = XlsxPackageXmlEditor.LoadXml(entry);
+                var root = pivotXml.Root;
+                if (root is null || root.Name != workbookNs + "pivotTableDefinition")
+                    continue;
+
+                cachesById.TryGetValue(pivot.CacheId, out var cache);
+
+                var changedItemFilters = RewritePreservedPivotFieldItemFilters(root, pivot, cache, workbookNs);
+                var changedPageFields = RewritePreservedPivotPageFieldSelections(root, pivot, cache, workbookNs);
+                if (changedItemFilters || changedPageFields)
+                    XlsxPackageXmlEditor.ReplaceXml(archive, pivotPath, pivotXml);
+            }
+        }
+    }
+
+    // Rewrites each preserved <pageFields>/<pageField>'s item/name selection from the corresponding
+    // PivotFieldModel.SelectedItem. Field matching is by @fld (source field index); a pageField with no
+    // corresponding model entry (e.g. removed from the Filters axis) is left untouched -- axis
+    // reassignment is out of scope for this patch-style rewrite.
+    private static bool RewritePreservedPivotPageFieldSelections(
+        XElement pivotTableDefinitionRoot,
+        PivotTableModel pivot,
+        PivotCacheModel? cache,
+        XNamespace workbookNs)
+    {
+        var pageFieldsElement = pivotTableDefinitionRoot.Element(workbookNs + "pageFields");
+        if (pageFieldsElement is null)
+            return false;
+
+        var changed = false;
+        foreach (var pageFieldElement in pageFieldsElement.Elements(workbookNs + "pageField"))
+        {
+            var fieldIndex = XlsxXmlAttributeReader.ReadIntAttribute(pageFieldElement, "fld");
+            if (fieldIndex is null)
+                continue;
+
+            var model = pivot.PageFields.LastOrDefault(field => field.SourceFieldIndex == fieldIndex.Value);
+            if (model is null)
+                continue;
+
+            if (RewritePreservedPageFieldSelection(pageFieldElement, model, cache))
+                changed = true;
+        }
+
+        return changed;
+    }
+
+    private static bool RewritePreservedPageFieldSelection(
+        XElement pageFieldElement,
+        PivotFieldModel model,
+        PivotCacheModel? cache)
+    {
+        var existingItem = pageFieldElement.Attribute("item")?.Value;
+        var existingName = pageFieldElement.Attribute("name")?.Value;
+
+        if (string.IsNullOrWhiteSpace(model.SelectedItem))
+        {
+            if (existingItem is null && existingName is null)
+                return false;
+
+            pageFieldElement.Attribute("item")?.Remove();
+            pageFieldElement.Attribute("name")?.Remove();
+            return true;
+        }
+
+        var resolvedIndex = ResolvePreservedPageFieldItemIndex(model, cache);
+        if (resolvedIndex is { } index)
+        {
+            var desiredItem = index.ToString(CultureInfo.InvariantCulture);
+            if (existingItem == desiredItem && existingName is null)
+                return false;
+
+            pageFieldElement.SetAttributeValue("item", desiredItem);
+            pageFieldElement.Attribute("name")?.Remove();
+            return true;
+        }
+
+        if (existingName == model.SelectedItem && existingItem is null)
+            return false;
+
+        pageFieldElement.SetAttributeValue("name", model.SelectedItem);
+        pageFieldElement.Attribute("item")?.Remove();
+        return true;
+    }
+
+    // Mirrors XlsxPivotTableWriter's ResolvePivotPageFieldSelectedItemIndex: resolves the model's
+    // selected item TEXT to its position in the pivot cache field's materialized SharedItems list, so
+    // the native @item index attribute (Excel's preferred form) can be written instead of @name.
+    private static int? ResolvePreservedPageFieldItemIndex(PivotFieldModel field, PivotCacheModel? cache)
+    {
+        if (string.IsNullOrWhiteSpace(field.SelectedItem) ||
+            cache is null ||
+            field.SourceFieldIndex < 0 ||
+            field.SourceFieldIndex >= cache.Fields.Count ||
+            cache.Fields[field.SourceFieldIndex].SharedItems is not { Count: > 0 } sharedItems)
+        {
+            return null;
+        }
+
+        for (var index = 0; index < sharedItems.Count; index++)
+        {
+            if (string.Equals(sharedItems[index], field.SelectedItem, StringComparison.Ordinal))
+                return index;
+        }
+
+        return null;
+    }
+
+    // Rewrites each preserved <pivotField>'s <items><item hidden="..."/></items> flags from the
+    // corresponding PivotFieldModel.SelectedItems (the manual item-filter's visible-item list), for any
+    // row/column/page field the model records an explicit selection for. A field with SelectedItems ==
+    // null has no explicit selection recorded (the user never touched its item filter) and is left
+    // completely untouched, preserving whatever the source file originally carried.
+    private static bool RewritePreservedPivotFieldItemFilters(
+        XElement pivotTableDefinitionRoot,
+        PivotTableModel pivot,
+        PivotCacheModel? cache,
+        XNamespace workbookNs)
+    {
+        if (cache is null)
+            return false;
+
+        var pivotFieldsElement = pivotTableDefinitionRoot.Element(workbookNs + "pivotFields");
+        if (pivotFieldsElement is null)
+            return false;
+
+        var pivotFieldElements = pivotFieldsElement.Elements(workbookNs + "pivotField").ToList();
+        var changed = false;
+        for (var fieldIndex = 0; fieldIndex < pivotFieldElements.Count && fieldIndex < cache.Fields.Count; fieldIndex++)
+        {
+            var model = FindPreservedPivotField(pivot, fieldIndex);
+            if (model?.SelectedItems is not { } selectedItems)
+                continue;
+
+            var cacheField = cache.Fields[fieldIndex];
+            if (cacheField.SharedItems is not { Count: > 0 } sharedItems)
+                continue;
+
+            var itemsElement = pivotFieldElements[fieldIndex].Element(workbookNs + "items");
+            if (itemsElement is null)
+                continue;
+
+            var itemElements = itemsElement.Elements(workbookNs + "item").ToList();
+            var rawToMaterialized = ResolvePreservedRawToMaterializedIndexMap(
+                itemElements, cacheField.SharedItemCount, sharedItems.Count);
+            if (rawToMaterialized is null)
+                continue;
+
+            var selectedSet = new HashSet<string>(selectedItems, StringComparer.Ordinal);
+            foreach (var itemElement in itemElements)
+            {
+                var rawIndex = XlsxXmlAttributeReader.ReadIntAttribute(itemElement, "x");
+                if (rawIndex is null || !rawToMaterialized.TryGetValue(rawIndex.Value, out var materializedIndex))
+                    continue;
+
+                var value = sharedItems[materializedIndex];
+                var shouldBeHidden = !selectedSet.Contains(value);
+                var isHidden = XlsxXmlAttributeReader.ReadBoolAttribute(itemElement, "hidden");
+                if (shouldBeHidden == isHidden)
+                    continue;
+
+                if (shouldBeHidden)
+                    itemElement.SetAttributeValue("hidden", "1");
+                else
+                    itemElement.Attribute("hidden")?.Remove();
+                changed = true;
+            }
+        }
+
+        return changed;
+    }
+
+    private static PivotFieldModel? FindPreservedPivotField(PivotTableModel pivot, int sourceFieldIndex) =>
+        pivot.RowFields
+            .Concat(pivot.ColumnFields)
+            .Concat(pivot.PageFields)
+            .LastOrDefault(field => field.SourceFieldIndex == sourceFieldIndex);
+
+    // Maps each raw OOXML shared-item index (the pivotField item's own "x" attribute, which includes any
+    // dropped <m/> blank entries) to its materialized FreeX.Core.Model SharedItems index. When the
+    // field's declared sharedItems count matches (or there is none), the mapping is the identity.
+    // Otherwise reconstructs it purely from the preserved <items> list's own "m" (missing) flags --
+    // mirroring XlsxPivotTableReader.Fields.cs's TryResolveHiddenIndexesAcrossMissingSharedItems -- and
+    // returns null (decline to rewrite this field at all) when that reconstruction is ambiguous.
+    private static Dictionary<int, int>? ResolvePreservedRawToMaterializedIndexMap(
+        List<XElement> itemElements,
+        int? declaredCount,
+        int materializedCount)
+    {
+        if (declaredCount is not { } declared || declared <= materializedCount)
+        {
+            var identity = new Dictionary<int, int>();
+            for (var index = 0; index < materializedCount; index++)
+                identity[index] = index;
+            return identity;
+        }
+
+        var seenRawIndexes = new HashSet<int>();
+        var realRawIndexes = new List<int>();
+        var missingRawIndexCount = 0;
+        foreach (var itemElement in itemElements)
+        {
+            var rawIndex = XlsxXmlAttributeReader.ReadIntAttribute(itemElement, "x");
+            if (rawIndex is not { } index)
+                continue;
+
+            if (index < 0 || index >= declared || !seenRawIndexes.Add(index))
+                return null;
+
+            if (XlsxXmlAttributeReader.ReadBoolAttribute(itemElement, "m"))
+                missingRawIndexCount++;
+            else
+                realRawIndexes.Add(index);
+        }
+
+        if (seenRawIndexes.Count != declared ||
+            realRawIndexes.Count != materializedCount ||
+            missingRawIndexCount != declared - materializedCount)
+        {
+            return null;
+        }
+
+        realRawIndexes.Sort();
+        var map = new Dictionary<int, int>(realRawIndexes.Count);
+        for (var rank = 0; rank < realRawIndexes.Count; rank++)
+            map[realRawIndexes[rank]] = rank;
+
+        return map;
     }
 
     private static XlsxExcelCompatibilityNormalizationPlan CreateExcelCompatibilityNormalizationPlan(

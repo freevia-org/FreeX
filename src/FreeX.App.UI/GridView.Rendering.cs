@@ -339,7 +339,7 @@ public partial class GridView
         // without regard to reading order, so an effectively-RTL cell must bypass them and take the
         // uncached branch, which honors flowDirection.
         var useDefaultTextLayout = !hasSplitRichRuns && !isEffectivelyRightToLeft && CanUseDefaultFormattedText(style, wrapText);
-        var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
+        var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4 - indentPx) : 0;
         var wrapTextAlignment = TextAlignment.Left;
         var useDefaultWrappedTextLayout = false;
         if (!useDefaultTextLayout && wrapText)
@@ -793,7 +793,7 @@ public partial class GridView
             // Effectively-RTL cells must also take this path: the cached default-layout fast paths
             // always build FlowDirection.LeftToRight text regardless of reading order.
             var useDefaultTextLayout = !hasRichRuns && !isEffectivelyRightToLeft && CanUseDefaultFormattedText(style, wrapText);
-            var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;
+            var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4 - indentPx) : 0;
             var wrapTextAlignment = TextAlignment.Left;
             var useDefaultWrappedTextLayout = false;
             if (!useDefaultTextLayout && wrapText)

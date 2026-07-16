@@ -343,6 +343,35 @@ public sealed class Parser
     {
         var node = ParsePrimary();
 
+        // INDEX(...) used as one side of ':' -- real Excel's "reference form" of INDEX, e.g. the
+        // classic SUM(INDEX(A1:C3,1,1):INDEX(A1:C3,3,3)) technique. Only the CellRef-token range
+        // path in ParsePrimary's TokenType.CellRef case (below) currently builds a RangeRefNode
+        // from ':'; a FunctionCallNode result like INDEX(...) otherwise falls straight through the
+        // loop below to the 'break' at the end, leaving the trailing ':' unconsumed -- Parse() then
+        // rejects it as "Unexpected token", which FormulaEvaluator surfaces as #VALUE! for the
+        // whole formula. Fold INDEX(...) to the CellRefNode it targets when that's knowable at
+        // parse time (a literal range shape and literal row/column indices) -- see
+        // TryFoldIndexReferenceToCellRef for exactly what qualifies. A dynamically-indexed INDEX
+        // (e.g. INDEX(A:A,MATCH(...)), the classic dynamic named-range pattern) can't be resolved
+        // this way since the parser has no access to cell values; that shape is left unhandled here
+        // exactly as before (still #VALUE!, not a regression). This only ever applies directly to a
+        // FunctionCallNode fresh off ParsePrimary -- never after '%'/'#'/chained-call has already
+        // been applied to it -- so it's checked once here, before the postfix loop below.
+        if (Current.Type == TokenType.Colon && node is FunctionCallNode indexCall &&
+            TryFoldIndexReferenceToCellRef(indexCall, out var startEndpoint))
+        {
+            Advance();
+            // Parse (and consume) the end endpoint unconditionally, even if the start already
+            // resolved to an out-of-bounds #REF!, so a valid-looking end doesn't leave stray
+            // tokens behind for Parse() to reject as "Unexpected token".
+            var endEndpoint = ParseIndexRangeEndpoint();
+            return startEndpoint is CellRefNode startCellRef
+                ? (endEndpoint is CellRefNode endCellRef
+                    ? new RangeRefNode(startCellRef, endCellRef, startCellRef.SheetName)
+                    : endEndpoint) // end side out-of-bounds/malformed -> its own #REF!
+                : startEndpoint;   // start side out-of-bounds -> #REF!, matching Excel
+        }
+
         while (true)
         {
             if (Current.Type == TokenType.Percent)
@@ -436,6 +465,183 @@ public sealed class Parser
             : throw new FormulaParseException($"Unexpected '#' at position {hashToken.Position}");
     }
 
+    // Parses the end endpoint of an INDEX(...)-anchored range, e.g. the 'C3' or
+    // 'INDEX(A1:C3,3,3)' half of INDEX(A1:C3,1,1):C3 / INDEX(A1:C3,1,1):INDEX(A1:C3,3,3). Mirrors
+    // the plain CellRef range path in ParsePrimary's TokenType.CellRef case: a malformed cell-ref
+    // token still yields ErrorNode(#REF!) via ParseCellRef rather than throwing, and a second
+    // INDEX(...) call is folded the same way the start endpoint was (see
+    // TryFoldIndexReferenceToCellRef). Anything else -- a non-INDEX function call, a dynamically
+    // indexed INDEX, or a token that isn't a reference at all -- throws, exactly as the pre-existing
+    // "Expected cell reference after ':'" case does for the plain CellRef path.
+    private FormulaNode ParseIndexRangeEndpoint()
+    {
+        if (Current.Type == TokenType.CellRef)
+            return ParseCellRef(Advance());
+
+        if (Current.Type == TokenType.FunctionName)
+        {
+            var name = Advance();
+            var openParen = Expect(TokenType.OpenParen);
+            using var nesting = EnterNesting(openParen);
+            var args = ParseArgumentList();
+            Expect(TokenType.CloseParen);
+            var call = new FunctionCallNode(name.Value, args);
+            if (TryFoldIndexReferenceToCellRef(call, out var endResult))
+                return endResult;
+        }
+
+        throw new FormulaParseException(
+            $"Expected cell reference after ':' at position {Current.Position}");
+    }
+
+    // INDEX's "reference form": resolves INDEX(range, row_num[, column_num]) to the CellRefNode it
+    // points at, when every piece is knowable at parse time -- a literal range shape (a plain
+    // CellRef/RangeRef/full-column/full-row reference, or a nested foldable INDEX) and literal
+    // row/column indices. This covers real Excel's classic INDEX-as-range-endpoint technique
+    // verbatim, e.g. SUM(INDEX(A1:C3,1,1):INDEX(A1:C3,3,3)). Returns false (no fold; caller falls
+    // back to the pre-existing "unexpected token" #VALUE! behavior) for anything dynamic -- e.g. a
+    // MATCH(...)-computed row_num, the classic dynamic named-range pattern -- since the parser has
+    // no access to cell values to resolve that. An in-bounds index yields a CellRefNode; an
+    // out-of-bounds one yields ErrorNode(#REF!), matching Excel and mirroring how a malformed
+    // literal cell-ref token already produces ErrorNode(#REF!) elsewhere in this file (see
+    // ParseCellRef).
+    private static bool TryFoldIndexReferenceToCellRef(FunctionCallNode call, out FormulaNode result)
+    {
+        result = null!;
+
+        // No area_num (4-arg) support; row_num alone (1 arg total) isn't valid INDEX syntax.
+        if (call.FunctionName != "INDEX" || call.Arguments.Count is not (2 or 3))
+            return false;
+
+        if (!TryResolveStaticRangeDimensions(call.Arguments[0], out var sheetName, out var startRow,
+                out var startCol, out var rowCount, out var colCount))
+            return false;
+
+        if (call.Arguments[1] is not NumberNode rowArgNode || !TryTruncateNonNegative(rowArgNode.Value, out var rowNum))
+            return false;
+
+        int colNum;
+        if (call.Arguments.Count == 3)
+        {
+            if (call.Arguments[2] is not NumberNode colArgNode ||
+                !TryTruncateNonNegative(colArgNode.Value, out colNum))
+                return false;
+        }
+        else if (rowCount == 1)
+        {
+            // column_num omitted over a single-row range: the lone index selects the column
+            // instead, matching TryEvaluateIndexDirectRange's runtime handling of the same shape.
+            colNum = rowNum;
+            rowNum = 1;
+        }
+        else if (colCount == 1)
+        {
+            colNum = 1;
+        }
+        else
+        {
+            // A 2-D range with column_num omitted selects an entire row (a multi-cell reference),
+            // not a single cell -- not a shape this fold supports; leave unhandled.
+            return false;
+        }
+
+        // 0 means "entire column/row" in real INDEX semantics -- not a single-cell reference,
+        // which is all this fold produces; leave unhandled rather than misrepresent it.
+        if (rowNum < 1 || colNum < 1)
+            return false;
+
+        if (rowNum > rowCount || colNum > colCount)
+        {
+            result = new ErrorNode(Model.ErrorValue.Ref);
+            return true;
+        }
+
+        var targetRow = startRow + (uint)(rowNum - 1);
+        var targetCol = startCol + (uint)(colNum - 1);
+        result = new CellRefNode(Model.CellAddress.NumberToColumnName(targetCol), targetRow, SheetName: sheetName);
+        return true;
+    }
+
+    // Resolves the shape of an INDEX reference argument -- its top-left cell (sheetName/startRow/
+    // startCol) and its dimensions (rowCount/colCount) -- when that's knowable purely from the
+    // parsed AST, no cell values needed. A 3-D sheet-span RangeRefNode (EndSheetName set) is
+    // deliberately excluded: INDEX doesn't accept a multi-sheet reference, matching Excel.
+    private static bool TryResolveStaticRangeDimensions(
+        FormulaNode node, out string? sheetName, out uint startRow, out uint startCol,
+        out long rowCount, out long colCount)
+    {
+        switch (node)
+        {
+            case CellRefNode cell:
+                sheetName = cell.SheetName;
+                startRow = cell.Row;
+                startCol = cell.ColumnNumber;
+                rowCount = 1;
+                colCount = 1;
+                return true;
+
+            case RangeRefNode { EndSheetName: null } range:
+                sheetName = range.SheetName;
+                startRow = Math.Min(range.Start.Row, range.End.Row);
+                startCol = Math.Min(range.Start.ColumnNumber, range.End.ColumnNumber);
+                rowCount = Math.Max(range.Start.Row, range.End.Row) - startRow + 1L;
+                colCount = Math.Max(range.Start.ColumnNumber, range.End.ColumnNumber) - startCol + 1L;
+                return true;
+
+            case FullColumnRangeRefNode fullColumn:
+                sheetName = fullColumn.SheetName;
+                startRow = 1;
+                startCol = Math.Min(fullColumn.StartColumnNumber, fullColumn.EndColumnNumber);
+                rowCount = Model.CellAddress.MaxRow;
+                colCount = Math.Max(fullColumn.StartColumnNumber, fullColumn.EndColumnNumber) - startCol + 1L;
+                return true;
+
+            case FullRowRangeRefNode fullRow:
+                sheetName = fullRow.SheetName;
+                startRow = Math.Min(fullRow.StartRow, fullRow.EndRow);
+                startCol = 1;
+                rowCount = Math.Max(fullRow.StartRow, fullRow.EndRow) - startRow + 1L;
+                colCount = Model.CellAddress.MaxCol;
+                return true;
+
+            case FunctionCallNode nestedIndex when nestedIndex.FunctionName == "INDEX":
+                // A nested INDEX(...) reference, e.g. INDEX(INDEX(A1:C10,2,2),1,1) -- fold the
+                // inner call to its target cell first, then treat that single cell as a 1x1 range,
+                // same as the plain CellRefNode case above.
+                if (TryFoldIndexReferenceToCellRef(nestedIndex, out var nestedResult) &&
+                    nestedResult is CellRefNode nestedCell)
+                {
+                    sheetName = nestedCell.SheetName;
+                    startRow = nestedCell.Row;
+                    startCol = nestedCell.ColumnNumber;
+                    rowCount = 1;
+                    colCount = 1;
+                    return true;
+                }
+
+                sheetName = null; startRow = 0; startCol = 0; rowCount = 0; colCount = 0;
+                return false;
+
+            default:
+                sheetName = null; startRow = 0; startCol = 0; rowCount = 0; colCount = 0;
+                return false;
+        }
+    }
+
+    // Truncates a literal row_num/column_num argument towards zero, the same coercion
+    // TryEvaluateIndexDirectRange's runtime row/col handling applies via its plain (int) cast.
+    // Rejects non-finite or negative values (and anything too large to be a real row/column) so the
+    // caller can fall back to "no fold" instead of risking a wrong #REF!/off-by-one.
+    private static bool TryTruncateNonNegative(double value, out int truncated)
+    {
+        truncated = 0;
+        if (!double.IsFinite(value) || value < 0 || value > int.MaxValue)
+            return false;
+
+        truncated = (int)value;
+        return true;
+    }
+
     // Primary → Number | String | Boolean | FunctionCall | CellRef (potentially with ':' range) | '(' Expression ')'
     private FormulaNode ParsePrimary()
     {
@@ -505,17 +711,17 @@ public sealed class Parser
                 if (cellRef is not CellRefNode rangeStartRef)
                     return cellRef;
 
-                // Check for range operator ':'
+                // Check for range operator ':'. The end endpoint may be a plain cell reference or
+                // -- real Excel's INDEX "reference form" -- an INDEX(...) call that statically
+                // folds to one (e.g. A1:INDEX(A1:C3,3,3)); ParseIndexRangeEndpoint handles both,
+                // same as the INDEX-anchored start-endpoint path in ParsePostfix above.
                 if (Current.Type == TokenType.Colon)
                 {
                     Advance();
-                    if (Current.Type != TokenType.CellRef)
-                        throw new FormulaParseException(
-                            $"Expected cell reference after ':' at position {Current.Position}");
-                    var endRef = ParseCellRef(Advance());
-                    if (endRef is not CellRefNode rangeEndRef)
-                        return endRef;
-                    return new RangeRefNode(rangeStartRef, rangeEndRef);
+                    var endRef = ParseIndexRangeEndpoint();
+                    return endRef is CellRefNode rangeEndRef
+                        ? new RangeRefNode(rangeStartRef, rangeEndRef)
+                        : endRef;
                 }
 
                 return cellRef;

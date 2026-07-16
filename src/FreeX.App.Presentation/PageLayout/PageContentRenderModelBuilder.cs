@@ -598,10 +598,22 @@ public static class PageContentRenderModelBuilder
     private static PresentationRgb ResolveChartOutline(ChartModel chart, WorkbookTheme theme) =>
         PresentationRgb.FromCellColor(chart.ResolveChartAreaBorderColor(theme) ?? new CellColor(217, 217, 217));
 
+    // R44-meta-1: "No Line" is an explicit user choice -- returning 0 here makes the PDF/print
+    // stroke a no-op (WorkbookPdfContentBuilder.AddStrokeRect skips drawing when lineWidth <= 0),
+    // fully suppressing the chart-area border instead of falling back to the default outline.
+    //
+    // NOTE: the matching "No Fill" case (ChartAreaNoFill) cannot be fixed from this file alone --
+    // PageChartBlock.Fill (PageContentRenderModel.cs) is a non-nullable PresentationRgb with no
+    // alpha channel, and its only consumer (WorkbookPdfContentBuilder.AddFillRect at the chart call
+    // site) always paints it opaquely. Representing "no fill" would require adding a nullable/alpha
+    // field to PageChartBlock and updating that unconditional call site, both outside this bucket's
+    // owned files (see PageContentRenderModel.cs / WorkbookPdfContentBuilder.cs). Deferred.
     private static double ResolveChartOutlineThickness(ChartModel chart) =>
-        chart.ChartAreaBorderThickness is { } thickness && double.IsFinite(thickness) && thickness > 0
-            ? thickness
-            : 1.0;
+        chart.IsChartAreaLineSuppressed
+            ? 0
+            : chart.ChartAreaBorderThickness is { } thickness && double.IsFinite(thickness) && thickness > 0
+                ? thickness
+                : 1.0;
 
     private static PageHeadingCell BuildHeadingCell(LayoutRect rect, string label, ITextMeasurer textMeasurer)
     {

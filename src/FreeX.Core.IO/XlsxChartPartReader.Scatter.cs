@@ -45,6 +45,11 @@ public static partial class XlsxChartPartReader
                 if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, modelSeriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
+                // R44-io-chart-datapoint-3-1: per-point <c:dPt> fill overrides (e.g. a single
+                // scatter/bubble marker highlighted with Format Data Point > Fill) were previously
+                // only read for the pie/doughnut family; scatter series dropped them silently.
+                // ApplyPiePointFills is generic over any <c:ser> with <c:dPt> children.
+                XlsxChartSeriesFormatReader.ApplyPiePointFills(series, modelSeriesIndex, result);
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, modelSeriesIndex, result);
                 XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
                 XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);

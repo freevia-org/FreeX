@@ -905,7 +905,7 @@ public sealed partial class Sheet
                         if (table.Range.Contains(candidate)) return true;
                     }
                 }
-                if (_cells.ContainsKey(key))
+                if (_cells.TryGetValue(key, out var occupant))
                 {
                     // A provisional cached spill cell loaded from the XLSX for THIS anchor does not
                     // block the anchor — it is overwritten when the anchor re-spills via SetSpillRange.
@@ -913,7 +913,14 @@ public sealed partial class Sheet
                         _provisionalSpillCells.TryGetValue(key, out var owningAnchor) &&
                         owningAnchor == (anchor.Row, anchor.Col))
                         continue;
-                    return true;
+                    // Excel's spill-blocking rule looks at whether the destination cell has actual
+                    // content (a value or a formula), not whether it merely carries formatting. A cell
+                    // that was cleared via Clear Contents (or had formatting pasted onto it) but keeps
+                    // its StyleId in a live _cells entry — Value is BlankValue and there's no formula —
+                    // is not "occupied" and must not block a spill.
+                    if (occupant.HasFormula || occupant.Value is not BlankValue)
+                        return true;
+                    continue;
                 }
                 if (_spillValues.ContainsKey(key)) return true;
             }

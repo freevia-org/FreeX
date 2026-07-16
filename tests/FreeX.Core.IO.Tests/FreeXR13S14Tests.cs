@@ -143,6 +143,11 @@ public sealed class FreeXR13S14Tests
                         new XElement(SlicerNs + "i", new XAttribute("x", 0), selectedIndex == 0 ? new XAttribute("s", "1") : null),
                         new XElement(SlicerNs + "i", new XAttribute("x", 1), selectedIndex == 1 ? new XAttribute("s", "1") : null),
                         new XElement(SlicerNs + "i", new XAttribute("x", 2), selectedIndex == 2 ? new XAttribute("s", "1") : null))));
+            // R44-io-pivot-filter-page-3-2: a fresh save of a pivot slicer now ALSO emits its own native
+            // <data> element (previously only this injection did), so replace it rather than blindly
+            // appending -- a second <data> sibling is schema-invalid (CT_SlicerCacheDefinition allows at
+            // most one) and would make every native <i> lookup below see duplicates.
+            root.Elements(SlicerNs + "data").Remove();
             root.Add(data);
 
             entry.Delete();

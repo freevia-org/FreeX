@@ -155,13 +155,30 @@ public static partial class ChartRenderer
 
     private static void ApplyAreaStyle(PlotModel model, ChartModel chart, WorkbookTheme theme)
     {
-        if (chart.ResolveChartAreaFillColor(theme) is { } chartFill)
+        // R44-meta-1: "No Fill"/"No Line" are explicit user choices distinct from "nothing set" --
+        // force the OxyPlot model to render transparent instead of leaving its own opaque default.
+        if (chart.IsChartAreaFillSuppressed)
+            model.Background = OxyColors.Transparent;
+        else if (chart.ResolveChartAreaFillColor(theme) is { } chartFill)
             model.Background = OxyColor.FromRgb(chartFill.R, chartFill.G, chartFill.B);
-        if (chart.ResolvePlotAreaFillColor(theme) is { } plotFill)
+
+        if (chart.IsPlotAreaFillSuppressed)
+            model.PlotAreaBackground = OxyColors.Transparent;
+        else if (chart.ResolvePlotAreaFillColor(theme) is { } plotFill)
             model.PlotAreaBackground = OxyColor.FromRgb(plotFill.R, plotFill.G, plotFill.B);
-        if (chart.ResolvePlotAreaBorderColor(theme) is { } plotBorder)
-            model.PlotAreaBorderColor = OxyColor.FromRgb(plotBorder.R, plotBorder.G, plotBorder.B);
-        model.PlotAreaBorderThickness = new OxyThickness(chart.PlotAreaBorderThickness);
+
+        if (chart.IsPlotAreaLineSuppressed)
+        {
+            model.PlotAreaBorderColor = OxyColors.Transparent;
+            model.PlotAreaBorderThickness = new OxyThickness(0);
+        }
+        else
+        {
+            if (chart.ResolvePlotAreaBorderColor(theme) is { } plotBorder)
+                model.PlotAreaBorderColor = OxyColor.FromRgb(plotBorder.R, plotBorder.G, plotBorder.B);
+            model.PlotAreaBorderThickness = new OxyThickness(chart.PlotAreaBorderThickness);
+        }
+
         if (chart.ResolveChartDefaultTextColor(theme) is { } defaultText)
             model.TextColor = OxyColor.FromRgb(defaultText.R, defaultText.G, defaultText.B);
     }

@@ -36,6 +36,13 @@ public static partial class PrintRenderer
         double gridLeft,
         double gridTop)
     {
+        // Multi-pass rendering (fills, then gridlines/borders, then text) mirrors the interactive
+        // grid's layering (GridView.Rendering.cs). A single combined per-cell pass would have the
+        // NEXT column's fill (drawn on the following loop iteration) paint over text that the
+        // PREVIOUS cell already overflowed into that column, clipping it. Drawing every fill first,
+        // then every border, then every piece of text — including overflow text — guarantees text
+        // always layers on top of all fills/borders regardless of which cell "owns" the space it
+        // spills into.
         for (var rowIndex = 0; rowIndex < pageRows.Count; rowIndex++)
         {
             var row = pageRows[rowIndex];
@@ -55,6 +62,23 @@ public static partial class PrintRenderer
                 {
                     DrawPrintedCellFill(dc, cellRect, style);
                 }
+            }
+        }
+
+        for (var rowIndex = 0; rowIndex < pageRows.Count; rowIndex++)
+        {
+            var row = pageRows[rowIndex];
+            var rowHeight = measurement.RowHeightAt(rowIndex);
+            var y = gridTop + measurement.RowOffset(rowIndex);
+            for (var colIndex = 0; colIndex < pageColumns.Count; colIndex++)
+            {
+                var col = pageColumns[colIndex];
+                var colWidth = measurement.ColumnWidthAt(colIndex);
+                var x = gridLeft + measurement.ColumnOffset(colIndex);
+                var cellRect = new Rect(x, y, colWidth, rowHeight);
+
+                cellLookup.TryGetValue((row, col), out var cell);
+                var style = cell.Style;
 
                 if (printGridlines)
                 {
@@ -67,6 +91,23 @@ public static partial class PrintRenderer
                 {
                     DrawPrintedCellBorders(dc, cellRect, style);
                 }
+            }
+        }
+
+        for (var rowIndex = 0; rowIndex < pageRows.Count; rowIndex++)
+        {
+            var row = pageRows[rowIndex];
+            var rowHeight = measurement.RowHeightAt(rowIndex);
+            var y = gridTop + measurement.RowOffset(rowIndex);
+            for (var colIndex = 0; colIndex < pageColumns.Count; colIndex++)
+            {
+                var col = pageColumns[colIndex];
+                var colWidth = measurement.ColumnWidthAt(colIndex);
+                var x = gridLeft + measurement.ColumnOffset(colIndex);
+                var cellRect = new Rect(x, y, colWidth, rowHeight);
+
+                cellLookup.TryGetValue((row, col), out var cell);
+                var style = cell.Style;
 
                 if (hyperlinkLookup.TryGetValue((row, col), out var link))
                 {

@@ -70,6 +70,11 @@ public static partial class XlsxChartPartReader
                 if (barUsesSecondaryAxis)
                     result.SecondaryAxisSeriesIndexes.Add(seriesIndex);
 
+                // R44-io-chart-datapoint-3-1: per-point <c:dPt> fill overrides (e.g. highlighting a
+                // single column with Format Data Point > Fill) were previously only read for the
+                // pie/doughnut family; bar/column series dropped them silently. ApplyPiePointFills is
+                // generic over any <c:ser> with <c:dPt> children, not pie-specific.
+                XlsxChartSeriesFormatReader.ApplyPiePointFills(series, seriesIndex, result);
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
                 XlsxChartDataLabelReader.ApplyRangeDataLabels(series, seriesIndex, result);
                 XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
@@ -107,6 +112,8 @@ public static partial class XlsxChartPartReader
                 if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
+                // R44-io-chart-datapoint-3-1: see the barChart loop above.
+                XlsxChartSeriesFormatReader.ApplyPiePointFills(series, seriesIndex, result);
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
                 XlsxChartDataLabelReader.ApplyRangeDataLabels(series, seriesIndex, result);
                 XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
@@ -140,6 +147,8 @@ public static partial class XlsxChartPartReader
                 if (XlsxChartSeriesFormatReader.TryReadSeriesLine(series, seriesIndex, out var format))
                     result.SeriesFormats.Add(format);
 
+                // R44-io-chart-datapoint-3-1: see the barChart loop above.
+                XlsxChartSeriesFormatReader.ApplyPiePointFills(series, seriesIndex, result);
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
                 XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);
                 XlsxChartTrendlineErrorBarReader.ApplyErrorBars(series, result);
@@ -280,6 +289,11 @@ public static partial class XlsxChartPartReader
                 if (XlsxChartSeriesRangeReader.TryReadSeriesValueColumn(series, sheetId, sheetNameResolver) is { } valueColumn)
                     result.SeriesColumnMappings.Add(new ChartSeriesColumnMapping(seriesIndex, valueColumn));
 
+                // R44-io-chart-datapoint-3-1: per-point <c:dPt> fill overrides (e.g. highlighting a
+                // single column with Format Data Point > Fill) were previously only read for the
+                // pie/doughnut family; bar/column series dropped them silently. ApplyPiePointFills is
+                // generic over any <c:ser> with <c:dPt> children, not pie-specific.
+                XlsxChartSeriesFormatReader.ApplyPiePointFills(series, seriesIndex, result);
                 XlsxChartDataLabelReader.ApplyPointDataLabels(series, seriesIndex, result);
                 XlsxChartDataLabelReader.ApplyRangeDataLabels(series, seriesIndex, result);
                 XlsxChartTrendlineErrorBarReader.ApplyTrendline(series, result);

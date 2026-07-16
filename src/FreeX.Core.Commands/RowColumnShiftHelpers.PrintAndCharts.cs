@@ -90,7 +90,32 @@ internal static partial class RowColumnShiftHelpers
         foreach (var s in workbook.Sheets)
             foreach (var chart in s.Charts)
                 if (chart.DataRange.Start.Sheet == sheetId)
-                    chart.DataRange = ShiftRangeRowsDown(chart.DataRange, start, count) ?? chart.DataRange;
+                {
+                    var shifted = ShiftRangeRowsDown(chart.DataRange, start, count);
+                    chart.DataRange = shifted ?? CollapseDeletedChartRowRange(chart.DataRange, start);
+                }
+    }
+
+    /// <summary>
+    /// ShiftRangeRowsDown returns <see langword="null"/> only when the deleted rows fully
+    /// consumed <paramref name="original"/> (no row of it survives). <see cref="ChartModel.DataRange"/>
+    /// is a non-nullable <see cref="GridRange"/> — unlike a cell formula, which can become a
+    /// literal <c>#REF!</c> error — so there is no way to express "this chart's source is gone"
+    /// in the current model (that would require a model-level change beyond this file's scope).
+    /// Leaving <paramref name="original"/> completely unchanged (the prior behavior) is worse
+    /// than this: because every row below the deleted band has since shifted up, the stale
+    /// multi-row/-column extent would silently alias whatever unrelated data now occupies that
+    /// entire coordinate window. Collapsing to a single row at the delete boundary — the first
+    /// row now occupying that position after the shift — keeps <c>DataRange</c> valid and
+    /// anchored at one deterministic location instead of a whole stale block
+    /// (R44-commands-insert-delete-shift-3-3).
+    /// </summary>
+    private static GridRange CollapseDeletedChartRowRange(GridRange original, uint start)
+    {
+        var row = Math.Min(start, CellAddress.MaxRow);
+        return new GridRange(
+            new CellAddress(original.Start.Sheet, row, original.Start.Col),
+            new CellAddress(original.End.Sheet,   row, original.End.Col));
     }
 
     internal static void ShiftChartColumnsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
@@ -106,7 +131,19 @@ internal static partial class RowColumnShiftHelpers
         foreach (var s in workbook.Sheets)
             foreach (var chart in s.Charts)
                 if (chart.DataRange.Start.Sheet == sheetId)
-                    chart.DataRange = ShiftRangeColumnsDown(chart.DataRange, start, count) ?? chart.DataRange;
+                {
+                    var shifted = ShiftRangeColumnsDown(chart.DataRange, start, count);
+                    chart.DataRange = shifted ?? CollapseDeletedChartColumnRange(chart.DataRange, start);
+                }
+    }
+
+    /// <summary>Column analogue of <see cref="CollapseDeletedChartRowRange"/>.</summary>
+    private static GridRange CollapseDeletedChartColumnRange(GridRange original, uint start)
+    {
+        var col = Math.Min(start, CellAddress.MaxCol);
+        return new GridRange(
+            new CellAddress(original.Start.Sheet, original.Start.Row, col),
+            new CellAddress(original.End.Sheet,   original.End.Row,   col));
     }
 
     // ── Chart series-column-mapping shifting ──────────────────────────────────
