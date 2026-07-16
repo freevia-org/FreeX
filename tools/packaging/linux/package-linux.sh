@@ -4,7 +4,7 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: package-linux.sh --operation <tarball|appimage|deb> --config <file> --asset-dir <dir> --runtime <rid> --published <dir> --version <v> --output <dir> [--appimagetool <path>]" >&2
+  echo "Usage: package-linux.sh --operation <tarball|appimage|deb> --config <file> --asset-dir <dir> --runtime <rid> --published <dir> --version <v> --output <dir> [--appimagetool <path>] [--dry-run]" >&2
 }
 
 die_usage() {
@@ -26,6 +26,7 @@ published=""
 version="0.1.0"
 output=""
 appimagetool=""
+dry_run=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -69,6 +70,10 @@ while [[ $# -gt 0 ]]; do
       appimagetool="$2"
       shift 2
       ;;
+    --dry-run)
+      dry_run=true
+      shift
+      ;;
     *)
       die_usage "Unknown argument: $1"
       ;;
@@ -80,6 +85,27 @@ done
 if [[ "$operation" == "appimage" && -z "$appimagetool" ]]; then
   die_usage "Missing required argument: --appimagetool"
 fi
+
+validate_path_argument() {
+  local value="$1"
+  local label="$2"
+  [[ ! "$value" =~ [[:cntrl:]] ]] || die_usage "$label must not contain control characters."
+}
+
+validate_component_argument() {
+  local value="$1"
+  local label="$2"
+  [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die_usage "$label must be a single safe path component."
+}
+
+# Validate user-controlled path arguments and output-name components before any config or filesystem use.
+validate_path_argument "$config" "--config"
+validate_path_argument "$asset_dir" "--asset-dir"
+validate_path_argument "$published" "--published"
+validate_path_argument "$output" "--output"
+[[ -z "$appimagetool" ]] || validate_path_argument "$appimagetool" "--appimagetool"
+validate_component_argument "$runtime" "--runtime"
+validate_component_argument "$version" "--version"
 
 declare -A config_values=()
 
@@ -93,6 +119,7 @@ load_config() {
     key="${line%%=*}"
     value="${line#*=}"
     [[ "$key" =~ ^[a-z][a-z0-9_]*$ ]] || die_config "invalid key: $key"
+    [[ ! "$value" =~ [[:cntrl:]] ]] || die_config "control characters are not allowed in $key"
     case "$key" in
       product_key|display_name|binary_name|launcher_name|library_dir|app_id|appimage_prefix|stage_prefix|package_name|maintainer|description|description_long_1|description_long_2|mime_asset|cache_mime)
         config_values["$key"]="$value"
@@ -130,10 +157,10 @@ validate_config() {
 
   for key in product_key binary_name launcher_name library_dir app_id appimage_prefix stage_prefix package_name; do
     value="${config_values[$key]}"
-    [[ "$value" =~ ^[A-Za-z0-9._-]+$ ]] || die_config "$key must be a simple path/name value"
+    [[ "$value" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || die_config "$key must be a single safe path component"
   done
-  if [[ -n "$mime_asset" && ! "$mime_asset" =~ ^[A-Za-z0-9._-]+$ ]]; then
-    die_config "mime_asset must be a simple filename"
+  if [[ -n "$mime_asset" && ! "$mime_asset" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    die_config "mime_asset must be a single safe filename"
   fi
   [[ "$cache_mime" == "true" || "$cache_mime" == "false" ]] || die_config "cache_mime must be true or false"
 }
@@ -201,7 +228,8 @@ write_install_script() {
     printf 'cp "$here/share/applications/$app_id.desktop" "$prefix/share/applications/$app_id.desktop"\n'
     printf 'cp "$here/share/icons/hicolor/scalable/apps/$app_id.svg" "$prefix/share/icons/hicolor/scalable/apps/$app_id.svg"\n'
     if [[ -n "$mime_asset" ]]; then
-      printf 'cp "$here/share/mime/packages/$app_id.xml" "$prefix/share/mime/packages/$app_id.xml"\n'
+      printf 'mime_asset="%s"\n' "$mime_asset"
+      printf '%s\n' 'cp "$here/share/mime/packages/$mime_asset" "$prefix/share/mime/packages/$mime_asset"'
     fi
     printf 'cp "$here/share/metainfo/$app_id.metainfo.xml" "$prefix/share/metainfo/$app_id.metainfo.xml"\n'
     printf '%s\n' 'update-desktop-database "$prefix/share/applications" >/dev/null 2>&1 || true'
@@ -224,7 +252,8 @@ write_uninstall_script() {
     printf '%s\n' 'rm -f "$prefix/share/applications/$app_id.desktop"'
     printf '%s\n' 'rm -f "$prefix/share/icons/hicolor/scalable/apps/$app_id.svg"'
     if [[ -n "$mime_asset" ]]; then
-      printf '%s\n' 'rm -f "$prefix/share/mime/packages/$app_id.xml"'
+      printf 'mime_asset="%s"\n' "$mime_asset"
+      printf '%s\n' 'rm -f "$prefix/share/mime/packages/$mime_asset"'
     fi
     printf '%s\n' 'rm -f "$prefix/share/metainfo/$app_id.metainfo.xml"'
     printf '%s\n' 'update-desktop-database "$prefix/share/applications" >/dev/null 2>&1 || true'
@@ -252,7 +281,7 @@ write_cache_script() {
 build_tarball() {
   local stage_name="$stage_prefix-$version-$runtime"
   local stage="$output/$stage_name"
-  rm -rf "$stage"
+  rm -rf -- "$stage"
   mkdir -p "$stage/lib/$library_dir" "$stage/bin"
   make_share_dirs "$stage/share"
   cp -a "$published/." "$stage/lib/$library_dir/"
@@ -263,7 +292,7 @@ build_tarball() {
   write_uninstall_script "$stage/uninstall.sh"
   cp "$asset_dir/README.md" "$stage/README.md" 2>/dev/null || true
   local tarball="$output/$stage_name.tar.gz"
-  rm -f "$tarball"
+  rm -f -- "$tarball"
   tar -C "$output" -czf "$tarball" "$stage_name"
   echo "$tarball"
 }
@@ -277,7 +306,7 @@ build_appimage() {
   esac
 
   local appdir="$output/$appimage_prefix-$runtime.AppDir"
-  rm -rf "$appdir"
+  rm -rf -- "$appdir"
   mkdir -p "$appdir/usr/lib/$library_dir" "$appdir/usr/bin" "$appdir/usr/share/applications" \
     "$appdir/usr/share/icons/hicolor/scalable/apps" "$appdir/usr/share/metainfo"
   if [[ -n "$mime_asset" ]]; then
@@ -303,7 +332,7 @@ build_appimage() {
   chmod +x "$appdir/AppRun"
   mkdir -p "$output"
   local appimage="$output/$appimage_prefix-$version-$arch.AppImage"
-  rm -f "$appimage"
+  rm -f -- "$appimage"
   ARCH="$arch" "$appimagetool" "$appdir" "$appimage" 1>&2
   echo "$appimage"
 }
@@ -317,7 +346,7 @@ build_deb() {
   esac
 
   local pkg_root="$output/${package_name}_${version}_${deb_arch}"
-  rm -rf "$pkg_root"
+  rm -rf -- "$pkg_root"
   mkdir -p "$pkg_root/DEBIAN" "$pkg_root/usr/lib/$library_dir" "$pkg_root/usr/bin"
   make_share_dirs "$pkg_root/usr/share"
   cp -a "$published/." "$pkg_root/usr/lib/$library_dir/"
@@ -340,13 +369,63 @@ build_deb() {
   write_cache_script "$pkg_root/DEBIAN/postinst"
   write_cache_script "$pkg_root/DEBIAN/postrm"
   local deb_path="$output/${package_name}_${version}_${deb_arch}.deb"
-  rm -f "$deb_path"
+  rm -f -- "$deb_path"
   dpkg-deb --root-owner-group --build "$pkg_root" "$deb_path" >/dev/null
   echo "$deb_path"
 }
 
 load_config
 validate_config
+
+validate_operation_runtime() {
+  case "$operation:$runtime" in
+    appimage:linux-x64|appimage:linux-arm64|deb:linux-x64|deb:linux-arm64|tarball:*) ;;
+    appimage:*|deb:*) echo "Unsupported runtime for $operation: $runtime" >&2; exit 1 ;;
+  esac
+}
+
+print_dry_run() {
+  local stage_name="$stage_prefix-$version-$runtime"
+  local output_name
+  case "$operation" in
+    tarball) output_name="$stage_name.tar.gz" ;;
+    appimage)
+      local arch
+      case "$runtime" in
+        linux-x64) arch="x86_64" ;;
+        linux-arm64) arch="aarch64" ;;
+      esac
+      output_name="$appimage_prefix-$version-$arch.AppImage"
+      ;;
+    deb)
+      local deb_arch
+      case "$runtime" in
+        linux-x64) deb_arch="amd64" ;;
+        linux-arm64) deb_arch="arm64" ;;
+      esac
+      output_name="${package_name}_${version}_${deb_arch}.deb"
+      ;;
+  esac
+  printf '%s\n' \
+    "operation=$operation" \
+    "product_key=$product_key" \
+    "app_id=$app_id" \
+    "binary_name=$binary_name" \
+    "launcher_name=$launcher_name" \
+    "mime_asset=$mime_asset" \
+    "runtime=$runtime" \
+    "version=$version" \
+    "output_name=$output_name" \
+    "desktop_asset=$app_id.desktop" \
+    "icon_asset=$app_id.svg" \
+    "metainfo_asset=$app_id.metainfo.xml"
+}
+
+validate_operation_runtime
+if [[ "$dry_run" == true ]]; then
+  print_dry_run
+  exit 0
+fi
 check_published
 
 case "$operation" in
