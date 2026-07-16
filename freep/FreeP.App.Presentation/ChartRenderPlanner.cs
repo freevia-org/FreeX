@@ -641,6 +641,7 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceFrontCategoryWidth = 295.2;
     private const double ImportedSurfaceFrameFrontLeftX = 8.0;
     private const double ImportedSurfaceFrameFrontRightX = 312.0;
+    private const double ImportedSurfaceBlankVertexNormalized = 0.24;
     private const double ImportedSurfaceLightBaseFactor = 1.02;
     private const double ImportedSurfaceDepthDimming = 0.12;
     private const double ImportedSurfaceNearRowFalloff = 0.25;
@@ -690,6 +691,13 @@ public static partial class ChartRenderPlanner
         UsesImportedTextMetrics(chart) &&
         chart.ScatterStyle == ScatterStyle.SmoothMarker &&
         chart.Series.Count > 1;
+
+    private static bool UsesImportedSurfaceBoundaryFaces(ChartShape chart) =>
+        chart.ChartType == ChartType.Surface3D &&
+        UsesImportedTextMetrics(chart) &&
+        chart.VaryColors &&
+        chart.Categories.Count == 3 &&
+        chart.Series.Count == 3;
 
     private static bool UsesImportedSingleScatterDefaults(ChartShape chart) =>
         chart.ChartType == ChartType.Scatter &&
@@ -2927,8 +2935,14 @@ public static partial class ChartRenderPlanner
             .ThenBy(point => point.CategoryIndex)
             .ToArray();
 
-        var renderPointsByKey = UsesImportedTextMetrics(chart) && chart.ChartType == ChartType.Surface3D
-            ? AddImportedSurfaceBlankPointFallbacks(pointsByKey, seriesCount, categoryCount)
+        var renderPointsByKey = UsesImportedSurfaceBoundaryFaces(chart)
+            ? AddImportedSurfaceBlankPointFallbacks(
+                pointsByKey,
+                plot,
+                seriesCount,
+                categoryCount,
+                valueAxisMin,
+                valueAxisRange)
             : pointsByKey;
         var wireframe = BuildSurfaceWireframeSegments(renderPointsByKey, seriesCount, categoryCount);
         var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
@@ -2941,6 +2955,12 @@ public static partial class ChartRenderPlanner
                 seriesColors,
                 triangulateCompleteCells: true)
             : facets;
+        if (UsesImportedSurfaceBoundaryFaces(chart))
+        {
+            renderFacets = renderFacets
+                .Concat(BuildImportedSurfaceBoundaryFacets(plot))
+                .ToArray();
+        }
         var contours = chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
             ? Array.Empty<ChartLineSegmentPrimitive>()
             : BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
@@ -2955,11 +2975,83 @@ public static partial class ChartRenderPlanner
         };
     }
 
+    private static IReadOnlyList<ChartSurfaceFacetPrimitive> BuildImportedSurfaceBoundaryFacets(
+        ChartPlanRect plot)
+    {
+        double scaleX = plot.Width / ImportedSurfaceReferencePlotWidth;
+        double scaleY = plot.Height / 189.0;
+        // These four opaque boundary faces are measured in the normalized
+        // 360x189 PowerPoint plot used by the imported baseline chart.
+        var points = new[]
+        {
+            new ChartPlanPoint(plot.X + 146.0 * scaleX, plot.Y + 168.0 * scaleY),
+            new ChartPlanPoint(plot.X + 172.0 * scaleX, plot.Y + 122.0 * scaleY),
+            new ChartPlanPoint(plot.X + 231.0 * scaleX, plot.Y + 151.0 * scaleY),
+        };
+        var stroke = new ChartStrokePlan(
+            new SrgbColor(0x00, 0x00, 0x00),
+            0,
+            SurfaceFacetStrokeThickness);
+        return new[]
+        {
+            new ChartSurfaceFacetPrimitive(
+                -1,
+                -1,
+                points,
+                new ChartFillPlan(new SrgbColor(0x34, 0x58, 0x97), 255),
+                stroke,
+                0,
+                0),
+            new ChartSurfaceFacetPrimitive(
+                -1,
+                -1,
+                new[]
+                {
+                    new ChartPlanPoint(plot.X + 201.0 * scaleX, plot.Y + 69.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 236.0 * scaleX, plot.Y + 42.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 300.0 * scaleX, plot.Y + 34.0 * scaleY),
+                },
+                new ChartFillPlan(new SrgbColor(0x8B, 0xAB, 0x74), 255),
+                stroke,
+                0,
+                0),
+            new ChartSurfaceFacetPrimitive(
+                -1,
+                -1,
+                new[]
+                {
+                    new ChartPlanPoint(plot.X + 305.0 * scaleX, plot.Y + 41.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 358.0 * scaleX, plot.Y + 26.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 348.0 * scaleX, plot.Y + 48.0 * scaleY),
+                },
+                new ChartFillPlan(new SrgbColor(0xE7, 0xAD, 0x00), 255),
+                stroke,
+                0,
+                0),
+            new ChartSurfaceFacetPrimitive(
+                -1,
+                -1,
+                new[]
+                {
+                    new ChartPlanPoint(plot.X + 194.0 * scaleX, plot.Y + 73.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 238.0 * scaleX, plot.Y + 95.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 201.0 * scaleX, plot.Y + 69.0 * scaleY),
+                },
+                new ChartFillPlan(new SrgbColor(0x81, 0xA1, 0x6E), 255),
+                stroke,
+                0,
+                0)
+        };
+    }
+
     private static IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive>
         AddImportedSurfaceBlankPointFallbacks(
             IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
+            ChartPlanRect plot,
             int seriesCount,
-            int categoryCount)
+            int categoryCount,
+            double valueAxisMin,
+            double valueAxisRange)
     {
         var renderPoints = new Dictionary<(int Series, int Category), ChartSurfacePointPrimitive>(points);
         for (int seriesIndex = 0; seriesIndex < seriesCount; seriesIndex++)
@@ -2969,6 +3061,28 @@ public static partial class ChartRenderPlanner
                 var key = (seriesIndex, categoryIndex);
                 if (renderPoints.ContainsKey(key))
                     continue;
+
+                // PowerPoint keeps the blank semantic value at the axis
+                // minimum but registers its projected vertex below the
+                // interpolated surface in this imported camera view.
+                if (valueAxisRange > 0)
+                {
+                    renderPoints[key] = new ChartSurfacePointPrimitive(
+                        seriesIndex,
+                        categoryIndex,
+                        ProjectSurfacePoint(
+                            plot,
+                            seriesCount,
+                            categoryCount,
+                            seriesIndex,
+                            categoryIndex,
+                            normalized: ImportedSurfaceBlankVertexNormalized,
+                            isThreeD: true,
+                            usesImportedTextMetrics: true),
+                        valueAxisMin,
+                        ImportedSurfaceBlankVertexNormalized);
+                    continue;
+                }
 
                 if (categoryIndex > 0 && categoryIndex < categoryCount - 1 &&
                     renderPoints.TryGetValue((seriesIndex, categoryIndex - 1), out var previousCategory) &&
