@@ -91,29 +91,15 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
-
-function Resolve-RepositoryPath {
-    param(
-        [Parameter(Mandatory = $true)][string]$Path
-    )
-
-    if ([IO.Path]::IsPathRooted($Path)) {
-        $candidate = $Path
-    }
-    else {
-        $candidate = Join-Path $repoRoot $Path
-    }
-
-    return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($candidate)
-}
+. (Join-Path $scriptDir '..\..\tools\ToolScriptSupport.ps1')
+$repoRoot = Resolve-ToolFullPath (Join-Path $scriptDir "..\..")
 
 if (-not $OutDir) {
     $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
     $OutDir = Join-Path $scriptDir "..\runs\visual-evidence-$stamp"
 }
 
-$runRoot = Resolve-RepositoryPath $OutDir
+$runRoot = Resolve-ToolRepoPath -Path $OutDir -RepoRoot $repoRoot
 $wordBaselineRoot = $null
 $wordBaselineRenderRoot = $null
 if ($IncludeWordBaseline) {
@@ -121,12 +107,12 @@ if ($IncludeWordBaseline) {
         Join-Path $runRoot 'word-baseline'
     }
     else {
-        Resolve-RepositoryPath $WordBaselineDir
+        Resolve-ToolRepoPath -Path $WordBaselineDir -RepoRoot $repoRoot
     }
     $wordBaselineRoot = Join-Path $wordBaselineRenderRoot 'word'
 }
 elseif (-not [string]::IsNullOrWhiteSpace($WordBaselineDir)) {
-    $wordBaselineRoot = Resolve-RepositoryPath $WordBaselineDir
+    $wordBaselineRoot = Resolve-ToolRepoPath -Path $WordBaselineDir -RepoRoot $repoRoot
     if (-not (Test-Path -LiteralPath $wordBaselineRoot -PathType Container)) {
         throw "Word baseline directory does not exist: $wordBaselineRoot"
     }
@@ -269,40 +255,6 @@ foreach ($scenario in @($ScenarioId)) {
     }
 }
 $effectiveScenarioIds = @($effectiveScenarioIds | Select-Object -Unique)
-
-function Invoke-DotNetStep {
-    param(
-        [Parameter(Mandatory = $true)][string]$Label,
-        [Parameter(Mandatory = $true)][string[]]$Arguments
-    )
-
-    Write-Host ""
-    Write-Host "== $Label ==" -ForegroundColor Cyan
-    & dotnet @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Label failed with exit code $LASTEXITCODE"
-    }
-}
-
-function Invoke-PowerShellStep {
-    param(
-        [Parameter(Mandatory = $true)][string]$Label,
-        [Parameter(Mandatory = $true)][string]$ScriptPath,
-        [Parameter(Mandatory = $true)][string[]]$Arguments
-    )
-
-    $powerShell = Get-Command powershell.exe -ErrorAction SilentlyContinue
-    if (-not $powerShell) {
-        throw "$Label requires powershell.exe because MS Word COM automation is Windows-only."
-    }
-
-    Write-Host ""
-    Write-Host "== $Label ==" -ForegroundColor Cyan
-    & $powerShell.Path -NoProfile -ExecutionPolicy Bypass -File $ScriptPath @Arguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "$Label failed with exit code $LASTEXITCODE"
-    }
-}
 
 function Assert-BackstageEvidenceReadiness {
     param(
