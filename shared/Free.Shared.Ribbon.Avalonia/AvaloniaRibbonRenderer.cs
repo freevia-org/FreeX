@@ -31,6 +31,7 @@ namespace Free.Shared.Ribbon.Avalonia;
 public static class AvaloniaRibbonRenderer
 {
     private const string FileRibbonTabId = "FileTab";
+    private const string KeyTipBadgeTag = "RibbonKeyTipBadge";
     private const string SelectedTabUnderlineTag = "FreeX.SelectedTabUnderline";
     private const double SmallRowHeight = 26;
     private const double TabHeaderHeight = 28;
@@ -301,6 +302,14 @@ public static class AvaloniaRibbonRenderer
         visit(control);
         switch (control)
         {
+            case TabControl tabControl:
+                foreach (var item in tabControl.Items.OfType<TabItem>())
+                {
+                    if (item.Header is Control header)
+                        ForEachRibbonDescendant(header, visit);
+                    ForEachRibbonDescendant(item, visit);
+                }
+                break;
             case Panel panel:
                 foreach (var child in panel.Children.OfType<Control>())
                     ForEachRibbonDescendant(child, visit);
@@ -314,10 +323,11 @@ public static class AvaloniaRibbonRenderer
         }
     }
 
-    private static Control BuildTabHeader(string header, AvaloniaRibbonPalette palette)
+    private static Control BuildTabHeader(string header, string? keyTip, AvaloniaRibbonPalette palette)
     {
         var grid = new Grid
         {
+            ClipToBounds = false,
             RowDefinitions =
             {
                 new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
@@ -339,6 +349,31 @@ public static class AvaloniaRibbonRenderer
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(5, 0),
         }, 0);
+        if (!string.IsNullOrWhiteSpace(keyTip))
+        {
+            var badge = new Border
+            {
+                Tag = KeyTipBadgeTag,
+                Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xF4, 0xCE)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x76, 0x70, 0x5C)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(2),
+                Padding = new Thickness(3, 0),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                IsVisible = false,
+                Child = new TextBlock
+                {
+                    Text = keyTip.Trim().ToUpperInvariant(),
+                    FontFamily = RibbonFontFamily,
+                    FontSize = 10,
+                    Foreground = Brushes.Black,
+                },
+            };
+            Grid.SetRow(badge, 0);
+            badge.ZIndex = 10;
+            grid.Children.Add(badge);
+        }
         AddHeaderChild(grid, new Border
         {
             Tag = SelectedTabUnderlineTag,
@@ -361,14 +396,14 @@ public static class AvaloniaRibbonRenderer
     /// <summary>Builds a single <see cref="TabItem"/> for a tab (header + content), tagged with the tab id.</summary>
     private static TabItem BuildTabItem(RibbonTab tab, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette) => new()
     {
-        Header = BuildTabHeader(tab.Header, palette),
+        Header = BuildTabHeader(tab.Header, tab.KeyTip, palette),
         Content = BuildTabContent(tab, registry, afterExecute, palette),
         Tag = tab.Id,
     };
 
     private static TabItem BuildFileTabItem(AvaloniaRibbonPalette palette) => new()
     {
-        Header = BuildTabHeader("File", palette),
+        Header = BuildTabHeader("File", "F", palette),
         Content = new Border
         {
             Background = palette.SurfaceBrush,
@@ -391,7 +426,8 @@ public static class AvaloniaRibbonRenderer
         IRibbonCommandRegistry? registry = null,
         IRibbonContextSource? contextSource = null,
         Action? afterExecute = null,
-        RibbonVisualPalette? palette = null)
+        RibbonVisualPalette? palette = null,
+        Action? onFileTabSelected = null)
     {
         ArgumentNullException.ThrowIfNull(definition);
         var resolvedPalette = ResolvePalette(palette);
@@ -418,12 +454,125 @@ public static class AvaloniaRibbonRenderer
 
         if (tabControl.Items.Count > 0)
             tabControl.SelectedIndex = tabControl.Items.Count > 1 ? 1 : 0;
+        var lastContentTabIndex = tabControl.SelectedIndex;
+        var restoringContentTab = false;
         UpdateTabHeaderSelectionStates(tabControl);
-        tabControl.SelectionChanged += (_, _) => UpdateTabHeaderSelectionStates(tabControl);
+        tabControl.SelectionChanged += (_, _) =>
+        {
+            if (restoringContentTab)
+                return;
+
+            if ((tabControl.SelectedItem as TabItem)?.Tag is string selectedId &&
+                string.Equals(selectedId, FileRibbonTabId, StringComparison.Ordinal))
+            {
+                onFileTabSelected?.Invoke();
+                if (lastContentTabIndex >= 0 && lastContentTabIndex < tabControl.Items.Count)
+                {
+                    restoringContentTab = true;
+                    tabControl.SelectedIndex = lastContentTabIndex;
+                    restoringContentTab = false;
+                }
+            }
+            else
+            {
+                lastContentTabIndex = tabControl.SelectedIndex;
+            }
+
+            UpdateTabHeaderSelectionStates(tabControl);
+        };
         if (contextSource is not null)
             contextSource.ContextChanged += (_, _) => SyncContextualTabs(tabControl, definition, registry, contextSource, afterExecute, resolvedPalette);
 
         return tabControl;
+    }
+
+    public static void SetTopLevelKeyTipsVisible(Control ribbon, bool visible)
+    {
+        ArgumentNullException.ThrowIfNull(ribbon);
+        ForEachRibbonDescendant(ribbon, control =>
+        {
+            if (control is Border { Tag: string tag } badge &&
+                string.Equals(tag, KeyTipBadgeTag, StringComparison.Ordinal))
+            {
+                badge.IsVisible = visible;
+            }
+        });
+    }
+
+    public static bool TryActivateTopLevelKeyTip(Control ribbon, string keyTip)
+    {
+        ArgumentNullException.ThrowIfNull(ribbon);
+        if (string.IsNullOrWhiteSpace(keyTip))
+            return false;
+
+        var tabControl = FindTabControl(ribbon);
+        if (tabControl is null)
+            return false;
+
+        var normalized = keyTip.Trim();
+        foreach (var item in tabControl.Items.OfType<TabItem>())
+        {
+            var badge = FindKeyTipBadge(item.Header as Control);
+            if (badge?.Child is not TextBlock label ||
+                !string.Equals(label.Text, normalized, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            tabControl.SelectedItem = item;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static TabControl? FindTabControl(Control control)
+    {
+        if (control is TabControl tabControl)
+            return tabControl;
+
+        switch (control)
+        {
+            case Panel panel:
+                foreach (var child in panel.Children.OfType<Control>())
+                    if (FindTabControl(child) is { } match)
+                        return match;
+                break;
+            case ContentControl { Content: Control content }:
+                return FindTabControl(content);
+            case Decorator { Child: { } child }:
+                return FindTabControl(child);
+        }
+
+        return null;
+    }
+
+    private static Border? FindKeyTipBadge(Control? control)
+    {
+        if (control is null)
+            return null;
+        if (control is Border { Tag: string tag } border &&
+            string.Equals(tag, KeyTipBadgeTag, StringComparison.Ordinal))
+        {
+            return border;
+        }
+
+        if (control is Panel panel)
+        {
+            foreach (var child in panel.Children.OfType<Control>())
+                if (FindKeyTipBadge(child) is { } match)
+                    return match;
+        }
+        else if (control is ContentControl { Content: Control content })
+        {
+            return FindKeyTipBadge(content);
+        }
+        else if (control is Decorator { Child: { } child })
+        {
+            return FindKeyTipBadge(child);
+        }
+
+        return null;
     }
 
     /// <summary>

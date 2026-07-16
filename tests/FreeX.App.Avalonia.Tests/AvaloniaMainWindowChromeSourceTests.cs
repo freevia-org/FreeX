@@ -277,13 +277,15 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         buildContentBlock.Should().Contain("StatusBar: statusBar,");
         buildContentBlock.Should().Contain("BottomPanelsAboveStatus: [sheetTabs],");
         buildContentBlock.Should().Contain("TopPanelsBelowRibbon: [formulaBar]");
-        buildContentBlock.Should().Contain("return frame.Root;");
+        buildContentBlock.Should().Contain("var root = new AvaloniaGrid();");
+        buildContentBlock.Should().Contain("root.Children.Add(frame.Root);");
+        buildContentBlock.Should().Contain("root.Children.Add(BuildBackstageOverlay());");
+        buildContentBlock.Should().Contain("return root;");
         AssertBefore(buildContentBlock, "Ribbon: ribbon,", "WorkArea: BuildWorkbookWorkArea(),");
         AssertBefore(buildContentBlock, "WorkArea: BuildWorkbookWorkArea(),", "StatusBar: statusBar,");
         AssertBefore(buildContentBlock, "StatusBar: statusBar,", "BottomPanelsAboveStatus: [sheetTabs],");
         AssertBefore(buildContentBlock, "BottomPanelsAboveStatus: [sheetTabs],", "TopPanelsBelowRibbon: [formulaBar]");
         buildContentBlock.Should().NotContain("var root = new DockPanel();");
-        buildContentBlock.Should().NotContain("root.Children.Add(");
 
         statusBarBlock.Should().Contain("SisterAppStatusBarChrome.Build(new SisterAppStatusBarSpec(");
         statusBarBlock.Should().Contain("LeftContent: leftPanel,");

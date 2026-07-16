@@ -45,7 +45,12 @@ internal static class AvaloniaRibbonHost
         var registry = AvaloniaRibbonComposition.BuildRegistry(session, setStatus, callbacks);
         var definition = AvaloniaRibbonComposition.BuildDefinition();
         var palette = RibbonVisualPalette.FromTheme(App.ActiveTheme);
-        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition, registry, contextSource, palette: palette);
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
+            definition,
+            registry,
+            contextSource,
+            palette: palette,
+            onFileTabSelected: callbacks.Backstage);
         return (ribbon, () => AvaloniaRibbonRenderer.SyncToggleStates(ribbon, registry, palette));
     }
 
@@ -91,6 +96,9 @@ internal static class AvaloniaRibbonHost
 /// </summary>
 internal sealed record AvaloniaRibbonHostCallbacks
 {
+    /// <summary>File tab - open the Office-style backstage surface.</summary>
+    public Action? Backstage { get; init; }
+
     /// <summary>Data ▸ Text to Columns.</summary>
     public Action? OpenTextToColumns { get; init; }
 

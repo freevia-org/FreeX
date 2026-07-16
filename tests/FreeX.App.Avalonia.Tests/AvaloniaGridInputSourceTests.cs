@@ -89,6 +89,8 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("AddAutofillHandleAdorner(border, zoomFactor);");
         source.Should().Contain("TryBeginAutofillDrag(args, border, address)");
         source.Should().Contain("GridAutofillPlanner.IsOnHandle(");
+        source.Should().NotContain("!_session.SelectedRange.Contains(address)");
+        source.Should().Contain("border.ClipToBounds = false;");
         source.Should().Contain("GridAutofillPlanner.CalculateCompletedSelectionRange(source, fillRange)");
         source.Should().Contain("_session.FillSelectedRange(direction)");
         source.Should().Contain("TryBeginSelectionMoveDrag(args, border, address)");
@@ -125,9 +127,9 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("point.Properties.IsRightButtonPressed");
         source.Should().Contain("point.Properties.IsLeftButtonPressed && args.KeyModifiers.HasFlag(KeyModifiers.Control)");
         source.Should().Contain("if (IsContextClick(point, args))");
-        source.Should().Contain("OpenWorksheetCellContextMenu(border);");
-        source.Should().Contain("OpenColumnHeaderContextMenu(header);");
-        source.Should().Contain("OpenRowHeaderContextMenu(header);");
+        source.Should().Contain("OpenWorksheetCellContextMenu((Control?)_activeCellBorder ?? _sheetGridHost);");
+        source.Should().Contain("OpenColumnHeaderContextMenu(_sheetGridHost);");
+        source.Should().Contain("OpenRowHeaderContextMenu(_sheetGridHost);");
     }
 
     [Fact]

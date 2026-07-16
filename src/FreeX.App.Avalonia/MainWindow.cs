@@ -919,6 +919,7 @@ public sealed partial class MainWindow : Window
         }
 
         Title = FormatWindowWorkbookTitle();
+        ApplyWindowIcon();
         Width = 1120;
         Height = 720;
         MinWidth = 820;
@@ -939,6 +940,7 @@ public sealed partial class MainWindow : Window
     {
         var ribbonCallbacks = new FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHostCallbacks
             {
+                Backstage = ShowBackstageOverlay,
                 OpenTextToColumns = TextToColumns,
                 OpenConsolidate = Consolidate,
                 InsertTable = () => _ = InsertTableFromSelectionAsync(),
@@ -1477,6 +1479,7 @@ public sealed partial class MainWindow : Window
             ribbonCallbacks,
             _ribbonContextSource);
         _refreshRibbonToggleStates = refreshRibbonToggleStates;
+        _ribbonControl = ribbon;
 
         var formulaBar = BuildToolbar();
 
@@ -1490,7 +1493,10 @@ public sealed partial class MainWindow : Window
             BottomPanelsAboveStatus: [sheetTabs],
             TopPanelsBelowRibbon: [formulaBar]));
 
-        return frame.Root;
+        var root = new AvaloniaGrid();
+        root.Children.Add(frame.Root);
+        root.Children.Add(BuildBackstageOverlay());
+        return root;
     }
 
     private Control BuildWorkbookWorkArea()
@@ -3068,7 +3074,7 @@ public sealed partial class MainWindow : Window
         _cellAddressText.VerticalAlignment = AvaloniaVerticalAlignment.Center;
         _cellAddressText.Background = Brushes.Transparent;
         _cellAddressText.BorderThickness = new Thickness(0);
-        _cellAddressText.Padding = new Thickness(0);
+        _cellAddressText.Padding = new Thickness(4, 0, 0, 0);
         _cellAddressText.MinHeight = 0;
         _cellAddressText.Focusable = true;
         _cellAddressText.GotFocus += CellAddressBox_GotFocus;
@@ -6065,7 +6071,7 @@ public sealed partial class MainWindow : Window
             if (IsContextClick(point, args))
             {
                 SelectAllCells();
-                OpenWorksheetCellContextMenu(header);
+                OpenWorksheetCellContextMenu(_sheetGridHost);
                 args.Handled = true;
                 return;
             }
@@ -6092,7 +6098,7 @@ public sealed partial class MainWindow : Window
             {
                 if (!IsSelectedColumn(col))
                     SelectEntireColumn(col);
-                OpenColumnHeaderContextMenu(header);
+                OpenColumnHeaderContextMenu(_sheetGridHost);
                 args.Handled = true;
                 return;
             }
@@ -6122,7 +6128,7 @@ public sealed partial class MainWindow : Window
             {
                 if (!IsSelectedRow(row))
                     SelectEntireRow(row);
-                OpenRowHeaderContextMenu(header);
+                OpenRowHeaderContextMenu(_sheetGridHost);
                 args.Handled = true;
                 return;
             }
@@ -6703,7 +6709,6 @@ public sealed partial class MainWindow : Window
     private bool TryBeginAutofillDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
     {
         if (!args.GetCurrentPoint(capture).Properties.IsLeftButtonPressed ||
-            !_session.SelectedRange.Contains(address) ||
             !IsPointerOnAutofillHandle(args))
         {
             return false;
@@ -6723,8 +6728,10 @@ public sealed partial class MainWindow : Window
             _session.Viewport,
             _session.SelectedRange,
             new GridPoint(pos.X, pos.Y),
-            _session.ActiveSheet.ShowHeadings ? HeaderColumnWidth * GetActiveZoomFactor() : 0,
-            _session.ActiveSheet.ShowHeadings ? HeaderRowHeight * GetActiveZoomFactor() : 0);
+            _session.ActiveSheet.ShowHeadings ? GetRowHeaderWidth(_session.Viewport, GetActiveZoomFactor()) : 0,
+            _session.ActiveSheet.ShowHeadings ? HeaderRowHeight * GetActiveZoomFactor() : 0,
+            handleSize: Math.Max(8, 8 * GetActiveZoomFactor()),
+            hitPadding: Math.Max(5, 5 * GetActiveZoomFactor()));
     }
 
     private void ContinueAutofillDrag(PointerEventArgs args, CellAddress target)
@@ -7220,6 +7227,9 @@ public sealed partial class MainWindow : Window
         FlowDirection flowDirection = FlowDirection.LeftToRight,
         CellCommentDisplay? commentDisplay = null)
     {
+        var applySelectionFill = selected &&
+            address != _session.ActiveCell &&
+            mergeRegion?.Contains(_session.ActiveCell) != true;
         var border = CreateCellBorder(
             text,
             background,
@@ -7231,7 +7241,7 @@ public sealed partial class MainWindow : Window
             fontStyle,
             fontSize,
             textDecorations,
-            selected,
+            applySelectionFill,
             indentPadding,
             textRotation,
             style,
@@ -7249,6 +7259,9 @@ public sealed partial class MainWindow : Window
             richRuns: richRuns,
             flowDirection: flowDirection,
             commentDisplay: commentDisplay);
+
+        if (selected)
+            AddSelectionOutlineAdorner(border, address, mergeRegion, zoomFactor);
 
         // Comment/note corner indicator + hover card: mirrors WPF's GridView.Rendering.cs
         // DrawCommentIndicator (small top-right triangle, red for a legacy note, purple for a
@@ -7306,8 +7319,9 @@ public sealed partial class MainWindow : Window
             {
                 // Right-click selects the clicked cell (so the menu commands target it) and then
                 // opens the worksheet cell context menu, built from the shared neutral plan.
-                SelectCell(address);
-                OpenWorksheetCellContextMenu(border);
+                if (!IsSelectedCell(address))
+                    SelectCell(address);
+                OpenWorksheetCellContextMenu((Control?)_activeCellBorder ?? _sheetGridHost);
                 args.Handled = true;
                 return;
             }
@@ -7645,10 +7659,76 @@ public sealed partial class MainWindow : Window
         return fontSize;
     }
 
+    private void AddSelectionOutlineAdorner(
+        Border border,
+        CellAddress address,
+        GridRange? mergeRegion,
+        double zoomFactor)
+    {
+        var visualRange = mergeRegion ?? new GridRange(address, address);
+        var top = false;
+        var right = false;
+        var bottom = false;
+        var left = false;
+
+        foreach (var range in _session.SelectedRanges)
+        {
+            if (!range.Overlaps(visualRange))
+                continue;
+
+            top |= visualRange.Start.Row <= range.Start.Row && range.Start.Row <= visualRange.End.Row;
+            bottom |= visualRange.Start.Row <= range.End.Row && range.End.Row <= visualRange.End.Row;
+            left |= visualRange.Start.Col <= range.Start.Col && range.Start.Col <= visualRange.End.Col;
+            right |= visualRange.Start.Col <= range.End.Col && range.End.Col <= visualRange.End.Col;
+        }
+
+        if (!top && !right && !bottom && !left)
+            return;
+
+        var existing = border.Child;
+        border.Child = null;
+        var layer = new AvaloniaGrid { ClipToBounds = true };
+        layer.Children.Add(existing!);
+
+        var thickness = Math.Max(2, 2 * zoomFactor);
+        if (top)
+            layer.Children.Add(CreateSelectionOutlineEdge(thickness, horizontal: true, start: true));
+        if (right)
+            layer.Children.Add(CreateSelectionOutlineEdge(thickness, horizontal: false, start: false));
+        if (bottom)
+            layer.Children.Add(CreateSelectionOutlineEdge(thickness, horizontal: true, start: false));
+        if (left)
+            layer.Children.Add(CreateSelectionOutlineEdge(thickness, horizontal: false, start: true));
+
+        border.Child = layer;
+    }
+
+    private static AvaloniaRectangle CreateSelectionOutlineEdge(
+        double thickness,
+        bool horizontal,
+        bool start) =>
+        new()
+        {
+            Fill = SelectionBorder,
+            Width = horizontal ? double.NaN : thickness,
+            Height = horizontal ? thickness : double.NaN,
+            HorizontalAlignment = horizontal
+                ? AvaloniaHorizontalAlignment.Stretch
+                : start
+                    ? AvaloniaHorizontalAlignment.Left
+                    : AvaloniaHorizontalAlignment.Right,
+            VerticalAlignment = horizontal
+                ? start
+                    ? AvaloniaVerticalAlignment.Top
+                    : AvaloniaVerticalAlignment.Bottom
+                : AvaloniaVerticalAlignment.Stretch,
+            IsHitTestVisible = false,
+        };
+
     private static void AddAutofillHandleAdorner(Border border, double zoomFactor)
     {
         var existing = border.Child;
-        var handleSize = Math.Max(6, 7 * zoomFactor);
+        var handleSize = Math.Max(8, 8 * zoomFactor);
         // Detach 'existing' from 'border' before re-parenting it into the new layer Grid.
         // Avalonia (unlike WPF) throws InvalidOperationException if a control still has a
         // visual parent when it is added to a second parent's Children collection.
@@ -7665,20 +7745,28 @@ public sealed partial class MainWindow : Window
             Children =
             {
                 existing!,
-                new AvaloniaRectangle
+                new Border
                 {
                     Width = handleSize,
                     Height = handleSize,
-                    Fill = SelectionBorder,
+                    Background = Brushes.White,
+                    BorderBrush = SelectionBorder,
+                    BorderThickness = new Thickness(Math.Max(1, zoomFactor)),
                     HorizontalAlignment = AvaloniaHorizontalAlignment.Right,
                     VerticalAlignment = AvaloniaVerticalAlignment.Bottom,
                     IsHitTestVisible = false,
                     Margin = new Thickness(0, 0, -overhang, -overhang),
+                    Child = new Border
+                    {
+                        Background = SelectionBorder,
+                        Margin = new Thickness(Math.Max(1, zoomFactor)),
+                    },
                 }
             }
         };
 
         border.Child = layer;
+        border.ClipToBounds = false;
     }
 
     private bool TryInsertFormulaPointReference(CellAddress address)
@@ -8270,12 +8358,10 @@ public sealed partial class MainWindow : Window
         return new Border
         {
             Background = background,
-            BorderBrush = selected ? SelectionBorder : showGridlines ? GridLine : Brushes.Transparent,
-            BorderThickness = selected
+            BorderBrush = showGridlines ? GridLine : Brushes.Transparent,
+            BorderThickness = showGridlines
                 ? new Thickness(scaledBorderThickness)
-                : showGridlines
-                    ? new Thickness(scaledBorderThickness)
-                    : new Thickness(0),
+                : new Thickness(0),
             ClipToBounds = true,
             Child = cellContent,
         };
@@ -21878,6 +21964,16 @@ public sealed partial class MainWindow : Window
 
     private async Task MainWindow_KeyDownAsync(KeyEventArgs e)
     {
+        if (TryHandleRibbonKeyTips(e))
+            return;
+
+        if (_backstageOverlay.IsVisible && e.Key == Key.Escape)
+        {
+            HideBackstageOverlay();
+            e.Handled = true;
+            return;
+        }
+
         if (IsShellFocusCycleKey(e))
         {
             e.Handled = true;

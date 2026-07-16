@@ -324,8 +324,13 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
     // AddAutofillHandleAdorner wraps the cell's existing content plus a small solid Rectangle
     // (the fill-handle square) in a new layer Grid — see MainWindow.cs AddAutofillHandleAdorner.
     private static bool HasAutofillHandleAdorner(Border border) =>
-        FindDescendants(border).OfType<global::Avalonia.Controls.Shapes.Rectangle>()
-            .Any(r => r.Width > 0 && r.Width == r.Height && r.Width <= 12);
+        FindDescendants(border).OfType<Border>()
+            .Any(candidate =>
+                candidate.Width > 0 &&
+                candidate.Width == candidate.Height &&
+                candidate.Width <= 12 &&
+                candidate.Margin.Right < 0 &&
+                candidate.Margin.Bottom < 0);
 
     private static IEnumerable<Control> FindDescendants(Control root)
     {

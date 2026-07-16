@@ -311,6 +311,47 @@ public sealed class AvaloniaRibbonRendererTests
     });
 
     [Fact]
+    public Task FileTab_InvokesBackstageWithoutChangingTheSelectedContentTab() => RunOnUiThread(() =>
+    {
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { });
+        var opened = 0;
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
+            definition,
+            registry,
+            onFileTabSelected: () => opened++);
+        var tabControl = Assert.IsType<TabControl>(ribbon);
+
+        tabControl.SelectedIndex = 0;
+
+        Assert.Equal(1, opened);
+        Assert.Equal(1, tabControl.SelectedIndex);
+        Assert.Equal("HomeTab", ((TabItem)tabControl.SelectedItem!).Tag);
+    });
+
+    [Fact]
+    public Task TopLevelKeyTips_ShowAndActivateTheMatchingTab() => RunOnUiThread(() =>
+    {
+        var definition = new RibbonDefinitionBuilder()
+            .Tab("home", "Home", "H", tab => tab.Group("g", "G", "G", 1, group => group.Button("b", "B")))
+            .Tab("insert", "Insert", "N", tab => tab.Group("g2", "G2", "G", 1, group => group.Button("b2", "B2")))
+            .Build();
+        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(definition);
+        var tabControl = Assert.IsType<TabControl>(ribbon);
+
+        AvaloniaRibbonRenderer.SetTopLevelKeyTipsVisible(ribbon, true);
+        var badges = ribbon.GetLogicalDescendants()
+            .OfType<Border>()
+            .Where(border => Equals(border.Tag, "RibbonKeyTipBadge"))
+            .ToArray();
+
+        Assert.Equal(3, badges.Length);
+        Assert.All(badges, badge => Assert.True(badge.IsVisible));
+        Assert.True(AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(ribbon, "N"));
+        Assert.Equal("insert", ((TabItem)tabControl.SelectedItem!).Tag);
+    });
+
+    [Fact]
     public Task BuildRibbon_UsesCompactTabAndComboStyles() => RunOnUiThread(() =>
     {
         var definition = AvaloniaRibbonComposition.BuildDefinition();
