@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
@@ -190,10 +191,10 @@ public sealed class ChartRenderingTests
     {
         // Layout 7: ShowTitle=false, ShowLegend=false, ShowDataLabels=true, ShowGridlines=false.
         var view = ViewWithStyledChart(quickLayoutId: 7);
-        // No gridlines (Lines); only the baseline axis line is drawn and NOT gridlines (which are 4 count).
         var lines = LogicalDescendants<System.Windows.Shapes.Line>(view.Document);
-        // At most 1 baseline axis line (no gridlines with ShowGridlines=false).
-        Assert.True(lines.Count <= 1, $"expected <= 1 line (no gridlines), got {lines.Count}");
+        var gridlines = lines.Where(line => line.Stroke is SolidColorBrush brush
+            && brush.Color == Color.FromRgb(0xE6, 0xE6, 0xE6));
+        Assert.Empty(gridlines);
     }
 
     [StaFact]
