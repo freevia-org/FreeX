@@ -63,6 +63,25 @@ public static class SplitPaneCellLayoutPlanner
 
             var isTopPane = topRowLookup.TryGetValue(cell.Row, out var topRow);
             var isLeftPane = leftColumnLookup.TryGetValue(cell.Col, out var leftColumn);
+
+            if (merge.HasValue)
+            {
+                EmitMergeLayouts(
+                    cell,
+                    merge.Value,
+                    isTopPane,
+                    isLeftPane,
+                    topRowLookup,
+                    bottomLeftRowLookup,
+                    leftColumnLookup,
+                    topRightColumnLookup,
+                    rowHeaderWidth,
+                    horizontalY,
+                    verticalX,
+                    ref consumer);
+                continue;
+            }
+
             var region = ResolveSplitPaneRegion(isTopPane, isLeftPane);
             var row = isTopPane
                 ? topRow
@@ -78,15 +97,9 @@ public static class SplitPaneCellLayoutPlanner
             if (row is null || column is null)
                 continue;
 
-            var rowMetrics = isTopPane ? topRowLookup : bottomLeftRowLookup;
             var colMetrics = isLeftPane ? leftColumnLookup : topRightColumnLookup;
             var width = column.Width;
             var height = row.Height;
-            if (merge.HasValue)
-            {
-                width += SumMergedColumnWidths(merge.Value, colMetrics, cell.Col);
-                height += SumMergedRowHeights(merge.Value, rowMetrics, cell.Row);
-            }
 
             var x = isLeftPane
                 ? rowHeaderWidth + column.LeftOffset
@@ -115,6 +128,88 @@ public static class SplitPaneCellLayoutPlanner
         }
     }
 
+    /// <summary>
+    /// A merged cell that crosses a View&gt;Split vertical divider must still render across both the
+    /// left and right pane (clipped per pane), matching real Excel, instead of being truncated to
+    /// whichever pane the anchor's own column falls in. The merge's row footprint stays scoped to the
+    /// anchor's own row band exactly as before (top vs. bottom pane) — only the column footprint is
+    /// widened to cross the divider — since that is the reported failure (see
+    /// SplitPaneCellLayoutPlanner_BoundsTallMergeWorkToVisibleCells, which pins the existing row-band
+    /// behavior for an unrelated giant-merge performance scenario). Only the quadrant containing the
+    /// merge's anchor cell renders text/icon/comment/data-bar content — the other quadrant renders
+    /// fill/border only, via <see cref="StripContentForSecondaryMergeQuadrant"/>, so content is never
+    /// drawn twice.
+    /// </summary>
+    private static void EmitMergeLayouts<TConsumer>(
+        DisplayCell cell,
+        GridRange merge,
+        bool anchorIsTopPane,
+        bool anchorIsLeftPane,
+        SplitPaneRowMetricLookup topRowLookup,
+        SplitPaneRowMetricLookup bottomLeftRowLookup,
+        SplitPaneColumnMetricLookup leftColumnLookup,
+        SplitPaneColumnMetricLookup topRightColumnLookup,
+        double rowHeaderWidth,
+        double horizontalY,
+        double verticalX,
+        ref TConsumer consumer)
+        where TConsumer : struct, ISplitPaneCellLayoutConsumer
+    {
+        var rowLookup = anchorIsTopPane ? topRowLookup : bottomLeftRowLookup;
+        if (FindMergeRowSpan(rowLookup, merge) is not { } rowSpan)
+            return;
+
+        var yOrigin = anchorIsTopPane ? GridView.ColHeaderHeight : horizontalY;
+        var primaryColumns = anchorIsLeftPane ? leftColumnLookup : topRightColumnLookup;
+        var secondaryColumns = anchorIsLeftPane ? topRightColumnLookup : leftColumnLookup;
+        var primarySpan = FindMergeColumnSpan(primaryColumns, merge);
+
+        // The secondary pane's box only covers the part of the merge's columns that ISN'T already
+        // shown by the anchor's own pane. Normally the two pane's column sets are disjoint, so this
+        // is simply the whole remainder; but it also correctly yields "nothing more to draw" for a
+        // (degenerate) viewport where both panes happen to share the same column metrics.
+        var secondarySpan = FindMergeColumnSpan(secondaryColumns, merge, exclude: primaryColumns);
+        var primaryOrigin = anchorIsLeftPane ? rowHeaderWidth : verticalX;
+        var secondaryOrigin = anchorIsLeftPane ? verticalX : rowHeaderWidth;
+        var primaryRegion = ResolveSplitPaneRegion(anchorIsTopPane, anchorIsLeftPane);
+        var secondaryRegion = ResolveSplitPaneRegion(anchorIsTopPane, !anchorIsLeftPane);
+
+        EmitMergeQuadrant(cell, rowSpan, primarySpan, primaryRegion, primaryOrigin, yOrigin, isPrimary: true, ref consumer);
+        EmitMergeQuadrant(cell, rowSpan, secondarySpan, secondaryRegion, secondaryOrigin, yOrigin, isPrimary: false, ref consumer);
+    }
+
+    private static void EmitMergeQuadrant<TConsumer>(
+        DisplayCell cell,
+        (double Offset, double Size) rowSpan,
+        (double Offset, double Size)? colSpan,
+        SplitPaneRegion region,
+        double xOrigin,
+        double yOrigin,
+        bool isPrimary,
+        ref TConsumer consumer)
+        where TConsumer : struct, ISplitPaneCellLayoutConsumer
+    {
+        if (colSpan is not { } cols)
+            return;
+
+        var rect = new Rect(xOrigin + cols.Offset, yOrigin + rowSpan.Offset, cols.Size, rowSpan.Size);
+        var layoutCell = isPrimary ? cell : StripContentForSecondaryMergeQuadrant(cell);
+
+        consumer.AcceptLayout(new SplitPaneCellLayout(layoutCell, rect, rect, region));
+    }
+
+    // Excel never repeats a merged cell's text/icon/comment/data-bar in more than one place, but its
+    // fill/border must continue into every pane the merge crosses — so the non-anchor quadrant(s) keep
+    // Style (for fill/border) while their content is cleared so it isn't drawn twice.
+    private static DisplayCell StripContentForSecondaryMergeQuadrant(DisplayCell cell) =>
+        cell with
+        {
+            DisplayText = string.Empty,
+            HasComment = false,
+            ConditionalIcon = null,
+            ConditionalDataBar = null,
+        };
+
     private struct SplitPaneCellLayoutCollector(IReadOnlyList<DisplayCell> cells) : ISplitPaneCellLayoutConsumer
     {
         private readonly IReadOnlyList<DisplayCell> _cells = cells;
@@ -123,15 +218,23 @@ public static class SplitPaneCellLayoutPlanner
         private Rect[]? _rects;
         private Rect[]? _textClipRects;
         private SplitPaneRegion[]? _regions;
+        // Lazily allocated only when a layout's Cell differs from the source cell at its resolved
+        // index - i.e. a merged cell crossing a View>Split divider, whose secondary-pane quadrant
+        // carries content stripped by StripContentForSecondaryMergeQuadrant. Most cells never need
+        // this, so it stays null in the common case.
+        private DisplayCell?[]? _cellOverrides;
         private int _count;
 
         public void AcceptLayout(SplitPaneCellLayout layout)
         {
             EnsureCapacity();
-            _cellIndexes![_count] = FindCellIndex(layout.Cell.Row, layout.Cell.Col);
+            var index = FindCellIndex(layout.Cell.Row, layout.Cell.Col);
+            _cellIndexes![_count] = index;
             _rects![_count] = layout.Rect;
             _textClipRects![_count] = layout.TextClipRect;
             _regions![_count] = layout.Region;
+            if (!layout.Cell.Equals(_cells[index]))
+                (_cellOverrides ??= new DisplayCell?[_cellIndexes.Length])[_count] = layout.Cell;
             _count++;
         }
 
@@ -144,6 +247,7 @@ public static class SplitPaneCellLayoutPlanner
                     _rects!,
                     _textClipRects!,
                     _regions!,
+                    _cellOverrides,
                     _count);
 
         private void EnsureCapacity()
@@ -151,7 +255,9 @@ public static class SplitPaneCellLayoutPlanner
             if (_cellIndexes is not null)
                 return;
 
-            var capacity = _cells.Count;
+            // A merged cell crossing a View>Split divider is now emitted once per pane it touches
+            // (up to 2), not once overall - so capacity must cover more layouts than source cells.
+            var capacity = _cells.Count * 2;
             _cellIndexes = new int[capacity];
             _rects = new Rect[capacity];
             _textClipRects = new Rect[capacity];
@@ -187,6 +293,7 @@ public static class SplitPaneCellLayoutPlanner
         Rect[] rects,
         Rect[] textClipRects,
         SplitPaneRegion[] regions,
+        DisplayCell?[]? cellOverrides,
         int count) : IReadOnlyList<SplitPaneCellLayout>
     {
         public int Count { get; } = count;
@@ -200,7 +307,7 @@ public static class SplitPaneCellLayoutPlanner
                     throw new ArgumentOutOfRangeException(nameof(index));
 
                 return new SplitPaneCellLayout(
-                    cells[cellIndexes[index]],
+                    cellOverrides?[index] ?? cells[cellIndexes[index]],
                     rects[index],
                     textClipRects[index],
                     regions[index]);
@@ -703,30 +810,62 @@ public static class SplitPaneCellLayoutPlanner
         return width;
     }
 
-    private static double SumMergedColumnWidths(GridRange merge, SplitPaneColumnMetricLookup columns, uint anchorCol)
+    // Finds the portion of a merge's column range ([merge.Start.Col, merge.End.Col]) that is visible
+    // within a single pane's column lookup, returning that pane-local box's left offset (of its
+    // leftmost in-range column) and total width — or null if the pane doesn't show any of those
+    // columns at all. Used to render a merge's footprint separately in every pane it crosses.
+    // `exclude`, when given, skips any column also present there — used so a secondary (non-anchor)
+    // pane's box only covers the part of the merge NOT already shown by the anchor's own pane, even
+    // in the degenerate case where two panes' column sets overlap.
+    private static (double Offset, double Size)? FindMergeColumnSpan(
+        SplitPaneColumnMetricLookup columns,
+        GridRange merge,
+        SplitPaneColumnMetricLookup? exclude = null)
     {
-        double width = 0;
+        double total = 0;
+        uint? minCol = null;
+        double minOffset = 0;
         for (var i = 0; i < columns.Count; i++)
         {
             var metric = columns[i];
-            if (metric.Col > anchorCol && metric.Col <= merge.End.Col)
-                width += metric.Width;
+            if (metric.Col < merge.Start.Col || metric.Col > merge.End.Col)
+                continue;
+            if (exclude is { } excludeColumns && excludeColumns.TryGetValue(metric.Col, out _))
+                continue;
+
+            total += metric.Width;
+            if (minCol is null || metric.Col < minCol.Value)
+            {
+                minCol = metric.Col;
+                minOffset = metric.LeftOffset;
+            }
         }
 
-        return width;
+        return minCol is null ? null : (minOffset, total);
     }
 
-    private static double SumMergedRowHeights(GridRange merge, SplitPaneRowMetricLookup rows, uint anchorRow)
+    // Row counterpart to FindMergeColumnSpan: the portion of a merge's row range visible within a
+    // single pane's row lookup.
+    private static (double Offset, double Size)? FindMergeRowSpan(SplitPaneRowMetricLookup rows, GridRange merge)
     {
-        double height = 0;
+        double total = 0;
+        uint? minRow = null;
+        double minOffset = 0;
         for (var i = 0; i < rows.Count; i++)
         {
             var metric = rows[i];
-            if (metric.Row > anchorRow && metric.Row <= merge.End.Row)
-                height += metric.Height;
+            if (metric.Row < merge.Start.Row || metric.Row > merge.End.Row)
+                continue;
+
+            total += metric.Height;
+            if (minRow is null || metric.Row < minRow.Value)
+            {
+                minRow = metric.Row;
+                minOffset = metric.TopOffset;
+            }
         }
 
-        return height;
+        return minRow is null ? null : (minOffset, total);
     }
 
     private sealed class MergeRangeIndex

@@ -1140,8 +1140,14 @@ public partial class GridView
         if (activeAddress is not { } address || !range.Contains(address))
             return null;
 
-        var activeCellRange = new GridRange(address, address);
-        var layout = CalculateVisibleSingleCellSelectionLayout(viewport, activeCellRange, rowHeaderWidth, columnHeaderHeight);
+        // If the active cell is a merged cell (anchor or otherwise), the fill "hole" must cover the
+        // merge's full footprint - matching Excel, which never tints any part of the active cell -
+        // instead of just the single active-cell address, or the rest of the merge would be wrongly
+        // tinted by the surrounding selection fill.
+        var activeCellRange = FindMerge(address.Row, address.Col) is { } merge
+            ? merge
+            : new GridRange(address, address);
+        var layout = CalculateSelectionRangeLayout(viewport, activeCellRange, rowHeaderWidth, columnHeaderHeight);
         return layout?.Rect;
     }
 

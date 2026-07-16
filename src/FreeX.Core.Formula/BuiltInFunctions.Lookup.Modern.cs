@@ -576,11 +576,17 @@ public static partial class BuiltInFunctions
             }
         }
 
+        // Approximate (next-smaller/next-larger) matches only ever consider candidates whose
+        // type class (number / text / bool) matches the lookup value's own type class -- a
+        // text or bool candidate can never be a numeric "next larger/smaller" match, mirroring
+        // MATCH/VLOOKUP/HLOOKUP/LOOKUP's own ApproxLookupTypeClass filtering.
+        int lookupClass = ApproxLookupTypeClass(lookupValue);
         int best = -1;
         for (int i = start; i != end; i += step)
         {
             var candidate = lookupVector[i];
             if (candidate is ErrorValue err) return err;
+            if (ApproxLookupTypeClass(candidate) != lookupClass) continue;
             int candidateVsLookup = CompareScalar(candidate, lookupValue);
             if (nextSmaller)
             {

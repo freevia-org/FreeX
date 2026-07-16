@@ -56,7 +56,9 @@ public static partial class BuiltInFunctions
         int imonth = (int)Math.Truncate(month);
         if (cost <= 0 || salvage < 0 || ilife <= 0 || iper <= 0 || iper > ilife + 1) return ErrorValue.Num;
         if (imonth < 1 || imonth > 12) return ErrorValue.Num;
-        if (salvage >= cost) return NumberResult(0);
+        // Excel's DB has no special case for salvage >= cost: it always evaluates the
+        // declining-balance rate formula below, which naturally yields 0 when salvage == cost
+        // and a small negative rate (i.e. a book-value increase) when salvage > cost.
         // Rate rounded to 3 decimal places.
         double rate = Math.Round(1 - Math.Pow(salvage / cost, 1.0 / ilife), 3);
         double accumulated = 0;
@@ -152,7 +154,12 @@ public static partial class BuiltInFunctions
 
         double totalDep = 0;
         double bookValue = cost;
-        double currentPeriod = startPeriod;
+        // Simulate depreciation sequentially from period 0 (not from startPeriod), so that
+        // bookValue at the start of startPeriod correctly reflects every period depreciated
+        // before it. Only the portion of each period's depreciation that overlaps
+        // [startPeriod, endPeriod) is added to the running total; book value is still reduced
+        // by the period's FULL depreciation regardless of whether it falls inside that window.
+        double currentPeriod = 0;
         while (currentPeriod < endPeriod)
         {
             double periodEnd = Math.Min(Math.Ceiling(currentPeriod + 1e-10), endPeriod);
@@ -163,7 +170,9 @@ public static partial class BuiltInFunctions
             double dep = !noSwitch && slnDep > ddbDep ? slnDep : ddbDep;
             dep = Math.Max(0, Math.Min(dep, bookValue - salvage));
             double partialDep = dep * fraction;
-            totalDep += partialDep;
+            double overlapStart = Math.Max(currentPeriod, startPeriod);
+            double overlapLength = Math.Max(0, periodEnd - overlapStart);
+            totalDep += dep * overlapLength;
             bookValue -= partialDep;
             currentPeriod = periodEnd;
         }
