@@ -5,6 +5,7 @@ using System.Windows.Documents;
 using System.Windows.Markup;
 using System.Windows.Media;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host;
@@ -77,7 +78,34 @@ internal static class PrintLayout
         foreach (var block in CloneBlocks(editor.Document))
             flow.Blocks.Add(block);
 
+        // Word reserves room in the body frame for footnotes before it paginates the body. Keep the
+        // shared print/preview paginator on the same page-count path as the paged editor.
+        ApplyFootnoteBodyReserve(flow, editor.Model);
+
         return flow;
+    }
+
+    private static void ApplyFootnoteBodyReserve(FlowDocument flow, TextDocument document)
+    {
+        if (document.Footnotes.Count == 0)
+            return;
+
+        var (_, contentWidthDip) = PageLayout.ContentAreaDip(document.Page);
+        var noteIds = document.Footnotes.Keys.OrderBy(id => id).ToList();
+        var notePlan = DocumentNoteRegionPlanner.BuildFootnoteRegion(
+            document,
+            noteIds,
+            pageNumber: 1,
+            contentWidthDip);
+        if (notePlan.EstimatedHeightDip <= 0)
+            return;
+
+        const double footnoteFrameClearanceDip = 24.0;
+        flow.PagePadding = new Thickness(
+            flow.PagePadding.Left,
+            flow.PagePadding.Top,
+            flow.PagePadding.Right,
+            flow.PagePadding.Bottom + notePlan.EstimatedHeightDip + footnoteFrameClearanceDip);
     }
 
     /// <summary>
@@ -192,7 +220,11 @@ internal static class PrintLayout
 /// header/footer is rendered with the live 1-based page number for that page.
 /// </summary>
 internal sealed class HeaderFooterPaginator(
-    DocumentPaginator inner, TextDocument model, PageSettings page, double lineHeightDip = 0) : DocumentPaginator
+    DocumentPaginator inner,
+    TextDocument model,
+    PageSettings page,
+    double lineHeightDip = 0,
+    IReadOnlyList<IReadOnlyList<int>>? footnoteIdsByPage = null) : DocumentPaginator
 {
     public override bool IsPageCountValid => inner.IsPageCountValid;
     public override int PageCount => inner.PageCount;
@@ -205,11 +237,18 @@ internal sealed class HeaderFooterPaginator(
         var hasWatermark = !string.IsNullOrEmpty(page.Watermark);
         var hasBorder = page.PageBorder is not null;
         var hasLineNumbers = page.LineNumberMode != LineNumberMode.None && lineHeightDip > 0;
-        // Footnote/endnote bodies are drawn at the page foot only for single-page documents, where every
-        // note belongs to the one (last) page — sidestepping the per-page note→page mapping and the
-        // page-bottom space reservation that a general implementation needs.
-        var hasNotesAtFoot = inner.PageCount == 1
+        // Footnote bodies follow the page containing their reference. Markerless single-page models
+        // retain the historical fallback that displays all stored notes on that page.
+        var resolvedFootnoteIdsByPage = footnoteIdsByPage ?? BuildFootnoteIdsByPage(model, inner);
+        var pageFootnoteIds = pageNumber < resolvedFootnoteIdsByPage.Count
+            ? resolvedFootnoteIdsByPage[pageNumber]
+            : null;
+        var hasMappedNotesAtFoot = pageFootnoteIds is { Count: > 0 };
+        var hasAnyMappedFootnotes = resolvedFootnoteIdsByPage.Any(ids => ids.Count > 0);
+        var hasFallbackNotesAtFoot = !hasAnyMappedFootnotes
+            && inner.PageCount == 1
             && (model.Footnotes.Count > 0 || model.Endnotes.Count > 0);
+        var hasNotesAtFoot = hasMappedNotesAtFoot || hasFallbackNotesAtFoot;
         if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
             && !hasWatermark && !hasBorder && !hasLineNumbers && !hasNotesAtFoot)
             return basePage;
@@ -243,7 +282,13 @@ internal sealed class HeaderFooterPaginator(
         }
 
         if (hasNotesAtFoot)
-            visual.Children.Add(BuildNotesAtFoot(size, marginLeft, contentWidth));
+            visual.Children.Add(BuildNotesAtFoot(
+                size,
+                marginLeft,
+                contentWidth,
+                pageFootnoteIds,
+                includeAllNotes: hasFallbackNotesAtFoot,
+                includeEndnotes: pageNumber == inner.PageCount - 1));
 
         return new DocumentPage(visual, size, basePage.BleedBox, basePage.ContentBox);
     }
@@ -254,14 +299,27 @@ internal sealed class HeaderFooterPaginator(
     /// reserves space inside the content area for these; FreeW approximates by drawing them in the
     /// otherwise-empty bottom margin so the note text is visible (previously only the reference marker was).
     /// </summary>
-    private DrawingVisual BuildNotesAtFoot(Size size, double marginLeft, double contentWidth)
+    private DrawingVisual BuildNotesAtFoot(
+        Size size,
+        double marginLeft,
+        double contentWidth,
+        IReadOnlyList<int>? pageFootnoteIds,
+        bool includeAllNotes,
+        bool includeEndnotes)
     {
         var visual = new DrawingVisual();
         if (contentWidth <= 0)
             return visual;
 
-        var notes = model.Footnotes.OrderBy(kv => kv.Key).Select(kv => (kv.Key, kv.Value.PlainText))
-            .Concat(model.Endnotes.OrderBy(kv => kv.Key).Select(kv => (kv.Key, kv.Value.PlainText)))
+        var footnotes = includeAllNotes
+            ? model.Footnotes.OrderBy(kv => kv.Key)
+            : model.Footnotes
+                .Where(kv => pageFootnoteIds?.Contains(kv.Key) == true)
+                .OrderBy(kv => kv.Key);
+        var notes = footnotes.Select(kv => (kv.Key, kv.Value.PlainText))
+            .Concat(includeEndnotes
+                ? model.Endnotes.OrderBy(kv => kv.Key).Select(kv => (kv.Key, kv.Value.PlainText))
+                : [])
             .Where(n => !string.IsNullOrEmpty(n.Item2))
             .ToList();
         if (notes.Count == 0)
@@ -296,6 +354,87 @@ internal sealed class HeaderFooterPaginator(
             y += formatted.Height + PageLayout.PointsToDip(1);
         }
         return visual;
+    }
+
+    private static IReadOnlyList<IReadOnlyList<int>> BuildFootnoteIdsByPage(
+        TextDocument model,
+        IReadOnlyList<int> blockPageAssignment,
+        int pageCount)
+    {
+        var mutablePages = Enumerable.Range(0, Math.Max(1, pageCount))
+            .Select(_ => new List<int>())
+            .ToList();
+
+        for (var blockIndex = 0; blockIndex < model.Blocks.Count; blockIndex++)
+        {
+            var pageIndex = blockIndex < blockPageAssignment.Count
+                ? Math.Clamp(blockPageAssignment[blockIndex], 0, mutablePages.Count - 1)
+                : 0;
+            foreach (var footnoteId in FootnoteIds(model.Blocks[blockIndex]))
+            {
+                if (!mutablePages[pageIndex].Contains(footnoteId))
+                    mutablePages[pageIndex].Add(footnoteId);
+            }
+        }
+
+        return mutablePages;
+    }
+
+    private static IReadOnlyList<IReadOnlyList<int>> BuildFootnoteIdsByPage(
+        TextDocument model,
+        DocumentPaginator paginator)
+    {
+        if (paginator.Source is not FlowDocument flow
+            || paginator is not DynamicDocumentPaginator dynamicPaginator)
+            return [];
+
+        var assignment = new int[model.Blocks.Count];
+        var flowBlocks = flow.Blocks.ToArray();
+        var pageCount = Math.Max(1, paginator.PageCount);
+        var currentPage = 0;
+        for (var blockIndex = 0; blockIndex < model.Blocks.Count && blockIndex < flowBlocks.Length; blockIndex++)
+        {
+            var markerPositions = DocumentView.CollectFootnoteMarkerPositions([flowBlocks[blockIndex]]);
+            try
+            {
+                var page = markerPositions.Count > 0
+                    ? markerPositions
+                        .Select(dynamicPaginator.GetPageNumber)
+                        .Where(pageNumber => pageNumber >= 0)
+                        .DefaultIfEmpty(dynamicPaginator.GetPageNumber(flowBlocks[blockIndex].ContentStart))
+                        .Max()
+                    : dynamicPaginator.GetPageNumber(flowBlocks[blockIndex].ContentStart);
+                if (page >= 0)
+                    currentPage = Math.Clamp(page, 0, pageCount - 1);
+            }
+            catch (NotSupportedException) { }
+            catch (InvalidOperationException) { }
+
+            assignment[blockIndex] = currentPage;
+        }
+
+        return BuildFootnoteIdsByPage(model, assignment, pageCount);
+    }
+
+    private static IEnumerable<int> FootnoteIds(FreeW.Core.Model.Block block)
+    {
+        switch (block)
+        {
+            case FreeW.Core.Model.Paragraph paragraph:
+                foreach (var run in paragraph.Runs)
+                    if (run.FootnoteId is { } id)
+                        yield return id;
+                break;
+
+            case FreeW.Core.Model.Table table:
+                foreach (var row in table.Rows)
+                    foreach (var cell in row.Cells)
+                        foreach (var paragraph in cell.Paragraphs)
+                            foreach (var run in paragraph.Runs)
+                                if (run.FootnoteId is { } id)
+                                    yield return id;
+                break;
+        }
     }
 
     /// <summary>
@@ -443,9 +582,12 @@ internal sealed class HeaderFooterPaginator(
     private string ResolveText(HeaderFooter content, int zeroBasedPageNumber)
     {
         var displayPage = (zeroBasedPageNumber + 1).ToString(System.Globalization.CultureInfo.CurrentCulture);
+        var displayPageCount = inner.PageCount.ToString(System.Globalization.CultureInfo.CurrentCulture);
         var lines = content.Paragraphs.Select(p =>
             string.Concat(p.Runs.Select(r =>
-                r.FieldKind == RunFieldKind.PageNumber ? displayPage : r.Text)));
+                r.FieldKind == RunFieldKind.PageNumber ? displayPage
+                : r.FieldKind == RunFieldKind.NumPages ? displayPageCount
+                : r.Text)));
         return string.Join("  ", lines.Where(l => l.Length > 0));
     }
 }

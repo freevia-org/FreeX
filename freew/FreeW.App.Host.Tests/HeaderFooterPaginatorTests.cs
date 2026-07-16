@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Documents;
 using FreeW.App.Host;
+using FreeW.App.Host.Editing;
 using FreeW.Core.Model;
 using Xunit;
 
@@ -96,6 +97,32 @@ public sealed class HeaderFooterPaginatorTests
 
         // With a footnote on a single page the paginator wraps the base page and composites the note
         // visual, rather than returning the bare base page (the no-overlay early-return).
+        var container = Assert.IsType<System.Windows.Media.ContainerVisual>(page.Visual);
+        Assert.True(container.Children.Count >= 2);
+    }
+
+    [StaFact]
+    public void PrintLayout_MultiPageFootnoteUsesAssignedPageAndReservesBodySpace()
+    {
+        var model = TextDocument.CreateEmpty();
+        var footnote = new Footnote(1);
+        footnote.Content.Add(new Paragraph("the footnote body"));
+        model.Footnotes[1] = footnote;
+
+        var first = new Paragraph();
+        first.Runs.Add(new Run("body with a note "));
+        first.Runs.Add(Run.FootnoteReference(1));
+        model.Blocks.Add(first);
+        for (var i = 0; i < 90; i++)
+            model.Blocks.Add(new Paragraph("filler paragraph to force a second printed page"));
+
+        var view = new DocumentView();
+        view.LoadModel(model);
+        var paginator = PrintLayout.BuildPaginator(view);
+        paginator.ComputePageCount();
+
+        Assert.True(paginator.PageCount >= 2);
+        var page = paginator.GetPage(0);
         var container = Assert.IsType<System.Windows.Media.ContainerVisual>(page.Visual);
         Assert.True(container.Children.Count >= 2);
     }
