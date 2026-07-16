@@ -14,6 +14,7 @@ public class ChartRoundTripTests
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace C = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
     private static readonly XNamespace Rel = "http://schemas.openxmlformats.org/package/2006/relationships";
 
@@ -443,6 +444,29 @@ public class ChartRoundTripTests
         var read = RoundTrip(doc);
         var roundTripped = read.Paragraphs.Single().Runs.Single(r => r.Chart is not null).Chart!;
         roundTripped.QuickLayoutId.Should().Be(5);
+    }
+
+    [Fact]
+    public void ChartDataLabels_EmitsStandardShowValWhenStyleRequestsThem()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["A", "B"], [1.0, 2.0]);
+        chart.StyleId = 7;
+        chart.QuickLayoutId = 9;
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromChart(chart));
+        doc.Blocks.Add(paragraph);
+
+        var chartXml = EntryXml(WriteBytes(doc), "word/charts/chart1.xml");
+        var labels = chartXml.Descendants(C + "dLbls").Should().ContainSingle().Subject;
+        labels.Element(C + "showVal")!.Attribute("val")!.Value.Should().Be("1");
+        labels.Element(C + "showLegendKey")!.Attribute("val")!.Value.Should().Be("0");
+        labels.Element(C + "showCatName")!.Attribute("val")!.Value.Should().Be("0");
+        labels.Element(C + "showSerName")!.Attribute("val")!.Value.Should().Be("0");
+        var plotArea = chartXml.Descendants(C + "plotArea").Should().ContainSingle().Subject;
+        plotArea.Element(C + "spPr").Should().NotBeNull();
+        var plotProperties = plotArea.Element(C + "spPr")!;
+        plotProperties.Descendants(A + "solidFill").Should().ContainSingle();
     }
 
     [Fact]

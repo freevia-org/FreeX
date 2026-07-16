@@ -180,6 +180,20 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
+    public void ChartScene_SingleSeriesWordStyleUsesCategoryLegend()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"],
+            [1.4, 1.8, 1.6, 2.2], seriesName: "Revenue");
+        chart.StyleId = 7;
+        chart.QuickLayoutId = 9;
+        chart.ShowLegend = true;
+
+        var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 300, 168);
+
+        scene.Legend.Select(entry => entry.Text).Should().ContainInOrder("Q1", "Q2", "Q3", "Q4");
+    }
+
+    [Fact]
     public void ChartDataSignatures_CaptureCategorySeriesAndValueShape()
     {
         var chart = Chart.Create(ChartKind.Line, ["Q1", "Q2"], [1.25, 2.5], seriesName: "Actual");
