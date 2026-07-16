@@ -6,6 +6,8 @@ namespace Free.Shared.Opc;
 
 public static class OpcXml
 {
+    private static readonly DateTimeOffset DeterministicZipTimestamp = new(1980, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
     public static XDocument LoadXml(
         ZipArchiveEntry entry,
         long maxCharactersInDocument = SecureXmlReaderSettings.DefaultMaxCharactersInDocument)
@@ -93,6 +95,7 @@ public static class OpcXml
         }
 
         var entry = archive.CreateEntry(entryName, CompressionLevel.Optimal);
+        entry.LastWriteTime = DeterministicZipTimestamp;
         using var stream = entry.Open();
         document.Save(stream, saveOptions);
     }
@@ -100,6 +103,7 @@ public static class OpcXml
     public static void WriteXmlEntry(ZipArchive archive, string entryPath, XDocument document)
     {
         var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
+        entry.LastWriteTime = DeterministicZipTimestamp;
         using var stream = entry.Open();
         document.Save(stream);
     }

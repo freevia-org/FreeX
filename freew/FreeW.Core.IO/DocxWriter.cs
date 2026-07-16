@@ -15,6 +15,8 @@ namespace FreeW.Core.IO;
 /// </summary>
 public static class DocxWriter
 {
+    private static readonly DateTimeOffset DeterministicZipTimestamp = new(1980, 1, 1, 0, 0, 0, TimeSpan.Zero);
+
     private const string OfficeDocumentRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
     private const string StylesRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles";
     private const string ImageRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
@@ -701,6 +703,7 @@ public static class DocxWriter
     private static void WriteBinaryPart(ZipArchive archive, string entryPath, byte[] content)
     {
         var entry = archive.CreateEntry(entryPath, CompressionLevel.Optimal);
+        entry.LastWriteTime = DeterministicZipTimestamp;
         using var entryStream = entry.Open();
         entryStream.Write(content, 0, content.Length);
     }
