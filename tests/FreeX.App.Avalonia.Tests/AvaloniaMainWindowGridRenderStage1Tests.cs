@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using FluentAssertions;
@@ -191,15 +192,16 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
             window.Session.SelectRange(new GridRange(new CellAddress(sheet.Id, 1, 1), mergeEnd));
             window.Session.SelectedRange.End.Should().Be(mergeEnd, "selection must resolve to the merge's non-anchor corner for this test to be meaningful");
 
-            var grid = FindInnerGrid(window.RebuildSheetGridForTest());
+            var rebuilt = window.RebuildSheetGridForTest();
+            var grid = FindInnerGrid(rebuilt);
             var headerOffset = window.Session.ActiveSheet.ShowHeadings ? 1 : 0;
 
-            // The merge's anchor (B4) is the only Border rendered for this merge; it must carry the
-            // autofill handle adorner even though its own address (B4) != SelectedRange.End (C5).
+            // The merge's anchor (B4) is the only cell Border rendered for this merge. The handle now
+            // belongs to the top-level selection overlay, so later cells cannot cover or intercept it.
             var anchorBorder = FindCellsCoveringSlot(grid, headerOffset + 3, headerOffset + 1).Single();
-            HasAutofillHandleAdorner(anchorBorder).Should().BeTrue(
-                "the fill handle must appear on the merge's rendered Border when the selection's bottom-right " +
-                "corner lands anywhere inside the merge, not only when it lands exactly on the merge's own anchor");
+            FindAutofillHandles(anchorBorder).Should().BeEmpty();
+            FindAutofillHandles(rebuilt).Should().ContainSingle(
+                "the selection overlay must render a usable handle when the bottom-right corner is a non-anchor merge member");
 
             window.Close();
         }, CancellationToken.None);
@@ -219,12 +221,57 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
             sheet.AddMergedRegion(new GridRange(anchor, new CellAddress(sheet.Id, 5, 3)));
             window.Session.SelectCell(new CellAddress(sheet.Id, 8, 8));
 
-            var grid = FindInnerGrid(window.RebuildSheetGridForTest());
+            var rebuilt = window.RebuildSheetGridForTest();
+            var grid = FindInnerGrid(rebuilt);
             var headerOffset = window.Session.ActiveSheet.ShowHeadings ? 1 : 0;
             var anchorBorder = FindCellsCoveringSlot(grid, headerOffset + 3, headerOffset + 1).Single();
 
-            HasAutofillHandleAdorner(anchorBorder).Should().BeFalse(
-                "the merge's Border must not carry a fill handle when the selection has nothing to do with it");
+            FindAutofillHandles(anchorBorder).Should().BeEmpty(
+                "cell visuals must never own the fill handle");
+            FindAutofillHandles(rebuilt).Should().ContainSingle(
+                "the one active selection still owns exactly one overlay handle");
+
+            window.Close();
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task SelectionOverlay_UsesActualGridSpanAndCellsDoNotForceHandCursor()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = new MainWindow([]);
+            var sheet = window.Session.ActiveSheet;
+            window.Session.SelectRange(new GridRange(
+                new CellAddress(sheet.Id, 3, 2),
+                new CellAddress(sheet.Id, 4, 4)));
+
+            var grid = FindInnerGrid(window.RebuildSheetGridForTest());
+            var outline = grid.Children
+                .OfType<Border>()
+                .Single(candidate =>
+                    AutomationProperties.GetAutomationId(candidate) == "WorksheetSelectionOutline");
+            var handle = grid.Children
+                .OfType<Border>()
+                .Single(candidate =>
+                    AutomationProperties.GetAutomationId(candidate) == "WorksheetAutofillHandle");
+            var activeCell = FindDescendants(grid)
+                .OfType<Border>()
+                .Single(candidate =>
+                    AutomationProperties.GetAutomationId(candidate) == "Cell_B3");
+            var headerOffset = window.Session.ActiveSheet.ShowHeadings ? 1 : 0;
+
+            Grid.GetRow(outline).Should().Be(2 + headerOffset);
+            Grid.GetColumn(outline).Should().Be(1 + headerOffset);
+            Grid.GetRowSpan(outline).Should().Be(2);
+            Grid.GetColumnSpan(outline).Should().Be(3);
+            outline.ZIndex.Should().BeGreaterThan(activeCell.ZIndex);
+
+            Grid.GetRow(handle).Should().Be(3 + headerOffset);
+            Grid.GetColumn(handle).Should().Be(3 + headerOffset);
+            handle.Width.Should().Be(10);
+            handle.Height.Should().Be(10);
+            activeCell.Cursor.Should().BeNull("normal worksheet cells must not force the hand cursor");
 
             window.Close();
         }, CancellationToken.None);
@@ -306,11 +353,20 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
     }
 
     private static Canvas? FindOverlayCanvas(Control built) =>
-        (built as Grid)?.Children.OfType<Canvas>().FirstOrDefault();
+        (built as Grid)?.Children
+            .OfType<Canvas>()
+            .FirstOrDefault(canvas =>
+                AutomationProperties.GetAutomationId(canvas) != "WorksheetSelectionOverlay");
 
     private static IEnumerable<Border> FindCellsCoveringSlot(Grid grid, int row, int col) =>
         grid.Children.OfType<Border>().Where(b =>
         {
+            if (AutomationProperties.GetAutomationId(b) is not { } automationId ||
+                !automationId.StartsWith("Cell_", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
             var br = Grid.GetRow(b);
             var bc = Grid.GetColumn(b);
             var rowSpan = Grid.GetRowSpan(b);
@@ -321,16 +377,12 @@ public sealed class AvaloniaMainWindowGridRenderStage1Tests
     private static string? ExtractRenderedText(Border border) =>
         FindDescendants(border).OfType<TextBlock>().FirstOrDefault()?.Text;
 
-    // AddAutofillHandleAdorner wraps the cell's existing content plus a small solid Rectangle
-    // (the fill-handle square) in a new layer Grid — see MainWindow.cs AddAutofillHandleAdorner.
-    private static bool HasAutofillHandleAdorner(Border border) =>
-        FindDescendants(border).OfType<Border>()
-            .Any(candidate =>
-                candidate.Width > 0 &&
-                candidate.Width == candidate.Height &&
-                candidate.Width <= 12 &&
-                candidate.Margin.Right < 0 &&
-                candidate.Margin.Bottom < 0);
+    private static Border[] FindAutofillHandles(Control root) =>
+        FindDescendants(root)
+            .OfType<Border>()
+            .Where(candidate =>
+                AutomationProperties.GetAutomationId(candidate) == "WorksheetAutofillHandle")
+            .ToArray();
 
     private static IEnumerable<Control> FindDescendants(Control root)
     {

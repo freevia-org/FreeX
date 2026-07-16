@@ -25,7 +25,8 @@ public static class GridSelectionLayoutPlanner
         ViewportModel viewport,
         GridRange range,
         double rowHeaderWidth,
-        double columnHeaderHeight)
+        double columnHeaderHeight,
+        double metricScale = 1)
     {
         var hasVisibleRow = false;
         var hasTopEdge = false;
@@ -39,8 +40,8 @@ public static class GridSelectionLayoutPlanner
             if (row.Row > range.End.Row)
                 break;
 
-            var rowTop = row.TopOffset;
-            var rowBottom = row.TopOffset + row.Height;
+            var rowTop = row.TopOffset * metricScale;
+            var rowBottom = (row.TopOffset + row.Height) * metricScale;
             if (row.Row == range.Start.Row)
                 hasTopEdge = true;
             if (row.Row == range.End.Row)
@@ -74,8 +75,8 @@ public static class GridSelectionLayoutPlanner
             if (column.Col > range.End.Col)
                 break;
 
-            var columnLeft = column.LeftOffset;
-            var columnRight = column.LeftOffset + column.Width;
+            var columnLeft = column.LeftOffset * metricScale;
+            var columnRight = (column.LeftOffset + column.Width) * metricScale;
             if (column.Col == range.Start.Col)
                 hasLeftEdge = true;
             if (column.Col == range.End.Col)

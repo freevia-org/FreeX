@@ -86,11 +86,18 @@ public sealed class AvaloniaGridInputSourceTests
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
         var sessionSource = File.ReadAllText(RepoFile("src", "FreeX.App.Services", "WorkbookSession.cs"));
 
-        source.Should().Contain("AddAutofillHandleAdorner(border, zoomFactor);");
+        source.Should().Contain("AddSelectionOverlayToGrid(");
+        source.Should().Contain("AutomationProperties.SetAutomationId(outline, \"WorksheetSelectionOutline\");");
+        source.Should().Contain("AutomationProperties.SetAutomationId(handle, \"WorksheetAutofillHandle\");");
         source.Should().Contain("TryBeginAutofillDrag(args, border, address)");
         source.Should().Contain("GridAutofillPlanner.IsOnHandle(");
         source.Should().NotContain("!_session.SelectedRange.Contains(address)");
-        source.Should().Contain("border.ClipToBounds = false;");
+        source.Should().Contain("private const double AutofillHandleSize = 10;");
+        source.Should().Contain("private const double AutofillHandleHitPadding = 6;");
+        source.Should().Contain("_sheetGridHost.Cursor = IsPointerOnAutofillHandle(args)");
+        source.Should().Contain("? new Cursor(StandardCursorType.Hand)");
+        source.Should().Contain(": Cursor.Default;");
+        source.Should().NotContain(": new Cursor(StandardCursorType.Hand);");
         source.Should().Contain("GridAutofillPlanner.CalculateCompletedSelectionRange(source, fillRange)");
         source.Should().Contain("_session.FillSelectedRange(direction)");
         source.Should().Contain("TryBeginSelectionMoveDrag(args, border, address)");

@@ -427,6 +427,27 @@ public sealed class GridAutofillPlannerTests
     }
 
     [Fact]
+    public void IsOnHandle_ScalesMetricGeometryToMatchTheRenderedGrid()
+    {
+        var sheet = SheetId.New();
+        var selectedRange = new GridRange(
+            new CellAddress(sheet, 2, 2),
+            new CellAddress(sheet, 3, 3));
+
+        GridAutofillPlanner.IsOnHandle(
+                CreateViewport(),
+                selectedRange,
+                new GridPoint(210, 108),
+                rowHeaderWidth: 30,
+                columnHeaderHeight: 18,
+                handleSize: 10,
+                hitPadding: 6,
+                metricScale: 1.5)
+            .Should()
+            .BeTrue("the hit target must follow the same zoomed bottom-right corner as the overlay handle");
+    }
+
+    [Fact]
     public void IsOnHandle_UsesRenderedHandleWhenEndMetricsAreDuplicated()
     {
         var sheet = SheetId.New();

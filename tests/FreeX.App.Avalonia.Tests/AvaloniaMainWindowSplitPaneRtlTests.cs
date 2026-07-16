@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media;
@@ -325,8 +326,12 @@ public sealed class AvaloniaMainWindowSplitPaneRtlTests
         var freezeDividerBrush = GetFreezeDividerBrush();
         return grid.Children.OfType<Border>().Where(b =>
         {
-            if (ReferenceEquals(b.Background, freezeDividerBrush))
+            if (ReferenceEquals(b.Background, freezeDividerBrush) ||
+                AutomationProperties.GetAutomationId(b) is not { } automationId ||
+                !automationId.StartsWith("Cell_", StringComparison.Ordinal))
+            {
                 return false;
+            }
 
             var br = Grid.GetRow(b);
             var bc = Grid.GetColumn(b);

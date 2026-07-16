@@ -92,6 +92,7 @@ internal static class PptxChartWriter
                 new XElement(C + "chart",
                     titleEl,
                     new XElement(C + "autoTitleDeleted", new XAttribute("val", chart.Title is null ? "1" : "0")),
+                    BuildView3DEl(chart),
                     plotArea,
                     legendEl,
                     new XElement(C + "plotVisOnly", new XAttribute("val", "1")),
@@ -99,6 +100,25 @@ internal static class PptxChartWriter
                     BuildShowDataLabelsOverMaximumEl(chart)),
                 BuildChartTextPropertiesEl(chart.TextStyle)));
     }
+
+    private static XElement? BuildView3DEl(ChartShape chart)
+    {
+        if (chart.View3D is not { } view) return null;
+
+        return new XElement(C + "view3D",
+            OptionalIntElement("rotX", view.RotationX),
+            OptionalIntElement("hPercent", view.HeightPercent),
+            OptionalIntElement("rotY", view.RotationY),
+            OptionalIntElement("depthPercent", view.DepthPercent),
+            OptionalBoolElement("rAngAx", view.RightAngleAxes),
+            OptionalIntElement("perspective", view.Perspective));
+    }
+
+    private static XElement? OptionalIntElement(string name, int? value) =>
+        value is { } v ? new XElement(C + name, new XAttribute("val", v)) : null;
+
+    private static XElement? OptionalBoolElement(string name, bool? value) =>
+        value is { } v ? new XElement(C + name, new XAttribute("val", BoolValue(v))) : null;
 
     private static XElement BuildTitleEl(string title) =>
         new XElement(C + "title",

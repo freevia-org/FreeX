@@ -50,6 +50,7 @@ public sealed class ChartTests : IDisposable
         chart.BarOverlapPercent.Should().BeNull();
         chart.BarGapDepthPercent.Should().BeNull();
         chart.ThreeDStyle.Should().Be(ChartThreeDStyle.None);
+        chart.View3D.Should().BeNull();
         chart.FirstSliceAngleDegrees.Should().BeNull();
         chart.BubbleScalePercent.Should().Be(100);
         chart.BubbleSizeRepresents.Should().Be(BubbleSizeRepresentation.Area);
@@ -67,6 +68,15 @@ public sealed class ChartTests : IDisposable
         chart.BarOverlapPercent = -40;
         chart.BarGapDepthPercent = 125;
         chart.ThreeDStyle = ChartThreeDStyle.Pie;
+        chart.View3D = new Chart3DView
+        {
+            RotationX = 15,
+            RotationY = 20,
+            RightAngleAxes = false,
+            Perspective = 30,
+            HeightPercent = 100,
+            DepthPercent = 100,
+        };
         chart.DisplayBlanksAs = ChartDisplayBlanksAs.Span;
         chart.ShowDataLabelsOverMaximum = true;
         slide.Shapes.Add(new SlideShape
@@ -88,6 +98,14 @@ public sealed class ChartTests : IDisposable
         clonedChart.BarOverlapPercent.Should().Be(-40);
         clonedChart.BarGapDepthPercent.Should().Be(125);
         clonedChart.ThreeDStyle.Should().Be(ChartThreeDStyle.Pie);
+        clonedChart.View3D.Should().NotBeNull();
+        clonedChart.View3D.Should().NotBeSameAs(chart.View3D);
+        clonedChart.View3D!.RotationX.Should().Be(15);
+        clonedChart.View3D.RotationY.Should().Be(20);
+        clonedChart.View3D.RightAngleAxes.Should().BeFalse();
+        clonedChart.View3D.Perspective.Should().Be(30);
+        clonedChart.View3D.HeightPercent.Should().Be(100);
+        clonedChart.View3D.DepthPercent.Should().Be(100);
         clonedChart.DisplayBlanksAs.Should().Be(ChartDisplayBlanksAs.Span);
         clonedChart.ShowDataLabelsOverMaximum.Should().BeTrue();
     }
@@ -371,6 +389,50 @@ public sealed class ChartTests : IDisposable
         rt.ChartType.Should().Be(ChartType.ColumnClustered);
         rt.BarGapWidthPercent.Should().Be(40);
         rt.BarGapDepthPercent.Should().Be(180);
+    }
+
+    [Fact]
+    public void RoundTrip_Chart_View3D_PreservesSchemaOrderAndCameraSettings()
+    {
+        var chart = BuildColumnChart();
+        chart.View3D = new Chart3DView
+        {
+            RotationX = 15,
+            HeightPercent = 100,
+            RotationY = 20,
+            DepthPercent = 100,
+            RightAngleAxes = false,
+            Perspective = 30,
+        };
+        var path = WriteToPptx(BuildPresWithChart(chart));
+
+        using (var archive = ZipFile.OpenRead(path))
+        {
+            var chartDoc = LoadChartXml(archive, chartIndex: 1);
+            var chartEl = chartDoc.Root!.Element(ChartNs + "chart")!;
+            ChartChildIndex(chartEl, "autoTitleDeleted").Should().BeLessThan(ChartChildIndex(chartEl, "view3D"));
+            ChartChildIndex(chartEl, "view3D").Should().BeLessThan(ChartChildIndex(chartEl, "plotArea"));
+
+            var view3D = chartEl.Element(ChartNs + "view3D")!;
+            view3D.Elements().Select(element => element.Name.LocalName).Should().Equal(
+                "rotX", "hPercent", "rotY", "depthPercent", "rAngAx", "perspective");
+            view3D.Element(ChartNs + "rotX")!.Attribute("val")!.Value.Should().Be("15");
+            view3D.Element(ChartNs + "hPercent")!.Attribute("val")!.Value.Should().Be("100");
+            view3D.Element(ChartNs + "rotY")!.Attribute("val")!.Value.Should().Be("20");
+            view3D.Element(ChartNs + "depthPercent")!.Attribute("val")!.Value.Should().Be("100");
+            view3D.Element(ChartNs + "rAngAx")!.Attribute("val")!.Value.Should().Be("0");
+            view3D.Element(ChartNs + "perspective")!.Attribute("val")!.Value.Should().Be("30");
+        }
+
+        var reloaded = PptxPackageReader.Read(path);
+        var rt = reloaded.Slides[0].Shapes.First(s => s.Kind == SlideShapeKind.Chart).Chart!;
+        rt.View3D.Should().NotBeNull();
+        rt.View3D!.RotationX.Should().Be(15);
+        rt.View3D.HeightPercent.Should().Be(100);
+        rt.View3D.RotationY.Should().Be(20);
+        rt.View3D.DepthPercent.Should().Be(100);
+        rt.View3D.RightAngleAxes.Should().BeFalse();
+        rt.View3D.Perspective.Should().Be(30);
     }
 
     [Fact]

@@ -104,7 +104,7 @@ public sealed class AvaloniaGridMergeShrinkFreezeSelectionTests
     {
         var method = ExtractMethod(
             "private static double ResolveShrinkToFitFontSize(",
-            "private static void AddAutofillHandleAdorner(");
+            "private void AddSelectionOverlayToGrid(");
 
         method.Should().Contain("ShrinkToFitMinimumFontSize");
         method.Should().Contain("MeasureInlineCellTextWidth(text, fontSize, fontWeight, fontStyle) > availableWidth");
