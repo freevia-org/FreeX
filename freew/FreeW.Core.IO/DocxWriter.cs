@@ -4276,20 +4276,21 @@ public static class DocxWriter
         var docId = SmartArtModelId(0);
         var isHierarchyLayout = string.Equals(SmartArtLayoutCategory(smartArt), "hierarchy", StringComparison.Ordinal);
         var isPyramidLayout = string.Equals(SmartArtLayoutCategory(smartArt), "pyramid", StringComparison.Ordinal);
+        var isFlatLayout = !isHierarchyLayout && !isPyramidLayout;
         var ptLst = new XElement(Dgm + "ptLst",
             new XElement(Dgm + "pt",
                 new XAttribute("modelId", docId),
                 new XAttribute("type", "doc"),
-                new XElement(Dgm + "prSet",
+                isFlatLayout ? null : new XElement(Dgm + "prSet",
                     new XAttribute("loTypeId", SmartArtLayoutUrn(smartArt)),
                     new XAttribute("loCatId", SmartArtLayoutCategory(smartArt)),
                     new XAttribute("qsTypeId", "urn:microsoft.com/office/officeart/2005/8/quickstyle/" + SmartArtQuickStyleSuffix(smartArt)),
                     new XAttribute("qsCatId", "simple"),
-                    new XAttribute("csTypeId", "urn:microsoft.com/office/officeart/2005/8/colors/" + SmartArtColorGallerySuffix(smartArt.ColorSchemeId)),
+                    new XAttribute("csTypeId", "urn:microsoft.com/office/officeart/2005/8/colors/" + SmartArtColorGallerySuffix(smartArt)),
                     new XAttribute("csCatId", SmartArtColorCategory(smartArt.ColorSchemeId)),
                     new XAttribute("phldr", isHierarchyLayout ? "0" : "1")),
-                new XElement(Dgm + "spPr"),
-                DiagramText(string.Empty)));
+                isFlatLayout ? null : new XElement(Dgm + "spPr"),
+                isFlatLayout ? null : DiagramText(string.Empty)));
         var cxnLst = new XElement(Dgm + "cxnLst");
         var semanticNodes = new List<(string Id, string PresentationId, string ParentId, int Ordinal, int Depth)>();
         var presentationIds = new Dictionary<string, string>(StringComparer.Ordinal)
@@ -4310,26 +4311,39 @@ public static class DocxWriter
             semanticNodes.Add((id, presentationId, parentId, ordinal, depth));
             ptLst.Add(new XElement(Dgm + "pt",
                 new XAttribute("modelId", id),
-                new XElement(Dgm + "prSet", new XAttribute("phldrT", "[Text]")),
-                new XElement(Dgm + "spPr"),
+                isFlatLayout ? null : new XElement(Dgm + "prSet", new XAttribute("phldrT", "[Text]")),
+                isFlatLayout ? null : new XElement(Dgm + "spPr"),
                 DiagramText(node.Text)));
 
             var connectionId = SmartArtModelId(1000 + nextCxn);
-            var parTransId = SmartArtModelId(4000 + nextCxn);
-            var sibTransId = SmartArtModelId(5000 + nextCxn);
-            parentTransitionPresentationIds[parTransId] = SmartArtModelId(7500 + nextCxn);
-            transitionPresentationIds[sibTransId] = SmartArtModelId(8000 + nextCxn);
-            transitionDepths[sibTransId] = depth;
-            AddTransitionPoint(ptLst, parTransId, "parTrans", connectionId);
-            AddTransitionPoint(ptLst, sibTransId, "sibTrans", connectionId);
-            cxnLst.Add(new XElement(Dgm + "cxn",
-                new XAttribute("modelId", connectionId),
-                new XAttribute("srcId", parentId),
-                new XAttribute("destId", id),
-                new XAttribute("srcOrd", ordinal),
-                new XAttribute("destOrd", 0),
-                new XAttribute("parTransId", parTransId),
-                new XAttribute("sibTransId", sibTransId)));
+            if (isHierarchyLayout || isPyramidLayout)
+            {
+                var parTransId = SmartArtModelId(4000 + nextCxn);
+                var sibTransId = SmartArtModelId(5000 + nextCxn);
+                parentTransitionPresentationIds[parTransId] = SmartArtModelId(7500 + nextCxn);
+                transitionPresentationIds[sibTransId] = SmartArtModelId(8000 + nextCxn);
+                transitionDepths[sibTransId] = depth;
+                AddTransitionPoint(ptLst, parTransId, "parTrans", connectionId);
+                AddTransitionPoint(ptLst, sibTransId, "sibTrans", connectionId);
+                cxnLst.Add(new XElement(Dgm + "cxn",
+                    new XAttribute("modelId", connectionId),
+                    new XAttribute("srcId", parentId),
+                    new XAttribute("destId", id),
+                    new XAttribute("srcOrd", ordinal),
+                    new XAttribute("destOrd", 0),
+                    new XAttribute("parTransId", parTransId),
+                    new XAttribute("sibTransId", sibTransId)));
+            }
+            else
+            {
+                cxnLst.Add(new XElement(Dgm + "cxn",
+                    new XAttribute("modelId", connectionId),
+                    new XAttribute("type", "parOf"),
+                    new XAttribute("srcId", parentId),
+                    new XAttribute("destId", id),
+                    new XAttribute("srcOrd", 0),
+                    new XAttribute("destOrd", 0)));
+            }
             nextCxn++;
             for (var i = 0; i < node.Children.Count; i++)
                 Emit(node.Children[i], id, i, depth + 1);
@@ -4347,7 +4361,8 @@ public static class DocxWriter
             string? styleLabel = null,
             int? styleIndex = null,
             int styleCount = 0,
-            XElement? presentationLayoutVars = null)
+            XElement? presentationLayoutVars = null,
+            bool includeTextBody = false)
         {
             var prSet = new XElement(Dgm + "prSet",
                 new XAttribute("presAssocID", assocId),
@@ -4363,7 +4378,8 @@ public static class DocxWriter
                 new XAttribute("modelId", id),
                 new XAttribute("type", "pres"),
                 prSet,
-                new XElement(Dgm + "spPr")));
+                new XElement(Dgm + "spPr"),
+                includeTextBody ? DiagramText(string.Empty) : null));
         }
 
         void AddPresentationConnection(string type, string sourceId, string destinationId, int sourceOrdinal = 0)
@@ -4513,40 +4529,8 @@ public static class DocxWriter
         }
         else
         {
-            AddPresentationPoint(presentationIds[docId], docId, "diagram");
             foreach (var node in semanticNodes)
-            {
-                AddPresentationPoint(node.PresentationId, node.Id, "node", "node1");
-                var nodeIndex = semanticNodes.IndexOf(node);
-                var hasFollowingSibling = semanticNodes.Any(other =>
-                    string.Equals(other.ParentId, node.ParentId, StringComparison.Ordinal)
-                    && other.Ordinal == node.Ordinal + 1);
-                if (hasFollowingSibling)
-                {
-                    var transitionId = SmartArtModelId(5000 + nodeIndex);
-                    AddPresentationPoint(transitionPresentationIds[transitionId], transitionId, "sibTrans");
-                }
-            }
-
-            foreach (var node in semanticNodes)
-                AddPresentationConnection("presOf", node.Id, node.PresentationId);
-            AddPresentationConnection("presOf", docId, presentationIds[docId]);
-
-            foreach (var group in semanticNodes.GroupBy(node => node.ParentId, StringComparer.Ordinal))
-            {
-                var sourcePresentationId = presentationIds[group.Key];
-                var children = group.OrderBy(node => node.Ordinal).ToList();
-                for (var i = 0; i < children.Count; i++)
-                {
-                    var child = children[i];
-                    AddPresentationConnection("presParOf", sourcePresentationId, child.PresentationId, i * 2);
-                    if (i + 1 < children.Count)
-                    {
-                        var transitionId = SmartArtModelId(5000 + semanticNodes.IndexOf(child));
-                        AddPresentationConnection("presParOf", sourcePresentationId, transitionPresentationIds[transitionId], i * 2 + 1);
-                    }
-                }
-            }
+                AddPresentationPoint(node.PresentationId, node.Id, "node", "node0", 0, 1, includeTextBody: true);
         }
 
         return new XDocument(
@@ -4636,6 +4620,11 @@ public static class DocxWriter
             _ => colorId ?? "accent1_2"
         };
     }
+
+    private static string SmartArtColorGallerySuffix(SmartArt smartArt) =>
+        UsesFlatSmartArtGallery(smartArt) && smartArt.ColorSchemeId is null
+            ? "accent0_1"
+            : SmartArtColorGallerySuffix(smartArt.ColorSchemeId);
 
     private static string SmartArtColorCategory(string? colorId)
     {
@@ -5018,6 +5007,21 @@ public static class DocxWriter
         var isPyramid = string.Equals(category, "pyramid", StringComparison.Ordinal);
         if (isHierarchy || isPyramid)
             return LoadSmartArtLayoutTemplate(isHierarchy ? "hierarchy1.xml" : "pyramid1.xml", layoutUrn, category);
+        if (UsesFlatSmartArtGallery(smartArt))
+        {
+            return new XDocument(
+                new XElement(Dgm + "layoutDef",
+                    new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
+                    new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
+                    new XAttribute("uniqueId", layoutUrn),
+                    new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
+                    new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
+                    new XElement(Dgm + "catLst"),
+                    new XElement(Dgm + "sampData"),
+                    new XElement(Dgm + "styleData"),
+                    new XElement(Dgm + "clrData"),
+                    new XElement(Dgm + "layoutNode", new XAttribute("name", "diagram"))));
+        }
         var rootAlgorithm = isHierarchy
             ? "hierRoot"
             : isPyramid
@@ -5176,17 +5180,20 @@ public static class DocxWriter
         "fgAcc4", "bgShp", "dkBgShp", "trBgShp", "fgShp", "revTx"
     ];
 
-    private static string SmartArtQuickStyleSuffix(SmartArt smartArt) =>
-        string.Equals(SmartArtLayoutCategory(smartArt), "hierarchy", StringComparison.Ordinal)
-            ? "simple1"
-            : smartArt.StyleId ?? "simple1";
+    private static string SmartArtQuickStyleSuffix(SmartArt smartArt) => "simple1";
+
+    private static bool UsesFlatSmartArtGallery(SmartArt smartArt) =>
+        SmartArtLayoutCategory(smartArt) is "list" or "process";
 
     private static XDocument BuildDiagramQuickStyle(SmartArt smartArt)
     {
         var labels = SmartArtGalleryStyleLabels;
+        var usesFlatGallery = UsesFlatSmartArtGallery(smartArt);
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/quickstyle/";
         var uniqueId = BaseUrn + SmartArtQuickStyleSuffix(smartArt);
-        var styleLabels = labels.Select(name =>
+        var styleLabels = usesFlatGallery
+            ? new List<XElement> { new XElement(Dgm + "styleLbl", new XAttribute("name", "node0")) }
+            : labels.Select(name =>
         {
             var lineIndex = name is "sibTrans2D1" or "fgSibTrans2D1" or "bgSibTrans2D1"
                 ? 0
@@ -5231,8 +5238,10 @@ public static class DocxWriter
             smartArt.StyleId is null ? null : new XAttribute("freewStyleId", smartArt.StyleId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
-            new XElement(Dgm + "catLst",
-                new XElement(Dgm + "cat", new XAttribute("type", "simple"), new XAttribute("pri", 10100))),
+            usesFlatGallery
+                ? new XElement(Dgm + "catLst")
+                : new XElement(Dgm + "catLst",
+                    new XElement(Dgm + "cat", new XAttribute("type", "simple"), new XAttribute("pri", 10100))),
             new XElement(Dgm + "scene3d",
                 new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
                 new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
@@ -5249,7 +5258,8 @@ public static class DocxWriter
     {
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/colors/";
         var colorId = smartArt.ColorSchemeId ?? "accent1_2";
-        var uniqueId = BaseUrn + SmartArtColorGallerySuffix(smartArt.ColorSchemeId);
+        var uniqueId = BaseUrn + SmartArtColorGallerySuffix(smartArt);
+        var usesFlatGallery = UsesFlatSmartArtGallery(smartArt);
         var category = SmartArtColorCategory(colorId);
         XElement Scheme(string value, params (string Name, string Value)[] modifiers) =>
             new(A + "schemeClr",
@@ -5269,7 +5279,12 @@ public static class DocxWriter
             var line = (Value: "lt1", Modifiers: Array.Empty<(string Name, string Value)>());
             var textFill = (Value: (string?)null, Modifiers: Array.Empty<(string Name, string Value)>());
 
-            if (name == "vennNode1")
+            if (usesFlatGallery && name == "node0")
+            {
+                line = (category, Array.Empty<(string, string)>());
+                textFill = ("lt1", Array.Empty<(string, string)>());
+            }
+            else if (name == "vennNode1")
                 fill = (category, new[] { ("alpha", "50000") });
             else if (name is "fgImgPlace1" or "alignImgPlace1" or "bgImgPlace1")
             {
@@ -5371,7 +5386,7 @@ public static class DocxWriter
             yield return (textFill.Value ?? string.Empty, textFill.Modifiers);
         }
 
-        var styleLabels = SmartArtGalleryStyleLabels.Select(name =>
+        var styleLabels = (usesFlatGallery ? new[] { "node0" } : SmartArtGalleryStyleLabels).Select(name =>
         {
             var rules = ColorRule(name).ToArray();
             var fill = rules[0];
@@ -5392,8 +5407,10 @@ public static class DocxWriter
             smartArt.ColorSchemeId is null ? null : new XAttribute("freewColorId", smartArt.ColorSchemeId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
-            new XElement(Dgm + "catLst",
-                new XElement(Dgm + "cat", new XAttribute("type", category), new XAttribute("pri", 11200))),
+            usesFlatGallery
+                ? new XElement(Dgm + "catLst")
+                : new XElement(Dgm + "catLst",
+                    new XElement(Dgm + "cat", new XAttribute("type", category), new XAttribute("pri", 11200))),
             styleLabels);
         return new XDocument(elem);
     }
