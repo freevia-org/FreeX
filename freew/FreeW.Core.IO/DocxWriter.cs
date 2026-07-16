@@ -572,11 +572,13 @@ public static class DocxWriter
                 ImagePart? watermarkImage = null;
                 if (watermark?.IsPicture == true)
                 {
+                    var (widthPt, heightPt) = PictureWatermarkSizePt(watermark, page);
                     var image = new InlineImage(
                         watermark.ImageBytes!,
-                        widthPt: 468,
-                        heightPt: 117,
+                        widthPt,
+                        heightPt,
                         InlineImage.DetectFormat(watermark.ImageBytes!));
+                    image.TransparencyPct = (1 - Math.Clamp(watermark.Opacity, 0, 1)) * 100;
                     watermarkImage = new ImagePart(
                         image,
                         "rIdWatermarkImage",
@@ -626,6 +628,110 @@ public static class DocxWriter
                 AddSlot(section, section.HeadersFooters, section.Page, legacyFinal: false);
 
         return parts;
+    }
+
+    private static (double WidthPt, double HeightPt) PictureWatermarkSizePt(
+        WatermarkOptions watermark,
+        PageSettings page)
+    {
+        var pageWidth = Math.Max(1, page.WidthPt);
+        var pageHeight = Math.Max(1, page.HeightPt);
+        var aspect = TryGetImageAspectRatio(watermark.ImageBytes!) ?? 468d / 281d;
+        double width;
+        double height;
+
+        if (watermark.ScalePct > 0)
+        {
+            var scale = Math.Clamp(watermark.ScalePct, 1, 500) / 100d;
+            if (aspect >= 1)
+            {
+                width = pageWidth * scale;
+                height = width / aspect;
+            }
+            else
+            {
+                height = pageHeight * scale;
+                width = height * aspect;
+            }
+        }
+        else
+        {
+            var fitScale = Math.Min(pageWidth * 0.65 / aspect, pageHeight * 0.65);
+            height = Math.Max(1, fitScale);
+            width = height * aspect;
+        }
+
+        var maxWidth = pageWidth * 0.95;
+        var maxHeight = pageHeight * 0.95;
+        if (width > maxWidth)
+        {
+            width = maxWidth;
+            height = width / aspect;
+        }
+        if (height > maxHeight)
+        {
+            height = maxHeight;
+            width = height * aspect;
+        }
+
+        return (width, height);
+    }
+
+    private static double? TryGetImageAspectRatio(byte[] bytes)
+    {
+        if (bytes.Length >= 24
+            && bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47)
+        {
+            var width = (bytes[16] << 24) | (bytes[17] << 16) | (bytes[18] << 8) | bytes[19];
+            var height = (bytes[20] << 24) | (bytes[21] << 16) | (bytes[22] << 8) | bytes[23];
+            return width > 0 && height > 0 ? (double)width / height : null;
+        }
+
+        if (bytes.Length >= 10 && bytes[0] == (byte)'G' && bytes[1] == (byte)'I' && bytes[2] == (byte)'F')
+        {
+            var width = bytes[6] | (bytes[7] << 8);
+            var height = bytes[8] | (bytes[9] << 8);
+            return width > 0 && height > 0 ? (double)width / height : null;
+        }
+
+        if (bytes.Length >= 26 && bytes[0] == (byte)'B' && bytes[1] == (byte)'M')
+        {
+            var width = BitConverter.ToInt32(bytes, 18);
+            var height = Math.Abs(BitConverter.ToInt32(bytes, 22));
+            return width > 0 && height > 0 ? (double)width / height : null;
+        }
+
+        if (bytes.Length >= 4 && bytes[0] == 0xFF && bytes[1] == 0xD8)
+        {
+            for (var offset = 2; offset + 9 < bytes.Length;)
+            {
+                if (bytes[offset++] != 0xFF)
+                    continue;
+                while (offset < bytes.Length && bytes[offset] == 0xFF)
+                    offset++;
+                if (offset >= bytes.Length)
+                    break;
+
+                var marker = bytes[offset++];
+                if (marker is 0xD8 or 0xD9 || marker is >= 0xD0 and <= 0xD7)
+                    continue;
+                if (offset + 1 >= bytes.Length)
+                    break;
+
+                var length = (bytes[offset] << 8) | bytes[offset + 1];
+                if (length < 2 || offset + length > bytes.Length)
+                    break;
+                if (marker is >= 0xC0 and <= 0xC3 or >= 0xC5 and <= 0xC7 or >= 0xC9 and <= 0xCB or >= 0xCD and <= 0xCF)
+                {
+                    var height = (bytes[offset + 3] << 8) | bytes[offset + 4];
+                    var width = (bytes[offset + 5] << 8) | bytes[offset + 6];
+                    return width > 0 && height > 0 ? (double)width / height : null;
+                }
+                offset += length;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1268,7 +1374,11 @@ public static class DocxWriter
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
         if (part.Watermark is not null)
-            root.Add(BuildWatermarkParagraph(part.Watermark, part.WatermarkImage));
+        {
+            root.Add(part.WatermarkImage is { } picture
+                ? BuildPictureWatermarkParagraph(picture)
+                : BuildWatermarkParagraph(part.Watermark));
+        }
 
         if (part.Content.Paragraphs.Count == 0 && part.Watermark is null)
             root.Add(new XElement(W + "p"));
@@ -1279,18 +1389,16 @@ public static class DocxWriter
         return new XDocument(root);
     }
 
-    private static XElement BuildWatermarkParagraph(WatermarkOptions options, ImagePart? watermarkImage)
+    private static XElement BuildWatermarkParagraph(WatermarkOptions options)
     {
         var color = NormalizeHex(options.FontColorHex, "808080");
         var opacity = Math.Clamp(options.Opacity, 0, 1)
             .ToString("0.###", System.Globalization.CultureInfo.InvariantCulture);
         var rotation = options.Layout == WatermarkLayout.Diagonal ? "315" : "0";
-        var shapeId = watermarkImage is null ? "PowerPlusWaterMarkObject" : "PowerPlusPictureWaterMarkObject";
-        var shapeSize = watermarkImage is null
-            ? "width:468pt;height:117pt"
-            : "width:468pt;height:281pt";
+        const string shapeId = "PowerPlusWaterMarkObject";
+        const string shapeSize = "width:468pt;height:117pt";
 
-        var shapeType = new XElement(V + "shapetype",
+        var textShapeType = new XElement(V + "shapetype",
             new XAttribute("id", "_x0000_t136"),
             new XAttribute("coordsize", "21600,21600"),
             new XAttribute(O + "spt", "136"),
@@ -1328,16 +1436,6 @@ public static class DocxWriter
         // VML colors are CSS values. Word treats an unprefixed six-digit value as
         // invalid and falls back to white, so retain the leading hash from the model.
         var vmlColor = $"#{color}";
-        var fill = watermarkImage is null
-            ? new XElement(V + "fill",
-                new XAttribute("color", vmlColor),
-                new XAttribute("opacity", opacity))
-            : new XElement(V + "fill",
-                new XAttribute(R + "id", watermarkImage.RelationshipId),
-                new XAttribute("type", "frame"),
-                new XAttribute("color2", "FFFFFF"),
-                new XAttribute("recolor", "t"),
-                new XAttribute("opacity", opacity));
 
         var shape = new XElement(V + "shape",
             new XAttribute("id", shapeId),
@@ -1345,22 +1443,57 @@ public static class DocxWriter
             new XAttribute("style", $"position:absolute;margin-left:0;margin-top:0;{shapeSize};rotation:{rotation};z-index:-251654144;mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin"),
             new XAttribute(O + "allowincell", "f"),
             new XAttribute("stroked", "f"),
-            watermarkImage is null ? new XAttribute("fillcolor", vmlColor) : null,
-            fill,
-            watermarkImage is null
-                ? new XElement(V + "textpath",
-                    new XAttribute("on", "t"),
-                    new XAttribute("fitshape", "t"),
-                    new XAttribute("style", $"font-family:{options.FontFamily};font-size:1pt"),
-                    new XAttribute("string", options.Text))
-                : null,
+            new XAttribute("fillcolor", vmlColor),
+            new XElement(V + "fill",
+                new XAttribute("color", vmlColor),
+                new XAttribute("opacity", opacity)),
+            new XElement(V + "textpath",
+                new XAttribute("on", "t"),
+                new XAttribute("fitshape", "t"),
+                new XAttribute("style", $"font-family:{options.FontFamily};font-size:1pt"),
+                new XAttribute("string", options.Text)),
             new XElement(W10 + "wrap", new XAttribute("anchorx", "margin"), new XAttribute("anchory", "margin")));
 
         return new XElement(W + "p",
             new XElement(W + "r",
                 new XElement(W + "pict",
-                    shapeType,
+                    textShapeType,
                     shape)));
+    }
+
+    private static XElement BuildPictureWatermarkParagraph(ImagePart picture)
+    {
+        var image = picture.Image;
+        var cx = PointsToEmu(image.WidthPt);
+        var cy = PointsToEmu(image.HeightPt);
+
+        return new XElement(W + "p",
+            new XElement(W + "r",
+                new XElement(W + "drawing",
+                    new XElement(Wp + "anchor",
+                        new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                        new XAttribute("distT", 0), new XAttribute("distB", 0),
+                        new XAttribute("distL", 0), new XAttribute("distR", 0),
+                        new XAttribute("simplePos", 0),
+                        new XAttribute("relativeHeight", 0),
+                        new XAttribute("behindDoc", 1),
+                        new XAttribute("locked", 0),
+                        new XAttribute("layoutInCell", 1),
+                        new XAttribute("allowOverlap", 1),
+                        new XElement(Wp + "simplePos", new XAttribute("x", 0), new XAttribute("y", 0)),
+                        new XElement(Wp + "positionH",
+                            new XAttribute("relativeFrom", "margin"),
+                            new XElement(Wp + "align", "center")),
+                        new XElement(Wp + "positionV",
+                            new XAttribute("relativeFrom", "margin"),
+                            new XElement(Wp + "align", "center")),
+                        new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                        new XElement(Wp + "effectExtent",
+                            new XAttribute("l", 0), new XAttribute("t", 0),
+                            new XAttribute("r", 0), new XAttribute("b", 0)),
+                        new XElement(Wp + "wrapNone"),
+                        BuildDocPr(picture),
+                        BuildPicGraphic(picture, cx, cy)))));
     }
 
     private static string NormalizeHex(string? value, string fallback)

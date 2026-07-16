@@ -201,11 +201,22 @@ public class WatermarkOptionsRoundTripTests
         doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
         {
             ImageBytes = Convert.FromBase64String(
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="),
+            ScalePct = 50
         };
 
         var rels = ReadHeaderRelsXml(doc);
         rels.Should().Contain("Id=\"rIdWatermarkImage\"");
+
+        var header = ReadHeaderXml(doc);
+        var wp = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing");
+        var drawing = XNamespace.Get("http://schemas.openxmlformats.org/drawingml/2006/main");
+        var anchor = header.Descendants(wp + "anchor").Single();
+        anchor.Attribute("behindDoc")!.Value.Should().Be("1");
+        anchor.Element(wp + "extent")!.Attribute("cx")!.Value.Should().Be("3886200");
+        anchor.Element(wp + "extent")!.Attribute("cy")!.Value.Should().Be("3886200");
+        anchor.Descendants(wp + "align").Select(a => a.Value).Should().Equal("center", "center");
+        anchor.Descendants(drawing + "alphaModFix").Single().Attribute("amt")!.Value.Should().Be("30000");
 
         using var stream = new MemoryStream();
         DocxWriter.Write(doc, stream);
