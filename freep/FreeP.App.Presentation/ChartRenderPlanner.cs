@@ -549,6 +549,7 @@ public static partial class ChartRenderPlanner
     public const double ImportedComboPlotLeftInset = 3.0;
     public const double ImportedComboPlotRightReduction = 8.0;
     public const double ImportedComboPlotBottomReduction = 1.5;
+    public const double ImportedComboPlotTopOffset = 1.0;
     public const double ImportedComboSecondaryLabelCompensation = 8.0;
     public const double ImportedComboLegendRightCompensation = 8.0;
     public const double LineMarkerRadius = 3.0;
@@ -1064,9 +1065,9 @@ public static partial class ChartRenderPlanner
         {
             plot = new ChartPlanRect(
                 plot.X + ImportedComboPlotLeftInset,
-                plot.Y,
+                plot.Y + ImportedComboPlotTopOffset,
                 Math.Max(1.0, plot.Width - ImportedComboPlotRightReduction),
-                Math.Max(1.0, plot.Height - ImportedComboPlotBottomReduction));
+                Math.Max(1.0, plot.Height - ImportedComboPlotBottomReduction - ImportedComboPlotTopOffset));
         }
         if (UsesStockLineFallback(chart))
         {

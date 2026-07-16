@@ -1374,6 +1374,21 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildFramePlan_ImportedComboMovesPlotDownWhilePreservingBottomEdge()
+    {
+        var chart = MakeSecondaryAxisChart();
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.Series[1].OverrideChartType = ChartType.Line;
+
+        var frame = ChartRenderPlanner.BuildFramePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+
+        frame.Plot.Should().Be(new ChartPlanRect(71, 21, 760, 465.5));
+        frame.Plot.Bottom.Should().Be(486.5);
+    }
+
+    [Fact]
     public void BuildFramePlan_ManualPlotLayout_UsesEdgeRightAndBottomCoordinates()
     {
         var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
