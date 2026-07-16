@@ -128,6 +128,39 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void PlanColumnLines_FlowsTheLastLineAcrossColumnBoundary()
+    {
+        var text = new ResolvedTextLayout
+        {
+            ColumnCount = 2,
+            ColumnSpacingDip = 20,
+            InsetLeftDip = 10,
+            InsetTopDip = 5,
+            InsetRightDip = 10,
+            InsetBottomDip = 5,
+            Paragraphs = new[] { Paragraph(), Paragraph() }
+        };
+        var layout = TextLayoutPlanner.GetColumnLayout(text, new LayoutRect(0, 0, 300, 100));
+        var lines = new[]
+        {
+            new TextColumnLineMeasure(0, 0, 40, 0, 0, true, false),
+            new TextColumnLineMeasure(0, 1, 40, 0, 0, false, true),
+            new TextColumnLineMeasure(1, 0, 40, 0, 0, true, false),
+            new TextColumnLineMeasure(1, 1, 40, 0, 0, false, true)
+        };
+
+        var plan = TextLayoutPlanner.PlanColumnLines(text, layout, lines);
+
+        plan.Select(line => (line.ParagraphIndex, line.LineIndex, line.ColumnIndex))
+            .Should().Equal(
+                (0, 0, 0),
+                (0, 1, 0),
+                (1, 0, 1),
+                (1, 1, 1));
+        plan[2].X.Should().BeApproximately(160, 0.001);
+    }
+
+    [Fact]
     public void PlanBodyText_BottomAnchor_UsesInsetsIndentAndLineSpacingScale()
     {
         var text = new ResolvedTextLayout

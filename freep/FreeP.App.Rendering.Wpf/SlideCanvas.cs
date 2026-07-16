@@ -1395,6 +1395,9 @@ public sealed class SlideCanvas : FrameworkElement
     // Greedy paragraph-level assignment: fill column 1 top-to-bottom, then column 2, etc.
     private static void RenderTextCoreColumns(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
+        if (TryRenderContinuousColumnFlow(dc, text, bounds))
+            return;
+
         var initialColumnLayout = TextLayoutPlanner.GetColumnLayout(text, bounds);
         var initialMeasured = new List<TextParagraphMeasure>();
 
@@ -1474,6 +1477,141 @@ public sealed class SlideCanvas : FrameworkElement
             }
         }
     }
+
+    private static bool TryRenderContinuousColumnFlow(
+        DrawingContext dc,
+        ResolvedTextLayout text,
+        LayoutRect bounds)
+    {
+        if (text.AutoFitKind != TextAutoFitKind.None ||
+            text.HasStoredFontScale ||
+            text.Paragraphs.Any(para =>
+                para.Runs.Count != 1 ||
+                TextLayoutPlanner.PlanParagraphRenderRoute(para, text) != TextParagraphRenderRoute.Plain))
+        {
+            return false;
+        }
+
+        var layout = TextLayoutPlanner.GetColumnLayout(text, bounds);
+        var fragments = new Dictionary<(int ParagraphIndex, int LineIndex), ResolvedParagraph>();
+        var measures = new List<TextColumnLineMeasure>();
+
+        for (int paragraphIndex = 0; paragraphIndex < text.Paragraphs.Count; paragraphIndex++)
+        {
+            var paragraph = text.Paragraphs[paragraphIndex];
+            var run = paragraph.Runs[0];
+            var lines = SplitColumnText(paragraph, run, layout.ColumnWidthDip, text.Wrap);
+            for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
+            {
+                var fragment = CloneParagraphWithText(paragraph, run, lines[lineIndex]);
+                var formatted = BuildFormattedText(fragment, layout.ColumnWidthDip, text.Wrap, useIdealMetrics: true);
+                fragments[(paragraphIndex, lineIndex)] = fragment;
+                measures.Add(new TextColumnLineMeasure(
+                    paragraphIndex,
+                    lineIndex,
+                    formatted.Height,
+                    lineIndex == 0 ? TextLayoutPlanner.PointsToDip(paragraph.SpaceBeforePt) : 0,
+                    lineIndex == lines.Count - 1 ? TextLayoutPlanner.PointsToDip(paragraph.SpaceAfterPt) : 0,
+                    lineIndex == 0,
+                    lineIndex == lines.Count - 1));
+            }
+        }
+
+        foreach (var placement in TextLayoutPlanner.PlanColumnLines(text, layout, measures))
+        {
+            var fragment = fragments[(placement.ParagraphIndex, placement.LineIndex)];
+            var formatted = BuildFormattedText(fragment, placement.MaxWidthDip, text.Wrap, useIdealMetrics: true);
+            if (placement.IsFirstLine && fragment.IndentDip > 0 && formatted.MaxTextWidth > 0)
+                formatted.MaxTextWidth = placement.MaxWidthDip;
+            dc.DrawText(formatted, new Point(placement.X, placement.Y));
+        }
+
+        return true;
+    }
+
+
+    private static IReadOnlyList<string> SplitColumnText(
+        ResolvedParagraph paragraph,
+        ResolvedRun run,
+        double maxWidth,
+        bool wrap)
+    {
+        if (!wrap || maxWidth <= 0)
+            return new[] { run.Text };
+
+        var words = run.Text.Replace('\r', ' ').Replace('\n', ' ')
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0)
+            return new[] { string.Empty };
+
+        var lines = new List<string>();
+        string current = string.Empty;
+        foreach (var word in words)
+        {
+            string candidate = current.Length == 0 ? word : current + " " + word;
+            var measure = BuildFormattedText(
+                CloneParagraphWithText(paragraph, run, candidate),
+                0,
+                false,
+                useIdealMetrics: true);
+            if (current.Length > 0 && measure.WidthIncludingTrailingWhitespace > maxWidth)
+            {
+                lines.Add(current);
+                current = word;
+            }
+            else
+            {
+                current = candidate;
+            }
+        }
+
+        if (current.Length > 0)
+            lines.Add(current);
+        return lines;
+    }
+
+    private static ResolvedParagraph CloneParagraphWithText(
+        ResolvedParagraph paragraph,
+        ResolvedRun run,
+        string text) =>
+        new()
+        {
+            Runs = new[]
+            {
+                new ResolvedRun
+                {
+                    Text = text,
+                    FontFamily = run.FontFamily,
+                    FontSizePt = run.FontSizePt,
+                    Bold = run.Bold,
+                    Italic = run.Italic,
+                    Underline = run.Underline,
+                    Strikethrough = run.Strikethrough,
+                    Color = run.Color,
+                    TextFill = run.TextFill,
+                    TextOutline = run.TextOutline,
+                    TextShadow = run.TextShadow,
+                    TextReflection = run.TextReflection,
+                    TextGlow = run.TextGlow,
+                    TextSoftEdge = run.TextSoftEdge,
+                    MathLayout = run.MathLayout
+                }
+            },
+            Align = paragraph.Align,
+            Level = paragraph.Level,
+            BulletKind = paragraph.BulletKind,
+            BulletChar = paragraph.BulletChar,
+            BulletImage = paragraph.BulletImage,
+            SpaceBeforePt = paragraph.SpaceBeforePt,
+            SpaceAfterPt = paragraph.SpaceAfterPt,
+            TabStops = paragraph.TabStops,
+            BulletText = paragraph.BulletText,
+            BulletColor = paragraph.BulletColor,
+            BulletFontFamily = paragraph.BulletFontFamily,
+            BulletFontSizePt = paragraph.BulletFontSizePt,
+            IndentDip = paragraph.IndentDip,
+            HangingDip = paragraph.HangingDip
+        };
 
     private static void RenderTextCore(DrawingContext dc, ResolvedTextLayout text, LayoutRect bounds)
     {
