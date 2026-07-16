@@ -52,13 +52,19 @@ public sealed class LinuxWorksheetEditingParityTests
                 .ToDictionary(button => (string)button.Tag!);
 
             buttons.Keys.Should().Contain(["Fill Color", "Font Color"]);
-            buttons["Fill Color"].Flyout.Should().BeOfType<MenuFlyout>()
-                .Which.ItemsSource!.Cast<object>().Count().Should().BeGreaterThan(3);
-            buttons["Font Color"].Flyout.Should().BeOfType<MenuFlyout>()
-                .Which.ItemsSource!.Cast<object>().Count().Should().BeGreaterThan(3);
-            buttons["Fill Color"].Flyout.Should().BeOfType<MenuFlyout>()
-                .Which.ItemsSource!.Cast<MenuItem>()
-                .Should().Contain(item => Equals(item.Header, "More Colors..."));
+            var fillPalette = buttons["Fill Color"].Flyout.Should().BeOfType<Flyout>().Subject;
+            var fontPalette = buttons["Font Color"].Flyout.Should().BeOfType<Flyout>().Subject;
+            var fillContent = fillPalette.Content.Should().BeAssignableTo<Control>().Subject;
+            var fontContent = fontPalette.Content.Should().BeAssignableTo<Control>().Subject;
+
+            FindDescendants(fillContent).OfType<Button>()
+                .Count(button => AutomationProperties.GetAutomationId(button)?.StartsWith("RibbonThemeColor", StringComparison.Ordinal) == true)
+                .Should().Be(60);
+            FindDescendants(fontContent).OfType<Button>()
+                .Count(button => AutomationProperties.GetAutomationId(button)?.StartsWith("RibbonStandardColor", StringComparison.Ordinal) == true)
+                .Should().Be(10);
+            FindDescendants(fillContent).OfType<Button>()
+                .Should().Contain(button => AutomationProperties.GetAutomationId(button) == "RibbonColorPaletteMoreColors");
 
             window.AllowCloseWithoutDirtyPromptForParityCapture();
             window.Close();
@@ -120,6 +126,35 @@ public sealed class LinuxWorksheetEditingParityTests
         source.Should().Contain("IsHeaderResizeHotspot(point.Position, header.Bounds, HeaderResizeKind.Row)");
         source.Should().Contain("point.Properties.IsLeftButtonPressed && IsCellDoubleClick(address, args.ClickCount)");
         source.Should().Contain("BeginInlineCellEdit(address, editText, editText.Length);");
+    }
+
+    [Fact]
+    public void SourceArmsAutofillAndMoveAfterPersistentPointerCaptureInitialization()
+    {
+        var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var autofill = MethodSource(source, "private bool TryBeginAutofillDrag", "private bool IsPointerOnAutofillHandle");
+        var move = MethodSource(source, "private bool TryBeginSelectionMoveDrag", "private bool IsPointerOnSelectionMoveBorder");
+
+        autofill.IndexOf("BeginCellSelectionDrag(args, capture, source.Start);", StringComparison.Ordinal)
+            .Should().BeLessThan(autofill.IndexOf("_autofillDragging = true;", StringComparison.Ordinal));
+        move.IndexOf("BeginCellSelectionDrag(args, capture, source.Start);", StringComparison.Ordinal)
+            .Should().BeLessThan(move.IndexOf("_selectionMoveDragging = true;", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task NumberFormatComboSelection_AppliesFormatWithoutOpeningDialog()
+    {
+        await Session.Dispatch(() =>
+        {
+            var window = CreateCleanWindow(out var sheet);
+            var address = new CellAddress(sheet.Id, 1, 1);
+            sheet.SetCell(address, new NumberValue(1));
+            window.Session.SelectCell(address);
+
+            Invoke(window, "ApplyRibbonNumberFormat", "Number");
+
+            window.Session.SelectedRangeStartNumberFormat.Should().Be("0.00");
+        }, CancellationToken.None);
     }
 
     [Fact]
@@ -193,6 +228,20 @@ public sealed class LinuxWorksheetEditingParityTests
         (T)typeof(MainWindow)
             .GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(window, args)!;
+
+    private static void Invoke(MainWindow window, string name, params object[] args) =>
+        typeof(MainWindow)
+            .GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(window, args);
+
+    private static string MethodSource(string source, string startMarker, string endMarker)
+    {
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        start.Should().BeGreaterThanOrEqualTo(0);
+        end.Should().BeGreaterThan(start);
+        return source[start..end];
+    }
 
     private static string RepoFile(params string[] parts) =>
         Path.Combine(FindRepoRoot(), Path.Combine(parts));
