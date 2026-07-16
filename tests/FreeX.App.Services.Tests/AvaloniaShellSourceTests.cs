@@ -4311,9 +4311,9 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var textWrapping = style?.WrapText == true ? TextWrapping.Wrap : TextWrapping.NoWrap;");
         source.Should().Contain("var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;");
         source.Should().Contain("TextWrapping = isFillAlign ? TextWrapping.NoWrap : effectiveTextWrapping,");
-        source.Should().Contain("TextTrimming = (isFillAlign || effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255)");
-        source.Should().Contain("? TextTrimming.None");
-        source.Should().Contain(": TextTrimming.CharacterEllipsis");
+        source.Should().Contain("TextTrimming = TextTrimming.None,");
+        source.Should().Contain("AddCellTextOverflowOverlayToGrid(");
+        source.Should().Contain("CellTextOverflowPlanner.CanOverflowCellText(");
     }
 
     [Fact]
