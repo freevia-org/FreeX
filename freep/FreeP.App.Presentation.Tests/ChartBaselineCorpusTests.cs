@@ -16,6 +16,25 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartBaselineCorpus_ImportedStockUsesPowerPointBlackGridAndAxisStrokes()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[0].Shapes
+            .Single(shape => shape.Chart?.ChartType == ChartType.Stock).Chart!;
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 480, 288));
+        var expectedStroke = new ChartStrokePlan(
+            new SrgbColor(0x00, 0x00, 0x00),
+            Alpha: 255,
+            Thickness: 1.0);
+
+        scene.GridLines.Stroke.Should().Be(expectedStroke);
+        scene.AxisTicks.Stroke.Should().Be(expectedStroke);
+    }
+
+    [Fact]
     public void ChartLabelsCorpus_ImportedComboUsesPowerPointAxisIntervalsAndGeneralLabels()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "19-chart-labels.pptx");

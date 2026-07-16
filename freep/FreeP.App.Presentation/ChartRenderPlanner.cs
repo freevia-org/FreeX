@@ -5617,6 +5617,10 @@ public static partial class ChartRenderPlanner
 
     private static ChartStrokePlan DefaultGridLineStroke(ChartShape? chart = null) =>
         chart is not null &&
+        chart.ChartType == ChartType.Stock &&
+        UsesImportedTextMetrics(chart)
+            ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 1.0)
+        : chart is not null &&
         UsesClassicOfficeChartStyle(chart)
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.5)
             : chart is not null &&
@@ -5625,7 +5629,11 @@ public static partial class ChartRenderPlanner
             : new ChartStrokePlan(new SrgbColor(0xD9, 0xD9, 0xD9), Alpha: 255, Thickness: 0.5);
 
     private static ChartStrokePlan DefaultAxisTickStroke(ChartShape? chart = null) =>
-        chart is not null && UsesImportedCartesianAxisStrokes(chart)
+        chart is not null &&
+        chart.ChartType == ChartType.Stock &&
+        UsesImportedTextMetrics(chart)
+            ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 1.0)
+        : chart is not null && UsesImportedCartesianAxisStrokes(chart)
             ? new ChartStrokePlan(new SrgbColor(0x89, 0x89, 0x89), Alpha: 255, Thickness: 0.75)
             : chart is not null &&
               UsesClassicOfficeChartStyle(chart)
