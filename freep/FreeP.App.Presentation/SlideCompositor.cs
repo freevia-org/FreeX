@@ -158,7 +158,7 @@ public static class SlideCompositor
                 break;
 
             // Theme 21: OLE — render the fallback preview image (same as Picture path).
-            // Live OLE activation is deferred; fallback image is the visual floor.
+            // Host interaction can externally activate the preserved payload.
             case SlideShapeKind.Ole:
                 ComposeOle(shape, slide, presentation, theme, ops, effectiveClrMap);
                 break;
@@ -458,7 +458,7 @@ public static class SlideCompositor
 
     /// <summary>
     /// Renders an OLE embedded object by drawing its fallback preview image (same as ComposePicture).
-    /// Live OLE activation is deferred; the fallback image is the visual floor.
+    /// In-place OLE hosting is deferred; the host can externally activate the payload.
     /// When no fallback image is present a grey placeholder rectangle is rendered instead.
     /// </summary>
     private static void ComposeOle(

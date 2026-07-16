@@ -3,6 +3,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using FreeP.App.Compositor;
 using FreeP.Core.Model;
+using Free.Shared.Drawing;
 using System.Collections.Generic;
 
 namespace FreeP.App.Rendering.Wpf;
@@ -104,6 +105,25 @@ public sealed class CanvasGestureHandler
 
         if (slide is null || _editor.Presentation is null)
             return;
+
+        if (e.ClickCount >= 2)
+        {
+            var slidePoint = xf.ScreenToSlide(pt.X, pt.Y);
+            var oleHitId = ShapeHitTester.HitTest(
+                slide,
+                _editor.Presentation,
+                slidePoint.X,
+                slidePoint.Y);
+            var shape = oleHitId.HasValue
+                ? slide.Shapes.FirstOrDefault(candidate => candidate.Id == oleHitId.Value)
+                : null;
+            if (shape?.Kind == SlideShapeKind.Ole)
+            {
+                OleActivationService.TryActivate(shape.OleObject);
+                e.Handled = true;
+                return;
+            }
+        }
 
         // Determine what was hit first for the existing selection (handles take priority)
         if (_editor.SelectedShapeIds.Count > 0)
