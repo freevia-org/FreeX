@@ -5,6 +5,7 @@ using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Media;
 using FreeX.App.Presentation.GridInteraction;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 using CellHAlign = FreeX.Core.Model.HorizontalAlignment;
 
@@ -862,17 +863,7 @@ public partial class GridView : FrameworkElement
     }
 
     public static bool CanOverflowCellText(CellStyle? style, ScalarValue? rawValue, string? displayText, GridRange? merge)
-    {
-        var hAlign = style?.HorizontalAlignment ?? CellHAlign.General;
-        return !string.IsNullOrEmpty(displayText) &&
-            style?.WrapText != true &&
-            style?.ShrinkToFit != true &&
-            !HasCellTextOrientation(style?.TextRotation ?? 0) &&
-            rawValue is not NumberValue and not DateTimeValue &&
-            !merge.HasValue &&
-            (hAlign == CellHAlign.Left || hAlign == CellHAlign.General ||
-             hAlign == CellHAlign.Right || hAlign == CellHAlign.Center);
-    }
+        => CellTextOverflowPlanner.CanOverflowCellText(style, rawValue, displayText, merge);
 
     public static CellAddress ConstrainAutofillTarget(GridRange source, CellAddress target)
         => GridAutofillPlanner.ConstrainTarget(source, target);
