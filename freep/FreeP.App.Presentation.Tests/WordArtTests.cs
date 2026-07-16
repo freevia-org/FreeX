@@ -569,9 +569,25 @@ public sealed class WordArtTests : IDisposable
             .SelectMany(p => p.Runs)
             .Single(r => r.Text == "Arch Up Text");
 
+        reflectionRun.Caps.Should().Be(RunTextCaps.All);
         reflectionRun.TextReflection.Should().NotBeNull();
         reflectionRun.TextReflection!.Alpha.Should().BeInRange(126, 128);
         reflectionRun.TextReflection.ScaleY.Should().BeApproximately(-1.0, 0.001);
+
+        var resolvedRun = SlideCompositor.Compose(pres, pres.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .SelectMany(shape => shape.Text?.Paragraphs ?? Enumerable.Empty<ResolvedParagraph>())
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.Text == "ARCH UP TEXT");
+        resolvedRun.Text.Should().Be("ARCH UP TEXT");
+
+        var roundTripped = PptxPackageReader.Read(WriteToPptx(pres));
+        roundTripped.Slides
+            .SelectMany(s => s.Shapes)
+            .SelectMany(s => s.TextBody?.Paragraphs ?? Enumerable.Empty<Paragraph>())
+            .SelectMany(p => p.Runs)
+            .Single(r => r.Text == "Arch Up Text")
+            .Caps.Should().Be(RunTextCaps.All);
     }
 
     [Fact]

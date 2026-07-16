@@ -197,6 +197,7 @@ internal static class PresentationModelCloneHelper
         ItalicSet = source.ItalicSet,
         Underline = source.Underline,
         Strikethrough = source.Strikethrough,
+        Caps = source.Caps,
         Color = source.Color,
         Hyperlink = CloneHyperlink(source.Hyperlink),
         Field = CloneField(source.Field),

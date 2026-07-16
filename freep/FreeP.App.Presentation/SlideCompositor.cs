@@ -1291,6 +1291,8 @@ public static class SlideCompositor
                 string resolvedText = run.Field is not null
                     ? ResolveFieldText(run.Field, slideIndex)
                     : run.Text;
+                if (run.Caps == RunTextCaps.All)
+                    resolvedText = resolvedText.ToUpperInvariant();
 
                 // Color: explicit run > field color > inherited style > Black.
                 SrgbColor color;

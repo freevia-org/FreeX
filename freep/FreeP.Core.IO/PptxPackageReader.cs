@@ -4081,6 +4081,12 @@ public static class PptxPackageReader
             if (iAttr is not null) { run.ItalicSet = true; run.Italic = iAttr.Value is "1" or "true"; }
             run.Underline = rPr.Attribute("u")?.Value is not null and not "none";
             run.Strikethrough = rPr.Attribute("strike")?.Value is "sngStrike" or "dblStrike";
+            run.Caps = rPr.Attribute("cap")?.Value.ToLowerInvariant() switch
+            {
+                "all" => RunTextCaps.All,
+                "small" => RunTextCaps.Small,
+                _ => RunTextCaps.None,
+            };
             if (int.TryParse(rPr.Attribute("sz")?.Value, out var sz) && sz > 0)
                 run.FontSizePt = sz / 100.0;
             run.FontFamily = rPr.Element(A + "latin")?.Attribute("typeface")?.Value;

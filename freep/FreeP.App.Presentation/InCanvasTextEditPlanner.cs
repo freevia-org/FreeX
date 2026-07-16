@@ -583,6 +583,7 @@ internal static class TextBodyRunMutationPlanner
         ItalicSet = source.ItalicSet,
         Underline = source.Underline,
         Strikethrough = source.Strikethrough,
+        Caps = source.Caps,
         Color = source.Color,
         Hyperlink = source.Hyperlink,
         Field = source.Field,
@@ -604,6 +605,7 @@ internal static class TextBodyRunMutationPlanner
         && a.ItalicSet == b.ItalicSet
         && a.Underline == b.Underline
         && a.Strikethrough == b.Strikethrough
+        && a.Caps == b.Caps
         && TextBodyModelCloner.ColorsEqual(a.Color, b.Color)
         && a.Hyperlink == b.Hyperlink
         && a.Field == b.Field
@@ -892,6 +894,7 @@ internal static class TextBodyModelCloner
         ItalicSet = source.ItalicSet,
         Underline = source.Underline,
         Strikethrough = source.Strikethrough,
+        Caps = source.Caps,
         Color = source.Color,
         Hyperlink = CloneHyperlink(source.Hyperlink),
         Field = CloneField(source.Field),
