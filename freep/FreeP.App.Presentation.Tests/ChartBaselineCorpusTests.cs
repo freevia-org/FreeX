@@ -478,6 +478,13 @@ public sealed class ChartBaselineCorpusTests
         charts.Select(chart => chart.ChartType)
             .Should().Equal(ChartType.ColumnClustered, ChartType.LineMarkers, ChartType.BarClustered);
 
+        ChartRenderPlanner.BuildFramePlan(charts[0], new ChartPlanRect(0, 0, 960, 540)).Plot
+            .Should().Be(new ChartPlanRect(70.0, 21.0, 775.4, 467.0),
+                "PowerPoint's imported style-2 column chart uses the wider plot band captured by the COM baseline");
+        ChartRenderPlanner.BuildFramePlan(charts[1], new ChartPlanRect(0, 0, 960, 540)).Plot
+            .Should().Be(new ChartPlanRect(70.0, 21.0, 775.4, 467.0),
+                "PowerPoint's imported style-2 line chart shares the column chart plot geometry");
+
         foreach (var chart in charts)
         {
             var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 960, 540));

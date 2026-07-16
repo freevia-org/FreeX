@@ -664,6 +664,13 @@ public static partial class ChartRenderPlanner
         !UsesImportedComboDefaults(chart) &&
         chart.ChartType is not (ChartType.Pie or ChartType.Doughnut);
 
+    private static bool UsesImportedStyle2ColumnLineFrame(ChartShape chart) =>
+        chart.StyleId == 2 &&
+        UsesImportedTextMetrics(chart) &&
+        !UsesImportedComboDefaults(chart) &&
+        chart.DataLabels is null &&
+        chart.ChartType is ChartType.ColumnClustered or ChartType.LineMarkers;
+
     /// <summary>
     /// Chart parts without an authored style use PowerPoint's classic default
     /// appearance. Newer Office chart styles carry an explicit style id.
@@ -972,6 +979,16 @@ public static partial class ChartRenderPlanner
             plotTop,
             plotRight - plotLeft,
             plotBottom - plotTop);
+        if (UsesImportedStyle2ColumnLineFrame(chart))
+        {
+            // PowerPoint's style-2 Cartesian charts use a slightly wider plot
+            // band and keep the first gridline one pixel below the title band.
+            plot = new ChartPlanRect(
+                plot.X + 2.0,
+                plot.Y + 1.0,
+                plot.Width + 9.0,
+                plot.Height - 1.0);
+        }
         if (family == ChartRenderFamily.ScatterLike && UsesImportedTextMetrics(chart))
         {
             // PowerPoint's imported scatter layout moves the plot above the
