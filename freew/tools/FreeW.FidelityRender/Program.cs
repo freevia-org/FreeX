@@ -281,6 +281,79 @@ static void RenderDocumentComposite(
     // The old path hard-coded ColumnWidth=pageW (single column). This fixes that miss.
     DocumentView.ApplyColumnLayout(flow, page);
 
+    if (page.ColumnCount > 1)
+    {
+        var diagnosticColumnWidth = (pageWDip - marginLeft - marginRight
+            - PageLayout.PointsToDip(page.ColumnSpacingPt) * (page.ColumnCount - 1)) / page.ColumnCount;
+        // Use a fresh FlowDocument for the diagnostic pagination pass. Changing column geometry on
+        // the production FlowDocument after WPF has realized its paginator leaves stale page visuals.
+        var diagnosticView = new DocumentView { Width = pageWDip };
+        diagnosticView.LoadModel(doc);
+        var diagnosticFlow = diagnosticView.Document;
+        diagnosticFlow.PageWidth = diagnosticColumnWidth + flow.PagePadding.Left + flow.PagePadding.Right;
+        diagnosticFlow.PageHeight = pageHDip;
+        diagnosticFlow.PagePadding = flow.PagePadding;
+        diagnosticFlow.ColumnWidth = double.PositiveInfinity;
+        diagnosticFlow.IsColumnWidthFlexible = false;
+        diagnosticFlow.ColumnGap = 0;
+
+        // Mirror the body section-break convention used by the production flow so a diagnostic
+        // column page is not confused with a section-created page.
+        var diagnosticModelBlocks = doc.Blocks;
+        var diagnosticBlocks = diagnosticFlow.Blocks.ToList();
+        for (int blockIndex = 0;
+             blockIndex < diagnosticModelBlocks.Count - 1 && blockIndex < diagnosticBlocks.Count - 1;
+             blockIndex++)
+        {
+            if (diagnosticModelBlocks[blockIndex] is FreeW.Core.Model.Paragraph
+                { SectionBreak: { } sectionBreak }
+                && sectionBreak.BreakKind is SectionBreakKind.NextPage
+                    or SectionBreakKind.EvenPage
+                    or SectionBreakKind.OddPage
+                && diagnosticBlocks[blockIndex + 1] is System.Windows.Documents.Paragraph nextParagraph)
+            {
+                nextParagraph.BreakPageBefore = true;
+            }
+        }
+
+        var diagnosticPaginator = ((IDocumentPaginatorSource)diagnosticFlow).DocumentPaginator;
+        diagnosticPaginator.PageSize = new Size(diagnosticFlow.PageWidth, pageHDip);
+        diagnosticPaginator.ComputePageCount();
+        var productionParagraphs = flow.Blocks.OfType<System.Windows.Documents.Paragraph>().ToArray();
+        foreach (var (paragraph, index) in diagnosticFlow.Blocks.OfType<System.Windows.Documents.Paragraph>().Select((p, i) => (p, i)))
+        {
+            try
+            {
+                var startPage = diagnosticPaginator is DynamicDocumentPaginator dynamicPaginator
+                    ? dynamicPaginator.GetPageNumber(paragraph.ContentStart)
+                    : -1;
+                var endPage = diagnosticPaginator is DynamicDocumentPaginator dynamicPaginator2
+                    ? dynamicPaginator2.GetPageNumber(paragraph.ContentEnd)
+                    : -1;
+                var textLength = new TextRange(paragraph.ContentStart, paragraph.ContentEnd).Text.Trim().Length;
+                var crossesColumnWithinPage = startPage >= 0
+                    && endPage == startPage + 1
+                    && startPage / page.ColumnCount == endPage / page.ColumnCount
+                    && textLength > 0
+                    && textLength <= 500;
+                if (crossesColumnWithinPage)
+                {
+                    // Word's implicit widow/orphan control does not leave a short paragraph's
+                    // first line at the bottom of a column. Keep only these column-boundary cases
+                    // intact; paragraphs crossing a real page remain splittable.
+                    if (index < productionParagraphs.Length)
+                        productionParagraphs[index].KeepTogether = true;
+                }
+                if (Environment.GetEnvironmentVariable("FREEW_LAYOUT_DIAGNOSTICS") == "1")
+                    Console.WriteLine($"column p{index}: pages={startPage}..{endPage} keep={crossesColumnWithinPage}");
+            }
+            catch (Exception ex)
+            {
+                if (Environment.GetEnvironmentVariable("FREEW_LAYOUT_DIAGNOSTICS") == "1")
+                    Console.WriteLine($"column p{index}: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+    }
     var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
     paginator.PageSize = new Size(pageWDip, pageHDip);
     paginator.ComputePageCount();
