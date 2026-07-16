@@ -78,7 +78,8 @@ internal static class SmartArtRenderer
         Thickness margin,
         Thickness padding,
         double? width = null,
-        double? minWidth = null)
+        double? minWidth = null,
+        TextWrapping textWrapping = TextWrapping.Wrap)
     {
         Effect? effect = null;
         if (node.ShadowOpacity > 0)
@@ -107,7 +108,7 @@ internal static class SmartArtRenderer
                 Foreground = new SolidColorBrush(ParseHex(node.TextHex)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
-                TextWrapping = TextWrapping.Wrap,
+                TextWrapping = textWrapping,
                 FontSize = Math.Max(1, node.FontSizeDip),
                 TextAlignment = System.Windows.TextAlignment.Center
             }
@@ -354,7 +355,10 @@ internal static class SmartArtRenderer
                 strokeThickness,
                 margin: new Thickness(0),
                 padding: new Thickness(6, 3, 6, 3),
-                width: nodeGeometry.Width);
+                width: nodeGeometry.Width,
+                textWrapping: string.Equals(plan.LayoutId, "orgchart1", StringComparison.OrdinalIgnoreCase)
+                    ? TextWrapping.NoWrap
+                    : TextWrapping.Wrap);
             box.Height = nodeGeometry.Height;
             Canvas.SetLeft(box, nodeGeometry.X);
             Canvas.SetTop(box, nodeGeometry.Y);

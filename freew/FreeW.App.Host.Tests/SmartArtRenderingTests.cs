@@ -232,7 +232,8 @@ public sealed class SmartArtRenderingTests
             var fill = Assert.IsType<SolidColorBrush>(node.Background).Color;
             Assert.Equal(Color.FromRgb(0x1F, 0x38, 0x64), fill);
             Assert.Equal(0, node.Effect is DropShadowEffect shadow ? shadow.Opacity : 0);
-            Assert.InRange(Assert.IsType<TextBlock>(node.Child).FontSize, 14.665, 14.668);
+            Assert.InRange(Assert.IsType<TextBlock>(node.Child).FontSize, 29.331, 29.335);
+            Assert.Equal(TextWrapping.NoWrap, Assert.IsType<TextBlock>(node.Child).TextWrapping);
         }
 
         var canvas = LogicalDescendants<Canvas>(outer).Single();
@@ -344,7 +345,7 @@ public sealed class SmartArtRenderingTests
             var textBlock = Assert.IsType<TextBlock>(node.Child);
             var foreground = Assert.IsType<SolidColorBrush>(textBlock.Foreground).Color;
             Assert.Equal(Colors.Black, foreground);
-            Assert.InRange(textBlock.FontSize, 24.639, 24.641);
+            Assert.InRange(textBlock.FontSize, 18.665, 18.668);
         }
 
         var canvas = LogicalDescendants<Canvas>(outer).Single();

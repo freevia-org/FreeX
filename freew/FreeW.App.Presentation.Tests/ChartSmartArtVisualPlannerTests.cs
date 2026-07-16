@@ -465,7 +465,7 @@ public sealed class ChartSmartArtVisualPlannerTests
         plan.Nodes.Select(node => node.ConnectorHex).Should().OnlyContain(hex => hex == "#1F3864");
         plan.Nodes.Should().OnlyContain(node => node.ShadowOpacity == 0);
         plan.Nodes.Select(node => node.FontSizeDip)
-            .Should().OnlyContain(size => Math.Abs(size - 11 * 96.0 / 72.0) < 0.001);
+            .Should().OnlyContain(size => Math.Abs(size - 22 * 96.0 / 72.0) < 0.001);
 
         plan.HierarchyGeometry.Should().NotBeNull();
         var geometry = plan.HierarchyGeometry!;
@@ -497,7 +497,7 @@ public sealed class ChartSmartArtVisualPlannerTests
         plan.Nodes.Select(node => node.FillHex).Should().OnlyContain(hex => hex == "#7F0000");
         plan.Nodes.Select(node => node.TextHex).Should().OnlyContain(hex => hex == "#000000");
         plan.Nodes.Select(node => node.FontSizeDip)
-            .Should().OnlyContain(size => Math.Abs(size - 18.48 * 96.0 / 72.0) < 0.001);
+            .Should().OnlyContain(size => Math.Abs(size - 14 * 96.0 / 72.0) < 0.001);
         plan.LayoutGeometry.Should().NotBeNull();
         var geometry = plan.LayoutGeometry!;
         geometry.NaturalWidth.Should().Be(300);

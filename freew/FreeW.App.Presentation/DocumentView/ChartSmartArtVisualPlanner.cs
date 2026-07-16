@@ -359,6 +359,11 @@ public sealed record SmartArtVisualPlan(
 
 public static class ChartSmartArtVisualPlanner
 {
+    // Word's native gallery drawing scales cached SmartArt text differently from the nominal a:rPr sizes.
+    // These values are calibrated against the live Word COM raster for the authored native gallery probes.
+    private const double WordOrgChartRenderedTextSizePt = 22;
+    private const double WordPyramidRenderedTextSizePt = 14;
+
     public static ChartVisualPlan BuildChartPlan(Chart chart)
     {
         ArgumentNullException.ThrowIfNull(chart);
@@ -1212,7 +1217,8 @@ public static class ChartSmartArtVisualPlanner
                 ShadowOpacity = 0,
                 ShadowBlur = 0,
                 ShadowDepth = 0,
-                ConnectorHex = "#1F3864"
+                ConnectorHex = "#1F3864",
+                FontSizeDip = WordOrgChartRenderedTextSizePt * 96.0 / 72.0
             })
             .ToList();
 
@@ -1238,7 +1244,7 @@ public static class ChartSmartArtVisualPlanner
                 ShadowBlur = 0,
                 ShadowDepth = 0,
                 ConnectorHex = "#7F0000",
-                FontSizeDip = 18.48 * 96.0 / 72.0
+                FontSizeDip = WordPyramidRenderedTextSizePt * 96.0 / 72.0
             })
             .ToList();
 
