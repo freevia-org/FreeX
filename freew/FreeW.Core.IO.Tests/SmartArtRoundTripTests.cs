@@ -665,7 +665,7 @@ public class SmartArtRoundTripTests
 
         docPrSet.Attribute("qsTypeId")!.Value.Should().EndWith("/quickstyle/simple1");
         docPrSet.Attribute("phldr")!.Value.Should().Be("0");
-        ptList.Elements(Dgm + "pt").Count(pt => pt.Attribute("type")?.Value == "pres").Should().Be(18);
+        ptList.Elements(Dgm + "pt").Count(pt => pt.Attribute("type")?.Value == "pres").Should().Be(21);
 
         XElement pres(string name) => ptList.Elements(Dgm + "pt")
             .Single(pt => pt.Element(Dgm + "prSet")?.Attribute("presName")?.Value == name)
@@ -673,16 +673,15 @@ public class SmartArtRoundTripTests
 
         pres("hierChild1").Element(Dgm + "presLayoutVars")!
             .Element(Dgm + "chPref")!.Attribute("val")!.Value.Should().Be("1");
-        pres("background").Attributes().Should().Contain(attribute => attribute.Name.LocalName == "presStyleLbl" && attribute.Value == "node0");
-        pres("background").Attribute("presStyleCnt")!.Value.Should().Be("1");
-        pres("text").Attribute("presStyleLbl")!.Value.Should().Be("fgAcc0");
-        pres("text").Element(Dgm + "presLayoutVars")!.Element(Dgm + "chPref")!
+        pres("rootText1").Attributes().Should().Contain(attribute => attribute.Name.LocalName == "presStyleLbl" && attribute.Value == "node0");
+        pres("rootText1").Attribute("presStyleCnt")!.Value.Should().Be("1");
+        pres("rootText1").Element(Dgm + "presLayoutVars")!.Element(Dgm + "chPref")!
             .Attribute("val")!.Value.Should().Be("3");
-        pres("background2").Attribute("presStyleLbl")!.Value.Should().Be("node2");
-        pres("background2").Attribute("presStyleCnt")!.Value.Should().Be("2");
-        pres("Name10").Attribute("presStyleLbl")!.Value.Should().Be("parChTrans1D2");
-        pres("Name10").Attribute("presStyleIdx")!.Value.Should().Be("0");
-        pres("Name10").Attribute("presStyleCnt")!.Value.Should().Be("2");
+        pres("rootText3").Attribute("presStyleLbl")!.Value.Should().Be("asst1");
+        pres("rootText").Attribute("presStyleLbl")!.Value.Should().Be("node3");
+        pres("Name111").Attribute("presStyleLbl")!.Value.Should().Be("parChTrans1D2");
+        pres("Name111").Attribute("presStyleIdx")!.Value.Should().Be("0");
+        pres("Name111").Attribute("presStyleCnt")!.Value.Should().Be("1");
 
         var quickStyle = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
         quickStyle.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/quickstyle/simple1");
@@ -696,6 +695,28 @@ public class SmartArtRoundTripTests
             .Attribute("val")!.Value.Should().Be("90000");
         colors.Descendants(Dgm + "styleLbl").Single(label => label.Attribute("name")!.Value == "fgAcc0")
             .Element(Dgm + "txFillClrLst")!.Element(A + "schemeClr")!.Attribute("val")!.Value.Should().Be("dk1");
+    }
+
+    [Fact]
+    public void WordOrganizationChartLayout_RoundTripsAsHierarchy()
+    {
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy, LayoutId = "orgchart1" };
+        var root = new SmartArtNode("Plan");
+        smartArt.Nodes.Add(root);
+        var child = root.AddChild("Build");
+        child.AddChild("Verify");
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+        var roundTripped = read.Paragraphs.Single().Runs.Single(run => run.SmartArt is not null).SmartArt!;
+
+        roundTripped.Kind.Should().Be(SmartArtKind.Hierarchy);
+        roundTripped.LayoutId.Should().Be("orgChart1");
+        roundTripped.Nodes.Should().ContainSingle();
+        roundTripped.Nodes[0].Text.Should().Be("Plan");
+        roundTripped.Nodes[0].Children.Should().ContainSingle();
+        roundTripped.Nodes[0].Children[0].Text.Should().Be("Build");
+        roundTripped.Nodes[0].Children[0].Children.Should().ContainSingle();
+        roundTripped.Nodes[0].Children[0].Children[0].Text.Should().Be("Verify");
     }
 
     [Fact]
@@ -753,9 +774,9 @@ public class SmartArtRoundTripTests
         hierarchyLayout.Descendants(Dgm + "alg").Select(alg => alg.Attribute("type")!.Value)
             .Should().Contain("hierChild");
         hierarchyLayout.Descendants(Dgm + "layoutNode").Select(node => node.Attribute("name")!.Value)
-            .Should().Contain(["hierRoot1", "composite", "background", "text", "hierChild2", "Name10"]);
+            .Should().Contain(["hierRoot1", "rootComposite1", "rootText1", "rootConnector1", "hierChild2", "Name111"]);
         hierarchyData.Descendants(Dgm + "prSet").Select(prSet => prSet.Attribute("presName")?.Value)
-            .Should().Contain(["hierRoot1", "composite", "background", "text", "hierChild2"]);
+            .Should().Contain(["hierRoot1", "rootComposite1", "rootText1", "rootConnector1", "hierChild2"]);
 
         pyramidData.Root!.Element(Dgm + "ptLst")!.Element(Dgm + "pt")!
             .Element(Dgm + "prSet")!.Attribute("loCatId")!.Value.Should().Be("pyramid");

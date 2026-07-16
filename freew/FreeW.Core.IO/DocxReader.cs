@@ -4089,7 +4089,8 @@ public static class DocxReader
         var uniqueId = LoadPart(archive, layoutPath)?.Root?.Attribute("uniqueId")?.Value ?? string.Empty;
         if (uniqueId.Contains("process", StringComparison.OrdinalIgnoreCase))
             return SmartArtKind.Process;
-        if (uniqueId.Contains("hierarchy", StringComparison.OrdinalIgnoreCase))
+        if (uniqueId.Contains("hierarchy", StringComparison.OrdinalIgnoreCase)
+            || uniqueId.Contains("orgChart", StringComparison.OrdinalIgnoreCase))
             return SmartArtKind.Hierarchy;
         return SmartArtKind.List;
     }
