@@ -11424,7 +11424,8 @@ public sealed class DocumentView : RichTextBox
 
         var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
         var content = SmartArtRenderer.Build(smartArt, plan, strokeThickness);
-        var isNativeWordSmartArt = plan.LayoutId is "orgchart1" or "pyramid1";
+        var isNativeWordSmartArt = plan.LayoutId is "orgchart1" or "pyramid1"
+            || plan.UsesWordLayeredGalleryStyle;
 
         var element = new Border
         {
@@ -11436,7 +11437,9 @@ public sealed class DocumentView : RichTextBox
             Margin = plan.LayoutId == "pyramid1"
                 ? new Thickness(2, 4, 0, 6)
                 : new Thickness(0),
-            Background = isNativeWordSmartArt ? Brushes.Transparent : Brushes.White,
+            // Keep the page surface opaque for deterministic WPF evidence while suppressing the
+            // editor-only frame around Word-authored SmartArt.
+            Background = Brushes.White,
             BorderBrush = isNativeWordSmartArt
                 ? null
                 : new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),

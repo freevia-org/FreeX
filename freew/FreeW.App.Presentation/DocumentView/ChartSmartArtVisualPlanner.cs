@@ -355,7 +355,8 @@ public sealed record SmartArtVisualPlan(
     SmartArtStyle Style,
     IReadOnlyList<SmartArtNodeVisualPlan> Nodes,
     SmartArtHierarchyGeometryPlan? HierarchyGeometry = null,
-    SmartArtLayoutGeometryPlan? LayoutGeometry = null);
+    SmartArtLayoutGeometryPlan? LayoutGeometry = null,
+    bool UsesWordLayeredGalleryStyle = false);
 
 public static class ChartSmartArtVisualPlanner
 {
@@ -963,6 +964,10 @@ public static class ChartSmartArtVisualPlanner
         var layoutGeometry = hierarchyGeometry is null
             ? BuildLayoutGeometry(layout.Id, nodes.Count)
             : null;
+        var usesWordLayeredGalleryStyle = UsesWordLayeredGalleryStyle(
+            layoutId,
+            smartArt.ColorSchemeId,
+            smartArt.StyleId);
 
         return new SmartArtVisualPlan(
             layout.Kind,
@@ -972,7 +977,8 @@ public static class ChartSmartArtVisualPlanner
             style,
             nodes,
             hierarchyGeometry,
-            layoutGeometry);
+            layoutGeometry,
+            usesWordLayeredGalleryStyle);
     }
 
     public static IReadOnlyList<string> BuildSmartArtVisualSignatures(IEnumerable<SmartArtVisualPlan> smartArts)
@@ -1022,6 +1028,23 @@ public static class ChartSmartArtVisualPlanner
                 SmartArtKind.Hierarchy => "hierarchy1",
                 _ => "list1"
             };
+
+    private static bool UsesWordLayeredGalleryStyle(
+        string layoutId,
+        string? colorSchemeId,
+        string? styleId) =>
+        (string.Equals(layoutId, "list1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(layoutId, "process1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(layoutId, "hierarchy1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(layoutId, "cycle1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(layoutId, "radial1", StringComparison.OrdinalIgnoreCase))
+        && !string.IsNullOrWhiteSpace(colorSchemeId)
+        && !string.IsNullOrWhiteSpace(styleId)
+        && (string.Equals(styleId, "simple1", StringComparison.OrdinalIgnoreCase)
+            || (string.Equals(styleId, "intense1", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(colorSchemeId, "colorful2", StringComparison.OrdinalIgnoreCase))
+            || (string.Equals(styleId, "subtle1", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(colorSchemeId, "accent1", StringComparison.OrdinalIgnoreCase)));
 
     private static void FlattenNodes(
         IEnumerable<SmartArtNode> nodes,

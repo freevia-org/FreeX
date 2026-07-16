@@ -429,6 +429,33 @@ public sealed class SmartArtRenderingTests
     }
 
     [StaFact]
+    public void WordAuthoredSimpleProcess_UsesLayeredNodesAndNoOuterFrame()
+    {
+        var sa = SmartArt.Create(SmartArtKind.Process, ["Idea", "Review"]);
+        sa.LayoutId = "process1";
+        sa.ColorSchemeId = "accent0_1";
+        sa.StyleId = "simple1";
+        var view = ViewWithSmartArt(sa);
+
+        var outer = LogicalDescendants<Border>(view.Document)
+            .Single(border => ReferenceEquals(border.Tag, sa));
+        Assert.Equal(0, outer.BorderThickness.Left);
+        Assert.Null(outer.BorderBrush);
+
+        var front = NodeBorder(view, "Idea");
+        var frontFill = Assert.IsType<SolidColorBrush>(front.Background).Color;
+        Assert.Equal(Color.FromRgb(232, 239, 243), frontFill);
+        Assert.Equal(Colors.Black, Assert.IsType<SolidColorBrush>(Assert.IsType<TextBlock>(front.Child).Foreground).Color);
+
+        var backingShapes = LogicalDescendants<Border>(outer)
+            .Where(border => border.Child is null && border.Background is SolidColorBrush)
+            .ToList();
+        Assert.Equal(2, backingShapes.Count);
+        backingShapes.Should().OnlyContain(border =>
+            Assert.IsType<SolidColorBrush>(border.Background).Color == Color.FromRgb(0x15, 0x60, 0x82));
+    }
+
+    [StaFact]
     public void ContinuousBlockProcessLayout_RendersSharedProcessGeometry()
     {
         var sa = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);

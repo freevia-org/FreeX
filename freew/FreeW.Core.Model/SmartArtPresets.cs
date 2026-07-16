@@ -70,6 +70,8 @@ public sealed record SmartArtColorScheme(
         new("Colorful Accent", "colorful2", "#4BACC6", "#F79646", "#9BBB59", "#4E81BD"),
 
         // ── Accent 1 (monochromatic blue) ──────────────────────────────────────────────────────────
+        new("Word Default",    "accent0_1", "#156082", "#156082", "#156082", "#156082"),
+        new("Word Default Alias", "accent1_2", "#156082", "#156082", "#156082", "#156082"),
         new("Dark 1",          "accent1",   "#1F3864", "#2F5496", "#4E81BD", "#9DC3E6"),
         new("Gradient Loop",   "accent1g",  "#1F3864", "#4E81BD", "#9DC3E6", "#DEEBF7"),
 
@@ -89,7 +91,7 @@ public sealed record SmartArtColorScheme(
         Catalog.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Default color scheme (Colorful Range).</summary>
-    public static SmartArtColorScheme Default => Catalog[0];
+    public static SmartArtColorScheme Default => FindById("colorful1")!;
 
     /// <summary>Get the fill color for node at <paramref name="index"/> (cycles through the four slots).</summary>
     public string FillHexAt(int index) => (index % 4) switch
@@ -119,6 +121,7 @@ public sealed record SmartArtStyle(
     public static readonly IReadOnlyList<SmartArtStyle> Catalog =
     [
         // ── Flat / Best Match ───────────────────────────────────────────────────────────────────────
+        new("Word Simple",     "simple1",  4,   0.5, 0.00),
         new("Flat",            "flat1",    0,   1.0, 0.00),
         new("Simple Fill",     "subtle1",  3,   0.5, 0.00),
         new("Outline",         "outline1", 0,   1.5, 0.00, -0.1),
@@ -141,5 +144,5 @@ public sealed record SmartArtStyle(
         Catalog.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Default style preset (Flat).</summary>
-    public static SmartArtStyle Default => Catalog[0];
+    public static SmartArtStyle Default => FindById("flat1")!;
 }

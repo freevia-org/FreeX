@@ -410,6 +410,21 @@ public sealed class ChartSmartArtVisualPlannerTests
         signature.Should().Contain("#679AD6");
     }
 
+    [Fact]
+    public void SmartArtPlan_WordAuthoredSimpleGalleryUsesLayeredNodeTreatment()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.Process, ["Idea", "Review"]);
+        smartArt.LayoutId = "process1";
+        smartArt.ColorSchemeId = "accent0_1";
+        smartArt.StyleId = "simple1";
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.ColorScheme.Id.Should().Be("accent0_1");
+        plan.Style.Id.Should().Be("simple1");
+        plan.UsesWordLayeredGalleryStyle.Should().BeTrue();
+    }
+
     [Theory]
     [InlineData("subtle2", "#4E81BD", "#20538F", 0.5, 4, 0.15, 5.2, 1.8)]
     [InlineData("intense1", "#679AD6", "#396CA8", 1.5, 0, 0.30, 6.4, 2.1)]
@@ -704,5 +719,31 @@ public sealed class ChartSmartArtVisualPlannerTests
         plan.HierarchyGeometry.Connectors.Count.Should().Be(2);
         ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(plan)
             .Should().Contain("kind=Hierarchy|layout=orgchart1");
+    }
+
+    [Fact]
+    public void SmartArtPlan_RecognizesWordLayeredGalleryIdsAcrossLayouts()
+    {
+        var hierarchy = SmartArt.Create(SmartArtKind.Hierarchy, ["CEO", "CTO"]);
+        hierarchy.LayoutId = "hierarchy1";
+        hierarchy.ColorSchemeId = "accent1_2";
+        hierarchy.StyleId = "simple1";
+
+        var cycle = SmartArt.Create(SmartArtKind.List, ["Plan", "Do"]);
+        cycle.LayoutId = "cycle1";
+        cycle.ColorSchemeId = "accent0_1";
+        cycle.StyleId = "simple1";
+
+        var radial = SmartArt.Create(SmartArtKind.List, ["Core", "Branch"]);
+        radial.LayoutId = "radial1";
+        radial.ColorSchemeId = "accent1";
+        radial.StyleId = "subtle1";
+
+        ChartSmartArtVisualPlanner.BuildSmartArtPlan(hierarchy)
+            .UsesWordLayeredGalleryStyle.Should().BeTrue();
+        ChartSmartArtVisualPlanner.BuildSmartArtPlan(cycle)
+            .UsesWordLayeredGalleryStyle.Should().BeTrue();
+        ChartSmartArtVisualPlanner.BuildSmartArtPlan(radial)
+            .UsesWordLayeredGalleryStyle.Should().BeTrue();
     }
 }

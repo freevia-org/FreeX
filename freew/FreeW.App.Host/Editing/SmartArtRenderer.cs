@@ -302,9 +302,15 @@ internal static class SmartArtRenderer
     private static FrameworkElement BuildHierarchy(
         SmartArtVisualPlan plan,
         double strokeThickness,
-        double targetWidth,
-        double targetHeight)
+    double targetWidth,
+    double targetHeight)
     {
+        if (plan.UsesWordLayeredGalleryStyle
+            && string.Equals(plan.LayoutId, "hierarchy1", StringComparison.OrdinalIgnoreCase))
+        {
+            return BuildWordLayeredHierarchyLayout(plan, targetWidth, targetHeight);
+        }
+
         if (plan.HierarchyGeometry is not { Nodes.Count: > 0 } geometry)
             return BuildVerticalList(plan.Nodes, strokeThickness);
 
@@ -385,6 +391,12 @@ internal static class SmartArtRenderer
         double targetWidth,
         double targetHeight)
     {
+        if (plan.UsesWordLayeredGalleryStyle
+            && plan.LayoutId is "list1" or "process1" or "cycle1" or "radial1")
+        {
+            return BuildWordLayeredGalleryLayout(plan, targetWidth, targetHeight);
+        }
+
         if (plan.LayoutGeometry is not { Nodes.Count: > 0 } geometry)
             return BuildVerticalList(plan.Nodes, strokeThickness);
 
@@ -445,6 +457,318 @@ internal static class SmartArtRenderer
             VerticalAlignment = VerticalAlignment.Stretch,
             Child = canvas
         };
+    }
+
+    // Word's stock SmartArt galleries materialise a dark backing shape behind a smaller, light
+    // foreground shape. The diagram frame itself is transparent; only the two-layer node treatment
+    // is visible on the page. This path is used for authored Word gallery ids, while newly-created
+    // FreeW diagrams retain their explicit model style until a gallery is selected.
+    private static FrameworkElement BuildWordLayeredGalleryLayout(
+        SmartArtVisualPlan plan,
+        double targetWidth,
+        double targetHeight)
+    {
+        var canvas = new Canvas
+        {
+            Width = Math.Max(1, targetWidth),
+            Height = Math.Max(1, targetHeight),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+        var baseColor = ParseHex(plan.ColorScheme.Color1Hex);
+        var frontColor = BlendWithWhite(baseColor, 0.10);
+        var nodeCount = plan.Nodes.Count;
+        var isList = string.Equals(plan.LayoutId, "list1", StringComparison.OrdinalIgnoreCase);
+        var isCycle = string.Equals(plan.LayoutId, "cycle1", StringComparison.OrdinalIgnoreCase);
+        var isRadial = string.Equals(plan.LayoutId, "radial1", StringComparison.OrdinalIgnoreCase);
+        if (isCycle || isRadial)
+            return BuildWordLayeredVerticalGalleryLayout(plan, targetWidth, targetHeight, baseColor, isRadial);
+
+        var frontWidth = isList ? 60d : 120d;
+        var frontHeight = isList ? 35d : 72d;
+        var offsetX = isList ? 8d : 16d;
+        var offsetY = isList ? 8d : 14d;
+        var gap = isList ? 24d : 40d;
+        var fontSize = isList ? 6d * 96d / 72d : 18d * 96d / 72d;
+
+        if (isList)
+        {
+            var frontX = targetWidth * 0.455;
+            for (var i = 0; i < nodeCount; i++)
+            {
+                var frontY = 6 + i * (frontHeight + gap);
+                if (i > 0)
+                {
+                    canvas.Children.Add(new Line
+                    {
+                        X1 = frontX - offsetX / 2,
+                        Y1 = frontY - gap,
+                        X2 = frontX - offsetX / 2,
+                        Y2 = frontY,
+                        Stroke = new SolidColorBrush(baseColor),
+                        StrokeThickness = 1
+                    });
+                }
+
+                AddWordLayeredNode(
+                    canvas,
+                    plan.Nodes[i],
+                    frontX,
+                    frontY,
+                    frontWidth,
+                    frontHeight,
+                    offsetX,
+                    offsetY,
+                    baseColor,
+                    frontColor,
+                    fontSize,
+                    TextWrapping.Wrap);
+            }
+        }
+        else
+        {
+            var frontX = 16d;
+            var frontY = 84d;
+            for (var i = 0; i < nodeCount; i++)
+            {
+                AddWordLayeredNode(
+                    canvas,
+                    plan.Nodes[i],
+                    frontX + i * (frontWidth + gap),
+                    frontY,
+                    frontWidth,
+                    frontHeight,
+                    offsetX,
+                    offsetY,
+                    baseColor,
+                    frontColor,
+                    fontSize,
+                    TextWrapping.NoWrap);
+            }
+        }
+
+        return canvas;
+    }
+
+    private static FrameworkElement BuildWordLayeredHierarchyLayout(
+        SmartArtVisualPlan plan,
+        double targetWidth,
+        double targetHeight)
+    {
+        var canvas = new Canvas
+        {
+            Width = Math.Max(1, targetWidth),
+            Height = Math.Max(1, targetHeight),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+        if (plan.Nodes.Count == 0)
+            return canvas;
+
+        var baseColor = ParseHex(plan.ColorScheme.Color1Hex);
+        var frontColor = BlendWithWhite(baseColor, 0.10);
+        const double frontWidth = 160;
+        const double frontHeight = 101;
+        const double offsetX = 18;
+        const double offsetY = 18;
+        var rootX = (targetWidth - frontWidth) / 2;
+        var childY = Math.Max(0, targetHeight - frontHeight);
+        var childGap = Math.Max(0, (targetWidth - frontWidth * 3) / 4);
+        var childXs = new[]
+        {
+            childGap,
+            (targetWidth - frontWidth) / 2,
+            targetWidth - childGap - frontWidth
+        };
+        var childCount = Math.Min(childXs.Length, Math.Max(0, plan.Nodes.Count - 1));
+
+        var rootCenterX = rootX + frontWidth / 2;
+        var childCenterY = childY - 31;
+        var childCenters = childXs.Take(childCount).Select(x => x + frontWidth / 2).ToArray();
+        var connectorBrush = new SolidColorBrush(baseColor);
+        if (childCount > 0)
+        {
+            canvas.Children.Add(new Line
+            {
+                X1 = rootCenterX,
+                Y1 = frontHeight - offsetY,
+                X2 = rootCenterX,
+                Y2 = childCenterY,
+                Stroke = connectorBrush,
+                StrokeThickness = 1
+            });
+            canvas.Children.Add(new Line
+            {
+                X1 = childCenters[0],
+                Y1 = childCenterY,
+                X2 = childCenters[^1],
+                Y2 = childCenterY,
+                Stroke = connectorBrush,
+                StrokeThickness = 1
+            });
+        }
+        foreach (var childCenter in childCenters)
+        {
+            canvas.Children.Add(new Line
+            {
+                X1 = childCenter,
+                Y1 = childCenterY,
+                X2 = childCenter,
+                Y2 = childY,
+                Stroke = connectorBrush,
+                StrokeThickness = 1
+            });
+        }
+
+        AddWordLayeredNode(
+            canvas,
+            plan.Nodes[0],
+            rootX,
+            offsetY,
+            frontWidth,
+            frontHeight,
+            offsetX,
+            offsetY,
+            baseColor,
+            frontColor,
+            36d * 96d / 72d,
+            TextWrapping.NoWrap);
+        for (var i = 1; i <= childCount; i++)
+        {
+            AddWordLayeredNode(
+                canvas,
+                plan.Nodes[i],
+                childXs[i - 1],
+                childY,
+                frontWidth,
+                frontHeight,
+                offsetX,
+                offsetY,
+                baseColor,
+                frontColor,
+                36d * 96d / 72d,
+                TextWrapping.NoWrap);
+        }
+
+        return canvas;
+    }
+
+    private static FrameworkElement BuildWordLayeredVerticalGalleryLayout(
+        SmartArtVisualPlan plan,
+        double targetWidth,
+        double targetHeight,
+        Color baseColor,
+        bool isRadial)
+    {
+        var canvas = new Canvas
+        {
+            Width = Math.Max(1, targetWidth),
+            Height = Math.Max(1, targetHeight),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+        var frontColor = BlendWithWhite(baseColor, 0.10);
+        var frontWidth = isRadial ? 66d : 76d;
+        var frontHeight = isRadial ? 43d : 49d;
+        var offsetX = isRadial ? 8d : 9d;
+        var offsetY = isRadial ? 7d : 8d;
+        var gap = isRadial ? 17d : 21d;
+        var frontX = (targetWidth - frontWidth) / 2;
+        var frontY = isRadial ? 7d : 9d;
+        var fontSize = isRadial ? 7d * 96d / 72d : 16d * 96d / 72d;
+
+        for (var i = 1; i < plan.Nodes.Count; i++)
+        {
+            var lineY = frontY + i * (frontHeight + gap) - gap;
+            canvas.Children.Add(new Line
+            {
+                X1 = frontX - offsetX / 2,
+                Y1 = lineY,
+                X2 = frontX - offsetX / 2,
+                Y2 = lineY + gap,
+                Stroke = new SolidColorBrush(baseColor),
+                StrokeThickness = 1
+            });
+        }
+
+        for (var i = 0; i < plan.Nodes.Count; i++)
+        {
+            AddWordLayeredNode(
+                canvas,
+                plan.Nodes[i],
+                frontX,
+                frontY + i * (frontHeight + gap),
+                frontWidth,
+                frontHeight,
+                offsetX,
+                offsetY,
+                baseColor,
+                frontColor,
+                fontSize,
+                TextWrapping.NoWrap);
+        }
+
+        return canvas;
+    }
+
+    private static Border AddWordLayeredNode(
+        Canvas canvas,
+        SmartArtNodeVisualPlan node,
+        double frontX,
+        double frontY,
+        double width,
+        double height,
+        double offsetX,
+        double offsetY,
+        Color baseColor,
+        Color frontColor,
+        double fontSize,
+        TextWrapping textWrapping)
+    {
+        var backing = new Border
+        {
+            Width = width,
+            Height = height,
+            Background = new SolidColorBrush(baseColor),
+            CornerRadius = new CornerRadius(5)
+        };
+        Canvas.SetLeft(backing, frontX - offsetX);
+        Canvas.SetTop(backing, frontY - offsetY);
+        canvas.Children.Add(backing);
+
+        var front = new Border
+        {
+            Width = width,
+            Height = height,
+            Background = new SolidColorBrush(frontColor),
+            BorderBrush = new SolidColorBrush(baseColor),
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(5),
+            Child = new TextBlock
+            {
+                Text = node.Text,
+                Foreground = new SolidColorBrush(Colors.Black),
+                FontSize = fontSize,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                TextAlignment = System.Windows.TextAlignment.Center,
+                TextWrapping = textWrapping,
+                Padding = new Thickness(3, 1, 3, 1)
+            }
+        };
+        Canvas.SetLeft(front, frontX);
+        Canvas.SetTop(front, frontY);
+        canvas.Children.Add(front);
+        return front;
+    }
+
+    private static Color BlendWithWhite(Color color, double baseWeight)
+    {
+        var weight = Math.Clamp(baseWeight, 0, 1);
+        return Color.FromRgb(
+            (byte)Math.Round(color.R * weight + 255 * (1 - weight), MidpointRounding.AwayFromZero),
+            (byte)Math.Round(color.G * weight + 255 * (1 - weight), MidpointRounding.AwayFromZero),
+            (byte)Math.Round(color.B * weight + 255 * (1 - weight), MidpointRounding.AwayFromZero));
     }
 
     private static Polygon MakePlannedPolygon(
