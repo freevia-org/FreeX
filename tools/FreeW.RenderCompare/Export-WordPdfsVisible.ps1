@@ -101,6 +101,19 @@ function Wait-File {
     return $null
 }
 
+function Stop-ChildProcessIfRunning {
+    param([System.Diagnostics.Process]$Process)
+
+    if (-not $Process) {
+        return
+    }
+
+    # The short-lived ExecuteMso helper can exit between Wait-Process and a
+    # Process.HasExited property read, which must not turn a created PDF into a failed export.
+    Get-Process -Id $Process.Id -ErrorAction SilentlyContinue |
+        Stop-Process -Force -ErrorAction SilentlyContinue
+}
+
 function Dismiss-WordStartupExperienceDialog {
     param([object]$Word)
 
@@ -274,16 +287,12 @@ throw "ExecuteMso failed: `$(`$lastError.Exception.Message)"
 
             Move-Item -LiteralPath $sourcePdf -Destination $targetPdf -Force
             Wait-Process -Id $child.Id -Timeout 10 -ErrorAction SilentlyContinue
-            if (-not $child.HasExited) {
-                Stop-Process -Id $child.Id -Force -ErrorAction SilentlyContinue
-            }
+            Stop-ChildProcessIfRunning -Process $child
         }
         catch {
             $status = 'fail'
             $errorMessage = $_.Exception.Message
-            if ($child -and -not $child.HasExited) {
-                Stop-Process -Id $child.Id -Force -ErrorAction SilentlyContinue
-            }
+            Stop-ChildProcessIfRunning -Process $child
         }
         finally {
             if ($doc) {

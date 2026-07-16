@@ -47,6 +47,9 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Publish as PDF or XPS");
         source.Should().Contain("word-export-visible-ui.csv");
         source.Should().Contain("Visible Word PDF exports complete");
+        source.Should().Contain("function Stop-ChildProcessIfRunning");
+        source.Should().Contain("Get-Process -Id $Process.Id -ErrorAction SilentlyContinue");
+        source.Should().NotContain("$child.HasExited");
     }
 
     [Fact]
