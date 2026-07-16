@@ -347,6 +347,53 @@ function ConvertTo-ToolXmlAttribute {
     return [System.Security.SecurityElement]::Escape($Value)
 }
 
+function Get-ToolCommandInventoryMenuTraversalSource {
+    return @'
+    private static IEnumerable<(string CommandId, CommandLocation Location)> MenuLocations(
+        RibbonControl control,
+        RibbonTab tab,
+        RibbonGroup group,
+        string profile)
+    {
+        var menu = control switch
+        {
+            RibbonSplitButton splitButton => splitButton.Menu,
+            RibbonDropdown dropdown => dropdown.Menu,
+            _ => null,
+        };
+
+        if (menu is null)
+            yield break;
+
+        foreach (var item in MenuItems(menu.Items))
+        {
+            if (item.CommandId is null)
+                continue;
+
+            yield return (item.CommandId.Value.Value, new CommandLocation(
+                Profile: profile,
+                TabId: tab.Id,
+                Tab: tab.Header,
+                GroupId: group.Id,
+                Group: group.Header,
+                Label: item.Header,
+                ControlType: "RibbonMenuItem",
+                Layout: "Menu"));
+        }
+    }
+
+    private static IEnumerable<RibbonMenuItem> MenuItems(IEnumerable<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            yield return item;
+            foreach (var child in MenuItems(item.Children))
+                yield return child;
+        }
+    }
+'@.TrimEnd()
+}
+
 function Test-ToolGeneratedFileContentMatches {
     param(
         [Parameter(Mandatory = $true)][string]$ExpectedPath,

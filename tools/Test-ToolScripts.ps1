@@ -29,6 +29,7 @@ function Assert-ToolSourceCentralization {
             "function ConvertTo-ToolRepoRelativePath",
             "function Read-ToolJson",
             "function ConvertTo-ToolMarkdownCell",
+            "function Get-ToolCommandInventoryMenuTraversalSource",
             "function Test-ToolGeneratedContentMatches",
             "function Invoke-FidelityCorpusDownload",
             "function Invoke-ToolProcess",
@@ -206,6 +207,218 @@ function Assert-ToolSourceCentralization {
     }
 
     Write-Host "Validated shared tooling source guards."
+}
+
+function Assert-CommandInventoryMenuTraversalCentralization {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    $support = Get-Content -LiteralPath (Join-Path $ToolRoot "ToolScriptSupport.ps1") -Raw
+    $helper = Get-ToolCommandInventoryMenuTraversalSource
+    foreach ($requiredSource in @(
+            "private static IEnumerable<(string CommandId, CommandLocation Location)> MenuLocations",
+            "foreach (var item in MenuItems(menu.Items))",
+            "private static IEnumerable<RibbonMenuItem> MenuItems",
+            "foreach (var child in MenuItems(item.Children))",
+            "yield return child")) {
+        if (-not $helper.Contains($requiredSource)) {
+            throw "Shared command inventory menu helper is missing '$requiredSource'."
+        }
+    }
+
+    foreach ($generatorName in @("Generate-FreePCommandParityInventory.ps1", "Generate-FreeWCommandInventory.ps1")) {
+        $generator = Get-Content -LiteralPath (Join-Path $ToolRoot $generatorName) -Raw
+        if (([regex]::Matches($generator, "Get-ToolCommandInventoryMenuTraversalSource")).Count -ne 1) {
+            throw "$generatorName must consume Get-ToolCommandInventoryMenuTraversalSource exactly once."
+        }
+
+        if ($generator.Contains("private static IEnumerable<(string CommandId, CommandLocation Location)> MenuLocations") -or
+            $generator.Contains("private static IEnumerable<RibbonMenuItem> MenuItems")) {
+            throw "$generatorName still contains a private copy of the shared menu traversal helper."
+        }
+    }
+
+    if ($helper.IndexOf("yield return item", [System.StringComparison]::Ordinal) -ge
+        $helper.IndexOf("foreach (var child in MenuItems(item.Children))", [System.StringComparison]::Ordinal)) {
+        throw "Shared command inventory menu helper must yield a parent before recursively yielding nested children."
+    }
+
+    Write-Host "Validated command inventory menu traversal centralization and nested-item behavior."
+}
+
+function Assert-CommandInventoryMenuTraversalBehavior {
+    param([Parameter(Mandatory = $true)][string]$ToolRoot)
+
+    . (Join-Path $ToolRoot "ToolScriptSupport.ps1")
+    $helper = Get-ToolCommandInventoryMenuTraversalSource
+    $probeSource = @"
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+public static class CommandInventoryTraversalProbe {
+    public static void Main() { Run(); }
+
+    public static void Run() {
+        var tab = new RibbonTab("tab.home", "Home");
+        var group = new RibbonGroup("group.editing", "Editing");
+
+        Assert(MenuLocations(new RibbonSplitButton(null), tab, group, "Synthetic").ToArray().Length == 0,
+            "null split-button menus should emit no locations");
+        Assert(MenuLocations(new RibbonDropdown(null), tab, group, "Synthetic").ToArray().Length == 0,
+            "null dropdown menus should emit no locations");
+
+        var menu = new RibbonMenu(
+            new RibbonMenuItem("Parent", "command.parent",
+                new RibbonMenuItem("First child", "command.child.first"),
+                new RibbonMenuItem("Separator", null,
+                    new RibbonMenuItem("After separator", "command.after.separator")),
+                new RibbonMenuItem("Second child", "command.child.second",
+                    new RibbonMenuItem("Grandchild", "command.grandchild"))),
+            new RibbonMenuItem("Sibling", "command.sibling"));
+        var actual = MenuLocations(new RibbonDropdown(menu), tab, group, "Synthetic").ToArray();
+        var expected = new[] {
+            ("command.parent", "Parent"),
+            ("command.child.first", "First child"),
+            ("command.after.separator", "After separator"),
+            ("command.child.second", "Second child"),
+            ("command.grandchild", "Grandchild"),
+            ("command.sibling", "Sibling"),
+        };
+
+        Assert(actual.Length == expected.Length, "nested menu traversal emitted an unexpected item count");
+        for (var index = 0; index < expected.Length; index++) {
+            Assert(actual[index].CommandId == expected[index].Item1,
+                "nested menu traversal emitted an unexpected command order");
+            Assert(actual[index].Location.Label == expected[index].Item2,
+                "nested menu traversal emitted an unexpected label");
+            AssertLocation(actual[index].Location, "Synthetic", "tab.home", "Home", "group.editing", "Editing");
+        }
+    }
+
+    private static void AssertLocation(
+        CommandLocation location,
+        string profile,
+        string tabId,
+        string tab,
+        string groupId,
+        string group) {
+        Assert(location.Profile == profile, "location profile was not preserved");
+        Assert(location.TabId == tabId, "location tab path was not preserved");
+        Assert(location.Tab == tab, "location tab header was not preserved");
+        Assert(location.GroupId == groupId, "location group path was not preserved");
+        Assert(location.Group == group, "location group header was not preserved");
+        Assert(location.ControlType == "RibbonMenuItem", "location control type was not preserved");
+        Assert(location.Layout == "Menu", "location layout was not preserved");
+    }
+
+    private static void Assert(bool condition, string message) {
+        if (!condition)
+            throw new InvalidOperationException(message);
+    }
+
+    public class RibbonControl { }
+
+    public sealed class RibbonSplitButton : RibbonControl {
+        public RibbonSplitButton(RibbonMenu? menu) { Menu = menu; }
+        public RibbonMenu? Menu { get; }
+    }
+
+    public sealed class RibbonDropdown : RibbonControl {
+        public RibbonDropdown(RibbonMenu? menu) { Menu = menu; }
+        public RibbonMenu? Menu { get; }
+    }
+
+    public sealed class RibbonMenu {
+        public RibbonMenu(params RibbonMenuItem[] items) { Items = items; }
+        public IReadOnlyList<RibbonMenuItem> Items { get; }
+    }
+
+    public sealed class RibbonMenuItem {
+        public RibbonMenuItem(string header, string? commandId, params RibbonMenuItem[] children) {
+            Header = header;
+            CommandId = commandId is null ? null : new CommandId(commandId);
+            Children = children ?? Array.Empty<RibbonMenuItem>();
+        }
+
+        public string Header { get; }
+        public CommandId? CommandId { get; }
+        public IReadOnlyList<RibbonMenuItem> Children { get; }
+    }
+
+    public readonly struct CommandId {
+        public CommandId(string value) { Value = value; }
+        public string Value { get; }
+    }
+
+    public sealed class RibbonTab {
+        public RibbonTab(string id, string header) { Id = id; Header = header; }
+        public string Id { get; }
+        public string Header { get; }
+    }
+
+    public sealed class RibbonGroup {
+        public RibbonGroup(string id, string header) { Id = id; Header = header; }
+        public string Id { get; }
+        public string Header { get; }
+    }
+
+    public sealed class CommandLocation {
+        public CommandLocation(
+            string Profile,
+            string TabId,
+            string Tab,
+            string GroupId,
+            string Group,
+            string Label,
+            string ControlType,
+            string Layout) {
+            this.Profile = Profile;
+            this.TabId = TabId;
+            this.Tab = Tab;
+            this.GroupId = GroupId;
+            this.Group = Group;
+            this.Label = Label;
+            this.ControlType = ControlType;
+            this.Layout = Layout;
+        }
+
+        public string Profile { get; }
+        public string TabId { get; }
+        public string Tab { get; }
+        public string GroupId { get; }
+        public string Group { get; }
+        public string Label { get; }
+        public string ControlType { get; }
+        public string Layout { get; }
+    }
+
+$helper
+}
+"@
+
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("freex-command-inventory-traversal-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force -Path $tempRoot | Out-Null
+    $projectPath = Join-Path $tempRoot "CommandInventoryTraversalProbe.csproj"
+    $programPath = Join-Path $tempRoot "Program.cs"
+    [IO.File]::WriteAllText($projectPath, @"
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>
+"@)
+    [IO.File]::WriteAllText($programPath, $probeSource)
+    try {
+        Invoke-DotNetRun -ProjectPath $projectPath -Configuration "Release" -WorkingDirectory $tempRoot
+    }
+    finally {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    Write-Host "Validated executable command inventory menu traversal behavior."
 }
 
 function Assert-ScreenshotCaptureSupportBehavior {
@@ -732,6 +945,8 @@ $toolsRoot = [System.IO.Path]::GetFullPath((Resolve-ToolRepoPath -Path "tools" -
 $resolvedDirectory = [System.IO.Path]::GetFullPath($resolvedScriptDirectory).TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
 if ($resolvedDirectory.Equals($toolsRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
     Assert-ToolSourceCentralization -ToolRoot $resolvedDirectory
+    Assert-CommandInventoryMenuTraversalCentralization -ToolRoot $resolvedDirectory
+    Assert-CommandInventoryMenuTraversalBehavior -ToolRoot $resolvedDirectory
     Assert-ScreenshotCaptureSupportBehavior -ToolRoot $resolvedDirectory
     Assert-SharedToolHelperBehavior -RepoRoot $repoRoot
     Assert-ToolProviderPathBehavior -ToolRoot $resolvedDirectory
