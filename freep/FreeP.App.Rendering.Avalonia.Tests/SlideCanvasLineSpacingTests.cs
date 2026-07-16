@@ -15,4 +15,16 @@ public sealed class SlideCanvasLineSpacingTests
         SlideCanvas.ResolvePowerPointLineHeight(fontSizePx)
             .Should().BeApproximately(expected, 0.000001);
     }
+
+    [Theory]
+    [InlineData("Aptos", "Cambria")]
+    [InlineData("aptos", "Cambria")]
+    [InlineData("Aptos Display", "Aptos Display")]
+    [InlineData("Calibri", "Calibri")]
+    public void ResolvePowerPointFontFamily_UsesAvaloniaAptosFallback(
+        string source,
+        string expected)
+    {
+        SlideCanvas.ResolvePowerPointFontFamily(source).Should().Be(expected);
+    }
 }

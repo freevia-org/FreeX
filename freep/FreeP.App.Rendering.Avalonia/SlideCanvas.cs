@@ -2013,7 +2013,7 @@ public sealed class SlideCanvas : Control
 
         var firstRun = para.Runs[0];
         var typeface = new Typeface(
-            firstRun.FontFamily,
+            ResolvePowerPointFontFamily(firstRun.FontFamily),
             firstRun.Italic ? FontStyle.Italic : FontStyle.Normal,
             firstRun.Bold   ? FontWeight.Bold  : FontWeight.Normal,
             FontStretch.Normal);
@@ -2053,7 +2053,7 @@ public sealed class SlideCanvas : Control
             if (run.Italic)       ft.SetFontStyle(FontStyle.Italic, pos, len);
             if (run.Underline)    ft.SetTextDecorations(TextDecorations.Underline, pos, len);
             if (run.Strikethrough)ft.SetTextDecorations(TextDecorations.Strikethrough, pos, len);
-            ft.SetFontFamily(run.FontFamily, pos, len);
+            ft.SetFontFamily(ResolvePowerPointFontFamily(run.FontFamily), pos, len);
             ft.SetFontSize(run.FontSizePt * (96.0 / 72.0), pos, len);
             ft.SetForegroundBrush(
                 new SolidColorBrush(Color.FromRgb(run.Color.R, run.Color.G, run.Color.B)),
@@ -2062,6 +2062,13 @@ public sealed class SlideCanvas : Control
         }
         return ft;
     }
+
+    // This host does not provide Aptos. Cambria is the local fallback whose
+    // Avalonia metrics best match the PowerPoint body-text baseline.
+    internal static string ResolvePowerPointFontFamily(string fontFamily) =>
+        string.Equals(fontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+            ? "Cambria"
+            : fontFamily;
 
     internal static double ResolvePowerPointLineHeight(double fontSizePx) =>
         fontSizePx * PowerPointDefaultLineSpacingFactor;
