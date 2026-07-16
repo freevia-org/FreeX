@@ -528,6 +528,7 @@ public static partial class ChartRenderPlanner
     public const double AxisTitleFontSize = 7.5;
     public const double GridlinePad = 2.0;
     public const double AxisMajorTickLength = 4.0;
+    public const double AxisMinorTickLength = 2.0;
     public const double SecondaryAxisTitleGap = 2.0;
     public const double DataTableGap = 4.0;
     public const double DataTableHeaderHeight = 13.0;
@@ -1797,6 +1798,17 @@ public static partial class ChartRenderPlanner
                     new ChartPlanPoint(x, plot.Bottom),
                     new ChartPlanPoint(x, plot.Bottom + AxisMajorTickLength)));
             }
+
+            if (UsesStockLineFallback(chart))
+            {
+                for (int boundaryIndex = 0; boundaryIndex <= chart.Categories.Count; boundaryIndex++)
+                {
+                    double x = plot.X + boundaryIndex * categoryStep;
+                    ticks.Add(new ChartGridLinePlan(
+                        new ChartPlanPoint(x, plot.Bottom),
+                        new ChartPlanPoint(x, plot.Bottom + AxisMinorTickLength)));
+                }
+            }
         }
 
         return ticks;
@@ -1828,6 +1840,24 @@ public static partial class ChartRenderPlanner
                 double y = plot.Bottom - plot.Height * tickIndex / steps;
                 ticks.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(plot.X - AxisMajorTickLength, y),
+                    new ChartPlanPoint(plot.X, y)));
+            }
+        }
+
+        if (UsesStockLineFallback(chart) && !frame.IsBar)
+        {
+            const double stockMinorUnit = 0.4;
+            int minorTickCount = (int)Math.Round((maxValue - minValue) / stockMinorUnit);
+            for (int minorTickIndex = 1; minorTickIndex < minorTickCount; minorTickIndex++)
+            {
+                double value = minValue + stockMinorUnit * minorTickIndex;
+                double majorPosition = (value - minValue) / majorUnit;
+                if (Math.Abs(majorPosition - Math.Round(majorPosition)) < 0.0001)
+                    continue;
+
+                double y = plot.Bottom - plot.Height * (value - minValue) / (maxValue - minValue);
+                ticks.Add(new ChartGridLinePlan(
+                    new ChartPlanPoint(plot.X - AxisMinorTickLength, y),
                     new ChartPlanPoint(plot.X, y)));
             }
         }

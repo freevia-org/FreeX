@@ -32,6 +32,16 @@ public sealed class ChartBaselineCorpusTests
 
         scene.GridLines.Stroke.Should().Be(expectedStroke);
         scene.AxisTicks.Stroke.Should().Be(expectedStroke);
+        scene.AxisTicks.CategoryTicks.Should().HaveCount(7,
+            "PowerPoint renders three category-center ticks plus four minor boundary ticks");
+        scene.AxisTicks.ValueTicks.Should().HaveCount(46,
+            "PowerPoint renders the stock value axis at 0.4-unit minor intervals");
+        scene.AxisTicks.CategoryTicks.Skip(3).Select(tick => tick.Start.X)
+            .Should().Equal(
+                scene.Frame.Plot.X,
+                scene.Frame.Plot.X + scene.Frame.Plot.Width / 3,
+                scene.Frame.Plot.X + scene.Frame.Plot.Width * 2 / 3,
+                scene.Frame.Plot.Right);
     }
 
     [Fact]
