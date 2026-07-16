@@ -64,6 +64,19 @@ public sealed class GridAutofillPlannerTests
     }
 
     [Fact]
+    public void ConstrainTarget_PreservesInwardAxisForOneDimensionalSelections()
+    {
+        var sheet = SheetId.New();
+        var vertical = new GridRange(new CellAddress(sheet, 2, 2), new CellAddress(sheet, 6, 2));
+        var horizontal = new GridRange(new CellAddress(sheet, 2, 2), new CellAddress(sheet, 2, 6));
+
+        GridAutofillPlanner.ConstrainTarget(vertical, new CellAddress(sheet, 4, 2))
+            .Should().Be(new CellAddress(sheet, 4, 2));
+        GridAutofillPlanner.ConstrainTarget(horizontal, new CellAddress(sheet, 2, 4))
+            .Should().Be(new CellAddress(sheet, 2, 4));
+    }
+
+    [Fact]
     public void CalculateFillRange_ReturnsVerticalExtensionBelowSource()
     {
         var sheet = SheetId.New();
@@ -184,6 +197,21 @@ public sealed class GridAutofillPlannerTests
             .Be(new GridRange(
                 new CellAddress(sheet, 2, 2),
                 new CellAddress(sheet, 3, 6)));
+    }
+
+    [Fact]
+    public void CalculateCompletedSelectionRange_ShrinksAfterInwardClear()
+    {
+        var sheet = SheetId.New();
+        var vertical = new GridRange(new CellAddress(sheet, 2, 2), new CellAddress(sheet, 6, 2));
+        var verticalClear = new GridRange(new CellAddress(sheet, 5, 2), new CellAddress(sheet, 6, 2));
+        var horizontal = new GridRange(new CellAddress(sheet, 2, 2), new CellAddress(sheet, 2, 6));
+        var horizontalClear = new GridRange(new CellAddress(sheet, 2, 5), new CellAddress(sheet, 2, 6));
+
+        GridAutofillPlanner.CalculateCompletedSelectionRange(vertical, verticalClear)
+            .Should().Be(new GridRange(new CellAddress(sheet, 2, 2), new CellAddress(sheet, 4, 2)));
+        GridAutofillPlanner.CalculateCompletedSelectionRange(horizontal, horizontalClear)
+            .Should().Be(new GridRange(new CellAddress(sheet, 2, 2), new CellAddress(sheet, 2, 4)));
     }
 
     [Fact]

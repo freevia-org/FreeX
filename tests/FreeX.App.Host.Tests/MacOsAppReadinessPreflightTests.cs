@@ -825,7 +825,8 @@ public sealed class MacOsAppReadinessPreflightTests
         script.Should().Contain("_zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);");
         script.Should().Contain("CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor)");
         script.Should().Contain("displayHeight / zoomFactor");
-        script.Should().Contain("showGridlines ? GridLine : Brushes.Transparent");
+        script.Should().Contain("CellSurfaceGridlinePlanner.HasVisibleFill(");
+        script.Should().Contain("BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent");
         script.Should().Contain("NativeMenuItemId.FreezePanes => _freezePanesMenuItem,");
         script.Should().Contain("_freezePanesMenuItem.Click += (_, _) => FreezePanesAtActiveCell();");
         script.Should().Contain("private void ApplyFreezePaneCommand(Func<WorkbookCellEditResult> execute, string successAction, string failureMessage)");
@@ -2850,7 +2851,8 @@ public sealed class MacOsAppReadinessPreflightTests
                     _zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);
                     var showHeadings = _session.ActiveSheet.ShowHeadings;
                     var zoomFactor = GetActiveZoomFactor();
-                    showGridlines ? GridLine : Brushes.Transparent;
+                    CellSurfaceGridlinePlanner.HasVisibleFill(style, _session.Workbook.Theme);
+                    BorderBrush = showGridlines ? defaultBorderBrush : Brushes.Transparent;
                     CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor);
                     CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor);
                     fontSize * zoomFactor;

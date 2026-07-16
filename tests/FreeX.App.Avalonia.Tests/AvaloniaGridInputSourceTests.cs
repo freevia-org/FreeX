@@ -106,7 +106,7 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().Contain("? new Cursor(StandardCursorType.Hand)");
         source.Should().Contain(": Cursor.Default;");
         source.Should().NotContain(": new Cursor(StandardCursorType.Hand);");
-        source.Should().Contain("GridAutofillPlanner.CalculateCompletedSelectionRange(source, fillRange)");
+        source.Should().Contain("GridAutofillPlanner.CalculateCompletedSelectionRange(source, operationRange)");
         source.Should().Contain("_session.FillSelectedRange(direction)");
         source.Should().Contain("TryBeginSelectionMoveDrag(args, border, address)");
         source.Should().Contain("GridSelectionMovePlanner.IsOnMoveBorder(");

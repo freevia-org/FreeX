@@ -180,6 +180,9 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Home ▸ Number ▸ Comma.</summary>
     public Action? CommaStyle { get; init; }
 
+    /// <summary>Applies a Home Number Format combo selection.</summary>
+    public Action<string?>? SetNumberFormat { get; init; }
+
     /// <summary>
     /// Additional command-id → action bindings for parameterized menu items the named callbacks do not
     /// cover (e.g. the Number Format dropdown's General/Number/Currency/Date/Percent items, or the Fill
@@ -275,7 +278,28 @@ internal static class AvaloniaRibbonComposition
     };
 
     /// <summary>The canonical, single-source ribbon definition shared with the WPF app.</summary>
-    public static RibbonDefinition BuildDefinition() => FreeXRibbon.Build();
+    public static RibbonDefinition BuildDefinition()
+    {
+        var definition = FreeXRibbon.Build();
+        var numberFormatCommandId = AvaloniaCommandIdAdapter.ToCanonical("home.numberFormat");
+        var numberFormatLabels = HomeNumberFormatDropdownPlanner.Options
+            .Select(option => option.Label)
+            .ToArray();
+        return definition with
+        {
+            Tabs = definition.Tabs.Select(tab => tab with
+            {
+                Groups = tab.Groups.Select(group => group with
+                {
+                    Controls = group.Controls.Select(control =>
+                        control is RibbonComboBox combo &&
+                        string.Equals(combo.CommandId.Value, numberFormatCommandId, StringComparison.Ordinal)
+                            ? combo with { Items = numberFormatLabels }
+                            : control).ToArray(),
+                }).ToArray(),
+            }).ToArray(),
+        };
+    }
 
     public static IRibbonCommandRegistry BuildRegistry(Func<WorkbookSession?> session, Action<string> setStatus)
         => BuildRegistry(session, setStatus, new AvaloniaRibbonHostCallbacks());
@@ -386,6 +410,8 @@ internal static class AvaloniaRibbonComposition
         Bind("home.currency", callbacks.CurrencyFormat);
         Bind("home.percent", callbacks.PercentFormat);
         Bind("home.comma", callbacks.CommaStyle);
+        if (callbacks.SetNumberFormat is { } setNumberFormat)
+            Register(registry, "home.numberFormat", new ValueRibbonCommand(setNumberFormat));
 
         if (callbacks.ExtraCommands is { } extra)
             foreach (var (id, action) in extra)
