@@ -218,6 +218,26 @@ public sealed class Bevel3dTests
     }
 
     [Fact]
+    public void Compositor_Scene3d_SolidFaceColorGetsMaterialLift()
+    {
+        var shapeOp = ComposeShapeOp(
+            new ShapeEffects
+            {
+                Scene3d = new Scene3dInfo
+                {
+                    CameraPreset = "orthographicFront",
+                    LightRig = "flat",
+                    LightRigDir = "t"
+                }
+            },
+            new ShapeFill.Solid(new ThemeAwareColor(new SrgbColor(0x15, 0x60, 0x82), alpha: 128)));
+
+        var fill = shapeOp.Fill.Should().BeOfType<ResolvedFill.Solid>().Subject;
+        fill.Color.Should().Be(new SrgbColor(0x19, 0x68, 0x8C));
+        fill.Alpha.Should().Be(128);
+    }
+
+    [Fact]
     public void Compositor_NoScene3d_LightDirIsMinusOne()
     {
         var effects = new ShapeEffects
@@ -357,7 +377,7 @@ public sealed class Bevel3dTests
         return pres2.Slides[0].Shapes[0];
     }
 
-    private static DrawOp.Shape ComposeShapeOp(ShapeEffects effects)
+    private static DrawOp.Shape ComposeShapeOp(ShapeEffects effects, ShapeFill? fill = null)
     {
         var p = PresentationModel.CreateEmpty();
         p.Slides[0].Shapes.Clear();
@@ -368,6 +388,7 @@ public sealed class Bevel3dTests
             AutoShapeKind = DrawingShapeKind.Rectangle,
             OffsetXEmu = 457200, OffsetYEmu = 457200,
             ExtentCxEmu = 2743200, ExtentCyEmu = 1371600,
+            Fill = fill,
             Effects = effects
         });
 

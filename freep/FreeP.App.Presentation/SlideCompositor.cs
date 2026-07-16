@@ -202,6 +202,8 @@ public static class SlideCompositor
         var fill = shape.Fill is not null
             ? ResolveFill(shape.Fill, theme, effectiveClrMap)
             : InferDefaultFill(shape, theme);
+        if (shape.Effects?.Scene3d is not null)
+            fill = ResolveScene3dMaterialFill(fill);
 
         // Resolve outline.
         var outline = shape.Outline is not null
@@ -269,6 +271,21 @@ public static class SlideCompositor
             Effects = ResolveEffects(shape.Effects),
             ElbowRouteDip = elbowRouteDip,
         });
+    }
+
+    private static ResolvedFill ResolveScene3dMaterialFill(ResolvedFill fill)
+    {
+        if (fill is not ResolvedFill.Solid solid)
+            return fill;
+
+        // PowerPoint's default 3-D material/light pass lifts the authored face
+        // color slightly; raw theme colors make imported 3-D shapes visibly flat.
+        static byte Lift(byte channel) =>
+            (byte)Math.Clamp((int)Math.Round(channel * 1.05 + 3), 0, 255);
+
+        return new ResolvedFill.Solid(
+            new SrgbColor(Lift(solid.Color.R), Lift(solid.Color.G), Lift(solid.Color.B)),
+            solid.Alpha);
     }
 
     private static ResolvedShapeEffects? ResolveEffects(ShapeEffects? fx)
