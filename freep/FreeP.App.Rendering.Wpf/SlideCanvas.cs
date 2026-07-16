@@ -1686,6 +1686,9 @@ public sealed class SlideCanvas : FrameworkElement
         var fragments = new Dictionary<(int ParagraphIndex, int LineIndex), ResolvedParagraph>();
         var measures = new List<TextColumnLineMeasure>();
 
+        // PowerPoint's imported column breakpoints align more closely with WPF's
+        // display metrics than with ideal metrics, so use the same mode for both
+        // line measurement and placement.
         for (int paragraphIndex = 0; paragraphIndex < text.Paragraphs.Count; paragraphIndex++)
         {
             var paragraph = text.Paragraphs[paragraphIndex];
@@ -1694,7 +1697,7 @@ public sealed class SlideCanvas : FrameworkElement
             for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
             {
                 var fragment = CloneParagraphWithText(paragraph, run, lines[lineIndex]);
-                var formatted = BuildFormattedText(fragment, layout.ColumnWidthDip, text.Wrap, useIdealMetrics: true);
+                var formatted = BuildFormattedText(fragment, layout.ColumnWidthDip, text.Wrap, useIdealMetrics: false);
                 fragments[(paragraphIndex, lineIndex)] = fragment;
                 measures.Add(new TextColumnLineMeasure(
                     paragraphIndex,
@@ -1710,7 +1713,7 @@ public sealed class SlideCanvas : FrameworkElement
         foreach (var placement in TextLayoutPlanner.PlanColumnLines(text, layout, measures))
         {
             var fragment = fragments[(placement.ParagraphIndex, placement.LineIndex)];
-            var formatted = BuildFormattedText(fragment, placement.MaxWidthDip, text.Wrap, useIdealMetrics: true);
+            var formatted = BuildFormattedText(fragment, placement.MaxWidthDip, text.Wrap, useIdealMetrics: false);
             if (placement.IsFirstLine && fragment.IndentDip > 0 && formatted.MaxTextWidth > 0)
                 formatted.MaxTextWidth = placement.MaxWidthDip;
             dc.DrawText(formatted, new Point(placement.X, placement.Y));
@@ -1743,7 +1746,7 @@ public sealed class SlideCanvas : FrameworkElement
                 CloneParagraphWithText(paragraph, run, candidate),
                 0,
                 false,
-                useIdealMetrics: true);
+                useIdealMetrics: false);
             if (current.Length > 0 && measure.WidthIncludingTrailingWhitespace > maxWidth)
             {
                 lines.Add(current);
