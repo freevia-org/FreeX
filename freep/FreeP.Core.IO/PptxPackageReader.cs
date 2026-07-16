@@ -3836,6 +3836,19 @@ public static class PptxPackageReader
                 }
             }
 
+            // WordArt 3-D data is stored on a:bodyPr rather than p:spPr.
+            var textSp3d = bodyPr.Element(A + "sp3d");
+            var textScene3d = bodyPr.Element(A + "scene3d");
+            if (textSp3d is not null || textScene3d is not null)
+            {
+                var textEffects = new ShapeEffects();
+                if (textSp3d is not null)
+                    ReadSp3d(textSp3d, textEffects, scheme);
+                if (textScene3d is not null)
+                    ReadScene3d(textScene3d, textEffects);
+                body.Text3dEffects = textEffects;
+            }
+
             // Wave 22B: text columns (a:bodyPr numCol= spcCol=)
             if (int.TryParse(bodyPr.Attribute("numCol")?.Value, out var numCol) && numCol > 1)
                 body.ColumnCount = numCol;

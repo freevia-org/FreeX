@@ -101,6 +101,7 @@ internal static class PresentationModelCloneHelper
             LstStyle = CloneTextStyleLevels(source.LstStyle),
             VerticalType = source.VerticalType,
             WarpPreset = source.WarpPreset,
+            Text3dEffects = CloneShapeEffects(source.Text3dEffects),
             ColumnCount = source.ColumnCount,
             ColumnSpacingEmu = source.ColumnSpacingEmu,
         };
@@ -113,6 +114,55 @@ internal static class PresentationModelCloneHelper
 
         return copy;
     }
+
+    private static ShapeEffects? CloneShapeEffects(ShapeEffects? source)
+    {
+        if (source is null)
+            return null;
+
+        return new ShapeEffects
+        {
+            HasOuterShadow = source.HasOuterShadow,
+            OuterShadowColor = source.OuterShadowColor,
+            OuterShadowAlpha = source.OuterShadowAlpha,
+            OuterShadowBlurRadEmu = source.OuterShadowBlurRadEmu,
+            OuterShadowDistEmu = source.OuterShadowDistEmu,
+            OuterShadowDirDeg = source.OuterShadowDirDeg,
+            HasInnerShadow = source.HasInnerShadow,
+            InnerShadowColor = source.InnerShadowColor,
+            InnerShadowAlpha = source.InnerShadowAlpha,
+            InnerShadowBlurRadEmu = source.InnerShadowBlurRadEmu,
+            InnerShadowDistEmu = source.InnerShadowDistEmu,
+            InnerShadowDirDeg = source.InnerShadowDirDeg,
+            HasGlow = source.HasGlow,
+            GlowColor = source.GlowColor,
+            GlowAlpha = source.GlowAlpha,
+            GlowRadiusEmu = source.GlowRadiusEmu,
+            HasSoftEdge = source.HasSoftEdge,
+            SoftEdgeRadEmu = source.SoftEdgeRadEmu,
+            BevelTop = CloneBevel(source.BevelTop),
+            BevelBottom = CloneBevel(source.BevelBottom),
+            ExtrusionHeightEmu = source.ExtrusionHeightEmu,
+            ContourWidthEmu = source.ContourWidthEmu,
+            PrstMaterial = source.PrstMaterial,
+            ExtrusionColor = source.ExtrusionColor,
+            ContourColor = source.ContourColor,
+            Scene3d = source.Scene3d is null ? null : new Scene3dInfo
+            {
+                CameraPreset = source.Scene3d.CameraPreset,
+                LightRig = source.Scene3d.LightRig,
+                LightRigDir = source.Scene3d.LightRigDir,
+            },
+        };
+    }
+
+    private static BevelInfo? CloneBevel(BevelInfo? source) =>
+        source is null ? null : new BevelInfo
+        {
+            WidthEmu = source.WidthEmu,
+            HeightEmu = source.HeightEmu,
+            PresetName = source.PresetName,
+        };
 
     internal static Hyperlink? CloneHyperlink(Hyperlink? source) =>
         source is null

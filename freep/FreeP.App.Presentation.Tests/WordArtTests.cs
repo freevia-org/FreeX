@@ -625,6 +625,58 @@ public sealed class WordArtTests : IDisposable
     }
 
     [Fact]
+    public void PptxReader_ReadsAndRoundTripsBodyLevelWordArt3d()
+    {
+        var path = FindWorkspaceFile("tools", "FreeP.RenderCompare", "corpus", "13-wordart.pptx");
+        var pres = PptxPackageReader.Read(path);
+        var bodies = pres.Slides[0].Shapes
+            .Where(shape => shape.TextBody?.Text3dEffects is not null)
+            .Select(shape => shape.TextBody!)
+            .ToArray();
+
+        bodies.Should().HaveCount(2);
+        var archEffects = bodies
+            .Single(body => body.Paragraphs.SelectMany(p => p.Runs).Any(r => r.Text == "Arch Up Text"))
+            .Text3dEffects;
+        archEffects.Should().NotBeNull();
+        archEffects!.PrstMaterial.Should().Be("metal");
+        archEffects.BevelTop.Should().NotBeNull();
+        archEffects.BevelTop!.WidthEmu.Should().Be(127000);
+        archEffects.BevelTop.HeightEmu.Should().Be(31750);
+        archEffects.Scene3d.Should().NotBeNull();
+        archEffects.Scene3d!.CameraPreset.Should().Be("orthographicFront");
+        archEffects.Scene3d.LightRig.Should().Be("contrasting");
+        archEffects.Scene3d.LightRigDir.Should().Be("t");
+
+        var waveEffects = bodies
+            .Single(body => body.Paragraphs.SelectMany(p => p.Runs).Any(r => r.Text == "Wave Text"))
+            .Text3dEffects;
+        waveEffects.Should().NotBeNull();
+        waveEffects!.PrstMaterial.Should().Be("softEdge");
+        waveEffects.ExtrusionHeightEmu.Should().Be(57150);
+        waveEffects.BevelTop.Should().NotBeNull();
+        waveEffects.BevelTop!.WidthEmu.Should().Be(25400);
+        waveEffects.BevelTop.HeightEmu.Should().Be(38100);
+
+        var roundTripPath = WriteToPptx(pres);
+        GetSchemaErrors(File.ReadAllBytes(roundTripPath)).Should().BeEmpty();
+        var roundTripped = PptxPackageReader.Read(roundTripPath);
+        roundTripped.Slides[0].Shapes
+            .Select(shape => shape.TextBody?.Text3dEffects)
+            .Count(effects => effects is not null)
+            .Should().Be(2);
+
+        var resolvedLayouts = SlideCompositor.Compose(pres, pres.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .Select(shape => shape.Text)
+            .Where(text => text?.Text3dEffects is not null)
+            .ToArray();
+        resolvedLayouts.Should().HaveCount(2);
+        resolvedLayouts.Select(text => text!.Text3dEffects!.Scene3dCameraPreset)
+            .Should().Contain("orthographicFront");
+    }
+
+    [Fact]
     public void TextRunEffectRenderPlanner_EmitsGlowAndSoftEdgePassesBeforeFill()
     {
         var run = new ResolvedRun
