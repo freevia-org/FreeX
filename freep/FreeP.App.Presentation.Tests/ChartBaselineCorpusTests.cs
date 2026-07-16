@@ -372,11 +372,11 @@ public sealed class ChartBaselineCorpusTests
             .ToArray();
         firstSurfaceCellFacets.Should().HaveCount(2);
         firstSurfaceCellFacets[0].Points.Select(point => point.X)
-            .Should().Equal(new[] { 2.0, 149.6, 64.0 },
-                "PowerPoint splits the first imported surface cell along the 0-3 diagonal");
+            .Should().Equal(new[] { 2.0, 149.6, 196.8 },
+                "PowerPoint splits the imported blank low-band cell along the 0-2 diagonal");
         firstSurfaceCellFacets[1].Points.Select(point => point.X)
-            .Should().Equal(new[] { 149.6, 196.8, 64.0 },
-                "the paired imported surface triangle shares the alternate diagonal");
+            .Should().Equal(new[] { 2.0, 196.8, 64.0 },
+                "the paired imported blank-cell triangle closes the 0-2 split");
         surfaceGeometry.Points.Single(point => point.SeriesIndex == 2 && point.CategoryIndex == 0).Point.X
             .Should().BeApproximately(126.0, 0.0001,
                 "PowerPoint's rear-left surface vertex follows the projected frame depth wall");

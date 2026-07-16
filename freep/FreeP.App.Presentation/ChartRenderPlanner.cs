@@ -3096,12 +3096,20 @@ public static partial class ChartRenderPlanner
                     continue;
                 }
 
+                // PowerPoint's blank low-band cell uses the opposite diagonal;
+                // the other imported cells retain the established 0-3 split.
                 var renderPointSets = triangulateCompleteCells && facetPoints.Count == 4
-                    ? new[]
-                    {
-                        new[] { facetPoints[0], facetPoints[1], facetPoints[3] },
-                        new[] { facetPoints[1], facetPoints[2], facetPoints[3] }
-                    }
+                    ? seriesIndex == 0 && categoryIndex == 0
+                        ? new[]
+                        {
+                            new[] { facetPoints[0], facetPoints[1], facetPoints[2] },
+                            new[] { facetPoints[0], facetPoints[2], facetPoints[3] }
+                        }
+                        : new[]
+                        {
+                            new[] { facetPoints[0], facetPoints[1], facetPoints[3] },
+                            new[] { facetPoints[1], facetPoints[2], facetPoints[3] }
+                        }
                     : new[] { facetPoints.ToArray() };
 
                 for (int renderIndex = 0; renderIndex < renderPointSets.Length; renderIndex++)
