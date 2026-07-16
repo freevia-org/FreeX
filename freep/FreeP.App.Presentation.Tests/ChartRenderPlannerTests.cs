@@ -1677,6 +1677,40 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void ImportedThreeDColumn_UsesPowerPointAxisAndProjectedFrameDefaults()
+    {
+        var chart = MakeTwoSeriesChart(ChartType.ColumnClustered);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.ThreeDStyle = ChartThreeDStyle.Column;
+        chart.Series[0].Values.Clear();
+        chart.Series[0].Values.AddRange(new double?[] { 120, 200 });
+        chart.Series[1].Values.Clear();
+        chart.Series[1].Values.AddRange(new double?[] { 140, 180 });
+
+        ChartRenderPlanner.ComputePrimaryValueAxisRange(chart)
+            .Should().Be((0, 200, 20));
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+
+        scene.DrawFlatGrid.Should().BeFalse();
+        scene.DrawProjectedThreeDBarFrame.Should().BeTrue();
+        scene.AxisTicks.CategoryTicks.Should().BeEmpty();
+        scene.AxisTicks.ValueTicks.Should().BeEmpty();
+        scene.ValueAxisLabels.Should().HaveCount(11);
+
+        var first = scene.Rectangles
+            .Single(rectangle => rectangle.SeriesIndex == 0 && rectangle.CategoryIndex == 0);
+        first.Depth.Should().NotBeNull();
+        first.Depth!.Value.IsThreeD.Should().BeTrue();
+        first.Depth.Value.CategorySkewY.Should().Be(ChartRenderPlanner.ImportedThreeDBarCategorySkewY);
+        first.Bounds.Width.Should().BeLessThan(
+            scene.Frame.Plot.Width / chart.Categories.Count,
+            "PowerPoint narrows 3-D columns after applying perspective");
+    }
+
+    [Fact]
     public void BuildBarGapDepthPlan_ClampsAuthoredDepthAndPreservesOrientationContract()
     {
         var chart = MakeTwoSeriesChart(ChartType.BarClustered);
