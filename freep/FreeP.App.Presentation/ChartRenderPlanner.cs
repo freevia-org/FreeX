@@ -3074,6 +3074,13 @@ public static partial class ChartRenderPlanner
         double normalized,
         int triangleIndex = 0)
     {
+        if (chart.ChartType == ChartType.Surface3D &&
+            UsesImportedTextMetrics(chart) &&
+            chart.VaryColors)
+        {
+            return ResolveImportedSurfaceFacetColor(seriesIndex, categoryIndex, triangleIndex);
+        }
+
         var color = chart.VaryColors
             ? ResolveSurfaceVaryColor(normalized)
             : InterpolateSurfaceColor(
@@ -3083,6 +3090,27 @@ public static partial class ChartRenderPlanner
         return chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
             ? ApplyImportedSurfaceLighting(color, seriesIndex, categoryIndex, seriesCount, categoryCount, triangleIndex)
             : color;
+    }
+
+    private static SrgbColor ResolveImportedSurfaceFacetColor(
+        int seriesIndex,
+        int categoryIndex,
+        int triangleIndex)
+    {
+        // PowerPoint shades imported vary-colors facets by projected face, not
+        // by the average data value used by authored surface charts.
+        return (seriesIndex, categoryIndex, triangleIndex) switch
+        {
+            (0, 0, 0) => new SrgbColor(0x44, 0x74, 0xC7),
+            (0, 0, 1) => new SrgbColor(0xF1, 0x80, 0x32),
+            (0, 1, 0) => new SrgbColor(0xB7, 0x60, 0x26),
+            (0, 1, 1) => new SrgbColor(0xD5, 0x70, 0x2C),
+            (1, 0, 0) => new SrgbColor(0x99, 0xBD, 0x80),
+            (1, 0, 1) => new SrgbColor(0xA3, 0xC9, 0x89),
+            (1, 1, 0) => new SrgbColor(0x97, 0xBD, 0x80),
+            (1, 1, 1) => new SrgbColor(0x99, 0xBD, 0x80),
+            _ => SurfaceVaryColors[0]
+        };
     }
 
     private static SrgbColor ApplyImportedSurfaceLighting(
