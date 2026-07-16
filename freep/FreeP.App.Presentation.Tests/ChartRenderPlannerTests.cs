@@ -3071,6 +3071,36 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildPieSlicePrimitives_ImportedThreeDPiePlansPowerPointDepthAndLighting()
+    {
+        var series = new ChartSeries { Name = "Share" };
+        series.Values.AddRange(new double?[] { 2, 3, 5 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.Pie,
+            ThreeDStyle = ChartThreeDStyle.Pie,
+            TextStyle = new ChartTextStyle { FontSizePt = 18.0 }
+        };
+        chart.Series.Add(series);
+        var sourceColor = new SrgbColor(100, 150, 200);
+
+        var slices = ChartRenderPlanner.BuildPieSlicePrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 400, 200),
+            seriesColors: new[] { sourceColor });
+
+        var first = slices[0];
+        first.Center.Should().Be(new ChartPlanPoint(200, 71.5));
+        first.OuterRadius.Should().BeApproximately(196.0, 0.0001);
+        first.OuterRadiusY.Should().BeApproximately(35.28, 0.0001);
+        first.DepthOffsetY.Should().BeApproximately(66.64, 0.0001);
+        first.DrawDepthSidewalls.Should().BeTrue();
+        first.Fill!.Value.Color.Should().Be(new SrgbColor(92, 138, 184));
+        first.DepthFill!.Value.Color.Should().Be(sourceColor);
+        slices.Should().OnlyContain(slice => slice.DrawDepthSidewalls);
+    }
+
+    [Fact]
     public void BuildPieSlicePrimitives_VaryColorsUsesPointFallbackPalette()
     {
         var series = new ChartSeries { Name = "Share" };
