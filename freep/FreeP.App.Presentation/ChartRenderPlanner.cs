@@ -2745,7 +2745,9 @@ public static partial class ChartRenderPlanner
                 seriesColors,
                 triangulateCompleteCells: true)
             : facets;
-        var contours = BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
+        var contours = chart.ChartType == ChartType.Surface3D && UsesImportedTextMetrics(chart)
+            ? Array.Empty<ChartLineSegmentPrimitive>()
+            : BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
         var frameSegments = chart.ChartType == ChartType.Surface3D
             ? BuildSurfaceFrameSegments(plot, UsesImportedTextMetrics(chart))
             : Array.Empty<ChartLineSegmentPrimitive>();
