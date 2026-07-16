@@ -138,6 +138,29 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartTypesCorpus_BubbleWithoutSizesKeepsAxesButDoesNotInventBubbles()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "18-chart-types.pptx");
+        var chart = PptxPackageReader.Read(deckPath).Slides[3].Shapes
+            .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!;
+
+        chart.ChartType.Should().Be(ChartType.Bubble);
+        chart.Series.Should().ContainSingle().Which.BubbleSizes.Should().BeEmpty();
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 960, 540));
+
+        scene.Bubble.Should().NotBeNull();
+        scene.Bubble!.Value.Bubbles.Should().BeEmpty(
+            "PowerPoint leaves a bubble chart with no c:bubbleSize data empty");
+        scene.Bubble.Value.XAxisLabels.Select(label => label.Text)
+            .Should().Equal("0", "1", "2", "3", "4", "5", "6");
+        scene.Bubble.Value.YAxisLabels.Select(label => label.Text)
+            .Should().Equal("0", "10", "20", "30", "40", "50");
+    }
+
+    [Fact]
     public void ChartTypesCorpus_RadarUsesPowerPointScaleAndFullImportedLabels()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "18-chart-types.pptx");
