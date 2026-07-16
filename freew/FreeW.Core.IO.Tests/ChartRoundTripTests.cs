@@ -305,6 +305,7 @@ public class ChartRoundTripTests
         var chartXml = EntryXml(docx, "word/charts/chart1.xml");
 
         var scatter = chartXml.Descendants(C + "scatterChart").Should().ContainSingle().Subject;
+        scatter.Element(C + "scatterStyle")!.Attribute("val")!.Value.Should().Be("marker");
         var ser = scatter.Elements(C + "ser").Should().ContainSingle().Subject;
         ser.Element(C + "xVal")!.Descendants(C + "numCache").Should().ContainSingle();
         ser.Element(C + "yVal")!.Descendants(C + "numCache").Should().ContainSingle();

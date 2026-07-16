@@ -5958,7 +5958,9 @@ public static class DocxWriter
     private static XElement BuildScatterChart(Chart chart, long xAxisId, long yAxisId)
     {
         var root = new XElement(C + "scatterChart",
-            new XElement(C + "scatterStyle", new XAttribute("val", "lineMarker")));
+            // The model's scatter rendering is marker-only.  Keep the OOXML style in sync so Word does not
+            // add a connecting line when it opens the exported chart.
+            new XElement(C + "scatterStyle", new XAttribute("val", "marker")));
         for (var i = 0; i < chart.Series.Count; i++)
             root.Add(BuildScatterSeries(chart, chart.Series[i], i));
         if (ChartShowsDataLabels(chart))
