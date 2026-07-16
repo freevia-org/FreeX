@@ -303,6 +303,36 @@ public sealed class ReferencesTabTests
             .Should().BeFalse("undo removes the cross-reference (and its anchor)");
     }
 
+    [Fact]
+    public void InsertCrossReference_uses_undoable_anchor_command_and_caches_field_text()
+    {
+        var target = new Paragraph("Intro");
+        target.BookmarkNames.Add("chapter");
+        target.BookmarkNames.Add("_Ref2");
+        var existing = new Paragraph("Existing") { BookmarkName = "_Ref1" };
+        var view = ViewWith(target, existing, new Paragraph("See "));
+
+        view.InsertCrossReference(
+            CrossRefType.Heading,
+            new CrossRefTarget("Intro", Anchor: null, BlockIndex: 0),
+            CrossRefInsertAs.Text,
+            hyperlink: true);
+
+        var field = view.Document.Blocks.OfType<Paragraph>()
+            .SelectMany(paragraph => paragraph.Runs)
+            .Single(run => run.CrossReference is not null);
+        field.Text.Should().Be("Intro");
+        field.CrossReference!.Target.Should().Be("_Ref3");
+        target.BookmarkNames.Should().Equal("chapter", "_Ref2", "_Ref3");
+
+        view.Undo();
+
+        target.BookmarkNames.Should().Equal("chapter", "_Ref2");
+        view.Document.Blocks.OfType<Paragraph>().SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.CrossReference is not null)
+            .Should().BeFalse("one undo reverts both the anchor command and field insertion");
+    }
+
     // ── Citation / Bibliography ─────────────────────────────────────────────────────
 
     [Fact]

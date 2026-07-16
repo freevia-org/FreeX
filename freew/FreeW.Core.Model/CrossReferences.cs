@@ -87,6 +87,12 @@ public readonly record struct CrossRefTarget(string Display, string? Anchor, int
 public sealed record CrossReferenceField(
     CrossRefFieldKind Kind, string Target, CrossRefInsertAs InsertAs, bool Hyperlink);
 
+/// <summary>Pure insertion data; the host applies <see cref="BookmarkNameToAdd"/> through its native mutation path.</summary>
+public sealed record CrossReferenceInsertionPlan(
+    CrossRefTarget Target,
+    Run FieldRun,
+    string? BookmarkNameToAdd);
+
 /// <summary>The WordprocessingML field keyword a cross-reference uses.</summary>
 public enum CrossRefFieldKind
 {
@@ -191,6 +197,32 @@ public static class CrossReferences
             ? (target.NoteId?.ToString(CultureInfo.InvariantCulture) ?? string.Empty)
             : (target.Anchor ?? string.Empty);
         return new CrossReferenceField(kind, argument, insertAs, hyperlink);
+    }
+
+    /// <summary>Plans the target, field run, cached text, and any missing body anchor without mutation.</summary>
+    public static CrossReferenceInsertionPlan PlanInsertion(
+        TextDocument doc,
+        CrossRefType type,
+        CrossRefTarget target,
+        CrossRefInsertAs insertAs,
+        bool hyperlink,
+        int sourceBlockIndex)
+    {
+        ArgumentNullException.ThrowIfNull(doc);
+
+        var needsAnchor = FieldKindFor(type, insertAs) != CrossRefFieldKind.NoteRef
+            && string.IsNullOrEmpty(target.Anchor)
+            && target.BlockIndex is { } targetBlock
+            && targetBlock >= 0
+            && targetBlock < doc.Blocks.Count
+            && doc.Blocks[targetBlock] is Paragraph;
+        var bookmarkNameToAdd = needsAnchor ? AllocateCrossReferenceAnchor(doc) : null;
+        var resolved = bookmarkNameToAdd is null ? target : target with { Anchor = bookmarkNameToAdd };
+        var field = BuildField(type, resolved, insertAs, hyperlink);
+        return new CrossReferenceInsertionPlan(
+            resolved,
+            Run.CrossReferenceFieldRun(field, ResolveText(doc, type, resolved, insertAs, sourceBlockIndex)),
+            bookmarkNameToAdd);
     }
 
     /// <summary>
@@ -496,4 +528,19 @@ public static class CrossReferences
         && doc.Blocks[blockIndex] is Paragraph { BookmarkName: { Length: > 0 } name }
             ? name
             : null;
+
+    private static string AllocateCrossReferenceAnchor(TextDocument doc)
+    {
+        var used = new HashSet<string>(
+            doc.Blocks.OfType<Paragraph>()
+                .SelectMany(paragraph => paragraph.BookmarkNames)
+                .Where(name => name is { Length: > 0 })!,
+            StringComparer.Ordinal);
+        for (var index = 1; ; index++)
+        {
+            var name = "_Ref" + index.ToString(CultureInfo.InvariantCulture);
+            if (!used.Contains(name))
+                return name;
+        }
+    }
 }

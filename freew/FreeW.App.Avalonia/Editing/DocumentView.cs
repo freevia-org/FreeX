@@ -11155,58 +11155,23 @@ public sealed class DocumentView : Control
             return;
 
         var sourceBlock = _caret.Block;
-        var resolved = target;
-        var fieldKind = CrossReferences.FieldKindFor(type, insertAs);
+        var plan = CrossReferences.PlanInsertion(_doc, type, target, insertAs, hyperlink, sourceBlock);
 
         _bus.BeginUndoGroup();
 
-        // Body targets (REF/PAGEREF) need a bookmark anchor to resolve; ensure one on the target paragraph.
-        if (fieldKind != CrossRefFieldKind.NoteRef
-            && string.IsNullOrEmpty(resolved.Anchor)
-            && resolved.BlockIndex is { } targetBlock
-            && targetBlock >= 0 && targetBlock < _doc.Blocks.Count
-            && _doc.Blocks[targetBlock] is Paragraph)
+        // The shared plan chooses the anchor; Avalonia keeps bookmark mutation inside its existing
+        // undoable command path.
+        if (plan.BookmarkNameToAdd is { } anchor && plan.Target.BlockIndex is { } targetBlock)
         {
-            var anchor = EnsureCrossReferenceAnchor(targetBlock);
-            resolved = resolved with { Anchor = anchor };
+            _bus.Execute(new SetBookmarkNameCommand(targetBlock, anchor));
         }
 
-        var field = CrossReferences.BuildField(type, resolved, insertAs, hyperlink);
-        var cached = CrossReferences.ResolveText(_doc, type, resolved, insertAs, sourceBlock);
-        var run = Run.CrossReferenceFieldRun(field, cached);
-        _bus.Execute(new InsertObjectRunCommand(hostIndex, run));
+        _bus.Execute(new InsertObjectRunCommand(hostIndex, plan.FieldRun));
         _bus.CommitUndoGroup("Insert Cross-reference");
 
         _cellCaret = null;
         _caret = new DocPosition(hostIndex, BlockLength(hostIndex));
         _selectionAnchor = _caret;
-    }
-
-    // Returns the target paragraph's existing bookmark name, or assigns a fresh hidden "_Ref<n>" one (the
-    // smallest unused index) so a cross-reference field can resolve to it — mirroring Word's auto-bookmarks.
-    private string EnsureCrossReferenceAnchor(int blockIndex)
-    {
-        if (_doc.Blocks[blockIndex] is not Paragraph paragraph)
-            return string.Empty;
-        if (paragraph.BookmarkName is { Length: > 0 } existing)
-            return existing;
-
-        var used = new HashSet<string>(
-            _doc.Blocks.OfType<Paragraph>()
-                .Select(p => p.BookmarkName)
-                .Where(n => n is { Length: > 0 })!,
-            StringComparer.Ordinal);
-        var index = 1;
-        string name;
-        do
-        {
-            name = "_Ref" + index.ToString(CultureInfo.InvariantCulture);
-            index++;
-        }
-        while (used.Contains(name));
-
-        _bus.Execute(new SetBookmarkNameCommand(blockIndex, name));
-        return name;
     }
 
     // ── AV-LINK: hyperlinks + bookmarks (render handled in the glyph loop; follow/navigate here) ─────

@@ -325,4 +325,132 @@ public class CrossReferencesTests
         CrossReferences.ReferenceText(new CrossRefTarget("Footnote 3", null, null, 3))
             .Should().Be("Footnote 3");
     }
+
+    [Fact]
+    public void PlanInsertion_BodyTargetAllocatesSmallestGapWithoutMutatingDocument()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Heading") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Existing one") { BookmarkName = "_Ref1" });
+        doc.Blocks.Add(new Paragraph("Existing three") { BookmarkName = "_Ref3" });
+
+        var plan = CrossReferences.PlanInsertion(
+            doc,
+            CrossRefType.Heading,
+            new CrossRefTarget("Heading", null, 0),
+            CrossRefInsertAs.Text,
+            hyperlink: true,
+            sourceBlockIndex: 3);
+
+        plan.Target.Anchor.Should().Be("_Ref2");
+        plan.BookmarkNameToAdd.Should().Be("_Ref2");
+        plan.FieldRun.CrossReference.Should().Be(new CrossReferenceField(CrossRefFieldKind.Ref, "_Ref2", CrossRefInsertAs.Text, true));
+        plan.FieldRun.Text.Should().Be("Heading");
+        ((Paragraph)doc.Blocks[0]).BookmarkName.Should().BeNull();
+    }
+
+    [Fact]
+    public void PlanInsertion_AllocatesGapAcrossAllBookmarkNames()
+    {
+        var doc = new TextDocument();
+        var target = new Paragraph("Heading");
+        target.BookmarkNames.Add("heading");
+        target.BookmarkNames.Add("_Ref2");
+        doc.Blocks.Add(target);
+        doc.Blocks.Add(new Paragraph("Existing one") { BookmarkName = "_Ref1" });
+        doc.Blocks.Add(new Paragraph("Existing four") { BookmarkName = "_Ref4" });
+
+        var plan = CrossReferences.PlanInsertion(
+            doc,
+            CrossRefType.Heading,
+            new CrossRefTarget("Heading", null, 0),
+            CrossRefInsertAs.Text,
+            hyperlink: false,
+            sourceBlockIndex: 3);
+
+        plan.BookmarkNameToAdd.Should().Be("_Ref3");
+        plan.FieldRun.CrossReference!.Target.Should().Be("_Ref3");
+        target.BookmarkNames.Should().Equal("heading", "_Ref2");
+    }
+
+    [Fact]
+    public void PlanInsertion_AllocatesSmallestGapWhenSecondaryNameUsesRefOne()
+    {
+        var doc = new TextDocument();
+        var target = new Paragraph("Heading");
+        target.BookmarkNames.Add("heading");
+        target.BookmarkNames.Add("_Ref1");
+        doc.Blocks.Add(target);
+        doc.Blocks.Add(new Paragraph("Existing three") { BookmarkName = "_Ref3" });
+
+        var plan = CrossReferences.PlanInsertion(
+            doc,
+            CrossRefType.Heading,
+            new CrossRefTarget("Heading", null, 0),
+            CrossRefInsertAs.Text,
+            hyperlink: false,
+            sourceBlockIndex: 2);
+
+        plan.BookmarkNameToAdd.Should().Be("_Ref2");
+        target.BookmarkNames.Should().Equal("heading", "_Ref1");
+    }
+
+    [Fact]
+    public void PlanInsertion_ExistingBodyAnchorIsReused()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Heading") { StyleId = "Heading1", BookmarkName = "chapter" });
+
+        var plan = CrossReferences.PlanInsertion(
+            doc,
+            CrossRefType.Heading,
+            new CrossRefTarget("Heading", "chapter", 0),
+            CrossRefInsertAs.PageNumber,
+            hyperlink: false,
+            sourceBlockIndex: 1);
+
+        plan.BookmarkNameToAdd.Should().BeNull();
+        plan.FieldRun.CrossReference.Should().Be(new CrossReferenceField(CrossRefFieldKind.PageRef, "chapter", CrossRefInsertAs.PageNumber, false));
+        plan.FieldRun.Text.Should().Be("1");
+    }
+
+    [Fact]
+    public void PlanInsertion_NoteTargetBuildsNoteFieldWithoutBodyAnchor()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Body"));
+        doc.Footnotes[7] = new Footnote(7, "note");
+
+        var plan = CrossReferences.PlanInsertion(
+            doc,
+            CrossRefType.Footnote,
+            new CrossRefTarget("Footnote 7", null, null, 7),
+            CrossRefInsertAs.Text,
+            hyperlink: true,
+            sourceBlockIndex: 0);
+
+        plan.BookmarkNameToAdd.Should().BeNull();
+        plan.FieldRun.CrossReference!.Kind.Should().Be(CrossRefFieldKind.NoteRef);
+        plan.FieldRun.CrossReference.Target.Should().Be("7");
+        plan.FieldRun.Text.Should().Be("Footnote 7");
+    }
+
+    [Fact]
+    public void PlanInsertion_CachesRelativePositionTextInFieldRun()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("Target"));
+        doc.Blocks.Add(new Paragraph("Reference"));
+
+        var plan = CrossReferences.PlanInsertion(
+            doc,
+            CrossRefType.Bookmark,
+            new CrossRefTarget("Target", null, 0),
+            CrossRefInsertAs.AboveBelow,
+            hyperlink: false,
+            sourceBlockIndex: 1);
+
+        plan.FieldRun.Text.Should().Be("above");
+        plan.FieldRun.CrossReference!.InsertAs.Should().Be(CrossRefInsertAs.AboveBelow);
+    }
 }
