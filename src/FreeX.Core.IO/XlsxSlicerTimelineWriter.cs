@@ -246,6 +246,18 @@ internal static class XlsxSlicerTimelineWriter
                                     SlicerNs + "pivotTable",
                                     OptionalAttribute("name", slicer.SourcePivotTableName),
                                     new XAttribute("tabId", ResolvePivotHostTabId(workbook, workbookXml, slicer.SourcePivotTableName)))),
+                        // P14 (R44-io-pivot-filter-page-3-2): a pivot slicer's <data><tabular><items>
+                        // list is the ONLY thing real Excel (and FreeX's own reload, via
+                        // XlsxSlicerTimelineMetadataReader.ReadSlicerCacheItems ->
+                        // SlicerModel.CacheItems) draws its item/button tiles from -- the fx:
+                        // selectedItems extLst below is a FreeX-private fallback, not something Excel
+                        // or a fresh reload can see. Without it the just-inserted slicer renders with
+                        // zero buttons. Emit it whenever the bound pivot cache field's shared items can
+                        // be resolved by name; table slicers have no such field and keep relying on the
+                        // x15:tableSlicerCache binding instead.
+                        isTableSlicer
+                            ? null
+                            : BuildPivotSlicerCacheDataElement(workbook, slicer),
                         extensions.Count == 0
                             ? null
                             : new XElement(SlicerNs + "extLst", extensions))));
@@ -380,6 +392,68 @@ internal static class XlsxSlicerTimelineWriter
 
         XlsxPackageXmlEditor.ReplaceXml(archive, "xl/workbook.xml", workbookXml);
         XlsxPackageXmlEditor.ReplaceXml(archive, workbookRelsPath, workbookRelsXml);
+    }
+
+    // P14 (R44-io-pivot-filter-page-3-2): builds the native <data><tabular><items><i x="N" s="1"/>...>
+    // list a pivot slicer cache needs to render item tiles (mirrors
+    // XlsxSlicerTimelineMetadataReader.ReadSlicerCacheItems's read shape exactly -- x is the 0-based
+    // index into the pivot cache field's shared items, s="1" marks a selected item, and both this
+    // writer and that reader agree an absent @s means "not selected"). Resolves the field purely by
+    // name across every pivot cache in the workbook (a slicer cache carries no stable cache id here),
+    // matching SlicerItemResolver.ResolveSharedItemsField's association rule. Returns null when the
+    // field can't be resolved (e.g. a slicer authored against a cache FreeX doesn't model shared items
+    // for yet) so the cache definition is left exactly as it was before this fix in that case.
+    private static XElement? BuildPivotSlicerCacheDataElement(Workbook workbook, SlicerModel slicer)
+    {
+        var field = ResolveSlicerSharedItemsField(workbook, slicer.SourceFieldName);
+        if (field?.SharedItems is not { Count: > 0 } sharedItems)
+            return null;
+
+        // No explicit selection recorded on the model (slicer.SelectedItems empty) means the
+        // unfiltered "(All items selected)" state -- every tile starts selected, matching how Excel
+        // itself initializes a freshly inserted slicer's cache.
+        var selectedItems = slicer.SelectedItems.Count > 0
+            ? new HashSet<string>(slicer.SelectedItems, StringComparer.OrdinalIgnoreCase)
+            : null;
+
+        var items = new List<XElement>(sharedItems.Count);
+        for (var index = 0; index < sharedItems.Count; index++)
+        {
+            var isSelected = selectedItems is null || selectedItems.Contains(sharedItems[index]);
+            items.Add(new XElement(
+                SlicerNs + "i",
+                new XAttribute("x", index.ToString(CultureInfo.InvariantCulture)),
+                isSelected ? new XAttribute("s", "1") : null));
+        }
+
+        return new XElement(
+            SlicerNs + "data",
+            new XElement(
+                SlicerNs + "tabular",
+                new XElement(
+                    SlicerNs + "items",
+                    new XAttribute("count", items.Count.ToString(CultureInfo.InvariantCulture)),
+                    items)));
+    }
+
+    private static PivotCacheFieldModel? ResolveSlicerSharedItemsField(Workbook workbook, string? sourceFieldName)
+    {
+        if (string.IsNullOrWhiteSpace(sourceFieldName))
+            return null;
+
+        foreach (var cache in workbook.PivotCaches)
+        {
+            foreach (var field in cache.Fields)
+            {
+                if (string.Equals(field.Name, sourceFieldName, StringComparison.OrdinalIgnoreCase) &&
+                    field.SharedItems is { Count: > 0 })
+                {
+                    return field;
+                }
+            }
+        }
+
+        return null;
     }
 
     // P12: the slicerCache's pivotTable/@tabId is the sheetId of the worksheet hosting the pivot, not a

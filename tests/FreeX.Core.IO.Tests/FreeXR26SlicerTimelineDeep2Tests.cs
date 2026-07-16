@@ -220,6 +220,11 @@ public sealed class FreeXR26SlicerTimelineDeep2Tests
             var data = new XElement(SlicerNs + "data",
                 new XElement(SlicerNs + "tabular",
                     new XElement(SlicerNs + "items", itemElements)));
+            // R44-io-pivot-filter-page-3-2: a fresh save of a pivot slicer now ALSO emits its own native
+            // <data> element (previously only this injection did), so replace it rather than blindly
+            // appending -- a second <data> sibling is schema-invalid (CT_SlicerCacheDefinition allows at
+            // most one) and would make every native <i> lookup below see duplicates.
+            root.Elements(SlicerNs + "data").Remove();
             root.Add(data);
 
             entry.Delete();

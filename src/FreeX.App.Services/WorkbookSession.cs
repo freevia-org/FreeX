@@ -1898,7 +1898,54 @@ public sealed class WorkbookSession
             return result;
 
         ApplySuccessfulEditResult(result, address);
+        GrowRowHeightForAlreadyWrappedCellIfNeeded(address);
         return result;
+    }
+
+    /// <summary>
+    /// Excel re-measures an auto-height row on every edit of a cell that already has Wrap Text on
+    /// -- not just on the WrapText style flag's off-to-on transition (that one-time grow is handled
+    /// separately by <see cref="CreateWrapTextGrowthCommands"/>/<see cref="SetSelectedRangeWrapText"/>).
+    /// Runs after the edit (and its recalculation) has landed, so the cell's committed value/formula
+    /// result is what gets measured. Matches the existing "only ever grows a row" contract shared with
+    /// the wrap-toggle-on path: a row a user has manually resized taller (or that already fits) is
+    /// never shrunk back down just because a shorter value was typed.
+    /// </summary>
+    private void GrowRowHeightForAlreadyWrappedCellIfNeeded(CellAddress address)
+    {
+        var sheet = Workbook.GetSheet(address.Sheet);
+        if (sheet is null)
+            return;
+        if (sheet.GetCell(address.Row, address.Col) is not { } cell)
+            return;
+        if (!Workbook.GetStyle(cell.StyleId).WrapText)
+            return;
+        if (sheet.IsMerged(address) || sheet.IsRowEffectivelyHidden(address.Row))
+            return;
+
+        var singleCellRange = new GridRange(address, address);
+        var plans = Ribbon.RowColumnSizingPlanner.PlanAutoFitRowHeights(
+            sheet,
+            singleCellRange,
+            usedRange: singleCellRange,
+            GetAutoFitDisplayText,
+            sheet.DefaultRowHeight);
+
+        if (plans.Count != 1)
+            return;
+
+        var currentHeight = sheet.RowHeights.TryGetValue(address.Row, out var height) ? height : sheet.DefaultRowHeight;
+        if (plans[0].Size <= currentHeight)
+            return;
+
+        var growResult = _cellEditService.ExecuteEditCommand(
+            Workbook,
+            new SetRowHeightCommand(sheet.Id, address.Row, address.Row, plans[0].Size));
+        if (growResult.Success)
+        {
+            MarkDirty();
+            RefreshViewport();
+        }
     }
 
     /// <summary>

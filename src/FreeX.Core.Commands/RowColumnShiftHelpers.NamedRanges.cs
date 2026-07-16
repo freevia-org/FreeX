@@ -117,7 +117,14 @@ internal static partial class RowColumnShiftHelpers
         workbook.NamedRanges.Clear();
         workbook.NamedRangeMetadataByName.Clear();
         foreach (var (name, namedRange) in snapshot)
+        {
+            // A name that was a plain range before the op may have been converted to a #REF!
+            // NamedFormulas entry by ConvertNamedRangeToRefError (its whole range was fully
+            // consumed by the delete — R44-commands-insert-delete-shift-3-2). Undo restores this
+            // name back to its original range identity, so any stray formula entry must go too.
+            workbook.RemoveNamedFormula(name);
             workbook.DefineNamedRange(name, namedRange.Range, namedRange.Metadata);
+        }
     }
 
     /// <summary>
@@ -153,7 +160,12 @@ internal static partial class RowColumnShiftHelpers
             workbook.RemoveScopedNamedRange(name, sheetId);
 
         foreach (var ((name, sheetId), (range, metadata)) in snapshot)
+        {
+            // See RestoreNamedRanges: undo a ConvertScopedNamedRangeToRefError conversion by
+            // dropping any stray scoped #REF! formula entry before restoring the range identity.
+            workbook.RemoveScopedNamedFormula(name, sheetId);
             workbook.DefineNamedRange(name, range, metadata, sheetId);
+        }
     }
 
     internal static void ShiftNamedRangeRowsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
@@ -180,8 +192,10 @@ internal static partial class RowColumnShiftHelpers
         {
             if (range.Start.Sheet != sheetId) continue;
             var shifted = ShiftRangeRowsDown(range, start, count);
-            if (shifted is null) workbook.RemoveNamedRange(name);
-            else workbook.NamedRanges[name] = shifted.Value;
+            if (shifted is null)
+                ConvertNamedRangeToRefError(workbook, name);
+            else
+                workbook.NamedRanges[name] = shifted.Value;
         }
 
         foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
@@ -189,13 +203,37 @@ internal static partial class RowColumnShiftHelpers
             if (range.Start.Sheet != sheetId) continue;
             var shifted = ShiftRangeRowsDown(range, start, count);
             if (shifted is null)
-                workbook.RemoveScopedNamedRange(name, scopeSheet);
+                ConvertScopedNamedRangeToRefError(workbook, name, scopeSheet);
             else
             {
                 workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);
                 workbook.DefineNamedRange(name, shifted.Value, metadata, scopeSheet);
             }
         }
+    }
+
+    /// <summary>
+    /// Moves a plain (non-formula) workbook-scoped defined name whose entire range was just
+    /// deleted from <see cref="Workbook.NamedRanges"/> into <see cref="Workbook.NamedFormulas"/>
+    /// as a literal <c>#REF!</c> error, mirroring how a cell formula referencing the same deleted
+    /// rows/columns becomes <c>#REF!</c> rather than having the name removed outright
+    /// (R44-commands-insert-delete-shift-3-2). <see cref="Workbook.NamedRanges"/> is a plain
+    /// <c>Dictionary&lt;string, GridRange&gt;</c> with no way to represent an error state, so the
+    /// name is relocated to the formula-backed table — which already round-trips <c>#REF!</c> for
+    /// formula-typed names (see <see cref="FormulaRewriter"/>'s <c>ErrorNode(ErrorValue.Ref)</c>
+    /// output) — instead of deleting the dictionary entry.
+    /// </summary>
+    private static void ConvertNamedRangeToRefError(Workbook workbook, string name)
+    {
+        workbook.RemoveNamedRange(name);
+        workbook.NamedFormulas[name] = "#REF!";
+    }
+
+    /// <summary>Sheet-scoped analogue of <see cref="ConvertNamedRangeToRefError"/>.</summary>
+    private static void ConvertScopedNamedRangeToRefError(Workbook workbook, string name, SheetId scopeSheet)
+    {
+        workbook.RemoveScopedNamedRange(name, scopeSheet);
+        workbook.DefineNamedFormula(name, "#REF!", scopeSheet);
     }
 
     internal static void ShiftNamedRangeColumnsUp(Workbook workbook, SheetId sheetId, uint start, uint count)
@@ -222,8 +260,10 @@ internal static partial class RowColumnShiftHelpers
         {
             if (range.Start.Sheet != sheetId) continue;
             var shifted = ShiftRangeColumnsDown(range, start, count);
-            if (shifted is null) workbook.RemoveNamedRange(name);
-            else workbook.NamedRanges[name] = shifted.Value;
+            if (shifted is null)
+                ConvertNamedRangeToRefError(workbook, name);
+            else
+                workbook.NamedRanges[name] = shifted.Value;
         }
 
         foreach (var ((name, scopeSheet), range) in workbook.ScopedNamedRanges.ToList())
@@ -231,7 +271,7 @@ internal static partial class RowColumnShiftHelpers
             if (range.Start.Sheet != sheetId) continue;
             var shifted = ShiftRangeColumnsDown(range, start, count);
             if (shifted is null)
-                workbook.RemoveScopedNamedRange(name, scopeSheet);
+                ConvertScopedNamedRangeToRefError(workbook, name, scopeSheet);
             else
             {
                 workbook.TryGetScopedNamedRangeMetadata(name, scopeSheet, out var metadata);

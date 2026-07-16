@@ -809,6 +809,40 @@ internal static class XlsxStylesheetMetadataPreserver
                 BuildXfStyleSignature(sourceXf, sourceFonts, sourceFills, sourceBorders, sourceNumFmts, workbookNs));
         }
 
+        // Cross-style ambiguity guard: two DIFFERENT named styles (distinct source xfIds, therefore
+        // distinct recovered target named-style xfIds) can also resolve to byte-identical rendered
+        // formatting -- e.g. one custom style duplicated under a new name. When that happens, ClosedXML's
+        // rebuild style cache collapses every cell bound to either style onto the SAME shared target
+        // <xf>, so there is only one candidate to claim for a signature that in the source legitimately
+        // belongs to more than one named style. Blindly letting the first-processed source xf claim it
+        // (the prior dequeue-only behavior) would silently mislabel every cell bound to the other style
+        // with the first style's name. Since a single shared target record cannot correctly represent two
+        // different named styles at once, treat such signatures as unresolvable and leave them alone
+        // (same "don't guess" outcome as the plain-collision guard above), rather than reconnect them to
+        // whichever named style happened to be processed first.
+        var namedStyleTargetIdsBySignature = new Dictionary<string, HashSet<int>>(StringComparer.Ordinal);
+        foreach (var sourceXf in sourceCellXfs)
+        {
+            if (!TryGetIntAttribute(sourceXf, "xfId", out var namedXfId) ||
+                namedXfId == 0 ||
+                !sourceXfIdToTargetXfId.TryGetValue(namedXfId, out var candidateTargetXfId))
+            {
+                continue;
+            }
+
+            var namedSignature = BuildXfStyleSignature(sourceXf, sourceFonts, sourceFills, sourceBorders, sourceNumFmts, workbookNs);
+            if (!namedStyleTargetIdsBySignature.TryGetValue(namedSignature, out var targetIds))
+                namedStyleTargetIdsBySignature[namedSignature] = targetIds = new HashSet<int>();
+            targetIds.Add(candidateTargetXfId);
+        }
+
+        var ambiguousNamedStyleSignatures = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var (signatureKey, targetIds) in namedStyleTargetIdsBySignature)
+        {
+            if (targetIds.Count > 1)
+                ambiguousNamedStyleSignatures.Add(signatureKey);
+        }
+
         foreach (var sourceXf in sourceCellXfs)
         {
             if (!TryGetIntAttribute(sourceXf, "xfId", out var sourceXfId) ||
@@ -819,7 +853,7 @@ internal static class XlsxStylesheetMetadataPreserver
             }
 
             var signature = BuildXfStyleSignature(sourceXf, sourceFonts, sourceFills, sourceBorders, sourceNumFmts, workbookNs);
-            if (plainSourceSignatures.Contains(signature))
+            if (plainSourceSignatures.Contains(signature) || ambiguousNamedStyleSignatures.Contains(signature))
                 continue;
 
             if (!targetXfsBySignature.TryGetValue(signature, out var candidates) || candidates.Count == 0)

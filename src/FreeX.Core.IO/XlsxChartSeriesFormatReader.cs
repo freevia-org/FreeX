@@ -165,7 +165,11 @@ internal static class XlsxChartSeriesFormatReader
 
     /// <summary>
     /// Reads per-data-point fill colors from <c>&lt;c:dPt&gt;</c> elements within a series
-    /// and appends them to <see cref="ChartModel.PointFillColors"/>.
+    /// and appends them to <see cref="ChartModel.PointFillColors"/>. Despite the name (kept to avoid
+    /// a cross-file rename of its pie/doughnut caller), this is generic over any chart family that
+    /// emits <c>&lt;c:dPt&gt;</c> — it is also called from the bar/column, line, scatter, and combo
+    /// series loops (R44-io-chart-datapoint-3-1) so a highlighted single point round-trips for those
+    /// chart types too, not just pie/doughnut.
     /// </summary>
     public static void ApplyPiePointFills(XElement series, int seriesIndex, ChartModel chart)
     {

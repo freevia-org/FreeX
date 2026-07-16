@@ -544,6 +544,34 @@ public sealed class ChartModel
     public CellColor? ResolvePlotAreaBorderColor(WorkbookTheme theme) =>
         PlotAreaBorderThemeColor?.Resolve(theme) ?? PlotAreaBorderColor;
 
+    /// <summary>
+    /// R44-meta-1: true when the chart area was explicitly set to "No Fill" (<c>&lt;a:noFill/&gt;</c>),
+    /// as distinct from simply having no fill configured. <see cref="ResolveChartAreaFillColor"/>
+    /// alone cannot distinguish the two cases (both resolve to <c>null</c>) -- renderers that want to
+    /// paint nothing (transparent) rather than falling back to a default background must check this
+    /// first. See <see cref="ChartAreaNoFill"/>.
+    /// </summary>
+    public bool IsChartAreaFillSuppressed => ChartAreaNoFill == true;
+
+    /// <summary>
+    /// R44-meta-1: true when the chart area border was explicitly set to "No Line". Renderers that
+    /// want to paint no border must check this before falling back to a default border. See
+    /// <see cref="ChartAreaNoLine"/>.
+    /// </summary>
+    public bool IsChartAreaLineSuppressed => ChartAreaNoLine == true;
+
+    /// <summary>
+    /// R44-meta-1: true when the plot area was explicitly set to "No Fill". See
+    /// <see cref="IsChartAreaFillSuppressed"/>.
+    /// </summary>
+    public bool IsPlotAreaFillSuppressed => PlotAreaNoFill == true;
+
+    /// <summary>
+    /// R44-meta-1: true when the plot area border was explicitly set to "No Line". See
+    /// <see cref="IsChartAreaLineSuppressed"/>.
+    /// </summary>
+    public bool IsPlotAreaLineSuppressed => PlotAreaNoLine == true;
+
     public CellColor? ResolveChartTitleTextColor(WorkbookTheme theme) =>
         ChartTitleTextThemeColor?.Resolve(theme) ?? ChartTitleTextColor;
 

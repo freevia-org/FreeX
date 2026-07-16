@@ -280,24 +280,37 @@ internal static partial class RowColumnShiftHelpers
         {
             for (int i = sheet.DataValidations.Count - 1; i >= 0; i--)
             {
-                var shifted = ShiftRangeRowsDown(sheet.DataValidations[i].AppliesTo, start, count);
-                if (shifted is null) sheet.DataValidations.RemoveAt(i);
+                var rule = sheet.DataValidations[i];
+                var shifted = ShiftRangeRowsDown(rule.AppliesTo, start, count);
+                // Shift AdditionalRanges regardless of whether the primary AppliesTo survives:
+                // a surviving non-primary area must keep the rule alive even when the primary
+                // area was fully consumed by the delete (R44-commands-insert-delete-shift-3-1).
+                ShiftAdditionalRanges(rule, range => ShiftRangeRowsDown(range, start, count));
+                if (shifted is null)
+                {
+                    if (PromoteDvSurvivorOrRemove(rule))
+                        sheet.DataValidations.RemoveAt(i);
+                }
                 else
                 {
-                    sheet.DataValidations[i].AppliesTo = shifted.Value;
-                    ShiftAdditionalRanges(sheet.DataValidations[i], range => ShiftRangeRowsDown(range, start, count));
+                    rule.AppliesTo = shifted.Value;
                 }
             }
             sheet.DataValidations.NotifyRulesChanged();
         }
         for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
         {
-            var shifted = ShiftRangeRowsDown(sheet.ConditionalFormats[i].AppliesTo, start, count);
-            if (shifted is null) sheet.ConditionalFormats.RemoveAt(i);
+            var rule = sheet.ConditionalFormats[i];
+            var shifted = ShiftRangeRowsDown(rule.AppliesTo, start, count);
+            ShiftCfAdditionalRanges(rule, range => ShiftRangeRowsDown(range, start, count));
+            if (shifted is null)
+            {
+                if (PromoteCfSurvivorOrRemove(rule))
+                    sheet.ConditionalFormats.RemoveAt(i);
+            }
             else
             {
-                sheet.ConditionalFormats[i].AppliesTo = shifted.Value;
-                ShiftCfAdditionalRanges(sheet.ConditionalFormats[i], range => ShiftRangeRowsDown(range, start, count));
+                rule.AppliesTo = shifted.Value;
             }
         }
     }
@@ -326,26 +339,81 @@ internal static partial class RowColumnShiftHelpers
         {
             for (int i = sheet.DataValidations.Count - 1; i >= 0; i--)
             {
-                var shifted = ShiftRangeColumnsDown(sheet.DataValidations[i].AppliesTo, start, count);
-                if (shifted is null) sheet.DataValidations.RemoveAt(i);
+                var rule = sheet.DataValidations[i];
+                var shifted = ShiftRangeColumnsDown(rule.AppliesTo, start, count);
+                // See ShiftRuleRowsDown: shift AdditionalRanges first so a surviving non-primary
+                // area can be promoted instead of dropping the whole rule.
+                ShiftAdditionalRanges(rule, range => ShiftRangeColumnsDown(range, start, count));
+                if (shifted is null)
+                {
+                    if (PromoteDvSurvivorOrRemove(rule))
+                        sheet.DataValidations.RemoveAt(i);
+                }
                 else
                 {
-                    sheet.DataValidations[i].AppliesTo = shifted.Value;
-                    ShiftAdditionalRanges(sheet.DataValidations[i], range => ShiftRangeColumnsDown(range, start, count));
+                    rule.AppliesTo = shifted.Value;
                 }
             }
             sheet.DataValidations.NotifyRulesChanged();
         }
         for (int i = sheet.ConditionalFormats.Count - 1; i >= 0; i--)
         {
-            var shifted = ShiftRangeColumnsDown(sheet.ConditionalFormats[i].AppliesTo, start, count);
-            if (shifted is null) sheet.ConditionalFormats.RemoveAt(i);
+            var rule = sheet.ConditionalFormats[i];
+            var shifted = ShiftRangeColumnsDown(rule.AppliesTo, start, count);
+            ShiftCfAdditionalRanges(rule, range => ShiftRangeColumnsDown(range, start, count));
+            if (shifted is null)
+            {
+                if (PromoteCfSurvivorOrRemove(rule))
+                    sheet.ConditionalFormats.RemoveAt(i);
+            }
             else
             {
-                sheet.ConditionalFormats[i].AppliesTo = shifted.Value;
-                ShiftCfAdditionalRanges(sheet.ConditionalFormats[i], range => ShiftRangeColumnsDown(range, start, count));
+                rule.AppliesTo = shifted.Value;
             }
         }
+    }
+
+    /// <summary>
+    /// When a DV rule's primary <see cref="DataValidation.AppliesTo"/> area has been fully
+    /// consumed by an insert/delete (its shift returned <see langword="null"/>), promotes the
+    /// first surviving entry of <see cref="DataValidation.AdditionalRanges"/> (already shifted
+    /// by the caller) to become the new primary area, mirroring Excel's behavior of shrinking a
+    /// multi-area rule's sqref to whatever areas survived rather than dropping the whole rule
+    /// (R44-commands-insert-delete-shift-3-1). Returns <see langword="true"/> when the rule has
+    /// no surviving area at all and must be removed entirely.
+    /// </summary>
+    private static bool PromoteDvSurvivorOrRemove(DataValidation rule)
+    {
+        if (rule.AdditionalRanges.Count == 0)
+            return true;
+        rule.AppliesTo = rule.AdditionalRanges[0];
+        rule.AdditionalRanges.RemoveAt(0);
+        return false;
+    }
+
+    /// <summary>
+    /// CF analogue of <see cref="PromoteDvSurvivorOrRemove"/>: promotes the first surviving entry
+    /// of <see cref="ConditionalFormat.AdditionalRanges"/> (already shifted by the caller) to
+    /// become the new primary <see cref="ConditionalFormat.AppliesTo"/> when the primary area was
+    /// fully consumed. Returns <see langword="true"/> when nothing survived and the rule must be
+    /// removed entirely.
+    /// </summary>
+    private static bool PromoteCfSurvivorOrRemove(ConditionalFormat rule)
+    {
+        if (rule.AdditionalRanges is not { Count: > 0 } survivors)
+            return true;
+        rule.AppliesTo = survivors[0];
+        if (survivors.Count > 1)
+        {
+            var remaining = new List<GridRange>(survivors);
+            remaining.RemoveAt(0);
+            rule.AdditionalRanges = remaining;
+        }
+        else
+        {
+            rule.AdditionalRanges = null;
+        }
+        return false;
     }
 
     private static void ShiftAdditionalRanges(DataValidation rule, Func<GridRange, GridRange?> shift)
@@ -505,7 +573,13 @@ internal static partial class RowColumnShiftHelpers
             var result = TranslateRangeDeleteUp(rule.AppliesTo, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count);
             if (result == RangeDeleteResult.Remove)
             {
-                sheet.DataValidations.RemoveAt(i);
+                // Primary area fully consumed by the deleted band, but a non-primary additional
+                // area may still survive (fully or partially, or lie entirely outside the band);
+                // shift/adjust those first so a surviving area can be promoted instead of
+                // dropping the whole rule (R44-commands-insert-delete-shift-3-1).
+                AdjustAdditionalRangesDeleteUp(rule, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count);
+                if (PromoteDvSurvivorOrRemove(rule))
+                    sheet.DataValidations.RemoveAt(i);
                 dvChanged = true;
             }
             else
@@ -533,7 +607,9 @@ internal static partial class RowColumnShiftHelpers
             var result = TranslateRangeDeleteUp(rule.AppliesTo, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count);
             if (result == RangeDeleteResult.Remove)
             {
-                sheet.ConditionalFormats.RemoveAt(i);
+                AdjustCfAdditionalRangesDeleteUp(rule, bandStartCol, bandEndCol, deletedStartRow, deletedEndRow, count);
+                if (PromoteCfSurvivorOrRemove(rule))
+                    sheet.ConditionalFormats.RemoveAt(i);
                 cfChanged = true;
             }
             else
@@ -570,7 +646,12 @@ internal static partial class RowColumnShiftHelpers
             var result = TranslateRangeDeleteLeft(rule.AppliesTo, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count);
             if (result == RangeDeleteResult.Remove)
             {
-                sheet.DataValidations.RemoveAt(i);
+                // See AdjustRulesDeleteShiftUp: shift AdditionalRanges first so a surviving
+                // non-primary area can be promoted instead of dropping the whole rule
+                // (R44-commands-insert-delete-shift-3-1).
+                AdjustAdditionalRangesDeleteLeft(rule, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count);
+                if (PromoteDvSurvivorOrRemove(rule))
+                    sheet.DataValidations.RemoveAt(i);
                 dvChanged = true;
             }
             else
@@ -596,7 +677,9 @@ internal static partial class RowColumnShiftHelpers
             var result = TranslateRangeDeleteLeft(rule.AppliesTo, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count);
             if (result == RangeDeleteResult.Remove)
             {
-                sheet.ConditionalFormats.RemoveAt(i);
+                AdjustCfAdditionalRangesDeleteLeft(rule, bandStartRow, bandEndRow, deletedStartCol, deletedEndCol, count);
+                if (PromoteCfSurvivorOrRemove(rule))
+                    sheet.ConditionalFormats.RemoveAt(i);
                 cfChanged = true;
             }
             else
