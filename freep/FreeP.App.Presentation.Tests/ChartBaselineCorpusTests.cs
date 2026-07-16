@@ -65,6 +65,7 @@ public sealed class ChartBaselineCorpusTests
         scene.LegendItems[0].SwatchBounds.Height.Should().Be(ChartRenderPlanner.ImportedComboLegendSwatchHeight);
         scene.LegendItems[1].SwatchBounds.Height.Should().Be(ChartRenderPlanner.ImportedComboLegendSwatchHeight);
         scene.LegendItems[2].SwatchBounds.Width.Should().Be(ChartRenderPlanner.ImportedComboLegendSwatchWidth);
+        scene.LegendItems[2].IsLine.Should().BeTrue();
         (scene.LegendItems[1].Label.Bounds.Y - scene.LegendItems[0].Label.Bounds.Y)
             .Should().Be(ChartRenderPlanner.ImportedComboLegendLineHeight);
     }

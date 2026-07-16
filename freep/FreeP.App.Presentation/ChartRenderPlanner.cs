@@ -470,7 +470,8 @@ public readonly record struct ChartDataLabelPlan(
 public readonly record struct ChartLegendItemPlan(
     ChartPlanRect SwatchBounds,
     ChartTextPlan Label,
-    ChartFillPlan Fill);
+    ChartFillPlan Fill,
+    bool IsLine = false);
 
 public readonly record struct ChartAxisTitlePlan(
     ChartTextPlan Label,
@@ -1355,7 +1356,8 @@ public static partial class ChartRenderPlanner
                         ? ResolvePointFill(chart.Series[0], 0, sourceItemIndex, seriesColors, alpha: 255, fillPlans,
                             ShouldVaryPointColors(chart))
                         : ResolveSeriesFill(sourceItemIndex, seriesColors, alpha: 255, fillPlans)
-                    : new ChartFillPlan(color, Alpha: 255)));
+                    : new ChartFillPlan(color, Alpha: 255),
+                IsLine: importedCombo && lineSeries));
         }
 
         return items;

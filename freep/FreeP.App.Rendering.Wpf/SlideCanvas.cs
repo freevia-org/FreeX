@@ -867,7 +867,23 @@ public sealed class SlideCanvas : FrameworkElement
 
         foreach (var item in scene.LegendItems)
         {
-            dc.DrawRectangle(ToBrush(item.Fill), null, ToRect(item.SwatchBounds));
+            var swatch = ToRect(item.SwatchBounds);
+            if (item.IsLine)
+            {
+                double centerY = swatch.Top + swatch.Height / 2.0;
+                dc.DrawLine(
+                    ToPen(new ChartStrokePlan(item.Fill.Color, item.Fill.Alpha, ChartRenderPlanner.ImportedLineSeriesStrokeThickness)),
+                    new Point(swatch.Left, centerY),
+                    new Point(swatch.Right, centerY));
+                dc.DrawRectangle(
+                    ToBrush(item.Fill),
+                    null,
+                    new Rect(swatch.Left + swatch.Width / 2.0 - 4.0, centerY - 4.0, 8.0, 8.0));
+            }
+            else
+            {
+                dc.DrawRectangle(ToBrush(item.Fill), null, swatch);
+            }
             DrawChartLabel(dc, item.Label.Text, ToRect(item.Label.Bounds),
                 item.Label.IsBold,
                 item.Label.FontSize,
