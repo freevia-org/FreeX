@@ -481,7 +481,7 @@ public static class ChartSmartArtVisualPlanner
         var texts = new List<ChartSceneText>();
         var legend = new List<ChartSceneLegendEntry>();
         var axis = plan.ValueAxis;
-        var axisStroke = "#BFBFBF";
+        var axisStroke = "#000000";
         var gridStroke = "#E6E6E6";
         var textColor = "#000000";
 
@@ -507,6 +507,10 @@ public static class ChartSmartArtVisualPlanner
 
                 var labelX = horizontalGrid ? plot.X + fraction * plot.Width : plot.X - 2;
                 var labelY = horizontalGrid ? plot.Bottom + 2 : plot.Bottom - fraction * plot.Height;
+                if (horizontalGrid)
+                    axisLines.Add(new ChartSceneLine(labelX, plot.Bottom, labelX, plot.Bottom + 4, axisStroke, 1));
+                else
+                    axisLines.Add(new ChartSceneLine(plot.X - 4, labelY, plot.X, labelY, axisStroke, 1));
                 texts.Add(new ChartSceneText(
                     value.ToString("G3", CultureInfo.InvariantCulture),
                     labelX,
@@ -571,6 +575,10 @@ public static class ChartSmartArtVisualPlanner
 
                     AddCategoryText(texts, chart, category, plot.X + category * groupWidth + groupWidth / 2,
                         plot.Bottom + 2, ChartSceneTextAnchor.TopCenter);
+                    axisLines.Add(new ChartSceneLine(
+                        plot.X + category * groupWidth + groupWidth / 2, plot.Bottom,
+                        plot.X + category * groupWidth + groupWidth / 2, plot.Bottom + 4,
+                        axisStroke, 1));
                 }
             }
             else
@@ -608,6 +616,10 @@ public static class ChartSmartArtVisualPlanner
                     AddCategoryText(texts, chart, category, plot.X - 2,
                         plot.Y + category * groupHeight + groupHeight / 2,
                         ChartSceneTextAnchor.CenterRight);
+                    axisLines.Add(new ChartSceneLine(
+                        plot.X - 4, plot.Y + category * groupHeight + groupHeight / 2,
+                        plot.X, plot.Y + category * groupHeight + groupHeight / 2,
+                        axisStroke, 1));
                 }
             }
         }

@@ -19,7 +19,10 @@ public sealed class ChartSmartArtVisualPlannerTests
         scene.PlotBounds.Should().Be(new ChartSceneRect(32, 54, 200, 86));
         scene.Bars.Should().HaveCount(4);
         scene.GridLines.Should().HaveCount(3);
-        scene.AxisLines.Should().ContainSingle();
+        scene.AxisLines.Should().Contain(line =>
+            line.X1 == scene.PlotBounds.X && line.X2 == scene.PlotBounds.Right);
+        scene.AxisLines.Should().Contain(line =>
+            line.Y1 == scene.PlotBounds.Bottom && line.Y2 == scene.PlotBounds.Bottom + 4);
         scene.Legend.Should().HaveCount(2);
         scene.Texts.Count(text => text.Kind == ChartSceneTextKind.ValueAxis).Should().Be(4);
         scene.Texts.Count(text => text.Kind == ChartSceneTextKind.CategoryAxis).Should().Be(2);
