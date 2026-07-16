@@ -22,6 +22,7 @@ public sealed record ChartValueAxisPlan(double Minimum, double Maximum)
 {
     public double Range => Maximum - Minimum;
     public double ZeroFraction => -Minimum / Range;
+    public double MajorUnit => CalculateNiceStep(Range / 4);
 
     public double ValueFraction(double value) => (value - Minimum) / Range;
 
@@ -44,25 +45,32 @@ public sealed record ChartValueAxisPlan(double Minimum, double Maximum)
             maximum = minimum + 1;
 
         // Word chooses a human-friendly major unit instead of exposing the raw
-        // data extrema. Four major intervals match the compact chart surfaces
+        // data extrema. The four-interval estimate matches the compact chart surfaces
         // used by the fidelity corpus (2.2 becomes 0..3, 66 becomes 0..80).
         var rawStep = (maximum - minimum) / 4;
-        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawStep)));
-        var normalizedStep = rawStep / magnitude;
-        var step = normalizedStep <= 1
-            ? magnitude
-            : normalizedStep <= 2
-                ? 2 * magnitude
-                : normalizedStep <= 5
-                    ? 5 * magnitude
-                    : 10 * magnitude;
-
+        var step = CalculateNiceStep(rawStep);
         minimum = Math.Floor(minimum / step) * step;
         maximum = Math.Ceiling(maximum / step) * step;
         if (maximum <= minimum)
             maximum = minimum + step;
 
         return new ChartValueAxisPlan(minimum, maximum);
+    }
+
+    private static double CalculateNiceStep(double rawStep)
+    {
+        if (rawStep <= 0 || !double.IsFinite(rawStep))
+            return 1;
+
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawStep)));
+        var normalizedStep = rawStep / magnitude;
+        return normalizedStep <= 1
+            ? magnitude
+            : normalizedStep <= 2
+                ? 2 * magnitude
+                : normalizedStep <= 5
+                    ? 5 * magnitude
+                    : 10 * magnitude;
     }
 }
 
@@ -435,13 +443,22 @@ public static class ChartSmartArtVisualPlanner
             : 0;
         var titleHeight = plan.ShowTitle && !string.IsNullOrEmpty(chart.Title) ? 46 : 0;
         var legendHeight = legendCount > 0 ? 18 : 0;
-        var categoryTitleHeight = !isPie && plan.ShowAxisTitles && !string.IsNullOrEmpty(plan.CategoryAxisTitle) ? 20 : 0;
-        var valueTitleWidth = !isPie && plan.ShowAxisTitles && !string.IsNullOrEmpty(plan.ValueAxisTitle) ? 24 : 0;
+        var hasAxisTitles = !isPie && plan.ShowAxisTitles
+            && (!string.IsNullOrEmpty(plan.CategoryAxisTitle) || !string.IsNullOrEmpty(plan.ValueAxisTitle));
+        var categoryTitleHeight = hasAxisTitles && !string.IsNullOrEmpty(plan.CategoryAxisTitle) ? 20 : 0;
+        var valueTitleWidth = hasAxisTitles && !string.IsNullOrEmpty(plan.ValueAxisTitle) ? 24 : 0;
+        // Word's default chart layout reserves a generous annotation band below the plot when axis titles are
+        // visible. Without this, the plot expands into the category title and legend instead of matching Word.
+        var annotationBottomReserve = hasAxisTitles
+            ? 62 + (legendCount > 0 ? 14 : 0)
+            : 30;
+        var plotLeft = hasAxisTitles ? 44 + valueTitleWidth : 32 + valueTitleWidth;
+        var plotRightMargin = hasAxisTitles ? chart.Kind == ChartKind.Scatter ? 25 : 16 : 8;
         var plot = new ChartSceneRect(
-            32 + valueTitleWidth,
+            plotLeft,
             titleHeight + 8,
-            Math.Max(10, frame.Width - 40 - valueTitleWidth),
-            Math.Max(10, frame.Height - titleHeight - legendHeight - categoryTitleHeight - 30));
+            Math.Max(10, frame.Width - plotLeft - plotRightMargin),
+            Math.Max(10, frame.Height - titleHeight - legendHeight - categoryTitleHeight - annotationBottomReserve));
 
         var gridLines = new List<ChartSceneLine>();
         var axisLines = new List<ChartSceneLine>();
@@ -459,11 +476,10 @@ public static class ChartSmartArtVisualPlanner
         if (!isPie)
         {
             var horizontalGrid = chart.Kind == ChartKind.Bar;
-            for (var tick = 0; tick <= 4; tick++)
+            for (var value = axis.Minimum; value <= axis.Maximum + axis.MajorUnit / 2; value += axis.MajorUnit)
             {
-                var fraction = tick / 4.0;
-                var value = axis.Minimum + axis.Range * fraction;
-                if (plan.ShowGridlines && tick > 0)
+                var fraction = (value - axis.Minimum) / axis.Range;
+                if (plan.ShowGridlines && value > axis.Minimum + axis.MajorUnit / 2)
                 {
                     if (horizontalGrid)
                     {
@@ -498,6 +514,8 @@ public static class ChartSmartArtVisualPlanner
             {
                 var zeroY = plot.Bottom - axis.ZeroFraction * plot.Height;
                 axisLines.Add(new ChartSceneLine(plot.X, zeroY, plot.Right, zeroY, axisStroke, 1));
+                if (chart.Kind == ChartKind.Scatter)
+                    axisLines.Add(new ChartSceneLine(plot.X, plot.Y, plot.X, plot.Bottom, axisStroke, 1));
             }
         }
 
@@ -588,9 +606,9 @@ public static class ChartSmartArtVisualPlanner
                 var xValues = chart.Categories
                     .Select(value => double.TryParse(value, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed) ? parsed : double.NaN)
                     .ToList();
-                var xMin = xValues.Where(value => !double.IsNaN(value)).DefaultIfEmpty(1).Min();
-                var xMax = xValues.Where(value => !double.IsNaN(value)).DefaultIfEmpty(1).Max();
-                if (xMax <= xMin) xMax = xMin + 1;
+                var scatterAxis = BuildScatterAxis(xValues);
+                var xMin = scatterAxis.Minimum;
+                var xMax = scatterAxis.Maximum;
                 for (var series = 0; series < plan.Series.Count; series++)
                 {
                     for (var category = 0; category < plan.Series[series].Values.Count; category++)
@@ -605,7 +623,24 @@ public static class ChartSmartArtVisualPlanner
                             AddDataText(texts, plan.Series[series].Values[category], x + 6, y - 10);
                     }
                 }
-                AddCategoryLabels(texts, chart, plot, xValues);
+                for (var tick = xMin; tick <= xMax + scatterAxis.Step / 2; tick += scatterAxis.Step)
+                {
+                    var x = plot.X + (tick - xMin) / (xMax - xMin) * plot.Width;
+                    axisLines.Add(new ChartSceneLine(x, plot.Bottom, x, plot.Bottom + 4, axisStroke, 1));
+                    texts.Add(new ChartSceneText(
+                        FormatChartAxisValue(tick), x, plot.Bottom + 2,
+                        ChartSceneTextAnchor.TopCenter, ChartSceneTextKind.CategoryAxis, textColor, 9));
+                }
+                var minorStep = scatterAxis.Step / 5;
+                for (var tick = xMin + minorStep; tick < xMax - minorStep / 2; tick += minorStep)
+                {
+                    var majorPosition = (tick - xMin) / scatterAxis.Step;
+                    if (Math.Abs(majorPosition - Math.Round(majorPosition)) < 0.0001)
+                        continue;
+
+                    var x = plot.X + (tick - xMin) / (xMax - xMin) * plot.Width;
+                    axisLines.Add(new ChartSceneLine(x, plot.Bottom, x, plot.Bottom + 2, axisStroke, 1));
+                }
             }
             else
             {
@@ -674,7 +709,8 @@ public static class ChartSmartArtVisualPlanner
                 texts.Add(new ChartSceneText(plan.ValueAxisTitle!, 12, plot.CenterY, ChartSceneTextAnchor.Center,
                     ChartSceneTextKind.AxisTitle, textColor, 20, -90));
             if (!string.IsNullOrEmpty(plan.CategoryAxisTitle))
-                texts.Add(new ChartSceneText(plan.CategoryAxisTitle!, plot.CenterX, frame.Height - legendHeight - categoryTitleHeight + 1,
+                texts.Add(new ChartSceneText(plan.CategoryAxisTitle!, plot.CenterX,
+                    hasAxisTitles ? plot.Bottom + 27 : frame.Height - legendHeight - categoryTitleHeight + 1,
                     ChartSceneTextAnchor.TopCenter, ChartSceneTextKind.AxisTitle, textColor, 20));
         }
 
@@ -688,7 +724,7 @@ public static class ChartSmartArtVisualPlanner
                     ? index < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[index]) ? chart.Categories[index] : $"Item {index + 1}"
                     : index < chart.Series.Count && !string.IsNullOrEmpty(chart.Series[index].Name) ? chart.Series[index].Name! : $"Series {index + 1}";
                 var x = plot.X + index * entryWidth;
-                var y = frame.Height - legendHeight + 3;
+                var y = hasAxisTitles ? frame.Height - legendHeight - 5 : frame.Height - legendHeight + 3;
                 legend.Add(new ChartSceneLegendEntry(label, x, y, 8, x + 11, y));
             }
         }
@@ -705,6 +741,37 @@ public static class ChartSmartArtVisualPlanner
         && chart.Series.Count == 1
         && plan.ShowLegend
         && chart.StyleId is 7 or 8;
+
+    private static (double Minimum, double Maximum, double Step) BuildScatterAxis(IReadOnlyList<double> values)
+    {
+        var finite = values.Where(double.IsFinite).ToList();
+        if (finite.Count == 0)
+            return (0, 5, 1);
+
+        var dataMinimum = finite.Min();
+        var dataMaximum = finite.Max();
+        if (dataMaximum <= dataMinimum)
+            dataMaximum = dataMinimum + 1;
+
+        var rawStep = (dataMaximum - dataMinimum) / 5;
+        var magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawStep)));
+        var normalizedStep = rawStep / magnitude;
+        var step = normalizedStep <= 1
+            ? magnitude
+            : normalizedStep <= 2
+                ? 2 * magnitude
+                : normalizedStep <= 5
+                    ? 5 * magnitude
+                    : 10 * magnitude;
+
+        return (
+            Math.Floor(dataMinimum / step) * step - step,
+            Math.Ceiling(dataMaximum / step) * step + step,
+            step);
+    }
+
+    private static string FormatChartAxisValue(double value) =>
+        value.ToString("G3", CultureInfo.InvariantCulture);
 
     private static void AddCategoryText(List<ChartSceneText> texts, Chart chart, int index, double x, double y, ChartSceneTextAnchor anchor)
     {
