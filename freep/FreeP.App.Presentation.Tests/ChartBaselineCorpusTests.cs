@@ -300,8 +300,8 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
         surfaceGeometry.FrameSegments.Select(segment => segment.Stroke.Alpha)
-            .Should().OnlyContain(alpha => alpha == 48,
-                "imported PowerPoint Surface3D uses a light projected-frame stroke");
+            .Should().OnlyContain(alpha => alpha == 255,
+                "imported PowerPoint Surface3D uses an opaque projected-frame stroke");
         ChartRenderPlanner.BuildSurfaceSeriesAxisLabelPlans(surface, surfaceFrame)
             .Select(label => label.Text)
             .Should().Equal("Low band", "Mid band", "High band");
@@ -342,7 +342,7 @@ public sealed class ChartBaselineCorpusTests
         scatterPlan.GridLineStroke.Should().Be(new ChartStrokePlan(
             new SrgbColor(0x00, 0x00, 0x00),
             Alpha: 255,
-            Thickness: 0.5));
+            Thickness: 1.0));
 
         var stacked = charts.Single(chart => chart.ChartType == ChartType.ColumnStacked100);
         stacked.DataLabels.Should().NotBeNull();
@@ -363,6 +363,10 @@ public sealed class ChartBaselineCorpusTests
             .Should()
             .Be((0, 1, 0.1));
         var stackedScene = scenes.Single(scene => scene.GeometryKind == ChartSceneGeometryKind.Column);
+        stackedScene.GridLines.Stroke.Should().Be(new ChartStrokePlan(
+            new SrgbColor(0x00, 0x00, 0x00),
+            Alpha: 255,
+            Thickness: 1.0));
         stackedScene.ValueAxisLabels.Select(label => label.Text)
             .Should()
             .Equal("0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%");

@@ -2879,7 +2879,7 @@ public static partial class ChartRenderPlanner
         var backTopRight = new ChartPlanPoint(plot.Right, plot.Y + 15.0 * scaleY);
         var stroke = new ChartStrokePlan(
             new SrgbColor(0x00, 0x00, 0x00),
-            Alpha: usesImportedTextMetrics ? (byte)48 : (byte)220,
+            Alpha: usesImportedTextMetrics ? (byte)255 : (byte)220,
             Thickness: 0.7);
         var segments = new List<ChartLineSegmentPrimitive>(16);
 
@@ -5720,7 +5720,11 @@ public static partial class ChartRenderPlanner
         : chart is not null &&
           chart.ChartType == ChartType.Scatter &&
           UsesImportedSmoothScatterDefaults(chart)
-            ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.5)
+            ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 1.0)
+        : chart is not null &&
+          chart.ChartType == ChartType.ColumnStacked100 &&
+          UsesImportedTextMetrics(chart)
+            ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 1.0)
         : chart is not null &&
         UsesClassicOfficeChartStyle(chart)
             ? new ChartStrokePlan(new SrgbColor(0x00, 0x00, 0x00), Alpha: 255, Thickness: 0.5)
