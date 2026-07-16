@@ -380,12 +380,74 @@ public sealed class ChartSmartArtVisualPlannerTests
         signature.Should().Contain("lines=");
     }
 
+    [Fact]
+    public void SmartArtPlan_NativeOrgChartChainMatchesWordGeometryAndStyle()
+    {
+        var root = new SmartArtNode("Plan");
+        var build = root.AddChild("Build");
+        build.AddChild("Verify");
+        var smartArt = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        smartArt.LayoutId = "orgchart1";
+        smartArt.ColorSchemeId = "accent1";
+        smartArt.StyleId = "intense1";
+        smartArt.Nodes.Add(root);
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.Nodes.Select(node => node.FillHex).Should().ContainInOrder("#1F3864", "#1F3864", "#1F3864");
+        plan.Nodes.Select(node => node.BorderHex).Should().OnlyContain(hex => hex == "#1F3864");
+        plan.Nodes.Select(node => node.ConnectorHex).Should().OnlyContain(hex => hex == "#1F3864");
+        plan.Nodes.Should().OnlyContain(node => node.ShadowOpacity == 0);
+
+        plan.HierarchyGeometry.Should().NotBeNull();
+        var geometry = plan.HierarchyGeometry!;
+        geometry.NaturalWidth.Should().Be(320);
+        geometry.NaturalHeight.Should().Be(140);
+        geometry.Nodes[0].X.Should().BeApproximately(169.288503937008, 0.000001);
+        geometry.Nodes[0].Y.Should().BeApproximately(0.0624409448818898, 0.000001);
+        geometry.Nodes[1].X.Should().BeApproximately(77.859842519685, 0.000001);
+        geometry.Nodes[1].Y.Should().BeApproximately(51.7870866141732, 0.000001);
+        geometry.Nodes[2].X.Should().BeApproximately(125.213307086614, 0.000001);
+        geometry.Nodes[2].Y.Should().BeApproximately(103.511653543307, 0.000001);
+        geometry.Connectors.Should().OnlyContain(connector => connector.Points.Count == 3);
+        geometry.Connectors[0].Points[0].X.Should().BeApproximately(205.714251968504, 0.000001);
+        geometry.Connectors[0].Points[2].X.Should().BeApproximately(150.711338582677, 0.000001);
+        geometry.Connectors[1].Points[0].X.Should().BeApproximately(114.285590551181, 0.000001);
+        geometry.Connectors[1].Points[2].X.Should().BeApproximately(125.213307086614, 0.000001);
+    }
+
+    [Fact]
+    public void SmartArtPlan_NativePyramidMatchesWordGeometryAndTextTreatment()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+        smartArt.LayoutId = "pyramid1";
+        smartArt.ColorSchemeId = "accent2";
+        smartArt.StyleId = "flat1";
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.Nodes.Select(node => node.FillHex).Should().OnlyContain(hex => hex == "#7F0000");
+        plan.Nodes.Select(node => node.TextHex).Should().OnlyContain(hex => hex == "#000000");
+        plan.LayoutGeometry.Should().NotBeNull();
+        var geometry = plan.LayoutGeometry!;
+        geometry.NaturalWidth.Should().Be(300);
+        geometry.NaturalHeight.Should().Be(150);
+        geometry.Nodes.Select(node => (node.X, node.Y, node.Width, node.Height))
+            .Should().ContainInOrder(
+                (114, 6, 72, 33),
+                (78, 41, 144, 33),
+                (42, 76, 216, 33),
+                (6, 111, 288, 33));
+        geometry.Nodes[0].PolygonPoints.Select(point => (point.X, point.Y))
+            .Should().ContainInOrder((136.5, 6), (163.5, 6), (186, 39), (114, 39));
+    }
+
     [Theory]
     [InlineData("list1", "BasicList", 4, 0, 128, 154)]
     [InlineData("vertbullet1", "VerticalBulletList", 4, 0, 128, 154)]
     [InlineData("process1", "BasicProcess", 4, 3, 344, 46)]
     [InlineData("cycle1", "Cycle", 4, 4, 200, 160)]
-    [InlineData("pyramid1", "Pyramid", 4, 0, 176, 148)]
+    [InlineData("pyramid1", "Pyramid", 4, 0, 300, 150)]
     [InlineData("radial1", "Radial", 4, 3, 220, 180)]
     [InlineData("matrix1", "Matrix", 4, 0, 182, 94)]
     [InlineData("horizbullet1", "HorizontalList", 4, 0, 320, 46)]
@@ -444,25 +506,25 @@ public sealed class ChartSmartArtVisualPlannerTests
         var pyramidPlan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(pyramid);
         var pyramidGeometry = pyramidPlan.LayoutGeometry!;
         pyramidGeometry.Kind.Should().Be(SmartArtLayoutGeometryKind.Pyramid);
-        pyramidGeometry.Nodes[0].X.Should().BeApproximately(61, 0.01);
-        pyramidGeometry.Nodes[0].Width.Should().BeApproximately(54, 0.01);
-        pyramidGeometry.Nodes[3].X.Should().BeApproximately(8, 0.01);
-        pyramidGeometry.Nodes[3].Width.Should().BeApproximately(160, 0.01);
-        pyramidGeometry.Nodes.Select(n => n.Y).Should().ContainInOrder(8, 42, 76, 110);
+        pyramidGeometry.Nodes[0].X.Should().BeApproximately(114, 0.01);
+        pyramidGeometry.Nodes[0].Width.Should().BeApproximately(72, 0.01);
+        pyramidGeometry.Nodes[3].X.Should().BeApproximately(6, 0.01);
+        pyramidGeometry.Nodes[3].Width.Should().BeApproximately(288, 0.01);
+        pyramidGeometry.Nodes.Select(n => n.Y).Should().ContainInOrder(6, 41, 76, 111);
         pyramidGeometry.Nodes.Should().OnlyContain(n => n.HasPolygon);
         pyramidGeometry.Nodes[0].PolygonPoints.Select(p => (p.X, p.Y)).Should().ContainInOrder(
-            (61, 8),
-            (115, 8),
-            (128.25, 38),
-            (47.75, 38));
+            (136.5, 6),
+            (163.5, 6),
+            (186, 39),
+            (114, 39));
         pyramidGeometry.Nodes[3].PolygonPoints.Select(p => (p.X, p.Y)).Should().ContainInOrder(
-            (21.25, 110),
-            (154.75, 110),
-            (168, 140),
-            (8, 140));
+            (28.5, 111),
+            (271.5, 111),
+            (294, 144),
+            (6, 144));
         pyramidGeometry.Connectors.Should().BeEmpty();
         ChartSmartArtVisualPlanner.BuildSmartArtVisualSignature(pyramidPlan)
-            .Should().Contain("polygons=0=61:8;115:8;128.25:38;47.75:38");
+            .Should().Contain("polygons=0=136.5:6;163.5:6;186:39;114:39");
 
         var matrix = SmartArt.Create(SmartArtKind.List, ["A", "B", "C", "D"]);
         matrix.LayoutId = "matrix1";
