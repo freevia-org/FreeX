@@ -4075,6 +4075,9 @@ public static class DocxWriter
         var cx = PointsToEmu(part.SmartArt.WidthPt);
         var cy = PointsToEmu(part.SmartArt.HeightPt);
         var name = $"Diagram {part.DrawingId}";
+        XNamespace wp14 = "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing";
+        var anchorId = ((uint)(0x10000000 + part.DrawingId)).ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
+        var editId = ((uint)(0x20000000 + part.DrawingId)).ToString("X8", System.Globalization.CultureInfo.InvariantCulture);
 
         var smartArtDocPr = new XElement(Wp + "docPr", new XAttribute("id", part.DrawingId), new XAttribute("name", name));
         var smartArtGraphic = new XElement(A + "graphic",
@@ -4095,12 +4098,14 @@ public static class DocxWriter
         return new XElement(W + "drawing",
             new XElement(Wp + "inline",
                 new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                new XAttribute(wp14 + "anchorId", anchorId),
+                new XAttribute(wp14 + "editId", editId),
                 new XAttribute("distT", 0), new XAttribute("distB", 0),
                 new XAttribute("distL", 0), new XAttribute("distR", 0),
                 new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
                 new XElement(Wp + "effectExtent",
-                    new XAttribute("l", 0), new XAttribute("t", 0),
-                    new XAttribute("r", 0), new XAttribute("b", 0)),
+                    new XAttribute("l", 19050), new XAttribute("t", 38100),
+                    new XAttribute("r", 38100), new XAttribute("b", 57150)),
                 smartArtDocPr,
                 new XElement(Wp + "cNvGraphicFramePr"),
                 smartArtGraphic));
@@ -4487,7 +4492,12 @@ public static class DocxWriter
                         new XElement(Dgm + "animOne", new XAttribute("val", "branch")),
                         new XElement(Dgm + "animLvl", new XAttribute("val", "lvl")),
                         new XElement(Dgm + "resizeHandles"))
-                    : null);
+                    : isPyramidLayout
+                        ? new XElement(Dgm + "presLayoutVars",
+                            new XElement(Dgm + "dir"),
+                            new XElement(Dgm + "animLvl", new XAttribute("val", "lvl")),
+                            new XElement(Dgm + "resizeHandles", new XAttribute("val", "exact")))
+                        : null);
             AddPresentationConnection("presOf", docId, presentationIds[docId]);
 
             foreach (var node in semanticNodes)
@@ -4499,8 +4509,24 @@ public static class DocxWriter
                     var levelTextId = SmartArtModelId(nodePresentationId++);
                     containerIds[node.Id] = containerId;
                     AddPresentationPoint(containerId, node.Id, "Name8");
-                    AddPresentationPoint(levelId, node.Id, "level", "node1", node.Ordinal, semanticNodes.Count);
-                    AddPresentationPoint(levelTextId, node.Id, "levelTx", "revTx", 0);
+                    var pyramidPresentationLayoutVars = new XElement(Dgm + "presLayoutVars",
+                        new XElement(Dgm + "chMax", new XAttribute("val", "1")),
+                        new XElement(Dgm + "bulletEnabled", new XAttribute("val", "1")));
+                    AddPresentationPoint(
+                        levelId,
+                        node.Id,
+                        "level",
+                        "node1",
+                        node.Ordinal,
+                        semanticNodes.Count,
+                        new XElement(pyramidPresentationLayoutVars));
+                    AddPresentationPoint(
+                        levelTextId,
+                        node.Id,
+                        "levelTx",
+                        "revTx",
+                        0,
+                        presentationLayoutVars: new XElement(pyramidPresentationLayoutVars));
                     AddPresentationConnection("presOf", node.Id, levelId);
                     AddPresentationConnection("presOf", node.Id, levelTextId, 1);
                     AddPresentationConnection("presParOf", containerId, levelId);
