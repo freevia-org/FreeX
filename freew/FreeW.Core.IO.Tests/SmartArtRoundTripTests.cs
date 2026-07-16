@@ -262,7 +262,9 @@ public class SmartArtRoundTripTests
         long.Parse(frameExt.Attribute("cy")!.Value).Should().BeGreaterThan(0);
 
         var shapes = drawing.Descendants(Dsp + "sp").ToList();
-        shapes.Should().HaveCount(4);
+        shapes.Should().HaveCount(7);
+        shapes.Count(sp => sp.Descendants(A + "prstGeom").Any(geom => geom.Attribute("prst")?.Value == "rightArrow"))
+            .Should().Be(3, "Word's Basic Process drawing has one right-arrow connector between each pair of nodes");
         var shapeIds = shapes.Select(sp => sp.Element(Dsp + "nvSpPr")!.Element(Dsp + "cNvPr")!.Attribute("id")!.Value);
         shapeIds.Should().OnlyHaveUniqueItems();
         shapeIds.Should().NotContain("0");
@@ -276,8 +278,21 @@ public class SmartArtRoundTripTests
         data.Root.Element(Dgm + "cxnLst")!.Elements(Dgm + "cxn")
             .Count(cxn => cxn.Attribute("type")?.Value == "presParOf")
             .Should().BeGreaterThan(0, "Word needs presentation-parent links to place flat process nodes");
+        data.Root.Element(Dgm + "ptLst")!.Elements(Dgm + "pt")
+            .Count(pt => pt.Attribute("type")?.Value == "parTrans")
+            .Should().Be(4, "Word's Process data model materializes one parent transition per node");
+        data.Root.Element(Dgm + "ptLst")!.Elements(Dgm + "pt")
+            .Count(pt => pt.Attribute("type")?.Value == "sibTrans")
+            .Should().Be(4, "Word's Process data model materializes one sibling transition per node");
+        data.Root.Element(Dgm + "ptLst")!.Elements(Dgm + "pt")
+            .Select(pt => pt.Element(Dgm + "prSet")?.Attribute("presName")?.Value)
+            .Should().Contain(["Name0", "node", "sibTrans", "connectorText"]);
         layout.Descendants(Dgm + "alg").Select(alg => alg.Attribute("type")!.Value)
-            .Should().Contain("hierRoot", "the fallback scaffold uses Word's known hierarchy geometry");
+            .Should().Contain("lin", "Word's Basic Process uses a linear geometry");
+        layout.Descendants(Dgm + "layoutNode")
+            .Single(node => node.Attribute("name")?.Value == "sibTrans")
+            .Element(Dgm + "shape")!.Attribute("type")!.Value
+            .Should().Be("conn", "Word's Basic Process uses connector geometry for sibling transitions");
     }
 
     [Fact]

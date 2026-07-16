@@ -812,7 +812,20 @@ public static class ChartSmartArtVisualPlanner
             ?? SmartArtStyle.Default;
 
         var nodes = new List<SmartArtNodeVisualPlan>();
-        FlattenNodes(smartArt.Nodes, depth: 0, nodes, colorScheme, style);
+        var isBasicProcessLayout = string.Equals(layoutId, "process1", StringComparison.OrdinalIgnoreCase);
+        var useNativeDefaultProcessStyle = isBasicProcessLayout
+            && (string.IsNullOrWhiteSpace(smartArt.ColorSchemeId)
+                || string.Equals(smartArt.ColorSchemeId, "accent0_1", StringComparison.OrdinalIgnoreCase))
+            && (string.IsNullOrWhiteSpace(smartArt.StyleId)
+                || string.Equals(smartArt.StyleId, "simple1", StringComparison.OrdinalIgnoreCase));
+        FlattenNodes(
+            smartArt.Nodes,
+            depth: 0,
+            nodes,
+            colorScheme,
+            style,
+            isBasicProcessLayout,
+            useNativeDefaultProcessStyle);
 
         var hierarchyGeometry = layout.Kind == SmartArtKind.Hierarchy
             ? BuildHierarchyGeometry(smartArt.Nodes)
@@ -885,12 +898,20 @@ public static class ChartSmartArtVisualPlanner
         int depth,
         List<SmartArtNodeVisualPlan> into,
         SmartArtColorScheme colorScheme,
-        SmartArtStyle style)
+        SmartArtStyle style,
+        bool isBasicProcessLayout,
+        bool useNativeDefaultProcessStyle)
     {
         foreach (var node in nodes)
         {
             var colorIndex = into.Count;
-            var fillHex = AdjustBrightness(NormalizeHex(colorScheme.FillHexAt(colorIndex)), style.BrightnessAdjust);
+            var baseFillHex = useNativeDefaultProcessStyle
+                ? "#156082"
+                : NormalizeHex(colorScheme.FillHexAt(colorIndex));
+            var fillHex = AdjustBrightness(baseFillHex, style.BrightnessAdjust);
+            var connectorHex = useNativeDefaultProcessStyle
+                ? AdjustBrightness("#AAB6C1", style.BrightnessAdjust)
+                : ConnectorContrast(fillHex);
             into.Add(new SmartArtNodeVisualPlan(
                 node.Text,
                 depth,
@@ -899,12 +920,19 @@ public static class ChartSmartArtVisualPlanner
                 NormalizeHex(colorScheme.TextHex),
                 AdjustBrightness(fillHex, -0.18),
                 Math.Max(0, style.BorderThickness),
-                Math.Max(0, style.CornerRadius),
+                useNativeDefaultProcessStyle ? Math.Max(4, style.CornerRadius) : Math.Max(0, style.CornerRadius),
                 Math.Clamp(style.ShadowOpacity, 0, 1),
                 style.ShadowOpacity > 0 ? 4 + style.ShadowOpacity * 8 : 0,
                 style.ShadowOpacity > 0 ? 1.5 + style.ShadowOpacity * 2 : 0,
-                ConnectorContrast(fillHex)));
-            FlattenNodes(node.Children, depth + 1, into, colorScheme, style);
+                connectorHex));
+            FlattenNodes(
+                node.Children,
+                depth + 1,
+                into,
+                colorScheme,
+                style,
+                isBasicProcessLayout,
+                useNativeDefaultProcessStyle);
         }
     }
 

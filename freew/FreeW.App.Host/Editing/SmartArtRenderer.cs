@@ -369,7 +369,7 @@ internal static class SmartArtRenderer
         };
 
         foreach (var connector in geometry.Connectors)
-            AddPlannedConnector(canvas, plan.Nodes, connector, strokeThickness);
+            AddPlannedConnector(canvas, plan.Nodes, connector, strokeThickness, geometry.Kind);
 
         foreach (var nodeGeometry in geometry.Nodes)
         {
@@ -447,7 +447,8 @@ internal static class SmartArtRenderer
         Canvas canvas,
         IReadOnlyList<SmartArtNodeVisualPlan> nodes,
         SmartArtLayoutConnectorGeometry connector,
-        double strokeThickness)
+        double strokeThickness,
+        SmartArtLayoutGeometryKind geometryKind)
     {
         if (connector.SourceNodeIndex < 0 || connector.SourceNodeIndex >= nodes.Count)
             return;
@@ -469,8 +470,42 @@ internal static class SmartArtRenderer
             Opacity = 0.7
         });
 
+        if (geometryKind == SmartArtLayoutGeometryKind.BasicProcess && connector.Kind == SmartArtLayoutConnectorKind.Arrow)
+        {
+            AddBasicProcessArrow(canvas, brush, start, end);
+            return;
+        }
+
         if (connector.Kind == SmartArtLayoutConnectorKind.Arrow)
             AddArrowHead(canvas, brush, thickness, start, end);
+    }
+
+    private static void AddBasicProcessArrow(
+        Canvas canvas,
+        Brush brush,
+        Point start,
+        Point end)
+    {
+        const double halfHeight = 4;
+        const double headLength = 5;
+        var headStart = Math.Max(start.X, end.X - headLength);
+        var centerY = (start.Y + end.Y) / 2;
+
+        canvas.Children.Add(new Polygon
+        {
+            Points = new PointCollection(
+            [
+                new Point(start.X, centerY - halfHeight),
+                new Point(headStart, centerY - halfHeight),
+                new Point(headStart, centerY - halfHeight * 2),
+                new Point(end.X, centerY),
+                new Point(headStart, centerY + halfHeight * 2),
+                new Point(headStart, centerY + halfHeight),
+                new Point(start.X, centerY + halfHeight)
+            ]),
+            Fill = brush,
+            Stroke = null
+        });
     }
 
     private static void AddArrowHead(

@@ -323,6 +323,29 @@ public sealed class SmartArtRenderingTests
     }
 
     [StaFact]
+    public void BasicProcessLayout_UsesWordDefaultAccentAndFilledArrows()
+    {
+        var sa = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        sa.LayoutId = "process1";
+        var view = ViewWithSmartArt(sa);
+
+        var nodeBorders = new[] { "Plan", "Build", "Verify" }
+            .Select(text => NodeBorder(view, text))
+            .ToList();
+
+        nodeBorders.Select(border => Assert.IsType<SolidColorBrush>(border.Background).Color)
+            .Should().OnlyContain(color => color == Color.FromRgb(0x15, 0x60, 0x82));
+        nodeBorders.Should().OnlyContain(border => border.CornerRadius.TopLeft >= 4);
+
+        var arrows = LogicalDescendants<Polygon>(view.Document)
+            .Where(polygon => polygon.Fill is SolidColorBrush)
+            .ToList();
+        arrows.Should().HaveCount(2);
+        arrows.Select(polygon => Assert.IsType<SolidColorBrush>(polygon.Fill).Color)
+            .Should().OnlyContain(color => color == Color.FromRgb(0xAA, 0xB6, 0xC1));
+    }
+
+    [StaFact]
     public void ContinuousBlockProcessLayout_RendersSharedProcessGeometry()
     {
         var sa = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);

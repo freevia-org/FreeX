@@ -4274,8 +4274,10 @@ public static class DocxWriter
     private static XDocument BuildDiagramData(SmartArt smartArt, string drawingRelId)
     {
         var docId = SmartArtModelId(0);
+        var isProcessLayout = smartArt.Kind == SmartArtKind.Process
+            && string.Equals(SmartArtLayoutSuffix(smartArt), "process1", StringComparison.OrdinalIgnoreCase);
         var isHierarchyLayout = string.Equals(SmartArtLayoutCategory(smartArt), "hierarchy", StringComparison.Ordinal)
-            || UsesFlatSmartArtGallery(smartArt);
+            || UsesFlatSmartArtGallery(smartArt) && !isProcessLayout;
         var isPyramidLayout = string.Equals(SmartArtLayoutCategory(smartArt), "pyramid", StringComparison.Ordinal);
         var ptLst = new XElement(Dgm + "ptLst",
             new XElement(Dgm + "pt",
@@ -4316,7 +4318,7 @@ public static class DocxWriter
                 DiagramText(node.Text)));
 
             var connectionId = SmartArtModelId(1000 + nextCxn);
-            if (isHierarchyLayout || isPyramidLayout)
+            if (isHierarchyLayout || isPyramidLayout || isProcessLayout)
             {
                 var parTransId = SmartArtModelId(4000 + nextCxn);
                 var sibTransId = SmartArtModelId(5000 + nextCxn);
@@ -4404,7 +4406,60 @@ public static class DocxWriter
                 new XAttribute("presId", layoutUrn)));
         }
 
-        if (isHierarchyLayout || isPyramidLayout)
+        if (isProcessLayout)
+        {
+            AddPresentationPoint(
+                presentationIds[docId],
+                docId,
+                "Name0",
+                presentationLayoutVars: new XElement(Dgm + "presLayoutVars",
+                    new XElement(Dgm + "dir"),
+                    new XElement(Dgm + "resizeHandles", new XAttribute("val", "exact"))));
+            AddPresentationConnection("presOf", docId, presentationIds[docId]);
+
+            var processNodePresentationIds = new List<string>();
+            var processTransitionPresentationIds = new List<(string Transition, string ConnectorText)>();
+            for (var i = 0; i < semanticNodes.Count; i++)
+            {
+                var node = semanticNodes[i];
+                var nodePresentationId = SmartArtModelId(9000 + i * 3);
+                processNodePresentationIds.Add(nodePresentationId);
+                AddPresentationPoint(
+                    nodePresentationId,
+                    node.Id,
+                    "node",
+                    "node1",
+                    i,
+                    6,
+                    new XElement(Dgm + "presLayoutVars",
+                        new XElement(Dgm + "bulletEnabled", new XAttribute("val", "1"))));
+                AddPresentationConnection("presOf", node.Id, nodePresentationId);
+
+                if (i + 1 >= semanticNodes.Count)
+                    continue;
+
+                var transitionId = SmartArtModelId(5000 + i);
+                var transitionPresentationId = SmartArtModelId(8000 + i);
+                var connectorTextPresentationId = SmartArtModelId(8500 + i);
+                processTransitionPresentationIds.Add((transitionPresentationId, connectorTextPresentationId));
+                AddPresentationPoint(transitionPresentationId, transitionId, "sibTrans", "sibTrans2D1", i, 5);
+                AddPresentationPoint(connectorTextPresentationId, transitionId, "connectorText", "sibTrans2D1", i, 5);
+                AddPresentationConnection("presOf", transitionId, transitionPresentationId);
+                AddPresentationConnection("presOf", transitionId, connectorTextPresentationId, 1);
+            }
+
+            for (var i = 0; i < processNodePresentationIds.Count; i++)
+            {
+                AddPresentationConnection("presParOf", presentationIds[docId], processNodePresentationIds[i], i * 2);
+                if (i >= processTransitionPresentationIds.Count)
+                    continue;
+
+                var transition = processTransitionPresentationIds[i];
+                AddPresentationConnection("presParOf", presentationIds[docId], transition.Transition, i * 2 + 1);
+                AddPresentationConnection("presParOf", transition.Transition, transition.ConnectorText);
+            }
+        }
+        else if (isHierarchyLayout || isPyramidLayout)
         {
             var containerIds = new Dictionary<string, string>(StringComparer.Ordinal);
             var rootIds = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -4760,6 +4815,13 @@ public static class DocxWriter
                     new XElement(A + "gd",
                         new XAttribute("name", "adj"),
                         new XAttribute("fmla", "val 10000"))),
+                "rightArrow" => new XElement(A + "avLst",
+                    new XElement(A + "gd",
+                        new XAttribute("name", "adj1"),
+                        new XAttribute("fmla", "val 60000")),
+                    new XElement(A + "gd",
+                        new XAttribute("name", "adj2"),
+                        new XAttribute("fmla", "val 50000"))),
                 _ => new XElement(A + "avLst")
             };
             var spPr = new XElement(Dsp + "spPr",
@@ -4949,6 +5011,25 @@ public static class DocxWriter
                     spTree));
         }
 
+        if (isProcess && nodes.Count > 1)
+        {
+            var arrowHeight = Math.Max(1L, Math.Min(PointsToEmu(8), boxH / 2));
+            for (var i = 1; i < nodes.Count; i++)
+            {
+                var arrowX = margin + (i - 1) * (boxW + gap) + boxW;
+                var arrowY = (frameH - arrowHeight) / 2;
+                AddCachedShape(
+                    SmartArtModelId(8000 + i - 1),
+                    arrowX,
+                    arrowY,
+                    Math.Max(1L, gap),
+                    arrowHeight,
+                    "rightArrow",
+                    hierarchyAccentHex,
+                    lineHex: hierarchyAccentHex);
+            }
+        }
+
         for (var i = 0; i < nodes.Count; i++)
         {
             var (node, depth) = nodes[i];
@@ -4984,7 +5065,7 @@ public static class DocxWriter
                 new XAttribute("modelId", SmartArtModelId(3001 + i)),
                 new XElement(Dsp + "nvSpPr",
                     new XElement(Dsp + "cNvPr",
-                        new XAttribute("id", i + 1),
+                        new XAttribute("id", spTree.Elements(Dsp + "sp").Count() + 1),
                         new XAttribute("name", $"Node {i}")),
                     new XElement(Dsp + "cNvSpPr")),
                 new XElement(Dsp + "spPr",
@@ -5026,6 +5107,8 @@ public static class DocxWriter
         var category = SmartArtLayoutCategory(smartArt);
         var isHierarchy = string.Equals(category, "hierarchy", StringComparison.Ordinal);
         var isPyramid = string.Equals(category, "pyramid", StringComparison.Ordinal);
+        if (smartArt.Kind == SmartArtKind.Process && string.Equals(SmartArtLayoutSuffix(smartArt), "process1", StringComparison.OrdinalIgnoreCase))
+            return LoadSmartArtLayoutTemplate("process1.xml", layoutUrn, category);
         if (isHierarchy || isPyramid || UsesFlatSmartArtGallery(smartArt))
             return LoadSmartArtLayoutTemplate(isHierarchy || UsesFlatSmartArtGallery(smartArt) ? "hierarchy1.xml" : "pyramid1.xml", layoutUrn, category);
         var rootAlgorithm = isHierarchy
