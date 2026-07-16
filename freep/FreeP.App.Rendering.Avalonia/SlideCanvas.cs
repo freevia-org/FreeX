@@ -31,6 +31,8 @@ namespace FreeP.App.Rendering.Avalonia;
 /// </summary>
 public sealed class SlideCanvas : Control
 {
+    private const double PowerPointDefaultLineSpacingFactor = 1.18;
+
     // ── Styled / direct properties ──────────────────────────────────────────
 
     public static readonly DirectProperty<SlideCanvas, Presentation?> PresentationProperty =
@@ -2012,6 +2014,9 @@ public sealed class SlideCanvas : Control
             emSizePx,
             brush);
 
+        // PowerPoint's default paragraph leading is slightly tighter than Avalonia's automatic line height.
+        ft.LineHeight = ResolvePowerPointLineHeight(emSizePx);
+
         if (wrap && maxWidth > 0)
             ft.MaxTextWidth = maxWidth;
 
@@ -2041,6 +2046,9 @@ public sealed class SlideCanvas : Control
         }
         return ft;
     }
+
+    internal static double ResolvePowerPointLineHeight(double fontSizePx) =>
+        fontSizePx * PowerPointDefaultLineSpacingFactor;
 
     // ── Text-effects geometry helpers (Wave 16A) ──────────────────────────────
 
