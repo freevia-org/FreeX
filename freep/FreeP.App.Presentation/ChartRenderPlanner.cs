@@ -473,6 +473,7 @@ public readonly record struct ChartDataLabelPlan(
     public ChartPlanRect? TextBounds { get; init; }
     public ChartPlanRect? LegendKeyBounds { get; init; }
     public ChartFillPlan? LegendKeyFill { get; init; }
+    public bool WrapText { get; init; }
 }
 
 public readonly record struct ChartLegendItemPlan(
@@ -633,6 +634,7 @@ public static partial class ChartRenderPlanner
     private const double DefaultBarGapWidthPercent = 150.0;
     private const double ImportedPercentStackedGapWidthPercent = 250.0;
     private const double ImportedPercentStackedPlotBottomReduction = 19.0;
+    public const double ImportedPercentStackedDataLabelWidth = 92.0;
     private const double ImportedSurfaceBlueBandUpperBound = 0.20;
     private const double ImportedSurfaceOrangeBandUpperBound = 0.53;
     private const double ImportedSurfaceGreenBandUpperBound = 0.75;
@@ -6423,7 +6425,9 @@ public static partial class ChartRenderPlanner
                 };
 
             double labelWidth = UsesImportedTextMetrics(chart)
-                ? Math.Max(percentStacked ? 100.0 : 50.0, slot.SeriesSize)
+                ? importedPercentStackedCluster
+                    ? ImportedPercentStackedDataLabelWidth
+                    : Math.Max(percentStacked ? 100.0 : 50.0, slot.SeriesSize)
                 : slot.SeriesSize;
             double labelX = UsesImportedTextMetrics(chart)
                 ? barX + slot.SeriesSize / 2.0 - labelWidth / 2.0
@@ -6435,7 +6439,10 @@ public static partial class ChartRenderPlanner
                 new ChartPlanRect(labelX, labelY, labelWidth, labelHeight),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center);
+                Alignment: ChartPlanTextAlignment.Center)
+            {
+                WrapText = importedPercentStackedCluster
+            };
             if (labels.ShowLegendKey)
             {
                 const double keySize = 6.0;
