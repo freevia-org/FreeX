@@ -289,6 +289,9 @@ public sealed class ChartBaselineCorpusTests
                 new SrgbColor(0x98, 0xBC, 0x80));
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
+        surfaceGeometry.FrameSegments.Select(segment => segment.Stroke.Alpha)
+            .Should().OnlyContain(alpha => alpha == 48,
+                "imported PowerPoint Surface3D uses a light projected-frame stroke");
         ChartRenderPlanner.BuildSurfaceSeriesAxisLabelPlans(surface, surfaceFrame)
             .Select(label => label.Text)
             .Should().Equal("Low band", "Mid band", "High band");

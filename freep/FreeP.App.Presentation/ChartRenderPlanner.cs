@@ -2689,7 +2689,7 @@ public static partial class ChartRenderPlanner
             : facets;
         var contours = BuildSurfaceContourSegments(pointsByKey, seriesCount, categoryCount);
         var frameSegments = chart.ChartType == ChartType.Surface3D
-            ? BuildSurfaceFrameSegments(plot)
+            ? BuildSurfaceFrameSegments(plot, UsesImportedTextMetrics(chart))
             : Array.Empty<ChartLineSegmentPrimitive>();
 
         return new ChartSurfaceGeometryPlan(cells, points, facets, wireframe, contours)
@@ -2805,7 +2805,8 @@ public static partial class ChartRenderPlanner
     }
 
     private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceFrameSegments(
-        ChartPlanRect plot)
+        ChartPlanRect plot,
+        bool usesImportedTextMetrics)
     {
         double scaleX = plot.Width / 360.0;
         double scaleY = plot.Height / 189.0;
@@ -2820,7 +2821,7 @@ public static partial class ChartRenderPlanner
         var backTopRight = new ChartPlanPoint(plot.Right, plot.Y + 15.0 * scaleY);
         var stroke = new ChartStrokePlan(
             new SrgbColor(0x00, 0x00, 0x00),
-            Alpha: 220,
+            Alpha: usesImportedTextMetrics ? (byte)48 : (byte)220,
             Thickness: 0.7);
         var segments = new List<ChartLineSegmentPrimitive>(16);
 

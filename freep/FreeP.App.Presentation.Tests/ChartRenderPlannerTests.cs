@@ -674,6 +674,9 @@ public sealed class ChartRenderPlannerTests
         plan.WireframeSegments.Should().HaveCount(7);
         plan.ContourSegments.Should().NotBeEmpty();
         plan.FrameSegments.Should().NotBeEmpty();
+        plan.FrameSegments.Select(segment => segment.Stroke.Alpha)
+            .Should().OnlyContain(alpha => alpha == 220,
+                "authored Surface3D keeps its existing projected-frame opacity");
         plan.Facets.Should().OnlyContain(facet => facet.Points.Count == 4);
         plan.Facets.Select(facet => facet.AverageNormalizedValue)
             .Should()
