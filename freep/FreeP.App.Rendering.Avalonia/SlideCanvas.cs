@@ -1068,7 +1068,22 @@ public sealed class SlideCanvas : Control
         foreach (var item in scene.LegendItems)
         {
             var swatch = ToRect(item.SwatchBounds);
-            if (item.IsLine)
+            if (item.MarkerSymbol is { } markerSymbol)
+            {
+                DrawChartMarker(
+                    dc,
+                    new ChartCirclePrimitive(
+                        -1,
+                        -1,
+                        new ChartPlanPoint(
+                            item.SwatchBounds.X + item.SwatchBounds.Width / 2.0,
+                            item.SwatchBounds.Y + item.SwatchBounds.Height / 2.0),
+                        Math.Min(item.SwatchBounds.Width, item.SwatchBounds.Height) / 2.0,
+                        markerSymbol,
+                        item.Fill,
+                        Stroke: null));
+            }
+            else if (item.IsLine)
             {
                 double centerY = swatch.Top + swatch.Height / 2.0;
                 dc.DrawLine(
