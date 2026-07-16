@@ -1212,6 +1212,13 @@ public sealed partial class NativeJsonAdapter
         public string? MinDate { get; set; }
         public string? MaxDate { get; set; }
         public List<string>? SharedItems { get; set; }
+        /// <summary>
+        /// Element kind for each entry in <see cref="SharedItems"/> ('s', 'n', 'd', 'b'), mirroring
+        /// <see cref="PivotCacheFieldModel.SharedItemKinds"/>. Preserving this prevents a shared item
+        /// (e.g. a boolean serialized as "1"/"0") from being misclassified by kind-inference on a later
+        /// XLSX export after round-tripping through the native JSON format.
+        /// </summary>
+        public List<string>? SharedItemKinds { get; set; }
         public string? Formula { get; set; }
         public bool IsDatabaseField { get; set; } = true;
     }

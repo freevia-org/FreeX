@@ -63,6 +63,9 @@ public sealed partial class NativeJsonAdapter
             .Where(item => item is not null)
             .Select(item => item!)
             .ToList();
+        var sharedItemKinds = dto.SharedItemKinds?
+            .Select(kind => !string.IsNullOrEmpty(kind) ? kind[0] : '\0')
+            .ToList();
 
         return new PivotCacheFieldModel(
             dto.Name,
@@ -82,7 +85,7 @@ public sealed partial class NativeJsonAdapter
             TrimToNull(dto.MinDate),
             TrimToNull(dto.MaxDate),
             sharedItems,
-            null,
+            sharedItemKinds,
             TrimToNull(dto.Formula),
             dto.IsDatabaseField);
     }
@@ -339,6 +342,7 @@ public sealed partial class NativeJsonAdapter
             MinDate = field.MinDate,
             MaxDate = field.MaxDate,
             SharedItems = field.SharedItems?.ToList(),
+            SharedItemKinds = field.SharedItemKinds?.Select(kind => kind.ToString()).ToList(),
             Formula = field.Formula,
             IsDatabaseField = field.IsDatabaseField
         };

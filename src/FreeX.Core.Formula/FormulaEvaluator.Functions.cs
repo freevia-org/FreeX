@@ -253,6 +253,17 @@ public sealed partial class FormulaEvaluator
 
                 expandedArgs.Add(BuildRangeValueOrError(new RangeRefNode(cell, cell, cell.SheetName), context));
             }
+            else if (functionName == "TEXTSPLIT" && argIndex == 5 && arg is OmittedArgumentNode)
+            {
+                // TEXTSPLIT's pad_with must default to #N/A only when the argument slot itself is
+                // genuinely omitted -- not when an explicit argument merely evaluates to blank
+                // (e.g. a reference to an empty cell, which should pad with "" instead). The
+                // generic EvaluateNode(OmittedArgumentNode) fallback below returns the same
+                // BlankValue.Instance singleton a blank-cell reference produces, so the two cases
+                // must be told apart here, before evaluation, the same way OFFSET/INDEX inspect
+                // the raw argument node for OmittedArgumentNode ahead of evaluating it.
+                expandedArgs.Add(TextSplitOmittedPadArgumentValue.Instance);
+            }
             else if (arg is NamedRangeNode named)
             {
                 // Check LET/LAMBDA bindings first — these shadow workbook named ranges.

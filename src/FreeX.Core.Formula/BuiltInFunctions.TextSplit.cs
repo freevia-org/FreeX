@@ -147,7 +147,12 @@ public static partial class BuiltInFunctions
         if (matchMode is not (0 or 1))
             return ErrorValue.Value;
 
-        var padWith = args.Count > 5 && args[5] is not BlankValue
+        // pad_with defaults to #N/A only when the argument slot itself was genuinely omitted
+        // (the TextSplitOmittedPadArgumentValue sentinel substituted by FormulaEvaluator.Functions.cs
+        // for a truly-omitted trailing argument). An explicit argument that merely evaluates to
+        // blank -- e.g. a reference to an empty cell -- is not that sentinel and must pad with its
+        // real (blank) value instead of falling back to #N/A.
+        var padWith = args.Count > 5 && args[5] is not TextSplitOmittedPadArgumentValue
             ? SingleValueOrErrorAsValue(args[5], out error)
             : ErrorValue.NA;
         if (padWith is null) return error;

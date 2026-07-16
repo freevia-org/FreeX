@@ -129,16 +129,18 @@ public static class SplitPaneCellLayoutPlanner
     }
 
     /// <summary>
-    /// A merged cell that crosses a View&gt;Split vertical divider must still render across both the
-    /// left and right pane (clipped per pane), matching real Excel, instead of being truncated to
-    /// whichever pane the anchor's own column falls in. The merge's row footprint stays scoped to the
-    /// anchor's own row band exactly as before (top vs. bottom pane) — only the column footprint is
-    /// widened to cross the divider — since that is the reported failure (see
-    /// SplitPaneCellLayoutPlanner_BoundsTallMergeWorkToVisibleCells, which pins the existing row-band
-    /// behavior for an unrelated giant-merge performance scenario). Only the quadrant containing the
-    /// merge's anchor cell renders text/icon/comment/data-bar content — the other quadrant renders
-    /// fill/border only, via <see cref="StripContentForSecondaryMergeQuadrant"/>, so content is never
-    /// drawn twice.
+    /// A merged cell that crosses a View&gt;Split divider must still render across every pane it
+    /// touches (clipped per pane), matching real Excel, instead of being truncated to whichever pane
+    /// the anchor cell falls in. This applies independently on both axes: the column footprint is
+    /// widened to cross the vertical divider (left/right panes) and the row footprint is widened to
+    /// cross the horizontal divider (top/bottom panes) — so a merge straddling both splits at once can
+    /// emit up to 4 quadrant layouts (one per pane combination), while a merge crossing only one axis
+    /// emits 2, and a merge crossing neither emits just the anchor's own 1 (mirroring
+    /// SplitPaneCellLayoutPlanner_BoundsTallMergeWorkToVisibleCells, which pins that a giant merge
+    /// crossing both splits stays bounded to the handful of visible-cell quadrants, not proportional
+    /// to the merge's row/column span). Only the quadrant containing the merge's anchor cell renders
+    /// text/icon/comment/data-bar content — every other quadrant renders fill/border only, via
+    /// <see cref="StripContentForSecondaryMergeQuadrant"/>, so content is never drawn twice.
     /// </summary>
     private static void EmitMergeLayouts<TConsumer>(
         DisplayCell cell,
@@ -155,27 +157,41 @@ public static class SplitPaneCellLayoutPlanner
         ref TConsumer consumer)
         where TConsumer : struct, ISplitPaneCellLayoutConsumer
     {
-        var rowLookup = anchorIsTopPane ? topRowLookup : bottomLeftRowLookup;
-        if (FindMergeRowSpan(rowLookup, merge) is not { } rowSpan)
+        var primaryRows = anchorIsTopPane ? topRowLookup : bottomLeftRowLookup;
+        var secondaryRows = anchorIsTopPane ? bottomLeftRowLookup : topRowLookup;
+        if (FindMergeRowSpan(primaryRows, merge) is not { } primaryRowSpan)
             return;
 
-        var yOrigin = anchorIsTopPane ? GridView.ColHeaderHeight : horizontalY;
+        // The secondary row band's box only covers the part of the merge's rows that ISN'T already
+        // shown by the anchor's own row band. Normally the two bands' row sets are disjoint, so this
+        // is simply the whole remainder; but it also correctly yields "nothing more to draw" for a
+        // (degenerate) viewport where both bands happen to share the same row metrics.
+        var secondaryRowSpan = FindMergeRowSpan(secondaryRows, merge, exclude: primaryRows);
+
+        var primaryYOrigin = anchorIsTopPane ? GridView.ColHeaderHeight : horizontalY;
+        var secondaryYOrigin = anchorIsTopPane ? horizontalY : GridView.ColHeaderHeight;
+
         var primaryColumns = anchorIsLeftPane ? leftColumnLookup : topRightColumnLookup;
         var secondaryColumns = anchorIsLeftPane ? topRightColumnLookup : leftColumnLookup;
-        var primarySpan = FindMergeColumnSpan(primaryColumns, merge);
+        var primaryColSpan = FindMergeColumnSpan(primaryColumns, merge);
 
-        // The secondary pane's box only covers the part of the merge's columns that ISN'T already
-        // shown by the anchor's own pane. Normally the two pane's column sets are disjoint, so this
-        // is simply the whole remainder; but it also correctly yields "nothing more to draw" for a
-        // (degenerate) viewport where both panes happen to share the same column metrics.
-        var secondarySpan = FindMergeColumnSpan(secondaryColumns, merge, exclude: primaryColumns);
-        var primaryOrigin = anchorIsLeftPane ? rowHeaderWidth : verticalX;
-        var secondaryOrigin = anchorIsLeftPane ? verticalX : rowHeaderWidth;
-        var primaryRegion = ResolveSplitPaneRegion(anchorIsTopPane, anchorIsLeftPane);
-        var secondaryRegion = ResolveSplitPaneRegion(anchorIsTopPane, !anchorIsLeftPane);
+        // Column counterpart of the secondary-row exclusion above: only the part of the merge's
+        // columns not already shown by the anchor's own column pane.
+        var secondaryColSpan = FindMergeColumnSpan(secondaryColumns, merge, exclude: primaryColumns);
+        var primaryXOrigin = anchorIsLeftPane ? rowHeaderWidth : verticalX;
+        var secondaryXOrigin = anchorIsLeftPane ? verticalX : rowHeaderWidth;
 
-        EmitMergeQuadrant(cell, rowSpan, primarySpan, primaryRegion, primaryOrigin, yOrigin, isPrimary: true, ref consumer);
-        EmitMergeQuadrant(cell, rowSpan, secondarySpan, secondaryRegion, secondaryOrigin, yOrigin, isPrimary: false, ref consumer);
+        var primaryRowIsTop = anchorIsTopPane;
+        var secondaryRowIsTop = !anchorIsTopPane;
+
+        EmitMergeQuadrant(cell, primaryRowSpan, primaryColSpan, ResolveSplitPaneRegion(primaryRowIsTop, anchorIsLeftPane), primaryXOrigin, primaryYOrigin, isPrimary: true, ref consumer);
+        EmitMergeQuadrant(cell, primaryRowSpan, secondaryColSpan, ResolveSplitPaneRegion(primaryRowIsTop, !anchorIsLeftPane), secondaryXOrigin, primaryYOrigin, isPrimary: false, ref consumer);
+
+        if (secondaryRowSpan is { } secondaryRowSpanValue)
+        {
+            EmitMergeQuadrant(cell, secondaryRowSpanValue, primaryColSpan, ResolveSplitPaneRegion(secondaryRowIsTop, anchorIsLeftPane), primaryXOrigin, secondaryYOrigin, isPrimary: false, ref consumer);
+            EmitMergeQuadrant(cell, secondaryRowSpanValue, secondaryColSpan, ResolveSplitPaneRegion(secondaryRowIsTop, !anchorIsLeftPane), secondaryXOrigin, secondaryYOrigin, isPrimary: false, ref consumer);
+        }
     }
 
     private static void EmitMergeQuadrant<TConsumer>(
@@ -256,8 +272,10 @@ public static class SplitPaneCellLayoutPlanner
                 return;
 
             // A merged cell crossing a View>Split divider is now emitted once per pane it touches
-            // (up to 2), not once overall - so capacity must cover more layouts than source cells.
-            var capacity = _cells.Count * 2;
+            // (up to 4 - one per row-band/column-pane quadrant, since a merge can cross both the
+            // horizontal and vertical divider at once), not once overall - so capacity must cover
+            // more layouts than source cells.
+            var capacity = _cells.Count * 4;
             _cellIndexes = new int[capacity];
             _rects = new Rect[capacity];
             _textClipRects = new Rect[capacity];
@@ -845,8 +863,13 @@ public static class SplitPaneCellLayoutPlanner
     }
 
     // Row counterpart to FindMergeColumnSpan: the portion of a merge's row range visible within a
-    // single pane's row lookup.
-    private static (double Offset, double Size)? FindMergeRowSpan(SplitPaneRowMetricLookup rows, GridRange merge)
+    // single pane's row lookup. `exclude`, when given, skips any row also present there — used so a
+    // secondary (non-anchor) row band's box only covers the part of the merge NOT already shown by
+    // the anchor's own row band, even in the degenerate case where two bands' row sets overlap.
+    private static (double Offset, double Size)? FindMergeRowSpan(
+        SplitPaneRowMetricLookup rows,
+        GridRange merge,
+        SplitPaneRowMetricLookup? exclude = null)
     {
         double total = 0;
         uint? minRow = null;
@@ -855,6 +878,8 @@ public static class SplitPaneCellLayoutPlanner
         {
             var metric = rows[i];
             if (metric.Row < merge.Start.Row || metric.Row > merge.End.Row)
+                continue;
+            if (exclude is { } excludeRows && excludeRows.TryGetValue(metric.Row, out _))
                 continue;
 
             total += metric.Height;
