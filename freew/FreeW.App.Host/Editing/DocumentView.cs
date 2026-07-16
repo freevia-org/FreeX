@@ -6888,8 +6888,8 @@ public sealed class DocumentView : RichTextBox
             table.ColumnWidthsPt.Clear();
 
         // First pass: read each WPF cell into a model cell, carrying ColumnSpan -> GridSpan and
-        // RowSpan -> VerticalMerge.Restart. Continue cells are not rendered (they are absorbed by the
-        // restart's RowSpan), so we record where they need to be re-synthesised in the rows below.
+        // preserving explicit vertical-merge tags. Legacy WPF RowSpan cells are still expanded into
+        // Continue placeholders below so documents rendered before the explicit-cell path round-trip.
         var modelRows = new List<ModelTableRow>();
         // pendingContinues[rowIndex] = list of (gridColumn, gridSpan) continuation cells to inject.
         var pendingContinues = new List<List<(int Column, int Span)>>();
@@ -6948,6 +6948,7 @@ public sealed class DocumentView : RichTextBox
                     {
                         ShadingColorHex = cellShading,
                         GridSpan = span,
+                        VerticalMerge = cellTag?.VerticalMerge ?? VerticalMergeState.None,
                         // Recover per-cell borders, text direction and vertical alignment from the stashed
                         // Tag (WPF FlowDocument has no native representation for any of these; they survive
                         // the view→model round-trip only via the Tag).
@@ -7049,7 +7050,8 @@ public sealed class DocumentView : RichTextBox
         string? ShadingColorHex,
         CellBorders? Borders = null,
         CellTextDirection TextDirection = CellTextDirection.Horizontal,
-        TableCellVerticalAlignment VerticalAlignment = TableCellVerticalAlignment.Top);
+        TableCellVerticalAlignment VerticalAlignment = TableCellVerticalAlignment.Top,
+        VerticalMergeState VerticalMerge = VerticalMergeState.None);
 
     /// <summary>
     /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
@@ -7250,27 +7252,12 @@ public sealed class DocumentView : RichTextBox
             foreach (var modelCell in modelRow.Cells)
             {
                 var span = Math.Max(1, modelCell.GridSpan);
-                // A vertical-merge "continue" cell is absorbed by the restart cell above (which carries
-                // a RowSpan covering it), so it is not rendered as its own WPF cell.
-                if (modelCell.VerticalMerge == VerticalMergeState.Continue)
-                {
-                    gridColumn += span;
-                    cellIndex++;
-                    continue;
-                }
-
                 var wpfCell = new WpfTableCell
                 {
                     Padding = new Thickness(4, 2, 4, 2)
                 };
                 if (span > 1)
                     wpfCell.ColumnSpan = span;
-                if (modelCell.VerticalMerge == VerticalMergeState.Restart)
-                {
-                    var rowSpan = CountVerticalMergeSpan(table, rowIndex, gridColumn);
-                    if (rowSpan > 1)
-                        wpfCell.RowSpan = rowSpan;
-                }
                 if (table.Formatting.Borders)
                 {
                     wpfCell.BorderBrush = borderBrush;
@@ -7282,7 +7269,7 @@ public sealed class DocumentView : RichTextBox
                 // direction and vertical alignment have no WPF FlowDocument equivalent, so they survive
                 // only through the stashed Tag.
                 wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex, modelCell.Borders,
-                    modelCell.TextDirection, modelCell.VerticalAlignment);
+                    modelCell.TextDirection, modelCell.VerticalAlignment, modelCell.VerticalMerge);
 
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(modelCell.Borders, PxPerPoint);
                 if (cellBorderPlan.HasVisibleEdges)
@@ -7291,11 +7278,29 @@ public sealed class DocumentView : RichTextBox
                     wpfCell.BorderThickness = new Thickness(0);
                 }
 
-                var cellAppearance = EffectiveFillFor(rowIndex, cellIndex);
+                var mergeSource = modelCell.VerticalMerge == VerticalMergeState.Continue
+                    ? FindVerticalMergeRestart(table, rowIndex, gridColumn)
+                    : null;
+                var cellAppearance = mergeSource is { } source
+                    ? EffectiveFillFor(source.RowIndex, source.CellIndex)
+                    : EffectiveFillFor(rowIndex, cellIndex);
                 if (TryParseColor(cellAppearance.EffectiveFillHex, out var cellFill))
                     wpfCell.Background = new SolidColorBrush(cellFill);
                 if (cellAppearance.EffectiveBold)
                     wpfCell.FontWeight = FontWeights.Bold;
+                var hasPlannedCellBorders = cellBorderPlan.HasVisibleEdges;
+                if (!hasPlannedCellBorders && table.Formatting.Borders &&
+                    modelCell.VerticalMerge is VerticalMergeState.Restart or VerticalMergeState.Continue)
+                {
+                    var hasContinuation = modelCell.VerticalMerge == VerticalMergeState.Restart &&
+                        rowIndex + 1 < table.Rows.Count &&
+                        CellAtGridColumn(table.Rows[rowIndex + 1], gridColumn)?.VerticalMerge == VerticalMergeState.Continue;
+                    wpfCell.BorderThickness = modelCell.VerticalMerge == VerticalMergeState.Restart && hasContinuation
+                        ? new Thickness(0.5, 0.5, 0.5, 0)
+                        : modelCell.VerticalMerge == VerticalMergeState.Continue
+                            ? new Thickness(0.5, 0, 0.5, 0.5)
+                            : wpfCell.BorderThickness;
+                }
                 // Resolve cell content. For non-Top vertical alignment, or when text is rotated, we wrap
                 // everything in a BlockUIContainer so we can position the content via WPF layout. WPF
                 // FlowDocument's TableCell has no VerticalAlignment property, so the Grid wrapper is the
@@ -7305,7 +7310,6 @@ public sealed class DocumentView : RichTextBox
                 // Bottom use a Grid+StackPanel wrapper. Exact-height clamping is not enforceable in WPF
                 // FlowDocument (content may overflow the MinHeight), which is a known residual WPF limit.
                 var vAlign = modelCell.VerticalAlignment;
-                var hasPlannedCellBorders = cellBorderPlan.HasVisibleEdges;
                 if (hasPlannedCellBorders)
                 {
                     wpfCell.Blocks.Add(new BlockUIContainer(BuildCellContentHost(
@@ -7335,7 +7339,8 @@ public sealed class DocumentView : RichTextBox
                     var angle = modelCell.TextDirection == CellTextDirection.Rotate90 ? 90.0 : 270.0;
                     var stack = new System.Windows.Controls.StackPanel
                     {
-                        LayoutTransform = new RotateTransform(angle)
+                        RenderTransformOrigin = new Point(0.5, 0.5),
+                        RenderTransform = new RotateTransform(angle)
                     };
                     var paragraphs = modelCell.Paragraphs.Count > 0
                         ? modelCell.Paragraphs
@@ -7448,27 +7453,50 @@ public sealed class DocumentView : RichTextBox
             }
         };
 
-        if (modelCell.TextDirection != CellTextDirection.Horizontal)
-        {
-            var angle = modelCell.TextDirection == CellTextDirection.Rotate90 ? 90.0 : 270.0;
-            stack.LayoutTransform = new RotateTransform(angle);
-        }
-
         var paragraphs = modelCell.Paragraphs.Count > 0
             ? modelCell.Paragraphs
             : (IEnumerable<ModelParagraph>)[new ModelParagraph()];
 
-        foreach (var cellParagraph in paragraphs)
+        if (modelCell.TextDirection != CellTextDirection.Horizontal)
         {
-            var paraBlock = BuildParagraph(cellParagraph, document, inTableCell: true);
-            stack.Children.Add(new System.Windows.Controls.RichTextBox
+            // Keep the rotated content's measured bounds inside the authored row. Rotating a
+            // RichTextBox or StackPanel with LayoutTransform makes WPF's table measure an
+            // unconstrained swapped axis and can expand a short Word row to the full page height.
+            var textWidth = minHeightPx is { } height ? Math.Max(1, height) : 100;
+            var angle = modelCell.TextDirection == CellTextDirection.Rotate90 ? 90.0 : 270.0;
+            stack.HorizontalAlignment = HorizontalAlignment.Center;
+            stack.VerticalAlignment = VerticalAlignment.Center;
+            foreach (var cellParagraph in paragraphs)
             {
-                Document = new System.Windows.Documents.FlowDocument(paraBlock),
-                IsReadOnly = true,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                Background = System.Windows.Media.Brushes.Transparent
-            });
+                var textBlock = new System.Windows.Controls.TextBlock
+                {
+                    Width = textWidth,
+                    TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = System.Windows.TextAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    RenderTransformOrigin = new Point(0.5, 0.5),
+                    RenderTransform = new RotateTransform(angle)
+                };
+                foreach (var run in cellParagraph.Runs)
+                    textBlock.Inlines.Add(BuildRun(run, cellParagraph, document));
+                stack.Children.Add(textBlock);
+            }
+        }
+        else
+        {
+            foreach (var cellParagraph in paragraphs)
+            {
+                var paraBlock = BuildParagraph(cellParagraph, document, inTableCell: true);
+                stack.Children.Add(new System.Windows.Controls.RichTextBox
+                {
+                    Document = new System.Windows.Documents.FlowDocument(paraBlock),
+                    IsReadOnly = true,
+                    BorderThickness = new Thickness(0),
+                    Padding = new Thickness(0),
+                    Background = System.Windows.Media.Brushes.Transparent
+                });
+            }
         }
 
         grid.Children.Add(stack);
@@ -7555,21 +7583,33 @@ public sealed class DocumentView : RichTextBox
             };
     }
 
-    // Counts the height (in rows) of a vertical-merge run that starts at (restartRow, gridColumn):
-    // the restart row plus every immediately following row whose cell at the same grid column carries
-    // VerticalMerge.Continue. Returns at least 1 (the restart cell itself).
-    private static int CountVerticalMergeSpan(ModelTable table, int restartRow, int gridColumn)
+    private static (int RowIndex, int CellIndex)? FindVerticalMergeRestart(
+        ModelTable table,
+        int continuationRow,
+        int gridColumn)
     {
-        var span = 1;
-        for (var r = restartRow + 1; r < table.Rows.Count; r++)
+        for (var rowIndex = continuationRow; rowIndex >= 0; rowIndex--)
         {
-            var continuation = CellAtGridColumn(table.Rows[r], gridColumn);
-            if (continuation?.VerticalMerge == VerticalMergeState.Continue)
-                span++;
-            else
+            var column = 0;
+            for (var cellIndex = 0; cellIndex < table.Rows[rowIndex].Cells.Count; cellIndex++)
+            {
+                var cell = table.Rows[rowIndex].Cells[cellIndex];
+                var span = Math.Max(1, cell.GridSpan);
+                if (gridColumn < column || gridColumn >= column + span)
+                {
+                    column += span;
+                    continue;
+                }
+
+                if (cell.VerticalMerge == VerticalMergeState.Restart)
+                    return (rowIndex, cellIndex);
+                if (cell.VerticalMerge != VerticalMergeState.Continue)
+                    return null;
                 break;
+            }
         }
-        return span;
+
+        return null;
     }
 
     // Resolves the model cell occupying a given grid-column position in a row, honouring GridSpan so

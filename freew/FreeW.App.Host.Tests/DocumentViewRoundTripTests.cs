@@ -938,6 +938,34 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void TableVerticalMerge_RendersFiniteMergedRegion_AndRoundTrips()
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var renderedTable = RenderedTables(view.Document).Should().ContainSingle().Subject;
+        var rows = renderedTable.RowGroups.SelectMany(group => group.Rows).ToList();
+        var restartCell = rows[1].Cells[0];
+        var continuationCell = rows[2].Cells[0];
+
+        rows.Should().HaveCount(5);
+        rows[1].Cells.Should().HaveCount(4);
+        rows[2].Cells.Should().HaveCount(4);
+        restartCell.Background.Should().BeOfType<System.Windows.Media.SolidColorBrush>();
+        continuationCell.Background.Should().BeOfType<System.Windows.Media.SolidColorBrush>();
+        ((System.Windows.Media.SolidColorBrush)continuationCell.Background!).Color
+            .Should().Be(((System.Windows.Media.SolidColorBrush)restartCell.Background!).Color);
+        restartCell.BorderThickness.Bottom.Should().Be(0);
+        continuationCell.BorderThickness.Top.Should().Be(0);
+
+        view.CommitToModel();
+        var committedTable = view.Model.Blocks.OfType<Table>().Should().ContainSingle().Subject;
+        committedTable.Rows[1].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Restart);
+        committedTable.Rows[2].Cells[0].VerticalMerge.Should().Be(VerticalMergeState.Continue);
+    }
+
+    [StaFact]
     public void TableRepeatHeader_RenderedRows_DoNotRoundTripIntoModel()
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
