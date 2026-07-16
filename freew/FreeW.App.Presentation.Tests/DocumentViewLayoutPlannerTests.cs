@@ -798,7 +798,7 @@ public sealed class DocumentViewLayoutPlannerTests
         squarePlan.Should().Be(new DocumentFloatingWrapReservationPlan(
             DocumentFloatingObjectKind.Image,
             WidthDip: 96,
-            HeightDip: 72,
+            HeightDip: 0,
             ImageWrapping.Square));
         topAndBottomPlan.Should().Be(new DocumentFloatingWrapReservationPlan(
             DocumentFloatingObjectKind.Image,

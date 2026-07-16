@@ -1442,10 +1442,18 @@ public static class DocumentViewLayoutPlanner
             ? topAndBottomReservationWidthDip.Value
             : PageLayout.PointsToDip(resolvedWidthPt);
 
+        // Square and tight objects exclude text laterally around their page-space rectangle; they do
+        // not consume a second vertical flow slot. Only top-and-bottom wrapping advances normal flow
+        // by the object's authored height, matching Word's anchor behavior when several floating
+        // objects share one paragraph.
+        var reservationHeightDip = wrapping == ImageWrapping.TopAndBottom
+            ? PageLayout.PointsToDip(resolvedHeightPt)
+            : 0;
+
         return new DocumentFloatingWrapReservationPlan(
             kind,
             Math.Max(1, widthDip),
-            Math.Max(1, PageLayout.PointsToDip(resolvedHeightPt)),
+            reservationHeightDip,
             wrapping);
     }
 
