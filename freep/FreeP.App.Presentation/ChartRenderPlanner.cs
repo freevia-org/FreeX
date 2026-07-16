@@ -985,7 +985,11 @@ public static partial class ChartRenderPlanner
                         ? ImportedSingleScatterLegendAreaWidth
                         : UsesImportedBubbleDefaults(chart)
                             ? ImportedBubbleLegendAreaWidth
-                    : Math.Min(120, bounds.Width * 0.11)
+                    // Imported LineMarkers use a narrower right legend band than
+                    // the matching style-2 column chart in PowerPoint.
+                    : chart.ChartType == ChartType.LineMarkers
+                        ? Math.Min(100, bounds.Width * 0.11)
+                        : Math.Min(120, bounds.Width * 0.11)
                 : Math.Min(90, bounds.Width * 0.20)
             : 0;
         double legendAreaHeight = legendReservesPlotSpace && !legendRight
