@@ -60,6 +60,18 @@ public sealed class DeleteRowsCommand : IWorkbookCommand
 
         uint endRow = _startRow + _count - 1;
 
+        // R47-meta-1: mirror InsertRowsCommand's CSE-array/dynamic-spill split guard
+        // (InsertDeleteRowsCommand.cs) on the delete side. Deleting whole rows removes exactly the
+        // band [_startRow, endRow] across every column while every row below shifts up in lockstep —
+        // an array/spill whose extent straddles that band (some members inside the deleted band,
+        // some outside it) would have part of it deleted and part of it shifted, desyncing the
+        // array's anchor from its still-computed member rows with no error shown. An array entirely
+        // inside the deleted band is removed as one atomic unit (fine); an array entirely outside the
+        // band just rides the uniform shift (also fine).
+        var deletedRowsShiftRegion = new CellShiftRegion(_startRow, endRow, 1u, CellAddress.MaxCol);
+        if (CommandGuards.RejectIfSplitsArray(sheet, InsertCellsCommand.ArrayMembersWithinShiftRegion(sheet, deletedRowsShiftRegion)) is { } deleteSplitsArrayRejection)
+            return deleteSplitsArrayRejection;
+
         _addressStateSnapshot = RowColumnShiftHelpers.CaptureAddressBearingState(ctx.Workbook, sheet);
 
         (_deletedSnapshot, _shiftedSnapshot) = CaptureDeletedAndShiftedCells(sheet, endRow);

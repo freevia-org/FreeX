@@ -264,8 +264,14 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
                 var legacyIconSetStyle = IsX14OnlyIconSetStyle(iconSetStyle) ? "3TrafficLights1" : iconSetStyle;
                 var thresholdXmls = GetIconSetThresholds(cf, iconSetStyle)
                     .Select(threshold => ToCfvoXml(worksheetNs, threshold.Type, threshold.Value, threshold.GreaterThanOrEqual));
+                // A per-icon override referencing an x14-only family (e.g. "NoIcons"/"3Stars"/"5Boxes")
+                // has no member in the base ST_IconSetType enum, so it must not be written into the
+                // legacy <cfIcon iconSet="..."> attribute -- that produces schema-invalid OOXML. Such
+                // overrides are instead carried through the (unconditional, unfiltered) x14 <cfIcon>
+                // list in AppendX14ConditionalFormattingsExt below, which RequiresGeneratedOrExistingX14IconSet
+                // now guarantees gets generated whenever one is present.
                 var overrideXmls = cf.IconOverrides
-                    .Where(IsValidIconOverride)
+                    .Where(o => IsValidIconOverride(o) && !IsX14OnlyIconOverride(o))
                     .Select(o => new XElement(
                         worksheetNs + "cfIcon",
                         new XAttribute("iconSet", o.IconSet.Trim()),
@@ -400,27 +406,39 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         string.IsNullOrWhiteSpace(cf.IconSetStyle) ? "3TrafficLights1" : cf.IconSetStyle.Trim();
 
     /// <summary>
-    /// Icon-set styles that exist only in the x14 extension (Excel 2010+) and have no member in the
-    /// base spreadsheetml ST_IconSetType enum. See <c>ConditionalFormatIconSetCatalog</c>'s style
-    /// roster comment for the same distinction on the read/authoring side.
+    /// Icon-set styles (and per-icon override families, e.g. "NoIcons" for a per-icon "No Cell Icon"
+    /// choice) that exist only in the x14 extension (Excel 2010+) and have no member in the base
+    /// spreadsheetml ST_IconSetType enum. See <c>ConditionalFormatIconSetCatalog</c>'s style roster
+    /// comment for the same distinction on the read/authoring side.
     /// </summary>
     private static readonly HashSet<string> X14OnlyIconSetStyles = new(StringComparer.Ordinal)
     {
         "3Stars",
         "3Triangles",
+        "5Boxes",
+        "NoIcons",
     };
 
     private static bool IsX14OnlyIconSetStyle(string iconSetStyle) => X14OnlyIconSetStyles.Contains(iconSetStyle);
 
     /// <summary>
+    /// True when a per-icon override references an icon family that has no member in the base
+    /// ST_IconSetType enum (e.g. "NoIcons"/"3Stars"/"5Boxes"). Writing such an override straight into
+    /// the legacy &lt;cfIcon iconSet="..."&gt; attribute is schema-invalid OOXML.
+    /// </summary>
+    private static bool IsX14OnlyIconOverride(CfIconOverride icon) => IsX14OnlyIconSetStyle(icon.IconSet.Trim());
+
+    /// <summary>
     /// True when this icon-set rule needs an x14 extLst/x14:id link plus a matching x14
-    /// conditionalFormattings entry: either its style is x14-only (writing it into the legacy
-    /// &lt;iconSet iconSet="..."&gt; attribute alone would be schema-invalid), or the rule already
-    /// carries an x14 id from a prior load, so re-saving must not silently drop the x14 backing
-    /// (mirroring <see cref="XlsxAdvancedConditionalFormatMetadata.RequiresGeneratedOrExistingX14DataBar"/>).
+    /// conditionalFormattings entry: its style is x14-only (writing it into the legacy
+    /// &lt;iconSet iconSet="..."&gt; attribute alone would be schema-invalid), one of its per-icon
+    /// overrides references an x14-only family (same schema-validity problem, one level down), or the
+    /// rule already carries an x14 id from a prior load, so re-saving must not silently drop the x14
+    /// backing (mirroring <see cref="XlsxAdvancedConditionalFormatMetadata.RequiresGeneratedOrExistingX14DataBar"/>).
     /// </summary>
     private static bool RequiresGeneratedOrExistingX14IconSet(ConditionalFormat cf, string iconSetStyle) =>
         IsX14OnlyIconSetStyle(iconSetStyle) ||
+        cf.IconOverrides.Any(o => IsValidIconOverride(o) && IsX14OnlyIconOverride(o)) ||
         XlsxAdvancedConditionalFormatMetadata.TryGetExistingX14Id(cf) is not null;
 
     private static XElement ToX14IconSetCfvoXml(XNamespace x14Ns, XNamespace xmNs, CfThresholdModel threshold)
@@ -637,14 +655,19 @@ internal static partial class XlsxAdvancedConditionalFormatWriter
         foreach (var cf in newX14IconSets ?? [])
         {
             var iconSetStyle = GetEffectiveIconSetStyle(cf);
+            var validOverrides = cf.IconOverrides.Where(IsValidIconOverride).ToList();
             var x14IconSet = new XElement(
                 x14Ns + "iconSet",
                 new XAttribute("iconSet", iconSetStyle),
                 new XAttribute("showValue", cf.IconSetShowValue ? "1" : "0"),
                 new XAttribute("reverse", cf.IconSetReverse ? "1" : "0"),
+                // A rule carrying real per-icon overrides is Excel's "Custom" icon combination (mixed
+                // icons/families), distinct from a plain named gallery style -- mark it with the x14
+                // CT_IconSet "custom" attribute the same way Excel itself does, so a real-Excel Format
+                // Rule dialog re-opening a FreeX-generated block presents it as Custom too.
+                validOverrides.Count > 0 ? new XAttribute("custom", "1") : null,
                 GetIconSetThresholds(cf, iconSetStyle).Select(threshold => ToX14IconSetCfvoXml(x14Ns, xmNs, threshold)),
-                cf.IconOverrides
-                    .Where(IsValidIconOverride)
+                validOverrides
                     .Select(o => new XElement(
                         x14Ns + "cfIcon",
                         new XAttribute("iconSet", o.IconSet.Trim()),

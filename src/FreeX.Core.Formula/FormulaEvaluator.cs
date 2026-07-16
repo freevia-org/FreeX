@@ -230,3 +230,19 @@ internal sealed record OmittedLambdaArgumentValue : ScalarValue
 {
     public static readonly OmittedLambdaArgumentValue Instance = new();
 }
+
+/// <summary>
+/// Sentinel substituted for TEXTSPLIT's pad_with argument (argument index 5) only when the raw
+/// AST shows the argument slot itself was genuinely left empty (a trailing comma with nothing
+/// after it, or the argument omitted entirely) -- as opposed to an explicit argument that merely
+/// evaluates to a blank value (e.g. a reference to an empty cell). Both cases would otherwise
+/// collapse to the same <see cref="BlankValue.Instance"/> singleton by the time
+/// BuiltInFunctions.TextSplit.cs sees them, making the two indistinguishable; this sentinel
+/// preserves the distinction through the generic value-expansion pipeline in
+/// FormulaEvaluator.Functions.cs, mirroring OmittedLambdaArgumentValue's identical role for
+/// LAMBDA/ISOMITTED.
+/// </summary>
+internal sealed record TextSplitOmittedPadArgumentValue : ScalarValue
+{
+    public static readonly TextSplitOmittedPadArgumentValue Instance = new();
+}

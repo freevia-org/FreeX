@@ -52,7 +52,7 @@ internal static partial class XlsxPivotTableWriter
             // above were just generated from) so the saved cache definition doesn't contradict its own
             // records when the underlying cells were edited since the cache was loaded/created.
             ResyncPivotCacheFieldTypeMetadata(cache, workbook);
-            XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, calculatedFields, workbookNs, relNs, recordsRelId, cacheRecords.RecordCount));
+            XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, ToPivotCacheDefinitionXml(cache, calculatedFields, workbookNs, relNs, recordsRelId, cacheRecords.RecordCount, numberFormatIdMap));
             XlsxPackageXmlEditor.ReplaceXml(archive, recordsPath, cacheRecords.Document);
             XlsxPackageXmlEditor.ReplaceXml(archive, XlsxPackagePath.GetRelationshipPartPath(cachePath), ToPivotCacheDefinitionRelsXml(packageRelNs, cachePath, recordsPath, recordsRelId));
             XlsxPackageXmlEditor.EnsureSpecificContentType(archive, $"/{cachePath}", "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheDefinition+xml");

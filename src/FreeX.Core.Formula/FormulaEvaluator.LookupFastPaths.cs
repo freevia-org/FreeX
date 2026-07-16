@@ -455,12 +455,17 @@ public sealed partial class FormulaEvaluator
                 if (candidate is ErrorValue error)
                     return error;
 
-                if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
+                if (candidate is not BlankValue && BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 // Full scan keeping the last qualifying candidate (no early break): Excel's
                 // approximate match does not verify sortedness, so an out-of-order row that
                 // already exceeds the lookup value must not abort the scan and yield #N/A when a
                 // valid match exists later. Mirrors BuiltInFunctions.Lookup.Legacy's slow path
                 // (R29-lookup-repass-1) so the literal-range fast path agrees with it.
+                //
+                // A genuinely blank candidate cell is let through the type-class filter (mirrors
+                // BuiltInFunctions.Lookup.Legacy.cs) so CompareScalar's own blank-to-0/""
+                // coercion gets a chance to run instead of the blank row being skipped like a
+                // foreign type (text/logical).
                 if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
                     best = index;
             }
@@ -511,9 +516,11 @@ public sealed partial class FormulaEvaluator
                 if (candidate is ErrorValue error)
                     return error;
 
-                if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
+                if (candidate is not BlankValue && BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 // Full scan keeping the last qualifying candidate (no early break) -- see the
-                // rationale on EvaluateLegacyLookupDirectTable above (R29-lookup-repass-1).
+                // rationale on EvaluateLegacyLookupDirectTable above (R29-lookup-repass-1). A
+                // genuinely blank candidate is let through the type-class filter for the same
+                // reason as above.
                 if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
                     best = index;
             }
@@ -530,10 +537,11 @@ public sealed partial class FormulaEvaluator
                 if (candidate is ErrorValue error)
                     return error;
 
-                if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
+                if (candidate is not BlankValue && BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 // Full scan keeping the last qualifying candidate (no early break) -- descending
                 // MATCH mirror of the R29-lookup-repass-1 fix; do not abort on the first row that
-                // falls below the lookup value.
+                // falls below the lookup value. A genuinely blank candidate is let through the
+                // type-class filter for the same reason as above.
                 if (BuiltInFunctions.CompareScalar(candidate, lookupValue) >= 0)
                     descendingBest = index;
             }
@@ -834,6 +842,12 @@ public sealed partial class FormulaEvaluator
             }
         }
 
+        // Approximate (next-smaller/next-larger) matches only ever consider candidates whose
+        // type class (number / text / bool) matches the lookup value's own type class -- a
+        // text or bool candidate can never be a numeric "next larger/smaller" match, mirroring
+        // BuiltInFunctions.Lookup.Modern.cs's TryFindApproximateMatchIndexLinear (the general,
+        // non-fast-path XMATCH/XLOOKUP implementation).
+        var lookupClass = BuiltInFunctions.ApproxLookupTypeClass(lookupValue);
         var best = -1;
         ScalarValue bestValue = BlankValue.Instance;
         for (var index = start; index != end; index += step)
@@ -841,6 +855,8 @@ public sealed partial class FormulaEvaluator
             var candidate = reader.GetValue(index);
             if (candidate is ErrorValue error)
                 return error;
+
+            if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
 
             var candidateVsLookup = BuiltInFunctions.CompareScalar(candidate, lookupValue);
             if (nextSmaller)

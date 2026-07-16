@@ -102,7 +102,13 @@ internal static class XlsxSparklineMapper
                     result.Add(new XlsxSparklineLayout(
                         new SparklineModel
                         {
-                            DataRange        = GridRange.Parse(rangeText, tempSheet),
+                            // A sparkline's data-range formula legitimately collapses to a bare single-cell
+                            // reference (no colon) whenever the source data is exactly one cell -- e.g. the
+                            // user picks a single cell in the Sparkline "Edit Data" dialog, or later deletes
+                            // columns until only one remains and Excel auto-shrinks the reference. Use the
+                            // tolerant parser (already used for DateAxisRange below) so that shape isn't
+                            // silently treated as malformed and the whole sparkline dropped.
+                            DataRange        = GridRange.ParseCellOrRange(rangeText, tempSheet),
                             Location         = CellAddress.Parse(location, tempSheet),
                             Kind             = kind,
                             GroupId          = groupId,

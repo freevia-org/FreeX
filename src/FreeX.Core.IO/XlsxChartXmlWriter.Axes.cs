@@ -151,7 +151,6 @@ internal static partial class XlsxChartXmlWriter
 
         yield return ToCategoryAxisXml(chart, chartNs, drawingNs);
         var valueAxisNumberFormat = ToEffectiveValueAxisNumberFormat(chart);
-        var showValueAxisMajorGridlines = ToEffectiveShowValueAxisMajorGridlines(chart);
         var valueAxisMajorTickStyle = ToEffectiveAxisMajorTickStyle(chart.Type, chart.YAxisMajorTickStyle);
         var valueAxisCrossBetween = ToEffectiveValueAxisCrossBetween(chart);
         // For bar-direction charts the value axis is HORIZONTAL (rendered at the bottom / X), so its
@@ -172,6 +171,23 @@ internal static partial class XlsxChartXmlWriter
         // the value axis's <c:orientation> from YAxisReverseOrder unconditionally silently moved a
         // category-axis reversal onto the value axis on every save of a horizontal Bar chart.
         var valueAxisReverseOrder = valueAxisOnX ? chart.XAxisReverseOrder : chart.YAxisReverseOrder;
+        // R47-io-chart-axis-scaling-3-1/3-2/3-3/3-4: same routing, extended to the value axis's own
+        // gridlines/tick-label visibility+position/crosses(+crossesAt)/display-units — these were
+        // previously hardcoded to Y* below regardless of valueAxisOnX, so for a horizontal Bar chart
+        // (whose value axis was correctly captured into X* by the reader) they were written with the
+        // still-default/unset Y* values, silently dropping the value axis's own settings.
+        var valueAxisMinorGridlineColor = valueAxisOnX ? chart.XAxisMinorGridlineColor : chart.YAxisMinorGridlineColor;
+        var valueAxisGridlineThickness = valueAxisOnX ? chart.XAxisGridlineThickness : chart.YAxisGridlineThickness;
+        var showValueAxisMajorGridlines = ToEffectiveShowValueAxisMajorGridlines(chart, valueAxisOnX);
+        var valueAxisMajorGridlineColor = valueAxisOnX ? chart.XAxisMajorGridlineColor : chart.YAxisMajorGridlineColor;
+        var valueAxisShowMinorGridlines = valueAxisOnX ? chart.ShowXAxisMinorGridlines : chart.ShowYAxisMinorGridlines;
+        var valueAxisShowLabels = valueAxisOnX ? chart.ShowXAxisLabels : chart.ShowYAxisLabels;
+        var valueAxisTickLabelPosition = valueAxisOnX ? chart.XAxisTickLabelPosition : chart.YAxisTickLabelPosition;
+        var valueAxisCrosses = valueAxisOnX ? chart.XAxisCrosses : chart.YAxisCrosses;
+        var valueAxisCrossesAt = valueAxisOnX ? chart.XAxisCrossesAt : chart.YAxisCrossesAt;
+        var valueAxisDisplayUnit = valueAxisOnX ? chart.XAxisDisplayUnit : chart.YAxisDisplayUnit;
+        var valueAxisCustomDisplayUnit = valueAxisOnX ? chart.XAxisCustomDisplayUnit : chart.YAxisCustomDisplayUnit;
+        var valueAxisShowDisplayUnitLabel = valueAxisOnX ? chart.ShowXAxisDisplayUnitLabel : chart.ShowYAxisDisplayUnitLabel;
         yield return ToValueAxisXml(
             chart.YAxisTitle,
             chart.YAxisTitleLayout,
@@ -190,16 +206,16 @@ internal static partial class XlsxChartXmlWriter
             valueAxisNumberFormat.FormatCode,
             valueAxisNumberFormat.SourceLinked,
             showValueAxisMajorGridlines,
-            chart.ShowYAxisMinorGridlines,
-            chart.YAxisMajorGridlineColor,
-            chart.YAxisMinorGridlineColor,
-            chart.YAxisGridlineThickness,
+            valueAxisShowMinorGridlines,
+            valueAxisMajorGridlineColor,
+            valueAxisMinorGridlineColor,
+            valueAxisGridlineThickness,
             valueAxisMajorTickStyle,
             chart.YAxisMinorTickStyle,
             chart.YAxisLineColor,
             chart.YAxisLineThickness,
-            chart.ShowYAxisLabels,
-            chart.YAxisTickLabelPosition,
+            valueAxisShowLabels,
+            valueAxisTickLabelPosition,
             chart.YAxisLabelTextColor,
             chart.YAxisLabelFontSize,
             chart.YAxisLabelAngle,
@@ -207,16 +223,16 @@ internal static partial class XlsxChartXmlWriter
             chart.YAxisTitleTextThemeColor ?? chart.AxisTitleTextThemeColor,
             chart.YAxisTitleTextColor ?? chart.AxisTitleTextColor,
             chart.YAxisTitleFontSize ?? chart.AxisTitleFontSize,
-            chart.YAxisCrosses,
-            chart.YAxisCrossesAt,
+            valueAxisCrosses,
+            valueAxisCrossesAt,
             valueAxisCrossBetween,
-            chart.YAxisDisplayUnit,
-            chart.YAxisCustomDisplayUnit,
+            valueAxisDisplayUnit,
+            valueAxisCustomDisplayUnit,
             chartNs,
             drawingNs,
-            useExcelNativeMajorGridlineStyle: ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart),
+            useExcelNativeMajorGridlineStyle: ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart, valueAxisOnX),
             verbatimTitle: TryParseVerbatimAxisTitleXml(chart.YAxisTitleVerbatimXml),
-            showDisplayUnitLabel: chart.ShowYAxisDisplayUnitLabel);
+            showDisplayUnitLabel: valueAxisShowDisplayUnitLabel);
 
         var secondaryIndexes = GetSecondaryAxisSeriesIndexes(chart, ChartTypeSupport.GetDataSeriesCount(chart));
         if (secondaryIndexes.Count > 0)
@@ -299,7 +315,22 @@ internal static partial class XlsxChartXmlWriter
         // R16-meta-1: mirror XlsxChartAxisReader.ApplyCategoryAxisProperties(categoryAxisOnY:
         // valueAxisOnX) — for bar-family charts the category axis is physically on Y, so its
         // reverse-order flag was captured into YAxisReverseOrder on read, not XAxisReverseOrder.
-        var categoryAxisReverseOrder = IsHorizontalBarChart(chart.Type) ? chart.YAxisReverseOrder : chart.XAxisReverseOrder;
+        var categoryAxisIsOnY = IsHorizontalBarChart(chart.Type);
+        var categoryAxisReverseOrder = categoryAxisIsOnY ? chart.YAxisReverseOrder : chart.XAxisReverseOrder;
+        // R47-io-chart-axis-scaling-3-1/3-3/3-4: mirror the same routing for the category axis's own
+        // gridlines/tickLblPos/crosses(+crossesAt) — XlsxChartAxisReader.ApplyCategoryAxisProperties
+        // now captures these into Y* for bar-family charts (categoryAxisOnY), so the writer must read
+        // them back from Y* too, not unconditionally from X* (which belongs to the value axis for a
+        // horizontal Bar chart).
+        var categoryAxisShowMajorGridlines = categoryAxisIsOnY ? chart.ShowYAxisMajorGridlines : chart.ShowXAxisMajorGridlines;
+        var categoryAxisShowMinorGridlines = categoryAxisIsOnY ? chart.ShowYAxisMinorGridlines : chart.ShowXAxisMinorGridlines;
+        var categoryAxisMajorGridlineColor = categoryAxisIsOnY ? chart.YAxisMajorGridlineColor : chart.XAxisMajorGridlineColor;
+        var categoryAxisMinorGridlineColor = categoryAxisIsOnY ? chart.YAxisMinorGridlineColor : chart.XAxisMinorGridlineColor;
+        var categoryAxisGridlineThickness = categoryAxisIsOnY ? chart.YAxisGridlineThickness : chart.XAxisGridlineThickness;
+        var categoryAxisShowLabels = categoryAxisIsOnY ? chart.ShowYAxisLabels : chart.ShowXAxisLabels;
+        var categoryAxisTickLabelPosition = categoryAxisIsOnY ? chart.YAxisTickLabelPosition : chart.XAxisTickLabelPosition;
+        var categoryAxisCrosses = categoryAxisIsOnY ? chart.YAxisCrosses : chart.XAxisCrosses;
+        var categoryAxisCrossesAt = categoryAxisIsOnY ? chart.YAxisCrossesAt : chart.XAxisCrossesAt;
         var categoryAxisPosition = ToXlsxCategoryAxisPosition(chart);
         return new XElement(chartNs + (isDateAxis ? "dateAx" : "catAx"),
             new XElement(chartNs + "axId", new XAttribute("val", CategoryAxisId)),
@@ -307,8 +338,8 @@ internal static partial class XlsxChartXmlWriter
                 new XElement(chartNs + "orientation", new XAttribute("val", ToXlsxAxisOrientation(categoryAxisReverseOrder)))),
             new XElement(chartNs + "delete", new XAttribute("val", chart.HideXAxis ? "1" : "0")),
             new XElement(chartNs + "axPos", new XAttribute("val", categoryAxisPosition)),
-            ToAxisGridlinesXml("majorGridlines", chart.ShowXAxisMajorGridlines, chart.XAxisMajorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
-            ToAxisGridlinesXml("minorGridlines", chart.ShowXAxisMinorGridlines, chart.XAxisMinorGridlineColor, chart.XAxisGridlineThickness, chartNs, drawingNs),
+            ToAxisGridlinesXml("majorGridlines", categoryAxisShowMajorGridlines, categoryAxisMajorGridlineColor, categoryAxisGridlineThickness, chartNs, drawingNs),
+            ToAxisGridlinesXml("minorGridlines", categoryAxisShowMinorGridlines, categoryAxisMinorGridlineColor, categoryAxisGridlineThickness, chartNs, drawingNs),
             TryParseVerbatimAxisTitleXml(chart.XAxisTitleVerbatimXml)
                 ?? ToAxisTitleXml(
                     chart.XAxisTitle,
@@ -328,11 +359,11 @@ internal static partial class XlsxChartXmlWriter
                 new XAttribute("sourceLinked", ToXlsxNumberFormatSourceLinked(chart.XAxisNumberFormat, chart.XAxisNumberFormatSourceLinked))),
             new XElement(chartNs + "majorTickMark", new XAttribute("val", ToXlsxTickMark(ToEffectiveAxisMajorTickStyle(chart.Type, chart.XAxisMajorTickStyle)))),
             new XElement(chartNs + "minorTickMark", new XAttribute("val", ToXlsxTickMark(chart.XAxisMinorTickStyle))),
-            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(chart.ShowXAxisLabels, chart.XAxisTickLabelPosition))),
+            new XElement(chartNs + "tickLblPos", new XAttribute("val", ToXlsxTickLabelPosition(categoryAxisShowLabels, categoryAxisTickLabelPosition))),
             ToAxisLineShapeProperties(chart.XAxisLineColor, chart.XAxisLineThickness, chartNs, drawingNs),
             ToAxisLabelTextProperties(chart.XAxisLabelTextThemeColor, chart.XAxisLabelTextColor, chart.XAxisLabelFontSize, chart.XAxisLabelAngle, chartNs, drawingNs),
             new XElement(chartNs + "crossAx", new XAttribute("val", ValueAxisId)),
-            ToAxisCrossesXml(chart.XAxisCrosses, chart.XAxisCrossesAt, chartNs),
+            ToAxisCrossesXml(categoryAxisCrosses, categoryAxisCrossesAt, chartNs),
             isDateAxis ? null : ToAxisLabelAlignmentXml(chart.XAxisLabelAlignment, chartNs),
             ToUnsignedAxisValueXml("lblOffset", chart.XAxisLabelOffset, chartNs),
             isDateAxis ? ToDateAxisUnitXml("baseTimeUnit", chart.XAxisBaseTimeUnit, chartNs) : null,
@@ -547,14 +578,25 @@ internal static partial class XlsxChartXmlWriter
         return (chart.YAxisNumberFormat, chart.YAxisNumberFormatCode, chart.YAxisNumberFormatSourceLinked);
     }
 
-    private static bool ToEffectiveShowValueAxisMajorGridlines(ChartModel chart) =>
-        chart.ShowYAxisMajorGridlines || ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart);
+    // R47-io-chart-axis-scaling-3-3: routed by valueAxisOnX (true for bar-family charts, whose value
+    // axis's own gridline visibility lives in X*, not Y*) so a horizontal Bar chart's value-axis
+    // gridlines are read back from the field the reader actually captured them into.
+    private static bool ToEffectiveShowValueAxisMajorGridlines(ChartModel chart, bool valueAxisOnX)
+    {
+        var showMajorGridlines = valueAxisOnX ? chart.ShowXAxisMajorGridlines : chart.ShowYAxisMajorGridlines;
+        return showMajorGridlines || ShouldUseExcelNativeValueAxisMajorGridlineStyle(chart, valueAxisOnX);
+    }
 
-    private static bool ShouldUseExcelNativeValueAxisMajorGridlineStyle(ChartModel chart) =>
-        IsClassicStackedBarOrColumnChart(chart.Type) &&
-        !chart.ShowYAxisMajorGridlines &&
-        chart.YAxisMajorGridlineColor is null &&
-        chart.YAxisGridlineThickness == 1;
+    private static bool ShouldUseExcelNativeValueAxisMajorGridlineStyle(ChartModel chart, bool valueAxisOnX)
+    {
+        var showMajorGridlines = valueAxisOnX ? chart.ShowXAxisMajorGridlines : chart.ShowYAxisMajorGridlines;
+        var majorGridlineColor = valueAxisOnX ? chart.XAxisMajorGridlineColor : chart.YAxisMajorGridlineColor;
+        var gridlineThickness = valueAxisOnX ? chart.XAxisGridlineThickness : chart.YAxisGridlineThickness;
+        return IsClassicStackedBarOrColumnChart(chart.Type) &&
+            !showMajorGridlines &&
+            majorGridlineColor is null &&
+            gridlineThickness == 1;
+    }
 
     private static ChartAxisTickStyle ToEffectiveAxisMajorTickStyle(ChartType chartType, ChartAxisTickStyle tickStyle) =>
         IsClassicStackedBarOrColumnChart(chartType) && tickStyle == ChartAxisTickStyle.Outside

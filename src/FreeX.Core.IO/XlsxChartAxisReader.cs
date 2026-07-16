@@ -461,10 +461,22 @@ internal static class XlsxChartAxisReader
         if (axisElement is null)
             return;
 
-        ApplyXAxisGridlineProperties(
-            chart,
-            ReadAxisGridline(axisElement.Element(ChartNs + "majorGridlines")),
-            ReadAxisGridline(axisElement.Element(ChartNs + "minorGridlines")));
+        // R47-io-chart-axis-scaling-3-3: route the category axis's OWN gridlines to whichever field
+        // the renderer reads for the category axis's PHYSICAL position, same as the reverse-order
+        // routing below — otherwise, for bar-family charts, this always writes the X* gridline fields
+        // and gets clobbered a few lines later by ApplyValueAxisProperties (which, for bar charts, also
+        // targets X* via useXAxis: true), losing the category axis's own gridlines and the value
+        // axis's gridlines never reaching Y*.
+        if (categoryAxisOnY)
+            ApplyYAxisGridlineProperties(
+                chart,
+                ReadAxisGridline(axisElement.Element(ChartNs + "majorGridlines")),
+                ReadAxisGridline(axisElement.Element(ChartNs + "minorGridlines")));
+        else
+            ApplyXAxisGridlineProperties(
+                chart,
+                ReadAxisGridline(axisElement.Element(ChartNs + "majorGridlines")),
+                ReadAxisGridline(axisElement.Element(ChartNs + "minorGridlines")));
         var categoryReverseOrder = IsReverseOrientation(axisElement.Element(ChartNs + "scaling"));
         if (categoryAxisOnY)
             chart.YAxisReverseOrder = categoryReverseOrder;
@@ -473,8 +485,21 @@ internal static class XlsxChartAxisReader
         chart.XAxisMajorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "majorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.Outside);
         chart.XAxisMinorTickStyle = FromXlsxTickMark(axisElement.Element(ChartNs + "minorTickMark")?.Attribute("val")?.Value, ChartAxisTickStyle.None);
         var tickLabelPositionValue = axisElement.Element(ChartNs + "tickLblPos")?.Attribute("val")?.Value;
-        chart.ShowXAxisLabels = tickLabelPositionValue != "none";
-        chart.XAxisTickLabelPosition = FromXlsxTickLabelPosition(tickLabelPositionValue);
+        var categoryShowLabels = tickLabelPositionValue != "none";
+        var categoryTickLabelPosition = FromXlsxTickLabelPosition(tickLabelPositionValue);
+        // R47-io-chart-axis-scaling-3-4: same routing as gridlines above — the category axis's own
+        // tick-label visibility/position must land on Y* for bar-family charts, not clobber (and then
+        // be clobbered by) the value axis's X* tickLblPos.
+        if (categoryAxisOnY)
+        {
+            chart.ShowYAxisLabels = categoryShowLabels;
+            chart.YAxisTickLabelPosition = categoryTickLabelPosition;
+        }
+        else
+        {
+            chart.ShowXAxisLabels = categoryShowLabels;
+            chart.XAxisTickLabelPosition = categoryTickLabelPosition;
+        }
         chart.XAxisLabelSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickLblSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisTickMarkSkip = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "tickMarkSkip")?.Attribute("val")?.Value) ?? 0);
         chart.XAxisLabelOffset = Math.Max(0, ReadInt(axisElement.Element(ChartNs + "lblOffset")?.Attribute("val")?.Value) ?? 0);
@@ -506,9 +531,21 @@ internal static class XlsxChartAxisReader
         }
         ApplyXAxisLineProperties(chart, ReadAxisLine(axisElement.Element(ChartNs + "spPr")));
 
+        // R47-io-chart-axis-scaling-3-1: route the category axis's OWN crosses/crossesAt to Y* for
+        // bar-family charts (same reasoning as gridlines/tickLblPos above) — otherwise it is always
+        // written to X* and is immediately clobbered by ApplyValueAxisProperties's own X* crosses/
+        // crossesAt for a horizontal Bar chart, permanently losing the category axis's crossing point.
         var crossing = ReadAxisCrossing(axisElement);
-        chart.XAxisCrosses = crossing.Crosses;
-        chart.XAxisCrossesAt = crossing.CrossesAt;
+        if (categoryAxisOnY)
+        {
+            chart.YAxisCrosses = crossing.Crosses;
+            chart.YAxisCrossesAt = crossing.CrossesAt;
+        }
+        else
+        {
+            chart.XAxisCrosses = crossing.Crosses;
+            chart.XAxisCrossesAt = crossing.CrossesAt;
+        }
     }
 
     private static void ApplyXAxisGridlineProperties(

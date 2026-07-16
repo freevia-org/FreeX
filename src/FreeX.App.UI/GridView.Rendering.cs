@@ -344,12 +344,7 @@ public partial class GridView
         var useDefaultWrappedTextLayout = false;
         if (!useDefaultTextLayout && wrapText)
         {
-            wrapTextAlignment = hAlign switch
-            {
-                CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
-                CellHAlign.Right => TextAlignment.Right,
-                _ => TextAlignment.Left
-            };
+            wrapTextAlignment = ResolveWrapTextAlignment(hAlign, isNumeric, isEffectivelyRightToLeft);
             useDefaultWrappedTextLayout = !hasSplitRichRuns && !isEffectivelyRightToLeft && CanUseDefaultWrappedFormattedText(style);
         }
         FormattedText text;
@@ -798,12 +793,7 @@ public partial class GridView
             var useDefaultWrappedTextLayout = false;
             if (!useDefaultTextLayout && wrapText)
             {
-                wrapTextAlignment = hAlign switch
-                {
-                    CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
-                    CellHAlign.Right => TextAlignment.Right,
-                    _ => TextAlignment.Left
-                };
+                wrapTextAlignment = ResolveWrapTextAlignment(hAlign, isNumeric, isEffectivelyRightToLeft);
                 useDefaultWrappedTextLayout = !hasRichRuns && !isEffectivelyRightToLeft && CanUseDefaultWrappedFormattedText(style);
             }
 
@@ -1303,6 +1293,28 @@ public partial class GridView
 
     internal static string PrepareCellDisplayTextForRender(string text, int textRotation) =>
         CellTextOrientationLayoutPlanner.PrepareDisplayText(text, textRotation);
+
+    /// <summary>
+    /// Resolves the per-line <see cref="TextAlignment"/> used inside a wrapped cell's text box.
+    /// Left/Right/Center/Justify/Distributed are direction-agnostic (an explicit alignment always
+    /// means the same visual side regardless of sheet reading order). General, however, is
+    /// context-dependent exactly like the outer box's anchor side computed by
+    /// <see cref="CellTextOrientationLayoutPlanner.ResolveEffectiveHorizontalAlignment"/>: numeric/date
+    /// content flushes to the "end" of the reading direction and text content flushes to the "start"
+    /// — so a wrapped RTL paragraph must ragged-edge on the LEFT (flush-right) and a wrapped LTR
+    /// paragraph must ragged-edge on the RIGHT (flush-left), matching the Avalonia shell's
+    /// MapCellTextAlignment.
+    /// </summary>
+    internal static TextAlignment ResolveWrapTextAlignment(CellHAlign hAlign, bool isNumeric, bool isEffectivelyRightToLeft) =>
+        hAlign switch
+        {
+            CellHAlign.Left => TextAlignment.Left,
+            CellHAlign.Center or CellHAlign.Justify or CellHAlign.Distributed => TextAlignment.Center,
+            CellHAlign.Right => TextAlignment.Right,
+            CellHAlign.General when isNumeric => isEffectivelyRightToLeft ? TextAlignment.Left : TextAlignment.Right,
+            CellHAlign.General => isEffectivelyRightToLeft ? TextAlignment.Right : TextAlignment.Left,
+            _ => TextAlignment.Left
+        };
 
     internal static CellTextRenderLayout CalculateCellTextRenderLayout(
         Rect rect,

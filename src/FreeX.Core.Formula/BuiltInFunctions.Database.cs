@@ -45,20 +45,32 @@ public static partial class BuiltInFunctions
     }
 
     /// <summary>Returns true if a single data row matches a single criteria row (AND across columns).</summary>
-    private static bool DbRowMatchesCriteriaRow(RangeValue database, int dataRow, RangeValue criteria, int critRow)
+    private static bool DbRowMatchesCriteriaRow(RangeValue database, int dataRow, RangeValue criteria, int critRow, IEvalContext ctx)
     {
         for (int cc = 0; cc < criteria.ColCount; cc++)
         {
             var critHeader = criteria.Cells[0, cc];
-            if (critHeader is BlankValue) continue;
+            bool blankHeader = critHeader is BlankValue;
+            int dbCol = blankHeader ? -1 : FindDbHeaderCol(database, ToText(critHeader));
+
+            if (blankHeader || dbCol < 0)
+            {
+                // Excel's documented "computed criteria" convention: a criteria column whose
+                // header is blank, or is a label that doesn't match any database column name,
+                // has no field of its own to compare against. Its criteria cell instead holds a
+                // formula that is re-evaluated per candidate database row (relative references
+                // shifted to that row) and the row matches only when the formula is truthy. A
+                // criteria cell that isn't itself a live formula contributes no condition and is
+                // ignored, mirroring the "blank criterion under a mapped header" convention below.
+                if (!TryEvaluateComputedCriterion(criteria, critRow, cc, database, dataRow, ctx, out bool computedMatch))
+                    continue;
+                if (!computedMatch) return false;
+                continue;
+            }
 
             var critCell = criteria.Cells[critRow, cc];
             if (critCell is BlankValue) continue;
             if (critCell is TextValue tv && tv.Value.Length == 0) continue;
-
-            var headerText = ToText(critHeader);
-            int dbCol = FindDbHeaderCol(database, headerText);
-            if (dbCol < 0) return false;
 
             var cellValue = database.Cells[dataRow, dbCol];
             // Excel's database/Advanced-Filter criteria treat a bare (non-wildcard, non-numeric,
@@ -69,6 +81,59 @@ public static partial class BuiltInFunctions
         return true;
     }
 
+    /// <summary>
+    /// Evaluates a computed (blank/non-column-header) database criteria cell against a candidate
+    /// database row, mirroring Advanced Filter's <c>ComputedCriteriaCheck</c>: the formula authored
+    /// at the criteria cell is re-evaluated with its relative references shifted to the candidate
+    /// row, exactly as if it had been entered there. Returns false (nothing to evaluate) when the
+    /// criteria/database ranges aren't backed by real worksheet cells (e.g. synthesized arrays) or
+    /// the criteria cell holds no formula — Excel's computed criteria only exists as an authored
+    /// formula in a real cell, so there is no condition to apply otherwise.
+    /// </summary>
+    private static bool TryEvaluateComputedCriterion(
+        RangeValue criteria, int critRow, int cc,
+        RangeValue database, int dataRow,
+        IEvalContext ctx, out bool matches)
+    {
+        matches = false;
+        if (!criteria.IsSheetReference || !database.IsSheetReference) return false;
+
+        var sheet = criteria.SheetName is { } sheetName
+            ? ctx.CurrentWorkbook?.GetSheet(sheetName)
+            : ctx.CurrentSheet;
+        if (sheet is null) return false;
+
+        uint formulaRow = criteria.StartRow + (uint)critRow;
+        uint formulaCol = criteria.StartCol + (uint)cc;
+        var cell = sheet.GetCell(formulaRow, formulaCol);
+        if (cell?.FormulaText is not { Length: > 0 } formulaText) return false;
+
+        uint targetRow = database.StartRow + (uint)dataRow;
+        try
+        {
+            var ast = FormulaEvaluator.ParseFormula(formulaText);
+            var anchor = new Model.CellAddress(sheet.Id, formulaRow, formulaCol);
+            var current = new Model.CellAddress(sheet.Id, targetRow, formulaCol);
+            var shifted = FormulaEvaluator.ShiftFormulaForCell(ast, anchor, current);
+            var evaluator = new FormulaEvaluator();
+            var value = evaluator.Evaluate(shifted, sheet, ctx.CurrentWorkbook, currentCell: current);
+            matches = value switch
+            {
+                BoolValue b => b.Value,
+                NumberValue n => n.Value != 0,
+                _ => false
+            };
+            return true;
+        }
+        catch
+        {
+            // A computed criterion that errors is a real (non-matching) evaluation, not an
+            // "ignore this column" case -- matches AdvancedFilterPlanBuilder.ComputedCriteriaCheck.
+            matches = false;
+            return true;
+        }
+    }
+
     /// <summary>Extract values from the field column for all matching rows.</summary>
     /// <remarks>
     /// <paramref name="matchCount"/> is the total number of database rows satisfying the
@@ -77,7 +142,7 @@ public static partial class BuiltInFunctions
     /// a matching row's field value errors before every match has been scanned.
     /// </remarks>
     private static (List<ScalarValue> Matches, ErrorValue? Error, int MatchCount) DatabaseExtract(
-        RangeValue database, ScalarValue fieldArg, RangeValue criteria)
+        RangeValue database, ScalarValue fieldArg, RangeValue criteria, IEvalContext ctx)
     {
         if (database.RowCount < 2) return (new List<ScalarValue>(), null, 0);
 
@@ -93,7 +158,7 @@ public static partial class BuiltInFunctions
             // OR across criteria rows
             for (int cr = 1; cr < criteria.RowCount; cr++)
             {
-                if (DbRowMatchesCriteriaRow(database, r, criteria, cr))
+                if (DbRowMatchesCriteriaRow(database, r, criteria, cr, ctx))
                 {
                     rowMatches = true;
                     break;
@@ -112,9 +177,9 @@ public static partial class BuiltInFunctions
     }
 
     private static (List<double> Nums, ErrorValue? Error) DatabaseExtractNumeric(
-        RangeValue database, ScalarValue fieldArg, RangeValue criteria)
+        RangeValue database, ScalarValue fieldArg, RangeValue criteria, IEvalContext ctx)
     {
-        var (matches, err, _) = DatabaseExtract(database, fieldArg, criteria);
+        var (matches, err, _) = DatabaseExtract(database, fieldArg, criteria, ctx);
         if (err is not null) return (new List<double>(), err);
         var nums = new List<double>();
         foreach (var v in matches)
@@ -146,10 +211,11 @@ public static partial class BuiltInFunctions
 
     private static ScalarValue EvaluateDatabaseNumericAggregate(
         IReadOnlyList<ScalarValue> args,
+        IEvalContext ctx,
         Func<List<double>, ScalarValue> aggregate)
     {
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (nums, e) = DatabaseExtractNumeric(db, f, cr);
+        var (nums, e) = DatabaseExtractNumeric(db, f, cr, ctx);
         if (e is not null) return e;
         return aggregate(nums);
     }
@@ -176,10 +242,10 @@ public static partial class BuiltInFunctions
             : ErrorValue.DivByZero;
 
     private static ScalarValue DSum(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-        => EvaluateDatabaseNumericAggregate(args, nums => NumberResult(nums.Sum()));
+        => EvaluateDatabaseNumericAggregate(args, ctx, nums => NumberResult(nums.Sum()));
 
     private static ScalarValue DAverage(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-        => EvaluateDatabaseNumericAggregate(args, nums =>
+        => EvaluateDatabaseNumericAggregate(args, ctx, nums =>
         {
             if (nums.Count == 0) return ErrorValue.DivByZero;
             return NumberResult(nums.Average());
@@ -196,7 +262,7 @@ public static partial class BuiltInFunctions
         // are counted) -- so the field-resolution failure can't be told apart from "no
         // matches" just by looking at DatabaseExtract's returned Error/matches.
         if (ResolveDatabaseField(db, f) is null) return ErrorValue.Value;
-        var (matches, _, _) = DatabaseExtract(db, f, cr);
+        var (matches, _, _) = DatabaseExtract(db, f, cr, ctx);
         int count = 0;
         foreach (var v in matches)
             if (TryCellNumber(v, out _)) count++;
@@ -210,7 +276,7 @@ public static partial class BuiltInFunctions
         if (ResolveDatabaseField(db, f) is null) return ErrorValue.Value;
         // Mirrors plain COUNTA: an error in a matched field cell still counts as a
         // non-blank present value rather than being propagated.
-        var (matches, _, _) = DatabaseExtract(db, f, cr);
+        var (matches, _, _) = DatabaseExtract(db, f, cr, ctx);
         int count = 0;
         foreach (var v in matches)
             if (v is not BlankValue && !(v is TextValue tv && tv.Value.Length == 0)) count++;
@@ -220,7 +286,7 @@ public static partial class BuiltInFunctions
     private static ScalarValue DGet(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         if (!TryDbArgs(args, out var db, out var f, out var cr, out var err)) return err!;
-        var (matches, e, matchCount) = DatabaseExtract(db, f, cr);
+        var (matches, e, matchCount) = DatabaseExtract(db, f, cr, ctx);
         // Excel's documented "more than one record satisfies the criteria" #NUM! rule takes
         // priority over a matched row's field error — check the total match count first.
         if (matchCount > 1) return ErrorValue.Num;
@@ -231,21 +297,21 @@ public static partial class BuiltInFunctions
     }
 
     private static ScalarValue DMax(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-        => EvaluateDatabaseNumericAggregate(args, nums =>
+        => EvaluateDatabaseNumericAggregate(args, ctx, nums =>
         {
             if (nums.Count == 0) return NumberResult(0);
             return NumberResult(nums.Max());
         });
 
     private static ScalarValue DMin(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-        => EvaluateDatabaseNumericAggregate(args, nums =>
+        => EvaluateDatabaseNumericAggregate(args, ctx, nums =>
         {
             if (nums.Count == 0) return NumberResult(0);
             return NumberResult(nums.Min());
         });
 
     private static ScalarValue DProduct(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-        => EvaluateDatabaseNumericAggregate(args, nums =>
+        => EvaluateDatabaseNumericAggregate(args, ctx, nums =>
         {
             if (nums.Count == 0) return NumberResult(0);
             double prod = 1;
@@ -254,15 +320,15 @@ public static partial class BuiltInFunctions
         });
 
     private static ScalarValue DStdev(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-        => EvaluateDatabaseNumericAggregate(args, nums => DatabaseStdDev(nums, sample: true));
+        => EvaluateDatabaseNumericAggregate(args, ctx, nums => DatabaseStdDev(nums, sample: true));
 
     private static ScalarValue DStdevP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-        => EvaluateDatabaseNumericAggregate(args, nums => DatabaseStdDev(nums, sample: false));
+        => EvaluateDatabaseNumericAggregate(args, ctx, nums => DatabaseStdDev(nums, sample: false));
 
     private static ScalarValue DVar(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-        => EvaluateDatabaseNumericAggregate(args, nums => DatabaseVariance(nums, sample: true));
+        => EvaluateDatabaseNumericAggregate(args, ctx, nums => DatabaseVariance(nums, sample: true));
 
     private static ScalarValue DVarP(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
-        => EvaluateDatabaseNumericAggregate(args, nums => DatabaseVariance(nums, sample: false));
+        => EvaluateDatabaseNumericAggregate(args, ctx, nums => DatabaseVariance(nums, sample: false));
 
 }

@@ -135,9 +135,21 @@ public sealed partial class GridViewRenderPerformanceTests
         var allocatedBytes = GC.GetAllocatedBytesForCurrentThread() - before;
         var rowHeaderWidth = GridView.CalculateRowHeaderWidth(viewport);
         allocatedBytes.Should().BeLessThan(1_000_000);
+        // r47 extended the r46 vertical-split (column-crossing) merge fix to also cover the
+        // horizontal split (row-crossing): this merge spans rows 1..MaxRow, so it crosses BOTH the
+        // row split (TopRows ends at row 2) and the column split (LeftColumns ends at col 2). Row
+        // 500_000 is visible in the bottom-left pane (via the BottomLeftRows fallback to
+        // viewport.RowMetrics), so the merge now legitimately gets a 3rd quadrant layout there too -
+        // same anchor cell, stripped content, clipped to the bottom-left pane's box. The 4th
+        // possible quadrant (bottom-right) stays absent because the merge's columns (1-2) never
+        // reach the right pane's only visible column (10). The test's actual intent - that a
+        // 500,000-row-tall merge's layout cost stays bounded to the handful of visible cells/panes,
+        // not proportional to the merge's row span - is unaffected: still O(visible cells), just up
+        // to 4 quadrants per crossing merge instead of 2.
         layouts.Select(layout => (layout.Cell.Row, layout.Cell.Col, layout.Rect))
             .Should().Equal(
                 (1u, 1u, new Rect(rowHeaderWidth, GridView.ColHeaderHeight, 144, 40)),
+                (1u, 1u, new Rect(rowHeaderWidth, GridView.ColHeaderHeight + 40, 144, 18)),
                 (1u, 10u, new Rect(rowHeaderWidth + 144, GridView.ColHeaderHeight, 64, 18)));
     }
 

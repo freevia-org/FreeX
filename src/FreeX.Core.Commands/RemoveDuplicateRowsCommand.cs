@@ -59,6 +59,15 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtected(sheet) is { } protectedOutcome)
             return protectedOutcome;
 
+        // R47-sibling-guard-asymmetry-sweep-5: mirror ClearContentsCommand's CSE-array/dynamic-spill
+        // split guard for this command's identical "clear then possibly rewrite" primitive (see step
+        // 3 below) — reject if _range would only partially cover an array/spill (some members inside
+        // the operated range, others outside it left behind), matching Excel's "You cannot change
+        // part of an array".
+        var removeDuplicatesShiftRegion = new CellShiftRegion(_range.Start.Row, _range.End.Row, _range.Start.Col, _range.End.Col);
+        if (CommandGuards.RejectIfSplitsArray(sheet, InsertCellsCommand.ArrayMembersWithinShiftRegion(sheet, removeDuplicatesShiftRegion)) is { } splitsArrayRejection)
+            return splitsArrayRejection;
+
         RemovedRowCount = 0;
         _previousStructuredTable = null;
 

@@ -36,14 +36,16 @@ public static partial class BuiltInFunctions
             // full column and keep the last row where first-col value <= lookupValue (matches the
             // no-early-break scan already used by the LOOKUP() vector form below).
             // Excel skips entries whose type class differs from the lookup value's type class
-            // (blanks are always skipped; text headers above numeric data do not abort the scan).
+            // (text headers above numeric data do not abort the scan), but a genuinely blank cell
+            // is coerced to 0/"" (like any other blank participating in a comparison) rather than
+            // excluded outright, so it stays eligible as a candidate between real values.
             int lookupClass = ApproxLookupTypeClass(lookupValue);
             int bestRow = -1;
             for (int r = 1; r <= table.RowCount; r++)
             {
                 var cv = table.At(r, 1);
                 if (cv is ErrorValue cvErr) return cvErr;
-                if (ApproxLookupTypeClass(cv) != lookupClass) continue;
+                if (cv is not BlankValue && ApproxLookupTypeClass(cv) != lookupClass) continue;
                 if (CompareScalar(cv, lookupValue) <= 0)
                     bestRow = r;
             }
@@ -93,14 +95,16 @@ public static partial class BuiltInFunctions
             // Approximate match: scan first row ascending, without aborting on the first
             // out-of-order value (see VlookupScalar for why: Excel still returns a deterministic
             // result for genuinely unsorted data instead of erroring on the first descending cell).
-            // Skip entries whose type class differs from the lookup value's type class.
+            // Skip entries whose type class differs from the lookup value's type class, but let a
+            // genuinely blank cell through (see VlookupScalar) so it coerces to 0/"" instead of
+            // being excluded outright.
             int lookupClass = ApproxLookupTypeClass(lookupValue);
             int bestCol = -1;
             for (int c = 1; c <= table.ColCount; c++)
             {
                 var cv = table.At(1, c);
                 if (cv is ErrorValue cvErr) return cvErr;
-                if (ApproxLookupTypeClass(cv) != lookupClass) continue;
+                if (cv is not BlankValue && ApproxLookupTypeClass(cv) != lookupClass) continue;
                 if (CompareScalar(cv, lookupValue) <= 0)
                     bestCol = c;
             }
@@ -247,14 +251,15 @@ public static partial class BuiltInFunctions
         {
             // Ascending approximate: largest value <= lookupValue. Scan the whole vector without
             // aborting on the first out-of-order value (see VlookupScalar for why).
-            // Skip entries whose type class differs from the lookup value's type class.
+            // Skip entries whose type class differs from the lookup value's type class, but let a
+            // genuinely blank entry through so it coerces to 0/"" instead of being excluded outright.
             int lookupClass = ApproxLookupTypeClass(lookupValue);
             int best = -1;
             for (int i = 0; i < vector.Count; i++)
             {
                 var candidate = vector[i];
                 if (candidate is ErrorValue fErr) return fErr;
-                if (ApproxLookupTypeClass(candidate) != lookupClass) continue;
+                if (candidate is not BlankValue && ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 if (CompareScalar(candidate, lookupValue) <= 0)
                     best = i;
             }
@@ -266,14 +271,15 @@ public static partial class BuiltInFunctions
             // Descending approximate: smallest value >= lookupValue.
             // Assumes the lookup vector is sorted descending, matching Excel's contract, but scans
             // the whole vector without aborting on the first out-of-order value (see VlookupScalar).
-            // Skip entries whose type class differs from the lookup value's type class.
+            // Skip entries whose type class differs from the lookup value's type class, but let a
+            // genuinely blank entry through so it coerces to 0/"" instead of being excluded outright.
             int lookupClass = ApproxLookupTypeClass(lookupValue);
             int best = -1;
             for (int i = 0; i < vector.Count; i++)
             {
                 var candidate = vector[i];
                 if (candidate is ErrorValue fErr) return fErr;
-                if (ApproxLookupTypeClass(candidate) != lookupClass) continue;
+                if (candidate is not BlankValue && ApproxLookupTypeClass(candidate) != lookupClass) continue;
                 if (CompareScalar(candidate, lookupValue) >= 0)
                     best = i;
             }
@@ -314,7 +320,7 @@ public static partial class BuiltInFunctions
         for (int i = 0; i < lookupFlat.Count; i++)
         {
             if (lookupFlat[i] is ErrorValue) continue;
-            if (ApproxLookupTypeClass(lookupFlat[i]) != lookupClass) continue;
+            if (lookupFlat[i] is not BlankValue && ApproxLookupTypeClass(lookupFlat[i]) != lookupClass) continue;
             if (CompareScalar(lookupFlat[i], lookupVal) <= 0)
                 matchIdx = i;
         }
@@ -330,7 +336,7 @@ public static partial class BuiltInFunctions
         {
             var candidate = lookupVector[i];
             if (candidate is ErrorValue) continue;
-            if (ApproxLookupTypeClass(candidate) != lookupClass) continue;
+            if (candidate is not BlankValue && ApproxLookupTypeClass(candidate) != lookupClass) continue;
             if (CompareScalar(candidate, lookupVal) <= 0)
                 matchIdx = i;
         }

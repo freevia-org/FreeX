@@ -58,11 +58,28 @@ public sealed class MergeCellsCommand : IWorkbookCommand
             sheet.RemoveMergedRegion(region);
         _absorbedRegions = absorbed;
 
+        // Real Excel discards only the VALUE of every non-top-left cell (with the standard
+        // content-loss warning) but keeps that cell's own formatting (fill/font/number-format/
+        // borders) alive -- an Unmerge later brings back an empty cell that still carries its
+        // original look, matching Excel. sheet.ClearCell would hard-delete the whole Cell record
+        // (value AND StyleId together), permanently losing the formatting. Only cells that actually
+        // carry non-default formatting need to survive as a blank-but-styled Cell (mirroring the
+        // preserved-style blanking pattern ClearContentsCommand.Apply already uses); a plain,
+        // unstyled value cell has nothing to preserve, so it is still fully removed as before.
         var topLeft = _range.Start;
         foreach (var addr in _range.AllCells())
         {
             if (addr == topLeft) continue;
-            sheet.ClearCell(addr);
+            var oldCell = sheet.GetCell(addr);
+            if (oldCell is null || oldCell.StyleId == StyleId.Default)
+            {
+                sheet.ClearCell(addr);
+                continue;
+            }
+
+            var cleared = Cell.FromValue(BlankValue.Instance);
+            cleared.StyleId = oldCell.StyleId;
+            sheet.SetCell(addr, cleared);
         }
 
         sheet.AddMergedRegion(_range);

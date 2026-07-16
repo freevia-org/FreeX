@@ -14,7 +14,8 @@ internal static partial class XlsxPivotTableWriter
         XNamespace workbookNs,
         XNamespace relNs,
         string recordsRelId,
-        int recordCount)
+        int recordCount,
+        IReadOnlyDictionary<int, int> numberFormatIdMap)
     {
         var cacheFields = GetEffectivePivotCacheFields(cache, calculatedFields);
         var source = new XElement(workbookNs + "worksheetSource");
@@ -60,7 +61,7 @@ internal static partial class XlsxPivotTableWriter
             new XElement(
                 workbookNs + "cacheFields",
                 new XAttribute("count", cacheFields.Count.ToString(CultureInfo.InvariantCulture)),
-                cacheFields.Select(field => ToPivotCacheFieldXml(field, workbookNs))),
+                cacheFields.Select(field => ToPivotCacheFieldXml(field, workbookNs, numberFormatIdMap))),
             FreeXPivotCacheExtension(cache, workbookNs)));
     }
 
@@ -119,15 +120,36 @@ internal static partial class XlsxPivotTableWriter
                 payload));
     }
 
-    private static XElement ToPivotCacheFieldXml(PivotCacheFieldModel field, XNamespace workbookNs) =>
+    private static XElement ToPivotCacheFieldXml(
+        PivotCacheFieldModel field,
+        XNamespace workbookNs,
+        IReadOnlyDictionary<int, int> numberFormatIdMap) =>
         new(
             workbookNs + "cacheField",
             new XAttribute("name", string.IsNullOrWhiteSpace(field.Name) ? "Field" : field.Name),
-            field.NumberFormatId is { } numFmtId ? new XAttribute("numFmtId", numFmtId.ToString(CultureInfo.InvariantCulture)) : null,
+            ToPivotCacheNumberFormatAttribute(field, numberFormatIdMap),
             field.IsDatabaseField ? null : new XAttribute("databaseField", "0"),
             string.IsNullOrWhiteSpace(field.Formula) ? null : new XAttribute("formula", field.Formula),
             ToPivotCacheSharedItemsXml(field, workbookNs),
             ToPivotCacheFieldGroupXml(field, workbookNs));
+
+    // Mirrors ToPivotNumberFormatAttribute (XlsxPivotTableWriter.cs, used by sibling pivotTable
+    // dataFields): when the workbook's style/numFmt catalog write remaps a custom numFmtId to avoid an
+    // id collision, the SAME remap must be applied here so a cacheField's numFmtId keeps pointing at its
+    // original custom format instead of silently referencing whatever unrelated format now occupies its
+    // old id in the rebuilt styles.xml.
+    private static XAttribute? ToPivotCacheNumberFormatAttribute(
+        PivotCacheFieldModel field,
+        IReadOnlyDictionary<int, int> numberFormatIdMap)
+    {
+        if (field.NumberFormatId is not { } numberFormatId)
+            return null;
+
+        var mappedId = numberFormatIdMap.TryGetValue(numberFormatId, out var remapped)
+            ? remapped
+            : numberFormatId;
+        return new XAttribute("numFmtId", mappedId.ToString(CultureInfo.InvariantCulture));
+    }
 
     // R30-io-pivot-cache-deep-3: date/number-range grouping (field.Grouping/GroupStart/GroupEnd/
     // GroupInterval) was previously only preserved in a FreeX-private extLst extension, which real Excel
