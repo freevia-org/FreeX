@@ -4,6 +4,9 @@ An on-demand, durable interaction-smoke harness that launches the real FreeX Ava
 inside Docker (Ubuntu 24.04, Xvfb + openbox + xdotool) and drives it with synthetic keyboard
 input to prove that UI flows actually work on Linux — not just that the app opens.
 
+For a browser-based desktop that supports direct mouse and keyboard interaction, use
+`tools/Run-LinuxInteractiveDocker.ps1`; see `tools/LinuxInteractiveDocker/README.md`.
+
 ## What it tests
 
 Each *flow* performs an action, asserts an observable outcome, and captures a screenshot:
