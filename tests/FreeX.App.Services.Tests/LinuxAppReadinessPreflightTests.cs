@@ -52,4 +52,41 @@ public sealed class LinuxAppReadinessPreflightTests
         smokeSource.Should().Contain("public const string Argument = \"--macos-launch-smoke\";");
         smokeSource.Should().Contain("IsReportArgument(argument)");
     }
+
+    [Fact]
+    public void InteractiveDockerHarness_IsLocalOnlyOwnedAndAppSelectable()
+    {
+        var runner = File.ReadAllText(RepositoryFileLocator.Find("tools", "Run-LinuxInteractiveDocker.ps1"));
+        var dockerfile = File.ReadAllText(RepositoryFileLocator.Find("tools", "LinuxInteractiveDocker", "Dockerfile"));
+        var entrypoint = File.ReadAllText(RepositoryFileLocator.Find("tools", "LinuxInteractiveDocker", "entrypoint.sh"));
+        var readme = File.ReadAllText(RepositoryFileLocator.Find("tools", "LinuxInteractiveDocker", "README.md"));
+
+        runner.Should().Contain("[ValidateSet(\"FreeX\", \"FreeW\", \"FreeP\")]");
+        runner.Should().Contain("127.0.0.1:$Port`:6080");
+        runner.Should().Contain("\"--rm\"");
+        runner.Should().Contain("\"--init\"");
+        runner.Should().Contain("io.github.tony-xmelon.freex.linux-interactive");
+        runner.Should().Contain("Container '$containerName' exists but is not owned by this harness.");
+        runner.Should().Contain("freex-linux-interactive-app-$appKey");
+        runner.Should().Contain("& tar -czf $archivePath -C $publishDir .");
+        runner.Should().Contain("COPY app.tar.gz /tmp/app.tar.gz");
+        runner.Should().Contain("Docker image '$appImage' exists but is not owned by this harness.");
+        runner.Should().Contain("FreeX-LinuxInteractive/$appKey/publish/linux-x64");
+
+        dockerfile.Should().Contain("FROM ubuntu:24.04");
+        dockerfile.Should().Contain("novnc");
+        dockerfile.Should().Contain("openbox");
+        dockerfile.Should().Contain("x11vnc");
+        dockerfile.Should().Contain("xvfb");
+
+        entrypoint.Should().Contain("Xvfb :99");
+        entrypoint.Should().Contain("websockify");
+        entrypoint.Should().Contain("xdotool search --onlyvisible");
+        entrypoint.Should().Contain("/work/ready.json");
+        entrypoint.Should().Contain("scrot /work/screenshots/initial.png");
+
+        readme.Should().Contain("http://127.0.0.1:6080/vnc.html");
+        readme.Should().Contain("-Action Screenshot");
+        readme.Should().Contain("-Action Stop");
+    }
 }

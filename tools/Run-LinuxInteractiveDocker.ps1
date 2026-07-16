@@ -1,0 +1,415 @@
+<#
+.SYNOPSIS
+  Run a FreeX-family Avalonia app in an interactive Linux desktop exposed through noVNC.
+
+.DESCRIPTION
+  Publishes FreeX, FreeW, or FreeP for linux-x64, starts an isolated Ubuntu 24.04
+  container with Xvfb, Openbox, x11vnc, and noVNC, and exposes the desktop only
+  on localhost. The container remains available until the Stop action is used.
+
+.EXAMPLE
+  powershell -File tools/Run-LinuxInteractiveDocker.ps1 -App FreeX -OpenBrowser
+
+.EXAMPLE
+  powershell -File tools/Run-LinuxInteractiveDocker.ps1 -Action Screenshot -App FreeX
+
+.EXAMPLE
+  powershell -File tools/Run-LinuxInteractiveDocker.ps1 -Action Stop -App FreeX
+#>
+[CmdletBinding()]
+param(
+    [ValidateSet("Start", "Stop", "Status", "Screenshot", "Clean")]
+    [string]$Action = "Start",
+
+    [ValidateSet("FreeX", "FreeW", "FreeP")]
+    [string]$App = "FreeX",
+
+    [ValidateRange(1024, 65535)]
+    [int]$Port = 6080,
+
+    [ValidateRange(640, 7680)]
+    [int]$Width = 1280,
+
+    [ValidateRange(480, 4320)]
+    [int]$Height = 820,
+
+    [ValidateRange(72, 240)]
+    [int]$Dpi = 96,
+
+    [string]$OutputDir = "artifacts/linux-interactive",
+    [string]$PublishDir = "",
+    [string]$Image = "freex-linux-interactive:ubuntu24.04",
+    [string]$DocumentPath = "",
+    [switch]$SkipPublish,
+    [switch]$SkipImageBuild,
+    [switch]$OpenBrowser,
+    [switch]$Replace
+)
+
+$ErrorActionPreference = "Stop"
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$dockerContext = Join-Path $PSScriptRoot "LinuxInteractiveDocker"
+$resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
+    [IO.Path]::GetFullPath($OutputDir)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $repoRoot $OutputDir))
+}
+
+$appDefinitions = @{
+    FreeX = @{
+        Project = "src/FreeX.App.Avalonia/FreeX.App.Avalonia.csproj"
+        Executable = "FreeX"
+        WindowTitle = "FreeX"
+    }
+    FreeW = @{
+        Project = "freew/FreeW.App.Avalonia/FreeW.App.Avalonia.csproj"
+        Executable = "FreeW"
+        WindowTitle = "FreeW"
+    }
+    FreeP = @{
+        Project = "freep/FreeP.App.Avalonia/FreeP.App.Avalonia.csproj"
+        Executable = "FreeP"
+        WindowTitle = "FreeP"
+    }
+}
+
+$definition = $appDefinitions[$App]
+$appKey = $App.ToLowerInvariant()
+$containerName = "freex-linux-interactive-$appKey-$Port"
+$appImage = "freex-linux-interactive-app-$appKey`:current"
+$appOutputRoot = Join-Path $resolvedOutputRoot $appKey
+$publishDir = if ([string]::IsNullOrWhiteSpace($PublishDir)) {
+    Join-Path $env:TEMP "FreeX-LinuxInteractive/$appKey/publish/linux-x64"
+} elseif ([IO.Path]::IsPathRooted($PublishDir)) {
+    [IO.Path]::GetFullPath($PublishDir)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $repoRoot $PublishDir))
+}
+$documentsDir = Join-Path $appOutputRoot "documents"
+$currentSessionPath = Join-Path $appOutputRoot "current-session.json"
+$labelName = "io.github.tony-xmelon.freex.linux-interactive"
+
+function Invoke-Docker {
+    param(
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [switch]$AllowFailure
+    )
+
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $output = @(& docker @Arguments 2>&1)
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = $previousPreference
+    $output = @($output | ForEach-Object { $_.ToString() })
+
+    if (-not $AllowFailure -and $exitCode -ne 0) {
+        throw "docker $($Arguments -join ' ') failed with exit code $exitCode.`n$($output -join [Environment]::NewLine)"
+    }
+
+    [pscustomobject]@{
+        ExitCode = $exitCode
+        Output = $output
+    }
+}
+
+function Get-OwnedContainerStatus {
+    $inspect = Invoke-Docker -Arguments @("inspect", $containerName) -AllowFailure
+
+    if ($inspect.ExitCode -ne 0) {
+        return $null
+    }
+
+    $containers = @((($inspect.Output -join [Environment]::NewLine) | ConvertFrom-Json))
+    if ($containers.Count -ne 1) {
+        throw "Expected one Docker inspection result for '$containerName', found $($containers.Count)."
+    }
+
+    $container = $containers[0]
+    $ownershipLabel = $container.Config.Labels.PSObject.Properties[$labelName]
+    if ($null -eq $ownershipLabel -or $ownershipLabel.Value -ne "true") {
+        throw "Container '$containerName' exists but is not owned by this harness."
+    }
+
+    return [string]$container.State.Status
+}
+
+function Get-CurrentSession {
+    if (-not (Test-Path -LiteralPath $currentSessionPath -PathType Leaf)) {
+        return $null
+    }
+
+    return Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+}
+
+function Get-OwnedAppImage {
+    $inspect = Invoke-Docker -Arguments @("image", "inspect", $appImage) -AllowFailure
+    if ($inspect.ExitCode -ne 0) {
+        return $null
+    }
+
+    $images = @((($inspect.Output -join [Environment]::NewLine) | ConvertFrom-Json))
+    if ($images.Count -ne 1) {
+        throw "Expected one Docker image inspection result for '$appImage', found $($images.Count)."
+    }
+
+    $image = $images[0]
+    $ownershipLabel = $image.Config.Labels.PSObject.Properties[$labelName]
+    if ($null -eq $ownershipLabel -or $ownershipLabel.Value -ne "true") {
+        throw "Docker image '$appImage' exists but is not owned by this harness."
+    }
+
+    return $image
+}
+
+if ($Action -eq "Stop" -or $Action -eq "Clean") {
+    $status = Get-OwnedContainerStatus
+    if ($null -ne $status) {
+        Invoke-Docker -Arguments @("stop", "--time", "10", $containerName) | Out-Null
+        Write-Host "Stopped interactive container '$containerName'."
+    } else {
+        Write-Host "Interactive container '$containerName' is not running."
+    }
+
+    if ($Action -eq "Clean") {
+        $image = Get-OwnedAppImage
+        if ($null -ne $image) {
+            Invoke-Docker -Arguments @("image", "rm", $appImage) | Out-Null
+            Write-Host "Removed cached app image '$appImage'."
+        }
+    }
+    exit 0
+}
+
+if ($Action -eq "Status") {
+    $status = Get-OwnedContainerStatus
+    if ($null -eq $status) {
+        Write-Host "Interactive container '$containerName' is not running."
+        exit 1
+    }
+
+    Write-Host "Container: $containerName"
+    Write-Host "Status   : $status"
+    Write-Host "Desktop  : http://127.0.0.1:$Port/vnc.html?autoconnect=true&resize=scale"
+    $session = Get-CurrentSession
+    if ($null -ne $session) {
+        Write-Host "Session  : $($session.sessionDirectory)"
+    }
+    exit 0
+}
+
+if ($Action -eq "Screenshot") {
+    $status = Get-OwnedContainerStatus
+    if ($status -ne "running") {
+        throw "Interactive container '$containerName' is not running."
+    }
+
+    $stamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+    $relativeScreenshot = "screenshots/manual-$stamp.png"
+    Invoke-Docker -Arguments @(
+        "exec",
+        $containerName,
+        "bash",
+        "-lc",
+        "export DISPLAY=:99; mkdir -p /work/screenshots && scrot -o /work/$relativeScreenshot"
+    ) | Out-Null
+
+    $session = Get-CurrentSession
+    if ($null -eq $session) {
+        throw "Current session metadata was not found at '$currentSessionPath'."
+    }
+
+    $screenshotPath = Join-Path ([string]$session.sessionDirectory) ($relativeScreenshot -replace "/", [IO.Path]::DirectorySeparatorChar)
+    Write-Host "Screenshot: $screenshotPath"
+    exit 0
+}
+
+$existingStatus = Get-OwnedContainerStatus
+if ($null -ne $existingStatus) {
+    if (-not $Replace) {
+        throw "Interactive container '$containerName' already exists with status '$existingStatus'. Use -Replace or the Stop action."
+    }
+
+    Invoke-Docker -Arguments @("stop", "--time", "10", $containerName) | Out-Null
+}
+
+New-Item -ItemType Directory -Path $appOutputRoot, $publishDir, $documentsDir -Force | Out-Null
+
+if (-not $SkipImageBuild) {
+    Write-Host "Building interactive Linux desktop image '$Image'..."
+    $baseBuild = Invoke-Docker -Arguments @("build", "--quiet", "--tag", $Image, $dockerContext)
+    Write-Host "Base image: $([string]$baseBuild.Output[-1])"
+}
+
+$projectPath = Join-Path $repoRoot $definition.Project
+if (-not $SkipPublish) {
+    Write-Host "Publishing $App for linux-x64..."
+    & dotnet publish $projectPath `
+        --configuration Release `
+        --framework net10.0 `
+        --runtime linux-x64 `
+        --self-contained true `
+        -p:UseAppHost=true `
+        -p:PublishReadyToRun=false `
+        -p:PublishSingleFile=false `
+        --output $publishDir
+    if ($LASTEXITCODE -ne 0) {
+        throw "Publishing $App for linux-x64 failed."
+    }
+}
+
+$publishedExecutable = Join-Path $publishDir $definition.Executable
+if (-not (Test-Path -LiteralPath $publishedExecutable -PathType Leaf)) {
+    throw "Published Linux executable was not found: $publishedExecutable"
+}
+
+$existingAppImage = Get-OwnedAppImage
+if (-not $SkipPublish) {
+    $imageContext = Join-Path $env:TEMP "FreeX-LinuxInteractive/$appKey/image-context"
+    New-Item -ItemType Directory -Path $imageContext -Force | Out-Null
+    $archivePath = Join-Path $imageContext "app.tar.gz"
+    $appDockerfilePath = Join-Path $imageContext "Dockerfile"
+
+    if (Test-Path -LiteralPath $archivePath -PathType Leaf) {
+        Remove-Item -LiteralPath $archivePath -Force
+    }
+
+    Write-Host "Packing the Linux publish into one Docker build layer..."
+    & tar -czf $archivePath -C $publishDir .
+    if ($LASTEXITCODE -ne 0) {
+        throw "Creating the Linux app archive failed."
+    }
+
+    $appDockerfile = @"
+FROM $Image
+LABEL $labelName="true"
+LABEL $labelName.app="$appKey"
+COPY app.tar.gz /tmp/app.tar.gz
+RUN mkdir -p /opt/published \
+    && tar -xzf /tmp/app.tar.gz -C /opt/published \
+    && rm /tmp/app.tar.gz \
+    && chmod +x /opt/published/$($definition.Executable)
+"@
+    [IO.File]::WriteAllText($appDockerfilePath, $appDockerfile, (New-Object Text.UTF8Encoding($false)))
+
+    try {
+        Write-Host "Building app image '$appImage'..."
+        $appBuild = Invoke-Docker -Arguments @("build", "--quiet", "--tag", $appImage, $imageContext)
+        Write-Host "App image : $([string]$appBuild.Output[-1])"
+    } finally {
+        Remove-Item -LiteralPath $archivePath -Force -ErrorAction SilentlyContinue
+    }
+} elseif ($null -eq $existingAppImage) {
+    throw "Cached app image '$appImage' was not found. Run without -SkipPublish once."
+}
+
+$containerDocument = ""
+if (-not [string]::IsNullOrWhiteSpace($DocumentPath)) {
+    $resolvedDocument = [IO.Path]::GetFullPath($DocumentPath)
+    if (-not (Test-Path -LiteralPath $resolvedDocument -PathType Leaf)) {
+        throw "Document was not found: $resolvedDocument"
+    }
+
+    $documentName = Split-Path -Leaf $resolvedDocument
+    Copy-Item -LiteralPath $resolvedDocument -Destination (Join-Path $documentsDir $documentName) -Force
+    $containerDocument = "/documents/$documentName"
+} elseif ($App -eq "FreeX") {
+    $demoPath = Join-Path $documentsDir "linux-interactive-demo.csv"
+    @"
+Region,Q1,Q2,Total
+North,120,135,255
+South,98,110,208
+East,143,150,293
+West,87,92,179
+"@ | Set-Content -LiteralPath $demoPath -Encoding utf8
+    $containerDocument = "/documents/$(Split-Path -Leaf $demoPath)"
+}
+
+$sessionStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+$sessionDir = Join-Path $appOutputRoot "sessions/$sessionStamp"
+New-Item -ItemType Directory -Path $sessionDir -Force | Out-Null
+
+$sessionMetadata = [ordered]@{
+    schemaVersion = 1
+    app = $App
+    containerName = $containerName
+    port = $Port
+    url = "http://127.0.0.1:$Port/vnc.html?autoconnect=true&resize=scale"
+    sessionDirectory = $sessionDir
+    startedUtc = (Get-Date).ToUniversalTime().ToString("O")
+}
+$sessionMetadata | ConvertTo-Json | Set-Content -LiteralPath $currentSessionPath -Encoding utf8
+
+$sessionMount = "type=bind,source=$sessionDir,target=/work"
+$documentsMount = "type=bind,source=$documentsDir,target=/documents"
+$portBinding = "127.0.0.1:$Port`:6080"
+
+Write-Host "Starting interactive Linux container '$containerName'..."
+$runResult = Invoke-Docker -Arguments @(
+    "run",
+    "--detach",
+    "--rm",
+    "--init",
+    "--name", $containerName,
+    "--label", "$labelName=true",
+    "--label", "$labelName.app=$appKey",
+    "--memory", "2g",
+    "--shm-size", "256m",
+    "--publish", $portBinding,
+    "--env", "APP_EXECUTABLE=$($definition.Executable)",
+    "--env", "APP_WINDOW_TITLE=$($definition.WindowTitle)",
+    "--env", "APP_DOCUMENT=$containerDocument",
+    "--env", "SCREEN_WIDTH=$Width",
+    "--env", "SCREEN_HEIGHT=$Height",
+    "--env", "SCREEN_DPI=$Dpi",
+    "--mount", $sessionMount,
+    "--mount", $documentsMount,
+    $appImage
+)
+Write-Host "Container id: $([string]$runResult.Output[0])"
+
+$readyPath = Join-Path $sessionDir "ready.json"
+$failurePath = Join-Path $sessionDir "failure.json"
+$url = [string]$sessionMetadata.url
+$deadline = (Get-Date).AddSeconds(90)
+$webReady = $false
+
+while ((Get-Date) -lt $deadline) {
+    if (Test-Path -LiteralPath $failurePath -PathType Leaf) {
+        $failure = Get-Content -LiteralPath $failurePath -Raw
+        throw "The Linux desktop started, but the app did not become ready.`n$failure"
+    }
+
+    if (-not $webReady) {
+        try {
+            $response = Invoke-WebRequest -Uri $url -TimeoutSec 2 -UseBasicParsing
+            $webReady = ($response.StatusCode -eq 200)
+        } catch {
+            $webReady = $false
+        }
+    }
+
+    if ($webReady -and (Test-Path -LiteralPath $readyPath -PathType Leaf)) {
+        break
+    }
+    Start-Sleep -Milliseconds 500
+}
+
+if (-not $webReady -or -not (Test-Path -LiteralPath $readyPath -PathType Leaf)) {
+    $logs = Invoke-Docker -Arguments @("logs", "--tail", "100", $containerName) -AllowFailure
+    throw "Interactive Linux session did not become ready within 90 seconds.`n$($logs.Output -join [Environment]::NewLine)"
+}
+
+$ready = Get-Content -LiteralPath $readyPath -Raw | ConvertFrom-Json
+Write-Host ""
+Write-Host "$App is running interactively on Linux."
+Write-Host "Desktop    : $url"
+Write-Host "Resolution : $($ready.screen) at $($ready.dpi) DPI"
+Write-Host "Window     : $($ready.windowTitle)"
+Write-Host "Published  : $publishDir"
+Write-Host "Artifacts  : $sessionDir"
+Write-Host "Stop       : powershell -File tools/Run-LinuxInteractiveDocker.ps1 -Action Stop -App $App -Port $Port"
+
+if ($OpenBrowser) {
+    Start-Process $url
+}

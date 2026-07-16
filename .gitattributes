@@ -1,1 +1,2 @@
 tools/packaging/linux/*.conf text eol=lf
+tools/LinuxInteractiveDocker/*.sh text eol=lf
