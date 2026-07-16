@@ -73,6 +73,9 @@ public sealed class DocumentView : RichTextBox
 {
     private const double PxPerPoint = 96.0 / 72.0;
 
+    // Matches the shared planner's default page-space gap around wrapped objects.
+    private const double FloatingWrapGapDip = 9.0;
+
     /// <summary>Document default run size in points, used when a run inherits its size.</summary>
     private const double DefaultFontSizePt = 11;
 
@@ -4437,6 +4440,9 @@ public sealed class DocumentView : RichTextBox
 
         // Coalesce consecutive list paragraphs of the same kind into one WPF List so they render with
         // shared bullet/number decoration; everything else maps one-to-one via BuildBlock.
+        var leadingWrapReservations = BuildLeadingWrapReservations(
+            _model,
+            out var suppressedFloatingWrapRuns);
         var i = 0;
         while (i < blocks.Count)
         {
@@ -4482,7 +4488,13 @@ public sealed class DocumentView : RichTextBox
                     var wpfParagraph = BuildParagraph(
                         listParagraphs[p].Paragraph,
                         _model,
-                        sourceBlockIndex: listParagraphs[p].BlockIndex);
+                        sourceBlockIndex: listParagraphs[p].BlockIndex,
+                        leadingWrapReservations: leadingWrapReservations.TryGetValue(
+                            listParagraphs[p].BlockIndex,
+                            out var listReservations)
+                            ? listReservations
+                            : null,
+                        suppressedFloatingWrapRuns: suppressedFloatingWrapRuns);
                     if (markers is not null)
                         PrependMultiLevelMarker(wpfParagraph, markers[p], _model);
                     list.ListItems.Add(new WpfListItem(wpfParagraph));
@@ -4491,7 +4503,12 @@ public sealed class DocumentView : RichTextBox
             }
             else
             {
-                foreach (var block in BuildBlocks(blocks[i], _model, i))
+                foreach (var block in BuildBlocks(
+                    blocks[i],
+                    _model,
+                    i,
+                    leadingWrapReservations.TryGetValue(i, out var reservations) ? reservations : null,
+                    suppressedFloatingWrapRuns))
                     flow.Blocks.Add(block);
                 visibleCount++;
                 i++;
@@ -7028,12 +7045,126 @@ public sealed class DocumentView : RichTextBox
     private static IReadOnlyList<System.Windows.Documents.Block> BuildBlocks(
         ModelBlock block,
         TextDocument document,
-        int sourceBlockIndex) => block switch
+        int sourceBlockIndex,
+        IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations = null,
+        IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns = null) => block switch
     {
         ModelTable table => BuildTableBlocks(table, document, sourceBlockIndex),
-        ModelParagraph paragraph => [BuildParagraph(paragraph, document, sourceBlockIndex: sourceBlockIndex)],
+        ModelParagraph paragraph => [BuildParagraph(
+            paragraph,
+            document,
+            sourceBlockIndex: sourceBlockIndex,
+            leadingWrapReservations: leadingWrapReservations,
+            suppressedFloatingWrapRuns: suppressedFloatingWrapRuns)],
         _ => [BuildParagraph(new ModelParagraph(), document)]
     };
+
+    private IReadOnlyDictionary<int, IReadOnlyList<LeadingWrapReservation>> BuildLeadingWrapReservations(
+        TextDocument document,
+        out HashSet<ModelRun> suppressedFloatingWrapRuns)
+    {
+        suppressedFloatingWrapRuns = new HashSet<ModelRun>(ReferenceEqualityComparer.Instance);
+        var result = new Dictionary<int, IReadOnlyList<LeadingWrapReservation>>();
+        var surface = DocumentViewLayoutPlanner.BuildFloatingOverlaySurfacePlan(
+            document.Page,
+            PrintLayoutEnabled,
+            PlainPadding.Left);
+
+        for (var sourceBlockIndex = 1; sourceBlockIndex < document.Blocks.Count; sourceBlockIndex++)
+        {
+            if (document.Blocks[sourceBlockIndex] is not ModelParagraph paragraph)
+                continue;
+
+            if (!paragraph.Runs.Any(run =>
+                    run.Image is
+                    {
+                        IsFloating: true,
+                        VerticalAnchor: VerticalAnchor.Page,
+                        Wrapping: ImageWrapping.Square or ImageWrapping.Tight
+                    }))
+                continue;
+
+            var snapshots = DocumentViewLayoutPlanner.BuildFloatingObjectSnapshots(
+                paragraph,
+                sourceBlockIndex,
+                EstimateLeadingContentHeightDip(document, sourceBlockIndex),
+                surface,
+                columnCount: 1);
+
+            foreach (var snapshot in snapshots)
+            {
+                if (snapshot.Kind != DocumentFloatingObjectKind.Image
+                    || snapshot.Wrapping is not (ImageWrapping.Square or ImageWrapping.Tight)
+                    || snapshot.Rect.TopDip >= surface.MarginTopDip
+                    || snapshot.RunIndex < 0
+                    || snapshot.RunIndex >= paragraph.Runs.Count)
+                    continue;
+
+                var reservation = DocumentViewLayoutPlanner.BuildFloatingWrapReservation(
+                    paragraph.Runs[snapshot.RunIndex]);
+                if (reservation is null)
+                    continue;
+
+                var contentCenterDip = surface.ContentLeftDip + surface.ContentWidthDip / 2;
+                var contentRightDip = surface.ContentLeftDip + surface.ContentWidthDip;
+                var reservationWidthDip = snapshot.Rect.CenterXDip <= contentCenterDip
+                    ? snapshot.Rect.RightDip - surface.ContentLeftDip + FloatingWrapGapDip
+                    : contentRightDip - snapshot.Rect.LeftDip + FloatingWrapGapDip;
+                reservation = reservation with
+                {
+                    WidthDip = Math.Max(reservation.WidthDip, reservationWidthDip)
+                };
+
+                // A page-anchored image above the content margin belongs in the first text paragraph
+                // on its page for flow purposes. The real anchor marker remains in its original model
+                // paragraph; this visual-only copy is deliberately untagged and is ignored on commit.
+                var pageIndex = surface.PageIndexFromPageSpaceY(snapshot.Rect.TopDip);
+                var firstFlowParagraphIndex = FindFirstFlowParagraphIndexOnPage(
+                    document,
+                    surface,
+                    pageIndex,
+                    sourceBlockIndex);
+                if (firstFlowParagraphIndex < 0)
+                    continue;
+
+                var list = result.TryGetValue(firstFlowParagraphIndex, out var existing)
+                    ? existing.ToList()
+                    : [];
+                var run = paragraph.Runs[snapshot.RunIndex];
+                list.Add(new LeadingWrapReservation(run, reservation));
+                suppressedFloatingWrapRuns.Add(run);
+                result[firstFlowParagraphIndex] = list;
+            }
+        }
+
+        return result;
+    }
+
+    private static int FindFirstFlowParagraphIndexOnPage(
+        TextDocument document,
+        DocumentViewSurfacePlan surface,
+        int pageIndex,
+        int sourceBlockIndex)
+    {
+        if (sourceBlockIndex <= 0)
+            return -1;
+
+        var safePageIndex = Math.Max(0, pageIndex);
+        for (var blockIndex = 0; blockIndex < sourceBlockIndex; blockIndex++)
+        {
+            if (document.Blocks[blockIndex] is not ModelParagraph)
+                continue;
+
+            var leadingContentHeightDip = EstimateLeadingContentHeightDip(document, blockIndex);
+            var estimatedPageIndex = surface.TextAreaHeightDip > 0
+                ? Math.Max(0, (int)(leadingContentHeightDip / surface.TextAreaHeightDip))
+                : 0;
+            if (estimatedPageIndex >= safePageIndex)
+                return blockIndex;
+        }
+
+        return -1;
+    }
 
     // The legacy light fills used to render the table-style toggles when no named TableStyleId is set.
     // These match DocxWriter's header/banded fill constants and round-trip via DocxReader's strip logic.
@@ -7661,7 +7792,9 @@ public sealed class DocumentView : RichTextBox
         ModelParagraph paragraph,
         TextDocument document,
         bool inTableCell = false,
-        int? sourceBlockIndex = null)
+        int? sourceBlockIndex = null,
+        IReadOnlyList<LeadingWrapReservation>? leadingWrapReservations = null,
+        IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns = null)
     {
         var paraFmt = Resolve(paragraph, document);
         // Inside a table cell, paragraphs that don't set their own spacing follow the table style rather than
@@ -7803,9 +7936,13 @@ public sealed class DocumentView : RichTextBox
         {
             // Emit any pre-cap runs (e.g. image/marker runs before the large letter) inline.
             for (var i = 0; i < dropCapPlan.RunIndex; i++)
-                wpf.Inlines.Add(BuildRun(runs[i], paragraph, document, sourceBlockIndex, i));
+                wpf.Inlines.Add(BuildRun(
+                    runs[i], paragraph, document, sourceBlockIndex, i,
+                    suppressedFloatingWrapRuns?.Contains(runs[i]) == true));
 
-            var capInline = BuildRun(runs[dropCapPlan.RunIndex], paragraph, document, sourceBlockIndex, dropCapPlan.RunIndex);
+            var capInline = BuildRun(
+                runs[dropCapPlan.RunIndex], paragraph, document, sourceBlockIndex, dropCapPlan.RunIndex,
+                suppressedFloatingWrapRuns?.Contains(runs[dropCapPlan.RunIndex]) == true);
             var capPara = new WpfParagraph(capInline)
             {
                 Margin = new Thickness(0, 0, dropCapPlan.DistanceFromTextDip, 0)
@@ -7819,11 +7956,29 @@ public sealed class DocumentView : RichTextBox
 
             // Emit the remaining runs after the cap.
             for (var i = dropCapPlan.RunIndex + 1; i < runs.Count; i++)
-                wpf.Inlines.Add(BuildRun(runs[i], paragraph, document, sourceBlockIndex, i));
+                wpf.Inlines.Add(BuildRun(
+                    runs[i], paragraph, document, sourceBlockIndex, i,
+                    suppressedFloatingWrapRuns?.Contains(runs[i]) == true));
         }
         else
         {
-            AppendRunsWithTabPlans(wpf, runs, paragraph, document, paraFmt, sourceBlockIndex);
+            if (leadingWrapReservations is { Count: > 0 })
+            {
+                foreach (var reservation in leadingWrapReservations)
+                    wpf.Inlines.Add(BuildVisualOnlyWrapReservationFloater(
+                        reservation.Run,
+                        reservation.Plan,
+                        document));
+            }
+
+            AppendRunsWithTabPlans(
+                wpf,
+                runs,
+                paragraph,
+                document,
+                paraFmt,
+                sourceBlockIndex,
+                suppressedFloatingWrapRuns);
         }
 
         return wpf;
@@ -7835,7 +7990,8 @@ public sealed class DocumentView : RichTextBox
         ModelParagraph paragraph,
         TextDocument document,
         ParagraphFormatting paraFmt,
-        int? sourceBlockIndex)
+        int? sourceBlockIndex,
+        IReadOnlySet<ModelRun>? suppressedFloatingWrapRuns)
     {
         var penPositionDip = (paraFmt.IndentLeftPt + paraFmt.FirstLineIndentPt) * PxPerPoint;
         for (var runIndex = 0; runIndex < runs.Count; runIndex++)
@@ -7843,7 +7999,9 @@ public sealed class DocumentView : RichTextBox
             var run = runs[runIndex];
             if (!IsPlainTextRun(run) || !run.Text.Contains('\t', StringComparison.Ordinal))
             {
-                wpf.Inlines.Add(BuildRun(run, paragraph, document, sourceBlockIndex, runIndex));
+                wpf.Inlines.Add(BuildRun(
+                    run, paragraph, document, sourceBlockIndex, runIndex,
+                    suppressedFloatingWrapRuns?.Contains(run) == true));
                 penPositionDip += MeasureRunText(run.Text, run, paragraph, document);
                 continue;
             }
@@ -7860,7 +8018,9 @@ public sealed class DocumentView : RichTextBox
                 {
                     var segment = text.Substring(start, tabIndex - start);
                     var segmentRun = CloneTextRun(run, segment);
-                    wpf.Inlines.Add(BuildRun(segmentRun, paragraph, document, sourceBlockIndex, runIndex));
+                    wpf.Inlines.Add(BuildRun(
+                        segmentRun, paragraph, document, sourceBlockIndex, runIndex,
+                        suppressedFloatingWrapRuns?.Contains(run) == true));
                     penPositionDip += MeasureRunText(segment, segmentRun, paragraph, document);
                 }
 
@@ -7883,7 +8043,9 @@ public sealed class DocumentView : RichTextBox
             {
                 var remainder = text[start..];
                 var remainderRun = CloneTextRun(run, remainder);
-                wpf.Inlines.Add(BuildRun(remainderRun, paragraph, document, sourceBlockIndex, runIndex));
+                wpf.Inlines.Add(BuildRun(
+                    remainderRun, paragraph, document, sourceBlockIndex, runIndex,
+                    suppressedFloatingWrapRuns?.Contains(run) == true));
                 penPositionDip += MeasureRunText(remainder, remainderRun, paragraph, document);
             }
         }
@@ -8121,14 +8283,20 @@ public sealed class DocumentView : RichTextBox
         ModelParagraph paragraph,
         TextDocument document,
         int? sourceBlockIndex = null,
-        int? sourceRunIndex = null)
+        int? sourceRunIndex = null,
+        bool suppressFloatingWrapReservation = false)
     {
         var effectSet = DocumentEffectSet.FromTheme(document.Theme);
 
         if (run.Image is { } image)
         {
             if (image.IsFloating)
-                return BuildFloatingAnchorRun(run, document, new AnchorMarker(Image: image));
+            {
+                var marker = new AnchorMarker(Image: image);
+                return suppressFloatingWrapReservation
+                    ? WrapHyperlinkIfNeeded(run, new WpfRun(string.Empty) { Tag = marker })
+                    : BuildFloatingAnchorRun(run, document, marker);
+            }
             return WrapHyperlinkIfNeeded(run, BuildImageRun(image));
         }
 
@@ -8448,6 +8616,30 @@ public sealed class DocumentView : RichTextBox
                 ? HorizontalAlignment.Center
                 : BuildFloatingWrapHorizontalAlignment(run, document),
             Tag = reservationMarker,
+        };
+    }
+
+    private static Floater BuildVisualOnlyWrapReservationFloater(
+        ModelRun run,
+        DocumentFloatingWrapReservationPlan reservation,
+        TextDocument document)
+    {
+        var placeholder = new Border
+        {
+            Width = reservation.WidthDip,
+            Height = reservation.HeightDip,
+            Background = Brushes.Transparent,
+            Opacity = 0,
+            IsHitTestVisible = false,
+            Focusable = false,
+        };
+        var block = new BlockUIContainer(placeholder) { Margin = new Thickness(0) };
+        return new Floater(block)
+        {
+            Width = reservation.WidthDip,
+            HorizontalAlignment = reservation.Wrapping == ImageWrapping.TopAndBottom
+                ? HorizontalAlignment.Center
+                : BuildFloatingWrapHorizontalAlignment(run, document),
         };
     }
 
@@ -9056,6 +9248,12 @@ public sealed class DocumentView : RichTextBox
         string? HyperlinkUrl = null,
         string? HyperlinkAnchor = null,
         string? HyperlinkTooltip = null);
+
+    // A visual-only wrap band copied into the earlier paragraph when a page-anchored image sits above
+    // its model anchor. It has no marker, so ReadFloaterInlineContent ignores it during commit.
+    private sealed record LeadingWrapReservation(
+        ModelRun Run,
+        DocumentFloatingWrapReservationPlan Plan);
 
     /// <summary>
     /// Renders an endnote reference as a small superscript marker showing the endnote number, tagged
