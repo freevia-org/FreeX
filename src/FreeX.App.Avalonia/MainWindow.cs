@@ -19,6 +19,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Diagnostics;
 using System.Globalization;
 using FreeX.App.Presentation;
 using FreeX.App.Presentation.Backstage;
@@ -26,6 +27,7 @@ using FreeX.App.Presentation.Comments;
 using FreeX.App.Presentation.DataTools;
 using FreeX.App.Presentation.Dialogs;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.FormulaBar;
 using FreeX.App.Presentation.GridInteraction;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.PageLayout;
@@ -382,6 +384,7 @@ public sealed partial class MainWindow : Window
     private const double SelectionOutlineThickness = 2;
     private const double AutofillHandleSize = 10;
     private const double AutofillHandleHitPadding = 6;
+    private const double HeaderResizeHitThickness = 9;
     // Shared selection-fill token — byte-identical to the WPF grid's SelectionBrush
     // (GridView.cs: MakeBrushAlpha(32, 33, 115, 70)). A light translucent green laid over the
     // selected range so multi-cell selections read like Windows (a faint green wash that keeps the
@@ -450,6 +453,10 @@ public sealed partial class MainWindow : Window
     private CellAddress? _inlineCellEditAddress;
     private string? _inlineCellEditText;
     private int? _pendingInlineCellCaretIndex;
+    private CellAddress? _lastCellPointerPressAddress;
+    private long _lastCellPointerPressTimestamp;
+    private int? _formulaReferenceStart;
+    private int? _formulaReferenceLength;
     private readonly TextBlock _formulaReferenceTextOverlay = new();
     private readonly Border _formulaBarHost = new();
     private readonly Button _formulaExpandButton = new();
@@ -1489,6 +1496,8 @@ public sealed partial class MainWindow : Window
             _ribbonContextSource);
         _refreshRibbonToggleStates = refreshRibbonToggleStates;
         _ribbonControl = ribbon;
+        ConfigureWorksheetRibbonFlyouts(ribbon);
+        ribbon.Loaded += (_, _) => ConfigureWorksheetRibbonFlyouts(ribbon);
 
         var formulaBar = BuildToolbar();
 
@@ -1506,6 +1515,48 @@ public sealed partial class MainWindow : Window
         root.Children.Add(frame.Root);
         root.Children.Add(BuildBackstageOverlay());
         return root;
+    }
+
+    private void ConfigureWorksheetRibbonFlyouts(Control ribbon)
+    {
+        foreach (var button in EnumerateRibbonControls(ribbon).OfType<Button>())
+        {
+            switch (button.Tag as string)
+            {
+                case "Fill Color":
+                    button.Flyout = CreateColorPaletteFlyout(ColorPaletteTarget.Fill, includeClearFill: true);
+                    break;
+                case "Font Color":
+                    button.Flyout = CreateColorPaletteFlyout(ColorPaletteTarget.Font, includeClearFill: false);
+                    break;
+            }
+        }
+    }
+
+    private static IEnumerable<Control> EnumerateRibbonControls(Control root)
+    {
+        yield return root;
+        switch (root)
+        {
+            case ItemsControl itemsControl:
+                foreach (var item in itemsControl.Items.OfType<Control>())
+                    foreach (var descendant in EnumerateRibbonControls(item))
+                        yield return descendant;
+                break;
+            case Panel panel:
+                foreach (var child in panel.Children)
+                    foreach (var descendant in EnumerateRibbonControls(child))
+                        yield return descendant;
+                break;
+            case ContentControl { Content: Control content }:
+                foreach (var descendant in EnumerateRibbonControls(content))
+                    yield return descendant;
+                break;
+            case Decorator { Child: { } child }:
+                foreach (var descendant in EnumerateRibbonControls(child))
+                    yield return descendant;
+                break;
+        }
     }
 
     private Control BuildWorkbookWorkArea()
@@ -3186,13 +3237,13 @@ public sealed partial class MainWindow : Window
         _formulaReferenceTextOverlay.IsVisible = false;
 
         var formulaOverlayHost = new AvaloniaGrid();
+        formulaOverlayHost.Children.Add(_formulaBox);
         formulaOverlayHost.Children.Add(new Border
         {
             Padding = new Thickness(7, 4, 7, 2),
             IsHitTestVisible = false,
             Child = _formulaReferenceTextOverlay,
         });
-        formulaOverlayHost.Children.Add(_formulaBox);
 
         var formulaFill = new Border
         {
@@ -4359,6 +4410,14 @@ public sealed partial class MainWindow : Window
                 AddGridChild(grid, cellControl, rowIndex + headerOffset, colIndex + headerOffset);
             }
         }
+
+        AddCellTextOverflowOverlayToGrid(
+            grid,
+            cellsByAddress,
+            rowMetrics,
+            colMetrics,
+            showHeadings,
+            zoomFactor);
 
         if (splitRowCount > 0 || splitColCount > 0)
             AddSplitPaneDividerOverlayToGrid(grid, rowMetrics, colMetrics, splitRowCount, splitColCount, headerOffset);
@@ -6044,6 +6103,292 @@ public sealed partial class MainWindow : Window
     private static double GetDisplayedRowHeight(RowMetric metric, double zoomFactor) =>
         Math.Max(MinimumDisplayedRowHeight, metric.Height) * zoomFactor;
 
+    private void AddCellTextOverflowOverlayToGrid(
+        AvaloniaGrid grid,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellsByAddress,
+        IReadOnlyList<RowMetric> rowMetrics,
+        IReadOnlyList<ColMetric> colMetrics,
+        bool showHeadings,
+        double zoomFactor)
+    {
+        if (cellsByAddress.Count == 0)
+            return;
+
+        var rowTopByRow = new Dictionary<uint, double>(rowMetrics.Count);
+        var rowTop = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        foreach (var metric in rowMetrics)
+        {
+            rowTopByRow[metric.Row] = rowTop;
+            rowTop += GetDisplayedRowHeight(metric, zoomFactor);
+        }
+
+        var colLeftByCol = new Dictionary<uint, double>(colMetrics.Count);
+        var colLeft = showHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0;
+        foreach (var metric in colMetrics)
+        {
+            colLeftByCol[metric.Col] = colLeft;
+            colLeft += GetDisplayedColumnWidth(metric, zoomFactor);
+        }
+
+        var layer = new Canvas
+        {
+            IsHitTestVisible = false,
+            ClipToBounds = true,
+            ZIndex = 50,
+        };
+        AutomationProperties.SetAutomationId(layer, "WorksheetCellTextOverflowOverlay");
+
+        foreach (var cell in cellsByAddress.Values)
+        {
+            var address = new CellAddress(_session.ActiveSheet.Id, cell.Row, cell.Col);
+            if (Equals(_inlineCellEditAddress, address) ||
+                _session.ActiveSheet.RichTextRuns.ContainsKey(address) ||
+                !CellTextOverflowPlanner.CanOverflowCellText(
+                    cell.Style,
+                    cell.RawValue,
+                    cell.DisplayText,
+                    _session.ActiveSheet.GetMergeRegion(address)) ||
+                cell.ConditionalIcon is not null ||
+                !rowTopByRow.TryGetValue(cell.Row, out var top) ||
+                !colLeftByCol.TryGetValue(cell.Col, out var left))
+            {
+                continue;
+            }
+
+            var rowIndex = FindMetricIndex(rowMetrics, cell.Row);
+            var colIndex = FindMetricIndex(colMetrics, cell.Col);
+            if (rowIndex < 0 || colIndex < 0)
+                continue;
+
+            var style = cell.Style;
+            var rowHeight = GetDisplayedRowHeight(rowMetrics[rowIndex], zoomFactor);
+            var colWidth = GetDisplayedColumnWidth(colMetrics[colIndex], zoomFactor);
+            var fontFamily = ResolveAvaloniaCellFontFamily(style, _session.Workbook.Theme);
+            var fontWeight = style?.Bold == true ? FontWeight.Bold : FontWeight.Normal;
+            var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
+            var foreground = style is null
+                ? Brushes.Black
+                : Brush(style.ResolveFontColor(_session.Workbook.Theme));
+            var fontSize = Math.Max(
+                1,
+                ((style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset) * zoomFactor);
+            var flowDirection = MapCellFlowDirection(
+                CellTextOrientationLayoutPlanner.ResolveIsEffectivelyRightToLeft(
+                    style?.ReadingOrder ?? CellReadingOrder.Context,
+                    _session.ActiveSheet.IsRightToLeft));
+            var formatted = new FormattedText(
+                cell.DisplayText,
+                CultureInfo.CurrentCulture,
+                flowDirection,
+                new Typeface(fontFamily, fontStyle, fontWeight),
+                fontSize,
+                Brushes.Black);
+            var textWidth = formatted.Width;
+            var textHeight = formatted.Height;
+            var indent = GetCellIndentPadding(style) * zoomFactor;
+            var horizontalPadding = 8 * zoomFactor;
+            var effectiveAlignment = CellTextOrientationLayoutPlanner.ResolveEffectiveHorizontalAlignment(
+                style?.HorizontalAlignment ?? CellHAlign.General,
+                isNumeric: false,
+                flowDirection == FlowDirection.RightToLeft);
+            var textLeft = effectiveAlignment switch
+            {
+                CellHAlign.Right => left + colWidth - horizontalPadding - indent - textWidth,
+                CellHAlign.Center => left + ((colWidth - textWidth) / 2),
+                _ => left + horizontalPadding + indent,
+            };
+            var verticalAlignment = style?.VerticalAlignment ?? CellVAlign.Bottom;
+            var textTop = verticalAlignment switch
+            {
+                CellVAlign.Top => top,
+                CellVAlign.Center => top + Math.Max(0, (rowHeight - textHeight) / 2),
+                _ => top + Math.Max(0, rowHeight - textHeight),
+            };
+
+            var cellRight = left + colWidth;
+            if (effectiveAlignment is CellHAlign.Left or CellHAlign.General or CellHAlign.Center)
+            {
+                var rightLimit = ResolveOverflowRightLimit(
+                    cell.Row,
+                    colIndex,
+                    cellRight,
+                    cellsByAddress,
+                    colMetrics,
+                    zoomFactor);
+                AddCellTextOverflowExtension(
+                    layer,
+                    cell,
+                    style,
+                    fontFamily,
+                    fontWeight,
+                    fontStyle,
+                    fontSize,
+                    foreground,
+                    flowDirection,
+                    textLeft,
+                    textTop,
+                    top,
+                    rowHeight,
+                    Math.Max(cellRight, textLeft),
+                    Math.Min(rightLimit, textLeft + textWidth));
+            }
+
+            if (effectiveAlignment is CellHAlign.Right or CellHAlign.Center)
+            {
+                var leftLimit = ResolveOverflowLeftLimit(
+                    cell.Row,
+                    colIndex,
+                    left,
+                    cellsByAddress,
+                    colMetrics,
+                    zoomFactor);
+                AddCellTextOverflowExtension(
+                    layer,
+                    cell,
+                    style,
+                    fontFamily,
+                    fontWeight,
+                    fontStyle,
+                    fontSize,
+                    foreground,
+                    flowDirection,
+                    textLeft,
+                    textTop,
+                    top,
+                    rowHeight,
+                    Math.Max(leftLimit, textLeft),
+                    Math.Min(left, textLeft + textWidth));
+            }
+        }
+
+        if (layer.Children.Count == 0)
+            return;
+
+        AvaloniaGrid.SetRow(layer, 0);
+        AvaloniaGrid.SetRowSpan(layer, grid.RowDefinitions.Count);
+        AvaloniaGrid.SetColumn(layer, 0);
+        AvaloniaGrid.SetColumnSpan(layer, grid.ColumnDefinitions.Count);
+        grid.Children.Add(layer);
+    }
+
+    private static int FindMetricIndex(IReadOnlyList<RowMetric> metrics, uint row)
+    {
+        for (var i = 0; i < metrics.Count; i++)
+            if (metrics[i].Row == row)
+                return i;
+        return -1;
+    }
+
+    private static int FindMetricIndex(IReadOnlyList<ColMetric> metrics, uint col)
+    {
+        for (var i = 0; i < metrics.Count; i++)
+            if (metrics[i].Col == col)
+                return i;
+        return -1;
+    }
+
+    private double ResolveOverflowRightLimit(
+        uint row,
+        int colIndex,
+        double cellRight,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellsByAddress,
+        IReadOnlyList<ColMetric> colMetrics,
+        double zoomFactor)
+    {
+        var limit = cellRight;
+        for (var index = colIndex + 1; index < colMetrics.Count; index++)
+        {
+            var col = colMetrics[index].Col;
+            if (IsOverflowOccupied(row, col, cellsByAddress))
+                break;
+            limit += GetDisplayedColumnWidth(colMetrics[index], zoomFactor);
+        }
+        return limit;
+    }
+
+    private double ResolveOverflowLeftLimit(
+        uint row,
+        int colIndex,
+        double cellLeft,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellsByAddress,
+        IReadOnlyList<ColMetric> colMetrics,
+        double zoomFactor)
+    {
+        var limit = cellLeft;
+        for (var index = colIndex - 1; index >= 0; index--)
+        {
+            var col = colMetrics[index].Col;
+            if (IsOverflowOccupied(row, col, cellsByAddress))
+                break;
+            limit -= GetDisplayedColumnWidth(colMetrics[index], zoomFactor);
+        }
+        return limit;
+    }
+
+    private bool IsOverflowOccupied(
+        uint row,
+        uint col,
+        IReadOnlyDictionary<(uint Row, uint Col), DisplayCell> cellsByAddress)
+    {
+        var address = new CellAddress(_session.ActiveSheet.Id, row, col);
+        if (_session.ActiveSheet.GetMergeRegion(address) is not null ||
+            Equals(_inlineCellEditAddress, address))
+        {
+            return true;
+        }
+
+        return cellsByAddress.TryGetValue((row, col), out var cell) &&
+            CellTextOverflowPlanner.IsOverflowOccupied(cell, _inlineCellEditAddress);
+    }
+
+    private static void AddCellTextOverflowExtension(
+        Canvas layer,
+        DisplayCell cell,
+        CellStyle? style,
+        FontFamily fontFamily,
+        FontWeight fontWeight,
+        FontStyle fontStyle,
+        double fontSize,
+        IBrush foreground,
+        FlowDirection flowDirection,
+        double textLeft,
+        double textTop,
+        double rowTop,
+        double rowHeight,
+        double clipLeft,
+        double clipRight)
+    {
+        if (clipRight - clipLeft <= 0.5)
+            return;
+
+        var host = new Canvas
+        {
+            Width = clipRight - clipLeft,
+            Height = rowHeight,
+            ClipToBounds = true,
+            IsHitTestVisible = false,
+        };
+        var text = new TextBlock
+        {
+            Text = cell.DisplayText,
+            FontFamily = fontFamily,
+            FontSize = fontSize,
+            FontWeight = fontWeight,
+            FontStyle = fontStyle,
+            Foreground = foreground,
+            TextDecorations = BuildTextDecorations(style),
+            TextWrapping = TextWrapping.NoWrap,
+            TextTrimming = TextTrimming.None,
+            FlowDirection = flowDirection,
+        };
+        Canvas.SetLeft(text, textLeft - clipLeft);
+        Canvas.SetTop(text, textTop - rowTop);
+        host.Children.Add(text);
+        Canvas.SetLeft(host, clipLeft);
+        Canvas.SetTop(host, rowTop);
+        layer.Children.Add(host);
+    }
+
     private bool IsSelectedColumn(uint col) =>
         _session.SelectedRanges.Any(range => range.Start.Col <= col && col <= range.End.Col);
 
@@ -6113,6 +6458,17 @@ public sealed partial class MainWindow : Window
         header.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(header);
+            if (IsHeaderResizeHotspot(point.Position, header.Bounds, HeaderResizeKind.Column))
+            {
+                if (args.ClickCount >= 2)
+                    AutoFitColumnFromHeader(col);
+                else
+                    BeginHeaderResize(args, header, HeaderResizeKind.Column, col, GetDisplayedColumnWidth(metric, zoomFactor));
+
+                args.Handled = true;
+                return;
+            }
+
             if (IsContextClick(point, args))
             {
                 if (!IsSelectedColumn(col))
@@ -6143,6 +6499,17 @@ public sealed partial class MainWindow : Window
         header.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(header);
+            if (IsHeaderResizeHotspot(point.Position, header.Bounds, HeaderResizeKind.Row))
+            {
+                if (args.ClickCount >= 2)
+                    AutoFitRowFromHeader(row);
+                else
+                    BeginHeaderResize(args, header, HeaderResizeKind.Row, row, GetDisplayedRowHeight(metric, zoomFactor));
+
+                args.Handled = true;
+                return;
+            }
+
             if (IsContextClick(point, args))
             {
                 if (!IsSelectedRow(row))
@@ -6167,6 +6534,11 @@ public sealed partial class MainWindow : Window
         (point.Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed &&
             args.KeyModifiers.HasFlag(KeyModifiers.Control)) ||
         (point.Properties.IsLeftButtonPressed && args.KeyModifiers.HasFlag(KeyModifiers.Control));
+
+    private static bool IsHeaderResizeHotspot(Point position, Rect bounds, HeaderResizeKind kind) =>
+        kind == HeaderResizeKind.Column
+            ? position.X >= Math.Max(0, bounds.Width - HeaderResizeHitThickness)
+            : position.Y >= Math.Max(0, bounds.Height - HeaderResizeHitThickness);
 
     private void BeginCellSelectionDrag(PointerPressedEventArgs args, Control capture, CellAddress address)
     {
@@ -6543,8 +6915,8 @@ public sealed partial class MainWindow : Window
     private static Border CreateHeaderResizeHandle(HeaderResizeKind kind) =>
         new()
         {
-            Width = kind == HeaderResizeKind.Column ? 5 : double.NaN,
-            Height = kind == HeaderResizeKind.Row ? 5 : double.NaN,
+            Width = kind == HeaderResizeKind.Column ? HeaderResizeHitThickness : double.NaN,
+            Height = kind == HeaderResizeKind.Row ? HeaderResizeHitThickness : double.NaN,
             Background = Brushes.Transparent,
             HorizontalAlignment = kind == HeaderResizeKind.Column ? AvaloniaHorizontalAlignment.Right : AvaloniaHorizontalAlignment.Stretch,
             VerticalAlignment = kind == HeaderResizeKind.Row ? AvaloniaVerticalAlignment.Bottom : AvaloniaVerticalAlignment.Stretch,
@@ -6645,16 +7017,26 @@ public sealed partial class MainWindow : Window
 
         if (drag.Kind == HeaderResizeKind.Column)
         {
-            SelectEntireColumn(drag.Index);
-            var result = _session.SetSelectedColumnsWidth(ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize));
+            var result = _session.ExecuteReviewCommand(
+                new SetColumnWidthCommand(
+                    _session.ActiveSheet.Id,
+                    drag.Index,
+                    drag.Index,
+                    ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize)),
+                _session.ActiveCell);
             RefreshShell(result.Success
                 ? UiText.Format("RowColumn_ColumnWidthApplied", FormatDimension(ColumnWidthPixelMapper.PixelsToColumnWidth(clampedSize)))
                 : result.ErrorMessage ?? UiText.Get("RowColumn_ColumnWidthFailed"));
         }
         else
         {
-            SelectEntireRow(drag.Index);
-            var result = _session.SetSelectedRowsHeight(clampedSize);
+            var result = _session.ExecuteReviewCommand(
+                new SetRowHeightCommand(
+                    _session.ActiveSheet.Id,
+                    drag.Index,
+                    drag.Index,
+                    clampedSize),
+                _session.ActiveCell);
             RefreshShell(result.Success
                 ? UiText.Format("RowColumn_RowHeightApplied", FormatDimension(clampedSize))
                 : result.ErrorMessage ?? UiText.Get("RowColumn_RowHeightFailed"));
@@ -7190,6 +7572,7 @@ public sealed partial class MainWindow : Window
         var weight = style?.Bold == true ? FontWeight.Bold : FontWeight.Normal;
         var fontStyle = style?.Italic == true ? FontStyle.Italic : FontStyle.Normal;
         var fontSize = (style?.FontSize ?? CellStyle.Default.FontSize) + WorksheetFontSizeDisplayOffset;
+        var fontFamily = ResolveAvaloniaCellFontFamily(style, _session.Workbook.Theme);
         var textDecorations = BuildTextDecorations(style);
         var indentPadding = GetCellIndentPadding(style) + GetPivotRowLabelTextPadding(address.Row, address.Col);
         var textRotation = style?.TextRotation ?? CellStyle.Default.TextRotation;
@@ -7239,7 +7622,25 @@ public sealed partial class MainWindow : Window
             richRuns: richRuns,
             mergeRegion: mergeRegion,
             flowDirection: flowDirection,
-            commentDisplay: cell.CommentDisplay);
+            commentDisplay: cell.CommentDisplay,
+            fontFamily: fontFamily);
+    }
+
+    private static FontFamily ResolveAvaloniaCellFontFamily(CellStyle? style, WorkbookTheme theme)
+    {
+        var fontName = (style ?? CellStyle.Default).ResolveEffectiveFontName(theme);
+        var fallback = fontName.Trim().ToUpperInvariant() switch
+        {
+            "CALIBRI" => "Carlito, Liberation Sans",
+            "APTOS" => "Carlito, Liberation Sans",
+            "APTOS NARROW" => "Arial Narrow, Liberation Sans Narrow, Nimbus Sans Narrow, Liberation Sans",
+            "ARIAL" => "Liberation Sans",
+            "SEGOE UI" => "Liberation Sans",
+            "VERDANA" => "DejaVu Sans, Liberation Sans",
+            "TIMES NEW ROMAN" => "Liberation Serif",
+            _ => "Liberation Sans, sans-serif",
+        };
+        return new FontFamily($"{fontName}, {fallback}");
     }
 
     private Border CreateInteractiveCellBorder(
@@ -7271,7 +7672,8 @@ public sealed partial class MainWindow : Window
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
         GridRange? mergeRegion = null,
         FlowDirection flowDirection = FlowDirection.LeftToRight,
-        CellCommentDisplay? commentDisplay = null)
+        CellCommentDisplay? commentDisplay = null,
+        FontFamily? fontFamily = null)
     {
         var applySelectionFill = selected &&
             address != _session.ActiveCell &&
@@ -7304,7 +7706,8 @@ public sealed partial class MainWindow : Window
             patternBrush: patternBrush,
             richRuns: richRuns,
             flowDirection: flowDirection,
-            commentDisplay: commentDisplay);
+            commentDisplay: commentDisplay,
+            fontFamily: fontFamily);
 
         // Comment/note corner indicator + hover card: mirrors WPF's GridView.Rendering.cs
         // DrawCommentIndicator (small top-right triangle, red for a legacy note, purple for a
@@ -7374,6 +7777,24 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
+            if (point.Properties.IsLeftButtonPressed && IsCellDoubleClick(address, args.ClickCount))
+            {
+                var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
+                var caretIndex = CalculateInlineCellCaretIndex(
+                    editText,
+                    point.Position.X,
+                    cellWidth,
+                    fontSize * zoomFactor,
+                    fontWeight,
+                    fontStyle,
+                    fontFamily ?? FontFamily.Default,
+                    (8 + indentPadding) * zoomFactor,
+                    textAlignment);
+                BeginInlineCellEdit(address, editText, caretIndex);
+                args.Handled = true;
+                return;
+            }
+
             if (args.KeyModifiers.HasFlag(KeyModifiers.Shift))
                 SelectRange(address);
             else
@@ -7394,6 +7815,7 @@ public sealed partial class MainWindow : Window
                 fontSize * zoomFactor,
                 fontWeight,
                 fontStyle,
+                fontFamily ?? FontFamily.Default,
                 (8 + indentPadding) * zoomFactor,
                 textAlignment);
             BeginInlineCellEdit(address, editText, caretIndex);
@@ -7410,11 +7832,26 @@ public sealed partial class MainWindow : Window
                 fontWeight,
                 fontStyle,
                 fontSize,
+                fontFamily ?? FontFamily.Default,
                 indentPadding,
                 zoomFactor,
                 cellHeight);
         }
         return DecoratePivotHeaderCell(DecorateAutoFilterHeaderCell(border, address), address);
+    }
+
+    private bool IsCellDoubleClick(CellAddress address, int frameworkClickCount)
+    {
+        var now = Stopwatch.GetTimestamp();
+        var elapsed = _lastCellPointerPressTimestamp == 0
+            ? double.PositiveInfinity
+            : Stopwatch.GetElapsedTime(_lastCellPointerPressTimestamp, now).TotalMilliseconds;
+        var isDoubleClick = frameworkClickCount >= 2 ||
+            (_lastCellPointerPressAddress == address && elapsed <= 500);
+
+        _lastCellPointerPressAddress = isDoubleClick ? null : address;
+        _lastCellPointerPressTimestamp = isDoubleClick ? 0 : now;
+        return isDoubleClick;
     }
 
     private TextBox CreateInlineCellEditor(
@@ -7425,6 +7862,7 @@ public sealed partial class MainWindow : Window
         FontWeight fontWeight,
         FontStyle fontStyle,
         double fontSize,
+        FontFamily fontFamily,
         double indentPadding,
         double zoomFactor,
         double cellHeight)
@@ -7438,6 +7876,7 @@ public sealed partial class MainWindow : Window
             BorderThickness = new Thickness(0),
             Padding = new Thickness((8 + indentPadding) * zoomFactor, 0, 8 * zoomFactor, 0),
             FontSize = Math.Max(1, fontSize * zoomFactor),
+            FontFamily = fontFamily,
             FontWeight = fontWeight,
             FontStyle = fontStyle,
             TextAlignment = textAlignment,
@@ -7455,6 +7894,7 @@ public sealed partial class MainWindow : Window
 
             _inlineCellEditText = editor.Text ?? "";
             _formulaBox.Text = _inlineCellEditText;
+            ClearFormulaReferenceEntrySpan();
         };
         editor.KeyDown += (_, args) =>
         {
@@ -7535,6 +7975,7 @@ public sealed partial class MainWindow : Window
         _pendingInlineCellCaretIndex = Math.Clamp(caretIndex, 0, editText.Length);
         _formulaBox.Text = editText;
         _formulaBoxEditOriginalText = editText;
+        ClearFormulaReferenceEntrySpan();
         _session.BeginFormulaEdit(address);
         RefreshShell("Ready");
     }
@@ -7557,6 +7998,7 @@ public sealed partial class MainWindow : Window
     {
         _session.CancelFormulaEdit();
         _formulaBoxEditOriginalText = null;
+        ClearFormulaReferenceEntrySpan();
         ClearInlineCellEditorState();
         RefreshShell("Ready");
         FocusShellRegion(ShellFocusTarget.Worksheet);
@@ -7570,6 +8012,12 @@ public sealed partial class MainWindow : Window
         _pendingInlineCellCaretIndex = null;
     }
 
+    private void ClearFormulaReferenceEntrySpan()
+    {
+        _formulaReferenceStart = null;
+        _formulaReferenceLength = null;
+    }
+
     private static int CalculateInlineCellCaretIndex(
         string text,
         double pointerX,
@@ -7577,13 +8025,14 @@ public sealed partial class MainWindow : Window
         double fontSize,
         FontWeight fontWeight,
         FontStyle fontStyle,
+        FontFamily fontFamily,
         double leftPadding,
         TextAlignment textAlignment)
     {
         if (string.IsNullOrEmpty(text))
             return 0;
 
-        var textWidth = MeasureInlineCellTextWidth(text, fontSize, fontWeight, fontStyle);
+        var textWidth = MeasureInlineCellTextWidth(text, fontSize, fontWeight, fontStyle, fontFamily);
         var textLeft = textAlignment switch
         {
             TextAlignment.Center => Math.Max(leftPadding, (cellWidth - textWidth) / 2),
@@ -7597,7 +8046,7 @@ public sealed partial class MainWindow : Window
         {
             var prefixWidth = i == 0
                 ? 0
-                : MeasureInlineCellTextWidth(text[..i], fontSize, fontWeight, fontStyle);
+                : MeasureInlineCellTextWidth(text[..i], fontSize, fontWeight, fontStyle, fontFamily);
             var distance = Math.Abs(prefixWidth - relativeX);
             if (distance < closestDistance)
             {
@@ -7621,7 +8070,12 @@ public sealed partial class MainWindow : Window
     private static readonly Dictionary<TextWidthMeasurementKey, double> TextWidthMeasurementCache = new();
     private static readonly Dictionary<ShrinkToFitFontSizeKey, double> ShrinkToFitFontSizeCache = new();
 
-    private readonly record struct TextWidthMeasurementKey(string Text, double FontSize, FontWeight FontWeight, FontStyle FontStyle);
+    private readonly record struct TextWidthMeasurementKey(
+        string Text,
+        double FontSize,
+        FontWeight FontWeight,
+        FontStyle FontStyle,
+        string FontFamilyName);
 
     private readonly record struct ShrinkToFitFontSizeKey(
         string Text,
@@ -7630,9 +8084,15 @@ public sealed partial class MainWindow : Window
         double RequestedFontSize,
         double AvailableWidth);
 
-    private static double MeasureInlineCellTextWidth(string text, double fontSize, FontWeight fontWeight, FontStyle fontStyle)
+    private static double MeasureInlineCellTextWidth(
+        string text,
+        double fontSize,
+        FontWeight fontWeight,
+        FontStyle fontStyle,
+        FontFamily? fontFamily = null)
     {
-        var key = new TextWidthMeasurementKey(text, fontSize, fontWeight, fontStyle);
+        fontFamily ??= FontFamily.Default;
+        var key = new TextWidthMeasurementKey(text, fontSize, fontWeight, fontStyle, fontFamily.ToString());
         if (TextWidthMeasurementCache.TryGetValue(key, out var cachedWidth))
             return cachedWidth;
 
@@ -7643,7 +8103,7 @@ public sealed partial class MainWindow : Window
             text,
             CultureInfo.InvariantCulture,
             FlowDirection.LeftToRight,
-            new Typeface("Calibri", fontStyle, fontWeight),
+            new Typeface(fontFamily, fontStyle, fontWeight),
             Math.Max(1, fontSize),
             Brushes.Black);
         TextWidthMeasurementCache.Add(key, formatted.Width);
@@ -7851,34 +8311,57 @@ public sealed partial class MainWindow : Window
 
     private bool TryInsertFormulaPointReference(CellAddress address)
     {
-        if (_session.FormulaEditAddress is null ||
-            !IsFormulaPointModeText(_formulaBox.Text))
+        var editor = _inlineCellEditor is not null && _inlineCellEditAddress is not null
+            ? _inlineCellEditor
+            : _formulaBox;
+        var text = editor.Text ?? "";
+        if (_session.FormulaEditAddress is null || !IsFormulaPointModeText(text))
         {
             return false;
         }
 
-        var reference = SpreadsheetDisplayFormatter.FormatCellReference(address, UseR1C1ReferenceStyle);
-        var text = _formulaBox.Text ?? "";
-        var selectionStart = Math.Clamp(Math.Min(_formulaBox.SelectionStart, _formulaBox.SelectionEnd), 0, text.Length);
-        var selectionEnd = Math.Clamp(Math.Max(_formulaBox.SelectionStart, _formulaBox.SelectionEnd), 0, text.Length);
+        var selectionStart = Math.Clamp(Math.Min(editor.SelectionStart, editor.SelectionEnd), 0, text.Length);
+        var selectionLength = Math.Clamp(Math.Abs(editor.SelectionEnd - editor.SelectionStart), 0, text.Length - selectionStart);
+        if (!FormulaRangeEntryPlanner.TryApplyRangeSelection(
+                text,
+                selectionStart,
+                selectionLength,
+                _formulaReferenceStart,
+                _formulaReferenceLength,
+                new GridRange(address, address),
+                _session.FormulaEditAddress.Value,
+                UseR1C1ReferenceStyle,
+                out var edit))
+        {
+            return false;
+        }
+
         _isApplyingFormulaBoxText = true;
         try
         {
-            _formulaBox.Text = string.Concat(
-                text.AsSpan(0, selectionStart),
-                reference,
-                text.AsSpan(selectionEnd));
+            ApplyTextBoxEdit(editor, edit.TextEdit);
+            if (!ReferenceEquals(editor, _formulaBox))
+            {
+                _inlineCellEditText = editor.Text ?? "";
+                _formulaBox.Text = _inlineCellEditText;
+                _formulaBox.CaretIndex = editor.CaretIndex;
+                _formulaBox.SelectionStart = editor.SelectionStart;
+                _formulaBox.SelectionEnd = editor.SelectionEnd;
+            }
         }
         finally
         {
             _isApplyingFormulaBoxText = false;
         }
 
-        var caret = selectionStart + reference.Length;
-        _formulaBox.CaretIndex = caret;
-        _formulaBox.SelectionStart = caret;
-        _formulaBox.SelectionEnd = caret;
-        _formulaBox.Focus();
+        _formulaReferenceStart = edit.ReferenceStart;
+        _formulaReferenceLength = edit.ReferenceLength;
+        _sheetGridHost.Content = BuildSheetGrid();
+        RefreshFormulaReferenceHighlights();
+        var refreshedEditor = _inlineCellEditor is not null && _inlineCellEditAddress is not null
+            ? _inlineCellEditor
+            : _formulaBox;
+        refreshedEditor.Focus();
         return true;
     }
 
@@ -7891,6 +8374,7 @@ public sealed partial class MainWindow : Window
         if (_isApplyingFormulaBoxText)
             return;
 
+        ClearFormulaReferenceEntrySpan();
         if (_session.FormulaEditAddress is null)
         {
             ClearFormulaReferenceTextOverlay();
@@ -8286,7 +8770,8 @@ public sealed partial class MainWindow : Window
         IBrush? patternBrush = null,
         IReadOnlyList<ResolvedCellTextRun>? richRuns = null,
         FlowDirection flowDirection = FlowDirection.LeftToRight,
-        CellCommentDisplay? commentDisplay = null)
+        CellCommentDisplay? commentDisplay = null,
+        FontFamily? fontFamily = null)
     {
         var effectiveText = FormatTextForRotation(text, textRotation);
         var effectiveTextWrapping = textRotation == 255 ? TextWrapping.NoWrap : textWrapping;
@@ -8351,14 +8836,13 @@ public sealed partial class MainWindow : Window
         var textBlock = new TextBlock
         {
             FontSize = adjustedFontSize,
+            FontFamily = fontFamily ?? FontFamily.Default,
             FontWeight = fontWeight,
             FontStyle = fontStyle,
             Foreground = foreground,
             TextAlignment = effectiveTextAlignment,
             TextWrapping = isFillAlign ? TextWrapping.NoWrap : effectiveTextWrapping,
-            TextTrimming = (isFillAlign || effectiveTextWrapping == TextWrapping.Wrap || textRotation == 255)
-                ? TextTrimming.None
-                : TextTrimming.CharacterEllipsis,
+            TextTrimming = TextTrimming.None,
             VerticalAlignment = verticalAlignment,
             Margin = new Thickness(
                 scaledHorizontalPadding + (isRightAnchored ? 0 : scaledIndentPadding),
@@ -8959,6 +9443,15 @@ public sealed partial class MainWindow : Window
         }
 
         items.AddRange(CellColorPalettePlanner.BuildDefaultSwatches(_session.Workbook.Theme).Select(swatch => CreateColorSwatchMenuItem(swatch, target)));
+        var moreColorsItem = new MenuItem { Header = "More Colors..." };
+        moreColorsItem.Click += (_, _) =>
+        {
+            if (target == ColorPaletteTarget.Fill)
+                ShowMoreFillColorDialog();
+            else
+                ShowMoreFontColorDialog();
+        };
+        items.Add(moreColorsItem);
         return new MenuFlyout { ItemsSource = items };
     }
 
@@ -14647,6 +15140,7 @@ public sealed partial class MainWindow : Window
     private void BeginFormulaEdit(CellAddress address, string? initialText = null)
     {
         ClearSelectedDrawingObject();
+        ClearFormulaReferenceEntrySpan();
         _session.BeginFormulaEdit(address);
         RefreshShell("Ready");
         var originalText = _formulaBox.Text ?? "";
@@ -14673,6 +15167,7 @@ public sealed partial class MainWindow : Window
         {
             _session.CancelFormulaEdit();
             _formulaBoxEditOriginalText = null;
+            ClearFormulaReferenceEntrySpan();
             RefreshShell("Ready");
             FocusShellRegion(ShellFocusTarget.Worksheet);
             e.Handled = true;
@@ -14939,6 +15434,7 @@ public sealed partial class MainWindow : Window
         }
 
         _formulaBoxEditOriginalText = null;
+        ClearFormulaReferenceEntrySpan();
         RefreshShell($"Edited {FormatCellReference(address)}");
         return true;
     }
@@ -22688,7 +23184,9 @@ public sealed partial class MainWindow : Window
         if (e.Key == Key.F2)
         {
             e.Handled = true;
-            BeginFormulaEdit(_session.ActiveCell);
+            var address = _session.ActiveCell;
+            var editText = FormatEditText(_session.ActiveSheet.GetCell(address), address);
+            BeginInlineCellEdit(address, editText, editText.Length);
             return;
         }
 

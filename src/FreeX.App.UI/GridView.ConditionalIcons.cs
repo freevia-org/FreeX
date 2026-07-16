@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.Core.Calc;
 using FreeX.Core.Model;
 
 namespace FreeX.App.UI;
@@ -31,19 +32,7 @@ public partial class GridView
     /// for callers that don't have merge data on hand, preserving prior behavior for them.
     /// </summary>
     public static bool IsOverflowOccupied(DisplayCell cell, CellAddress? editingCell, GridRange? merge = null)
-    {
-        if (editingCell is { } address && address.Row == cell.Row && address.Col == cell.Col)
-            return true;
-
-        if (merge is not null)
-            return true;
-
-        return !string.IsNullOrEmpty(cell.DisplayText) ||
-               cell.ConditionalIcon is not null ||
-               cell.ConditionalDataBar is not null ||
-               cell.Formula is not null ||
-               cell.RawValue is not null and not BlankValue;
-    }
+        => CellTextOverflowPlanner.IsOverflowOccupied(cell, editingCell, merge);
 
     /// <summary>
     /// Builds the set of cells that block text overflow. <paramref name="findMerge"/> (row, col) -&gt;
