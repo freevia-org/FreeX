@@ -126,4 +126,29 @@ public sealed class HeaderFooterPaginatorTests
         var container = Assert.IsType<System.Windows.Media.ContainerVisual>(page.Visual);
         Assert.True(container.Children.Count >= 2);
     }
+
+    [StaFact]
+    public void MultiPageEndnotes_DrawOnTheFinalPage()
+    {
+        var model = TextDocument.CreateEmpty();
+        model.Endnotes[1] = new Endnote(1, "endnote body");
+
+        var flow = new FlowDocument();
+        for (var i = 0; i < 120; i++)
+            flow.Blocks.Add(new System.Windows.Documents.Paragraph(
+                new System.Windows.Documents.Run($"body paragraph {i}")));
+
+        var inner = ((IDocumentPaginatorSource)flow).DocumentPaginator;
+        var (pageWidth, pageHeight) = PageLayout.PageSizeDip(model.Page);
+        inner.PageSize = new Size(pageWidth, pageHeight);
+
+        var paginator = new HeaderFooterPaginator(inner, model, model.Page, lineHeightDip: 16);
+        paginator.ComputePageCount();
+        Assert.True(paginator.PageCount >= 2);
+
+        var lastPage = paginator.GetPage(paginator.PageCount - 1);
+        var container = Assert.IsType<System.Windows.Media.ContainerVisual>(lastPage.Visual);
+        Assert.True(container.Children.Count >= 2,
+            "the final page should contain the base page plus the endnote overlay");
+    }
 }

@@ -115,6 +115,9 @@ internal static class PrintLayout
     /// </summary>
     public static DocumentPaginator BuildPaginator(DocumentView editor)
     {
+        if (editor.Model.Sections.Count > 1 && NeedsSectionAwareRendering(editor.Model))
+            return SectionAwareDocumentPaginator.Build(editor);
+
         var page = editor.Model.Page;
         var (pageWidth, pageHeight) = PageLayout.PageSizeDip(page);
 
@@ -127,6 +130,35 @@ internal static class PrintLayout
         // (LineHeight defaults to FontSize * 4/3).
         var lineHeightDip = editor.Document.FontSize * (4.0 / 3.0);
         return new HeaderFooterPaginator(paginator, editor.Model, page, lineHeightDip);
+    }
+
+    private static bool NeedsSectionAwareRendering(TextDocument document) =>
+        document.Sections.Any(section =>
+            !section.HeadersFooters.IsEmpty || PageGeometryDiffers(section.Page, document.Page));
+
+    private static bool PageGeometryDiffers(PageSettings left, PageSettings right) =>
+        left.WidthPt != right.WidthPt
+        || left.HeightPt != right.HeightPt
+        || left.MarginLeftPt != right.MarginLeftPt
+        || left.MarginRightPt != right.MarginRightPt
+        || left.MarginTopPt != right.MarginTopPt
+        || left.MarginBottomPt != right.MarginBottomPt
+        || left.Landscape != right.Landscape
+        || left.GutterPt != right.GutterPt
+        || left.HeaderDistancePt != right.HeaderDistancePt
+        || left.FooterDistancePt != right.FooterDistancePt
+        || left.ColumnCount != right.ColumnCount
+        || left.ColumnSpacingPt != right.ColumnSpacingPt
+        || left.ColumnsLineBetween != right.ColumnsLineBetween
+        || !SequenceEqual(left.ColumnWidthsPt, right.ColumnWidthsPt);
+
+    private static bool SequenceEqual(IReadOnlyList<double>? left, IReadOnlyList<double>? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
+        if (left is null || right is null || left.Count != right.Count)
+            return false;
+        return left.SequenceEqual(right);
     }
 
     /// <summary>
@@ -248,7 +280,10 @@ internal sealed class HeaderFooterPaginator(
         var hasFallbackNotesAtFoot = !hasAnyMappedFootnotes
             && inner.PageCount == 1
             && (model.Footnotes.Count > 0 || model.Endnotes.Count > 0);
-        var hasNotesAtFoot = hasMappedNotesAtFoot || hasFallbackNotesAtFoot;
+        // Endnotes are collected at the document end. They belong on the final printed page even
+        // when the document has multiple body pages and no footnote marker assignment on that page.
+        var hasEndnotesAtFoot = model.Endnotes.Count > 0 && pageNumber == inner.PageCount - 1;
+        var hasNotesAtFoot = hasMappedNotesAtFoot || hasFallbackNotesAtFoot || hasEndnotesAtFoot;
         if (model.Header is not { IsEmpty: false } && model.Footer is not { IsEmpty: false }
             && !hasWatermark && !hasBorder && !hasLineNumbers && !hasNotesAtFoot)
             return basePage;

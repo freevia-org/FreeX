@@ -3,7 +3,7 @@
   <!--
     Headless FreeW page-render harness for the on-demand DOCX visual-fidelity comparison.
     Loads each corpus .docx through DocxReader, hosts it in a DocumentView, and rasterizes every
-    paginated page (via the app's real PrintLayout.BuildPaginator print path) to PNG. Included in
+    paginated page through the app's real print/preview paginator to PNG. Included in
     solution preflight for project hygiene; run on demand alongside the Word ground-truth export. See
     freew-fidelity-corpus/README.md and docs/fidelity/.
   -->
