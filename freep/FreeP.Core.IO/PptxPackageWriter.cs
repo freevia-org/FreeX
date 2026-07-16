@@ -3562,6 +3562,17 @@ public static class PptxPackageWriter
                 avLst));
         }
 
+        // WordArt 3-D material and lighting live on a:bodyPr, not p:spPr.
+        if (body.Text3dEffects is { } textEffects)
+        {
+            var scene3d = BuildScene3dEl(textEffects);
+            var sp3d = BuildSp3dEl(textEffects);
+            if (scene3d is not null)
+                bodyPr.Add(scene3d);
+            if (sp3d is not null)
+                bodyPr.Add(sp3d);
+        }
+
         // Wave 22B: text columns (a:bodyPr numCol= spcCol=)
         if (body.ColumnCount > 1)
         {

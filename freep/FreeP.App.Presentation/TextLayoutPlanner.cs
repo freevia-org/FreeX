@@ -300,6 +300,7 @@ public static class TextLayoutPlanner
             Wrap = text.Wrap,
             WarpPreset = text.WarpPreset,
             WarpAdjusts = text.WarpAdjusts,
+            Text3dEffects = text.Text3dEffects,
             VerticalType = text.VerticalType,
             AutoFitKind = text.AutoFitKind,
             HasStoredFontScale = text.HasStoredFontScale,

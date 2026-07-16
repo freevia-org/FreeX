@@ -1677,6 +1677,7 @@ public static class SlideCompositor
             Wrap = body.Wrap,
             WarpPreset = body.WarpPreset,   // Wave 16A
             WarpAdjusts = body.WarpAdjusts.ToArray(),
+            Text3dEffects = ResolveEffects(body.Text3dEffects),
             VerticalType = body.VerticalType,  // Wave 18B
             AutoFitKind = body.AutoFitKind,
             HasStoredFontScale = hasStoredFontScale,
