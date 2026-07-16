@@ -15752,10 +15752,17 @@ public sealed class DocumentView : Control
             if (connector.ParentNodeIndex < 0 || connector.ParentNodeIndex >= sd.NodePlans.Count)
                 continue;
 
-            context.DrawLine(
-                SmartArtConnectorPenAt(sd, connector.ParentNodeIndex),
-                ScalePoint(connector.X1, connector.Y1),
-                ScalePoint(connector.X2, connector.Y2));
+            var points = connector.Points.Count > 1
+                ? connector.Points
+                : [new SmartArtLayoutPoint(connector.X1, connector.Y1), new(connector.X2, connector.Y2)];
+            var pen = SmartArtConnectorPenAt(sd, connector.ParentNodeIndex);
+            for (var pointIndex = 1; pointIndex < points.Count; pointIndex++)
+            {
+                context.DrawLine(
+                    pen,
+                    ScalePoint(points[pointIndex - 1].X, points[pointIndex - 1].Y),
+                    ScalePoint(points[pointIndex].X, points[pointIndex].Y));
+            }
         }
 
         foreach (var node in hierarchy.Nodes)

@@ -205,6 +205,48 @@ public sealed class SmartArtRenderingTests
         Assert.InRange(secondRootShadow.Opacity, 0.29, 0.31);
     }
 
+    [StaFact]
+    public void NativeOrgChart_UsesWordGeometryStyleAndNoOuterFrame()
+    {
+        var root = new SmartArtNode("Plan");
+        var build = root.AddChild("Build");
+        build.AddChild("Verify");
+        var sa = new SmartArt { Kind = SmartArtKind.Hierarchy };
+        sa.LayoutId = "orgchart1";
+        sa.ColorSchemeId = "accent1";
+        sa.StyleId = "intense1";
+        sa.WidthPt = 320;
+        sa.HeightPt = 140;
+        sa.Nodes.Add(root);
+
+        var view = ViewWithSmartArt(sa);
+        var outer = LogicalDescendants<Border>(view.Document)
+            .Single(border => ReferenceEquals(border.Tag, sa));
+
+        Assert.Equal(0, outer.BorderThickness.Left);
+        Assert.Null(outer.BorderBrush);
+
+        foreach (var text in new[] { "Plan", "Build", "Verify" })
+        {
+            var node = NodeBorder(view, text);
+            var fill = Assert.IsType<SolidColorBrush>(node.Background).Color;
+            Assert.Equal(Color.FromRgb(0x1F, 0x38, 0x64), fill);
+            Assert.Equal(0, node.Effect is DropShadowEffect shadow ? shadow.Opacity : 0);
+        }
+
+        var canvas = LogicalDescendants<Canvas>(outer).Single();
+        var plan = NodeBorder(view, "Plan");
+        var buildBox = NodeBorder(view, "Build");
+        var verify = NodeBorder(view, "Verify");
+        Assert.InRange(Canvas.GetLeft(plan), 169.28, 169.30);
+        Assert.InRange(Canvas.GetTop(plan), 0.05, 0.08);
+        Assert.InRange(Canvas.GetLeft(buildBox), 77.85, 77.87);
+        Assert.InRange(Canvas.GetTop(buildBox), 51.77, 51.80);
+        Assert.InRange(Canvas.GetLeft(verify), 125.20, 125.23);
+        Assert.InRange(Canvas.GetTop(verify), 103.50, 103.53);
+        Assert.Equal(4, LogicalDescendants<Line>(canvas).Count);
+    }
+
     // ── Bug #5: process arrow fill contrasts with box fill ───────────────────────────────────────
 
     /// <summary>
@@ -272,11 +314,48 @@ public sealed class SmartArtRenderingTests
 
         Assert.True(polygons.Count >= 4,
             $"expected WPF to render shared polygon bands for Basic Pyramid; got {polygons.Count}");
-        Assert.InRange(polygons[0].Points[0].X, 60.9, 61.1);
-        Assert.InRange(polygons[0].Points[2].X, 128.2, 128.3);
+        Assert.InRange(polygons[0].Points[0].X, 136.4, 136.6);
+        Assert.InRange(polygons[0].Points[2].X, 185.9, 186.1);
         Assert.True(polygons[0].Points[3].X < polygons[0].Points[0].X
             && polygons[0].Points[2].X > polygons[0].Points[1].X,
             "top shared pyramid polygon should widen from top edge to bottom edge");
+    }
+
+    [StaFact]
+    public void NativePyramid_UsesWordGeometryStyleAndNoOuterFrame()
+    {
+        var sa = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+        sa.LayoutId = "pyramid1";
+        sa.ColorSchemeId = "accent2";
+        sa.StyleId = "flat1";
+        sa.WidthPt = 300;
+        sa.HeightPt = 150;
+
+        var view = ViewWithSmartArt(sa);
+        var outer = LogicalDescendants<Border>(view.Document)
+            .Single(border => ReferenceEquals(border.Tag, sa));
+        Assert.Equal(0, outer.BorderThickness.Left);
+        Assert.Null(outer.BorderBrush);
+
+        foreach (var text in new[] { "Top", "Middle", "Lower", "Base" })
+        {
+            var node = NodeBorder(view, text);
+            var textBlock = Assert.IsType<TextBlock>(node.Child);
+            var foreground = Assert.IsType<SolidColorBrush>(textBlock.Foreground).Color;
+            Assert.Equal(Colors.Black, foreground);
+        }
+
+        var canvas = LogicalDescendants<Canvas>(outer).Single();
+        var top = NodeBorder(view, "Top");
+        var baseNode = NodeBorder(view, "Base");
+        Assert.InRange(Canvas.GetLeft(top), 113.99, 114.01);
+        Assert.InRange(Canvas.GetTop(top), 5.99, 6.01);
+        Assert.InRange(Canvas.GetLeft(baseNode), 5.99, 6.01);
+        Assert.InRange(Canvas.GetTop(baseNode), 110.99, 111.01);
+        var polygons = LogicalDescendants<Polygon>(canvas);
+        Assert.Equal(4, polygons.Count);
+        foreach (var polygon in polygons)
+            Assert.Equal(Color.FromRgb(0x7F, 0x00, 0x00), Assert.IsType<SolidColorBrush>(polygon.Fill).Color);
     }
 
     [StaTheory]

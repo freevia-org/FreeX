@@ -11148,14 +11148,17 @@ public sealed class DocumentView : RichTextBox
 
         var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
         var content = SmartArtRenderer.Build(smartArt, plan, strokeThickness);
+        var isNativeWordSmartArt = plan.LayoutId is "orgchart1" or "pyramid1";
 
         var element = new Border
         {
             Width = widthPx,
             Height = heightPx,
-            Background = System.Windows.Media.Brushes.White,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
-            BorderThickness = new Thickness(strokeThickness),
+            Background = isNativeWordSmartArt ? Brushes.Transparent : Brushes.White,
+            BorderBrush = isNativeWordSmartArt
+                ? null
+                : new SolidColorBrush(Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            BorderThickness = isNativeWordSmartArt ? new Thickness(0) : new Thickness(strokeThickness),
             Child = content,
             Tag = smartArt // carries the model SmartArt so CommitToModel can round-trip it
         };

@@ -24,37 +24,46 @@ internal static class SmartArtRenderer
     public static FrameworkElement Build(
         SmartArt smartArt,
         SmartArtVisualPlan plan,
-        double strokeThickness) =>
-        Build(plan, strokeThickness);
+        double strokeThickness)
+    {
+        const double pixelsPerPoint = 96.0 / 72.0;
+        return Build(
+            plan,
+            strokeThickness,
+            Math.Max(1, smartArt.WidthPt * pixelsPerPoint),
+            Math.Max(1, smartArt.HeightPt * pixelsPerPoint));
+    }
 
     private static FrameworkElement Build(
         SmartArtVisualPlan plan,
-        double strokeThickness)
+        double strokeThickness,
+        double targetWidth,
+        double targetHeight)
     {
         return plan.LayoutId switch
         {
             // ── List layouts ────────────────────────────────────────────────────────────────────────
-            "list1" or "vertbullet1" => BuildPlannedLayout(plan, strokeThickness),
-            "horizbullet1"           => BuildPlannedLayout(plan, strokeThickness),
+            "list1" or "vertbullet1" => BuildPlannedLayout(plan, strokeThickness, targetWidth, targetHeight),
+            "horizbullet1"           => BuildPlannedLayout(plan, strokeThickness, targetWidth, targetHeight),
 
             // ── Process layouts ─────────────────────────────────────────────────────────────────────
-            "process1"               => BuildPlannedLayout(plan, strokeThickness),
-            "continuousBlockProcess" => BuildPlannedLayout(plan, strokeThickness),
-            "stepup1"                => BuildPlannedLayout(plan, strokeThickness),
-            "stepdown1"              => BuildPlannedLayout(plan, strokeThickness),
+            "process1"               => BuildPlannedLayout(plan, strokeThickness, targetWidth, targetHeight),
+            "continuousBlockProcess" => BuildPlannedLayout(plan, strokeThickness, targetWidth, targetHeight),
+            "stepup1"                => BuildPlannedLayout(plan, strokeThickness, targetWidth, targetHeight),
+            "stepdown1"              => BuildPlannedLayout(plan, strokeThickness, targetWidth, targetHeight),
 
             // ── Cycle ────────────────────────────────────────────────────────────────────────────────
-            "cycle1"                 => BuildPlannedLayout(plan, strokeThickness),
-            "pyramid1"               => BuildPlannedLayout(plan, strokeThickness),
+            "cycle1"                 => BuildPlannedLayout(plan, strokeThickness, targetWidth, targetHeight),
+            "pyramid1"               => BuildPlannedLayout(plan, strokeThickness, targetWidth, targetHeight),
 
             // ── Hierarchy ───────────────────────────────────────────────────────────────────────────
-            "hierarchy1" or "orgchart1" => BuildHierarchy(plan, strokeThickness),
+            "hierarchy1" or "orgchart1" => BuildHierarchy(plan, strokeThickness, targetWidth, targetHeight),
 
             // ── Radial ──────────────────────────────────────────────────────────────────────────────
-            "radial1"                => BuildPlannedLayout(plan, strokeThickness),
+            "radial1"                => BuildPlannedLayout(plan, strokeThickness, targetWidth, targetHeight),
 
             // ── Matrix ──────────────────────────────────────────────────────────────────────────────
-            "matrix1"                => BuildPlannedLayout(plan, strokeThickness),
+            "matrix1"                => BuildPlannedLayout(plan, strokeThickness, targetWidth, targetHeight),
 
             // ── Fallback (unknown layout) ────────────────────────────────────────────────────────────
             _                        => BuildVerticalList(plan.Nodes, strokeThickness)
@@ -291,7 +300,9 @@ internal static class SmartArtRenderer
     // Hierarchy layout: shared planner geometry, with styles mapped by DFS node index.
     private static FrameworkElement BuildHierarchy(
         SmartArtVisualPlan plan,
-        double strokeThickness)
+        double strokeThickness,
+        double targetWidth,
+        double targetHeight)
     {
         if (plan.HierarchyGeometry is not { Nodes.Count: > 0 } geometry)
             return BuildVerticalList(plan.Nodes, strokeThickness);
@@ -302,7 +313,9 @@ internal static class SmartArtRenderer
             Height = geometry.NaturalHeight,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6)
+            Margin = string.Equals(plan.LayoutId, "orgchart1", StringComparison.OrdinalIgnoreCase)
+                ? new Thickness(0)
+                : new Thickness(6)
         };
 
         foreach (var connector in geometry.Connectors)
@@ -311,16 +324,24 @@ internal static class SmartArtRenderer
                 continue;
 
             var parent = plan.Nodes[connector.ParentNodeIndex];
-            canvas.Children.Add(new Line
+            var connectorBrush = new SolidColorBrush(ParseHex(parent.ConnectorHex));
+            var connectorThickness = ConnectorThickness(parent, strokeThickness);
+            var points = connector.Points.Count > 1
+                ? connector.Points
+                : [new SmartArtLayoutPoint(connector.X1, connector.Y1), new(connector.X2, connector.Y2)];
+            for (var pointIndex = 1; pointIndex < points.Count; pointIndex++)
             {
-                X1 = connector.X1,
-                Y1 = connector.Y1,
-                X2 = connector.X2,
-                Y2 = connector.Y2,
-                Stroke = new SolidColorBrush(ParseHex(parent.ConnectorHex)),
-                StrokeThickness = ConnectorThickness(parent, strokeThickness),
-                Opacity = 0.75
-            });
+                canvas.Children.Add(new Line
+                {
+                    X1 = points[pointIndex - 1].X,
+                    Y1 = points[pointIndex - 1].Y,
+                    X2 = points[pointIndex].X,
+                    Y2 = points[pointIndex].Y,
+                    Stroke = connectorBrush,
+                    StrokeThickness = connectorThickness,
+                    Opacity = 0.75
+                });
+            }
         }
 
         foreach (var nodeGeometry in geometry.Nodes)
@@ -342,6 +363,8 @@ internal static class SmartArtRenderer
 
         return new Viewbox
         {
+            Width = targetWidth,
+            Height = targetHeight,
             Stretch = Stretch.Uniform,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,
@@ -354,7 +377,9 @@ internal static class SmartArtRenderer
 
     private static FrameworkElement BuildPlannedLayout(
         SmartArtVisualPlan plan,
-        double strokeThickness)
+        double strokeThickness,
+        double targetWidth,
+        double targetHeight)
     {
         if (plan.LayoutGeometry is not { Nodes.Count: > 0 } geometry)
             return BuildVerticalList(plan.Nodes, strokeThickness);
@@ -365,7 +390,9 @@ internal static class SmartArtRenderer
             Height = Math.Max(1, geometry.NaturalHeight),
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6)
+            Margin = plan.LayoutId is "orgchart1" or "pyramid1"
+                ? new Thickness(0)
+                : new Thickness(6)
         };
 
         foreach (var connector in geometry.Connectors)
@@ -407,6 +434,8 @@ internal static class SmartArtRenderer
 
         return new Viewbox
         {
+            Width = targetWidth,
+            Height = targetHeight,
             Stretch = Stretch.Uniform,
             HorizontalAlignment = HorizontalAlignment.Stretch,
             VerticalAlignment = VerticalAlignment.Stretch,

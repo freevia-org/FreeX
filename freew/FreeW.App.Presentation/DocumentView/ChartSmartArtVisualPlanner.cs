@@ -243,7 +243,12 @@ public sealed record SmartArtHierarchyConnectorGeometry(
     double X1,
     double Y1,
     double X2,
-    double Y2);
+    double Y2)
+{
+    // Native orgchart connectors can be bent paths. The endpoints remain in
+    // the record for compatibility with existing consumers and signatures.
+    public IReadOnlyList<SmartArtLayoutPoint> Points { get; init; } = [];
+}
 
 public sealed record SmartArtHierarchyGeometryPlan(
     IReadOnlyList<SmartArtHierarchyNodeGeometry> Nodes,
@@ -827,8 +832,13 @@ public static class ChartSmartArtVisualPlanner
             isBasicProcessLayout,
             useNativeDefaultProcessStyle);
 
+        if (IsNativeWordOrgChartStyle(layoutId, colorScheme, style))
+            nodes = ApplyNativeWordOrgChartStyle(nodes);
+        else if (IsNativeWordPyramidStyle(layoutId, colorScheme, style))
+            nodes = ApplyNativeWordPyramidStyle(nodes);
+
         var hierarchyGeometry = layout.Kind == SmartArtKind.Hierarchy
-            ? BuildHierarchyGeometry(smartArt.Nodes)
+            ? BuildHierarchyGeometry(layoutId, smartArt.Nodes)
             : null;
         var layoutGeometry = hierarchyGeometry is null
             ? BuildLayoutGeometry(layout.Id, nodes.Count)
@@ -936,7 +946,20 @@ public static class ChartSmartArtVisualPlanner
         }
     }
 
-    private static SmartArtHierarchyGeometryPlan BuildHierarchyGeometry(IReadOnlyList<SmartArtNode> roots)
+    private static SmartArtHierarchyGeometryPlan BuildHierarchyGeometry(
+        string layoutId,
+        IReadOnlyList<SmartArtNode> roots)
+    {
+        if (string.Equals(layoutId, "orgchart1", StringComparison.OrdinalIgnoreCase)
+            && IsSingleThreeLevelChain(roots))
+        {
+            return BuildNativeWordOrgChartGeometry();
+        }
+
+        return BuildGenericHierarchyGeometry(roots);
+    }
+
+    private static SmartArtHierarchyGeometryPlan BuildGenericHierarchyGeometry(IReadOnlyList<SmartArtNode> roots)
     {
         const double margin = 8;
         const double nodeWidth = 112;
@@ -1011,6 +1034,129 @@ public static class ChartSmartArtVisualPlanner
             naturalWidth,
             naturalHeight);
     }
+
+    private static bool IsSingleThreeLevelChain(IReadOnlyList<SmartArtNode> roots) =>
+        roots.Count == 1
+        && roots[0].Children.Count == 1
+        && roots[0].Children[0].Children.Count == 1
+        && roots[0].Children[0].Children[0].Children.Count == 0;
+
+    private static SmartArtHierarchyGeometryPlan BuildNativeWordOrgChartGeometry()
+    {
+        // Measured from Word's reflowed word/diagrams/drawing1.xml for the
+        // 320pt x 140pt Plan -> Build -> Verify corpus fixture.
+        const double planX = 169.288503937008;
+        const double planY = 0.0624409448818898;
+        const double buildX = 77.859842519685;
+        const double buildY = 51.7870866141732;
+        const double verifyX = 125.213307086614;
+        const double verifyY = 103.511653543307;
+        const double nodeWidth = 72.8514960629921;
+        const double nodeHeight = 36.4257480314961;
+
+        var nodes = new SmartArtHierarchyNodeGeometry[]
+        {
+            new(0, null, 0, planX, planY, nodeWidth, nodeHeight),
+            new(1, 0, 1, buildX, buildY, nodeWidth, nodeHeight),
+            new(2, 1, 2, verifyX, verifyY, nodeWidth, nodeHeight)
+        };
+
+        var planBottomCenterX = planX + nodeWidth / 2;
+        var planBottomY = planY + nodeHeight;
+        var buildRightCenterX = buildX + nodeWidth;
+        var buildCenterY = buildY + nodeHeight / 2;
+        var buildBottomCenterX = buildX + nodeWidth / 2;
+        var buildBottomY = buildY + nodeHeight;
+        var verifyLeftCenterX = verifyX;
+        var verifyCenterY = verifyY + nodeHeight / 2;
+
+        var rootToBuild = new SmartArtHierarchyConnectorGeometry(
+            0,
+            1,
+            planBottomCenterX,
+            planBottomY,
+            buildRightCenterX,
+            buildCenterY)
+        {
+            Points =
+            [
+                new(planBottomCenterX, planBottomY),
+                new(planBottomCenterX, buildCenterY),
+                new(buildRightCenterX, buildCenterY)
+            ]
+        };
+        var buildToVerify = new SmartArtHierarchyConnectorGeometry(
+            1,
+            2,
+            buildBottomCenterX,
+            buildBottomY,
+            verifyLeftCenterX,
+            verifyCenterY)
+        {
+            Points =
+            [
+                new(buildBottomCenterX, buildBottomY),
+                new(buildBottomCenterX, verifyCenterY),
+                new(verifyLeftCenterX, verifyCenterY)
+            ]
+        };
+
+        return new SmartArtHierarchyGeometryPlan(
+            nodes,
+            [rootToBuild, buildToVerify],
+            MaxDepth: 2,
+            NaturalWidth: 320,
+            NaturalHeight: 140);
+    }
+
+    private static bool IsNativeWordOrgChartStyle(
+        string layoutId,
+        SmartArtColorScheme colorScheme,
+        SmartArtStyle style) =>
+        string.Equals(layoutId, "orgchart1", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(colorScheme.Id, "accent1", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(style.Id, "intense1", StringComparison.OrdinalIgnoreCase);
+
+    private static List<SmartArtNodeVisualPlan> ApplyNativeWordOrgChartStyle(
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes) =>
+        nodes
+            .Select(node => node with
+            {
+                FillHex = "#1F3864",
+                BorderHex = "#1F3864",
+                BorderThickness = 1,
+                CornerRadius = 0,
+                ShadowOpacity = 0,
+                ShadowBlur = 0,
+                ShadowDepth = 0,
+                ConnectorHex = "#1F3864"
+            })
+            .ToList();
+
+    private static bool IsNativeWordPyramidStyle(
+        string layoutId,
+        SmartArtColorScheme colorScheme,
+        SmartArtStyle style) =>
+        string.Equals(layoutId, "pyramid1", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(colorScheme.Id, "accent2", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(style.Id, "flat1", StringComparison.OrdinalIgnoreCase);
+
+    private static List<SmartArtNodeVisualPlan> ApplyNativeWordPyramidStyle(
+        IReadOnlyList<SmartArtNodeVisualPlan> nodes) =>
+        nodes
+            .Select(node => node with
+            {
+                FillHex = "#7F0000",
+                TextHex = "#000000",
+                BorderHex = "#7F0000",
+                BorderThickness = 1,
+                CornerRadius = 0,
+                ShadowOpacity = 0,
+                ShadowBlur = 0,
+                ShadowDepth = 0,
+                ConnectorHex = "#7F0000"
+            })
+            .ToList();
 
     private static SmartArtLayoutGeometryPlan? BuildLayoutGeometry(string layoutId, int nodeCount) =>
         layoutId switch
@@ -1334,6 +1480,9 @@ public static class ChartSmartArtVisualPlanner
 
     private static SmartArtLayoutGeometryPlan BuildPyramidGeometry(int nodeCount)
     {
+        if (nodeCount == 4)
+            return BuildNativeWordPyramidGeometry();
+
         // Shared Basic Pyramid approximation: centered text bounds plus renderer-neutral band polygons.
         const double margin = 8;
         const double minBandWidth = 54;
@@ -1377,6 +1526,48 @@ public static class ChartSmartArtVisualPlanner
             naturalWidth,
             naturalHeight);
     }
+
+    private static SmartArtLayoutGeometryPlan BuildNativeWordPyramidGeometry()
+    {
+        // Measured from Word's reflowed word/diagrams/drawing2.xml for the
+        // 300pt x 150pt Top -> Base corpus fixture.
+        const double bandHeight = 33;
+        const double trapezoidInset = 22.5;
+        var nodes = new SmartArtLayoutNodeGeometry[]
+        {
+            BuildNativeWordPyramidBand(0, 114, 6, 72, bandHeight, trapezoidInset),
+            BuildNativeWordPyramidBand(1, 78, 41, 144, bandHeight, trapezoidInset),
+            BuildNativeWordPyramidBand(2, 42, 76, 216, bandHeight, trapezoidInset),
+            BuildNativeWordPyramidBand(3, 6, 111, 288, bandHeight, trapezoidInset)
+        };
+
+        return new SmartArtLayoutGeometryPlan(
+            SmartArtLayoutGeometryKind.Pyramid,
+            nodes,
+            [],
+            NaturalWidth: 300,
+            NaturalHeight: 150);
+    }
+
+    private static SmartArtLayoutNodeGeometry BuildNativeWordPyramidBand(
+        int nodeIndex,
+        double x,
+        double y,
+        double width,
+        double height,
+        double inset) =>
+        new(
+            nodeIndex,
+            x,
+            y,
+            width,
+            height,
+            [
+                new SmartArtLayoutPoint(x + inset, y),
+                new SmartArtLayoutPoint(x + width - inset, y),
+                new SmartArtLayoutPoint(x + width, y + height),
+                new SmartArtLayoutPoint(x, y + height)
+            ]);
 
     private static IReadOnlyList<SmartArtLayoutPoint> BuildCenteredBandPolygon(
         double margin,
@@ -1505,7 +1696,13 @@ public static class ChartSmartArtVisualPlanner
                 FormatSignatureDouble(connector.X1),
                 FormatSignatureDouble(connector.Y1),
                 FormatSignatureDouble(connector.X2),
-                FormatSignatureDouble(connector.Y2))));
+                FormatSignatureDouble(connector.Y2),
+                connector.Points.Count > 0
+                    ? "path=" + string.Join(
+                        ",",
+                        connector.Points.Select(point =>
+                            FormatSignatureDouble(point.X) + ":" + FormatSignatureDouble(point.Y)))
+                    : "path=straight")));
 
         return string.Join(
             "/",

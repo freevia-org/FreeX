@@ -2240,9 +2240,8 @@ public sealed class VisualEvidencePlannerTests
             signature.Contains("hierarchy=maxDepth=2/nodes=3/connectors=2", StringComparison.Ordinal) &&
             signature.Contains("colorScheme=accent1", StringComparison.Ordinal) &&
             signature.Contains("style=intense1", StringComparison.Ordinal) &&
-            signature.Contains("#38517D", StringComparison.Ordinal) &&
-            signature.Contains("#486DAF", StringComparison.Ordinal) &&
-            signature.Contains("#679AD6", StringComparison.Ordinal));
+            signature.Contains("#1F3864", StringComparison.Ordinal) &&
+            signature.Contains("path=", StringComparison.Ordinal));
         expectation.ChartSmartArt.SmartArtVisualSignatures.Should().Contain(signature =>
             signature.Contains("layout=pyramid1", StringComparison.Ordinal) &&
             signature.Contains("colorScheme=accent2", StringComparison.Ordinal) &&
@@ -2259,7 +2258,7 @@ public sealed class VisualEvidencePlannerTests
         smartArt.HierarchyGeometry!.MaxDepth.Should().Be(2);
         smartArt.HierarchyGeometry.Connectors.Should().HaveCount(2);
         smartArt.Nodes.Select(node => node.FillHex)
-            .Should().ContainInOrder("#38517D", "#486DAF", "#679AD6");
+            .Should().ContainInOrder("#1F3864", "#1F3864", "#1F3864");
         var pyramid = expectation.ChartSmartArt.SmartArts.Single(plan => plan.LayoutId == "pyramid1");
         pyramid.LayoutGeometry.Should().NotBeNull();
         pyramid.LayoutGeometry!.Kind.Should().Be(SmartArtLayoutGeometryKind.Pyramid);
@@ -2303,10 +2302,10 @@ public sealed class VisualEvidencePlannerTests
             geometry.Nodes.Should().HaveCount(4);
             geometry.Nodes.Should().OnlyContain(node => node.HasPolygon);
             geometry.Nodes[0].PolygonPoints.Select(point => (point.X, point.Y)).Should().ContainInOrder(
-                (61, 8),
-                (115, 8),
-                (128.25, 38),
-                (47.75, 38));
+                (136.5, 6),
+                (163.5, 6),
+                (186, 39),
+                (114, 39));
         }
         finally
         {
@@ -3113,7 +3112,7 @@ public sealed class VisualEvidencePlannerTests
             summary.Trust.Failures.Should().Contain(f =>
                 f.Contains("chart/SmartArt renderer pair 'chart-smartart-complex' page 1", StringComparison.Ordinal)
                 && f.Contains("SmartArt visual signatures differ", StringComparison.Ordinal)
-                && f.Contains("#486DAF", StringComparison.Ordinal)
+                && f.Contains("#1F3864", StringComparison.Ordinal)
                 && f.Contains("#101010", StringComparison.Ordinal));
         }
         finally

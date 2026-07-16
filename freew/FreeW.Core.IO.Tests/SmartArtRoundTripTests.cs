@@ -14,6 +14,8 @@ public class SmartArtRoundTripTests
 {
     private static readonly XNamespace W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     private static readonly XNamespace R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace Wp = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
+    private static readonly XNamespace Wp14 = "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing";
     private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
     private static readonly XNamespace A = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace Ct = "http://schemas.openxmlformats.org/package/2006/content-types";
@@ -388,6 +390,37 @@ public class SmartArtRoundTripTests
             .Should().Equal("0", "1", "2", "3");
         levels.Select(pt => pt.Element(Dgm + "prSet")!.Attribute("presStyleCnt")!.Value)
             .Should().OnlyContain(value => value == "4");
+        var pyramidRootPresentation = data.Descendants(Dgm + "prSet")
+            .Single(prSet => prSet.Attribute("presName")?.Value == "Name0")
+            .Element(Dgm + "presLayoutVars")!;
+        pyramidRootPresentation.Element(Dgm + "dir").Should().NotBeNull();
+        pyramidRootPresentation.Element(Dgm + "animLvl")!.Attribute("val")!.Value.Should().Be("lvl");
+        pyramidRootPresentation.Element(Dgm + "resizeHandles")!.Attribute("val")!.Value.Should().Be("exact");
+        levels.Select(pt => pt.Element(Dgm + "prSet")!.Element(Dgm + "presLayoutVars")!)
+            .Should().OnlyContain(vars => vars.Element(Dgm + "chMax")!.Attribute("val")!.Value == "1"
+                && vars.Element(Dgm + "bulletEnabled")!.Attribute("val")!.Value == "1");
+    }
+
+    [Fact]
+    public void InlineSmartArt_UsesWordInlineMetadataRequiredForNativeRendering()
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Top", "Middle", "Lower", "Base"]);
+        smartArt.LayoutId = "pyramid1";
+
+        var document = EntryXml(WriteBytes(SingleDiagramDocument(smartArt)), "word/document.xml");
+        var inline = document.Descendants(Wp + "inline").Single();
+        var effectExtent = inline.Element(Wp + "effectExtent")!;
+
+        inline.Attribute(Wp14 + "anchorId")!.Value.Should().Be("10000001");
+        inline.Attribute(Wp14 + "editId")!.Value.Should().Be("20000001");
+        effectExtent.Attributes().ToDictionary(attribute => attribute.Name.LocalName, attribute => attribute.Value)
+            .Should().Contain(new Dictionary<string, string>
+            {
+                ["l"] = "19050",
+                ["t"] = "38100",
+                ["r"] = "38100",
+                ["b"] = "57150"
+            });
     }
 
     [Fact]
