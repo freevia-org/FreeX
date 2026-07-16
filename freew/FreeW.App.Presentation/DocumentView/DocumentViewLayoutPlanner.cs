@@ -1442,11 +1442,12 @@ public static class DocumentViewLayoutPlanner
             ? topAndBottomReservationWidthDip.Value
             : PageLayout.PointsToDip(resolvedWidthPt);
 
-        // Square and tight objects exclude text laterally around their page-space rectangle; they do
-        // not consume a second vertical flow slot. Only top-and-bottom wrapping advances normal flow
-        // by the object's authored height, matching Word's anchor behavior when several floating
-        // objects share one paragraph.
-        var reservationHeightDip = wrapping == ImageWrapping.TopAndBottom
+        // WPF represents the wrap reservation as a transparent Floater. Raster images using square
+        // or tight wrapping need their authored height in that floater so WPF has a vertical band
+        // around which paragraph lines can flow; a zero-height placeholder lets the overlay image
+        // paint over text. Complex drawing objects retain the established overlay-only behavior until
+        // their own flow geometry is baselined. Top-and-bottom always reserves its authored height.
+        var reservationHeightDip = wrapping == ImageWrapping.TopAndBottom || kind == DocumentFloatingObjectKind.Image
             ? PageLayout.PointsToDip(resolvedHeightPt)
             : 0;
 
