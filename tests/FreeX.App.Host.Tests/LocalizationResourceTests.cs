@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using FluentAssertions;
 using Free.Shared.Localization;
+using Free.Shared.Shell;
 using FreeX.App.Host;
 using FreeX.App.Localization;
 
@@ -90,12 +91,53 @@ public sealed partial class LocalizationResourceTests
         using var cultureScope = TestCultureScope.CurrentCultureAndUICulture(currentCulture: "fr-FR", currentUICulture: "fr-FR");
         var expectedDefaultCulture = CultureInfo.DefaultThreadCurrentCulture;
 
-        AppLocalization.ApplyAppLanguage("uk-UA");
+        AppLocalization.Bootstrap.ApplyAppLanguage("uk-UA");
 
         CultureInfo.CurrentUICulture.Name.Should().Be("uk-UA");
         CultureInfo.DefaultThreadCurrentUICulture?.Name.Should().Be("uk-UA");
         CultureInfo.CurrentCulture.Name.Should().Be("fr-FR");
         CultureInfo.DefaultThreadCurrentCulture.Should().BeSameAs(expectedDefaultCulture);
+    }
+
+    [Fact]
+    public void AppLocalizationBootstrap_InstallsAppResourceSeamsBeforeCultureSelection()
+    {
+        var originalShellStrings = ShellStrings.Current;
+        var originalBackstageStrings = BackstageStrings.Current;
+        try
+        {
+            using var cultureScope = TestCultureScope.CurrentCultureAndUICulture("en-US");
+            AppLocalization.Bootstrap.InstallSharedSeams();
+            AppLocalization.Bootstrap.ApplyAppLanguage("fr-FR");
+
+            ShellStrings.Current.Cancel.Should().Be("_Annuler");
+            BackstageStrings.Current.Format("File_CommandFailedFormat", "Open", "Denied")
+                .Should()
+                .Be("Open failed: Denied");
+            BackstageStrings.Current.Get("Backstage_GreetingMorning").Should().Be("Bonjour");
+        }
+        finally
+        {
+            ShellStrings.Current = originalShellStrings;
+            BackstageStrings.Current = originalBackstageStrings;
+        }
+    }
+
+    [Fact]
+    public void AppStartup_UsesOrderedLocalizationBootstrap()
+    {
+        var source = DialogSourceTestSupport.ReadHostSources("App.xaml.cs");
+        var install = source.IndexOf(
+            "AppLocalization.Bootstrap.InstallSharedSeams();",
+            StringComparison.Ordinal);
+        var apply = source.IndexOf(
+            "AppLocalization.Bootstrap.ApplyAppLanguage(options.AppLanguage);",
+            StringComparison.Ordinal);
+
+        install.Should().BeGreaterOrEqualTo(0);
+        apply.Should().BeGreaterThan(install);
+        source.Should().NotContain("new ResourceShellStrings");
+        source.Should().NotContain("new ResourceBackstageStrings");
     }
 
     [Fact]

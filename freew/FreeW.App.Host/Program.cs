@@ -22,7 +22,7 @@ public static class Program
             new AppProductIdentity("FreeW", "FREEW_DIAGNOSTICS", "FreeW"),
             (options, optionsStore) => new MainWindow(options, optionsStore))
         {
-            InstallSharedSeams = AppLocalization.InstallSharedSeams,
+            InstallSharedSeams = AppLocalization.Bootstrap.InstallSharedSeams,
             Theme = new WpfApplicationThemeStartupSpec<Theme>(
                 EnvironmentVariableName: "FREEW_THEME",
                 AlternateThemeValue: "midnight",
@@ -35,7 +35,7 @@ public static class Program
             },
             Localization = new WpfApplicationLocalizationStartupSpec<FreeWOptions>(
                 SelectUiLanguage: options => options.UiLanguage,
-                ApplyUiLanguage: AppLocalization.ApplyAppLanguage,
-                ApplyCurrentCultureToWpf: AppLocalization.ApplyCurrentCultureToWpf)
+                ApplyUiLanguage: AppLocalization.Bootstrap.ApplyAppLanguage,
+                ApplyCurrentCultureToWpf: AppLocalization.Bootstrap.ApplyCurrentCultureToWpf)
         });
 }

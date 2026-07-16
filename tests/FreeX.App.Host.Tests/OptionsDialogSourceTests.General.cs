@@ -182,9 +182,9 @@ public sealed partial class OptionsDialogSourceTests
         source.Should().Contain("OptAppLanguage.SelectedValue = AppLanguageCatalog.NormalizeCultureName(_opts.AppLanguage)");
         source.Should().Contain("AppLanguage       = AppLanguageCatalog.NormalizeCultureName(OptAppLanguage.SelectedValue as string)");
 
-        backstageSource.Should().Contain("AppLocalization.ApplyAppLanguage(_options.AppLanguage)");
+        backstageSource.Should().Contain("AppLocalization.Bootstrap.ApplyAppLanguage(_options.AppLanguage)");
         backstageSource.Should().Contain("UiText.Get(\"Options_AppLanguageRestartMessage\")");
-        appSource.Should().Contain("AppLocalization.ApplyAppLanguage(options.AppLanguage);");
+        appSource.Should().Contain("AppLocalization.Bootstrap.ApplyAppLanguage(options.AppLanguage);");
         appSource.Should().Contain("_startupOptions = options;");
         appSource.Should().Contain("ConfigureServices(serviceCollection);");
         appSource.Should().Contain("var options = _startupOptions ?? FreeXOptions.Load();");
