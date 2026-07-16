@@ -2701,7 +2701,8 @@ public sealed class SlideCanvas : FrameworkElement
             "dashVert" => BuildStripePatternBrush(bg, fg, horizontal: false),
             "diagStripe" or "ltDnDiag" or "dnDiag" => BuildDiagPatternBrush(bg, fg, down: true),
             "upDiag" or "ltUpDiag" => BuildDiagPatternBrush(bg, fg, down: false),
-            "cross" => BuildCrossPatternBrush(bg, fg, tileSize: 12, strokeWidth: 1),
+            // PowerPoint's cross preset repeats on an 8-pixel grid at slide render scale.
+            "cross" => BuildCrossPatternBrush(bg, fg, tileSize: 8, strokeWidth: 1),
             "diagCross" or "smConfetti" => BuildDiagCrossPatternBrush(bg, fg),
             "smGrid" => BuildCrossPatternBrush(bg, fg),
             "wave" or "trellis" => BuildDiagCrossPatternBrush(bg, fg),
