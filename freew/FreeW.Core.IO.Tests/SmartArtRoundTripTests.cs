@@ -632,7 +632,7 @@ public class SmartArtRoundTripTests
         var read = RoundTrip(SingleDiagramDocument(smartArt));
 
         var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
-        diagram.StyleId.Should().Be("intense1");
+        diagram.StyleId.Should().Be("simple1");
     }
 
     [Fact]
@@ -648,7 +648,7 @@ public class SmartArtRoundTripTests
         var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
         diagram.LayoutId.Should().Be("hierarchy1");
         diagram.ColorSchemeId.Should().Be("accent1");
-        diagram.StyleId.Should().Be("subtle2");
+        diagram.StyleId.Should().Be("simple1", "the current Word-compatible quick-style body is simple1");
     }
 
     [Fact]
@@ -670,7 +670,7 @@ public class SmartArtRoundTripTests
         colorsXml.Root!.Attribute("uniqueId")!.Value.Should().EndWith("mono1");
 
         var qsXml = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
-        qsXml.Root!.Attribute("uniqueId")!.Value.Should().EndWith("flat1");
+        qsXml.Root!.Attribute("uniqueId")!.Value.Should().EndWith("simple1");
     }
 
     [Fact]
@@ -732,7 +732,7 @@ public class SmartArtRoundTripTests
         var docPoint = ptList.Elements(Dgm + "pt").Single(pt => pt.Attribute("type")?.Value == "doc");
         var docPrSet = docPoint.Element(Dgm + "prSet")!;
 
-        docPrSet.Attribute("qsTypeId")!.Value.Should().EndWith("/quickstyle/intense1");
+        docPrSet.Attribute("qsTypeId")!.Value.Should().EndWith("/quickstyle/simple1");
         docPrSet.Attribute("phldr")!.Value.Should().Be("0");
         ptList.Elements(Dgm + "pt").Count(pt => pt.Attribute("type")?.Value == "pres").Should().Be(21);
 
@@ -753,7 +753,7 @@ public class SmartArtRoundTripTests
         pres("Name111").Attribute("presStyleCnt")!.Value.Should().Be("1");
 
         var quickStyle = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
-        quickStyle.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/quickstyle/intense1");
+        quickStyle.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/quickstyle/simple1");
         quickStyle.Root.Attribute("freewStyleId").Should().BeNull();
         var colors = EntryXml(bytes, "word/diagrams/colors1.xml");
         colors.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/colors/accent1_2");

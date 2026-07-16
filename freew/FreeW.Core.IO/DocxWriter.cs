@@ -5482,8 +5482,9 @@ public static class DocxWriter
         "fgAcc4", "bgShp", "dkBgShp", "trBgShp", "fgShp", "revTx"
     ];
 
-    private static string SmartArtQuickStyleSuffix(SmartArt smartArt) =>
-        string.IsNullOrWhiteSpace(smartArt.StyleId) ? "simple1" : smartArt.StyleId;
+    // The writer currently emits the native simple1 definition for every diagram. Keep the declared
+    // gallery id truthful until FreeW carries complete native definitions for the other Office styles.
+    private static string SmartArtQuickStyleSuffix(SmartArt smartArt) => "simple1";
 
     private static bool UsesFlatSmartArtGallery(SmartArt smartArt) =>
         SmartArtLayoutCategory(smartArt) is "list" or "process";
