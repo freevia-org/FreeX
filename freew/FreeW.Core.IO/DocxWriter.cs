@@ -5735,6 +5735,8 @@ public static class DocxWriter
                 : BuildCategoryAxis(catAxisId, valAxisId, chart.CategoryAxisTitle));
             plotArea.Add(BuildValueAxis(valAxisId, catAxisId, "l", chart.ValueAxisTitle));
         }
+        if (ChartHasPlotAreaFill(chart))
+            plotArea.Add(BuildChartPlotAreaProperties());
 
         var chartElement = new XElement(C + "chart");
         if (chart.Title is { Length: > 0 } title)
@@ -5938,6 +5940,9 @@ public static class DocxWriter
         for (var i = 0; i < chart.Series.Count; i++)
             root.Add(BuildSeries(chart, chart.Series[i], i));
 
+        if (ChartShowsDataLabels(chart))
+            root.Add(BuildChartDataLabels());
+
         root.Add(new XElement(C + "axId", new XAttribute("val", catAxisId)));
         root.Add(new XElement(C + "axId", new XAttribute("val", valAxisId)));
         return root;
@@ -5954,6 +5959,8 @@ public static class DocxWriter
             new XElement(C + "scatterStyle", new XAttribute("val", "lineMarker")));
         for (var i = 0; i < chart.Series.Count; i++)
             root.Add(BuildScatterSeries(chart, chart.Series[i], i));
+        if (ChartShowsDataLabels(chart))
+            root.Add(BuildChartDataLabels());
         root.Add(new XElement(C + "axId", new XAttribute("val", xAxisId)));
         root.Add(new XElement(C + "axId", new XAttribute("val", yAxisId)));
         return root;
@@ -5966,10 +5973,37 @@ public static class DocxWriter
             new XElement(C + "varyColors", new XAttribute("val", "1")));
         if (chart.Series.Count > 0)
             pie.Add(BuildSeries(chart, chart.Series[0], 0));
+        if (ChartShowsDataLabels(chart))
+            pie.Add(BuildChartDataLabels());
         if (doughnut)
             pie.Add(new XElement(C + "holeSize", new XAttribute("val", "50")));
         return pie;
     }
+
+    private static bool ChartShowsDataLabels(Chart chart)
+    {
+        if (chart.QuickLayoutId > 0)
+            return ChartQuickLayout.FindById(chart.QuickLayoutId)?.ShowDataLabels == true;
+
+        return chart.StyleId > 0
+            && ChartStyle.FindById(chart.StyleId)?.ShowDataLabels == true;
+    }
+
+    private static XElement BuildChartDataLabels() =>
+        new(C + "dLbls",
+            new XElement(C + "showLegendKey", new XAttribute("val", "0")),
+            new XElement(C + "showVal", new XAttribute("val", "1")),
+            new XElement(C + "showCatName", new XAttribute("val", "0")),
+            new XElement(C + "showSerName", new XAttribute("val", "0")));
+
+    private static bool ChartHasPlotAreaFill(Chart chart) =>
+        chart.StyleId > 0 && ChartStyle.FindById(chart.StyleId)?.PlotAreaFill == true;
+
+    private static XElement BuildChartPlotAreaProperties() =>
+        new(C + "spPr",
+            new XElement(A + "solidFill",
+                new XElement(A + "srgbClr", new XAttribute("val", "D9E2F3"))),
+            new XElement(A + "ln", new XElement(A + "noFill")));
 
     /// <summary>
     /// Builds one c:ser: its index/order, an optional c:tx (series name) string cache, the shared category

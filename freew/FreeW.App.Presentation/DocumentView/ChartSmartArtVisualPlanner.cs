@@ -425,9 +425,12 @@ public static class ChartSmartArtVisualPlanner
         var categoryCount = Math.Max(
             chart.Categories.Count,
             chart.Series.Select(series => series.Values.Count).DefaultIfEmpty().Max());
+        var useCategoryLegend = UsesCategoryLegend(chart, plan, isPie);
         var legendCount = plan.ShowLegend
             ? isPie
                 ? Math.Max(categoryCount, chart.Series.Select(series => series.Values.Count).DefaultIfEmpty().Max())
+                : useCategoryLegend
+                    ? categoryCount
                 : chart.Series.Count
             : 0;
         var titleHeight = plan.ShowTitle && !string.IsNullOrEmpty(chart.Title) ? 46 : 0;
@@ -681,6 +684,7 @@ public static class ChartSmartArtVisualPlanner
             for (var index = 0; index < legendCount; index++)
             {
                 var label = isPie
+                    || useCategoryLegend
                     ? index < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[index]) ? chart.Categories[index] : $"Item {index + 1}"
                     : index < chart.Series.Count && !string.IsNullOrEmpty(chart.Series[index].Name) ? chart.Series[index].Name! : $"Series {index + 1}";
                 var x = plot.X + index * entryWidth;
@@ -694,6 +698,13 @@ public static class ChartSmartArtVisualPlanner
             plan.PaletteHex, chart.Categories.ToList(), plan.Series.Count,
             gridLines, axisLines, bars, lineSeries, markers, slices, texts, legend);
     }
+
+    private static bool UsesCategoryLegend(Chart chart, ChartVisualPlan plan, bool isPie) =>
+        !isPie
+        && chart.Kind is ChartKind.Column or ChartKind.Bar
+        && chart.Series.Count == 1
+        && plan.ShowLegend
+        && chart.StyleId is 7 or 8;
 
     private static void AddCategoryText(List<ChartSceneText> texts, Chart chart, int index, double x, double y, ChartSceneTextAnchor anchor)
     {
