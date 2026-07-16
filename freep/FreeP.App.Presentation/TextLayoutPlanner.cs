@@ -39,6 +39,27 @@ public readonly record struct TextParagraphPlacement(
     }
 }
 
+public readonly record struct TextColumnLineMeasure(
+    int ParagraphIndex,
+    int LineIndex,
+    double HeightDip,
+    double SpaceBeforeDip,
+    double SpaceAfterDip,
+    bool IsFirstLine,
+    bool IsLastLine)
+{
+    public double TotalHeightDip => HeightDip + SpaceBeforeDip + SpaceAfterDip;
+}
+
+public readonly record struct TextColumnLinePlacement(
+    int ParagraphIndex,
+    int LineIndex,
+    int ColumnIndex,
+    double X,
+    double Y,
+    double MaxWidthDip,
+    bool IsFirstLine);
+
 public readonly record struct TextBulletPlacement(
     string Text,
     string FontFamily,
@@ -494,6 +515,47 @@ public static class TextLayoutPlanner
         }
 
         return new TextBlockLayoutPlan(layout.Area, placements);
+    }
+
+    public static IReadOnlyList<TextColumnLinePlacement> PlanColumnLines(
+        ResolvedTextLayout text,
+        TextColumnLayout layout,
+        IReadOnlyList<TextColumnLineMeasure> lines)
+    {
+        int column = 0;
+        double currentY = layout.Area.Y;
+        double columnX = layout.Area.X;
+        double columnBottom = layout.Area.Y + layout.Area.Height;
+
+        var placements = new List<TextColumnLinePlacement>(lines.Count);
+        foreach (var line in lines)
+        {
+            if ((uint)line.ParagraphIndex >= (uint)text.Paragraphs.Count)
+                continue;
+
+            if (currentY + line.TotalHeightDip > columnBottom &&
+                column < layout.ColumnCount - 1)
+            {
+                column++;
+                columnX = layout.Area.X + column * (layout.ColumnWidthDip + layout.ColumnSpacingDip);
+                currentY = layout.Area.Y;
+            }
+
+            currentY += line.SpaceBeforeDip;
+            var paragraph = text.Paragraphs[line.ParagraphIndex];
+            double paragraphX = columnX + paragraph.IndentDip;
+            placements.Add(new TextColumnLinePlacement(
+                line.ParagraphIndex,
+                line.LineIndex,
+                column,
+                paragraphX,
+                currentY,
+                Math.Max(1, layout.ColumnWidthDip - paragraph.IndentDip),
+                line.IsFirstLine));
+            currentY += line.HeightDip + line.SpaceAfterDip;
+        }
+
+        return placements;
     }
 
     public static TextStackedVerticalLayoutPlan PlanStackedVerticalText(
