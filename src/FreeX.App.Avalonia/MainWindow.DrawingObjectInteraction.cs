@@ -5,6 +5,7 @@ using Avalonia.Media;
 
 using FreeX.App.Presentation.Charts;
 using FreeX.App.Presentation.DrawingInteraction;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Services.Ribbon;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
@@ -14,6 +15,7 @@ using Free.Shared.Ribbon;
 
 using AvaloniaBorder = Avalonia.Controls.Border;
 using AvaloniaCanvas = Avalonia.Controls.Canvas;
+using AvaloniaGrid = Avalonia.Controls.Grid;
 
 namespace FreeX.App.Avalonia;
 
@@ -178,6 +180,440 @@ public sealed partial class MainWindow
         else
             SendSelectedShapeBackward();
     }
+
+    // Drawing-object selection chrome matches the WPF grid: eight 8px resize handles, a 10px
+    // rotation grip 20px above the object, and a 4px hit pad around each affordance.
+    private const double DrawingObjectHandleSize = 8;
+    private const double DrawingObjectHandleHitPadding = 4;
+    private const double DrawingObjectRotationGripDiameter = 10;
+    private const double DrawingObjectSelectionHorizontalPadding = 8;
+    private const double DrawingObjectSelectionBottomPadding = 8;
+    private static readonly double DrawingObjectSelectionTopPadding =
+        ObjectDragPlanner.RotationGripOffset +
+        (DrawingObjectRotationGripDiameter / 2) +
+        DrawingObjectHandleHitPadding;
+
+    private static readonly ObjectDragKind[] DrawingObjectResizeHandleKinds =
+    [
+        ObjectDragKind.ResizeNW,
+        ObjectDragKind.ResizeN,
+        ObjectDragKind.ResizeNE,
+        ObjectDragKind.ResizeE,
+        ObjectDragKind.ResizeSE,
+        ObjectDragKind.ResizeS,
+        ObjectDragKind.ResizeSW,
+        ObjectDragKind.ResizeW,
+    ];
+
+    private DrawingObjectDragSession? _drawingObjectDragSession;
+
+    private sealed class DrawingObjectDragSession
+    {
+        public required DrawingObjectRenderPlan RenderPlan { get; init; }
+        public required Control Container { get; init; }
+        public required AvaloniaGrid Surface { get; init; }
+        public required AvaloniaCanvas Adorner { get; init; }
+        public required ObjectDragKind Kind { get; init; }
+        public required LayoutRect StartCanvasRect { get; init; }
+        public required LayoutPoint StartPointerInCanvas { get; init; }
+        public required double StartRotationDegrees { get; init; }
+        public required bool StartFlipHorizontal { get; init; }
+        public required bool StartFlipVertical { get; init; }
+        public LayoutRect CurrentCanvasRect { get; set; }
+        public double CurrentRotationDegrees { get; set; }
+        public bool CurrentFlipHorizontal { get; set; }
+        public bool CurrentFlipVertical { get; set; }
+        public bool Moved { get; set; }
+    }
+
+    private AvaloniaCanvas CreateDrawingObjectSelectionAdorner(
+        double width,
+        double height,
+        double rotationDegrees)
+    {
+        var layer = new AvaloniaCanvas
+        {
+            Background = Brushes.Transparent,
+            IsHitTestVisible = false,
+        };
+
+        layer.Children.Add(new AvaloniaBorder
+        {
+            BorderBrush = SelectionBorder,
+            BorderThickness = new Thickness(1.5),
+            IsHitTestVisible = false,
+        });
+        layer.Children.Add(new AvaloniaBorder
+        {
+            Width = 1,
+            Background = SelectionBorder,
+            IsHitTestVisible = false,
+        });
+        layer.Children.Add(new global::Avalonia.Controls.Shapes.Ellipse
+        {
+            Width = DrawingObjectRotationGripDiameter,
+            Height = DrawingObjectRotationGripDiameter,
+            Fill = Brushes.White,
+            Stroke = SelectionBorder,
+            StrokeThickness = 1,
+            IsHitTestVisible = false,
+        });
+
+        foreach (var _ in DrawingObjectResizeHandleKinds)
+        {
+            layer.Children.Add(new AvaloniaBorder
+            {
+                Width = DrawingObjectHandleSize,
+                Height = DrawingObjectHandleSize,
+                Background = Brushes.White,
+                BorderBrush = SelectionBorder,
+                BorderThickness = new Thickness(1),
+                IsHitTestVisible = false,
+            });
+        }
+
+        LayoutDrawingObjectSelectionAdorner(layer, width, height, rotationDegrees);
+        return layer;
+    }
+
+    private static void LayoutDrawingObjectSelectionAdorner(
+        AvaloniaCanvas layer,
+        double width,
+        double height,
+        double rotationDegrees)
+    {
+        var objectWidth = Math.Max(1, width);
+        var objectHeight = Math.Max(1, height);
+        var layerWidth = objectWidth + (DrawingObjectSelectionHorizontalPadding * 2);
+        var layerHeight = objectHeight + DrawingObjectSelectionTopPadding + DrawingObjectSelectionBottomPadding;
+        var objectRect = new LayoutRect(
+            DrawingObjectSelectionHorizontalPadding,
+            DrawingObjectSelectionTopPadding,
+            objectWidth,
+            objectHeight);
+
+        layer.Width = layerWidth;
+        layer.Height = layerHeight;
+        layer.RenderTransformOrigin = new RelativePoint(
+            objectRect.Center.X / layerWidth,
+            objectRect.Center.Y / layerHeight,
+            RelativeUnit.Relative);
+        layer.RenderTransform = Math.Abs(rotationDegrees) <= 0.0001
+            ? null
+            : new RotateTransform(rotationDegrees);
+
+        if (layer.Children[0] is AvaloniaBorder border)
+        {
+            border.Width = objectWidth;
+            border.Height = objectHeight;
+            AvaloniaCanvas.SetLeft(border, objectRect.Left);
+            AvaloniaCanvas.SetTop(border, objectRect.Top);
+        }
+
+        var rotateCenter = ObjectDragPlanner.RotateHandleCenter(ObjectDragKind.Rotate, objectRect, 0);
+        if (layer.Children[1] is AvaloniaBorder connector)
+        {
+            var connectorTop = rotateCenter.Y + (DrawingObjectRotationGripDiameter / 2);
+            connector.Height = Math.Max(0, objectRect.Top - connectorTop);
+            AvaloniaCanvas.SetLeft(connector, rotateCenter.X - 0.5);
+            AvaloniaCanvas.SetTop(connector, connectorTop);
+        }
+
+        if (layer.Children[2] is Control rotateGrip)
+        {
+            AvaloniaCanvas.SetLeft(rotateGrip, rotateCenter.X - (DrawingObjectRotationGripDiameter / 2));
+            AvaloniaCanvas.SetTop(rotateGrip, rotateCenter.Y - (DrawingObjectRotationGripDiameter / 2));
+        }
+
+        for (var index = 0; index < DrawingObjectResizeHandleKinds.Length; index++)
+        {
+            if (layer.Children[index + 3] is not Control handle)
+                continue;
+
+            var center = ObjectDragPlanner.RotateHandleCenter(
+                DrawingObjectResizeHandleKinds[index],
+                objectRect,
+                rotationDegrees: 0);
+            AvaloniaCanvas.SetLeft(handle, center.X - (DrawingObjectHandleSize / 2));
+            AvaloniaCanvas.SetTop(handle, center.Y - (DrawingObjectHandleSize / 2));
+        }
+    }
+
+    private bool TryBeginDrawingObjectDrag(
+        DrawingObjectRenderPlan renderPlan,
+        Control container,
+        AvaloniaGrid surface,
+        AvaloniaCanvas adorner,
+        PointerPressedEventArgs args)
+    {
+        if (container.Parent is not AvaloniaCanvas canvas ||
+            DrawingObjectKindMapper.ToDrawingObjectTargetKind(renderPlan.Bounds.Kind) is null)
+        {
+            return false;
+        }
+
+        var objectRect = new LayoutRect(
+            DrawingObjectSelectionHorizontalPadding,
+            DrawingObjectSelectionTopPadding,
+            surface.Bounds.Width > 0 ? surface.Bounds.Width : surface.Width,
+            surface.Bounds.Height > 0 ? surface.Bounds.Height : surface.Height);
+        var localPoint = args.GetCurrentPoint(container).Position;
+        var kind = ObjectDragPlanner.HitTestHandle(
+            new LayoutPoint(localPoint.X, localPoint.Y),
+            objectRect,
+            DrawingObjectHandleSize,
+            DrawingObjectHandleHitPadding,
+            renderPlan.Bounds.RotationDegrees);
+        if (kind == ObjectDragKind.None)
+            return false;
+
+        var canvasRect = new LayoutRect(
+            AvaloniaCanvas.GetLeft(container) + DrawingObjectSelectionHorizontalPadding,
+            AvaloniaCanvas.GetTop(container) + DrawingObjectSelectionTopPadding,
+            objectRect.Width,
+            objectRect.Height);
+        var pointer = args.GetCurrentPoint(canvas).Position;
+        _drawingObjectDragSession = new DrawingObjectDragSession
+        {
+            RenderPlan = renderPlan,
+            Container = container,
+            Surface = surface,
+            Adorner = adorner,
+            Kind = kind,
+            StartCanvasRect = canvasRect,
+            StartPointerInCanvas = new LayoutPoint(pointer.X, pointer.Y),
+            StartRotationDegrees = renderPlan.Bounds.RotationDegrees,
+            StartFlipHorizontal = renderPlan.Bounds.FlipHorizontal,
+            StartFlipVertical = renderPlan.Bounds.FlipVertical,
+            CurrentCanvasRect = canvasRect,
+            CurrentRotationDegrees = renderPlan.Bounds.RotationDegrees,
+            CurrentFlipHorizontal = renderPlan.Bounds.FlipHorizontal,
+            CurrentFlipVertical = renderPlan.Bounds.FlipVertical,
+        };
+
+        container.Cursor = DrawingObjectDragCursor(kind);
+        args.Pointer.Capture(container);
+        args.Handled = true;
+        return true;
+    }
+
+    private void WireDrawingObjectDragMoveRelease(
+        DrawingObjectRenderPlan renderPlan,
+        Control container,
+        AvaloniaGrid surface)
+    {
+        container.PointerMoved += (_, args) =>
+        {
+            if (_drawingObjectDragSession is { } session && ReferenceEquals(session.Container, container))
+            {
+                ContinueDrawingObjectDrag(session, args);
+                return;
+            }
+
+            var objectRect = new LayoutRect(
+                DrawingObjectSelectionHorizontalPadding,
+                DrawingObjectSelectionTopPadding,
+                surface.Bounds.Width > 0 ? surface.Bounds.Width : surface.Width,
+                surface.Bounds.Height > 0 ? surface.Bounds.Height : surface.Height);
+            var point = args.GetCurrentPoint(container).Position;
+            var kind = ObjectDragPlanner.HitTestHandle(
+                new LayoutPoint(point.X, point.Y),
+                objectRect,
+                DrawingObjectHandleSize,
+                DrawingObjectHandleHitPadding,
+                renderPlan.Bounds.RotationDegrees);
+            container.Cursor = DrawingObjectDragCursor(kind);
+        };
+        container.PointerExited += (_, _) =>
+        {
+            if (_drawingObjectDragSession is null)
+                container.Cursor = Cursor.Default;
+        };
+        container.PointerReleased += (_, args) => EndDrawingObjectDrag(container, args);
+        container.PointerCaptureLost += (_, _) =>
+        {
+            if (_drawingObjectDragSession is { } session && ReferenceEquals(session.Container, container))
+                _drawingObjectDragSession = null;
+        };
+    }
+
+    private void ContinueDrawingObjectDrag(DrawingObjectDragSession session, PointerEventArgs args)
+    {
+        if (session.Container.Parent is not AvaloniaCanvas canvas)
+            return;
+
+        var point = args.GetCurrentPoint(canvas).Position;
+        if (session.Kind == ObjectDragKind.Rotate)
+        {
+            var center = session.StartCanvasRect.Center;
+            session.CurrentRotationDegrees = ObjectDragPlanner.CalculateRotationDegrees(
+                center,
+                new LayoutPoint(point.X, point.Y));
+        }
+        else
+        {
+            var transform = ObjectDragPlanner.CalculateDragTransform(
+                session.Kind,
+                session.StartCanvasRect,
+                session.StartPointerInCanvas,
+                new LayoutPoint(point.X, point.Y));
+            session.CurrentCanvasRect = transform.Rect;
+            session.CurrentFlipHorizontal = session.StartFlipHorizontal ^ transform.CrossedHorizontally;
+            session.CurrentFlipVertical = session.StartFlipVertical ^ transform.CrossedVertically;
+        }
+
+        session.Moved = true;
+        UpdateDrawingObjectDragPreview(session);
+        session.Container.Cursor = DrawingObjectDragCursor(session.Kind);
+        args.Handled = true;
+    }
+
+    private void UpdateDrawingObjectDragPreview(DrawingObjectDragSession session)
+    {
+        var rect = session.CurrentCanvasRect;
+        var previewBounds = session.RenderPlan.Bounds with
+        {
+            Width = rect.Width,
+            Height = rect.Height,
+            RotationDegrees = session.CurrentRotationDegrees,
+            FlipHorizontal = session.CurrentFlipHorizontal,
+            FlipVertical = session.CurrentFlipVertical,
+        };
+        var previewPlan = session.RenderPlan with { Bounds = previewBounds };
+
+        session.Surface.Width = Math.Max(1, rect.Width);
+        session.Surface.Height = Math.Max(1, rect.Height);
+        session.Surface.Children.Clear();
+        session.Surface.Children.Add(CreateDrawingObjectVisual(
+            previewPlan,
+            rect.Width,
+            rect.Height,
+            _session.Workbook.Theme));
+
+        session.Container.Width = Math.Max(1, rect.Width) + (DrawingObjectSelectionHorizontalPadding * 2);
+        session.Container.Height = Math.Max(1, rect.Height) + DrawingObjectSelectionTopPadding + DrawingObjectSelectionBottomPadding;
+        AvaloniaCanvas.SetLeft(session.Container, rect.Left - DrawingObjectSelectionHorizontalPadding);
+        AvaloniaCanvas.SetTop(session.Container, rect.Top - DrawingObjectSelectionTopPadding);
+        LayoutDrawingObjectSelectionAdorner(
+            session.Adorner,
+            rect.Width,
+            rect.Height,
+            session.CurrentRotationDegrees);
+    }
+
+    private void EndDrawingObjectDrag(Control container, PointerReleasedEventArgs args)
+    {
+        if (_drawingObjectDragSession is not { } session || !ReferenceEquals(session.Container, container))
+            return;
+
+        _drawingObjectDragSession = null;
+        args.Pointer.Capture(null);
+        if (session.Moved)
+            CommitDrawingObjectDrag(session);
+        args.Handled = true;
+    }
+
+    private void CommitDrawingObjectDrag(DrawingObjectDragSession session)
+    {
+        if (DrawingObjectKindMapper.ToDrawingObjectTargetKind(session.RenderPlan.Bounds.Kind) is not { } targetKind)
+        {
+            RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
+            return;
+        }
+
+        var sheetId = _session.ActiveSheet.Id;
+        IWorkbookCommand? command = null;
+        string successStatus;
+        string failureTitle;
+
+        if (session.Kind == ObjectDragKind.Rotate)
+        {
+            command = DrawingObjectCommandPlanner.BuildRotateCommand(
+                sheetId,
+                targetKind,
+                session.RenderPlan.Bounds.Id,
+                session.CurrentRotationDegrees);
+            successStatus = FormatDrawingObjectResourceText(DrawingObjectActionPlanner.RotationSuccess(
+                new FormatPicturePlanner.RotationResult(session.CurrentRotationDegrees)));
+            failureTitle = DrawingObjectActionPlanner.RotateObjectCommandTitle;
+        }
+        else if (session.Kind == ObjectDragKind.Move)
+        {
+            if (!TryResolveCellAddressFromSheetGridPosition(
+                    new Point(session.CurrentCanvasRect.Left, session.CurrentCanvasRect.Top),
+                    out var anchor))
+            {
+                RefreshShell(UiText.Get("Drawing_ObjectNoLongerAvailable"));
+                return;
+            }
+
+            command = DrawingObjectCommandPlanner.BuildMoveCommand(
+                sheetId,
+                targetKind,
+                session.RenderPlan.Bounds.Id,
+                anchor);
+            successStatus = UiText.Get("DrawingInteract_Moved");
+            failureTitle = DrawingObjectActionPlanner.MoveObjectCommandTitle;
+        }
+        else
+        {
+            var zoomFactor = Math.Max(0.01, GetActiveZoomFactor());
+            var width = Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Width / zoomFactor);
+            var height = Math.Max(ObjectDragPlanner.MinimumObjectSize, session.CurrentCanvasRect.Height / zoomFactor);
+            var movedTopLeft =
+                Math.Abs(session.CurrentCanvasRect.Left - session.StartCanvasRect.Left) > 0.5 ||
+                Math.Abs(session.CurrentCanvasRect.Top - session.StartCanvasRect.Top) > 0.5;
+
+            if (movedTopLeft && TryResolveCellAddressFromSheetGridPosition(
+                    new Point(session.CurrentCanvasRect.Left, session.CurrentCanvasRect.Top),
+                    out var anchor))
+            {
+                command = DrawingObjectCommandPlanner.BuildResizeWithAnchorCommand(
+                    sheetId,
+                    targetKind,
+                    session.RenderPlan.Bounds.Id,
+                    anchor,
+                    width,
+                    height,
+                    session.CurrentFlipHorizontal,
+                    session.CurrentFlipVertical);
+            }
+            else
+            {
+                command = DrawingObjectCommandPlanner.BuildResizeCommand(
+                    sheetId,
+                    targetKind,
+                    session.RenderPlan.Bounds.Id,
+                    width,
+                    height,
+                    session.CurrentFlipHorizontal,
+                    session.CurrentFlipVertical);
+            }
+
+            successStatus = FormatDrawingObjectResourceText(DrawingObjectActionPlanner.ResizeSuccess(
+                new ObjectSizeDialogSize(width, height)));
+            failureTitle = DrawingObjectActionPlanner.ResizeObjectCommandTitle;
+        }
+
+        var result = _session.ExecuteReviewCommand(command);
+        RefreshShell(result.Success
+            ? successStatus
+            : result.ErrorMessage ?? UiText.Format("InsertLoc_DrawingCommandFailed", failureTitle));
+    }
+
+    private static Cursor DrawingObjectDragCursor(ObjectDragKind kind) =>
+        new(kind switch
+        {
+            ObjectDragKind.Move => StandardCursorType.SizeAll,
+            ObjectDragKind.ResizeNW => StandardCursorType.TopLeftCorner,
+            ObjectDragKind.ResizeSE => StandardCursorType.BottomRightCorner,
+            ObjectDragKind.ResizeNE => StandardCursorType.TopRightCorner,
+            ObjectDragKind.ResizeSW => StandardCursorType.BottomLeftCorner,
+            ObjectDragKind.ResizeN or ObjectDragKind.ResizeS => StandardCursorType.SizeNorthSouth,
+            ObjectDragKind.ResizeE or ObjectDragKind.ResizeW => StandardCursorType.SizeWestEast,
+            ObjectDragKind.Rotate => StandardCursorType.Cross,
+            _ => StandardCursorType.Arrow,
+        });
 
     // -------------------------------------------------------------------------------------------------------
     // Chart drag-to-move and handle-resize.

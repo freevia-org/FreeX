@@ -389,7 +389,7 @@ public sealed partial class MainWindow
             MinWidth = 260,
             AcceptsReturn = multiline,
             TextWrapping = multiline ? TextWrapping.Wrap : TextWrapping.NoWrap,
-            MinHeight = multiline ? 64 : double.NaN,
+            MinHeight = multiline ? 64 : 0,
         };
         AvaloniaCompactDialogChrome.ApplyTextBox(input, PictureShapeDialogChromeStyle, fixedHeight: !multiline);
         AutomationProperties.SetAutomationId(input, "PictureShapeInputBox");

@@ -4850,9 +4850,10 @@ public sealed partial class MainWindow : Window
                 continue;
             }
 
+            var selected = IsSelectedDrawingObject(drawingObject);
             var visual = CreateSelectableDrawingObjectVisual(renderPlan, width, height);
-            Canvas.SetLeft(visual, left);
-            Canvas.SetTop(visual, top);
+            Canvas.SetLeft(visual, left - (selected ? DrawingObjectSelectionHorizontalPadding : 0));
+            Canvas.SetTop(visual, top - (selected ? DrawingObjectSelectionTopPadding : 0));
             overlay.Children.Add(visual);
         }
 
@@ -5077,17 +5078,32 @@ public sealed partial class MainWindow : Window
         double height)
     {
         var drawingObject = renderPlan.Bounds;
-        var visual = CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme);
         var selected = IsSelectedDrawingObject(drawingObject);
-        var container = new AvaloniaGrid
+        var horizontalPadding = selected ? DrawingObjectSelectionHorizontalPadding : 0;
+        var topPadding = selected ? DrawingObjectSelectionTopPadding : 0;
+        var bottomPadding = selected ? DrawingObjectSelectionBottomPadding : 0;
+        var surface = new AvaloniaGrid
         {
             Width = Math.Max(1, width),
             Height = Math.Max(1, height),
+            Margin = new Thickness(horizontalPadding, topPadding, 0, 0),
+            HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left,
+            VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Top,
+            IsHitTestVisible = false,
+        };
+        surface.Children.Add(CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme));
+        var container = new AvaloniaGrid
+        {
+            Width = Math.Max(1, width) + (horizontalPadding * 2),
+            Height = Math.Max(1, height) + topPadding + bottomPadding,
             Background = Brushes.Transparent,
             ClipToBounds = false,
-            Cursor = new Cursor(StandardCursorType.Hand),
+            Cursor = selected ? Cursor.Default : new Cursor(StandardCursorType.Hand),
             Focusable = true,
         };
+        var adorner = selected
+            ? CreateDrawingObjectSelectionAdorner(width, height, drawingObject.RotationDegrees)
+            : null;
 
         AutomationProperties.SetAutomationId(container, $"DrawingObject{drawingObject.Kind}{drawingObject.Id:N}");
         AutomationProperties.SetName(container, $"{FormatDrawingObjectKind(drawingObject.Kind)} {drawingObject.DisplayName}");
@@ -5105,6 +5121,9 @@ public sealed partial class MainWindow : Window
 
             if (args.GetCurrentPoint(container).Properties.IsLeftButtonPressed)
             {
+                if (adorner is not null && TryBeginDrawingObjectDrag(renderPlan, container, surface, adorner, args))
+                    return;
+
                 SelectDrawingObject(drawingObject);
                 args.Handled = true;
             }
@@ -5118,9 +5137,12 @@ public sealed partial class MainWindow : Window
             }
         };
 
-        container.Children.Add(visual);
-        if (selected)
-            container.Children.Add(CreateSelectedDrawingObjectAdorner());
+        container.Children.Add(surface);
+        if (adorner is not null)
+        {
+            container.Children.Add(adorner);
+            WireDrawingObjectDragMoveRelease(renderPlan, container, surface);
+        }
 
         return container;
     }
@@ -5149,14 +5171,6 @@ public sealed partial class MainWindow : Window
         // Chart/picture/shape selection (above) drives the contextual tabs for now; clearing drops them.
         _ribbonContextSource.OnSelectionCleared();
     }
-
-    private static Border CreateSelectedDrawingObjectAdorner() =>
-        new()
-        {
-            BorderBrush = SelectionBorder,
-            BorderThickness = new Thickness(2),
-            IsHitTestVisible = false,
-        };
 
     private static string FormatDrawingObjectKind(SelectionPaneObjectKind kind) =>
         kind switch

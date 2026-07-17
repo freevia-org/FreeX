@@ -1484,14 +1484,15 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("container.KeyDown += (_, args) =>");
         source.Should().Contain("if (args.Key is Key.Enter or Key.Space)");
         source.Should().Contain("SelectDrawingObject(drawingObject);");
-        source.Should().Contain("container.Children.Add(CreateSelectedDrawingObjectAdorner());");
+        source.Should().Contain("? CreateDrawingObjectSelectionAdorner(width, height, drawingObject.RotationDegrees)");
+        source.Should().Contain("WireDrawingObjectDragMoveRelease(renderPlan, container, surface);");
+        source.Should().Contain("TryBeginDrawingObjectDrag(renderPlan, container, surface, adorner, args)");
         source.Should().Contain("private void SelectDrawingObject(DrawingObjectBounds drawingObject)");
         source.Should().Contain("_selectedDrawingObjectKind = drawingObject.Kind;");
         source.Should().Contain("_selectedDrawingObjectId = drawingObject.Id;");
         source.Should().Contain("RefreshShell($\"Selected {FormatDrawingObjectKind(drawingObject.Kind)}: {drawingObject.DisplayName}\");");
         source.Should().Contain("private bool IsSelectedDrawingObject(DrawingObjectBounds drawingObject)");
         source.Should().Contain("private void ClearSelectedDrawingObject()");
-        source.Should().Contain("private static Border CreateSelectedDrawingObjectAdorner()");
         source.Should().Contain("private static string FormatDrawingObjectKind(SelectionPaneObjectKind kind)");
         source.Should().Contain("private static Control CreateDrawingObjectVisual(");
         source.Should().Contain("DrawingObjectRenderPrimitiveKind.Shape => CreateDrawingShapeVisual(drawingObject, width, height)");
@@ -1524,8 +1525,8 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("drawingObject.Text");
         source.Should().Contain("drawingObject.AnchorCol");
         source.Should().Contain("drawingObject.AnchorRow");
-        source.Should().Contain("Canvas.SetLeft(visual, left);");
-        source.Should().Contain("Canvas.SetTop(visual, top);");
+        source.Should().Contain("Canvas.SetLeft(visual, left - (selected ? DrawingObjectSelectionHorizontalPadding : 0));");
+        source.Should().Contain("Canvas.SetTop(visual, top - (selected ? DrawingObjectSelectionTopPadding : 0));");
         source.Should().Contain("GetDisplayedColumnWidth(metric, zoomFactor)");
         source.Should().Contain("GetDisplayedRowHeight(metric, zoomFactor)");
         source.Should().Contain("ApplyDrawingObjectTransform(");
@@ -5544,6 +5545,15 @@ public sealed class AvaloniaShellSourceTests
         // User-facing strings go through UiText with the unique GetData_ key prefix.
         getDataSource.Should().Contain("UiText.Get(\"GetData_DialogTitle\")");
         getDataSource.Should().Contain("AutomationProperties.SetAutomationId(dialog, \"GetDataDialog\");");
+    }
+
+    [Fact]
+    public void PictureShapeSingleValueDialog_UsesValidAvaloniaMinimumHeight()
+    {
+        var source = File.ReadAllText(RepositoryFileLocator.Find("src", "FreeX.App.Avalonia", "MainWindow.PictureShapeTabs.cs"));
+
+        source.Should().Contain("MinHeight = multiline ? 64 : 0");
+        source.Should().NotContain("MinHeight = multiline ? 64 : double.NaN");
     }
 
     private static string ExtractSourceBlock(string source, string startMarker, string endMarker)
