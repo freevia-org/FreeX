@@ -5,14 +5,16 @@ namespace FreeW.App.Presentation.Tests;
 public sealed class VisualEvidenceRunnerScriptTests
 {
     [Fact]
-    public void WordBaselineEvidenceRunner_UsesSoftwareFallbackForWpfEvidenceRender()
+    public void WordBaselineEvidenceRunner_UsesRealWpfCompositeForVisibleWordPublish()
     {
         var source = File.ReadAllText(RepositoryFile(
             "tools",
             "Run-FreeWWordBaselineEvidence.ps1"));
 
         source.Should().Contain("FreeW.FidelityRender");
-        source.Should().Contain("\"--composite\", \"--software-fallback\"");
+        source.Should().Contain("$fidelityRenderArgs = @(");
+        source.Should().Contain("if (-not $UseVisibleWordPublish)");
+        source.Should().Contain("$fidelityRenderArgs += \"--software-fallback\"");
         source.Should().Contain("-AllowMissingWord");
         source.Should().Contain("[switch]$UseVisibleWordPublish");
         source.Should().Contain("Export-WordPdfsVisible.ps1");

@@ -207,7 +207,15 @@ New-Item -ItemType Directory -Force -Path $runRootFull, $fixtureDir, $wpfDir, $a
 if (-not $SkipEvidenceRender) {
     Invoke-DotNetBuild $fidelityRenderProject -Configuration $Configuration
     Invoke-DotNetRunNoBuild $fidelityRenderProject @("--generate-f2-corpus", $fixtureDir) -Configuration $Configuration
-    Invoke-DotNetRunNoBuild $fidelityRenderProject @($fixtureDir, $wpfDir, $MaxPagesPerDocument.ToString([Globalization.CultureInfo]::InvariantCulture), "--composite", "--software-fallback") -Configuration $Configuration
+    $fidelityRenderArgs = @(
+        $fixtureDir,
+        $wpfDir,
+        $MaxPagesPerDocument.ToString([Globalization.CultureInfo]::InvariantCulture),
+        "--composite")
+    if (-not $UseVisibleWordPublish) {
+        $fidelityRenderArgs += "--software-fallback"
+    }
+    Invoke-DotNetRunNoBuild $fidelityRenderProject $fidelityRenderArgs -Configuration $Configuration
     Invoke-DotNetRun $pageLayoutShotProject @($avaloniaDir) -Configuration $Configuration
 }
 
