@@ -63,6 +63,22 @@ public class WordArtRoundTripTests
     }
 
     [Fact]
+    public void AuthoredBounds_SurviveFloatingWordArtRoundTrip()
+    {
+        var wordArt = new WordArt("FreeW", WordArtStyle.GlowBlue, 30)
+        {
+            WidthPt = 93,
+            HeightPt = 48,
+            Placement = new FloatingPlacement { Wrapping = ImageWrapping.InFront }
+        };
+
+        var read = RoundTrippedWordArt(DocumentWith(wordArt));
+
+        read.WidthPt.Should().BeApproximately(93, 0.01);
+        read.HeightPt.Should().BeApproximately(48, 0.01);
+    }
+
+    [Fact]
     public void FillBlue_EmitsSolidFillOnShapeProperties()
     {
         var xml = WriteDocumentXml(DocumentWith(WordArt.Create("Solid", WordArtStyle.FillBlue)));

@@ -3328,6 +3328,9 @@ public static class DocxReader
         var fontSizePt = HalfPointsToPoints(rPr.Element(W + "sz")?.Attribute(W + "val")?.Value) ?? 36;
 
         var wordArt = new WordArt(text, style.Value, fontSizePt);
+        var wordArtExtent = container.Element(Wp + "extent");
+        wordArt.WidthPt = EmuToPoints(wordArtExtent?.Attribute("cx")?.Value);
+        wordArt.HeightPt = EmuToPoints(wordArtExtent?.Attribute("cy")?.Value);
 
         // Alt text: wp:docPr/@descr on the inline or anchor drawing.
         var waDocPrDescr = container!.Element(Wp + "docPr")?.Attribute("descr")?.Value;

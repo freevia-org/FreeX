@@ -3659,10 +3659,10 @@ public static class DocxWriter
     /// </summary>
     private static XElement BuildWordArtDrawing(WordArt wordArt, IdAllocator ids)
     {
-        // WordArt has no intrinsic geometry size in the FreeW model; derive a sensible text-box extent from
-        // the font size and text length so the inline drawing has a non-zero extent (Word recomputes it).
-        var heightPt = wordArt.FontSizePt * 1.6;
-        var widthPt = Math.Max(1, wordArt.Text.Length) * wordArt.FontSizePt * 0.62;
+        // Preserve imported text-box geometry. New WordArt still falls back to a sensible extent based
+        // on its font size and text length.
+        var heightPt = wordArt.HeightPt is > 0 ? wordArt.HeightPt.Value : wordArt.FontSizePt * 1.6;
+        var widthPt = wordArt.WidthPt is > 0 ? wordArt.WidthPt.Value : Math.Max(1, wordArt.Text.Length) * wordArt.FontSizePt * 0.62;
         var cx = PointsToEmu(widthPt);
         var cy = PointsToEmu(heightPt);
         var docPrId = ids.NextShapeDrawingId();
