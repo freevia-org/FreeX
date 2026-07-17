@@ -158,6 +158,66 @@ public sealed class DocumentViewHeaderFooterTests
             "the footer text must leave room for its line box above Word's footer-distance anchor");
     }
 
+    [Fact]
+    public async Task Header_paragraph_spacing_advances_the_following_header_line()
+    {
+        IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Body text."));
+            var header = new HeaderFooter();
+            header.Paragraphs.Add(new Paragraph("First header line")
+            {
+                Formatting = ParagraphFormatting.Default with { SpaceAfterPt = 24 }
+            });
+            header.Paragraphs.Add(new Paragraph("Second header line"));
+            doc.FinalSectionHeadersFooters.Header = header;
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            items = view.HeaderFooterItems;
+        });
+
+        if (!ran) return;
+        var headerItems = items!;
+        var first = headerItems.Single(item => item.Text == "First header line");
+        var second = headerItems.Single(item => item.Text == "Second header line");
+        second.Y.Should().BeGreaterThan(first.Y + 40,
+            "the following header paragraph must include the preceding 24pt SpaceAfter");
+    }
+
+    [Fact]
+    public async Task Footer_trailing_spacing_contributes_to_the_footer_anchor()
+    {
+        IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = TextDocument.CreateEmpty();
+            doc.Blocks.Clear();
+            doc.Blocks.Add(new Paragraph("Body text."));
+            var footer = new HeaderFooter();
+            footer.Paragraphs.Add(new Paragraph("Spaced footer")
+            {
+                Formatting = ParagraphFormatting.Default with { SpaceAfterPt = 24 }
+            });
+            doc.FinalSectionHeadersFooters.Footer = footer;
+
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            items = view.HeaderFooterItems;
+        });
+
+        if (!ran) return;
+        const double pageBottom = 24.0 + 792.0 * (96.0 / 72.0);
+        const double footerAnchor = pageBottom - 36.0 * (96.0 / 72.0);
+        items!.Single().Y.Should().BeLessThan(footerAnchor - 32,
+            "the footer's final SpaceAfter must be part of the extent anchored to the page bottom");
+    }
+
     // ── Test 3: first-page header variant is used on page 1 when DifferentFirstPage ─────────────────
 
     [Fact]

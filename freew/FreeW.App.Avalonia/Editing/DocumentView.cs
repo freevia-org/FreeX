@@ -3544,13 +3544,13 @@ public sealed class DocumentView : Control
                 var pageBottom = pageTop + _pageHeightPx;
                 var footerStart = _headerFooterItems.Count;
                 var footerAnchorY = pageBottom - footerDistDip;
-                EmitHfParagraphs(footer!, footerAnchorY, hfWidth, pageNumberText, _pageCount,
+                var footerBottom = EmitHfParagraphs(footer!, footerAnchorY, hfWidth, pageNumberText, _pageCount,
                     pi => MakeHfTarget(sectionHf, footerSlot, pi),
                     slots.FooterSlotName,
                     pi + 1,
                     pageSection.SectionIndex + 1,
                     pageSection.SectionRelativePageNumber);
-                LiftFooterToAnchor(footerStart, footerAnchorY);
+                LiftFooterToAnchor(footerStart, footerAnchorY, footerBottom);
             }
         }
     }
@@ -3559,14 +3559,11 @@ public sealed class DocumentView : Control
     /// Word measures the footer distance to the lower edge of its final line. The render items are emitted
     /// top-down, so rebase their complete extent after their line heights are known.
     /// </summary>
-    private void LiftFooterToAnchor(int firstFooterItem, double anchorY)
+    private void LiftFooterToAnchor(int firstFooterItem, double anchorY, double footerBottom)
     {
         if (firstFooterItem >= _headerFooterItems.Count)
             return;
 
-        var footerBottom = _headerFooterItems
-            .Skip(firstFooterItem)
-            .Max(item => item.Y + item.LineHeight);
         var lift = footerBottom - anchorY;
         if (Math.Abs(lift) < 0.01)
             return;
@@ -3583,7 +3580,7 @@ public sealed class DocumentView : Control
     /// defaults when present. Each tab-separated segment is emitted as a separate HfRenderItem at the
     /// computed X position so the draw loop does not need tab-aware logic.
     /// </summary>
-    private void EmitHfParagraphs(
+    private double EmitHfParagraphs(
         HeaderFooter hf,
         double startY,
         double availWidth,
@@ -3600,6 +3597,10 @@ public sealed class DocumentView : Control
         {
             var para = hf.Paragraphs[paraIdx];
             var pf = ResolveParagraphFmt(para);
+            // Header/footer stories retain normal paragraph spacing in Word. Apply it here as part of
+            // the story's line flow so multi-paragraph headers and footer anchor calculations use the
+            // same extent as the serialized document.
+            y += Math.Max(0, PageLayout.PointsToDip(pf.SpaceBeforePt));
             // AV-HFEDIT: the editing target for this paragraph (which section/slot/para), or null in
             // legacy callers that do not pass a factory (kept for backward compatibility / tests).
             HfTarget? paraTarget = targetFactory?.Invoke(paraIdx);
@@ -3872,8 +3873,10 @@ public sealed class DocumentView : Control
                 }
             }
 
-            y += lineH;
+            y += lineH + Math.Max(0, PageLayout.PointsToDip(pf.SpaceAfterPt));
         }
+
+        return y;
     }
 
     /// <summary>
