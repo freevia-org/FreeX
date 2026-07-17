@@ -16,6 +16,9 @@ param(
     [ValidateRange(1, 60)]
     [int]$TimeoutMinutes = 20,
 
+    [ValidateRange(1, 20)]
+    [int]$DialogBatchSize = 10,
+
     [switch]$SkipImageBuild,
     [switch]$SkipPublish
 )
@@ -26,6 +29,10 @@ $harness = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $currentSessionPath = Join-Path $repoRoot "artifacts/linux-interactive/freex/current-session.json"
 $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
+$authoritativeDialogCount = 120
+$reportStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
+$reportDirectory = Join-Path $repoRoot "artifacts/linux-interactive/freex/interaction-validation/$reportStamp"
+New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
 
 $desktopStartArguments = @{
     Action = "Start"
@@ -56,48 +63,73 @@ try {
 
     & $harness -Action Stop -App FreeX -Port $Port
 
-    # Phase two runs deterministic in-process model/dispatch/dialog probes in the same real X11 image.
-    & $harness `
-        -Action Start `
-        -App FreeX `
-        -Port $Port `
-        -Replace `
-        -SkipImageBuild `
-        -SkipPublish `
-        -AppArgument @("--interaction-validation", "/work/validation")
-    if ($LASTEXITCODE -ne 0) {
-        throw "Linux interaction-validation harness failed to start."
+    # Phase two uses a fresh X11 process for each bounded dialog slice. Avalonia retains native modal/input
+    # resources across repeated closes, so one 120-dialog process is not a reliable validation boundary.
+    $manifest = $null
+    $combinedResults = @()
+    for ($dialogStart = 0; $dialogStart -lt $authoritativeDialogCount; $dialogStart += $DialogBatchSize) {
+        $dialogCount = [Math]::Min($DialogBatchSize, $authoritativeDialogCount - $dialogStart)
+        $appArguments = @(
+            "--interaction-validation", "/work/validation",
+            "--interaction-validation-dialog-start", [string]$dialogStart,
+            "--interaction-validation-dialog-count", [string]$dialogCount
+        )
+        if ($dialogStart -gt 0) {
+            $appArguments += "--interaction-validation-dialog-only"
+        }
+
+        Write-Host "Running dialog interaction batch $dialogStart..$($dialogStart + $dialogCount - 1)..."
+        $batchStartArguments = @{
+            Action = "Start"
+            App = "FreeX"
+            Port = $Port
+            Replace = $true
+            SkipImageBuild = $true
+            SkipPublish = $true
+            AppArgument = $appArguments
+        }
+        & $harness @batchStartArguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Linux interaction-validation batch starting at $dialogStart failed to start."
+        }
+
+        $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+        $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
+        $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+        while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $batchManifestPath -PathType Leaf)) {
+            Start-Sleep -Milliseconds 500
+        }
+
+        if (-not (Test-Path -LiteralPath $batchManifestPath -PathType Leaf)) {
+            $appLogPath = Join-Path ([string]$session.sessionDirectory) "logs/app.log"
+            $appLog = if (Test-Path -LiteralPath $appLogPath) { Get-Content -LiteralPath $appLogPath -Raw } else { "" }
+            throw "Interaction-validation batch $dialogStart did not write a manifest within $TimeoutMinutes minute(s): $batchManifestPath`n$appLog"
+        }
+
+        $batchManifest = Get-Content -LiteralPath $batchManifestPath -Raw | ConvertFrom-Json
+        if ($batchManifest.error) {
+            throw "Interaction validation batch $dialogStart failed before producing results: $($batchManifest.error)"
+        }
+        if ($null -eq $manifest) { $manifest = $batchManifest }
+        $combinedResults += @($batchManifest.results)
+        Copy-Item -LiteralPath $batchManifestPath -Destination (Join-Path $reportDirectory ("batch-{0:D3}.json" -f $dialogStart)) -Force
+        & $harness -Action Stop -App FreeX -Port $Port
     }
 
-    $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
-    $manifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
-    $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
-    while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-        Start-Sleep -Milliseconds 500
-    }
-
-    if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-        throw "Interaction-validation manifest was not written within $TimeoutMinutes minute(s): $manifestPath"
-    }
-
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    if ($manifest.error) {
-        throw "Interaction validation failed before producing results: $($manifest.error)"
-    }
-
-    $manifest.results = @($manifest.results) + @($x11Manifest.results)
+    $manifest.results = @($combinedResults) + @($x11Manifest.results)
     $summary = [ordered]@{}
     foreach ($group in @($manifest.results | Group-Object -Property status)) {
         $summary[[string]$group.Name] = [int]$group.Count
     }
     $summary.total = @($manifest.results).Count
     $manifest.summary = $summary
+    $manifestPath = Join-Path $reportDirectory "interaction-validation.json"
     [IO.File]::WriteAllText(
         $manifestPath,
         ($manifest | ConvertTo-Json -Depth 12),
         (New-Object Text.UTF8Encoding($false)))
 
-    $reportPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.html"
+    $reportPath = Join-Path $reportDirectory "interaction-validation.html"
     $rows = foreach ($result in $manifest.results) {
         $statusClass = [System.Net.WebUtility]::HtmlEncode([string]$result.status)
         $id = [System.Net.WebUtility]::HtmlEncode([string]$result.id)

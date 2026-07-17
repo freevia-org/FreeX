@@ -37,6 +37,28 @@ public sealed class AvaloniaInteractionCoverageTests
     }
 
     [Fact]
+    public void Options_ParseBoundedDialogBatch()
+    {
+        var parsed = InteractionValidationOptions.TryParse(
+            [
+                "--interaction-validation", "/work/validation",
+                "--interaction-validation-dialog-start", "20",
+                "--interaction-validation-dialog-count", "10",
+                "--interaction-validation-dialog-only",
+                "book.xlsx",
+            ],
+            out var options,
+            out var startupArguments,
+            out var error);
+
+        Assert.True(parsed, error);
+        Assert.Equal(20, options!.DialogStart);
+        Assert.Equal(10, options.DialogCount);
+        Assert.False(options.IncludeCoreResults);
+        Assert.Equal(["book.xlsx"], startupArguments);
+    }
+
+    [Fact]
     public void RibbonSurfaceInventory_PreservesEveryDeclaredPlacement()
     {
         var definition = AvaloniaRibbonComposition.BuildDefinition();

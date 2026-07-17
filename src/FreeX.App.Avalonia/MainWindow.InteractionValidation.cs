@@ -13,23 +13,36 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     internal async Task<IReadOnlyList<InteractionValidationResult>> RunInteractionValidationAsync(
-        string outputDirectory)
+        string outputDirectory,
+        int dialogStart = 0,
+        int dialogCount = int.MaxValue,
+        bool includeCoreResults = true)
     {
         var results = new List<InteractionValidationResult>();
-        AddRibbonBindingResults(results);
-        AddRibbonInteractionExecutionResults(results);
-        AddShortcutRoutingResults(results);
-        AddShortcutScenarioInventoryResults(results);
-        AddContextMenuCatalogResults(results);
-        AddContextMenuFamilyInventoryResults(results);
-        AddDialogRangeTargetResults(results);
-        await AddEditingInteractionResultsAsync(results);
+        if (includeCoreResults)
+        {
+            AddRibbonBindingResults(results);
+            AddRibbonInteractionExecutionResults(results);
+            AddShortcutRoutingResults(results);
+            AddShortcutScenarioInventoryResults(results);
+            AddContextMenuCatalogResults(results);
+            AddContextMenuFamilyInventoryResults(results);
+            AddDialogRangeTargetResults(results);
+            await AddEditingInteractionResultsAsync(results);
+        }
+
+        var selectedDialogIds = InteractionSurfaceCatalog.Dialogs
+            .Skip(Math.Max(0, dialogStart))
+            .Take(Math.Max(0, dialogCount))
+            .Select(dialog => dialog.Id)
+            .ToHashSet(StringComparer.Ordinal);
 
         var surfacesDirectory = Path.Combine(outputDirectory, "surfaces");
         Directory.CreateDirectory(surfacesDirectory);
         var capturedSurfaces = await CaptureParitySurfacesAsync(
             surfacesDirectory,
-            interactionOnly: true);
+            interactionOnly: true,
+            interactionDialogCatalogIds: selectedDialogIds);
         foreach (var surface in capturedSurfaces)
         {
             var rendered = !string.IsNullOrWhiteSpace(surface.PngFileName);
@@ -45,15 +58,16 @@ public sealed partial class MainWindow
                     : "production dialog opener",
                 Note: surface.Note));
         }
-        AddDialogInventoryResults(results, capturedSurfaces);
-        results.AddRange(BuildDialogInteractionContractResults());
+        AddDialogInventoryResults(results, capturedSurfaces, selectedDialogIds);
+        results.AddRange(BuildDialogInteractionContractResults(selectedDialogIds));
 
         return results;
     }
 
     private static void AddDialogInventoryResults(
         List<InteractionValidationResult> results,
-        IReadOnlyList<ParitySurfaceResult> capturedSurfaces)
+        IReadOnlyList<ParitySurfaceResult> capturedSurfaces,
+        IReadOnlySet<string>? selectedDialogIds = null)
     {
         var capturedDialogs = capturedSurfaces
             .Where(surface => surface.Kind == ParitySurfaceKind.Dialog && surface.Captured)
@@ -61,6 +75,9 @@ public sealed partial class MainWindow
 
         foreach (var dialog in InteractionSurfaceCatalog.Dialogs)
         {
+            if (selectedDialogIds is not null && !selectedDialogIds.Contains(dialog.Id))
+                continue;
+
             var route = ParityInteractionDialogRoutes.SingleOrDefault(candidate =>
                 string.Equals(candidate.CatalogId, dialog.Id, StringComparison.Ordinal));
             var capturedSurface = route is null || route.IsMissing

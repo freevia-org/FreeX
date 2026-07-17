@@ -250,7 +250,8 @@ public sealed partial class MainWindow
         string outputDirectory,
         int? maxDialogSurfaces = null,
         string? targetSurfaceId = null,
-        bool interactionOnly = false)
+        bool interactionOnly = false,
+        IReadOnlySet<string>? interactionDialogCatalogIds = null)
     {
         var results = new List<ParitySurfaceResult>();
         ResetDialogInteractionContracts();
@@ -262,6 +263,12 @@ public sealed partial class MainWindow
                 string.Equals(route.CatalogId, requestedSurfaceId, StringComparison.Ordinal));
         if (requestedCatalogRoute is not null)
             requestedSurfaceId = requestedCatalogRoute.SurfaceId;
+        var interactionSurfaceIds = interactionDialogCatalogIds is null
+            ? null
+            : ParityInteractionDialogRoutes
+                .Where(route => interactionDialogCatalogIds.Contains(route.CatalogId) && !route.IsMissing)
+                .Select(route => route.SurfaceId)
+                .ToHashSet(StringComparer.Ordinal);
 
         // ── Ribbon tabs + grid: render the live shell window with each tab selected. ──
         if (!interactionOnly && (captureAll || requestedSurfaceId.StartsWith("tab.", StringComparison.Ordinal) ||
@@ -307,6 +314,10 @@ public sealed partial class MainWindow
 
         // ── Dialogs: open each, render the dialog window, close it. ──
         var dialogOpeners = ParityDialogOpeners();
+        if (interactionSurfaceIds is not null)
+            dialogOpeners = dialogOpeners
+                .Where(opener => interactionSurfaceIds.Contains(opener.SurfaceId))
+                .ToArray();
         if (!captureAll)
             dialogOpeners = dialogOpeners
                 .Where(opener => string.Equals(opener.SurfaceId, requestedSurfaceId, StringComparison.Ordinal))
@@ -329,6 +340,10 @@ public sealed partial class MainWindow
         //    PNG per tab/category (`<surfaceId>.<TabName>`) so the comparison runner pairs each
         //    tab against the matching WPF tab. ──
         var tabDialogs = ParityTabDialogOpeners();
+        if (interactionSurfaceIds is not null)
+            tabDialogs = tabDialogs
+                .Where(dialog => interactionSurfaceIds.Contains(dialog.SurfaceId))
+                .ToArray();
         if (maxDialogSurfaces is not null)
             tabDialogs = [];
         if (!captureAll)
@@ -362,6 +377,7 @@ public sealed partial class MainWindow
                 .ToArray();
             var supplementalRoutes = ParityInteractionDialogRoutes
                 .Where(route => !route.IsMissing)
+                .Where(route => interactionDialogCatalogIds is null || interactionDialogCatalogIds.Contains(route.CatalogId))
                 .Where(route => !existingSingleSurfaceIds.Contains(route.SurfaceId))
                 .Where(route => !existingTabSurfaceIds.Any(tabSurfaceId =>
                     string.Equals(route.SurfaceId, tabSurfaceId, StringComparison.Ordinal) ||
@@ -388,6 +404,8 @@ public sealed partial class MainWindow
             }
 
             var missingRoutes = ParityInteractionDialogRoutes.Where(route => route.IsMissing);
+            if (interactionDialogCatalogIds is not null)
+                missingRoutes = missingRoutes.Where(route => interactionDialogCatalogIds.Contains(route.CatalogId));
             if (!captureAll)
                 missingRoutes = missingRoutes.Where(route =>
                     ReferenceEquals(route, requestedCatalogRoute) ||

@@ -28,6 +28,16 @@ public sealed class DialogInteractionValidationTests
                 result.Category == "dialog-contract" &&
                 result.Status == "failed" &&
                 result.EvidenceLevel == "catalogued-not-exercised");
+
+            var expectedBatchIds = InteractionSurfaceCatalog.Dialogs
+                .Skip(20)
+                .Take(10)
+                .Select(dialog => dialog.Id)
+                .ToArray();
+            var selectedIds = expectedBatchIds.ToHashSet(StringComparer.Ordinal);
+            var batchResults = window.BuildDialogInteractionContractResults(selectedIds);
+            batchResults.Should().HaveCount(10);
+            batchResults.Select(result => result.Id).Should().Equal(expectedBatchIds);
             window.Close();
         }, CancellationToken.None);
     }

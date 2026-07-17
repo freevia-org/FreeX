@@ -6,9 +6,16 @@ using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
 
-internal sealed record InteractionValidationOptions(string OutputDirectory)
+internal sealed record InteractionValidationOptions(
+    string OutputDirectory,
+    int DialogStart = 0,
+    int DialogCount = int.MaxValue,
+    bool IncludeCoreResults = true)
 {
     public const string Argument = "--interaction-validation";
+    public const string DialogStartArgument = "--interaction-validation-dialog-start";
+    public const string DialogCountArgument = "--interaction-validation-dialog-count";
+    public const string DialogOnlyArgument = "--interaction-validation-dialog-only";
 
     public static bool TryParse(
         IReadOnlyList<string> args,
@@ -21,15 +28,43 @@ internal sealed record InteractionValidationOptions(string OutputDirectory)
         options = null;
         error = "";
         var filtered = new List<string>();
+        string? outputDirectory = null;
+        var dialogStart = 0;
+        var dialogCount = int.MaxValue;
+        var includeCoreResults = true;
         for (var index = 0; index < args.Count; index++)
         {
+            if (string.Equals(args[index], DialogOnlyArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                includeCoreResults = false;
+                continue;
+            }
+
+            if (string.Equals(args[index], DialogStartArgument, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(args[index], DialogCountArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                var optionName = args[index];
+                if (index + 1 >= args.Count || !int.TryParse(args[++index], out var value) || value < 0)
+                {
+                    startupArguments = [];
+                    error = $"{optionName} requires a non-negative integer.";
+                    return false;
+                }
+
+                if (string.Equals(optionName, DialogStartArgument, StringComparison.OrdinalIgnoreCase))
+                    dialogStart = value;
+                else
+                    dialogCount = value;
+                continue;
+            }
+
             if (!string.Equals(args[index], Argument, StringComparison.OrdinalIgnoreCase))
             {
                 filtered.Add(args[index]);
                 continue;
             }
 
-            if (options is not null)
+            if (outputDirectory is not null)
             {
                 startupArguments = [];
                 error = $"{Argument} was specified more than once.";
@@ -43,9 +78,11 @@ internal sealed record InteractionValidationOptions(string OutputDirectory)
                 return false;
             }
 
-            options = new InteractionValidationOptions(args[++index]);
+            outputDirectory = args[++index];
         }
 
+        if (outputDirectory is not null)
+            options = new InteractionValidationOptions(outputDirectory, dialogStart, dialogCount, includeCoreResults);
         startupArguments = filtered.ToArray();
         return true;
     }
@@ -91,7 +128,11 @@ internal static class InteractionValidationCoordinator
         try
         {
             Directory.CreateDirectory(options.OutputDirectory);
-            var results = await mainWindow.RunInteractionValidationAsync(options.OutputDirectory);
+            var results = await mainWindow.RunInteractionValidationAsync(
+                options.OutputDirectory,
+                options.DialogStart,
+                options.DialogCount,
+                options.IncludeCoreResults);
             WriteManifest(options.OutputDirectory, results);
             exitCode = results.Any(result => string.Equals(result.Status, "failed", StringComparison.Ordinal)) ? 1 : 0;
             diagnostics?.RecordEvent("interaction_validation", new Dictionary<string, string?>

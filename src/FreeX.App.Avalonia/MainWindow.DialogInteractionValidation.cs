@@ -345,11 +345,15 @@ public sealed partial class MainWindow
 
     private static bool IsFailed(string value) => value.StartsWith("failed:", StringComparison.Ordinal);
 
-    internal IReadOnlyList<InteractionValidationResult> BuildDialogInteractionContractResults()
+    internal IReadOnlyList<InteractionValidationResult> BuildDialogInteractionContractResults(
+        IReadOnlySet<string>? selectedDialogIds = null)
     {
         var results = new List<InteractionValidationResult>(InteractionSurfaceCatalog.Dialogs.Count);
         foreach (var dialog in InteractionSurfaceCatalog.Dialogs)
         {
+            if (selectedDialogIds is not null && !selectedDialogIds.Contains(dialog.Id))
+                continue;
+
             var route = ParityInteractionDialogRoutes.Single(candidate =>
                 string.Equals(candidate.CatalogId, dialog.Id, StringComparison.Ordinal));
             var contract = FindDialogInteractionContract(route.SurfaceId);
