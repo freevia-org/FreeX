@@ -260,17 +260,6 @@ static void RenderDocumentComposite(
 
     flow.PageWidth   = pageWDip;
     flow.PageHeight  = pageHDip;
-    // Word reserves a compact header band inside the top margin when a header is present. The
-    // compositor paints that band separately below; reserve the same height here so column flow
-    // does not start one header line too high.
-    const double HeaderBodyReserveDip = 25.0;
-    var hasHeaderContent = doc.FinalSectionHeadersFooters.Header is { IsEmpty: false }
-        || doc.FinalSectionHeadersFooters.EvenHeader is { IsEmpty: false }
-        || doc.FinalSectionHeadersFooters.FirstHeader is { IsEmpty: false }
-        || doc.Sections.Any(section =>
-            section.HeadersFooters.Header is { IsEmpty: false }
-            || section.HeadersFooters.EvenHeader is { IsEmpty: false }
-            || section.HeadersFooters.FirstHeader is { IsEmpty: false });
     // A multi-page table is emitted as explicit page-sized sections by DocumentView. Its table
     // planner already accounts for the leading content on page 1, so applying the document-wide
     // footnote reserve again would incorrectly shrink every later table segment. The compositor
@@ -284,7 +273,7 @@ static void RenderDocumentComposite(
     var bodyFootnoteReserveDip = hasMultiPageTable ? 0 : footnoteReserveDip;
     flow.PagePadding = new Thickness(
         marginLeft,
-        marginTop + (hasHeaderContent ? HeaderBodyReserveDip : 0),
+        marginTop,
         marginRight,
         marginBottom + bodyFootnoteReserveDip);
 
@@ -569,12 +558,16 @@ static void RenderDocumentComposite(
             const double hfH = 36;
 
             var ownerHf = box.OwnerSectionHf ?? doc.FinalSectionHeadersFooters;
-            var headerTop = thisPageSettings.HeaderDistancePt > 0
+            // Word uses a 0.5-inch edge distance when w:pgMar omits header/footer.
+            const double DefaultHeaderFooterDistanceDip = 48;
+            var headerDistance = thisPageSettings.HeaderDistancePt > 0
                 ? PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)
-                : Math.Max(0, thisMarginTop - hfH - 12);
-            var footerTop = thisPageSettings.FooterDistancePt > 0
-                ? thisPixH - PageLayout.PointsToDip(thisPageSettings.FooterDistancePt) - hfH
-                : thisPixH - thisMarginBottom + 19;
+                : DefaultHeaderFooterDistanceDip;
+            var footerDistance = thisPageSettings.FooterDistancePt > 0
+                ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
+                : DefaultHeaderFooterDistanceDip;
+            var headerTop = headerDistance;
+            var footerTop = thisPixH - footerDistance - hfH;
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
             {

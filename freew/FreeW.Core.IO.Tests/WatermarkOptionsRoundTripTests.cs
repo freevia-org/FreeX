@@ -194,6 +194,19 @@ public class WatermarkOptionsRoundTripTests
     }
 
     [Fact]
+    public void WatermarkOptions_RoundTrip_PreservesHeaderTextWhenWatermarkSharesTheParagraph()
+    {
+        var doc = new TextDocument();
+        doc.FinalSectionHeadersFooters.Header = new HeaderFooter("Visible header");
+        doc.Page.WatermarkOptions = new WatermarkOptions("CONFIDENTIAL");
+
+        var loaded = RoundTrip(doc);
+
+        loaded.FinalSectionHeadersFooters.Header!.Paragraphs.Should().ContainSingle();
+        loaded.FinalSectionHeadersFooters.Header.Paragraphs[0].PlainText.Should().Be("Visible header");
+    }
+
+    [Fact]
     public void PictureWatermark_EmitsHeaderRelationshipAndMedia()
     {
         var doc = new TextDocument();
