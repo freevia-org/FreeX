@@ -36,6 +36,25 @@ $reportStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
 $reportDirectory = Join-Path $repoRoot "artifacts/linux-interactive/freex/interaction-validation/$reportStamp"
 New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
 
+function Read-CompletedJsonManifest {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][datetime]$Deadline
+    )
+
+    while ((Get-Date) -lt $Deadline) {
+        if (Test-Path -LiteralPath $Path -PathType Leaf) {
+            try {
+                return Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+            } catch {
+                # The app writes a large manifest directly; file existence can precede the final byte.
+            }
+        }
+        Start-Sleep -Milliseconds 500
+    }
+    return $null
+}
+
 $desktopStartArguments = @{
     Action = "Start"
     App = "FreeX"
@@ -106,17 +125,13 @@ try {
         $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
         $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
-        while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $batchManifestPath -PathType Leaf)) {
-            Start-Sleep -Milliseconds 500
-        }
-
-        if (-not (Test-Path -LiteralPath $batchManifestPath -PathType Leaf)) {
+        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline
+        if ($null -eq $batchManifest) {
             $appLogPath = Join-Path ([string]$session.sessionDirectory) "logs/app.log"
             $appLog = if (Test-Path -LiteralPath $appLogPath) { Get-Content -LiteralPath $appLogPath -Raw } else { "" }
-            throw "Interaction-validation batch $dialogStart did not write a manifest within $TimeoutMinutes minute(s): $batchManifestPath`n$appLog"
+            throw "Interaction-validation batch $dialogStart did not write a complete manifest within $TimeoutMinutes minute(s): $batchManifestPath`n$appLog"
         }
 
-        $batchManifest = Get-Content -LiteralPath $batchManifestPath -Raw | ConvertFrom-Json
         if ($batchManifest.error) {
             throw "Interaction validation batch $dialogStart failed before producing results: $($batchManifest.error)"
         }
@@ -165,14 +180,11 @@ try {
         $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
         $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
         $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
-        while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $batchManifestPath -PathType Leaf)) {
-            Start-Sleep -Milliseconds 500
-        }
-        if (-not (Test-Path -LiteralPath $batchManifestPath -PathType Leaf)) {
-            throw "Ribbon interaction-validation batch $ribbonStart did not write a manifest within $TimeoutMinutes minute(s): $batchManifestPath"
+        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline
+        if ($null -eq $batchManifest) {
+            throw "Ribbon interaction-validation batch $ribbonStart did not write a complete manifest within $TimeoutMinutes minute(s): $batchManifestPath"
         }
 
-        $batchManifest = Get-Content -LiteralPath $batchManifestPath -Raw | ConvertFrom-Json
         if ($batchManifest.error) {
             throw "Ribbon interaction validation batch $ribbonStart failed before producing results: $($batchManifest.error)"
         }
