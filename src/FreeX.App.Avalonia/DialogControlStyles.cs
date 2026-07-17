@@ -104,6 +104,7 @@ internal static class DialogControlStyles
         var presenter = new ContentPresenter
         {
             VerticalAlignment = VerticalAlignment.Center,
+            RecognizesAccessKey = true,
         };
         presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = checkBox });
         presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = checkBox });
@@ -155,6 +156,7 @@ internal static class DialogControlStyles
         var presenter = new ContentPresenter
         {
             VerticalAlignment = VerticalAlignment.Center,
+            RecognizesAccessKey = true,
         };
         presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(ContentControl.Content)) { Source = radioButton });
         presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(ContentControl.ContentTemplate)) { Source = radioButton });

@@ -1172,6 +1172,9 @@ public static class AvaloniaRibbonRenderer
     // affordance) rather than running "▾" into the caption text.
     private static Control BuildLargeControl(RibbonControl control, IRibbonCommandRegistry? registry, Action? afterExecute, AvaloniaRibbonPalette palette)
     {
+        if (control is RibbonSplitButton splitButton)
+            return BuildLargeSplitControl(splitButton, registry, afterExecute, palette);
+
         // Center the icon+label cluster vertically in the hero button so large icons sit in the middle
         // of the row like Windows, instead of pinned to the top (StackPanel defaults to top alignment).
         var stack = new StackPanel
@@ -1199,10 +1202,8 @@ public static class AvaloniaRibbonRenderer
             MaxWidth = 74,
         });
 
-        // Large split/dropdown affordance: a centered chevron on its OWN line under the label, so the
-        // hero button reads as visually split (icon + label = primary, the chevron band = open the menu) —
-        // matching the WPF hero split-button layout. The flyout is still attached to the whole button by
-        // WireControl, so the primary click opens the menu as before; only the visual changes.
+        // Large dropdown affordance: a centered chevron on its own line under the label. True split
+        // buttons are handled by BuildLargeSplitControl so their primary and menu actions remain distinct.
         if (HasMenu(control))
         {
             stack.Children.Add(Chevron(new Thickness(0, 1, 0, 0), palette));
@@ -1218,6 +1219,69 @@ public static class AvaloniaRibbonRenderer
         ((ContentControl)button).Content = stack;
         WireControl(button, control, registry, afterExecute, palette);
         return button;
+    }
+
+    private static Control BuildLargeSplitControl(
+        RibbonSplitButton control,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute,
+        AvaloniaRibbonPalette palette)
+    {
+        var primaryContent = new StackPanel
+        {
+            Orientation = Orientation.Vertical,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Children =
+            {
+                NewIcon(control, LargeIconSize, HorizontalAlignment.Center),
+                new TextBlock
+                {
+                    Text = control.Label,
+                    FontSize = 12,
+                    FontFamily = RibbonFontFamily,
+                    TextAlignment = TextAlignment.Center,
+                    TextWrapping = TextWrapping.WrapWithOverflow,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 2, 0, 0),
+                    MaxWidth = 74,
+                },
+            },
+        };
+        var primary = new Button
+        {
+            Content = primaryContent,
+            Tag = control.CommandId.Value,
+            Padding = new Thickness(4, 2, 4, 0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        primary.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
+
+        var dropdown = new DropDownButton
+        {
+            Content = Chevron(new Thickness(0), palette),
+            Tag = $"{control.CommandId.Value}.Dropdown",
+            Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            Flyout = control.Menu.BuildFlyout(registry, afterExecute),
+        };
+
+        ApplyStateAndEnablement(primary, control.CommandId, registry, palette);
+        ApplyStateAndEnablement(dropdown, control.CommandId, registry, palette);
+
+        var split = new Grid
+        {
+            Width = 80,
+            Height = 76,
+            RowDefinitions = new RowDefinitions("*,20"),
+        };
+        Grid.SetRow(primary, 0);
+        Grid.SetRow(dropdown, 1);
+        split.Children.Add(primary);
+        split.Children.Add(dropdown);
+        return split;
     }
 
     // WPF BuildMediumControl: small icon (16px) + label in a horizontal row.
