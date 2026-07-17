@@ -1750,6 +1750,7 @@ public sealed class SlideCanvas : FrameworkElement
         var layout = TextLayoutPlanner.GetColumnLayout(text, bounds);
         var fragments = new Dictionary<(int ParagraphIndex, int LineIndex), ResolvedParagraph>();
         var measures = new List<TextColumnLineMeasure>();
+        const double importedAptosFallbackScale = 0.93;
 
         // PowerPoint's imported column breakpoints align more closely with WPF's
         // display metrics than with ideal metrics, so use the same mode for both
@@ -1758,7 +1759,10 @@ public sealed class SlideCanvas : FrameworkElement
         {
             var paragraph = text.Paragraphs[paragraphIndex];
             var run = paragraph.Runs[0];
-            var lines = SplitColumnText(paragraph, run, layout.ColumnWidthDip, text.Wrap);
+            double horizontalScale = string.Equals(run.FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+                ? importedAptosFallbackScale
+                : 1.0;
+            var lines = SplitColumnText(paragraph, run, layout.ColumnWidthDip / horizontalScale, text.Wrap);
             for (int lineIndex = 0; lineIndex < lines.Count; lineIndex++)
             {
                 var fragment = CloneParagraphWithText(paragraph, run, lines[lineIndex]);
@@ -1778,10 +1782,22 @@ public sealed class SlideCanvas : FrameworkElement
         foreach (var placement in TextLayoutPlanner.PlanColumnLines(text, layout, measures))
         {
             var fragment = fragments[(placement.ParagraphIndex, placement.LineIndex)];
-            var formatted = BuildFormattedText(fragment, placement.MaxWidthDip, text.Wrap, useIdealMetrics: false);
+            var sourceRun = text.Paragraphs[placement.ParagraphIndex].Runs[0];
+            double horizontalScale = string.Equals(sourceRun.FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+                ? importedAptosFallbackScale
+                : 1.0;
+            var formatted = BuildFormattedText(
+                fragment,
+                horizontalScale < 1.0 ? 0 : placement.MaxWidthDip,
+                horizontalScale < 1.0 ? false : text.Wrap,
+                useIdealMetrics: false);
             if (placement.IsFirstLine && fragment.IndentDip > 0 && formatted.MaxTextWidth > 0)
                 formatted.MaxTextWidth = placement.MaxWidthDip;
+            if (horizontalScale < 1.0)
+                dc.PushTransform(new ScaleTransform(horizontalScale, 1.0, placement.X, placement.Y));
             dc.DrawText(formatted, new Point(placement.X, placement.Y));
+            if (horizontalScale < 1.0)
+                dc.Pop();
         }
 
         return true;
