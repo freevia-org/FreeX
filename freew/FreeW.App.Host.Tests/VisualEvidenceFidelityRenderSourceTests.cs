@@ -97,6 +97,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("width - inset");
         source.Should().Contain("ResolveSoftwareHeaderFooterSlot(doc, i + 1, header: true)");
         source.Should().Contain("thisPageSettings.HeaderDistancePt > 0");
+        source.Should().Contain("PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)");
+        source.Should().Contain("PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)");
         source.Should().Contain("bodyOffsetTop");
         project.Should().Contain("FreeW.App.Presentation");
         project.Should().Contain("PackageReference Include=\"SkiaSharp\"");

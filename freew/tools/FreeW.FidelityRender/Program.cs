@@ -602,10 +602,10 @@ static void RenderDocumentComposite(
                 var hfPage = RenderHfSlot(headerSlot, doc, thisPageWDip, headerFooterBandDip, i + 1, pageNumberText, pageCount);
                 if (hfPage is not null)
                 {
-                    // Word keeps explicitly positioned headers inside the page margin; its
-                    // implicit/default header distance uses the calibrated upper reserve.
+                    // Word measures an explicit header distance from the page edge. Its
+                    // implicit/default header distance instead uses the calibrated upper reserve.
                     var headerTop = thisPageSettings.HeaderDistancePt > 0
-                        ? thisMarginTop + 2
+                        ? PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)
                         : Math.Max(0, thisMarginTop - headerFooterBandDip - 12);
                     var hfVis = new DrawingVisual();
                     using (var dc = hfVis.RenderOpen())
@@ -626,6 +626,9 @@ static void RenderDocumentComposite(
                 var hfPage = RenderHfSlot(footerSlot, doc, thisPageWDip, headerFooterBandDip, i + 1, pageNumberText, pageCount);
                 if (hfPage is not null)
                 {
+                    var footerTop = thisPageSettings.FooterDistancePt > 0
+                        ? thisPixH - PageLayout.PointsToDip(thisPageSettings.FooterDistancePt) - headerFooterBandDip
+                        : thisPixH - thisMarginBottom + 16;
                     var hfVis = new DrawingVisual();
                     using (var dc = hfVis.RenderOpen())
                         dc.DrawRectangle(new VisualBrush(hfPage.Visual)
@@ -634,7 +637,7 @@ static void RenderDocumentComposite(
                             AlignmentX = AlignmentX.Left,
                             AlignmentY = AlignmentY.Top
                         },
-                            null, new Rect(thisMarginLeft, thisPixH - thisMarginBottom + 16,
+                            null, new Rect(thisMarginLeft, footerTop,
                                 thisPageWDip - thisMarginLeft - thisMarginRight, headerFooterBandDip));
                     bmp.Render(hfVis);
                 }
