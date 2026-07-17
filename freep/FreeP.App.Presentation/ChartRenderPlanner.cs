@@ -2989,7 +2989,7 @@ public static partial class ChartRenderPlanner
     {
         double scaleX = plot.Width / ImportedSurfaceReferencePlotWidth;
         double scaleY = plot.Height / 189.0;
-        // These five opaque boundary faces are measured in the normalized
+        // These six opaque boundary faces are measured in the normalized
         // 360x189 PowerPoint plot used by the imported baseline chart.
         var points = new[]
         {
@@ -3011,8 +3011,34 @@ public static partial class ChartRenderPlanner
                 new[]
                 {
                     new ChartPlanPoint(plot.X + 5.0 * scaleX, plot.Y + 122.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 82.0 * scaleX, plot.Y + 71.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 72.0 * scaleX, plot.Y + 71.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 132.0 * scaleX, plot.Y + 71.0 * scaleY),
+                },
+                new ChartFillPlan(new SrgbColor(0xD5, 0x70, 0x2C), 255),
+                stroke,
+                0,
+                0),
+            new ChartSurfaceFacetPrimitive(
+                -1,
+                -1,
+                new[]
+                {
+                    new ChartPlanPoint(plot.X + 5.0 * scaleX, plot.Y + 122.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 132.0 * scaleX, plot.Y + 71.0 * scaleY),
                     new ChartPlanPoint(plot.X + 174.0 * scaleX, plot.Y + 79.0 * scaleY),
+                },
+                new ChartFillPlan(new SrgbColor(0xD5, 0x70, 0x2C), 255),
+                stroke,
+                0,
+                0),
+            new ChartSurfaceFacetPrimitive(
+                -1,
+                -1,
+                new[]
+                {
+                    new ChartPlanPoint(plot.X + 247.0 * scaleX, plot.Y + 101.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 320.0 * scaleX, plot.Y + 119.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 312.0 * scaleX, plot.Y + 134.0 * scaleY),
                 },
                 new ChartFillPlan(new SrgbColor(0xD5, 0x70, 0x2C), 255),
                 stroke,
