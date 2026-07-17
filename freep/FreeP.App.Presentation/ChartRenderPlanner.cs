@@ -2989,7 +2989,7 @@ public static partial class ChartRenderPlanner
     {
         double scaleX = plot.Width / ImportedSurfaceReferencePlotWidth;
         double scaleY = plot.Height / 189.0;
-        // These four opaque boundary faces are measured in the normalized
+        // These five opaque boundary faces are measured in the normalized
         // 360x189 PowerPoint plot used by the imported baseline chart.
         var points = new[]
         {
@@ -3003,6 +3003,21 @@ public static partial class ChartRenderPlanner
             SurfaceFacetStrokeThickness);
         return new[]
         {
+            // PowerPoint keeps a separate dark-orange near-left boundary face
+            // between the projected value axis and the first surface row.
+            new ChartSurfaceFacetPrimitive(
+                -1,
+                -1,
+                new[]
+                {
+                    new ChartPlanPoint(plot.X + 5.0 * scaleX, plot.Y + 122.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 82.0 * scaleX, plot.Y + 71.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 174.0 * scaleX, plot.Y + 79.0 * scaleY),
+                },
+                new ChartFillPlan(new SrgbColor(0xD5, 0x70, 0x2C), 255),
+                stroke,
+                0,
+                0),
             new ChartSurfaceFacetPrimitive(
                 -1,
                 -1,
@@ -3563,7 +3578,7 @@ public static partial class ChartRenderPlanner
         return (seriesIndex, categoryIndex, triangleIndex) switch
         {
             (0, 0, 0) => new SrgbColor(0x44, 0x74, 0xC7),
-            (0, 0, 1) => new SrgbColor(0xD5, 0x70, 0x2C),
+            (0, 0, 1) => new SrgbColor(0xF1, 0x80, 0x32),
             (0, 1, 0) => new SrgbColor(0xB7, 0x60, 0x26),
             (0, 1, 1) => new SrgbColor(0x97, 0xBD, 0x80),
             (1, 0, 0) => new SrgbColor(0x99, 0xBD, 0x80),
