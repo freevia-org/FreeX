@@ -556,7 +556,7 @@ public static partial class ChartRenderPlanner
     public const byte AreaFillAlpha = 200;
     public const byte RectSeriesFillAlpha = 255;
     public const double LineSeriesStrokeThickness = 1.5;
-    public const double ImportedLineSeriesStrokeThickness = 3.0;
+    public const double ImportedLineSeriesStrokeThickness = 4.0;
     public const double ImportedComboLegendSwatchWidth = 25.0;
     public const double ImportedComboLegendSwatchHeight = 14.0;
     public const double ImportedComboLegendLineHeight = 38.0;
