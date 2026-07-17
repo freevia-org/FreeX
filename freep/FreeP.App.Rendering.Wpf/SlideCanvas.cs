@@ -389,7 +389,8 @@ public sealed class SlideCanvas : FrameworkElement
         if (hasBevel && fx.BevelTop is not null)
         {
             var (highlight, shade) = BevelGeometryHelper.ComputeBevelRegions(bounds, fx.BevelTop, fx.LightDirDeg);
-            DrawBevelOverlay(dc, geo, bounds, highlight, shade, fx.BevelTop.WidthDip, fx.BevelTop.HeightDip);
+            DrawBevelOverlay(dc, geo, bounds, highlight, shade,
+                fx.BevelTop.WidthDip, fx.BevelTop.HeightDip, fx.BevelTop.PresetName);
         }
 
         // Contour outline (thin ring in contourColor)
@@ -411,7 +412,8 @@ public sealed class SlideCanvas : FrameworkElement
         BevelEdgeSet highlight,
         BevelEdgeSet shade,
         double bevelW,
-        double bevelH)
+        double bevelH,
+        string presetName)
     {
         // We draw simple trapezoidal / rectangular strips clipped to the shape geometry.
         // Highlight = near-white semi-transparent; Shade = near-black semi-transparent.
@@ -473,6 +475,37 @@ public sealed class SlideCanvas : FrameworkElement
             new Point(x + w,      y),
             new Point(x + w,      y + h),
             new Point(x + w - bw, y + h - bh));
+
+        if (string.Equals(presetName, "relaxedInset", StringComparison.OrdinalIgnoreCase))
+        {
+            // PowerPoint's relaxed inset has a second, shaded material band
+            // between the outer bevel highlight and the front face.
+            double ix = x + bw;
+            double iy = y + bh;
+            double iw = Math.Max(0, w - 2 * bw);
+            double ih = Math.Max(0, h - 2 * bh);
+
+            DrawWedge(true, shadeBrush,
+                new Point(ix, iy),
+                new Point(ix + iw, iy),
+                new Point(ix + iw - bw, iy + bh),
+                new Point(ix + bw, iy + bh));
+            DrawWedge(true, shadeBrush,
+                new Point(ix + bw, iy + ih - bh),
+                new Point(ix + iw - bw, iy + ih - bh),
+                new Point(ix + iw, iy + ih),
+                new Point(ix, iy + ih));
+            DrawWedge(true, shadeBrush,
+                new Point(ix, iy),
+                new Point(ix + bw, iy + bh),
+                new Point(ix + bw, iy + ih - bh),
+                new Point(ix, iy + ih));
+            DrawWedge(true, shadeBrush,
+                new Point(ix + iw - bw, iy + bh),
+                new Point(ix + iw, iy),
+                new Point(ix + iw, iy + ih),
+                new Point(ix + iw - bw, iy + ih - bh));
+        }
 
         dc.Pop(); // pop clip
     }
