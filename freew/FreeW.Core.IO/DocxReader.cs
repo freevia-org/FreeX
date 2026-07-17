@@ -58,6 +58,7 @@ public static class DocxReader
             document.Blocks.Add(new Paragraph());
 
         ReadHeaderFooter(documentXml, archive, document, hyperlinkRelationships);
+        ReadNativeVmlTextWatermark(archive, document);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, hyperlinkRelationships);
@@ -5055,6 +5056,99 @@ public static class DocxReader
 
         if (customProperties.GetBoolean(MarkAsFinalPropertyName) == true)
             document.MarkedAsFinal = true;
+    }
+
+    /// <summary>
+    /// Recovers Word's native text watermark when a document was not produced by FreeW and therefore
+    /// has no FreeW watermark custom properties. Word serializes its canonical watermark in a header as
+    /// a VML text-path shape named <c>PowerPlusWaterMarkObject</c>. The visible VML payload is the
+    /// authority for this fallback; FreeW metadata, when present, remains authoritative.
+    /// </summary>
+    private static void ReadNativeVmlTextWatermark(ZipArchive archive, TextDocument document)
+    {
+        if (document.Page.EffectiveWatermark is not null)
+            return;
+
+        foreach (var entry in archive.Entries
+                     .Where(entry => entry.FullName.StartsWith("word/header", StringComparison.OrdinalIgnoreCase)
+                         && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var root = LoadPart(archive, entry.FullName)?.Root;
+            var shape = root?.Descendants(V + "shape")
+                .FirstOrDefault(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject"
+                    && shape.Element(V + "textpath") is not null);
+            var textPath = shape?.Element(V + "textpath");
+            var text = textPath?.Attribute("string")?.Value;
+            if (string.IsNullOrWhiteSpace(text))
+                continue;
+
+            var fill = shape!.Element(V + "fill");
+            var color = NormalizeVmlColor(fill?.Attribute("color")?.Value ?? shape.Attribute("fillcolor")?.Value);
+            var rotation = ParseVmlStyleNumber(shape.Attribute("style")?.Value, "rotation");
+            document.Page.WatermarkOptions = new WatermarkOptions(text)
+            {
+                FontFamily = ParseVmlStyleValue(textPath!.Attribute("style")?.Value, "font-family") ?? "Calibri",
+                FontColorHex = color ?? "#808080",
+                Layout = rotation is { } value && Math.Abs(value) < 0.01
+                    ? WatermarkLayout.Horizontal
+                    : WatermarkLayout.Diagonal,
+                Opacity = ParseVmlOpacity(fill?.Attribute("opacity")?.Value)
+            };
+            return;
+        }
+    }
+
+    private static string? ParseVmlStyleValue(string? style, string name)
+    {
+        if (string.IsNullOrWhiteSpace(style))
+            return null;
+
+        foreach (var part in style.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var separator = part.IndexOf(':');
+            if (separator <= 0 || !part[..separator].Trim().Equals(name, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            var value = part[(separator + 1)..].Trim().Trim('"', '\'');
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        }
+
+        return null;
+    }
+
+    private static double? ParseVmlStyleNumber(string? style, string name) =>
+        double.TryParse(
+            ParseVmlStyleValue(style, name),
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var value)
+                ? value
+                : null;
+
+    private static double ParseVmlOpacity(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return 1;
+
+        var normalized = value.Trim();
+        var isPercent = normalized.EndsWith('%');
+        if (isPercent)
+            normalized = normalized[..^1];
+        return double.TryParse(
+            normalized,
+            System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out var opacity)
+                ? Math.Clamp(isPercent ? opacity / 100 : opacity, 0, 1)
+                : 1;
+    }
+
+    private static string? NormalizeVmlColor(string? value)
+    {
+        var hex = value?.Trim().TrimStart('#');
+        return hex is { Length: 6 } && hex.All(Uri.IsHexDigit)
+            ? "#" + hex.ToUpperInvariant()
+            : null;
     }
 
     private static void ReadStyles(ZipArchive archive, TextDocument document)

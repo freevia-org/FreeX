@@ -51,6 +51,39 @@ public class WatermarkOptionsRoundTripTests
         return reader.ReadToEnd();
     }
 
+    private static TextDocument ReadWithoutWatermarkCustomProperties(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+            zip.GetEntry("docProps/custom.xml")!.Delete();
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
+    private static TextDocument ReadWithMutatedVmlText(TextDocument document, string replacementText)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            xml.Descendants(vml + "textpath").Last().SetAttributeValue("string", replacementText);
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     // ── WatermarkOptions full round-trip ──────────────────────────────────
 
     [Fact]
@@ -175,6 +208,40 @@ public class WatermarkOptionsRoundTripTests
         textPath.Attribute("on")!.Value.Should().Be("t");
         textPath.Attribute("fitshape")!.Value.Should().Be("t");
         textPath.Attribute("style")!.Value.Should().Contain("font-family:Arial");
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_ImportsWhenFreeWCustomPropertiesAreAbsent()
+    {
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions("NATIVE WORD")
+        {
+            FontFamily = "Arial",
+            FontColorHex = "#123456",
+            Layout = WatermarkLayout.Horizontal,
+            Opacity = 0.5
+        };
+
+        var loaded = ReadWithoutWatermarkCustomProperties(doc);
+
+        var watermark = loaded.Page.WatermarkOptions;
+        watermark.Should().NotBeNull();
+        watermark!.Text.Should().Be("NATIVE WORD");
+        watermark.FontFamily.Should().Be("Arial");
+        watermark.FontColorHex.Should().Be("#123456");
+        watermark.Layout.Should().Be(WatermarkLayout.Horizontal);
+        watermark.Opacity.Should().BeApproximately(0.5, 0.001);
+    }
+
+    [Fact]
+    public void NativeVmlTextWatermark_DoesNotOverrideFreeWCustomProperties()
+    {
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions("AUTHORITATIVE");
+
+        var loaded = ReadWithMutatedVmlText(doc, "STALE VML");
+
+        loaded.Page.WatermarkOptions!.Text.Should().Be("AUTHORITATIVE");
     }
 
     [Fact]
