@@ -490,8 +490,6 @@ static void RenderDocumentComposite(
         var (thisPageWDip, thisPageHDip) = PageLayout.PageSizeDip(thisPageSettings);
         var (thisMarginLeft, thisMarginTop, thisMarginRight, thisMarginBottom) =
             PageLayout.MarginsDip(thisPageSettings);
-        const double headerFooterBandDip = 36;
-
         int thisPixW = (int)Math.Max(1, Math.Round(thisPageWDip));
         int thisPixH = (int)Math.Max(1, Math.Round(thisPageHDip));
 
