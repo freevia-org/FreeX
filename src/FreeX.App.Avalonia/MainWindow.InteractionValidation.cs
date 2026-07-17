@@ -25,8 +25,7 @@ public sealed partial class MainWindow
             AddRibbonInteractionExecutionResults(results);
             AddShortcutRoutingResults(results);
             AddShortcutScenarioInventoryResults(results);
-            AddContextMenuCatalogResults(results);
-            AddContextMenuFamilyInventoryResults(results);
+            await AddContextMenuInteractionResultsAsync(results);
             AddDialogRangeTargetResults(results);
             await AddEditingInteractionResultsAsync(results);
         }
@@ -251,29 +250,6 @@ public sealed partial class MainWindow
             Note: resolved && route == expectedRoute ? "" : $"Expected {expectedRoute}; resolved {route}."));
     }
 
-    private static void AddContextMenuCatalogResults(List<InteractionValidationResult> results)
-    {
-        foreach (var target in Enum.GetValues<WorksheetContextMenuTargetKind>())
-        {
-            var states = target == WorksheetContextMenuTargetKind.Worksheet
-                ? WorksheetContextValidationStates()
-                : [("default", WorksheetContextMenuState.Default)];
-            foreach (var (stateName, state) in states)
-            {
-                foreach (var command in FlattenContextCommands(WorksheetContextMenuPlanner.BuildCommands(target, state)))
-                {
-                    results.Add(new InteractionValidationResult(
-                        Id: $"{target}:{stateName}:{command.Action}",
-                        Category: "context-menu-command",
-                        Status: command.Action == WorksheetContextMenuAction.None ? "failed" : "passed",
-                        EvidenceLevel: command.IsEnabled ? "planned-enabled" : "planned-disabled",
-                        Evidence: command.Header,
-                        Note: command.AccessHeader));
-                }
-            }
-        }
-    }
-
     private static void AddDialogRangeTargetResults(List<InteractionValidationResult> results)
     {
         foreach (var target in InteractiveValidationInventory.WorksheetRangeTargets)
@@ -288,49 +264,6 @@ public sealed partial class MainWindow
                 Note: wired
                     ? "The shared session supports worksheet selection, mouse/Enter accept, Escape cancel, dialog restoration, and focus return."
                     : target.ExpectedBehavior));
-        }
-    }
-
-    private static void AddContextMenuFamilyInventoryResults(List<InteractionValidationResult> results)
-    {
-        foreach (var family in InteractionSurfaceCatalog.ContextMenus)
-        {
-            var capability = family.Platforms.PortableDesktop;
-            var status = capability.Implementation switch
-            {
-                InteractionImplementationCapability.ManagedSurface or
-                InteractionImplementationCapability.NativeSurface => "passed",
-                InteractionImplementationCapability.Missing => "failed",
-                _ => "skipped",
-            };
-            var evidenceLevel = capability.Implementation switch
-            {
-                InteractionImplementationCapability.ManagedSurface => "neutral-planner-backed",
-                InteractionImplementationCapability.NativeSurface => "native-surface-catalogued",
-                InteractionImplementationCapability.Missing => "portable-surface-missing",
-                _ => "portable-capability-unverified",
-            };
-
-            results.Add(new InteractionValidationResult(
-                Id: family.Id,
-                Category: "context-menu-family",
-                Status: status,
-                EvidenceLevel: evidenceLevel,
-                Evidence: $"{family.Name} | {capability.Implementation}",
-                Note: string.Join("; ", family.Prerequisites)));
-
-            foreach (var variant in family.Variants)
-            {
-                results.Add(new InteractionValidationResult(
-                    Id: variant.Id,
-                    Category: "context-menu-variant",
-                    Status: status,
-                    EvidenceLevel: evidenceLevel,
-                    Evidence: $"{family.Name} > {variant.Name}",
-                    Note: variant.Prerequisites.Count == 0
-                        ? family.Source.CatalogOrPlanner
-                        : string.Join("; ", variant.Prerequisites)));
-            }
         }
     }
 
