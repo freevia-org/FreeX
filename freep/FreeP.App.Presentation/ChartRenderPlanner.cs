@@ -1214,8 +1214,12 @@ public static partial class ChartRenderPlanner
         ChartPlanRect? titleBounds = chart.Title is not null
             ? new ChartPlanRect(
                 bounds.X + margin,
-                UsesStockLineFallback(chart) || chart.ChartType == ChartType.Surface3D
-                    ? bounds.Y + 7.0
+                UsesImportedTextMetrics(chart)
+                    ? UsesStockLineFallback(chart) || chart.ChartType == ChartType.Surface3D
+                        ? bounds.Y + 11.0
+                        : bounds.Y + 12.0
+                    : UsesStockLineFallback(chart) || chart.ChartType == ChartType.Surface3D
+                        ? bounds.Y + 7.0
                     : bounds.Y + margin,
                 bounds.Width - 2 * margin,
                 titleHeight)

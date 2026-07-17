@@ -514,6 +514,25 @@ public sealed class ChartRenderPlannerTests
         ChartRenderPlanner.ResolveTextFontSize(chart, 6.5).Should().Be(18.0);
     }
 
+    [Theory]
+    [InlineData(ChartType.Scatter, 12.0)]
+    [InlineData(ChartType.Surface3D, 11.0)]
+    public void BuildFramePlan_ImportedChartTitlesUsePowerPointTitleBandOffsets(
+        ChartType chartType,
+        double titleOffset)
+    {
+        var chart = new ChartShape
+        {
+            ChartType = chartType,
+            Title = "Revenue",
+            TextStyle = new ChartTextStyle { FontSizePt = 18.0 }
+        };
+
+        var plan = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        plan.TitleBounds.Should().Be(new ChartPlanRect(20, titleOffset, 360, 28));
+    }
+
     [Fact]
     public void ResolveTextFontSize_InheritedOfficeTitleDefault_UsesCompactRoleFallback()
     {
