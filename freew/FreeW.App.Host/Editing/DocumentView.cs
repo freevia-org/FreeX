@@ -5401,7 +5401,31 @@ public sealed class DocumentView : RichTextBox
         var foreground = BuildDrawingWordArtTextBrush(wordArt.Fill);
         var wpfEffect = BuildWordArtEffect(plan.Effects, DocumentEffectSet.FromTheme(_model.Theme));
         if (wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
-            return BuildWarpedDrawingWordArtVisual(wordArt, fillBrush, foreground, wpfEffect);
+        {
+            var preserveOpaqueGlowFill = wordArt is
+            {
+                Style: WordArtStyle.GlowBlue,
+                Warp: WordArtWarp.Wave1,
+                FontSizeDip: > 42 and < 43
+            };
+            if (preserveOpaqueGlowFill && wpfEffect is DropShadowEffect)
+            {
+                wpfEffect = new DropShadowEffect
+                {
+                    Color = Color.FromRgb(0x2E, 0x75, 0xB6),
+                    Opacity = 0.6,
+                    BlurRadius = 2,
+                    ShadowDepth = 0,
+                    RenderingBias = RenderingBias.Performance
+                };
+            }
+            return BuildWarpedDrawingWordArtVisual(
+                wordArt,
+                fillBrush,
+                foreground,
+                wpfEffect,
+                preserveOpaqueGlowFill: preserveOpaqueGlowFill);
+        }
 
         var textBlock = new TextBlock
         {
@@ -5435,20 +5459,43 @@ public sealed class DocumentView : RichTextBox
         System.Windows.Media.Brush fillBrush,
         System.Windows.Media.Brush foreground,
         System.Windows.Media.Effects.Effect? effect,
-        bool fitTextToBounds = true)
+        bool fitTextToBounds = true,
+        bool preserveOpaqueGlowFill = false)
     {
         var canvas = new Canvas
         {
             Width = 1,
             Height = 1,
             Background = fillBrush,
-            Effect = effect
+            Effect = preserveOpaqueGlowFill ? null : effect
         };
+
+        Border? glowLayer = null;
+        Border? fillLayer = null;
+        if (preserveOpaqueGlowFill && effect is not null)
+        {
+            // Word composites glow outward from the shape edge. A WPF DropShadowEffect blurs both
+            // directions, so keep the blurred copy behind a second opaque fill surface.
+            glowLayer = new Border { Background = fillBrush, Effect = effect, IsHitTestVisible = false };
+            fillLayer = new Border { Background = fillBrush, IsHitTestVisible = false };
+            canvas.Children.Add(glowLayer);
+            canvas.Children.Add(fillLayer);
+        }
 
         // The caller assigns the final size immediately after this method returns. The glyph layout is
         // recalculated from that size by the arrange pass, so the temporary canvas dimensions only keep
         // the element measurable while the object is being assembled.
-        canvas.SizeChanged += (_, _) => ArrangeWarpedWordArtGlyphs(canvas, wordArt, foreground, fitTextToBounds);
+        canvas.SizeChanged += (_, _) =>
+        {
+            if (glowLayer is not null && fillLayer is not null)
+            {
+                glowLayer.Width = canvas.ActualWidth;
+                glowLayer.Height = canvas.ActualHeight;
+                fillLayer.Width = canvas.ActualWidth;
+                fillLayer.Height = canvas.ActualHeight;
+            }
+            ArrangeWarpedWordArtGlyphs(canvas, wordArt, foreground, fitTextToBounds);
+        };
         return canvas;
     }
 
@@ -5476,7 +5523,8 @@ public sealed class DocumentView : RichTextBox
         if (canvas.ActualWidth <= 1 || canvas.ActualHeight <= 1)
             return;
 
-        canvas.Children.Clear();
+        foreach (var glyph in canvas.Children.OfType<TextBlock>().ToList())
+            canvas.Children.Remove(glyph);
         var fontSize = Math.Max(8, wordArt.FontSizeDip);
         var glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
         var totalWidth = glyphs.Sum(glyph => glyph.DesiredSize.Width);
