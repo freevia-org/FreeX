@@ -2442,7 +2442,9 @@ public sealed class SlideCanvas : FrameworkElement
                         {
                             var geoRect = geo.Bounds;
                             var r2 = new Rect(geoRect.X, geoRect.Y, Math.Max(1, geoRect.Width), Math.Max(1, geoRect.Height));
-                            dc.PushTransform(BuildTextReflectionTransform(reflection, plan.GlyphBoundsDip));
+                            dc.PushTransform(BuildTextReflectionTransform(
+                                reflection,
+                                new LayoutRect(geoRect.X, geoRect.Y, Math.Max(1, geoRect.Width), Math.Max(1, geoRect.Height))));
                             var reflectionMask = new LinearGradientBrush
                             {
                                 MappingMode = BrushMappingMode.RelativeToBoundingBox,
