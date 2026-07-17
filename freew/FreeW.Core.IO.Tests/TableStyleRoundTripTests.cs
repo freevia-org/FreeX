@@ -99,14 +99,14 @@ public class TableStyleRoundTripTests
     }
 
     [Fact]
-    public void RoundTrip_StyledTable_PreservesExplicitWordLightFills()
+    public void RoundTrip_StyledTable_RecognizesWriterGeneratedFillsAsStyleDerived()
     {
         var doc = MakeDocWithStyledTable("GridTable1Light");
 
         var table = RoundTrip(doc).Blocks.OfType<Table>().First();
 
-        table.Rows[0].Cells.Should().OnlyContain(cell => cell.ShadingColorHex == "#D9E2F3");
-        table.Rows[1].Cells.Should().OnlyContain(cell => cell.ShadingColorHex == "#F2F2F2");
+        table.Rows[0].Cells.Should().OnlyContain(cell => cell.ShadingColorHex == null);
+        table.Rows[1].Cells.Should().OnlyContain(cell => cell.ShadingColorHex == null);
     }
 
     [Fact]

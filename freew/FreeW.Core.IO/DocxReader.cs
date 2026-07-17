@@ -2805,12 +2805,12 @@ public static class DocxReader
                         cell.WidthPt = DxaToPoints(width);
                     var shading = tcPr.Element(W + "shd")?.Attribute(W + "fill")?.Value;
                     var normalized = shading is null or "auto" ? null : shading.TrimStart('#');
-                    // A named style does not make an explicit w:shd style-derived; Word applies explicit
-                    // cell shading after the table style and the rendered fill must preserve that precedence.
+                    // DocxWriter materializes its legacy header and band fills into w:shd so Word renders
+                    // them without relying on a full built-in style definition. Treat those exact generated
+                    // values as style-derived again on read, regardless of whether the named style survives.
                     if (normalized is not null
-                        && !(catalogStyle is null
-                            && ((isStyleHeader && string.Equals(normalized, StyleHeaderFill, StringComparison.OrdinalIgnoreCase))
-                                || (isStyleBanded && string.Equals(normalized, StyleBandedFill, StringComparison.OrdinalIgnoreCase)))))
+                        && !((isStyleHeader && string.Equals(normalized, StyleHeaderFill, StringComparison.OrdinalIgnoreCase))
+                            || (isStyleBanded && string.Equals(normalized, StyleBandedFill, StringComparison.OrdinalIgnoreCase))))
                         cell.ShadingColorHex = "#" + normalized;
 
                     // Horizontal merge: w:gridSpan w:val="N". Absent (or <2) means no span.
