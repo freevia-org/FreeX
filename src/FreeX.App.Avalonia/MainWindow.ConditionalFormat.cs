@@ -1005,10 +1005,32 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
         };
 
-        var appliesToBox = new TextBox { MinWidth = 160, IsVisible = false, Margin = new Thickness(0, 4, 0, 0), [DockPanel.DockProperty] = Dock.Bottom };
+        var appliesToBox = new TextBox { MinWidth = 160 };
         ApplyCfTextBoxChrome(appliesToBox);
         AutomationProperties.SetAutomationId(appliesToBox, "ManageConditionalFormatsAppliesToBox");
         AutomationProperties.SetName(appliesToBox, UiText.Get("ManageConditionalFormats_AppliesToColumn"));
+
+        var appliesToPicker = new Button
+        {
+            Content = "...",
+            Width = 32,
+            MinWidth = 32,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        ApplyCfButtonChrome(appliesToPicker, 32);
+        AutomationProperties.SetAutomationId(appliesToPicker, "ManageConditionalFormatsAppliesToPickerButton");
+        AutomationProperties.SetName(appliesToPicker, "Select conditional format range");
+
+        var appliesToRow = new AvaloniaGrid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            IsVisible = false,
+            Margin = new Thickness(0, 4, 0, 0),
+            [DockPanel.DockProperty] = Dock.Bottom,
+        };
+        appliesToRow.Children.Add(appliesToBox);
+        AvaloniaGrid.SetColumn(appliesToPicker, 1);
+        appliesToRow.Children.Add(appliesToPicker);
 
         var scopeBox = new ComboBox
         {
@@ -1097,6 +1119,8 @@ public sealed partial class MainWindow
             moveUpButton.IsEnabled = hasSelection && listBox.SelectedIndex > 0;
             moveDownButton.IsEnabled = hasSelection && listBox.SelectedIndex >= 0 && listBox.SelectedIndex < listBox.ItemCount - 1;
             applyAppliesToButton.IsEnabled = hasSelection;
+            appliesToRow.IsVisible = hasSelection;
+            appliesToPicker.IsEnabled = hasSelection;
         }
 
         listBox.SelectionChanged += (_, _) =>
@@ -1329,7 +1353,7 @@ public sealed partial class MainWindow
                             Margin = new Thickness(0, 0, 0, 4),
                             [DockPanel.DockProperty] = Dock.Top,
                         },
-                        appliesToBox,
+                        appliesToRow,
                         rulesFrame,
                     },
                 },
@@ -1355,6 +1379,12 @@ public sealed partial class MainWindow
                         closeButton)));
             };
         }
+
+        AttachDialogRangePicker(
+            dialog,
+            appliesToPicker,
+            appliesToBox,
+            "range.conditional-format.applies-to");
 
         await dialog.ShowDialog(this);
     }

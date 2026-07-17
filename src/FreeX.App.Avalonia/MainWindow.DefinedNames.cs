@@ -71,6 +71,27 @@ public sealed partial class MainWindow
         ApplyNamesListBoxStyle(namesList);
         AutomationProperties.SetAutomationId(namesList, "NameManagerNamesList");
 
+        var selectedRefersToBox = new TextBox
+        {
+            IsReadOnly = true,
+            MinWidth = 240,
+        };
+        ApplyNamesTextBoxChrome(selectedRefersToBox);
+        AutomationProperties.SetAutomationId(selectedRefersToBox, "NameManagerSelectedRefersToBox");
+        AutomationProperties.SetName(selectedRefersToBox, UiText.Get("InsertLoc_RefersToFieldLabel"));
+
+        var selectedRefersToPicker = new Button
+        {
+            Content = "...",
+            Width = 30,
+            MinWidth = 30,
+            IsEnabled = false,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        ApplyNamesButtonChrome(selectedRefersToPicker, minWidth: 30);
+        AutomationProperties.SetAutomationId(selectedRefersToPicker, "NameManagerSelectedRefersToPickerButton");
+        AutomationProperties.SetName(selectedRefersToPicker, "Select referenced range");
+
         var newButton = new Button { Content = UiText.Get("InsertLoc_NewButton"), MinWidth = 84 };
         ApplyNamesButtonChrome(newButton, minWidth: 84);
         AutomationProperties.SetAutomationId(newButton, "NameManagerNewButton");
@@ -100,6 +121,8 @@ public sealed partial class MainWindow
             namesList.ItemsSource = rows.Select(FormatNameManagerRow).ToList();
             editButton.IsEnabled = false;
             deleteButton.IsEnabled = false;
+            selectedRefersToBox.Text = string.Empty;
+            selectedRefersToPicker.IsEnabled = false;
         }
 
         namesList.SelectionChanged += (_, _) =>
@@ -107,6 +130,10 @@ public sealed partial class MainWindow
             var hasSelection = namesList.SelectedIndex >= 0 && namesList.SelectedIndex < rows.Count;
             editButton.IsEnabled = hasSelection;
             deleteButton.IsEnabled = hasSelection;
+            selectedRefersToPicker.IsEnabled = hasSelection;
+            selectedRefersToBox.Text = hasSelection
+                ? rows[namesList.SelectedIndex].RefersTo
+                : string.Empty;
         };
 
         filterBox.SelectionChanged += (_, _) => RefreshRows();
@@ -178,6 +205,25 @@ public sealed partial class MainWindow
             },
         };
 
+        var selectedRefersToRow = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"),
+            Margin = new Thickness(0, 8, 0, 0),
+        };
+        var selectedRefersToLabel = new TextBlock
+        {
+            Text = StripDisplayMnemonic(UiText.Get("InsertLoc_RefersToFieldLabel")),
+            FontSize = 12,
+            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        selectedRefersToRow.Children.Add(selectedRefersToLabel);
+        AvaloniaGrid.SetColumn(selectedRefersToBox, 1);
+        selectedRefersToRow.Children.Add(selectedRefersToBox);
+        AvaloniaGrid.SetColumn(selectedRefersToPicker, 2);
+        selectedRefersToRow.Children.Add(selectedRefersToPicker);
+        DockPanel.SetDock(selectedRefersToRow, Dock.Bottom);
+
         dialog.Content = new DockPanel
         {
             Margin = new Thickness(16),
@@ -191,11 +237,17 @@ public sealed partial class MainWindow
                         WithDock(commandButtons, Dock.Top, new Thickness(0, 0, 0, 8)),
                         WithDock(filterRow, Dock.Top, new Thickness(0, 0, 0, 8)),
                         WithDock(warningText, Dock.Bottom, new Thickness(0, 8, 0, 0)),
+                        selectedRefersToRow,
                         namesList,
                     },
                 },
             },
         };
+        AttachDialogRangePicker(
+            dialog,
+            selectedRefersToPicker,
+            selectedRefersToBox,
+            "range.named-ranges.selected-refers-to");
 
         await dialog.ShowDialog(this);
     }
@@ -246,6 +298,17 @@ public sealed partial class MainWindow
         };
         ApplyNamesTextBoxChrome(refersToBox);
         AutomationProperties.SetAutomationId(refersToBox, "DefineNameRefersToBox");
+
+        var refersToPicker = new Button
+        {
+            Content = "...",
+            Width = 30,
+            MinWidth = 30,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        ApplyNamesButtonChrome(refersToPicker, minWidth: 30);
+        AutomationProperties.SetAutomationId(refersToPicker, "DefineNameRefersToPickerButton");
+        AutomationProperties.SetName(refersToPicker, "Select referenced range");
 
         var commentBox = new TextBox
         {
@@ -371,7 +434,11 @@ public sealed partial class MainWindow
         AddDefineNameRow(form, 0, UiText.Get("InsertLoc_NameFieldLabel"), nameBox);
         AddDefineNameRow(form, 1, UiText.Get("InsertLoc_ScopeFieldLabel"), scopeBox);
         AddDefineNameRow(form, 2, UiText.Get("InsertLoc_CommentFieldLabel"), commentBox);
-        AddDefineNameRow(form, 3, UiText.Get("InsertLoc_RefersToFieldLabel"), refersToBox);
+        var refersToRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        refersToRow.Children.Add(refersToBox);
+        AvaloniaGrid.SetColumn(refersToPicker, 1);
+        refersToRow.Children.Add(refersToPicker);
+        AddDefineNameRow(form, 3, UiText.Get("InsertLoc_RefersToFieldLabel"), refersToRow);
 
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow(
             [cancelButton, okButton],
@@ -391,6 +458,11 @@ public sealed partial class MainWindow
                 },
             },
         };
+        AttachDialogRangePicker(
+            dialog,
+            refersToPicker,
+            refersToBox,
+            "range.named-ranges.definition-refers-to");
 
         await dialog.ShowDialog(this);
     }

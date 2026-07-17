@@ -49,6 +49,17 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(sourceBox, "PivotDataSourceRangeBox");
         AutomationProperties.SetName(sourceBox, UiText.Get("PivotDataSource_RangeName"));
 
+        var sourcePicker = new Button
+        {
+            Content = "...",
+            Width = 30,
+            MinWidth = 30,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        ApplyPivotButtonChrome(sourcePicker, 30);
+        AutomationProperties.SetAutomationId(sourcePicker, "PivotDataSourceRangePickerButton");
+        AutomationProperties.SetName(sourcePicker, "Select PivotTable source range");
+
         var dialog = new Window
         {
             Title = UiText.Get("PivotDataSource_Title"),
@@ -87,7 +98,11 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             Foreground = HeaderForeground,
         });
-        content.Children.Add(sourceBox);
+        var sourceRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        sourceRow.Children.Add(sourceBox);
+        Grid.SetColumn(sourcePicker, 1);
+        sourceRow.Children.Add(sourcePicker);
+        content.Children.Add(sourceRow);
         content.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -97,6 +112,11 @@ public sealed partial class MainWindow
             Children = { ok, cancel },
         });
         dialog.Content = content;
+        AttachDialogRangePicker(
+            dialog,
+            sourcePicker,
+            sourceBox,
+            "range.pivot-data-source.range");
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)

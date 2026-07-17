@@ -44,6 +44,17 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(destinationBox, "MovePivotDestinationBox");
         AutomationProperties.SetName(destinationBox, UiText.Get("MovePivot_RangeName"));
 
+        var destinationPicker = new Button
+        {
+            Content = "...",
+            Width = 30,
+            MinWidth = 30,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        ApplyPivotButtonChrome(destinationPicker, 30);
+        AutomationProperties.SetAutomationId(destinationPicker, "MovePivotDestinationPickerButton");
+        AutomationProperties.SetName(destinationPicker, "Select PivotTable destination");
+
         var dialog = new Window
         {
             Title = UiText.Get("MovePivot_Title"),
@@ -75,7 +86,11 @@ public sealed partial class MainWindow
 
         var content = new StackPanel { Spacing = 6, Margin = new Thickness(16) };
         content.Children.Add(new TextBlock { Text = UiText.Get("MovePivot_Label"), FontSize = 12, FontFamily = FormulaBarFontFamily, Foreground = HeaderForeground });
-        content.Children.Add(destinationBox);
+        var destinationRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        destinationRow.Children.Add(destinationBox);
+        Grid.SetColumn(destinationPicker, 1);
+        destinationRow.Children.Add(destinationPicker);
+        content.Children.Add(destinationRow);
         content.Children.Add(new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -85,6 +100,11 @@ public sealed partial class MainWindow
             Children = { ok, cancel },
         });
         dialog.Content = content;
+        AttachDialogRangePicker(
+            dialog,
+            destinationPicker,
+            destinationBox,
+            "range.move-pivot.destination");
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)

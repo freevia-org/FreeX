@@ -55,41 +55,96 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "InsertPivotTableDialog");
 
+        var sourceBox = new TextBox
+        {
+            Text = FormatRangeReference(source),
+            MinWidth = 300,
+        };
+        ApplyDataOpsTextBoxChrome(sourceBox);
+        AutomationProperties.SetAutomationId(sourceBox, "InsertPivotTableSourceRangeBox");
+        AutomationProperties.SetName(sourceBox, UiText.Get("PivotTable_PivotTableSourceRange"));
+
+        var sourcePicker = new Button { Content = "...", Width = 32, MinWidth = 32 };
+        ApplyDataOpsButtonChrome(sourcePicker);
+        AutomationProperties.SetAutomationId(sourcePicker, "InsertPivotTableSourceRangePickerButton");
+        AutomationProperties.SetName(sourcePicker, UiText.Get("PivotTable_SelectPivotTableSourceRange"));
+
+        var destinationBox = new TextBox
+        {
+            Text = FormatCellReference(new CellAddress(_session.ActiveSheet.Id, source.End.Row + 2, source.Start.Col)),
+            MinWidth = 300,
+            IsEnabled = false,
+        };
+        ApplyDataOpsTextBoxChrome(destinationBox);
+        AutomationProperties.SetAutomationId(destinationBox, "InsertPivotTableDestinationRangeBox");
+        AutomationProperties.SetName(destinationBox, UiText.Get("PivotTable_PivotTableLocation"));
+
+        var destinationPicker = new Button { Content = "...", Width = 32, MinWidth = 32, IsEnabled = false };
+        ApplyDataOpsButtonChrome(destinationPicker);
+        AutomationProperties.SetAutomationId(destinationPicker, "InsertPivotTableDestinationRangePickerButton");
+        AutomationProperties.SetName(destinationPicker, UiText.Get("PivotTable_SelectPivotTableLocation"));
+
         var roleBoxes = new Dictionary<int, ComboBox>();
         var fieldsPanel = new StackPanel { Spacing = 6 };
-        foreach (var field in fields)
+        void ReloadFields(
+            IReadOnlyList<PivotCreatePlanner.SourceField> sourceFields,
+            IReadOnlyDictionary<int, PivotCreatePlanner.FieldRole> defaultRoles)
         {
-            var roleBox = new ComboBox
+            roleBoxes.Clear();
+            fieldsPanel.Children.Clear();
+            foreach (var field in sourceFields)
             {
-                ItemsSource = PivotFieldRoleChoices.Select(c => c.Label).ToList(),
-                SelectedIndex = RoleIndex(defaults.TryGetValue(field.Index, out var r) ? r : PivotCreatePlanner.FieldRole.Unused),
-                MinWidth = 130,
-            };
-            ApplyDataOpsComboBoxChrome(roleBox);
-            AutomationProperties.SetAutomationId(roleBox, $"PivotFieldRole{field.Index}");
-            roleBoxes[field.Index] = roleBox;
-
-            fieldsPanel.Children.Add(new DockPanel
-            {
-                Children =
+                var roleBox = new ComboBox
                 {
-                    new TextBlock
+                    ItemsSource = PivotFieldRoleChoices.Select(c => c.Label).ToList(),
+                    SelectedIndex = RoleIndex(defaultRoles.TryGetValue(field.Index, out var role) ? role : PivotCreatePlanner.FieldRole.Unused),
+                    MinWidth = 130,
+                };
+                ApplyDataOpsComboBoxChrome(roleBox);
+                AutomationProperties.SetAutomationId(roleBox, $"PivotFieldRole{field.Index}");
+                roleBoxes[field.Index] = roleBox;
+
+                fieldsPanel.Children.Add(new DockPanel
+                {
+                    Children =
                     {
-                        Text = field.Header,
-                        VerticalAlignment = AvaloniaVerticalAlignment.Center,
-                        TextTrimming = TextTrimming.CharacterEllipsis,
-                        Width = 200,
-                        FontSize = 12,
-                        FontFamily = FormulaBarFontFamily,
+                        new TextBlock
+                        {
+                            Text = field.Header,
+                            VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                            TextTrimming = TextTrimming.CharacterEllipsis,
+                            Width = 200,
+                            FontSize = 12,
+                            FontFamily = FormulaBarFontFamily,
+                        },
+                        roleBox,
                     },
-                    roleBox,
-                },
-            });
+                });
+            }
         }
+        ReloadFields(fields, defaults);
+
+        sourceBox.TextChanged += (_, _) =>
+        {
+            if (_session.TryResolveReferenceRange(sourceBox.Text, out var selectedSource)
+                && selectedSource.Start.Sheet == _session.ActiveSheet.Id
+                && PivotCreatePlanner.IsValidSource(selectedSource))
+            {
+                source = selectedSource;
+                var selectedFields = PivotCreatePlanner.ReadFields(_session.ActiveSheet, source);
+                ReloadFields(selectedFields, PivotCreatePlanner.DefaultRoles(selectedFields));
+            }
+        };
 
         var newSheetBox = new CheckBox { Content = UiText.Get("PivotLoc_PlaceOnNewWorksheet"), IsChecked = true };
         ApplyDataOpsCheckBoxChrome(newSheetBox);
         AutomationProperties.SetAutomationId(newSheetBox, "PivotNewWorksheetBox");
+        newSheetBox.IsCheckedChanged += (_, _) =>
+        {
+            var useExistingWorksheet = newSheetBox.IsChecked != true;
+            destinationBox.IsEnabled = useExistingWorksheet;
+            destinationPicker.IsEnabled = useExistingWorksheet;
+        };
 
         var errorText = new TextBlock
         {
@@ -110,6 +165,18 @@ public sealed partial class MainWindow
 
         okButton.Click += (_, _) =>
         {
+            if (!_session.TryResolveReferenceRange(sourceBox.Text, out var selectedSource)
+                || selectedSource.Start.Sheet != _session.ActiveSheet.Id
+                || !PivotCreatePlanner.IsValidSource(selectedSource))
+            {
+                errorText.Text = UiText.Get("PivotLoc_SelectRangeForPivot");
+                errorText.IsVisible = true;
+                sourceBox.Focus();
+                sourceBox.SelectAll();
+                return;
+            }
+            source = selectedSource;
+
             var roles = new Dictionary<int, PivotCreatePlanner.FieldRole>();
             foreach (var (index, box) in roleBoxes)
                 roles[index] = PivotFieldRoleChoices[Math.Max(0, box.SelectedIndex)].Role;
@@ -123,9 +190,21 @@ public sealed partial class MainWindow
                 return;
             }
 
-            CellAddress? target = newSheetBox.IsChecked == true
-                ? null
-                : new CellAddress(_session.ActiveSheet.Id, source.End.Row + 2, source.Start.Col);
+            CellAddress? target = null;
+            if (newSheetBox.IsChecked != true)
+            {
+                if (!_session.TryResolveReferenceRange(destinationBox.Text, out var destination)
+                    || destination.Start.Sheet != _session.ActiveSheet.Id)
+                {
+                    errorText.Text = UiText.Get("PivotTable_EnterDestinationCellOnActiveWorksheet");
+                    errorText.IsVisible = true;
+                    destinationBox.Focus();
+                    destinationBox.SelectAll();
+                    return;
+                }
+
+                target = destination.Start;
+            }
 
             var command = PivotCreatePlanner.BuildCommand(
                 source,
@@ -158,6 +237,16 @@ public sealed partial class MainWindow
         };
         DockPanel.SetDock(buttonRow, Dock.Bottom);
 
+        static Grid BuildRangeRow(TextBox textBox, Button picker)
+        {
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            row.Children.Add(textBox);
+            Grid.SetColumn(picker, 1);
+            picker.Margin = new Thickness(6, 0, 0, 0);
+            row.Children.Add(picker);
+            return row;
+        }
+
         dialog.Content = new DockPanel
         {
             Margin = new Thickness(16),
@@ -171,19 +260,29 @@ public sealed partial class MainWindow
                     {
                         new TextBlock
                         {
-                            Text = UiText.Format("PivotLoc_SourceAssignPrompt", FormatRangeReference(source)),
+                            Text = StripDisplayMnemonic(UiText.Get("PivotTable_TableRangeLabel")),
                             Foreground = HeaderForeground,
-                            TextWrapping = TextWrapping.Wrap,
                             FontSize = 12,
                             FontFamily = FormulaBarFontFamily,
                         },
+                        BuildRangeRow(sourceBox, sourcePicker),
                         new ScrollViewer { Content = fieldsPanel, MaxHeight = 240 },
                         newSheetBox,
+                        new TextBlock
+                        {
+                            Text = StripDisplayMnemonic(UiText.Get("PivotTable_LocationLabel")),
+                            Foreground = HeaderForeground,
+                            FontSize = 12,
+                            FontFamily = FormulaBarFontFamily,
+                        },
+                        BuildRangeRow(destinationBox, destinationPicker),
                         errorText,
                     },
                 },
             },
         };
+        AttachDialogRangePicker(dialog, sourcePicker, sourceBox, "range.pivot-create.source");
+        AttachDialogRangePicker(dialog, destinationPicker, destinationBox, "range.pivot-create.destination");
 
         await dialog.ShowDialog(this);
     }

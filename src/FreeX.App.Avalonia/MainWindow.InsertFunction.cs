@@ -8,6 +8,8 @@ using Avalonia.Media;
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Dialogs;
 
+using AvaloniaGrid = Avalonia.Controls.Grid;
+
 namespace FreeX.App.Avalonia;
 
 /// <summary>
@@ -253,13 +255,36 @@ public sealed partial class MainWindow
                 argumentBoxes.Select(box => box.Text));
 
         var argumentStack = new StackPanel { Spacing = 8 };
-        foreach (var argument in arguments)
+        for (var argumentIndex = 0; argumentIndex < arguments.Count; argumentIndex++)
         {
+            var argument = arguments[argumentIndex];
             var box = new TextBox();
             ApplyFnTextBoxChrome(box);
             box.TextChanged += (_, _) => UpdatePreview();
             argumentBoxes.Add(box);
             AutomationProperties.SetName(box, argument.Name);
+            AutomationProperties.SetAutomationId(box, $"FunctionArgumentBox{argumentIndex}");
+
+            var referencePicker = new Button
+            {
+                Content = "...",
+                Width = 30,
+                MinWidth = 30,
+                Margin = new Thickness(6, 0, 0, 0),
+            };
+            ApplyFnButtonChrome(referencePicker, minWidth: 30);
+            AutomationProperties.SetName(referencePicker, $"Select worksheet reference for {argument.Name}");
+            AutomationProperties.SetAutomationId(referencePicker, $"FunctionArgumentReferencePicker{argumentIndex}");
+
+            var editorRow = new AvaloniaGrid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            editorRow.Children.Add(box);
+            AvaloniaGrid.SetColumn(referencePicker, 1);
+            editorRow.Children.Add(referencePicker);
+            AttachDialogRangePicker(
+                dialog,
+                referencePicker,
+                box,
+                "range.function-argument.reference");
 
             var label = argument.Optional ? $"{argument.Name} (optional):" : $"{argument.Name}:";
             argumentStack.Children.Add(new StackPanel
@@ -268,7 +293,7 @@ public sealed partial class MainWindow
                 Children =
                 {
                     new TextBlock { Text = label, FontSize = 12, FontWeight = FontWeight.Medium },
-                    box,
+                    editorRow,
                     new TextBlock
                     {
                         Text = argument.Description,
