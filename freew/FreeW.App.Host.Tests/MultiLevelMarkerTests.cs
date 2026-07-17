@@ -130,6 +130,31 @@ public sealed class MultiLevelMarkerTests
     }
 
     [StaFact]
+    public void AccumulatedMarkers_UseWordOutlineHangingIndents()
+    {
+        var view = new DocumentView();
+        view.LoadModel(BuildMultiLevelDoc());
+
+        var list = view.Document.Blocks.Should().ContainSingle()
+            .Which.Should().BeOfType<List>().Subject;
+        list.MarkerOffset.Should().Be(0);
+
+        var paragraphs = list.ListItems
+            .Select(item => item.Blocks.Should().ContainSingle().Which.Should().BeOfType<System.Windows.Documents.Paragraph>().Subject)
+            .ToList();
+
+        // DocxWriter's numbering.xml defines 720 twips left / 360 twips hanging at level 0,
+        // then adds 720 twips to the left indent per level. At WPF's 96 DPI those are 48/24 DIP;
+        // ListItem retains a 36-DIP content inset, so the paragraph compensates to land at 48 DIP on page.
+        paragraphs[0].Margin.Left.Should().Be(12);
+        paragraphs[0].TextIndent.Should().Be(-24);
+        paragraphs[1].Margin.Left.Should().Be(60);
+        paragraphs[1].TextIndent.Should().Be(-24);
+        paragraphs[2].Margin.Left.Should().Be(108);
+        paragraphs[2].TextIndent.Should().Be(-24);
+    }
+
+    [StaFact]
     public void StyledMarkersAppearInTheRenderedSurface()
     {
         var view = new DocumentView();

@@ -4462,6 +4462,11 @@ public sealed class DocumentView : RichTextBox
                 // the same Decimal marker, so ReadList recovers the kind from this Tag rather than inferring
                 // it from the marker (which can't tell MultiLevel from Number) — see ReadList/FromMarkerStyle.
                 var list = new WpfList { MarkerStyle = ToMarkerStyle(kind), Tag = kind };
+                // WPF reserves its default marker gutter even when MarkerStyle is None. Multilevel
+                // markers are drawn explicitly below, so collapse that gutter and apply Word's numbered
+                // hanging indent directly to each paragraph instead.
+                if (kind == ListKind.MultiLevel)
+                    list.MarkerOffset = 0;
 
                 // Collect this list's paragraphs first so a MultiLevel list can compute its accumulated
                 // outline markers ("1.1.1") across the whole run before building the WPF items.
@@ -4496,7 +4501,10 @@ public sealed class DocumentView : RichTextBox
                             : null,
                         suppressedFloatingWrapRuns: suppressedFloatingWrapRuns);
                     if (markers is not null)
+                    {
+                        ApplyMultiLevelListIndentation(wpfParagraph, listParagraphs[p].Paragraph.Formatting.ListLevel);
                         PrependMultiLevelMarker(wpfParagraph, markers[p], _model);
+                    }
                     list.ListItems.Add(new WpfListItem(wpfParagraph));
                 }
                 flow.Blocks.Add(list);
@@ -6205,6 +6213,27 @@ public sealed class DocumentView : RichTextBox
         IReadOnlyList<ListNumberFormat>? numberFormats = null) =>
         MultiLevelListMarkerFormatter.MarkerSequence(levels, numberFormats);
 
+    // The outline numbering definition emitted by DocxWriter uses 720 twips left / 360 twips hanging
+    // at level zero, then adds 360 twips to the left indent per deeper level. Keep the live WPF surface
+    // on the same geometry so a marker hangs just left of the text and continuation lines align with it.
+    private static void ApplyMultiLevelListIndentation(WpfParagraph paragraph, int level)
+    {
+        // A WPF ListItem retains a fixed 36-DIP content inset even with a zero MarkerOffset.
+        // Compensate for it so the resulting on-page geometry is the 48-DIP Word indent.
+        const double levelZeroLeftIndentDip = 12;
+        const double levelIncrementDip = 48;
+        const double hangingIndentDip = 24;
+
+        var normalizedLevel = Math.Clamp(level, 0, 8);
+        var margin = paragraph.Margin;
+        paragraph.Margin = new Thickness(
+            margin.Left + levelZeroLeftIndentDip + normalizedLevel * levelIncrementDip,
+            margin.Top,
+            margin.Right,
+            margin.Bottom);
+        paragraph.TextIndent -= hangingIndentDip;
+    }
+
     /// <summary>
     /// Prepends the computed accumulated outline marker (e.g. <c>1.1.1.</c>) to a multilevel-list
     /// paragraph as a leading non-editable run, plus a tab so the body text aligns past the marker
@@ -6222,10 +6251,20 @@ public sealed class DocumentView : RichTextBox
         {
             Tag = MultiLevelMarker.Instance
         };
-        // Match the paragraph's font size so the marker scales with the list text (fall back to default).
+        // Match the leading run so the marker follows heading/list typography (including colour and weight)
+        // as Word's generated numbering does.
         var firstRun = paragraph.Inlines.OfType<WpfRun>().FirstOrDefault();
-        if (firstRun is not null && firstRun.FontSize > 0)
-            marker.FontSize = firstRun.FontSize;
+        if (firstRun is not null)
+        {
+            marker.FontFamily = firstRun.FontFamily;
+            marker.FontSize = firstRun.FontSize > 0
+                ? firstRun.FontSize
+                : (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
+            marker.FontStretch = firstRun.FontStretch;
+            marker.FontStyle = firstRun.FontStyle;
+            marker.FontWeight = firstRun.FontWeight;
+            marker.Foreground = firstRun.Foreground;
+        }
         else
             marker.FontSize = (document.DefaultRun.FontSizePt ?? DefaultFontSizePt) * PxPerPoint;
         paragraph.Inlines.InsertBefore(paragraph.Inlines.FirstInline, marker);
