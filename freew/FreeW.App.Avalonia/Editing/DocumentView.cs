@@ -126,7 +126,7 @@ public sealed class DocumentView : Control
     // Floating images collected during layout; rendered separately from inline images with z-order.
     // BehindText=true → drawn before body text (behind); BehindText=false → drawn after (in front).
     // AV-FLSEL: BlockIndex/RunIndex added so hit-test can locate the model object.
-    private readonly List<(Rect Rect, Bitmap? Image, bool BehindText, int ZOrder, int BlockIndex, int RunIndex)> _floatingImages = new();
+    private readonly List<(Rect Rect, Bitmap? Image, int ReflectionPreset, bool BehindText, int ZOrder, int BlockIndex, int RunIndex)> _floatingImages = new();
     // Floating shapes collected during layout; rendered in the same z-ordered passes as floating images.
     // ShapeData captures everything needed to draw the shape in Render() without re-touching the model.
     private readonly List<FloatingShapeData> _floatingShapes = new();
@@ -5633,6 +5633,7 @@ public sealed class DocumentView : Control
                     _floatingImages.Add((
                         rect,
                         DecodeBitmap(img),
+                        img.ReflectionPreset,
                         snapshot.BehindText,
                         snapshot.ZOrderIndex,
                         snapshot.BlockIndex,
@@ -6740,7 +6741,7 @@ public sealed class DocumentView : Control
                 {
                     if (image.BlockIndex == snapshot.BlockIndex && image.RunIndex == snapshot.RunIndex)
                     {
-                        DrawFloatingImage(context, image.Rect, image.Image);
+                        DrawFloatingImage(context, image.Rect, image.Image, image.ReflectionPreset);
                         return;
                     }
                 }
@@ -6778,16 +6779,57 @@ public sealed class DocumentView : Control
         }
     }
 
-    private void DrawFloatingImage(DrawingContext context, Rect rect, Bitmap? bitmap)
+    private void DrawFloatingImage(DrawingContext context, Rect rect, Bitmap? bitmap, int reflectionPreset = 0)
     {
         if (bitmap is not null)
+        {
             context.DrawImage(bitmap, rect);
+            DrawFloatingImageReflection(context, rect, bitmap, reflectionPreset);
+        }
         else
         {
             // Placeholder: light-blue fill + dashed border so the position is visible even without bitmap data.
             context.FillRectangle(FloatPlaceholderFill, rect);
             context.DrawRectangle(null, FloatPlaceholderPen, rect);
         }
+    }
+
+    private static void DrawFloatingImageReflection(
+        DrawingContext context,
+        Rect imageRect,
+        Bitmap bitmap,
+        int reflectionPreset)
+    {
+        // Preset 1 is the imported touching reflection payload measured against Word. The
+        // offset presets require separate composition calibration when other picture effects apply.
+        if (reflectionPreset != 1)
+            return;
+
+        const double opacity = 0.5;
+        const double distance = 0.0;
+        var reflectionRect = new Rect(
+            imageRect.X,
+            imageRect.Bottom + distance,
+            imageRect.Width,
+            imageRect.Height);
+        var fadeMask = new LinearGradientBrush
+        {
+            StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+            EndPoint = new RelativePoint(0, 1, RelativeUnit.Relative),
+        };
+        fadeMask.GradientStops.Add(new global::Avalonia.Media.GradientStop(
+            Color.FromArgb((byte)Math.Round(opacity * 255), 0, 0, 0), 0));
+        fadeMask.GradientStops.Add(new global::Avalonia.Media.GradientStop(Color.FromArgb(0, 0, 0, 0), 1));
+
+        var mirror = Matrix.Identity;
+        mirror = mirror * Matrix.CreateTranslation(0, -imageRect.Bottom);
+        mirror = mirror * new Matrix(1, 0, 0, -1, 0, 0);
+        mirror = mirror * Matrix.CreateTranslation(0, imageRect.Bottom);
+
+        using var clip = context.PushClip(reflectionRect);
+        using var mask = context.PushOpacityMask(fadeMask, reflectionRect);
+        using var transform = context.PushTransform(mirror);
+        context.DrawImage(bitmap, imageRect);
     }
 
     /// <summary>
