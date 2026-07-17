@@ -1215,6 +1215,8 @@ public sealed class SlideCanvas : Control
         var renderFacets = plan.RenderFacets.Count > 0 ? plan.RenderFacets : plan.Facets;
         foreach (var segment in plan.FrameSegments)
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
+        foreach (var segment in plan.WireframeSegments)
+            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
         if (renderFacets.Count > 0)
         {
             foreach (var facet in renderFacets)
@@ -1239,8 +1241,6 @@ public sealed class SlideCanvas : Control
         foreach (var segment in plan.ContourSegments)
             dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
 
-        foreach (var segment in plan.WireframeSegments)
-            dc.DrawLine(ToPen(segment.Stroke), ToPoint(segment.Start), ToPoint(segment.End));
     }
 
     private static void RenderStockChart(DrawingContext dc, ChartScenePlan scene)
