@@ -103,6 +103,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("var box = panel.PageBoxes[i];");
         source.Should().Contain("box.HeaderSubEditor is not null");
         source.Should().Contain("box.FooterSubEditor is not null");
+        source.Should().Contain("var headerTop = thisPageSettings.HeaderDistancePt > 0");
+        source.Should().Contain("var footerTop = thisPageSettings.FooterDistancePt > 0");
         source.Should().Contain("DocumentView.UseWordTableFidelitySurfaces = true");
         source.Should().Contain("flow.PagePadding = new Thickness(");
         project.Should().Contain("FreeW.App.Presentation");
