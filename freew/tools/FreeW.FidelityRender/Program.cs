@@ -572,6 +572,12 @@ static void RenderDocumentComposite(
             const double hfH = 36;
 
             var ownerHf = box.OwnerSectionHf ?? doc.FinalSectionHeadersFooters;
+            var headerTop = thisPageSettings.HeaderDistancePt > 0
+                ? PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)
+                : Math.Max(0, thisMarginTop - hfH - 12);
+            var footerTop = thisPageSettings.FooterDistancePt > 0
+                ? thisPixH - PageLayout.PointsToDip(thisPageSettings.FooterDistancePt) - hfH
+                : thisPixH - thisMarginBottom + 16;
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
             {
@@ -590,7 +596,7 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, thisMarginTop + 2,
+                                null, new Rect(thisMarginLeft, headerTop,
                                     thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
@@ -613,7 +619,7 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, thisPixH - thisMarginBottom + 2,
+                                null, new Rect(thisMarginLeft, footerTop,
                                     thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
