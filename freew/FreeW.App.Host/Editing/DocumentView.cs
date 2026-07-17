@@ -8765,6 +8765,7 @@ public sealed class DocumentView : RichTextBox
                 HorizontalOffset = horizontalOffsetDip,
                 VerticalOffset = verticalOffsetDip,
                 WrapDirection = WrapDirection.Both,
+                Margin = new Thickness(0),
             };
         }
 

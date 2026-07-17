@@ -215,6 +215,7 @@ public sealed class FloatingImageRenderTests
         visualOnlyFigure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.PageLeft);
         visualOnlyFigure.VerticalAnchor.Should().Be(FigureVerticalAnchor.PageTop);
         visualOnlyFigure.WrapDirection.Should().Be(WrapDirection.Both);
+        visualOnlyFigure.Margin.Should().Be(new Thickness(0));
         paragraphs[1].Inlines.OfType<WpfFloater>().Should().BeEmpty(
             "the source anchor must not reserve the same image a second time");
 
