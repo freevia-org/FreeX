@@ -962,6 +962,7 @@ internal static class TextBodyModelCloner
                 DistPt = source.DistPt,
                 DirDeg = source.DirDeg,
                 ScaleY = source.ScaleY,
+                EndPos = source.EndPos,
             };
 
     private static RunTextGlow? CloneRunGlow(RunTextGlow? source) =>

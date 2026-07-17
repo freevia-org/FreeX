@@ -31,6 +31,7 @@ public sealed class ResolvedRunReflection
     public double DistDip { get; init; }
     public double DirDeg { get; init; }
     public double ScaleY { get; init; } = -1.0;
+    public double EndPos { get; init; } = 1.0;
 }
 
 /// <summary>

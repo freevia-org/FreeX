@@ -159,7 +159,8 @@ public sealed class WordArtTests : IDisposable
             BlurPt = 1.5,
             DistPt = 3.0,
             DirDeg = 90.0,
-            ScaleY = -0.75
+            ScaleY = -0.75,
+            EndPos = 0.5
         };
 
         var pres = BuildPres(slide =>
@@ -180,6 +181,7 @@ public sealed class WordArtTests : IDisposable
         run.TextReflection.DistPt.Should().BeApproximately(3.0, 0.5);
         run.TextReflection.DirDeg.Should().BeApproximately(90.0, 1.0);
         run.TextReflection.ScaleY.Should().BeApproximately(-0.75, 0.001);
+        run.TextReflection.EndPos.Should().BeApproximately(0.5, 0.001);
     }
 
     [Fact]

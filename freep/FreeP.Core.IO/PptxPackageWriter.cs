@@ -3911,7 +3911,8 @@ public static class PptxPackageWriter
                     new XAttribute("stA", (long)Math.Round(reflection.Alpha / 255.0 * 100000)),
                     new XAttribute("dist", DrawingMlUnits.PointsToEmu(reflection.DistPt)),
                     new XAttribute("dir", (long)Math.Round(reflection.DirDeg * 60000)),
-                    new XAttribute("sy", (long)Math.Round(reflection.ScaleY * 100000))));
+                    new XAttribute("sy", (long)Math.Round(reflection.ScaleY * 100000)),
+                    new XAttribute("endPos", (long)Math.Round(Math.Clamp(reflection.EndPos, 0.0, 1.0) * 100000))));
             }
 
             if (run.TextSoftEdge is not null)

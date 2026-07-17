@@ -305,6 +305,7 @@ internal static class PresentationModelCloneHelper
                 DistPt = source.DistPt,
                 DirDeg = source.DirDeg,
                 ScaleY = source.ScaleY,
+                EndPos = source.EndPos,
             };
 
     private static RunTextGlow? CloneRunGlow(RunTextGlow? source) =>

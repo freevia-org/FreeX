@@ -1450,6 +1450,7 @@ public static class SlideCompositor
                         DistDip = PointsToDip(reflection.DistPt),
                         DirDeg = reflection.DirDeg,
                         ScaleY = reflection.ScaleY,
+                        EndPos = reflection.EndPos,
                     };
                 }
 

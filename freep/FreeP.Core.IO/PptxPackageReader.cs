@@ -4228,11 +4228,12 @@ public static class PptxPackageReader
                         out var stA))
                     alpha = (byte)Math.Clamp((int)Math.Round(stA / 100000.0 * 255), 0, 255);
 
-                double blurPt = 0, distPt = 0, dirDeg = 90.0, scaleY = -1.0;
+                double blurPt = 0, distPt = 0, dirDeg = 90.0, scaleY = -1.0, endPos = 1.0;
                 if (long.TryParse(reflection.Attribute("blurRad")?.Value, out var blurEmu)) blurPt = DrawingMlUnits.EmuToPoints(blurEmu);
                 if (long.TryParse(reflection.Attribute("dist")?.Value, out var distEmu)) distPt = DrawingMlUnits.EmuToPoints(distEmu);
                 if (long.TryParse(reflection.Attribute("dir")?.Value, out var dirRaw)) dirDeg = dirRaw / 60000.0;
                 if (long.TryParse(reflection.Attribute("sy")?.Value, out var syRaw) && syRaw != 0) scaleY = syRaw / 100000.0;
+                if (long.TryParse(reflection.Attribute("endPos")?.Value, out var endPosRaw)) endPos = Math.Clamp(endPosRaw / 100000.0, 0.0, 1.0);
 
                 run.TextReflection = new RunTextReflection
                 {
@@ -4241,6 +4242,7 @@ public static class PptxPackageReader
                     DistPt = distPt,
                     DirDeg = dirDeg,
                     ScaleY = scaleY,
+                    EndPos = endPos,
                 };
             }
 
