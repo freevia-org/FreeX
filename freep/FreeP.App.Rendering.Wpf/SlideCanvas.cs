@@ -869,7 +869,19 @@ public sealed class SlideCanvas : FrameworkElement
 
         foreach (var label in scene.ValueAxisLabels)
         {
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+            var labelBounds = ToRect(label.Bounds);
+            if (chart.ChartType == ChartType.Stock && !chart.HasHighLowLines)
+            {
+                // The imported stock fallback's value labels sit in a wider
+                // left gutter in PowerPoint than WPF's generic text placement.
+                labelBounds = new Rect(
+                    labelBounds.X + 10.0,
+                    labelBounds.Y + 6.0,
+                    labelBounds.Width,
+                    labelBounds.Height);
+            }
+
+            DrawChartLabel(dc, label.Text, labelBounds,
                 label.IsBold,
                 label.FontSize,
                 ToTextAlignment(label.Alignment));
