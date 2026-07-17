@@ -247,6 +247,7 @@ public readonly record struct ChartTextPlan(
 {
     public string? FontFamily { get; init; }
     public SrgbColor? TextColor { get; init; }
+    public double HorizontalScale { get; init; } = 1.0;
 }
 
 public readonly record struct ChartBarDepthPlan(
@@ -594,6 +595,9 @@ public static partial class ChartRenderPlanner
     public const double ImportedPieLegendLineHeight = 37.0;
     public const double ImportedPieLegendVerticalOffset = 32.0;
     public const double ImportedPieLegendRightOffset = 20.0;
+    public const double ImportedPieLegendLabelOffset = -5.0;
+    public const double ImportedPieLegendTextScaleX = 1.07;
+    public const string ImportedPieLegendFontFamily = "Arial";
     public const double ImportedCartesianGridLinePixelOffset = 0.5;
     public const double ImportedPercentStackedGridEdgeOffsetX = 19.0;
     public const double ImportedCartesianCategoryLabelOffset = 16.0;
@@ -1612,6 +1616,8 @@ public static partial class ChartRenderPlanner
                             itemX + labelInset,
                             itemY + (importedCombo
                                 ? ImportedComboLegendLabelOffset
+                                : importedPieLegend
+                                    ? ImportedPieLegendLabelOffset
                                 : importedStyle2ColumnBarLegend
                                     ? ImportedStyle2LegendLabelOffset
                                     : 0.0),
@@ -1621,6 +1627,12 @@ public static partial class ChartRenderPlanner
                     FontSize: ResolveTextFontSize(chart, 7.0),
                     Alignment: ChartPlanTextAlignment.Left)
                     {
+                        FontFamily = importedPieLegend
+                            ? ImportedPieLegendFontFamily
+                            : null,
+                        HorizontalScale = importedPieLegend
+                            ? ImportedPieLegendTextScaleX
+                            : 1.0,
                         TextColor = importedPieLegend
                             ? new SrgbColor(0x00, 0x00, 0x00)
                             : null

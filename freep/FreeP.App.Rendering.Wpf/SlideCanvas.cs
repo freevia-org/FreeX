@@ -1005,7 +1005,8 @@ public sealed class SlideCanvas : FrameworkElement
                 item.Label.IsBold,
                 item.Label.FontSize,
                 ToTextAlignment(item.Label.Alignment),
-                textColor: item.Label.TextColor);
+                textColor: item.Label.TextColor,
+                horizontalScale: item.Label.HorizontalScale);
         }
     }
 
@@ -1528,7 +1529,8 @@ public sealed class SlideCanvas : FrameworkElement
         bool isItalic = false,
         SrgbColor? textColor = null,
         string? fontFamily = null,
-        int maxLineCount = 1)
+        int maxLineCount = 1,
+        double horizontalScale = 1.0)
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         if (rect.Width <= 0 || rect.Height <= 0) return;
@@ -1557,7 +1559,12 @@ public sealed class SlideCanvas : FrameworkElement
             Trimming       = TextTrimming.CharacterEllipsis
         };
 
+        bool scaled = Math.Abs(horizontalScale - 1.0) > 0.0001;
+        if (scaled)
+            dc.PushTransform(new ScaleTransform(horizontalScale, 1.0, rect.X, rect.Y));
         dc.DrawText(ft, new Point(rect.X, rect.Y));
+        if (scaled)
+            dc.Pop();
     }
 
     // ── Text ────────────────────────────────────────────────────────────────────

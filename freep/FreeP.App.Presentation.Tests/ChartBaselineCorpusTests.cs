@@ -160,6 +160,11 @@ public sealed class ChartBaselineCorpusTests
             .Should().Be(ChartRenderPlanner.ImportedPieLegendLineHeight);
         scene.LegendItems[0].Label.TextColor
             .Should().Be(new SrgbColor(0x00, 0x00, 0x00));
+        scene.LegendItems.Should().OnlyContain(item =>
+            item.Label.FontFamily == ChartRenderPlanner.ImportedPieLegendFontFamily &&
+            item.Label.HorizontalScale == ChartRenderPlanner.ImportedPieLegendTextScaleX &&
+            item.Label.Bounds.Y == item.SwatchBounds.Y +
+                ChartRenderPlanner.ImportedPieLegendLabelOffset - 3.0);
         scene.DataLabels.Should().OnlyContain(label =>
             label.TextColor == new SrgbColor(0x00, 0x00, 0x00));
     }

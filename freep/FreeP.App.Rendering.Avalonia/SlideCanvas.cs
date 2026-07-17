@@ -1149,7 +1149,8 @@ public sealed class SlideCanvas : Control
                 item.Label.IsBold,
                 item.Label.FontSize,
                 ToTextAlignment(item.Label.Alignment),
-                textColor: item.Label.TextColor);
+                textColor: item.Label.TextColor,
+                horizontalScale: item.Label.HorizontalScale);
         }
     }
 
@@ -1652,7 +1653,8 @@ public sealed class SlideCanvas : Control
         bool isItalic = false,
         SrgbColor? textColor = null,
         string? fontFamily = null,
-        int maxLineCount = 1)
+        int maxLineCount = 1,
+        double horizontalScale = 1.0)
     {
         if (string.IsNullOrWhiteSpace(text) || rect.Width <= 0 || rect.Height <= 0) return;
         var color = textColor ?? new SrgbColor(0x40, 0x40, 0x40);
@@ -1674,6 +1676,12 @@ public sealed class SlideCanvas : Control
             TextAlignment = align,
             Trimming      = TextTrimming.CharacterEllipsis,
         };
+        var transform = horizontalScale > 0.0 && Math.Abs(horizontalScale - 1.0) > 0.0001
+            ? Matrix.CreateTranslation(-rect.X, -rect.Y)
+                * Matrix.CreateScale(horizontalScale, 1.0)
+                * Matrix.CreateTranslation(rect.X, rect.Y)
+            : Matrix.Identity;
+        using var transformScope = dc.PushTransform(transform);
         dc.DrawText(ft, new Point(rect.X, rect.Y));
     }
 
