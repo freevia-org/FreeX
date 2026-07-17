@@ -166,8 +166,12 @@ function Get-OwnedAppImage {
 if ($Action -eq "Stop" -or $Action -eq "Clean") {
     $status = Get-OwnedContainerStatus
     if ($null -ne $status) {
-        Invoke-Docker -Arguments @("stop", "--time", "10", $containerName) | Out-Null
-        Write-Host "Stopped interactive container '$containerName'."
+        $stop = Invoke-Docker -Arguments @("stop", "--timeout", "10", $containerName) -AllowFailure
+        if ($stop.ExitCode -eq 0 -or $null -eq (Get-OwnedContainerStatus)) {
+            Write-Host "Stopped interactive container '$containerName'."
+        } else {
+            throw "Could not stop owned interactive container '$containerName'.`n$($stop.Output -join [Environment]::NewLine)"
+        }
     } else {
         Write-Host "Interactive container '$containerName' is not running."
     }
