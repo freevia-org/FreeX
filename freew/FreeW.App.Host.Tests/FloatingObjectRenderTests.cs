@@ -140,6 +140,32 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingOverlay_RendersReflectionBelowFloatingImage()
+    {
+        var image = new InlineImage(MinimalPng(), widthPt: 72, heightPt: 54)
+        {
+            Wrapping = ImageWrapping.InFront,
+            HorizontalOffsetPt = 36,
+            VerticalOffsetPt = 18,
+            ReflectionPreset = 2
+        };
+        var doc = new TextDocument();
+        var paragraph = new Paragraph();
+        paragraph.Runs.Add(Run.FromImage(image));
+        doc.Blocks.Add(paragraph);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var reflection = canvas.Children.OfType<StackPanel>().Single();
+        reflection.Tag.Should().BeSameAs(image);
+        reflection.Children.Count.Should().Be(2);
+        reflection.Children[1].Should().BeOfType<System.Windows.Shapes.Rectangle>();
+    }
+
+    [StaFact]
     public void FloatingOverlay_ParagraphAnchorUsesLeadingContentPosition()
     {
         var doc = new TextDocument();

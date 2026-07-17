@@ -5218,18 +5218,33 @@ public sealed class DocumentView : RichTextBox
         // Apply WPF visual effects (shadow/glow/soft-edge/bevel) on the root element.
         ApplyImageWpfEffects(root, image);
 
+        FrameworkElement visual = root;
+        if (image.ReflectionPreset > 0)
+        {
+            var reflectionOpacity = image.ReflectionPreset <= 3 ? 0.5 : 1.0;
+            var reflectionDistanceDip = image.ReflectionPreset switch { 2 => 4.0, 3 => 8.0, 5 => 4.0, _ => 0.0 } * PxPerPoint;
+            visual = BuildReflectionContainer(
+                root,
+                widthPx,
+                heightPx,
+                reflectionOpacity,
+                reflectionDistanceDip,
+                borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
+            visual.Tag = image;
+        }
+
         // Wire click to select this floating image. Shift/Ctrl adds to multi-select.
         if (enableSelection)
         {
-            root.Cursor = Cursors.SizeAll;
-            root.MouseLeftButtonDown += (_, e) =>
+            visual.Cursor = Cursors.SizeAll;
+            visual.MouseLeftButtonDown += (_, e) =>
             {
                 var addToMulti = (Keyboard.Modifiers & (ModifierKeys.Shift | ModifierKeys.Control)) != 0;
                 SelectFloatingImage(image, addToMulti);
                 e.Handled = true;
             };
         }
-        return root;
+        return visual;
     }
 
     private FrameworkElement BuildFloatingDrawingObjectVisual(
