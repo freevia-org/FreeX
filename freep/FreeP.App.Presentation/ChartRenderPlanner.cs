@@ -6055,6 +6055,21 @@ public static partial class ChartRenderPlanner
                 : Math.Round(Math.Clamp(outerRadius * 0.22, 2.0, 14.0), 4)
             : 0;
 
+    public static double ResolveImportedThreeDPieSidewallFactor(
+        int pointIndex,
+        double startAngle,
+        double endAngle)
+    {
+        double midpoint = (startAngle + endAngle) / 2;
+        return pointIndex switch
+        {
+            0 => 0.30,
+            1 => 0.80,
+            2 => 0.35,
+            _ => 0.35 + 0.4 * Math.Clamp(Math.Sin(midpoint), 0, 1)
+        };
+    }
+
     private static ChartFillPlan DarkenImportedThreeDPieTop(ChartFillPlan fill)
     {
         const double factor = ImportedThreeDPieTopShadeFactor;
