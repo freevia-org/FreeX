@@ -562,6 +562,22 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildScenePlan_StockLineFallback_UsesPowerPointStrokeAndMarkerDefaults()
+    {
+        var chart = MakeStockChart();
+        chart.HasHighLowLines = false;
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.LineSeries.Should().HaveCount(4);
+        scene.LineSeries.Select(series => series.Stroke.Thickness)
+            .Should().OnlyContain(thickness => thickness == ChartRenderPlanner.StockFallbackLineSeriesStrokeThickness);
+        scene.LineSeries.SelectMany(series => series.Markers)
+            .Select(marker => marker.Radius)
+            .Should().OnlyContain(radius => radius == ChartRenderPlanner.StockFallbackMarkerRadius);
+    }
+
+    [Fact]
     public void BuildStockPrimitivePlan_UsesHighLowStemsAndOpenCloseTicks()
     {
         var chart = MakeStockChart();
