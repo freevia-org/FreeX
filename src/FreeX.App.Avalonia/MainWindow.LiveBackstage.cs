@@ -9,6 +9,7 @@ using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Shell;
 using FreeX.App.Presentation.Backstage;
 using FreeX.App.Services;
+using FreeX.App.Services.Ribbon;
 using AvaloniaGrid = global::Avalonia.Controls.Grid;
 using AvaloniaHorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment;
 
@@ -312,7 +313,16 @@ public sealed partial class MainWindow
                 new ColumnDefinition { Width = new GridLength(38) },
             },
             Height = 40,
+            Focusable = true,
         };
+
+        AvaloniaManagedContextMenu.Attach(
+            row,
+            () => AvaloniaBackstageRecentFileContextMenu.BuildItems(
+                entry.IsPinned,
+                Path.GetFileName(entry.Path),
+                UiText.Get,
+                action => ApplyBackstageRecentFileAction(entry, action)));
 
         var openButton = new Button
         {
@@ -329,6 +339,15 @@ public sealed partial class MainWindow
             },
         };
         ToolTip.SetTip(openButton, entry.Path);
+        AutomationProperties.SetAutomationId(openButton, "BackstageRecentFileButton");
+        AutomationProperties.SetName(openButton, Path.GetFileName(entry.Path));
+        AvaloniaManagedContextMenu.Attach(
+            openButton,
+            () => AvaloniaBackstageRecentFileContextMenu.BuildItems(
+                entry.IsPinned,
+                Path.GetFileName(entry.Path),
+                UiText.Get,
+                action => ApplyBackstageRecentFileAction(entry, action)));
         openButton.Click += async (_, _) =>
         {
             HideBackstageOverlay();
@@ -359,14 +378,9 @@ public sealed partial class MainWindow
             Padding = new Thickness(0),
         };
         ToolTip.SetTip(pin, entry.IsPinned ? "Unpin from list" : "Pin to list");
-        pin.Click += (_, _) =>
-        {
-            if (entry.IsPinned)
-                _recentFiles.Unpin(entry.Path);
-            else
-                _recentFiles.Pin(entry.Path);
-            NavigateBackstageOverlay(FreeXBackstagePaneId.Home);
-        };
+        pin.Click += (_, _) => ApplyBackstageRecentFileAction(
+            entry,
+            entry.IsPinned ? BackstageRecentFileMenuAction.Unpin : BackstageRecentFileMenuAction.Pin);
         AvaloniaGrid.SetColumn(pin, 2);
         row.Children.Add(pin);
 

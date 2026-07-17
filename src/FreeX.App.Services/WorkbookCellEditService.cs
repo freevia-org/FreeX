@@ -3,6 +3,8 @@ using FreeX.Core.Commands;
 using FreeX.Core.Formula;
 using FreeX.Core.Model;
 
+using CommandHistoryEntry = Free.Shared.Commands.CommandHistoryEntry;
+
 namespace FreeX.App.Services;
 
 public sealed class WorkbookCellEditService
@@ -21,6 +23,16 @@ public sealed class WorkbookCellEditService
 
     public bool CanRedo(WorkbookId workbookId) =>
         _commandBus.CanRedo(workbookId);
+
+    public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(WorkbookId workbookId, int maxCount) =>
+        _commandBus is ICommandHistoryProvider historyProvider
+            ? historyProvider.GetUndoHistory(workbookId, maxCount)
+            : [];
+
+    public IReadOnlyList<CommandHistoryEntry> GetRedoHistory(WorkbookId workbookId, int maxCount) =>
+        _commandBus is ICommandHistoryProvider historyProvider
+            ? historyProvider.GetRedoHistory(workbookId, maxCount)
+            : [];
 
     public WorkbookCellEditResult UndoLastEdit(Workbook workbook)
     {

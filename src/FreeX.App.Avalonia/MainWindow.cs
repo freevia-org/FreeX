@@ -1572,7 +1572,7 @@ public sealed partial class MainWindow : Window
             WorkArea: BuildWorkbookWorkArea(),
             StatusBar: statusBar,
             BottomPanelsAboveStatus: [sheetTabs],
-            TopPanelsBelowRibbon: [formulaBar]));
+            TopPanelsBelowRibbon: [BuildQuickAccessToolbar(), formulaBar]));
 
         var root = new AvaloniaGrid();
         root.Children.Add(frame.Root);
@@ -1584,6 +1584,7 @@ public sealed partial class MainWindow : Window
     {
         foreach (var button in EnumerateRibbonControls(ribbon).OfType<Button>())
         {
+            AttachRibbonQuickAccessCustomization(button);
             switch (button.Tag as string)
             {
                 case "Fill Color":
@@ -3977,6 +3978,7 @@ public sealed partial class MainWindow : Window
         _undoButton.IsEnabled = isIdle && _session.CanUndo;
         _redoButton.IsEnabled = isIdle && _session.CanRedo;
         _cutButton.IsEnabled = isIdle;
+        RefreshAvaloniaQuickAccessToolbarState();
         _copyButton.IsEnabled = isIdle;
         _pasteButton.IsEnabled = isIdle;
         _pasteSpecialButton.IsEnabled = isIdle;

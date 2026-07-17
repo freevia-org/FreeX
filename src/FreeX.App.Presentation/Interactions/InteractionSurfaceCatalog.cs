@@ -318,7 +318,7 @@ public static class InteractionSurfaceCatalog
                 ["Backstage recent-file item is targeted"],
                 Variants("recent", "pinned"),
                 ["FreeX.App.Services.Ribbon.BackstageRecentFileContextMenuPlanner"],
-                WpfManagedPortableMissing),
+                ManagedOnBothPlatforms),
             ContextRow(
                 "context-menu.quick-access-toolbar",
                 "Quick Access Toolbar",
@@ -330,7 +330,7 @@ public static class InteractionSurfaceCatalog
                     "FreeX.App.Services.Ribbon.QuickAccessToolbarCustomizationMenuState",
                     "FreeX.App.Services.Ribbon.QuickAccessToolbarHistoryMenuState"
                 ],
-                WpfManagedPortableMissing),
+                ManagedOnBothPlatforms),
             ContextRow(
                 "context-menu.waterfall-point",
                 "Waterfall chart point",

@@ -2,6 +2,7 @@ using FreeX.App.Presentation.Editing;
 using FreeX.Core.Commands;
 using FreeX.Core.IO;
 using FreeX.Core.Model;
+using CommandHistoryEntry = Free.Shared.Commands.CommandHistoryEntry;
 using CoreSortKey = FreeX.Core.Commands.SortKey;
 
 namespace FreeX.App.Services;
@@ -299,6 +300,12 @@ public sealed class WorkbookSession
     public bool CanUndo => _cellEditService.CanUndo(Workbook.Id);
 
     public bool CanRedo => _cellEditService.CanRedo(Workbook.Id);
+
+    public IReadOnlyList<CommandHistoryEntry> GetUndoHistory(int maxCount) =>
+        _cellEditService.GetUndoHistory(Workbook.Id, maxCount);
+
+    public IReadOnlyList<CommandHistoryEntry> GetRedoHistory(int maxCount) =>
+        _cellEditService.GetRedoHistory(Workbook.Id, maxCount);
 
     /// <summary>Whether a repeatable command is available for <see cref="RepeatLastAction"/> (F4).</summary>
     public bool CanRepeatLastAction => _cellEditService.CanRepeatLastEdit(Workbook.Id);

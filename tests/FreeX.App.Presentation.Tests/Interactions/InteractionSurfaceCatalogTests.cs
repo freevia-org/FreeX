@@ -150,8 +150,6 @@ public sealed class InteractionSurfaceCatalogTests
         {
             ContextMenuFamily.PivotField,
             ContextMenuFamily.PivotChart,
-            ContextMenuFamily.RecentFiles,
-            ContextMenuFamily.QuickAccessToolbar,
             ContextMenuFamily.WaterfallPoint
         };
         var missingRows = InteractionSurfaceCatalog.ContextMenus
@@ -164,6 +162,22 @@ public sealed class InteractionSurfaceCatalogTests
             row.Platforms.PortableDesktop.Implementation == InteractionImplementationCapability.Missing);
         InteractionSurfaceCatalog.ForPlatform(InteractionPlatform.PortableDesktop)
             .Should().NotContain(row => missingFamilies.Contains(row.ContextFamily ?? default));
+    }
+
+    [Fact]
+    public void RecentFilesAndQuickAccessToolbar_AreManagedOnPortableDesktop()
+    {
+        var managedFamilies = new[]
+        {
+            ContextMenuFamily.RecentFiles,
+            ContextMenuFamily.QuickAccessToolbar
+        };
+
+        InteractionSurfaceCatalog.ContextMenus
+            .Where(row => managedFamilies.Contains(row.ContextFamily!.Value))
+            .Should().OnlyContain(row =>
+                row.Platforms.PortableDesktop.IsApplicable == true &&
+                row.Platforms.PortableDesktop.Implementation == InteractionImplementationCapability.ManagedSurface);
     }
 
     [Fact]
