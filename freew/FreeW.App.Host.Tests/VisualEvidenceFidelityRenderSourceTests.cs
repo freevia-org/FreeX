@@ -88,6 +88,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("[\"wpfRenderTargetBitmapReason\"] = wpfRenderTargetFailure");
         source.Should().Contain("const double FootnoteTrailingReserveDip = 15.0;");
         source.Should().Contain("thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip");
+        source.Should().Contain("Background  = System.Windows.Media.Brushes.Transparent");
         source.Should().Contain("PageLayout.PointsToDip(24)");
         source.Should().Contain("PageLayout.PointsToDip(pb.WidthPt)");
         source.Should().NotContain("pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0)");
@@ -99,7 +100,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("thisPageSettings.HeaderDistancePt > 0");
         source.Should().Contain("PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)");
         source.Should().Contain("PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)");
-        source.Should().Contain("bodyOffsetTop");
+        source.Should().Contain("flow.PagePadding = new Thickness(");
         project.Should().Contain("FreeW.App.Presentation");
         project.Should().Contain("PackageReference Include=\"SkiaSharp\"");
     }

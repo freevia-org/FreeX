@@ -1399,7 +1399,9 @@ static RenderTargetBitmap? RenderNoteRegion(
     var panel = new System.Windows.Controls.StackPanel
     {
         Orientation = System.Windows.Controls.Orientation.Vertical,
-        Background  = System.Windows.Media.Brushes.White
+        // This bitmap is drawn after the page border and watermark. Keeping its unused pixels
+        // transparent lets that earlier page chrome remain visible around the note content.
+        Background  = System.Windows.Media.Brushes.Transparent
     };
 
     bool hasContent = false;
