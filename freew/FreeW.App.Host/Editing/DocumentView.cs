@@ -5184,6 +5184,19 @@ public sealed class DocumentView : RichTextBox
         // Apply WPF visual effects (shadow/glow/soft-edge/bevel) on the root element.
         ApplyImageWpfEffects(root, image);
 
+        // Floating overlays need the same measured touching reflection as inline pictures.
+        if (image.ReflectionPreset == 1)
+        {
+            root = BuildReflectionContainer(
+                root,
+                widthPx,
+                heightPx,
+                reflOpacity: 0.5,
+                distPx: 0,
+                borderWidthPx: image.HasBorder ? Math.Max(image.BorderWidthPt, 0.75) * PxPerPoint : 0);
+            root.Tag = image;
+        }
+
         // Wire click to select this floating image. Shift/Ctrl adds to multi-select.
         if (enableSelection)
         {
