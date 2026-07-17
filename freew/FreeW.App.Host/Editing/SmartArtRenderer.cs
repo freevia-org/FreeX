@@ -527,6 +527,9 @@ internal static class SmartArtRenderer
         double targetWidth,
         double targetHeight)
     {
+        if (IsWordSimpleColorfulProcess(plan))
+            return BuildWordSimpleColorfulProcessLayout(plan, targetWidth, targetHeight);
+
         var canvas = new Canvas
         {
             Width = Math.Max(1, targetWidth),
@@ -604,6 +607,86 @@ internal static class SmartArtRenderer
                     fontSize,
                     TextWrapping.NoWrap);
             }
+        }
+
+        return canvas;
+    }
+
+    private static bool IsWordSimpleColorfulProcess(SmartArtVisualPlan plan) =>
+        string.Equals(plan.LayoutId, "process1", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(plan.ColorScheme.Id, "colorful1", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(plan.Style.Id, "simple1", StringComparison.OrdinalIgnoreCase);
+
+    // Word's 96-DPI gallery raster renders this native process signature as three solid accent nodes.
+    // The calibrated 216pt by 90pt geometry is scaled here for other sizes.
+    private static FrameworkElement BuildWordSimpleColorfulProcessLayout(
+        SmartArtVisualPlan plan,
+        double targetWidth,
+        double targetHeight)
+    {
+        const double nativeWidth = 288;
+        const double nativeHeight = 120;
+        const double nodeWidth = 76;
+        const double nodeHeight = 46;
+        const double nodeTop = 22.4;
+        const double nodeStride = 106;
+        var scaleX = targetWidth / nativeWidth;
+        var scaleY = targetHeight / nativeHeight;
+        var baseColor = ParseHex(plan.ColorScheme.Color1Hex);
+        var connectorColor = Color.FromRgb(0xB2, 0xC1, 0xDB);
+        var canvas = new Canvas
+        {
+            Width = Math.Max(1, targetWidth),
+            Height = Math.Max(1, targetHeight),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+
+        for (var index = 0; index < plan.Nodes.Count; index++)
+        {
+            var left = index * nodeStride * scaleX;
+            var top = nodeTop * scaleY;
+            var node = new Border
+            {
+                Width = nodeWidth * scaleX,
+                Height = nodeHeight * scaleY,
+                Background = new SolidColorBrush(baseColor),
+                CornerRadius = new CornerRadius(5 * Math.Min(scaleX, scaleY)),
+                Child = new TextBlock
+                {
+                    Text = plan.Nodes[index].Text,
+                    Foreground = Brushes.White,
+                    FontSize = 16 * Math.Min(scaleX, scaleY),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    TextAlignment = System.Windows.TextAlignment.Center,
+                    TextWrapping = TextWrapping.NoWrap
+                }
+            };
+            Canvas.SetLeft(node, left);
+            Canvas.SetTop(node, top);
+            canvas.Children.Add(node);
+
+            if (index >= plan.Nodes.Count - 1)
+                continue;
+
+            var arrowLeft = (left + nodeWidth * scaleX + 8 * scaleX);
+            var arrowTop = (top + 16 * scaleY);
+            var arrow = new Polygon
+            {
+                Points = new PointCollection([
+                    new Point(0, 0),
+                    new Point(16 * scaleX, 7 * scaleY),
+                    new Point(0, 14 * scaleY)
+                ]),
+                Fill = new SolidColorBrush(connectorColor),
+                Width = 16 * scaleX,
+                Height = 14 * scaleY,
+                Stretch = Stretch.Fill
+            };
+            Canvas.SetLeft(arrow, arrowLeft);
+            Canvas.SetTop(arrow, arrowTop);
+            canvas.Children.Add(arrow);
         }
 
         return canvas;

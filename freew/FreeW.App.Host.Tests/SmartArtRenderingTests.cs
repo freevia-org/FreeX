@@ -453,6 +453,39 @@ public sealed class SmartArtRenderingTests
     }
 
     [StaFact]
+    public void WordAuthoredColorfulSimpleProcess_UsesSolidNativeNodeGeometry()
+    {
+        var sa = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
+        sa.LayoutId = "process1";
+        sa.ColorSchemeId = "colorful1";
+        sa.StyleId = "simple1";
+        sa.WidthPt = 216;
+        sa.HeightPt = 90;
+        var view = ViewWithSmartArt(sa);
+
+        var outer = LogicalDescendants<Border>(view.Document)
+            .Single(border => ReferenceEquals(border.Tag, sa));
+        var nodes = new[] { "Plan", "Build", "Verify" }
+            .Select(text => NodeBorder(view, text))
+            .ToList();
+
+        nodes.Should().OnlyContain(node =>
+            Assert.IsType<SolidColorBrush>(node.Background).Color == Color.FromRgb(0x4E, 0x81, 0xBD));
+        nodes.Should().OnlyContain(node =>
+            Assert.IsType<TextBlock>(node.Child).Foreground == Brushes.White);
+        nodes.Select(Canvas.GetLeft).Should().Equal(0, 106, 212);
+        nodes.Select(Canvas.GetTop).Should().OnlyContain(top => Math.Abs(top - 22.4) < 0.01);
+        nodes.Should().OnlyContain(node => Math.Abs(node.Width - 76) < 0.01 && Math.Abs(node.Height - 46) < 0.01);
+
+        var arrows = LogicalDescendants<Polygon>(outer)
+            .Where(polygon => polygon.Fill is SolidColorBrush)
+            .ToList();
+        arrows.Should().HaveCount(2);
+        arrows.Should().OnlyContain(arrow =>
+            Assert.IsType<SolidColorBrush>(arrow.Fill).Color == Color.FromRgb(0xB2, 0xC1, 0xDB));
+    }
+
+    [StaFact]
     public void ContinuousBlockProcessLayout_RendersSharedProcessGeometry()
     {
         var sa = SmartArt.Create(SmartArtKind.Process, ["Plan", "Build", "Verify"]);
