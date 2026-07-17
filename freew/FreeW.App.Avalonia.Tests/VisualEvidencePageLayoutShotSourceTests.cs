@@ -87,6 +87,8 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"field-page-number-variants\", 1)");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"field-page-number-variants\", 2)");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"field-page-number-variants\", 3)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"field-page-number-variants\", 4)");
+        source.Should().MatchRegex("label: \"Field Page Number p4\"[\\s\\S]*?pageNumber: 4,\\s*pageCount: 4,\\s*viewportOffsetY: 3300");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildFieldPageNumberVariantsDocument");
         source.Should().Contain("references-heavy-fields");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"references-heavy-fields\", 1)");

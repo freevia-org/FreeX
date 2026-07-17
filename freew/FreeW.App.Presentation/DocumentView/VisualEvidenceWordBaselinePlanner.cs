@@ -21,7 +21,7 @@ public sealed record FreeWWordBaselineGenerationPlan(
 public static class FreeWWordBaselineEvidencePlanner
 {
     public const string DefaultWordApplicationProgId = "Word.Application";
-    public const int DefaultMaxPagesPerDocument = 3;
+    public const int DefaultMaxPagesPerDocument = 4;
     public const string BaselineScopeAll = "all";
     public const string BaselineScopeGeneratedCorpus = "generated-corpus";
 

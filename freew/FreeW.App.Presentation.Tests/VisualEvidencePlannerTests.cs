@@ -133,7 +133,7 @@ public sealed class VisualEvidencePlannerTests
             "resolved-header-footer-field-text",
             "chapter-prefixed-page-number-fields"]);
         fieldScenario.ExpectedOutputNamePattern.Should().Be("field-page-number-variants_p{page}.png");
-        fieldScenario.MinimumExpectedOutputs.Should().Be(3);
+        fieldScenario.MinimumExpectedOutputs.Should().Be(4);
         fieldScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
 
         var referencesScenario = FreeWVisualEvidencePlanner.ResolveScenario("references-heavy-fields");
@@ -845,16 +845,16 @@ public sealed class VisualEvidencePlannerTests
             "Complex:AUTHOR"]);
         fields.ComplexFieldResultSignatures.Should().Contain([
             "AUTHOR=FreeW Visual Evidence",
-            "NUMPAGES=3",
+            "NUMPAGES=4",
             "PAGE=1",
             "TITLE=Field Page Number Evidence"]);
 
-        var pageExpectations = Enumerable.Range(1, 3)
+        var pageExpectations = Enumerable.Range(1, 4)
             .Select(page => FreeWVisualEvidencePlanner.BuildPageExpectation(
                 "field-page-number-variants",
                 document.Page,
                 page,
-                pageCount: 3,
+                pageCount: 4,
                 outputName: $"field-page-number-variants_p{page}.png",
                 document: document))
             .ToList();
@@ -864,7 +864,8 @@ public sealed class VisualEvidencePlannerTests
             .Should().Contain([
                 "slot=first-header|page=1|section=1|sectionPage=1|paragraph=0|run=1|field=PAGE|text=1-1",
                 "slot=even-header|page=2|section=1|sectionPage=2|paragraph=0|run=1|field=PAGE|text=1-2",
-                "slot=header|page=3|section=1|sectionPage=3|paragraph=0|run=1|field=PAGE|text=1-3"]);
+                "slot=header|page=3|section=1|sectionPage=3|paragraph=0|run=1|field=PAGE|text=1-3",
+                "slot=even-header|page=4|section=1|sectionPage=4|paragraph=0|run=1|field=PAGE|text=1-4"]);
     }
 
     [Fact]
@@ -1526,9 +1527,9 @@ public sealed class VisualEvidencePlannerTests
                 Path.Combine(root, "word-baseline"));
 
             plan.WordApplicationProgId.Should().Be("Word.Application");
-            plan.MaxPagesPerDocument.Should().Be(3);
+            plan.MaxPagesPerDocument.Should().Be(4);
             plan.ExpectedFixtureCount.Should().Be(30);
-            plan.ExpectedBaselinePngCount.Should().Be(90);
+            plan.ExpectedBaselinePngCount.Should().Be(120);
             plan.Fixtures.Select(f => f.DocumentName).Should().Contain([
                 "f2-hf-basic.docx",
                 "f2-hf-images.docx",
@@ -1747,7 +1748,7 @@ public sealed class VisualEvidencePlannerTests
             "field-page-number-variants",
             document.Page,
             pageNumber: 2,
-            pageCount: 3,
+            pageCount: 4,
             outputName: "field-page-number-variants_p2.png",
             headerSlotName: "even-header",
             footerSlotName: "even-footer",
@@ -1766,10 +1767,10 @@ public sealed class VisualEvidencePlannerTests
         expectation.Fields.HasHeaderFooterFields.Should().BeTrue();
         expectation.Fields.ComplexFieldKeywords.Should().Contain(["PAGE", "NUMPAGES", "TITLE", "AUTHOR"]);
         expectation.HeaderFooters.Slots.Single(slot => slot.SlotName == "even-header")
-            .Lines.Single().Text.Should().Be("Even header page 1-2 of 3");
+            .Lines.Single().Text.Should().Be("Even header page 1-2 of 4");
         expectation.Fields.HeaderFooterResolvedFieldSignatures.Should().Contain([
             "slot=even-header|page=2|section=1|sectionPage=2|paragraph=0|run=1|field=PAGE|text=1-2",
-            "slot=even-header|page=2|section=1|sectionPage=2|paragraph=0|run=3|field=NUMPAGES|text=3"]);
+            "slot=even-header|page=2|section=1|sectionPage=2|paragraph=0|run=3|field=NUMPAGES|text=4"]);
     }
 
     [Fact]
