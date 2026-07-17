@@ -308,7 +308,7 @@ public sealed class FloatingObjectRenderTests
     [StaFact]
     public void FloatingOverlay_RendersWarpedWordArtWithContrastingTextAndFill()
     {
-        var wordArt = new WordArt("Warped FX", WordArtStyle.GlowBlue, 28)
+        var wordArt = new WordArt("FreeW CONFIDENTIAL", WordArtStyle.GlowBlue, 28)
         {
             Warp = WordArtWarp.Wave1,
             Placement = new FloatingPlacement
@@ -343,6 +343,10 @@ public sealed class FloatingObjectRenderTests
         glyphs.Should().HaveCount(wordArt.Text.Length);
         glyphs.All(glyph => glyph.Foreground is SolidColorBrush brush && brush.Color == Colors.White)
             .Should().BeTrue();
+        var glyphSpan = glyphs.Max(glyph => Canvas.GetLeft(glyph) + glyph.DesiredSize.Width)
+            - glyphs.Min(glyph => Canvas.GetLeft(glyph));
+        glyphSpan.Should().BeGreaterThan(300,
+            "Word expands a long Wave1 label beyond the 80%-width fit used by an ArchUp label");
         glyphs.Any(glyph => glyph.RenderTransform is RotateTransform rotation && Math.Abs(rotation.Angle) > 0.1)
             .Should().BeTrue();
     }

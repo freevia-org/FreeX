@@ -5487,7 +5487,8 @@ public sealed class DocumentView : RichTextBox
         var fontSize = Math.Max(8, wordArt.FontSizeDip);
         var glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
         var totalWidth = glyphs.Sum(glyph => glyph.DesiredSize.Width);
-        var targetWidth = canvas.ActualWidth * 0.8;
+        // Word stretches Wave1 closer to the text-box edges than ArchUp.
+        var targetWidth = canvas.ActualWidth * (wordArt.Warp == WordArtWarp.Wave1 ? 0.94 : 0.8);
         if (fitTextToBounds && totalWidth > targetWidth && totalWidth > 0)
         {
             fontSize = Math.Max(8, fontSize * targetWidth / totalWidth);
