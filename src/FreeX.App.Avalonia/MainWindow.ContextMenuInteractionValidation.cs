@@ -223,7 +223,11 @@ public sealed partial class MainWindow
             return Failed(row, "Sheet-tab action could not be parsed.");
 
         if (_session.SheetTabs.Count < 2)
-            _session.Workbook.AddSheet("ContextValidationSheet");
+        {
+            var addSheet = _session.AddSheet();
+            if (!addSheet.Success)
+                return Failed(row, addSheet.ErrorMessage ?? "Could not create the sheet-tab validation fixture.");
+        }
 
         Action dispatch = action switch
         {
