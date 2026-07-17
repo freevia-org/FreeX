@@ -500,6 +500,36 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void DrawingObjectRotateAndSize_ExecuteThroughSharedCanonicalCommands()
+    {
+        var fired = new List<string>();
+        var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
+        {
+            ExtraCommands = new Dictionary<string, Action>
+            {
+                ["shapeFormat.rotate"] = () => fired.Add("rotate"),
+                ["shapeFormat.size"] = () => fired.Add("size"),
+            },
+        });
+
+        Execute(registry, "shapeFormat.rotate");
+        Execute(registry, "shapeFormat.size");
+
+        Assert.Equal(new[] { "rotate", "size" }, fired);
+
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        foreach (var tabId in new[] { "DrawTab", "ShapeFormatTab" })
+        {
+            var ids = definition.FindTab(tabId)!.Groups
+                .SelectMany(group => group.Controls)
+                .Select(control => control.CommandId.Value)
+                .ToHashSet(StringComparer.Ordinal);
+            Assert.Contains("Rotate Object", ids);
+            Assert.Contains("Object Size", ids);
+        }
+    }
+
+    [Fact]
     public void InsertTable_BindsBothRibbonAndHomeButtons_ToTheSameAction()
     {
         var count = 0;
