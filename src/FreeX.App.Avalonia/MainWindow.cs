@@ -19,6 +19,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using System.Collections.Frozen;
 using System.Diagnostics;
 using System.Globalization;
 using FreeX.App.Presentation;
@@ -455,6 +456,9 @@ public sealed partial class MainWindow : Window
     private int? _pendingInlineCellCaretIndex;
     private CellAddress? _lastCellPointerPressAddress;
     private long _lastCellPointerPressTimestamp;
+    private CellAddress? _formulaRangeSelectionAnchor;
+    private CellAddress? _formulaRangeSelectionCursor;
+    private bool _formulaRangeEntryMode;
     private int? _formulaReferenceStart;
     private int? _formulaReferenceLength;
     private readonly TextBlock _formulaReferenceTextOverlay = new();
@@ -719,6 +723,14 @@ public sealed partial class MainWindow : Window
     /// </summary>
     internal WorkbookSession Session => _session;
 
+    internal static IReadOnlySet<string> InteractiveValidationKeyboardShortcutScenarioIds { get; } =
+        new[]
+        {
+            "shortcut.navigation.commit-forward",
+            "shortcut.navigation.commit-backward",
+            "shortcut.formulas.reference-mode",
+        }.ToFrozenSet(StringComparer.Ordinal);
+
     /// <summary>
     /// Test-only seam that rebuilds the worksheet grid (as <see cref="RefreshShell"/> does on every
     /// scroll/edit/zoom) and returns the resulting visual, so headless regression tests can mutate
@@ -789,6 +801,42 @@ public sealed partial class MainWindow : Window
     /// used by production code paths.
     /// </summary>
     internal void RaiseFormulaBoxKeyDownForTest(KeyEventArgs e) => FormulaBox_KeyDown(_formulaBox, e);
+
+    internal void BeginFormulaEditForTest(CellAddress address, string? initialText = null) =>
+        BeginFormulaEdit(address, initialText);
+
+    internal bool FormulaPointModeForTest => _formulaRangeEntryMode;
+
+    internal string? InlineCellEditorTextForTest => _inlineCellEditor?.Text ?? _inlineCellEditText;
+
+    internal void BeginInlineCellEditForTest(CellAddress address, string text, int caretIndex)
+    {
+        BeginInlineCellEdit(address, text, caretIndex);
+        if (_inlineCellEditor is { } editor)
+        {
+            var caret = Math.Clamp(caretIndex, 0, editor.Text?.Length ?? 0);
+            editor.CaretIndex = caret;
+            editor.SelectionStart = caret;
+            editor.SelectionEnd = caret;
+            _pendingInlineCellCaretIndex = null;
+        }
+    }
+
+    internal void RaiseInlineCellEditorKeyDownForTest(KeyEventArgs e)
+    {
+        if (_inlineCellEditor is not { } editor || _inlineCellEditAddress is not { } address)
+            throw new InvalidOperationException("No inline cell editor is active.");
+
+        InlineCellEditor_KeyDown(address, editor, e);
+    }
+
+    internal void SetFormulaBoxSelectionForTest(int start, int length)
+    {
+        var textLength = _formulaBox.Text?.Length ?? 0;
+        _formulaBox.SelectionStart = Math.Clamp(start, 0, textLength);
+        _formulaBox.SelectionEnd = Math.Clamp(start + Math.Max(0, length), 0, textLength);
+        _formulaBox.CaretIndex = _formulaBox.SelectionEnd;
+    }
 
     /// <summary>
     /// Test-only seam that drives the real worksheet pointer-wheel handling (row/column panning,
@@ -7943,60 +7991,9 @@ public sealed partial class MainWindow : Window
             _inlineCellEditText = editor.Text ?? "";
             _formulaBox.Text = _inlineCellEditText;
             ClearFormulaReferenceEntrySpan();
+            UpdateFormulaRangeEntryStateAfterTextChanged(_inlineCellEditText);
         };
-        editor.KeyDown += (_, args) =>
-        {
-            var intent = ExcelEditKeyPlanner.GetIntent(
-                FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(args.Key),
-                FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
-                address,
-                pageSize: Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
-                allowFormulaBarNavigationKeys: false,
-                moveSelectionAfterEnter: MoveSelectionAfterEnter,
-                enterDirection: AfterEnterDirection);
-
-            if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
-            {
-                ApplyTextBoxEdit(
-                    editor,
-                    ExcelTextEditorPlanner.InsertLineBreak(
-                        editor.Text ?? "",
-                        Math.Min(editor.SelectionStart, editor.SelectionEnd),
-                        Math.Abs(editor.SelectionEnd - editor.SelectionStart),
-                        Environment.NewLine));
-                _inlineCellEditText = editor.Text ?? "";
-                _formulaBox.Text = _inlineCellEditText;
-                args.Handled = true;
-            }
-            else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
-            {
-                var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
-                    _session.Workbook.GetSheet(address.Sheet),
-                    address,
-                    target);
-                var rowDelta = GetCellIndexDelta(address.Row, adjustedTarget.Row);
-                var colDelta = GetCellIndexDelta(address.Col, adjustedTarget.Col);
-                CommitInlineCellEdit(rowDelta, colDelta);
-                args.Handled = true;
-            }
-            else if (intent.Action == ExcelEditKeyAction.CommitSelection)
-            {
-                var text = editor.Text ?? _inlineCellEditText ?? "";
-                _formulaBox.Text = text;
-                ClearInlineCellEditorState();
-                if (CommitEditAcrossSelection(address, text))
-                {
-                    RefreshShell("Ready");
-                    FocusShellRegion(ShellFocusTarget.Worksheet);
-                }
-                args.Handled = true;
-            }
-            else if (args.Key == Key.Escape)
-            {
-                CancelInlineCellEdit();
-                args.Handled = true;
-            }
-        };
+        editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
 
         _inlineCellEditor = editor;
         Dispatcher.UIThread.Post(() =>
@@ -8015,6 +8012,71 @@ public sealed partial class MainWindow : Window
         return editor;
     }
 
+    private void InlineCellEditor_KeyDown(CellAddress address, TextBox editor, KeyEventArgs args)
+    {
+        if (TryHandleFormulaEditorModeOrReferenceCycle(editor, args))
+            return;
+
+        if (TryHandleFormulaRangeEntryNavigation(editor, address, args))
+            return;
+
+        var formulaRangeEntryActive = IsFormulaRangeEntryActive(editor.Text);
+        var intent = ExcelEditKeyPlanner.GetIntent(
+            FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(args.Key),
+            FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
+            address,
+            pageSize: Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
+            allowFormulaBarNavigationKeys: false,
+            formulaRangeEntryActive: formulaRangeEntryActive,
+            inlineEditorCommitsOnArrow: FormulaEditInteractionPlanner.ShouldCommitInlineArrows(
+                editor.Text,
+                _formulaRangeEntryMode),
+            moveSelectionAfterEnter: MoveSelectionAfterEnter,
+            enterDirection: AfterEnterDirection);
+
+        if (intent.Action == ExcelEditKeyAction.InsertLineBreak)
+        {
+            ApplyTextBoxEdit(
+                editor,
+                ExcelTextEditorPlanner.InsertLineBreak(
+                    editor.Text ?? "",
+                    Math.Min(editor.SelectionStart, editor.SelectionEnd),
+                    Math.Abs(editor.SelectionEnd - editor.SelectionStart),
+                    Environment.NewLine));
+            SynchronizeFormulaEditors(editor);
+            args.Handled = true;
+        }
+        else if (intent.Action == ExcelEditKeyAction.CommitAndMove && intent.Target is { } target)
+        {
+            var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
+                _session.Workbook.GetSheet(address.Sheet),
+                address,
+                target);
+            var rowDelta = GetCellIndexDelta(address.Row, adjustedTarget.Row);
+            var colDelta = GetCellIndexDelta(address.Col, adjustedTarget.Col);
+            CommitInlineCellEdit(rowDelta, colDelta);
+            args.Handled = true;
+        }
+        else if (intent.Action == ExcelEditKeyAction.CommitSelection)
+        {
+            var text = editor.Text ?? _inlineCellEditText ?? "";
+            _formulaBox.Text = text;
+            ClearInlineCellEditorState();
+            if (CommitEditAcrossSelection(address, text))
+            {
+                ClearFormulaRangeEntryState();
+                RefreshShell("Ready");
+                FocusShellRegion(ShellFocusTarget.Worksheet);
+            }
+            args.Handled = true;
+        }
+        else if (args.Key == Key.Escape)
+        {
+            CancelInlineCellEdit();
+            args.Handled = true;
+        }
+    }
+
     private void BeginInlineCellEdit(CellAddress address, string editText, int caretIndex)
     {
         ClearSelectedDrawingObject();
@@ -8023,7 +8085,8 @@ public sealed partial class MainWindow : Window
         _pendingInlineCellCaretIndex = Math.Clamp(caretIndex, 0, editText.Length);
         _formulaBox.Text = editText;
         _formulaBoxEditOriginalText = editText;
-        ClearFormulaReferenceEntrySpan();
+        ClearFormulaRangeEntryState();
+        _formulaRangeEntryMode = FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(editText);
         _session.BeginFormulaEdit(address);
         RefreshShell("Ready");
     }
@@ -8046,7 +8109,7 @@ public sealed partial class MainWindow : Window
     {
         _session.CancelFormulaEdit();
         _formulaBoxEditOriginalText = null;
-        ClearFormulaReferenceEntrySpan();
+        ClearFormulaRangeEntryState();
         ClearInlineCellEditorState();
         RefreshShell("Ready");
         FocusShellRegion(ShellFocusTarget.Worksheet);
@@ -8064,6 +8127,234 @@ public sealed partial class MainWindow : Window
     {
         _formulaReferenceStart = null;
         _formulaReferenceLength = null;
+    }
+
+    private void ClearFormulaRangeEntryState()
+    {
+        _formulaRangeSelectionAnchor = null;
+        _formulaRangeSelectionCursor = null;
+        _formulaRangeEntryMode = false;
+        ClearFormulaReferenceEntrySpan();
+    }
+
+    private void UpdateFormulaRangeEntryStateAfterTextChanged(string? text)
+    {
+        var plan = FormulaEditInteractionPlanner.BuildTextChangePlan(text);
+        if (!plan.StartsPointMode)
+            return;
+
+        _formulaRangeEntryMode = true;
+        ApplyFormulaEditStatusBarPlan(plan.StatusBarPlan);
+    }
+
+    private void ApplyFormulaEditStatusBarPlan(FormulaEditStatusBarPlan? plan)
+    {
+        if (plan is not { } statusBarPlan)
+            return;
+
+        var status = UiText.Get(statusBarPlan.ResourceKey);
+        _statusText.Text = status;
+        ApplyStatusBarModel(status);
+    }
+
+    private bool TryHandleFormulaEditorModeOrReferenceCycle(TextBox editor, KeyEventArgs args)
+    {
+        var key = FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(args.Key);
+        var modifiers = FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers);
+
+        if (args.Key == Key.F2 && args.KeyModifiers == KeyModifiers.None)
+        {
+            var togglePlan = FormulaEditInteractionPlanner.BuildPointModeTogglePlan(
+                editor.Text,
+                _formulaRangeEntryMode);
+            _formulaRangeEntryMode = togglePlan.PointMode;
+            if (togglePlan.ClearReferenceSpan)
+            {
+                _formulaRangeSelectionAnchor = null;
+                _formulaRangeSelectionCursor = null;
+                ClearFormulaReferenceEntrySpan();
+            }
+
+            ApplyFormulaEditStatusBarPlan(togglePlan.StatusBarPlan);
+            args.Handled = togglePlan.Handled;
+            return args.Handled;
+        }
+
+        if (!ExcelEditKeyPlanner.ShouldCycleFormulaReference(key, modifiers))
+            return false;
+
+        var caretIndex = editor.SelectionStart != editor.SelectionEnd
+            ? Math.Min(editor.SelectionStart, editor.SelectionEnd)
+            : editor.CaretIndex;
+        var anchor = _session.FormulaEditAddress ?? _session.ActiveCell;
+        if (!ExcelTextEditorPlanner.TryCycleFormulaReference(
+                editor.Text ?? "",
+                caretIndex,
+                anchor,
+                UseR1C1ReferenceStyle,
+                out var edit))
+        {
+            return false;
+        }
+
+        _isApplyingFormulaBoxText = true;
+        try
+        {
+            ApplyTextBoxEdit(editor, edit);
+            SynchronizeFormulaEditors(editor);
+        }
+        finally
+        {
+            _isApplyingFormulaBoxText = false;
+        }
+
+        args.Handled = true;
+        return true;
+    }
+
+    private bool TryHandleFormulaRangeEntryNavigation(TextBox editor, CellAddress fallbackCurrent, KeyEventArgs args)
+    {
+        if (!IsFormulaRangeEntryActive(editor.Text))
+            return false;
+
+        var current = FormulaRangeEntryPlanner.GetKeyboardCursor(
+            _session.SelectedRange,
+            _formulaRangeSelectionCursor ?? fallbackCurrent);
+        var target = FormulaRangeEntryPlanner.GetKeyboardSelectionTarget(
+            FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(args.Key),
+            FormulaEditorKey.None,
+            FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(args.KeyModifiers),
+            current,
+            _session.Workbook.GetSheet(current.Sheet),
+            Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
+            Math.Max(1, _session.Viewport.ColMetrics.Count - 1));
+        if (target is null)
+            return false;
+
+        if (!TryApplyFormulaRangeSelection(
+                target.Value,
+                extendSelection: args.KeyModifiers.HasFlag(KeyModifiers.Shift)))
+        {
+            return false;
+        }
+
+        args.Handled = true;
+        return true;
+    }
+
+    private bool IsFormulaRangeEntryActive(string? text) =>
+        _session.FormulaEditAddress is not null &&
+        FormulaEditInteractionPlanner.IsRangeEntryActive(text, _formulaRangeEntryMode);
+
+    private TextBox? GetFormulaRangeEntryEditor()
+    {
+        if (_inlineCellEditor is { } inlineEditor &&
+            _inlineCellEditAddress is not null &&
+            IsFormulaRangeEntryActive(inlineEditor.Text))
+        {
+            return inlineEditor;
+        }
+
+        return IsFormulaRangeEntryActive(_formulaBox.Text) ? _formulaBox : null;
+    }
+
+    private bool TryApplyFormulaRangeSelection(CellAddress target, bool extendSelection)
+    {
+        var anchor = extendSelection && _formulaRangeSelectionAnchor is { } existingAnchor
+            ? existingAnchor
+            : target;
+        var range = new GridRange(
+            new CellAddress(target.Sheet, Math.Min(anchor.Row, target.Row), Math.Min(anchor.Col, target.Col)),
+            new CellAddress(target.Sheet, Math.Max(anchor.Row, target.Row), Math.Max(anchor.Col, target.Col)));
+        return TryApplyFormulaRangeSelection(range, anchor, target);
+    }
+
+    private bool TryApplyFormulaRangeSelection(
+        GridRange range,
+        CellAddress selectionAnchor,
+        CellAddress selectionCursor)
+    {
+        var editor = GetFormulaRangeEntryEditor();
+        var formulaCell = _session.FormulaEditAddress;
+        if (editor is null || formulaCell is null)
+            return false;
+
+        var text = editor.Text ?? "";
+        var selectionStart = Math.Clamp(Math.Min(editor.SelectionStart, editor.SelectionEnd), 0, text.Length);
+        var selectionLength = Math.Clamp(Math.Abs(editor.SelectionEnd - editor.SelectionStart), 0, text.Length - selectionStart);
+        if (!FormulaRangeEntryPlanner.TryApplyRangeSelection(
+                text,
+                selectionStart,
+                selectionLength,
+                _formulaReferenceStart,
+                _formulaReferenceLength,
+                range,
+                formulaCell.Value,
+                UseR1C1ReferenceStyle,
+                out var edit))
+        {
+            return false;
+        }
+
+        _isApplyingFormulaBoxText = true;
+        try
+        {
+            ApplyTextBoxEdit(editor, edit.TextEdit);
+            SynchronizeFormulaEditors(editor);
+        }
+        finally
+        {
+            _isApplyingFormulaBoxText = false;
+        }
+
+        _formulaRangeSelectionAnchor = selectionAnchor;
+        _formulaRangeSelectionCursor = selectionCursor;
+        _formulaReferenceStart = edit.ReferenceStart;
+        _formulaReferenceLength = edit.ReferenceLength;
+        RefreshFormulaReferenceHighlights();
+        ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode: true));
+        if (ReferenceEquals(editor, _formulaBox))
+        {
+            _sheetGridHost.Content = BuildSheetGrid();
+            _formulaBox.Focus();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(RefreshInlineFormulaRangeEntryVisuals, DispatcherPriority.Input);
+        }
+
+        return true;
+    }
+
+    private void RefreshInlineFormulaRangeEntryVisuals()
+    {
+        if (_inlineCellEditAddress is null || !IsFormulaRangeEntryActive(_inlineCellEditText))
+            return;
+
+        _sheetGridHost.Content = BuildSheetGrid();
+        RefreshFormulaReferenceHighlights();
+        _inlineCellEditor?.Focus();
+    }
+
+    private void SynchronizeFormulaEditors(TextBox source)
+    {
+        var text = source.Text ?? "";
+        if (!ReferenceEquals(source, _formulaBox))
+        {
+            _inlineCellEditText = text;
+            _formulaBox.Text = text;
+            _formulaBox.CaretIndex = source.CaretIndex;
+            _formulaBox.SelectionStart = source.SelectionStart;
+            _formulaBox.SelectionEnd = source.SelectionEnd;
+        }
+        else if (_inlineCellEditor is { } inlineEditor && _inlineCellEditAddress is not null)
+        {
+            _inlineCellEditText = text;
+            inlineEditor.Text = text;
+            inlineEditor.CaretIndex = source.CaretIndex;
+            inlineEditor.SelectionStart = source.SelectionStart;
+            inlineEditor.SelectionEnd = source.SelectionEnd;
+        }
     }
 
     private static int CalculateInlineCellCaretIndex(
@@ -8375,54 +8666,17 @@ public sealed partial class MainWindow : Window
             ? _inlineCellEditor
             : _formulaBox;
         var text = editor.Text ?? "";
-        if (_session.FormulaEditAddress is null || !IsFormulaPointModeText(text))
+        if (_session.FormulaEditAddress is null ||
+            !IsFormulaPointModeText(text) ||
+            !_formulaRangeEntryMode)
         {
             return false;
         }
 
-        var selectionStart = Math.Clamp(Math.Min(editor.SelectionStart, editor.SelectionEnd), 0, text.Length);
-        var selectionLength = Math.Clamp(Math.Abs(editor.SelectionEnd - editor.SelectionStart), 0, text.Length - selectionStart);
-        if (!FormulaRangeEntryPlanner.TryApplyRangeSelection(
-                text,
-                selectionStart,
-                selectionLength,
-                _formulaReferenceStart,
-                _formulaReferenceLength,
-                new GridRange(address, address),
-                _session.FormulaEditAddress.Value,
-                UseR1C1ReferenceStyle,
-                out var edit))
-        {
-            return false;
-        }
-
-        _isApplyingFormulaBoxText = true;
-        try
-        {
-            ApplyTextBoxEdit(editor, edit.TextEdit);
-            if (!ReferenceEquals(editor, _formulaBox))
-            {
-                _inlineCellEditText = editor.Text ?? "";
-                _formulaBox.Text = _inlineCellEditText;
-                _formulaBox.CaretIndex = editor.CaretIndex;
-                _formulaBox.SelectionStart = editor.SelectionStart;
-                _formulaBox.SelectionEnd = editor.SelectionEnd;
-            }
-        }
-        finally
-        {
-            _isApplyingFormulaBoxText = false;
-        }
-
-        _formulaReferenceStart = edit.ReferenceStart;
-        _formulaReferenceLength = edit.ReferenceLength;
-        _sheetGridHost.Content = BuildSheetGrid();
-        RefreshFormulaReferenceHighlights();
-        var refreshedEditor = _inlineCellEditor is not null && _inlineCellEditAddress is not null
-            ? _inlineCellEditor
-            : _formulaBox;
-        refreshedEditor.Focus();
-        return true;
+        return TryApplyFormulaRangeSelection(
+            new GridRange(address, address),
+            address,
+            address);
     }
 
     private static bool IsFormulaPointModeText(string? text) =>
@@ -8435,6 +8689,7 @@ public sealed partial class MainWindow : Window
             return;
 
         ClearFormulaReferenceEntrySpan();
+        UpdateFormulaRangeEntryStateAfterTextChanged(_formulaBox.Text);
         if (_session.FormulaEditAddress is null)
         {
             ClearFormulaReferenceTextOverlay();
@@ -15120,14 +15375,17 @@ public sealed partial class MainWindow : Window
     private void BeginFormulaEdit(CellAddress address, string? initialText = null)
     {
         ClearSelectedDrawingObject();
-        ClearFormulaReferenceEntrySpan();
+        ClearFormulaRangeEntryState();
         _session.BeginFormulaEdit(address);
         RefreshShell("Ready");
         var originalText = _formulaBox.Text ?? "";
-        if (initialText is not null)
-            _formulaBox.Text = initialText;
-
         _formulaBox.Focus();
+        if (initialText is not null)
+        {
+            _formulaBox.Text = initialText;
+            _formulaRangeEntryMode = FormulaEditInteractionPlanner.ShouldStartPointModeFromTypedText(initialText);
+        }
+
         _formulaBoxEditOriginalText = originalText;
         MoveFormulaBoxCaretToEnd();
     }
@@ -15137,17 +15395,21 @@ public sealed partial class MainWindow : Window
         if (_session.FormulaEditAddress is not null)
             return;
 
+        ClearFormulaRangeEntryState();
         _session.BeginFormulaEdit(_session.ActiveCell);
         _formulaBoxEditOriginalText = _formulaBox.Text ?? "";
     }
 
     private void FormulaBox_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (TryHandleFormulaEditorModeOrReferenceCycle(_formulaBox, e))
+            return;
+
         if (e.Key == Key.Escape)
         {
             _session.CancelFormulaEdit();
             _formulaBoxEditOriginalText = null;
-            ClearFormulaReferenceEntrySpan();
+            ClearFormulaRangeEntryState();
             RefreshShell("Ready");
             FocusShellRegion(ShellFocusTarget.Worksheet);
             e.Handled = true;
@@ -15155,12 +15417,18 @@ public sealed partial class MainWindow : Window
         }
 
         var current = _session.FormulaEditAddress ?? _session.ActiveCell;
+        if (TryHandleFormulaRangeEntryNavigation(_formulaBox, current, e))
+            return;
+
+        var formulaTextActive = FormulaEditInteractionPlanner.IsFormulaText(_formulaBox.Text);
+        var formulaRangeEntryActive = IsFormulaRangeEntryActive(_formulaBox.Text);
         var intent = ExcelEditKeyPlanner.GetIntent(
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorKey(e.Key),
             FormulaBarAvaloniaInputAdapter.ToFormulaEditorModifiers(e.KeyModifiers),
             current,
             pageSize: Math.Max(1, _session.Viewport.RowMetrics.Count - 1),
-            allowFormulaBarNavigationKeys: false,
+            allowFormulaBarNavigationKeys: !formulaTextActive,
+            formulaRangeEntryActive: formulaRangeEntryActive,
             moveSelectionAfterEnter: MoveSelectionAfterEnter,
             enterDirection: AfterEnterDirection);
 
@@ -15183,6 +15451,7 @@ public sealed partial class MainWindow : Window
             }
             else if (CommitFormulaBox())
             {
+                ClearFormulaRangeEntryState();
                 var adjustedTarget = ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(
                     _session.Workbook.GetSheet(current.Sheet),
                     current,
@@ -15208,6 +15477,7 @@ public sealed partial class MainWindow : Window
             }
             else if (CommitEditAcrossSelection(current, _formulaBox.Text ?? ""))
             {
+                ClearFormulaRangeEntryState();
                 RefreshShell("Ready");
                 FocusShellRegion(ShellFocusTarget.Worksheet);
             }
@@ -15414,7 +15684,7 @@ public sealed partial class MainWindow : Window
         }
 
         _formulaBoxEditOriginalText = null;
-        ClearFormulaReferenceEntrySpan();
+        ClearFormulaRangeEntryState();
         RefreshShell($"Edited {FormatCellReference(address)}");
         return true;
     }
@@ -15453,6 +15723,7 @@ public sealed partial class MainWindow : Window
             _session.SelectRange(range);
 
         _formulaBoxEditOriginalText = null;
+        ClearFormulaRangeEntryState();
         return true;
     }
 
@@ -15465,6 +15736,7 @@ public sealed partial class MainWindow : Window
         {
             _session.CancelFormulaEdit();
             _formulaBoxEditOriginalText = null;
+            ClearFormulaRangeEntryState();
             return true;
         }
 
@@ -23223,10 +23495,13 @@ public sealed partial class MainWindow : Window
         var pageRows = Math.Max(1, _session.Viewport.RowMetrics.Count - 1);
         var pageCols = Math.Max(1, _session.Viewport.ColMetrics.Count - 1);
         var extendSelection = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var moveOnly = navigationKey is ExcelWorksheetNavigationKey.Enter or ExcelWorksheetNavigationKey.Tab;
         var useDataBoundary = ExcelWorksheetNavigationPlanner.ShouldUseDataBoundary(navigationKey, navigationModifiers, _endMode);
         var ctrlHeld = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
         var sheet = _session.Workbook.GetSheet(_session.ActiveSheet.Id);
-        var current = extendSelection && _selectionExtensionCursor is { } cursor ? cursor : _session.ActiveCell;
+        var current = extendSelection && !moveOnly && _selectionExtensionCursor is { } cursor
+            ? cursor
+            : _session.ActiveCell;
 
         if (_endMode)
             _endMode = false;
@@ -23263,13 +23538,22 @@ public sealed partial class MainWindow : Window
             // ShouldHandleWorksheetNavigationKey only lets End through when Ctrl is held (plain End
             // is consumed by TryToggleEndMode above), so this always resolves via GetCtrlEndCell.
             ExcelWorksheetNavigationKey.End => ExcelWorksheetNavigationPlanner.GetCtrlEndCell(sheet, _session.ActiveSheet.Id),
+            ExcelWorksheetNavigationKey.Enter => extendSelection
+                ? OffsetAddress(current, -1, 0)
+                : OffsetAddress(current, 1, 0),
+            ExcelWorksheetNavigationKey.Tab => extendSelection
+                ? OffsetAddress(current, 0, -1)
+                : OffsetAddress(current, 0, 1),
             _ => null
         };
 
         if (target is not { } resolvedTarget)
             return;
 
-        MoveOrExtendActiveCellTo(resolvedTarget, extendSelection);
+        var navigationTarget = moveOnly
+            ? ExcelWorksheetNavigationPlanner.AdjustTargetPastMerge(sheet, current, resolvedTarget)
+            : resolvedTarget;
+        MoveOrExtendActiveCellTo(navigationTarget, extendSelection && !moveOnly);
         ClearSelectedDrawingObject();
         e.Handled = true;
         RefreshShell("Ready");
