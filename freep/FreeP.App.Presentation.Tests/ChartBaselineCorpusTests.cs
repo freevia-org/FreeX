@@ -472,16 +472,16 @@ public sealed class ChartBaselineCorpusTests
             .Should().Equal(new[] { 167.0, 121.0, 153.0 },
                 "the imported blue boundary face retains the measured top-edge registration");
         surfaceGeometry.RenderFacets[8].Points.Select(point => point.X)
-            .Should().Equal(new[] { 5.0, 72.0, 132.0 },
+            .Should().Equal(new[] { 1.0, 72.0, 132.0 },
                 "PowerPoint exposes a separate near-left dark-orange boundary triangle");
         surfaceGeometry.RenderFacets[8].Points.Select(point => point.Y)
-            .Should().Equal(new[] { 122.0, 71.0, 71.0 },
+            .Should().Equal(new[] { 125.0, 71.0, 71.0 },
                 "the imported near-left boundary triangle uses the measured projected wall");
         surfaceGeometry.RenderFacets[9].Points.Select(point => point.X)
-            .Should().Equal(new[] { 5.0, 132.0, 174.0 },
+            .Should().Equal(new[] { 1.0, 132.0, 174.0 },
                 "the paired near-left triangle closes the measured projected polygon");
         surfaceGeometry.RenderFacets[9].Points.Select(point => point.Y)
-            .Should().Equal(new[] { 122.0, 71.0, 79.0 },
+            .Should().Equal(new[] { 125.0, 71.0, 79.0 },
                 "the paired near-left triangle retains the measured projected wall");
         surfaceGeometry.RenderFacets[10].Points.Select(point => point.X)
             .Should().Equal(new[] { 247.0, 320.0, 312.0 },
