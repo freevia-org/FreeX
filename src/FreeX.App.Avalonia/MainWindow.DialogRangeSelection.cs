@@ -43,6 +43,16 @@ public sealed partial class MainWindow
         new("range.allow-edit-range.range", "AllowEditRangeDialog", "AllowEditRangePickerButton", "AllowEditRangeBox", DialogRangeSelectionFormat.Range),
         new("range.text-to-columns.destination", "TextToColumnsDialog", "TextToColumnsDestinationPickerButton", "TextToColumnsDestinationBox", DialogRangeSelectionFormat.StartCell),
         new("range.resize-table.range", "TableResizeDialog", "TableResizeRangePickerButton", "TableResizeRangeBox", DialogRangeSelectionFormat.Range),
+        new("range.named-ranges.selected-refers-to", "NameManagerDialog", "NameManagerSelectedRefersToPickerButton", "NameManagerSelectedRefersToBox", DialogRangeSelectionFormat.Range),
+        new("range.named-ranges.definition-refers-to", "DefineNameDialog", "DefineNameRefersToPickerButton", "DefineNameRefersToBox", DialogRangeSelectionFormat.Range),
+        new("range.pivot-create.source", "InsertPivotTableDialog", "InsertPivotTableSourceRangePickerButton", "InsertPivotTableSourceRangeBox", DialogRangeSelectionFormat.Range),
+        new("range.pivot-create.destination", "InsertPivotTableDialog", "InsertPivotTableDestinationRangePickerButton", "InsertPivotTableDestinationRangeBox", DialogRangeSelectionFormat.StartCell),
+        new("range.scenario-manager.changing-cells", "ScenarioManagerCompactDialog", "ScenarioManagerChangingCellsPickerButton", "ScenarioManagerChangingCellsBox", DialogRangeSelectionFormat.Range),
+        new("range.scenario-manager.result-cells", "ScenarioManagerCompactDialog", "ScenarioManagerResultCellsPickerButton", "ScenarioManagerResultCellsBox", DialogRangeSelectionFormat.Range),
+        new("range.function-argument.reference", "FunctionArgumentsDialog", "FunctionArgumentReferencePicker0", "FunctionArgumentBox0", DialogRangeSelectionFormat.Range),
+        new("range.conditional-format.applies-to", "ManageConditionalFormatsDialog", "ManageConditionalFormatsAppliesToPickerButton", "ManageConditionalFormatsAppliesToBox", DialogRangeSelectionFormat.Range),
+        new("range.move-pivot.destination", "MovePivotDialog", "MovePivotDestinationPickerButton", "MovePivotDestinationBox", DialogRangeSelectionFormat.StartCell),
+        new("range.pivot-data-source.range", "PivotDataSourceDialog", "PivotDataSourceRangePickerButton", "PivotDataSourceRangeBox", DialogRangeSelectionFormat.Range),
     ];
 
     private static readonly ConditionalWeakTable<Button, DialogRangePickerRegistration> ConfiguredDialogRangePickers = new();

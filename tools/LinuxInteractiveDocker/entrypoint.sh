@@ -11,6 +11,7 @@ screen_dpi="${SCREEN_DPI:-96}"
 app_executable="${APP_EXECUTABLE:-FreeX}"
 app_window_title="${APP_WINDOW_TITLE:-FreeX}"
 app_document="${APP_DOCUMENT:-}"
+app_arguments_b64="${APP_ARGUMENTS_B64:-}"
 
 mkdir -p /work/logs /work/screenshots
 rm -f /work/ready.json /work/failure.json
@@ -62,11 +63,14 @@ websockify \
 child_pids+=("$!")
 
 cd /opt/published
-if [[ -n "$app_document" ]]; then
-    "./$app_executable" "$app_document" > /work/logs/app.log 2>&1 &
-else
-    "./$app_executable" > /work/logs/app.log 2>&1 &
+declare -a app_arguments=()
+if [[ -n "$app_arguments_b64" ]]; then
+    mapfile -t app_arguments < <(printf '%s' "$app_arguments_b64" | base64 -d)
 fi
+if [[ -n "$app_document" ]]; then
+    app_arguments+=("$app_document")
+fi
+"./$app_executable" "${app_arguments[@]}" > /work/logs/app.log 2>&1 &
 app_pid=$!
 child_pids+=("$app_pid")
 

@@ -50,6 +50,16 @@ internal static class Program
             return 1;
         }
 
+        if (!InteractionValidationOptions.TryParse(
+                startupArguments,
+                out var interactionValidationOptions,
+                out startupArguments,
+                out var interactionValidationError))
+        {
+            Console.Error.WriteLine(interactionValidationError);
+            return 1;
+        }
+
         var diagnostics = AvaloniaAppDiagnostics.Create(launchSmokeOptions?.DiagnosticsDirectory);
         diagnostics.RegisterUnhandledExceptionHandlers();
         diagnostics.RecordEvent("app_start", new Dictionary<string, string?>
@@ -63,6 +73,7 @@ internal static class Program
         App.LaunchSmokeOptions = launchSmokeOptions;
         App.ParityCaptureOptions = parityCaptureOptions;
         App.GridCaptureOptions = gridCaptureOptions;
+        App.InteractionValidationOptions = interactionValidationOptions;
         App.Diagnostics = diagnostics;
         try
         {

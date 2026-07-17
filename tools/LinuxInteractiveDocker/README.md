@@ -78,6 +78,29 @@ The runner packs it into one compressed archive and builds a harness-owned app
 image before launch. This avoids executing or copying hundreds of .NET files
 through a Windows bind mount.
 
+## Exhaustive FreeX Interaction Validation
+
+Run the production FreeX desktop through both real X11 input probes and the
+authoritative in-process interaction inventories:
+
+```powershell
+powershell -File tools/Run-FreeXLinuxInteractionValidation.ps1
+```
+
+The runner uses port `6082` by default, stops only its own container, and writes
+`interaction-validation.json`, a searchable `interaction-validation.html`, and
+the supporting screenshots into the session's `validation/` directory. It
+covers every declared ribbon placement, dialog and context-menu family, every
+documented keyboard gesture, inline and formula-bar edit/point modes, and every
+dialog field that accepts a worksheet range.
+
+The report keeps evidence strength explicit. `invoked-with-mutation` and real
+X11 probes exercise production behavior; `opened-and-rendered` proves a dialog
+can be reached and laid out; `registry-bound` and planner-backed rows prove
+structural routing but do not claim that a command's full workflow was executed.
+Failed and skipped rows remain visible so an inventory gap cannot silently look
+like parity.
+
 ## Environment Boundaries
 
 This is an X11 software-rendering session using Xvfb, Openbox, and the XRender

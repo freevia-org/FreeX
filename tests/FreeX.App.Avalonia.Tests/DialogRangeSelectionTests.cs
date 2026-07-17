@@ -29,13 +29,23 @@ public sealed class DialogRangeSelectionTests
         "range.allow-edit-range.range",
         "range.text-to-columns.destination",
         "range.resize-table.range",
+        "range.named-ranges.selected-refers-to",
+        "range.named-ranges.definition-refers-to",
+        "range.pivot-create.source",
+        "range.pivot-create.destination",
+        "range.scenario-manager.changing-cells",
+        "range.scenario-manager.result-cells",
+        "range.function-argument.reference",
+        "range.conditional-format.applies-to",
+        "range.move-pivot.destination",
+        "range.pivot-data-source.range",
     ];
 
     [Fact]
-    public void InteractiveValidationRangeTargetIds_ExactlyMatchTheTwentyOneWiredInventoryTargets()
+    public void InteractiveValidationRangeTargetIds_ExactlyMatchAllWiredInventoryTargets()
     {
         MainWindow.InteractiveValidationRangeTargetIds.Should().BeEquivalentTo(ExpectedTargetIds);
-        MainWindow.InteractiveValidationRangeTargetIds.Should().HaveCount(21);
+        MainWindow.InteractiveValidationRangeTargetIds.Should().HaveCount(31);
         InteractiveValidationInventory.WorksheetRangeTargets
             .Where(target => MainWindow.InteractiveValidationRangeTargetIds.Contains(target.Id))
             .Select(target => target.Id)

@@ -25,6 +25,8 @@ public sealed class App : Application
 
     internal static GridCaptureOptions? GridCaptureOptions { get; set; }
 
+    internal static InteractionValidationOptions? InteractionValidationOptions { get; set; }
+
     internal static AvaloniaAppDiagnostics? Diagnostics { get; set; }
 
     /// <summary>
@@ -120,6 +122,9 @@ public sealed class App : Application
 
             if (GridCaptureOptions is { } gridCaptureOptions)
                 GridCaptureCoordinator.Start(mainWindow, gridCaptureOptions, Diagnostics);
+
+            if (InteractionValidationOptions is { } interactionValidationOptions)
+                InteractionValidationCoordinator.Start(mainWindow, interactionValidationOptions, Diagnostics);
         }
 
         base.OnFrameworkInitializationCompleted();

@@ -37,7 +37,7 @@ internal static class AvaloniaRibbonHost
     /// <paramref name="contextSource"/> so contextual tabs (Chart/Picture/Shape/Table/Pivot) appear and
     /// disappear with the selection. A null source falls back to the static tab strip.
     /// </summary>
-    public static (Control Ribbon, Action RefreshToggleStates) Build(
+    public static (Control Ribbon, Action RefreshToggleStates, IRibbonCommandRegistry Registry) Build(
         Func<WorkbookSession?> session,
         Action<string> setStatus,
         AvaloniaRibbonHostCallbacks callbacks,
@@ -52,7 +52,10 @@ internal static class AvaloniaRibbonHost
             contextSource,
             palette: palette,
             onFileTabSelected: callbacks.Backstage);
-        return (ribbon, () => AvaloniaRibbonRenderer.SyncToggleStates(ribbon, registry, palette));
+        return (
+            ribbon,
+            () => AvaloniaRibbonRenderer.SyncToggleStates(ribbon, registry, palette),
+            registry);
     }
 
     /// <summary>
@@ -271,6 +274,20 @@ internal sealed class InsertChartRibbonCommand : IRibbonCommand
 /// </summary>
 internal static class AvaloniaRibbonComposition
 {
+    internal sealed record SurfaceRow(
+        string RowId,
+        string TabId,
+        string TabHeader,
+        string? ActivationKey,
+        string GroupId,
+        string GroupHeader,
+        string Kind,
+        string Label,
+        string? KeyTip,
+        RibbonCommandId CommandId,
+        string? ParentCommandId,
+        string MenuPath);
+
     private static readonly IReadOnlySet<string> StaticDrawUnavailableCommandIds = new HashSet<string>(StringComparer.Ordinal)
     {
         "Crop Picture",
@@ -486,6 +503,102 @@ internal static class AvaloniaRibbonComposition
         foreach (var tab in definition.Tabs)
         foreach (var id in EnumerateCommandIds(tab))
             yield return id;
+    }
+
+    /// <summary>
+    /// Enumerates every visible command placement, preserving duplicate command ids and nested menu paths.
+    /// This is the runtime counterpart of the generated parity surface catalog and is intentionally row based:
+    /// two controls which dispatch the same command are still two interactions that must render and route.
+    /// </summary>
+    public static IEnumerable<SurfaceRow> EnumerateSurfaceRows(RibbonDefinition definition)
+    {
+        foreach (var tab in definition.Tabs)
+        foreach (var group in tab.Groups)
+        for (var controlIndex = 0; controlIndex < group.Controls.Count; controlIndex++)
+        {
+            var control = group.Controls[controlIndex];
+            if (!string.IsNullOrEmpty(control.CommandId.Value))
+            {
+                yield return new SurfaceRow(
+                    $"{tab.Id}/{group.Id}/{controlIndex}",
+                    tab.Id,
+                    tab.Header,
+                    tab.Context?.ActivationKey,
+                    group.Id,
+                    group.Header,
+                    control.GetType().Name,
+                    control.Label,
+                    control.KeyTip,
+                    control.CommandId,
+                    ParentCommandId: null,
+                    MenuPath: "");
+            }
+
+            var menu = control switch
+            {
+                RibbonSplitButton split => split.Menu,
+                RibbonDropdown dropdown => dropdown.Menu,
+                _ => null,
+            };
+            if (menu is null)
+                continue;
+
+            foreach (var row in EnumerateMenuSurfaceRows(
+                         tab,
+                         group,
+                         control,
+                         controlIndex,
+                         menu.Items,
+                         parentPath: ""))
+                yield return row;
+        }
+    }
+
+    private static IEnumerable<SurfaceRow> EnumerateMenuSurfaceRows(
+        RibbonTab tab,
+        RibbonGroup group,
+        RibbonControl parent,
+        int controlIndex,
+        IReadOnlyList<RibbonMenuItem> items,
+        string parentPath)
+    {
+        for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
+        {
+            var item = items[itemIndex];
+            var itemPath = string.IsNullOrEmpty(parentPath)
+                ? itemIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                : $"{parentPath}.{itemIndex}";
+            var labelPath = string.IsNullOrEmpty(parentPath)
+                ? item.Header
+                : $"{parentPath}/{item.Header}";
+
+            if (item.Kind != RibbonMenuItemKind.Separator && item.CommandId is { } commandId &&
+                !string.IsNullOrEmpty(commandId.Value))
+            {
+                yield return new SurfaceRow(
+                    $"{tab.Id}/{group.Id}/{controlIndex}/menu/{itemPath}",
+                    tab.Id,
+                    tab.Header,
+                    tab.Context?.ActivationKey,
+                    group.Id,
+                    group.Header,
+                    nameof(RibbonMenuItem),
+                    item.Header,
+                    item.KeyTip,
+                    commandId,
+                    parent.CommandId.Value,
+                    labelPath);
+            }
+
+            foreach (var row in EnumerateMenuSurfaceRows(
+                         tab,
+                         group,
+                         parent,
+                         controlIndex,
+                         item.Children,
+                         itemPath))
+                yield return row;
+        }
     }
 
     private static IEnumerable<RibbonCommandId> EnumerateCommandIds(RibbonTab tab)

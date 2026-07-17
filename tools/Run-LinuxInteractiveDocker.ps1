@@ -40,6 +40,7 @@ param(
     [string]$PublishDir = "",
     [string]$Image = "freex-linux-interactive:ubuntu24.04",
     [string]$DocumentPath = "",
+    [string[]]$AppArgument = @(),
     [switch]$SkipPublish,
     [switch]$SkipImageBuild,
     [switch]$OpenBrowser,
@@ -343,6 +344,11 @@ $sessionMetadata | ConvertTo-Json | Set-Content -LiteralPath $currentSessionPath
 $sessionMount = "type=bind,source=$sessionDir,target=/work"
 $documentsMount = "type=bind,source=$documentsDir,target=/documents"
 $portBinding = "127.0.0.1:$Port`:6080"
+$appArgumentsBase64 = if ($AppArgument.Count -eq 0) {
+    ""
+} else {
+    [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($AppArgument -join "`n")))
+}
 
 Write-Host "Starting interactive Linux container '$containerName'..."
 $runResult = Invoke-Docker -Arguments @(
@@ -359,6 +365,7 @@ $runResult = Invoke-Docker -Arguments @(
     "--env", "APP_EXECUTABLE=$($definition.Executable)",
     "--env", "APP_WINDOW_TITLE=$($definition.WindowTitle)",
     "--env", "APP_DOCUMENT=$containerDocument",
+    "--env", "APP_ARGUMENTS_B64=$appArgumentsBase64",
     "--env", "SCREEN_WIDTH=$Width",
     "--env", "SCREEN_HEIGHT=$Height",
     "--env", "SCREEN_DPI=$Dpi",

@@ -85,6 +85,23 @@ public sealed partial class MainWindow
         ApplyReviewRefreshPlan(result.RefreshPlan, "Converted notes to comments.");
     }
 
+    private void ToggleActiveCellNoteVisibility()
+    {
+        var result = _session.ExecuteReviewCommand(
+            new ShowHideCommentCommand(_session.ActiveSheet.Id, _session.ActiveCell));
+        RefreshShell(result.Success
+            ? "Show/Hide Note"
+            : result.ErrorMessage ?? UiText.Get("Comment_NoNote"));
+    }
+
+    private void ToggleAllNotesVisibility()
+    {
+        var result = _session.ExecuteReviewCommand(new ShowAllNotesCommand(_session.ActiveSheet.Id));
+        RefreshShell(result.Success
+            ? "Show All Notes"
+            : result.ErrorMessage ?? UiText.Get("Comment_NoNote"));
+    }
+
     // ── Threaded comment dialog: create / edit root / reply / edit-reply / delete-reply ────────
     // Mirrors the WPF host's ThreadedCommentDialog, sharing its
     // portable ThreadedCommentDialogPlanner (validation + result-shaping) so both shells agree on

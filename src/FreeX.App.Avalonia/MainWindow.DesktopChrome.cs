@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Free.Shared.Ribbon;
 using Free.Shared.Ribbon.Avalonia;
 
 namespace FreeX.App.Avalonia;
@@ -8,9 +9,11 @@ namespace FreeX.App.Avalonia;
 public sealed partial class MainWindow
 {
     private Control? _ribbonControl;
+    private IRibbonCommandRegistry? _ribbonCommandRegistry;
     private bool _ribbonKeyTipsVisible;
     internal bool RibbonKeyTipsVisibleForTest => _ribbonKeyTipsVisible;
     internal bool HasWindowIconForTest => Icon is not null;
+    internal IRibbonCommandRegistry? RibbonCommandRegistryForTest => _ribbonCommandRegistry;
     internal Thickness CellAddressPaddingForTest => _cellAddressText.Padding;
 
     internal void ShowBackstageOverlayForTest() => ShowBackstageOverlay();
