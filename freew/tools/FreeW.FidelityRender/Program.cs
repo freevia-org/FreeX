@@ -281,9 +281,13 @@ static void RenderDocumentComposite(
             .BuildTableLayoutPlan(table, page: doc.Page, firstPageLeadingContentHeightDip: 0)
             .Pagination.Pages.Count > 1);
     var bodyFootnoteReserveDip = hasMultiPageTable ? 0 : footnoteReserveDip;
+    // WPF FlowDocument suppresses the first block's top margin at a page boundary, whereas Word retains
+    // the paragraph style's space-before. Fold that first resolved spacing into the page inset so a
+    // Heading1 at the start of a document begins at the same vertical coordinate in both renderers.
+    var firstBodySpaceBeforeDip = PageLayout.PointsToDip(FirstBodyParagraphSpaceBefore(doc));
     flow.PagePadding = new Thickness(
         marginLeft,
-        marginTop,
+        marginTop + firstBodySpaceBeforeDip,
         marginRight,
         Math.Max(0, marginBottom + bodyFootnoteReserveDip));
 
@@ -737,6 +741,30 @@ static void RenderDocumentComposite(
     }
 
     // Endnotes are composed within the final body page above.
+}
+
+static double FirstBodyParagraphSpaceBefore(TextDocument document)
+{
+    var paragraph = document.Blocks.OfType<FreeW.Core.Model.Paragraph>().FirstOrDefault();
+    if (paragraph is null)
+        return 0;
+
+    if (paragraph.Formatting.SpaceBeforeIsSet)
+        return Math.Max(0, paragraph.Formatting.SpaceBeforePt);
+
+    var styleId = paragraph.StyleId;
+    var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    while (styleId is { Length: > 0 } && seen.Add(styleId)
+        && document.Styles.TryGetValue(styleId, out var style))
+    {
+        if (style.Paragraph.SpaceBeforeIsSet)
+            return Math.Max(0, style.Paragraph.SpaceBeforePt);
+        styleId = style.BasedOnStyleId;
+    }
+
+    return document.DefaultParagraph.SpaceBeforeIsSet
+        ? Math.Max(0, document.DefaultParagraph.SpaceBeforePt)
+        : 0;
 }
 
 /// <summary>
