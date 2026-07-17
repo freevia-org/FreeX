@@ -120,7 +120,11 @@ public static class ShapeEffectRenderPlanner
         if (glowPasses <= 0)
             return Array.Empty<ShapeGlowPass>();
 
-        byte passAlpha = (byte)(effects.GlowAlpha / (glowPasses + 1));
+        // Each ring is composited over the previous one. Choose the per-ring
+        // alpha so the fully overlapped center reaches the authored opacity.
+        double targetAlpha = effects.GlowAlpha / 255.0;
+        double perPassAlpha = 1.0 - Math.Pow(1.0 - targetAlpha, 1.0 / glowPasses);
+        byte passAlpha = (byte)Math.Clamp(Math.Round(perPassAlpha * 255.0), 1, 255);
         var passes = new List<ShapeGlowPass>(glowPasses);
         for (int i = glowPasses; i >= 1; i--)
         {

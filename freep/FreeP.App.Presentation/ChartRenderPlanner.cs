@@ -504,6 +504,7 @@ public sealed class ChartScenePlan
 {
     public ChartFramePlan Frame { get; init; }
     public ChartSceneGeometryKind GeometryKind { get; init; }
+    public bool UsesStockLineFallback { get; init; }
     public ChartTextPlan? Title { get; init; }
     public bool DrawFlatGrid { get; init; }
     public bool DrawProjectedThreeDBarFrame { get; init; }
@@ -1396,6 +1397,7 @@ public static partial class ChartRenderPlanner
         {
             Frame = frame,
             GeometryKind = geometryKind,
+            UsesStockLineFallback = UsesStockLineFallback(chart),
             Title = title,
             DrawFlatGrid = !UsesProjectedSurfaceFrame(chart) &&
                 !UsesImportedThreeDColumnDefaults(chart) &&
