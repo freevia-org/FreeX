@@ -314,7 +314,10 @@ public sealed partial class MainWindow
             dialogOpeners = dialogOpeners.Take(Math.Max(0, limit)).ToArray();
 
         foreach (var (surfaceId, opener) in dialogOpeners)
+        {
             results.Add(await CaptureModalSurfaceAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener));
+            ReleaseCompletedDialogCaptureResources();
+        }
 
         // ── Multi-tab / multi-category dialogs: open once, render the default surface plus one
         //    PNG per tab/category (`<surfaceId>.<TabName>`) so the comparison runner pairs each
@@ -329,7 +332,10 @@ public sealed partial class MainWindow
                 .ToArray();
 
         foreach (var (surfaceId, opener, tabNames) in tabDialogs)
+        {
             results.AddRange(await CaptureModalTabsAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener, tabNames));
+            ReleaseCompletedDialogCaptureResources();
+        }
 
         // The original 57 logical routes above intentionally retain their stable ids and tab expansion.
         // Add only catalog routes that are not already represented by one of those production surfaces.
@@ -365,6 +371,7 @@ public sealed partial class MainWindow
                     route.SurfaceId,
                     ParitySurfaceKind.Dialog,
                     opener));
+                ReleaseCompletedDialogCaptureResources();
             }
 
             var missingRoutes = ParityInteractionDialogRoutes.Where(route => route.IsMissing);
@@ -391,6 +398,16 @@ public sealed partial class MainWindow
         }
 
         return results;
+    }
+
+    private static void ReleaseCompletedDialogCaptureResources()
+    {
+        // Closed Avalonia windows can retain sizeable visual/native graphs until a full collection.
+        // Exhaustive capture creates 120 of them in one process, so reclaim each completed unit before
+        // opening the next rather than allowing the Docker memory ceiling to become the collector trigger.
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: false);
+        GC.WaitForPendingFinalizers();
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: false);
     }
 
     /// <summary>The canonical dialog surfaces and the shell method that opens each. Ordered for stable output.</summary>
