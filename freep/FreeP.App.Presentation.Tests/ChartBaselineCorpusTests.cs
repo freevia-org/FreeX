@@ -404,6 +404,9 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 0).Point.Y
             .Should().BeApproximately(137.5, 0.0001,
                 "Surface3D height follows the PowerPoint value axis instead of normalizing to the smallest data value");
+        surfaceGeometry.Points.Single(point => point.SeriesIndex == 1 && point.CategoryIndex == 0).Point.Y
+            .Should().BeApproximately(98.93, 0.0001,
+                "the imported COM mesh registers the middle-row North vertex below the shared projection");
         surfaceGeometry.Facets.Should().HaveCount(4);
         surfaceGeometry.WireframeSegments.Should().HaveCountGreaterThan(surfaceGeometry.Facets.Count);
         surfaceGeometry.ContourSegments.Should().BeEmpty(
