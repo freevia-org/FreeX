@@ -2511,8 +2511,10 @@ public sealed class SlideCanvas : FrameworkElement
                             var reflectionMask = new LinearGradientBrush
                             {
                                 MappingMode = BrushMappingMode.RelativeToBoundingBox,
-                                StartPoint = new Point(0.5, 0),
-                                EndPoint = new Point(0.5, 1),
+                                // Reflections use a negative Y scale. Reverse the
+                                // mask direction so opacity fades away from the glyph.
+                                StartPoint = new Point(0.5, 1),
+                                EndPoint = new Point(0.5, 0),
                             };
                             reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(Colors.White, 0));
                             reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
