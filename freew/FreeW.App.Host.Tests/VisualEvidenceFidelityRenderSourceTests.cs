@@ -68,6 +68,9 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildBackstagePrintExportDocument");
         source.Should().Contain("RenderPictureWatermark(");
         source.Should().Contain("WatermarkVisualPlanner.BuildPictureLayout(");
+        source.Should().Contain("RenderReviewMarkupCapture(bmp, doc)");
+        source.Should().Contain("ReviewBalloonLayoutPlanner.BuildSources(document, ReviewDisplayPolicy.Default)");
+        source.Should().Contain("new Rect(stripLeft, stripTop, width - stripLeft, stripBottom - stripTop)");
         source.Should().Contain("backstage-print-preview-fidelity.docx");
         source.Should().Contain("backstage-pdf-export-fidelity.docx");
         source.Should().Contain("BuildVisualEvidenceOutputPath(outDir, name, i + 1)");
