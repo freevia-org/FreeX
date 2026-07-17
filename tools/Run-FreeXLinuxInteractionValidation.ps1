@@ -30,6 +30,10 @@ param(
 
     [string]$ResumeReportDirectory = "",
 
+    [string]$ExistingX11Manifest = "",
+
+    [switch]$SkipX11,
+
     [switch]$SkipImageBuild,
     [switch]$SkipPublish
 )
@@ -80,24 +84,33 @@ if ($SkipImageBuild) { $desktopStartArguments.SkipImageBuild = $true }
 if ($SkipPublish) { $desktopStartArguments.SkipPublish = $true }
 
 try {
-    # Phase one sends real X11 keyboard and pointer events through the production handlers.
-    & $harness @desktopStartArguments
-    if ($LASTEXITCODE -ne 0) {
-        throw "Linux X11 input-validation harness failed to start."
-    }
+    if ($SkipX11) {
+        if ([string]::IsNullOrWhiteSpace($ExistingX11Manifest) -or
+            -not (Test-Path -LiteralPath $ExistingX11Manifest -PathType Leaf)) {
+            throw "-SkipX11 requires -ExistingX11Manifest with a completed physical-probe manifest."
+        }
+        $x11Manifest = Get-Content -LiteralPath $ExistingX11Manifest -Raw | ConvertFrom-Json
+        $x11ProbeExit = if (@($x11Manifest.results | Where-Object status -eq "failed").Count -gt 0) { 1 } else { 0 }
+    } else {
+        # Phase one sends real X11 keyboard and pointer events through the production handlers.
+        & $harness @desktopStartArguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Linux X11 input-validation harness failed to start."
+        }
 
-    $x11Session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
-    & docker cp $x11ProbeScript "${containerName}:/tmp/run-freex-input-probes.sh"
-    if ($LASTEXITCODE -ne 0) { throw "Could not copy X11 input probes into '$containerName'." }
-    & docker exec --env DISPLAY=:99 $containerName bash /tmp/run-freex-input-probes.sh /work/x11-validation
-    $x11ProbeExit = $LASTEXITCODE
-    $x11ManifestPath = Join-Path ([string]$x11Session.sessionDirectory) "x11-validation/x11-input-results.json"
-    if (-not (Test-Path -LiteralPath $x11ManifestPath -PathType Leaf)) {
-        throw "X11 input probes did not write a result manifest (exit $x11ProbeExit): $x11ManifestPath"
-    }
-    $x11Manifest = Get-Content -LiteralPath $x11ManifestPath -Raw | ConvertFrom-Json
+        $x11Session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+        & docker cp $x11ProbeScript "${containerName}:/tmp/run-freex-input-probes.sh"
+        if ($LASTEXITCODE -ne 0) { throw "Could not copy X11 input probes into '$containerName'." }
+        & docker exec --env DISPLAY=:99 $containerName bash /tmp/run-freex-input-probes.sh /work/x11-validation
+        $x11ProbeExit = $LASTEXITCODE
+        $x11ManifestPath = Join-Path ([string]$x11Session.sessionDirectory) "x11-validation/x11-input-results.json"
+        if (-not (Test-Path -LiteralPath $x11ManifestPath -PathType Leaf)) {
+            throw "X11 input probes did not write a result manifest (exit $x11ProbeExit): $x11ManifestPath"
+        }
+        $x11Manifest = Get-Content -LiteralPath $x11ManifestPath -Raw | ConvertFrom-Json
 
-    & $harness -Action Stop -App FreeX -Port $Port
+        & $harness -Action Stop -App FreeX -Port $Port
+    }
 
     # Phase two uses a fresh X11 process for each bounded dialog slice. Avalonia retains native modal/input
     # resources across repeated closes, so one 120-dialog process is not a reliable validation boundary.
@@ -190,7 +203,7 @@ try {
             "--interaction-validation-context-count", [string]$contextCount
         )
         Write-Host "Running context-menu dispatch batch $contextStart..$($contextStart + $contextCount - 1)..."
-        & $harness -Action Start -App FreeX -Port $Port -Replace -SkipImageBuild -SkipPublish -AppArgument $appArguments
+        & $harness -Action Start -App FreeX -Port $Port -Replace -SkipImageBuild -SkipPublish -MemoryLimit 6g -AppArgument $appArguments
         if ($LASTEXITCODE -ne 0) {
             throw "Linux context-menu interaction batch starting at $contextStart failed to start."
         }

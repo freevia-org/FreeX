@@ -36,6 +36,9 @@ param(
     [ValidateRange(72, 240)]
     [int]$Dpi = 96,
 
+    [ValidateSet("2g", "4g", "6g", "8g")]
+    [string]$MemoryLimit = "4g",
+
     [string]$OutputDir = "artifacts/linux-interactive",
     [string]$PublishDir = "",
     [string]$Image = "freex-linux-interactive:ubuntu24.04",
@@ -364,7 +367,7 @@ $runResult = Invoke-Docker -Arguments @(
     "--label", "$labelName=true",
     "--label", "$labelName.app=$appKey",
     # Exhaustive parity runs retain rendered evidence for every dialog and need more than 2 GB.
-    "--memory", "4g",
+    "--memory", $MemoryLimit,
     "--shm-size", "256m",
     "--publish", $portBinding,
     "--env", "APP_EXECUTABLE=$($definition.Executable)",
