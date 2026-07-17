@@ -181,6 +181,7 @@ public sealed partial class MainWindow
 
     private async Task AddShortcutScenarioInteractionResultsAsync(List<InteractionValidationResult> results)
     {
+        var interactionOrdinal = 0;
         foreach (var scenario in InteractiveValidationInventory.KeyboardShortcuts)
         for (var index = 0; index < scenario.Interactions.Count; index++)
         {
@@ -203,7 +204,9 @@ public sealed partial class MainWindow
                 continue;
             }
 
-            var probe = await ExerciseShortcutInteractionAsync(interaction);
+            var probe = await ExerciseShortcutInteractionAsync(
+                interaction,
+                replaceSession: interactionOrdinal % 32 == 0);
             results.Add(new InteractionValidationResult(
                 Id: interactionId,
                 Category: "shortcut-scenario",
@@ -211,11 +214,15 @@ public sealed partial class MainWindow
                 EvidenceLevel: probe.Passed ? "production-key-event-dispatched" : "production-key-event-unhandled",
                 Evidence: $"{interaction.DisplayText} | {interaction.Context} | {interaction.Kind}",
                 Note: $"{probe.Note} Expected: {scenario.ExpectedBehavior}"));
+            interactionOrdinal++;
+            if (interactionOrdinal % 32 == 0)
+                GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: false);
         }
     }
 
     internal async Task<(bool Passed, string Note)> ExerciseShortcutInteractionAsync(
-        ShortcutInteractionDescriptor interaction)
+        ShortcutInteractionDescriptor interaction,
+        bool replaceSession = true)
     {
         var mappedSteps = new List<(Key Key, KeyModifiers Modifiers)>();
         if (interaction.Steps.Count == 0)
@@ -229,7 +236,7 @@ public sealed partial class MainWindow
 
         try
         {
-            ResetShortcutValidationState(interaction.Context);
+            ResetShortcutValidationState(interaction.Context, replaceSession);
             for (var index = 0; index < mappedSteps.Count; index++)
             {
                 var step = mappedSteps[index];
@@ -253,14 +260,17 @@ public sealed partial class MainWindow
         finally
         {
             CloseOwnedWindows(OwnedWindows.ToArray());
-            ResetShortcutValidationState(ShortcutInteractionContext.Worksheet);
+            ResetShortcutValidationState(ShortcutInteractionContext.Worksheet, replaceSession: false);
         }
     }
 
-    private void ResetShortcutValidationState(ShortcutInteractionContext context)
+    private void ResetShortcutValidationState(
+        ShortcutInteractionContext context,
+        bool replaceSession)
     {
         CloseOwnedWindows(OwnedWindows.ToArray());
-        _session = CreateDisposableRibbonSession();
+        if (replaceSession || _session.Workbook.Sheets.Count == 0)
+            _session = CreateDisposableRibbonSession();
         _legacyDataFilterSequenceState = LegacyDataFilterSequenceState.None;
         SetRibbonKeyTipsVisible(false);
         HideBackstageOverlay();
