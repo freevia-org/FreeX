@@ -572,7 +572,7 @@ public static partial class ChartRenderPlanner
     public const double ImportedComboPlotTopOffset = 1.0;
     public const double ImportedComboSecondaryLabelCompensation = 8.0;
     public const int ImportedComboSecondaryMinorTickDivisions = 5;
-    public const double ImportedComboLegendRightCompensation = 8.0;
+    public const double ImportedComboLegendRightCompensation = 0.0;
     public const double ImportedRadarLegendSwatchWidth = 29.0;
     public const double ImportedRadarLegendSwatchHeight = 12.0;
     public const double ImportedRadarLegendLabelInset = 29.0;
