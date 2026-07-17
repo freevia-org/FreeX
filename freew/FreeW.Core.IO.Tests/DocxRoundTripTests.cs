@@ -3566,6 +3566,31 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void Table_OuterBorders_DistinctEdges_RoundTrip()
+    {
+        var doc = new TextDocument();
+        var table = Table.Create(1, 1);
+        table.Rows[0].Cells[0] = new TableCell("framed");
+        table.OuterBorders = new CellBorders
+        {
+            Top = new CellBorderEdge(BorderLineStyle.Double, "#000000", 1.25),
+            Bottom = new CellBorderEdge(BorderLineStyle.Thick, "#1F4E79", 2),
+            Left = new CellBorderEdge(BorderLineStyle.Dashed, "#FF0000", 0.75),
+            Right = new CellBorderEdge(BorderLineStyle.Dotted, "#008000", 0.5)
+        };
+        doc.Blocks.Add(table);
+
+        var result = RoundTrip(doc);
+
+        var readTable = result.Blocks.OfType<Table>().Single();
+        readTable.OuterBorders.Should().NotBeNull();
+        readTable.OuterBorders!.Top.Should().Be(new CellBorderEdge(BorderLineStyle.Double, "#000000", 1.25));
+        readTable.OuterBorders.Bottom.Should().Be(new CellBorderEdge(BorderLineStyle.Thick, "#1F4E79", 2));
+        readTable.OuterBorders.Left.Should().Be(new CellBorderEdge(BorderLineStyle.Dashed, "#FF0000", 0.75));
+        readTable.OuterBorders.Right.Should().Be(new CellBorderEdge(BorderLineStyle.Dotted, "#008000", 0.5));
+    }
+
+    [Fact]
     public void WidePageDimensions_EmitLandscapeOrientationForWord()
     {
         var doc = new TextDocument();

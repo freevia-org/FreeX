@@ -188,6 +188,7 @@ public static class TableLayoutOperations
         var copy = new Table
         {
             Formatting = source.Formatting,
+            OuterBorders = source.OuterBorders,
             TableStyleId = source.TableStyleId,
             PreferredWidthPt = source.PreferredWidthPt,
             Alignment = source.Alignment,

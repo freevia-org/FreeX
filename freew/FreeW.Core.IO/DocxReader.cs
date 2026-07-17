@@ -2644,6 +2644,10 @@ public static class DocxReader
 
         var tblPr = tbl.Element(W + "tblPr");
         var borders = tblPr?.Element(W + "tblBorders");
+        // Retain the authored outer edges rather than reducing tblBorders to the legacy Boolean flag.
+        // This is deliberately distinct from per-cell tcBorders: Word paints this frame around the
+        // cell-spacing gap, which is visible even when every cell supplies its own edge formatting.
+        table.OuterBorders = ReadCellBorders(borders);
         // Borders can come from the referenced table style (w:tblStyle, e.g. the default TableGrid) rather
         // than an explicit tblBorders; resolve that so styled-but-not-explicitly-bordered tables still draw.
         var tblStyleId = tblPr?.Element(W + "tblStyle")?.Attribute(W + "val")?.Value;

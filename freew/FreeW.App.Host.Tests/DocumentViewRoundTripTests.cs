@@ -938,6 +938,27 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void TableCellMargins_RoundTrip()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 2);
+        table.DefaultCellMargins = new TableCellMargins(3, 6, 3, 6);
+        table.CellSpacingPt = 1.8;
+        table.Rows[0].Cells[1].Margins = new TableCellMargins(4, 8, 2, 5);
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        view.CommitToModel();
+        var result = view.Model.Blocks.OfType<Table>().Single();
+        result.DefaultCellMargins.Should().Be(table.DefaultCellMargins);
+        result.CellSpacingPt.Should().Be(table.CellSpacingPt);
+        result.Rows[0].Cells[1].Margins.Should().Be(table.Rows[0].Cells[1].Margins);
+    }
+
+    [StaFact]
     public void TableVerticalMerge_RendersFiniteMergedRegion_AndRoundTrips()
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();

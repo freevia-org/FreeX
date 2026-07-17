@@ -2114,6 +2114,13 @@ public sealed class Table : Block
     public TableFormatting Formatting { get; set; } = TableFormatting.Default;
 
     /// <summary>
+    /// Explicit outer table edges from <c>w:tblPr/w:tblBorders</c>. Null means the table inherits its
+    /// outer frame from its style or the legacy <see cref="Formatting"/> border flag. Inside horizontal
+    /// and vertical edges remain governed by <see cref="Formatting"/> and per-cell borders.
+    /// </summary>
+    public CellBorders? OuterBorders { get; set; }
+
+    /// <summary>
     /// The OOXML table-style id (e.g. <c>"TableGrid"</c>, <c>"GridTable1Light"</c>) referencing a
     /// <see cref="DocumentTableStyle"/> from the built-in catalog. When set, the table's visual appearance
     /// (borders, header fill, banded-row shading, emphasis) is driven by the catalog entry; the style id is

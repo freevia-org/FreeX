@@ -1980,7 +1980,28 @@ public static class DocxWriter
             tblPr.Add(new XElement(W + "tblInd",
                 new XAttribute(W + "w", PointsToDxa(indentPt)), new XAttribute(W + "type", "dxa")));
 
-        if (table.Formatting.Borders)
+        if (table.OuterBorders is { } outerBorders)
+        {
+            XElement? OuterBorder(string name, CellBorderEdge? edge) => edge is null
+                ? null
+                : new XElement(W + name,
+                    new XAttribute(W + "val", BorderLineStyles.ToToken(edge.Style)),
+                    new XAttribute(W + "sz", PointsToEighthPoints(edge.WidthPt)),
+                    new XAttribute(W + "space", 0),
+                    new XAttribute(W + "color", edge.ColorHex.TrimStart('#')));
+            XElement InnerBorder(string name) => new(W + name,
+                new XAttribute(W + "val", table.Formatting.Borders ? "single" : "none"),
+                new XAttribute(W + "sz", 4),
+                new XAttribute(W + "space", 0),
+                new XAttribute(W + "color", "auto"));
+            tblPr.Add(new XElement(W + "tblBorders",
+                OuterBorder("top", outerBorders.Top),
+                OuterBorder("left", outerBorders.Left),
+                OuterBorder("bottom", outerBorders.Bottom),
+                OuterBorder("right", outerBorders.Right),
+                InnerBorder("insideH"), InnerBorder("insideV")));
+        }
+        else if (table.Formatting.Borders)
         {
             XElement Border(string name) => new(W + name,
                 new XAttribute(W + "val", "single"),

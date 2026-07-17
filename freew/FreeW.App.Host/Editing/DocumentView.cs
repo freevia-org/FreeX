@@ -3735,7 +3735,11 @@ public sealed class DocumentView : RichTextBox
 
         // Rebuild the table preserving its formatting and column grid; only the row order changes (the
         // same TableRow instances are reused, so cell content/shading travels with each row).
-        var replacement = new ModelTable { Formatting = table.Formatting };
+        var replacement = new ModelTable
+        {
+            Formatting = table.Formatting,
+            OuterBorders = table.OuterBorders
+        };
         replacement.ColumnWidthsPt.AddRange(table.ColumnWidthsPt);
         replacement.Rows.AddRange(sorted);
 
@@ -6955,6 +6959,9 @@ public sealed class DocumentView : RichTextBox
         var bandedRows = stashed?.BandedRows ?? false;
         var repeatHeader = stashed?.RepeatHeaderRow ?? false;
         var tableStyleId = stashedTag?.TableStyleId;
+        table.OuterBorders = stashedTag?.OuterBorders;
+        table.DefaultCellMargins = stashedTag?.DefaultCellMargins;
+        table.CellSpacingPt = stashedTag?.CellSpacingPt;
 
         // Preserve column widths (column-level in WPF) so the docx tblGrid round-trips through edit.
         foreach (var column in wpfTable.Columns)
@@ -7034,6 +7041,7 @@ public sealed class DocumentView : RichTextBox
                         // Tag (WPF FlowDocument has no native representation for any of these; they survive
                         // the view→model round-trip only via the Tag).
                         Borders = cellTag?.Borders,
+                        Margins = cellTag?.Margins,
                         TextDirection = cellTag?.TextDirection ?? CellTextDirection.Horizontal,
                         VerticalAlignment = cellTag?.VerticalAlignment ?? TableCellVerticalAlignment.Top
                     };
@@ -7244,6 +7252,7 @@ public sealed class DocumentView : RichTextBox
     private sealed record TableCellTag(
         string? ShadingColorHex,
         CellBorders? Borders = null,
+        TableCellMargins? Margins = null,
         CellTextDirection TextDirection = CellTextDirection.Horizontal,
         TableCellVerticalAlignment VerticalAlignment = TableCellVerticalAlignment.Top,
         VerticalMergeState VerticalMerge = VerticalMergeState.None);
@@ -7257,6 +7266,9 @@ public sealed class DocumentView : RichTextBox
     private sealed record WpfTableTag(
         TableFormatting Formatting,
         string? TableStyleId,
+        CellBorders? OuterBorders,
+        TableCellMargins? DefaultCellMargins,
+        double? CellSpacingPt,
         int SourceBlockIndex = -1,
         int SegmentIndex = 0,
         int SegmentCount = 1,
@@ -7378,6 +7390,9 @@ public sealed class DocumentView : RichTextBox
             Tag = new WpfTableTag(
                 table.Formatting,
                 table.TableStyleId,
+                table.OuterBorders,
+                table.DefaultCellMargins,
+                table.CellSpacingPt,
                 sourceBlockIndex,
                 segmentIndex,
                 segmentCount,
@@ -7416,7 +7431,9 @@ public sealed class DocumentView : RichTextBox
             ? DocumentTableStyle.FindById(sid)
             : null;
 
-        // Border color: from the catalog style's BorderColorHex, else the default grey.
+        // WPF's Table border is painted inside the FlowDocument cell layout, unlike Word's tblBorders
+        // frame around cell spacing. Keep the established style-derived fallback here; OuterBorders is
+        // retained on the model/tag for lossless DOCX round-trip until the table compositor owns that frame.
         var borderColor = catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
             ? (Color)ColorConverter.ConvertFromString("#" + borderHex)
             : Color.FromRgb(0x9A, 0x9A, 0x9A);
@@ -7452,6 +7469,9 @@ public sealed class DocumentView : RichTextBox
                 var span = Math.Max(1, modelCell.GridSpan);
                 var wpfCell = new WpfTableCell
                 {
+                    // TableCell.Padding controls the external gap in WPF, while Word's tblCellMar is
+                    // internal content padding. Preserve the modeled margins through the tag but retain
+                    // the proven visual fallback until the compositor can apply them inside the cell frame.
                     Padding = new Thickness(4, 2, 4, 2)
                 };
                 if (span > 1)
@@ -7466,8 +7486,13 @@ public sealed class DocumentView : RichTextBox
                 // heuristic alone can't distinguish author shading from style fills; borders, text
                 // direction and vertical alignment have no WPF FlowDocument equivalent, so they survive
                 // only through the stashed Tag.
-                wpfCell.Tag = new TableCellTag(modelCell.ShadingColorHex, modelCell.Borders,
-                    modelCell.TextDirection, modelCell.VerticalAlignment, modelCell.VerticalMerge);
+                wpfCell.Tag = new TableCellTag(
+                    modelCell.ShadingColorHex,
+                    modelCell.Borders,
+                    modelCell.Margins,
+                    modelCell.TextDirection,
+                    modelCell.VerticalAlignment,
+                    modelCell.VerticalMerge);
 
                 var cellBorderPlan = TableCellBorderVisualPlanner.Build(modelCell.Borders, PxPerPoint);
                 if (cellBorderPlan.HasVisibleEdges)
