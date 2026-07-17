@@ -127,6 +127,8 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("generatedSegmentBox.OwnerSectionHf ?? doc.FinalSectionHeadersFooters");
         source.Should().Contain("HeaderFooterPagePlanner.ResolveSlots(");
         source.Should().Contain("footerSlotName = generatedSegmentSlots.FooterSlotName");
+        source.Should().Contain("dc.PushClip(new RectangleGeometry(new Rect(");
+        source.Should().Contain("dc.DrawImage(footnoteBmp, new Rect(0, fnY, thisPixW, fnH))");
     }
 
     private static string RepositoryFile(params string[] parts)

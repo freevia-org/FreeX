@@ -657,7 +657,15 @@ static void RenderDocumentComposite(
                         thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip);
                     var fnVis = new DrawingVisual();
                     using (var dc = fnVis.RenderOpen())
+                    {
+                        dc.PushClip(new RectangleGeometry(new Rect(
+                            thisMarginLeft,
+                            fnY,
+                            thisPageWDip - thisMarginLeft - thisMarginRight,
+                            fnH)));
                         dc.DrawImage(footnoteBmp, new Rect(0, fnY, thisPixW, fnH));
+                        dc.Pop();
+                    }
                     bmp.Render(fnVis);
                 }
             }
