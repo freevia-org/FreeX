@@ -766,6 +766,8 @@ public sealed class DocumentViewLayoutPlannerTests
         image.TypeTag.Should().Be("Image");
 
         snapshots[1].BehindText.Should().BeTrue();
+        snapshots[3].Rect.Should().Be(new DocumentFloatRect(216, 268, 200, 80),
+            "authored WordArt bounds must override the text-length fallback");
         snapshots[4].TypeTag.Should().Be("SmartArt");
 
         var wrapZones = DocumentViewLayoutPlanner.BuildFloatingWrapExclusionZones(snapshots);
@@ -982,6 +984,8 @@ public sealed class DocumentViewLayoutPlannerTests
         }));
         paragraph.Runs.Add(Run.FromWordArt(new WordArt("Go", fontSizePt: 24)
         {
+            WidthPt = 150,
+            HeightPt = 60,
             Placement = Floating(ImageWrapping.Tight, zOrder: 5, horizontalOffsetPt: 72, verticalOffsetPt: 36),
         }));
         paragraph.Runs.Add(Run.FromSmartArt(new SmartArt

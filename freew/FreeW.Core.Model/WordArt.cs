@@ -97,6 +97,13 @@ public sealed class WordArt
     public double FontSizePt { get; set; } = 36;
 
     /// <summary>
+    /// Authored text-box dimensions in points. Imported floating WordArt uses these extents instead of
+    /// re-estimating bounds from its text, preserving Word's anchor geometry.
+    /// </summary>
+    public double? WidthPt { get; set; }
+    public double? HeightPt { get; set; }
+
+    /// <summary>
     /// Accessibility description (maps onto <c>wp:docPr/@descr</c>). Null means no alt text.
     /// Mirrors <see cref="InlineImage.AltText"/> and <see cref="Shape.AltText"/>.
     /// </summary>
