@@ -87,6 +87,7 @@ static ChartShape MakeStockChart()
         ChartType                = ChartType.Stock,
         Title                    = "Stock: rising, falling, unchanged",
         RegenerateWorkbookOnSave = true,
+        HasHighLowLines          = false,
     };
     chart.Categories.AddRange(new[] { "Day 1", "Day 2", "Day 3" });
     chart.Series.Add(MakeSeries("Open", 10, 14, 12));
