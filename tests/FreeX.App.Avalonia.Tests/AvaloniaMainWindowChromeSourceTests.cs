@@ -636,13 +636,15 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     {
         var insertObjectsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.InsertObjects.cs"));
         var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var ribbonSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "Ribbon", "AvaloniaRibbonHost.cs"));
 
         insertObjectsSource.Should().Contain("foreach (var group in DrawingInsertionPlanner.ShapeGroups)");
         insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildShapeCommand(");
         insertObjectsSource.Should().Contain("DrawingInsertionPlanner.BuildTextBoxCommand(");
         insertObjectsSource.Should().Contain("DrawingObjectActionPlanner.InsertShapeSuccess(");
         insertObjectsSource.Should().Contain("DrawingObjectActionPlanner.InsertTextBoxSuccess(");
-        mainSource.Should().Contain("DrawingInsertionPlanner.DefaultShape");
+        mainSource.Should().Contain("InsertShape = InsertShapeAtActiveCell");
+        ribbonSource.Should().Contain("DrawingInsertionPlanner.DefaultShape");
         File.Exists(RepoFile("src", "FreeX.App.Avalonia", "InsertShapeCommandFactory.cs")).Should().BeFalse();
         File.Exists(RepoFile("src", "FreeX.App.Avalonia", "InsertTextBoxCommandFactory.cs")).Should().BeFalse();
     }

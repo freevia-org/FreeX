@@ -410,6 +410,32 @@ public sealed class WorkbookSessionTests
     }
 
     [Fact]
+    public void TryGetHyperlinkPlan_UsesClickedAddressWithoutChangingSelection()
+    {
+        var workbook = CreateWorkbook();
+        var sheet = workbook.Sheets.Single();
+        var selected = new CellAddress(sheet.Id, 1, 1);
+        var clicked = new CellAddress(sheet.Id, 2, 2);
+        sheet.Hyperlinks[clicked] = "https://example.test/clicked";
+        sheet.HyperlinkMetadata[clicked] = new HyperlinkMetadata(HyperlinkTargetKind.ExistingFileOrWebPage);
+        var session = CreateSession(new StartupWorkbookLoadResult(
+            workbook,
+            "Book.fxl",
+            "Opened .fxl.",
+            IsFallback: false));
+        session.SelectCell(selected);
+
+        session.TryGetHyperlinkPlan(clicked, out var plan).Should().BeTrue();
+
+        plan.Should().Be(new HyperlinkNavigationPlan(
+            HyperlinkNavigationKind.External,
+            "https://example.test/clicked",
+            null));
+        session.ActiveCell.Should().Be(selected);
+        session.IsDirty.Should().BeFalse();
+    }
+
+    [Fact]
     public void TryGetSelectedHyperlinkPlan_ResolvesRelativeLocalFileAgainstWorkbookPathWithoutNavigation()
     {
         var workbook = CreateWorkbook();

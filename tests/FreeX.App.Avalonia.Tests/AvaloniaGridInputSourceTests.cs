@@ -102,10 +102,11 @@ public sealed class AvaloniaGridInputSourceTests
         source.Should().NotContain("!_session.SelectedRange.Contains(address)");
         source.Should().Contain("private const double AutofillHandleSize = 10;");
         source.Should().Contain("private const double AutofillHandleHitPadding = 6;");
-        source.Should().Contain("_sheetGridHost.Cursor = IsPointerOnAutofillHandle(args)");
+        source.Should().Contain("if (IsPointerOnAutofillHandle(args))");
         source.Should().Contain("? new Cursor(StandardCursorType.Hand)");
         source.Should().Contain(": Cursor.Default;");
-        source.Should().NotContain(": new Cursor(StandardCursorType.Hand);");
+        source.Should().Contain("HasHyperlinkActivationModifier(args.KeyModifiers)");
+        source.Should().Contain("await OpenSelectedHyperlinkAsync();");
         source.Should().Contain("GridAutofillPlanner.CalculateCompletedSelectionRange(source, operationRange)");
         source.Should().Contain("_session.FillSelectedRange(direction)");
         source.Should().Contain("TryBeginSelectionMoveDrag(args, border, address)");
@@ -134,13 +135,15 @@ public sealed class AvaloniaGridInputSourceTests
     }
 
     [Fact]
-    public void WorksheetContextClick_AcceptsRightClickAndControlClick()
+    public void WorksheetContextClick_AcceptsRightClickAndMacControlClick()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
 
         source.Should().Contain("private static bool IsContextClick(PointerPoint point, PointerEventArgs args)");
         source.Should().Contain("point.Properties.IsRightButtonPressed");
-        source.Should().Contain("point.Properties.IsLeftButtonPressed && args.KeyModifiers.HasFlag(KeyModifiers.Control)");
+        source.Should().Contain("OperatingSystem.IsMacOS()");
+        source.Should().Contain("args.KeyModifiers.HasFlag(KeyModifiers.Control)");
+        source.Should().Contain("HasHyperlinkActivationModifier(args.KeyModifiers)");
         source.Should().Contain("if (IsContextClick(point, args))");
         source.Should().Contain("OpenWorksheetCellContextMenu((Control?)_activeCellBorder ?? _sheetGridHost);");
         source.Should().Contain("OpenColumnHeaderContextMenu(_sheetGridHost);");

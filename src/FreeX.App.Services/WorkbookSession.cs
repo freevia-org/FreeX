@@ -534,7 +534,10 @@ public sealed class WorkbookSession
         HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out _);
 
     public bool TryGetSelectedHyperlinkPlan(out HyperlinkNavigationPlan? plan) =>
-        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, SelectedRange.Start, CurrentFilePath, out plan);
+        TryGetHyperlinkPlan(SelectedRange.Start, out plan);
+
+    public bool TryGetHyperlinkPlan(CellAddress address, out HyperlinkNavigationPlan? plan) =>
+        HyperlinkNavigationPlanner.TryCreatePlan(ActiveSheet, address, CurrentFilePath, out plan);
 
     public WorkbookNavigationResult OpenSelectedHyperlink() =>
         OpenHyperlink(SelectedRange.Start);

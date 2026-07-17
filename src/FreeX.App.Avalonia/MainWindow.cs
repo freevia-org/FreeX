@@ -964,7 +964,7 @@ public sealed partial class MainWindow : Window
                 QuickAnalysis = () => _ = ShowQuickAnalysisDialogAsync(),
                 InsertPivotTable = () => _ = ShowInsertPivotTableDialogAsync(),
                 InsertPicture = () => _ = InsertPictureFromFileAsync(),
-                InsertShape = () => InsertShapeAtActiveCell(FreeX.App.Presentation.DrawingUI.DrawingInsertionPlanner.DefaultShape),
+                InsertShape = InsertShapeAtActiveCell,
                 InsertTextBox = InsertTextBoxAtActiveCell,
                 FormatPainter = () => CaptureFormatPainterSource(persistent: false),
                 SetFontSize = ApplyRibbonFontSize,
@@ -6531,9 +6531,15 @@ public sealed partial class MainWindow : Window
     private static bool IsContextClick(PointerPoint point, PointerEventArgs args) =>
         point.Properties.PointerUpdateKind == PointerUpdateKind.RightButtonPressed ||
         point.Properties.IsRightButtonPressed ||
-        (point.Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed &&
-            args.KeyModifiers.HasFlag(KeyModifiers.Control)) ||
-        (point.Properties.IsLeftButtonPressed && args.KeyModifiers.HasFlag(KeyModifiers.Control));
+        (OperatingSystem.IsMacOS() &&
+            (point.Properties.PointerUpdateKind == PointerUpdateKind.LeftButtonPressed ||
+             point.Properties.IsLeftButtonPressed) &&
+            args.KeyModifiers.HasFlag(KeyModifiers.Control));
+
+    private static bool HasHyperlinkActivationModifier(KeyModifiers modifiers) =>
+        OperatingSystem.IsMacOS()
+            ? modifiers.HasFlag(KeyModifiers.Meta)
+            : modifiers.HasFlag(KeyModifiers.Control);
 
     private static bool IsHeaderResizeHotspot(Point position, Rect bounds, HeaderResizeKind kind) =>
         kind == HeaderResizeKind.Column
@@ -7758,6 +7764,16 @@ public sealed partial class MainWindow : Window
         border.PointerPressed += (_, args) =>
         {
             var point = args.GetCurrentPoint(border);
+            if (point.Properties.IsLeftButtonPressed &&
+                !args.KeyModifiers.HasFlag(KeyModifiers.Shift) &&
+                HasHyperlinkActivationModifier(args.KeyModifiers) &&
+                _session.TryGetHyperlinkPlan(address, out var _))
+            {
+                args.Handled = true;
+                _ = OpenHyperlinkAsync(address);
+                return;
+            }
+
             if (IsContextClick(point, args))
             {
                 // Right-click selects the clicked cell (so the menu commands target it) and then
@@ -8311,10 +8327,22 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        _sheetGridHost.Cursor = IsPointerOnAutofillHandle(args)
-            ? new Cursor(StandardCursorType.Hand)
-            : IsPointerOnSelectionMoveBorder(args)
-                ? new Cursor(StandardCursorType.SizeAll)
+        if (IsPointerOnAutofillHandle(args))
+        {
+            _sheetGridHost.Cursor = new Cursor(StandardCursorType.Hand);
+            return;
+        }
+
+        if (IsPointerOnSelectionMoveBorder(args))
+        {
+            _sheetGridHost.Cursor = new Cursor(StandardCursorType.SizeAll);
+            return;
+        }
+
+        _sheetGridHost.Cursor = HasHyperlinkActivationModifier(args.KeyModifiers) &&
+            TryResolveCellPointerAddress(args, out var address) &&
+            _session.TryGetHyperlinkPlan(address, out _)
+                ? new Cursor(StandardCursorType.Hand)
                 : Cursor.Default;
     }
 
@@ -8553,6 +8581,7 @@ public sealed partial class MainWindow : Window
     {
         var state = WorksheetContextMenuState.Default with
         {
+            HasHyperlink = _session.ActiveSheet.Hyperlinks.ContainsKey(_session.ActiveCell),
             HasDropdownTarget = DataValidationDropdownPlanner.HasDropdownList(
                 _session.Workbook,
                 _session.ActiveSheet,
@@ -11729,11 +11758,14 @@ public sealed partial class MainWindow : Window
     }
 
     private async Task OpenSelectedHyperlinkAsync()
+        => await OpenHyperlinkAsync(_session.SelectedRange.Start);
+
+    private async Task OpenHyperlinkAsync(CellAddress address)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        if (!_session.TryGetSelectedHyperlinkPlan(out var plan) || plan is null)
+        if (!_session.TryGetHyperlinkPlan(address, out var plan) || plan is null)
         {
             ShowEditIssue(UiText.Get("MainLoc_HyperlinkTargetNotFound"));
             return;
@@ -11751,7 +11783,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        var result = _session.OpenSelectedHyperlink();
+        var result = _session.OpenHyperlink(address);
         if (!result.Success)
         {
             ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_OpenHyperlinkFailed"));
@@ -22595,6 +22627,18 @@ public sealed partial class MainWindow : Window
             var anchor = (Control?)_activeCellBorder ?? _sheetGridHost;
             OpenWorksheetCellContextMenu(anchor);
             e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.Enter &&
+            HasHyperlinkActivationModifier(e.KeyModifiers) &&
+            !e.KeyModifiers.HasFlag(KeyModifiers.Shift) &&
+            !e.KeyModifiers.HasFlag(KeyModifiers.Alt) &&
+            !_formulaBox.IsFocused &&
+            !IsTextEditingEventSource(e))
+        {
+            e.Handled = true;
+            await OpenSelectedHyperlinkAsync();
             return;
         }
 

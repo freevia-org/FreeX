@@ -3,8 +3,10 @@ using System.Linq;
 
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.ConditionalFormatting;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Ribbon.Definitions;
 using Free.Shared.Ribbon;
+using FreeX.Core.Model;
 
 using Xunit;
 
@@ -155,6 +157,39 @@ public sealed class AvaloniaRibbonHostCallbackTests
 
         foreach (var expected in new[] { "Home", "Insert", "Data", "Page Layout", "Formulas", "Review", "View" })
             Assert.Contains(expected, headers);
+    }
+
+    [Fact]
+    public void BuildDefinition_ShapesUsesTheCompleteSharedGallery()
+    {
+        var draw = AvaloniaRibbonComposition.BuildDefinition().Tabs.Single(tab => tab.Id == "DrawTab");
+        var shapes = Assert.IsType<RibbonSplitButton>(draw.Groups
+            .SelectMany(group => group.Controls)
+            .Single(control => control.CommandId.Value == "Shapes"));
+
+        Assert.Equal(
+            DrawingInsertionPlanner.ShapeGroups.Select(group => group.Label),
+            shapes.Menu.Items.Select(group => group.Header));
+        Assert.Equal(
+            DrawingInsertionPlanner.ShapeItems.Select(item => item.Label),
+            shapes.Menu.Items.SelectMany(group => group.Children).Select(item => item.Header));
+    }
+
+    [Fact]
+    public void ShapeGalleryCommand_InvokesTheSelectedShapeKind()
+    {
+        DrawingShapeKind? inserted = null;
+        var registry = AvaloniaRibbonComposition.BuildRegistry(
+            () => null,
+            _ => { },
+            new AvaloniaRibbonHostCallbacks { InsertShape = kind => inserted = kind });
+        var commandId = new RibbonCommandId(
+            AvaloniaRibbonComposition.GetShapeCommandId(DrawingShapeKind.Diamond));
+
+        Assert.True(registry.TryGet(commandId, out var command));
+        command!.Execute(EmptyContext);
+
+        Assert.Equal(DrawingShapeKind.Diamond, inserted);
     }
 
     [Fact]
@@ -455,7 +490,7 @@ public sealed class AvaloniaRibbonHostCallbackTests
         var registry = AvaloniaRibbonComposition.BuildRegistry(() => null, _ => { }, new AvaloniaRibbonHostCallbacks
         {
             InsertPicture = () => { },
-            InsertShape = () => { },
+            InsertShape = _ => { },
         });
 
         Assert.True(registry.TryGet(Canonical("insert.picture"), out var picture));
