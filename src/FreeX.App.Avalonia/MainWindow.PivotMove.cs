@@ -103,6 +103,11 @@ public sealed partial class MainWindow
             Children = { ok, cancel },
         });
         dialog.Content = content;
+        dialog.Opened += (_, _) =>
+        {
+            destinationBox.Focus();
+            destinationBox.SelectAll();
+        };
         AttachDialogRangePicker(
             dialog,
             destinationPicker,

@@ -84,8 +84,11 @@ public sealed partial class MainWindow
             ? "classified:no-owner-focus-before-open"
             : ReferenceEquals(ownerFocusBeforeOpen, ownerFocusAfterClose)
                 ? "passed:" + DescribeInputElement(ownerFocusAfterClose)
-                : "failed:expected=" + DescribeInputElement(ownerFocusBeforeOpen) +
-                  ",actual=" + DescribeInputElement(ownerFocusAfterClose);
+                : IsFocusInside(this, ownerFocusAfterClose)
+                    ? "passed:owner-active:expected=" + DescribeInputElement(ownerFocusBeforeOpen) +
+                      ",actual=" + DescribeInputElement(ownerFocusAfterClose)
+                    : "failed:expected-owner-focus-from=" + DescribeInputElement(ownerFocusBeforeOpen) +
+                      ",actual=" + DescribeInputElement(ownerFocusAfterClose);
 
         if (defaultButton is not null && IsSafeDefaultAction(surfaceId, defaultButton))
         {
@@ -240,13 +243,8 @@ public sealed partial class MainWindow
                 _ => PhysicalKey.None,
             };
             var timestamp = unchecked((ulong)Environment.TickCount64);
-            foreach (var (eventType, eventTimestamp) in new[]
-                     {
-                         (RawKeyEventType.KeyDown, timestamp),
-                         (RawKeyEventType.KeyUp, timestamp + 1),
-                     })
-            {
-                var rawEvent = constructor.Invoke(
+            RawInputEventArgs CreateRawKeyEvent(RawKeyEventType eventType, ulong eventTimestamp) =>
+                (RawInputEventArgs)constructor.Invoke(
                 [
                     keyboard,
                     eventTimestamp,
@@ -258,7 +256,22 @@ public sealed partial class MainWindow
                     null,
                     KeyDeviceType.Keyboard,
                 ]);
-                processInput.Invoke(inputManager, [rawEvent]);
+
+            processInput.Invoke(inputManager, [CreateRawKeyEvent(RawKeyEventType.KeyDown, timestamp)]);
+            if (dialog.IsVisible)
+            {
+                try
+                {
+                    processInput.Invoke(
+                        inputManager,
+                        [CreateRawKeyEvent(RawKeyEventType.KeyUp, timestamp + 1)]);
+                }
+                catch when (!dialog.IsVisible)
+                {
+                    // Escape commonly closes the native window during KeyDown. A stale native
+                    // key-up target is then expected and must not turn a successful close into
+                    // an input failure.
+                }
             }
 
             error = "";
