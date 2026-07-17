@@ -525,15 +525,16 @@ public sealed class ChartBaselineCorpusTests
             .Equal("0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%");
         stackedScene.GridLines.GridLines
             .Count(line => Math.Abs(line.Start.X - line.End.X) < 0.0001)
-            .Should().Be(stacked.Categories.Count + 2,
-                "PowerPoint adds two registered plot-edge strokes to the category grid");
+            .Should().Be(stacked.Categories.Count + 1,
+                "PowerPoint registers the category grid at the shifted plot boundaries");
+        double stackedCategoryStep = stackedScene.Frame.Plot.Width / stacked.Categories.Count;
         stackedScene.GridLines.GridLines
             .Where(line => Math.Abs(line.Start.X - line.End.X) < 0.0001)
-            .TakeLast(2)
             .Select(line => line.Start.X)
-            .Should().Equal(
-                stackedScene.Frame.Plot.X + ChartRenderPlanner.ImportedPercentStackedGridEdgeOffsetX,
-                stackedScene.Frame.Plot.Right + ChartRenderPlanner.ImportedPercentStackedGridEdgeOffsetX);
+            .Should().Equal(Enumerable.Range(0, stacked.Categories.Count + 1)
+                .Select(index => Math.Ceiling(stackedScene.Frame.Plot.X +
+                    ChartRenderPlanner.ImportedPercentStackedGridEdgeOffsetX +
+                    index * stackedCategoryStep)));
         var stackedFrame = ChartRenderPlanner.BuildFramePlan(
             stacked,
             new ChartPlanRect(0, 0, 480, 288));
