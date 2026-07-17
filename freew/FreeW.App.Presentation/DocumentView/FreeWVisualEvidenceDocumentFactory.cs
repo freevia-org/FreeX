@@ -840,7 +840,7 @@ public static class FreeWVisualEvidenceDocumentFactory
             new Run("Table composition stress page "),
             Run.PageNumberField(),
             new Run(" of "),
-            Run.NumPagesField("2"));
+            Run.NumPagesField("3"));
         doc.FinalSectionHeadersFooters.Footer = FieldHeaderFooter(
             new Run("FreeW visual evidence | "),
             Run.TitleField("Table Page Composition Stress"));
@@ -863,7 +863,7 @@ public static class FreeWVisualEvidenceDocumentFactory
             1,
             "Repeated-header table with page chrome, field headers, watermark, and explicit cell borders."));
         doc.Blocks.Add(new Paragraph(
-            "Both renderers should emit two trusted rows for this shared scenario, and the normalizer " +
+            "Both renderers should emit three trusted rows for this shared scenario, and the normalizer " +
             "should reject missing or drifted table/page-composition metadata."));
 
         return doc;
@@ -1456,9 +1456,11 @@ public static class FreeWVisualEvidenceDocumentFactory
                         shading: row == 5 ? "#FFF2CC" : null,
                         customBorder: true),
                     Cell(
-                        row <= 4
+                        row <= 2
                             ? "Page 1 should show header/footer fields, watermark, and border."
-                            : "Page 2 should repeat the header row inside the same page chrome.",
+                            : row <= 6
+                                ? "Page 2 should repeat the header row inside the same page chrome."
+                                : "Page 3 should repeat the header row before the caption and closing text.",
                         customBorder: true,
                         verticalAlignment: row >= 7
                             ? TableCellVerticalAlignment.Center

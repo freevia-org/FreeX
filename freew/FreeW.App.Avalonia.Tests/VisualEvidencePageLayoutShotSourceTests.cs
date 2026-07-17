@@ -123,6 +123,7 @@ public sealed class VisualEvidencePageLayoutShotSourceTests
         source.Should().Contain("table-page-composition-stress");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"table-page-composition-stress\", 1)");
         source.Should().Contain("VisualEvidenceOutputPath(outDir, \"table-page-composition-stress\", 2)");
+        source.Should().Contain("VisualEvidenceOutputPath(outDir, \"table-page-composition-stress\", 3)");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument");
         source.Should().Contain("drawing-objects-complex");
         source.Should().Contain("FreeWVisualEvidenceDocumentFactory.BuildDrawingObjectsCompositionDocument");

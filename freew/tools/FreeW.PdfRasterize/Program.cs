@@ -6,7 +6,8 @@
 // Defaults to each PDF page's 96-DPI geometry; supply width and height to use a fixed surface.
 // Output:   <outDir>/<pdfname>_pN.png   (N = 1-based page index)
 // When dimensions are omitted, output dimensions follow each PDF page's native 96-DPI size.
-// Supply both dimensions only when a fixed output surface is intentional.
+// Supply width alone to preserve each page's aspect ratio at a common width. Supply both
+// dimensions only when a fixed output surface is intentional.
 //
 // Explicit dimensions override the page-derived output surface.
 
@@ -15,7 +16,7 @@ using Windows.Data.Pdf;
 using Windows.Storage;
 using Windows.Storage.Streams;
 
-if (args.Length < 2 || args.Length == 3 || args.Length > 4)
+if (args.Length < 2 || args.Length > 4)
 {
     Console.Error.WriteLine("usage: FreeW.PdfRasterize <input.pdf> <outDir> [width height]");
     return 2;
@@ -25,17 +26,25 @@ string pdfPath = Path.GetFullPath(args[0]);
 string outDir  = Path.GetFullPath(args[1]);
 uint? width = null;
 uint? height = null;
-if (args.Length == 4)
+if (args.Length >= 3)
 {
-    if (!uint.TryParse(args[2], out var parsedWidth) || parsedWidth == 0 ||
-        !uint.TryParse(args[3], out var parsedHeight) || parsedHeight == 0)
+    if (!uint.TryParse(args[2], out var parsedWidth) || parsedWidth == 0)
     {
-        Console.Error.WriteLine("width and height must both be positive integers");
+        Console.Error.WriteLine("width must be a positive integer");
         return 2;
     }
 
     width = parsedWidth;
-    height = parsedHeight;
+    if (args.Length == 4)
+    {
+        if (!uint.TryParse(args[3], out var parsedHeight) || parsedHeight == 0)
+        {
+            Console.Error.WriteLine("height must be a positive integer");
+            return 2;
+        }
+
+        height = parsedHeight;
+    }
 }
 
 if (!File.Exists(pdfPath))
@@ -74,8 +83,10 @@ int exitCode = await Task.Run(async () =>
     }
 
     uint pageCount = pdf.PageCount;
-    Console.WriteLine(width is { } fixedWidth
-        ? $"PDF has {pageCount} page(s); rendering at {fixedWidth}x{height!.Value} px"
+    Console.WriteLine(width is { } requestedFixedWidth && height is { } requestedHeight
+        ? $"PDF has {pageCount} page(s); rendering at {requestedFixedWidth}x{requestedHeight} px"
+        : width is { } requestedAspectWidth
+        ? $"PDF has {pageCount} page(s); rendering each page at {requestedAspectWidth} px wide with its native aspect ratio"
         : $"PDF has {pageCount} page(s); rendering at native page dimensions");
 
     for (uint i = 0; i < pageCount; i++)
@@ -86,7 +97,10 @@ int exitCode = await Task.Run(async () =>
         const double PdfRenderOptionsDpi = 120.0;
         const double TargetDpi = 96.0;
         var outputWidth = width ?? Math.Max(1u, (uint)Math.Round(page.Size.Width));
-        var outputHeight = height ?? Math.Max(1u, (uint)Math.Round(page.Size.Height));
+        var outputHeight = height
+            ?? (width is { } aspectWidth
+                ? Math.Max(1u, (uint)Math.Round(aspectWidth * page.Size.Height / page.Size.Width))
+                : Math.Max(1u, (uint)Math.Round(page.Size.Height)));
         var destinationWidth = Math.Max(1u, (uint)Math.Round(outputWidth * TargetDpi / PdfRenderOptionsDpi));
         var destinationHeight = Math.Max(1u, (uint)Math.Round(outputHeight * TargetDpi / PdfRenderOptionsDpi));
         var opts = new PdfPageRenderOptions

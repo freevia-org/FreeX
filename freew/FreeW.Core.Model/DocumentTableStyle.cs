@@ -134,7 +134,7 @@ public sealed record DocumentTableStyle(
             Name: "Grid Table 1 Light",
             WordStyleId: "GridTable1Light",
             Borders: true,
-            HeaderBand: new("4472C4", Bold: true),
+            HeaderBand: new("D9E2F3", Bold: true),
             BandedRowOdd: new("DEEAF1"),
             BandedRowEven: null,
             FirstColumnBand: null,

@@ -249,9 +249,7 @@ try {
             $dimensions = Get-PngDimensions $evidencePage
             # FreeW.PdfRasterize applies a 120-to-96 DPI conversion internally, so
             # pass the pre-conversion surface that yields the evidence dimensions.
-            $rasterArgs += @(
-                ([int]($dimensions.Width * 1.25)),
-                ([int]($dimensions.Height * 1.25)))
+            $rasterArgs += ([int]($dimensions.Width * 1.25))
         }
 
         Invoke-DotNetRun $pdfRasterizeProject $rasterArgs -Configuration $Configuration

@@ -258,7 +258,7 @@ public sealed class VisualEvidencePlannerTests
             "caption",
             "footnotes"]);
         tablePageCompositionScenario.ExpectedOutputNamePattern.Should().Be("table-page-composition-stress_p{page}.png");
-        tablePageCompositionScenario.MinimumExpectedOutputs.Should().Be(2);
+        tablePageCompositionScenario.MinimumExpectedOutputs.Should().Be(3);
         tablePageCompositionScenario.Composition.ExpectsTables.Should().BeTrue();
         tablePageCompositionScenario.Composition.ExpectsHeadersFooters.Should().BeTrue();
         tablePageCompositionScenario.Composition.ExpectsPageBorder.Should().BeTrue();
@@ -366,7 +366,7 @@ public sealed class VisualEvidencePlannerTests
             "backstage-print-preview-fidelity",
             document.Page,
             pageNumber: 1,
-            pageCount: 2,
+            pageCount: 3,
             outputName: "backstage-print-preview_p1.png",
             headerSlotName: "default-header",
             footerSlotName: "default-footer",
@@ -1997,7 +1997,7 @@ public sealed class VisualEvidencePlannerTests
             "table-page-composition-stress",
             document.Page,
             pageNumber: 2,
-            pageCount: 2,
+            pageCount: 3,
             outputName: "table-page-composition-stress_p2.png",
             headerSlotName: "header",
             footerSlotName: "footer",
@@ -2037,7 +2037,7 @@ public sealed class VisualEvidencePlannerTests
         expectation.Tables.Tables.Single().TableStyleId.Should().Be("GridTable1Light");
         expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
             signature.Contains("source=style-derived-header", StringComparison.Ordinal)
-            && signature.Contains("fill=#4472C4", StringComparison.Ordinal));
+            && signature.Contains("fill=#D9E2F3", StringComparison.Ordinal));
         expectation.Tables.TableCellFillSignatures.Should().Contain(signature =>
             signature.Contains("source=explicit-cell", StringComparison.Ordinal)
             && signature.Contains("fill=#F8FBFD", StringComparison.Ordinal));
@@ -7879,22 +7879,22 @@ public sealed class VisualEvidencePlannerTests
                 "table-page-composition-stress"
             };
             var wpfRows = scenarioIds
-                .SelectMany(scenarioId => Enumerable.Range(1, 2)
+                .SelectMany(scenarioId => Enumerable.Range(1, ScenarioPageCount(scenarioId))
                     .Select(page => BuildFileBackedRow(
                         root,
                         FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                         scenarioId,
                         page,
-                        pageCount: 2)))
+                        pageCount: ScenarioPageCount(scenarioId))))
                 .ToList();
             var avaloniaRows = scenarioIds
-                .SelectMany(scenarioId => Enumerable.Range(1, 2)
+                .SelectMany(scenarioId => Enumerable.Range(1, ScenarioPageCount(scenarioId))
                     .Select(page => BuildFileBackedRow(
                         root,
                         FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                         scenarioId,
                         page,
-                        pageCount: 2)))
+                        pageCount: ScenarioPageCount(scenarioId))))
                 .ToList();
 
             FreeWVisualEvidencePlanner.WriteManifest(
@@ -7918,16 +7918,16 @@ public sealed class VisualEvidencePlannerTests
                         new FreeWVisualEvidenceExpectedScenario(
                             FreeWVisualEvidenceManifestNormalizer.WpfHostId,
                             scenarioId,
-                            2),
+                            ScenarioPageCount(scenarioId)),
                         new FreeWVisualEvidenceExpectedScenario(
                             FreeWVisualEvidenceManifestNormalizer.AvaloniaHostId,
                             scenarioId,
-                            2)
+                            ScenarioPageCount(scenarioId))
                     })
                     .ToList());
 
             summary.Trust.Passed.Should().BeTrue();
-            summary.TablePaginationProofReadiness.Should().HaveCount(4);
+            summary.TablePaginationProofReadiness.Should().HaveCount(5);
             summary.TablePaginationProofReadiness.Should().OnlyContain(row =>
                 row.Status == "paired-renderer-proof-ready"
                 && row.WordBaselineStatus == "not-run"
@@ -7949,7 +7949,7 @@ public sealed class VisualEvidencePlannerTests
                 comparisons);
 
             withBaseline.Trust.Passed.Should().BeTrue();
-            withBaseline.TablePaginationProofReadiness.Should().HaveCount(4);
+            withBaseline.TablePaginationProofReadiness.Should().HaveCount(5);
             withBaseline.TablePaginationProofReadiness.Should().OnlyContain(row =>
                 row.Status == "paired-renderer-proof-ready"
                 && row.WordBaselineStatus == "word-baseline-unavailable=2"
@@ -7977,7 +7977,7 @@ public sealed class VisualEvidencePlannerTests
             var json = FreeWVisualEvidenceManifestNormalizer.ToJson(withBaseline);
             using var doc = JsonDocument.Parse(json);
             doc.RootElement.GetProperty("schemaVersion").GetInt32().Should().BeGreaterThanOrEqualTo(40);
-            doc.RootElement.GetProperty("tablePaginationProofReadiness").GetArrayLength().Should().Be(4);
+            doc.RootElement.GetProperty("tablePaginationProofReadiness").GetArrayLength().Should().Be(5);
             doc.RootElement.GetProperty("remainingEvidenceBlockers").EnumerateArray()
                 .Should().Contain(blocker =>
                     blocker.GetProperty("blockerId").GetString() == "table-page-composition-stress-word-baseline-fidelity");
@@ -7995,6 +7995,11 @@ public sealed class VisualEvidencePlannerTests
             Directory.Delete(root, recursive: true);
         }
     }
+
+    private static int ScenarioPageCount(string scenarioId) =>
+        string.Equals(scenarioId, "table-page-composition-stress", StringComparison.Ordinal)
+            ? 3
+            : 2;
 
     [Fact]
     public void FloatingWrappingNoWordSummary_ReportsPairedProofReadinessWithoutAuthoritativeWordParity()

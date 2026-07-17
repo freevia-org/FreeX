@@ -65,14 +65,14 @@ public class DocumentTableStyleTests
     }
 
     [Fact]
-    public void GridTable1Light_HasBlueBordersAndHeaderFill()
+    public void GridTable1Light_HasBlueBordersAndLightHeaderFill()
     {
         var style = DocumentTableStyle.FindById("GridTable1Light")!;
 
         style.Borders.Should().BeTrue();
         style.BorderColorHex.Should().Be("4472C4");
         style.HeaderBand.Should().NotBeNull();
-        style.HeaderBand!.FillHex.Should().Be("4472C4");
+        style.HeaderBand!.FillHex.Should().Be("D9E2F3");
         style.HeaderBand.Bold.Should().BeTrue();
         style.BandedRowOdd.Should().NotBeNull();
     }
@@ -100,7 +100,7 @@ public class DocumentTableStyleTests
 
         var (fillHex, bold) = style.ResolveCellStyle(rowIndex: 0, totalRows: 4, isFirstCol: false, isLastCol: false, fmt);
 
-        fillHex.Should().Be("4472C4");
+        fillHex.Should().Be("D9E2F3");
         bold.Should().BeTrue();
     }
 

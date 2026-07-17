@@ -925,7 +925,7 @@ public static class FreeWVisualEvidencePlanner
                 "body-text"
             ],
             "table-page-composition-stress_p{page}.png",
-            2,
+            3,
             DocumentViewLayoutKind.PrintLayout,
             BodyPrintComposition with
             {
