@@ -347,6 +347,42 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingOverlay_UsesOuterOnlyGlowLayerForImportedWave1Signature()
+    {
+        var wordArt = new WordArt("FreeW CONFIDENTIAL", WordArtStyle.GlowBlue, 32)
+        {
+            Warp = WordArtWarp.Wave1,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 36,
+                VerticalOffsetPt = 18,
+                ZOrderIndex = 4
+            }
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Canvas>().Single();
+        root.Measure(new Size(476, 68));
+        root.Arrange(new Rect(0, 0, 476, 68));
+        root.UpdateLayout();
+
+        root.Effect.Should().BeNull();
+        root.Children.OfType<Border>().Should().HaveCount(2);
+        root.Children.OfType<Border>().Single(border => border.Effect is not null)
+            .Effect.Should().BeOfType<DropShadowEffect>();
+        root.Children.OfType<TextBlock>().Should().HaveCount(wordArt.Text.Length);
+    }
+
+    [StaFact]
     public void InlineOverlay_RendersArchUpWordArtThroughWarpedVisualAdapter()
     {
         var wordArt = new WordArt("Inline warp", WordArtStyle.GlowBlue, 24)

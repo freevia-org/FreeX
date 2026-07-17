@@ -22,6 +22,9 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("Style: WordArtStyle.FillGold,");
         wpf.Should().Contain("FontSizeDip: > 34 and < 35");
         wpf.Should().Contain("isImportedGoldArchUp ? 0.6 : 0.8");
+        wpf.Should().Contain("preserveOpaqueGlowFill");
+        wpf.Should().Contain("Style: WordArtStyle.GlowBlue,");
+        wpf.Should().Contain("BlurRadius = 2");
 
         wpf.Should().NotContain("var archDepth =");
         wpf.Should().NotContain("var amplitude =");
