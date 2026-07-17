@@ -1155,10 +1155,13 @@ public static class DocxReader
             // FreeW's page watermark is stored in a VML-only paragraph in the header. It is also
             // represented by custom document properties, so keeping this empty layout paragraph in
             // the model only consumes header height and can hide the real header text on render.
-            // Restrict the filter to FreeW's stable shape IDs so ordinary Word image/VML headers survive.
+            // Restrict the filter to FreeW's stable VML IDs and DrawingML relationship so ordinary
+            // Word image/VML headers survive.
             var isFreeWWatermarkParagraph = p.Descendants(V + "shape")
                 .Any(shape => shape.Attribute("id")?.Value is
-                    "PowerPlusWaterMarkObject" or "PowerPlusPictureWaterMarkObject");
+                    "PowerPlusWaterMarkObject" or "PowerPlusPictureWaterMarkObject")
+                || p.Descendants(A + "blip")
+                    .Any(blip => blip.Attribute(R + "embed")?.Value == "rIdWatermarkImage");
             if (isFreeWWatermarkParagraph)
                 continue;
 

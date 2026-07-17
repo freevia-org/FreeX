@@ -213,6 +213,26 @@ public class WatermarkOptionsRoundTripTests
         zip.GetEntry("word/media/header1_watermark1.png").Should().NotBeNull();
     }
 
+    [Fact]
+    public void PictureWatermark_RoundTrip_DoesNotBecomeHeaderContent()
+    {
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = image,
+            ScalePct = 48,
+            Opacity = 0.38
+        };
+
+        var loaded = RoundTrip(doc);
+
+        loaded.Page.EffectiveWatermark!.ImageBytes.Should().Equal(image);
+        loaded.FinalSectionHeadersFooters.Header.Should().NotBeNull();
+        loaded.FinalSectionHeadersFooters.Header!.IsEmpty.Should().BeTrue();
+    }
+
     // ── Legacy Watermark migration ────────────────────────────────────────
 
     [Fact]
