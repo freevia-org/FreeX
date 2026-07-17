@@ -5198,7 +5198,10 @@ public sealed class AvaloniaShellSourceTests
         sessionSource.Should().Contain("SelectionRangeService.CompressAddresses(matches)");
         sessionSource.Should().Contain("SelectRanges(selectedRange, ranges);");
         findReplaceServiceSource.Should().Contain("public enum FindResultTarget");
-        findReplaceServiceSource.Should().Contain("StyleDiff? RequiredFormat = null);");
+        // r48: FindOptions gained a trailing optional SelectionScope parameter (Excel: Replace All
+        // within an active multi-cell selection), so RequiredFormat is no longer the terminal param.
+        findReplaceServiceSource.Should().Contain("StyleDiff? RequiredFormat = null,");
+        findReplaceServiceSource.Should().Contain("IReadOnlyList<GridRange>? SelectionScope = null);");
         findReplaceServiceSource.Should().Contain("FindReplaceSearchPlanner.MatchesRequiredFormat(workbook, sheet, candidate.Address, options.RequiredFormat)");
         findReplaceServiceSource.Should().Contain("ThreadedCommentReply");
         findReplaceServiceSource.Should().Contain("FindResultTarget Target = FindResultTarget.Cell,");
