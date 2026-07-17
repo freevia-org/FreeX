@@ -486,6 +486,7 @@ public readonly record struct ChartLegendItemPlan(
     bool IsLine = false)
 {
     public ChartMarkerPrimitiveSymbol? MarkerSymbol { get; init; }
+    public bool IsLineOnly { get; init; }
 }
 
 public readonly record struct ChartAxisTitlePlan(
@@ -569,6 +570,12 @@ public static partial class ChartRenderPlanner
     public const double ImportedComboSecondaryLabelCompensation = 8.0;
     public const int ImportedComboSecondaryMinorTickDivisions = 5;
     public const double ImportedComboLegendRightCompensation = 8.0;
+    public const double ImportedRadarLegendSwatchWidth = 29.0;
+    public const double ImportedRadarLegendSwatchHeight = 12.0;
+    public const double ImportedRadarLegendLabelInset = 29.0;
+    public const double ImportedRadarLegendXOffset = 11.0;
+    public const double ImportedRadarLegendLineHeight = 38.0;
+    public const double ImportedRadarLegendVerticalOffset = 10.0;
     public const double ImportedCartesianGridLinePixelOffset = 0.5;
     public const double ImportedPercentStackedGridEdgeOffsetX = 19.0;
     public const double ImportedCartesianCategoryLabelOffset = 16.0;
@@ -1450,10 +1457,13 @@ public static partial class ChartRenderPlanner
                     : 0
             : chart.Series.Count;
         bool importedCombo = UsesImportedComboDefaults(chart);
+        bool importedRadarLineLegend = frame.IsRadar && chart.RadarStyle != RadarStyle.Filled;
         bool importedMarkerLegend = UsesImportedTextMetrics(chart) &&
             (UsesImportedSingleScatterDefaults(chart) || UsesImportedBubbleDefaults(chart));
         double legendLineHeight = importedCombo
             ? ImportedComboLegendLineHeight
+            : importedRadarLineLegend
+                ? ImportedRadarLegendLineHeight
             : ResolveLegendLineHeight(chart);
         int maxItems = (int)Math.Max(1, verticalLegend ? legendBounds.Height / legendLineHeight : legendWidth / 80);
         int itemsToShow = Math.Min(itemCount, maxItems);
@@ -1466,6 +1476,8 @@ public static partial class ChartRenderPlanner
             : legendBounds.Y;
         if (importedCombo && verticalLegend && !hasManualLayout)
             firstItemY += ImportedComboLegendVerticalOffset;
+        if (importedRadarLineLegend && verticalLegend && !hasManualLayout)
+            firstItemY += ImportedRadarLegendVerticalOffset;
         for (int itemIndex = 0; itemIndex < itemsToShow; itemIndex++)
         {
             int sourceItemIndex = frame.IsPie
@@ -1476,19 +1488,28 @@ public static partial class ChartRenderPlanner
             double itemX = verticalLegend
                 ? importedMarkerLegend
                     ? plot.Right + (chart.ChartType == ChartType.Bubble ? 30.0 : 32.0)
+                    : importedRadarLineLegend
+                        ? legendBounds.X + ImportedRadarLegendXOffset
                     : legendBounds.X
                 : legendBounds.X + itemIndex * 80.0;
             double itemY = verticalLegend ? firstItemY + itemIndex * legendLineHeight : legendBounds.Y;
             bool lineSeries = !frame.IsPie &&
-                chart.Series[sourceItemIndex].OverrideChartType is ChartType.Line or ChartType.LineMarkers;
+                (chart.Series[sourceItemIndex].OverrideChartType is ChartType.Line or ChartType.LineMarkers ||
+                 importedRadarLineLegend);
             double swatchWidth = importedCombo
                 ? ImportedComboLegendSwatchWidth
-                : importedMarkerLegend ? 12.0 : 8.0;
+                : importedRadarLineLegend
+                    ? ImportedRadarLegendSwatchWidth
+                    : importedMarkerLegend ? 12.0 : 8.0;
             double swatchHeight = importedCombo
                 ? lineSeries ? 12.0 : ImportedComboLegendSwatchHeight
-                : importedMarkerLegend ? 12.0 : 8.0;
+                : importedRadarLineLegend
+                    ? ImportedRadarLegendSwatchHeight
+                    : importedMarkerLegend ? 12.0 : 8.0;
             double labelInset = importedCombo
                 ? ImportedComboLegendSwatchWidth + 4.0
+                : importedRadarLineLegend
+                    ? ImportedRadarLegendLabelInset
                 : importedMarkerLegend ? 30.0 : 10.0;
             double textWidth = verticalLegend
                 ? importedMarkerLegend
@@ -1513,7 +1534,7 @@ public static partial class ChartRenderPlanner
                 new ChartTextPlan(
                     text,
                     new ChartPlanRect(
-                        itemX + (importedCombo ? ImportedComboLegendSwatchWidth + 4.0 : 10.0),
+                        itemX + labelInset,
                         itemY + (importedCombo ? ImportedComboLegendLabelOffset : 0.0),
                         textWidth,
                         legendLineHeight),
@@ -1526,13 +1547,14 @@ public static partial class ChartRenderPlanner
                             ShouldVaryPointColors(chart))
                         : ResolveSeriesFill(sourceItemIndex, seriesColors, alpha: 255, fillPlans)
                     : new ChartFillPlan(color, Alpha: 255),
-                IsLine: importedCombo && lineSeries)
+                IsLine: (importedCombo || importedRadarLineLegend) && lineSeries)
             {
                 MarkerSymbol = importedMarkerLegend
                     ? chart.ChartType == ChartType.Bubble
                         ? ChartMarkerPrimitiveSymbol.Circle
                         : ResolveImportedLineMarkerSymbol(sourceItemIndex)
-                    : null
+                    : null,
+                IsLineOnly = importedRadarLineLegend
             };
             items.Add(legendItem);
         }
