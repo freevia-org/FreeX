@@ -96,7 +96,7 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             }
         }
 
-        return new XlsxWorksheetSheetDataLayout(
+        var layout = new XlsxWorksheetSheetDataLayout(
             new XlsxWorksheetRowColumnLayout(
                 hiddenRows,
                 hiddenCols,
@@ -116,6 +116,15 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 hasDuplicateStyleOnlyCellStyleIndexes,
                 populatedCellCount,
                 sharedStringValueCells));
+
+        var outlinePr = root?
+            .Element(worksheetNs + "sheetPr")?
+            .Element(worksheetNs + "outlinePr");
+        ClassifyCollapsedOutlineHidden(
+            layout.RowColumnLayout,
+            ReadSummaryDirection(outlinePr?.Attribute("summaryBelow")?.Value),
+            ReadSummaryDirection(outlinePr?.Attribute("summaryRight")?.Value));
+        return layout;
     }
 
     public static XlsxWorksheetSheetDataLayout ReadSheetDataLayout(
@@ -336,7 +345,9 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             }
         }
 
-        return CreateLayout();
+        var layout = CreateLayout();
+        ClassifyCollapsedOutlineHidden(layout.RowColumnLayout, summaryBelow: true, summaryRight: true);
+        return layout;
 
         XlsxWorksheetSheetDataLayout CreateLayout() =>
             new(
@@ -441,33 +452,24 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         Dictionary<uint, double> rowHeights)
     {
         var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("hidden")?.Value);
-        if (isHidden)
-            hiddenRows.Add(rowNumber);
-
         if (TryReadRowHeight(row.Attribute("ht")?.Value, row.Attribute("customHeight")?.Value, out var height))
             rowHeights[rowNumber] = height;
 
         var isCollapsed = XlsxWorksheetXmlValueParser.IsTruthy(row.Attribute("collapsed")?.Value);
 
         var outlineStr = row.Attribute("outlineLevel")?.Value;
-        if (int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0)
+        var hasOutline = int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0;
+        if (hasOutline)
         {
             rowOutlineLevels[rowNumber] = outlineLevel;
-            // `collapsed="1"` alone marks the (potentially still-visible) anchor row of a
-            // collapsed outline group in real Excel-authored files -- it does not mean the row
-            // itself is hidden. Only fold it into GroupHiddenRows when the row's own `hidden`
-            // attribute agrees, so a visible collapsed subtotal/summary row stays visible.
-            if (isHidden && isCollapsed)
-                groupHiddenRows.Add(rowNumber);
         }
 
-        // A row marked `collapsed="1"` but NOT itself hidden is the visible anchor (subtotal/
-        // summary row) Excel uses to host that group's "+/-" outline toggle. This is independent
-        // of whether the row itself carries a nonzero outlineLevel: the anchor of the OUTERMOST
-        // collapsed group commonly has outlineLevel="0"/absent, since only the detail rows it
-        // summarizes are nested -- so this check must not be gated by the outlineLevel>0 branch
-        // above (R35-deferred-collapse-anchor-1).
-        if (isCollapsed && !isHidden)
+        if (isHidden)
+            hiddenRows.Add(rowNumber);
+
+        // An inner group's anchor can itself be hidden as detail of an outer group, so collapsed
+        // must be retained independently of hidden and outlineLevel.
+        if (isCollapsed)
             collapsedAnchorRows.Add(rowNumber);
     }
 
@@ -481,28 +483,22 @@ internal static class XlsxWorksheetRowColumnLayoutReader
         Dictionary<uint, double> rowHeights)
     {
         var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("hidden"));
-        if (isHidden)
-            hiddenRows.Add(rowNumber);
-
         if (TryReadRowHeight(row.GetAttribute("ht"), row.GetAttribute("customHeight"), out var height))
             rowHeights[rowNumber] = height;
 
         var isCollapsed = XlsxWorksheetXmlValueParser.IsTruthy(row.GetAttribute("collapsed"));
 
         var outlineStr = row.GetAttribute("outlineLevel");
-        if (int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0)
+        var hasOutline = int.TryParse(outlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var outlineLevel) && outlineLevel > 0;
+        if (hasOutline)
         {
             rowOutlineLevels[rowNumber] = outlineLevel;
-            // `collapsed="1"` alone marks the (potentially still-visible) anchor row of a
-            // collapsed outline group in real Excel-authored files -- it does not mean the row
-            // itself is hidden. Only fold it into GroupHiddenRows when the row's own `hidden`
-            // attribute agrees, so a visible collapsed subtotal/summary row stays visible.
-            if (isHidden && isCollapsed)
-                groupHiddenRows.Add(rowNumber);
         }
 
-        // See the XElement overload above for why this is not gated by outlineLevel>0.
-        if (isCollapsed && !isHidden)
+        if (isHidden)
+            hiddenRows.Add(rowNumber);
+
+        if (isCollapsed)
             collapsedAnchorRows.Add(rowNumber);
     }
 
@@ -530,37 +526,23 @@ internal static class XlsxWorksheetRowColumnLayoutReader
             max = CellAddress.MaxCol;
 
         var isHidden = XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("hidden")?.Value);
+        var isColCollapsed = XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("collapsed")?.Value);
+
+        var colOutlineStr = col.Attribute("outlineLevel")?.Value;
+        var hasOutline = int.TryParse(colOutlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var colOutlineLevel) && colOutlineLevel > 0;
+        if (hasOutline)
+        {
+            for (var colNumber = min; colNumber <= max; colNumber++)
+                colOutlineLevels[colNumber] = colOutlineLevel;
+        }
+
         if (isHidden)
         {
             for (var colNumber = min; colNumber <= max; colNumber++)
                 hiddenCols.Add(colNumber);
         }
 
-        var isColCollapsed = XlsxWorksheetXmlValueParser.IsTruthy(col.Attribute("collapsed")?.Value);
-
-        var colOutlineStr = col.Attribute("outlineLevel")?.Value;
-        if (int.TryParse(colOutlineStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out var colOutlineLevel) && colOutlineLevel > 0)
-        {
-            // `collapsed="1"` alone marks the (potentially still-visible) anchor column of a
-            // collapsed outline group in real Excel-authored files -- it does not mean the column
-            // itself is hidden. Only fold it into GroupHiddenCols when the column's own `hidden`
-            // attribute agrees, so a visible collapsed summary column stays visible. Mirrors
-            // ReadRowLayout's identical row-side handling above.
-            var collapsed = isHidden && isColCollapsed;
-            for (var colNumber = min; colNumber <= max; colNumber++)
-            {
-                colOutlineLevels[colNumber] = colOutlineLevel;
-                if (collapsed)
-                    groupHiddenCols.Add(colNumber);
-            }
-        }
-
-        // A column marked `collapsed="1"` but NOT itself hidden is the visible anchor (summary
-        // column) Excel uses to host that group's "+/-" outline toggle -- not gated by
-        // outlineLevel>0 for the same reason as the row-side handling above
-        // (R35-deferred-collapse-anchor-1): the outermost collapsed group's anchor column
-        // commonly has outlineLevel="0"/absent.
-        if (isColCollapsed && !isHidden)
+        if (isColCollapsed)
         {
             for (var colNumber = min; colNumber <= max; colNumber++)
                 collapsedAnchorCols.Add(colNumber);
@@ -585,6 +567,97 @@ internal static class XlsxWorksheetRowColumnLayoutReader
                 columnWidths[colNumber] = width;
         }
     }
+
+    internal static void ClassifyCollapsedOutlineHidden(
+        XlsxWorksheetRowColumnLayout layout,
+        bool summaryBelow,
+        bool summaryRight)
+    {
+        layout.HiddenRows.UnionWith(layout.GroupHiddenRows);
+        layout.GroupHiddenRows.Clear();
+        foreach (var anchor in layout.CollapsedAnchorRows ?? [])
+        {
+            ClassifyDetailRun(
+                anchor,
+                summaryBelow,
+                CellAddress.MaxRow,
+                layout.HiddenRows,
+                layout.RowOutlineLevels,
+                layout.GroupHiddenRows);
+        }
+        layout.HiddenRows.ExceptWith(layout.GroupHiddenRows);
+
+        layout.HiddenCols.UnionWith(layout.GroupHiddenCols);
+        layout.GroupHiddenCols.Clear();
+        foreach (var anchor in layout.CollapsedAnchorCols ?? [])
+        {
+            ClassifyDetailRun(
+                anchor,
+                summaryRight,
+                CellAddress.MaxCol,
+                layout.HiddenCols,
+                layout.ColOutlineLevels,
+                layout.GroupHiddenCols);
+        }
+        layout.HiddenCols.ExceptWith(layout.GroupHiddenCols);
+    }
+
+    private static void ClassifyDetailRun(
+        uint anchor,
+        bool summaryAfter,
+        uint maxIndex,
+        IReadOnlySet<uint> hidden,
+        IReadOnlyDictionary<uint, int> levels,
+        HashSet<uint> groupHidden)
+    {
+        levels.TryGetValue(anchor, out var anchorLevel);
+        if (summaryAfter)
+        {
+            if (anchor <= 1)
+                return;
+
+            for (var index = anchor - 1; ; index--)
+            {
+                if (!TryClassify(index))
+                    break;
+                if (index == 1)
+                    break;
+            }
+        }
+        else
+        {
+            if (anchor >= maxIndex)
+                return;
+
+            for (var index = anchor + 1; index <= maxIndex; index++)
+            {
+                if (!TryClassify(index))
+                    break;
+                if (index == maxIndex)
+                    break;
+            }
+        }
+
+        bool TryClassify(uint index)
+        {
+            if (!hidden.Contains(index) ||
+                !levels.TryGetValue(index, out var level) ||
+                level <= anchorLevel)
+            {
+                return false;
+            }
+
+            groupHidden.Add(index);
+            return true;
+        }
+    }
+
+    private static bool ReadSummaryDirection(string? value) =>
+        value?.Trim().ToLowerInvariant() switch
+        {
+            "0" or "false" => false,
+            _ => true
+        };
 
     private static bool TryReadRowHeight(string? rawHeight, string? rawCustomHeight, out double height)
     {

@@ -1258,7 +1258,9 @@ public static class AvaloniaRibbonRenderer
         };
         primary.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
 
-        var dropdown = new DropDownButton
+        // Use a plain Button with an attached flyout. DropDownButton supplies its own built-in
+        // arrow in addition to Content, which doubled the shared chevron on Linux.
+        var dropdown = new Button
         {
             Content = Chevron(new Thickness(0), palette),
             Tag = $"{control.CommandId.Value}.Dropdown",
@@ -1649,6 +1651,9 @@ public static class AvaloniaRibbonRenderer
                 case RibbonComboBox combo:
                     flyout.Items.Add(new MenuItem { Header = combo.Label, IsEnabled = false, Tag = combo.CommandId.Value });
                     break;
+                case RibbonSplitButton split:
+                    AddCollapsedSplitButtonItems(flyout, split, registry, afterExecute);
+                    break;
                 default:
                     flyout.Items.Add(BuildCollapsedGroupMenuItem(control, registry, afterExecute));
                     break;
@@ -1656,6 +1661,47 @@ public static class AvaloniaRibbonRenderer
         }
 
         return flyout;
+    }
+
+    private static void AddCollapsedSplitButtonItems(
+        MenuFlyout flyout,
+        RibbonSplitButton split,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute)
+    {
+        // A collapsed ribbon group cannot preserve the two independent hit targets of an
+        // expanded split button. Keep the primary action as an invokable leaf, then append any
+        // additional menu actions. Skipping the menu's duplicate primary command turns Outline
+        // into Group, Ungroup, Clear Outline instead of two submenu parents that cannot execute.
+        flyout.Items.Add(BuildCollapsedGroupPrimaryAction(split, registry, afterExecute));
+
+        foreach (var menuItem in split.Menu.Items)
+        {
+            if (menuItem.Kind != RibbonMenuItemKind.Separator &&
+                menuItem.CommandId is { } commandId &&
+                (commandId == split.CommandId ||
+                 string.Equals(menuItem.Header, split.Label, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            flyout.Items.Add(BuildMenuItem(menuItem, registry, afterExecute));
+        }
+    }
+
+    private static MenuItem BuildCollapsedGroupPrimaryAction(
+        RibbonControl control,
+        IRibbonCommandRegistry? registry,
+        Action? afterExecute)
+    {
+        var item = new MenuItem
+        {
+            Header = control.Label,
+            Tag = control.CommandId.Value,
+        };
+        item.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
+        ApplyEnablement(item, control.CommandId, registry);
+        return item;
     }
 
     private static Control BuildCollapsedGroupMenuItem(

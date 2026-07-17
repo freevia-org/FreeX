@@ -755,7 +755,7 @@ public sealed partial class MainWindow
 
         var showHeadings = sheet.ShowHeadings;
         var headerLeft = showHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0;
-        var headerTop = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var headerTop = showHeadings ? GetColumnHeaderHeight(_session.Viewport, zoomFactor) : 0;
 
         var canvasLeft = AvaloniaCanvas.GetLeft(container);
         var canvasTop = AvaloniaCanvas.GetTop(container);

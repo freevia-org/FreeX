@@ -169,8 +169,30 @@ public static class FreeXRibbonDefinition
                 .Large("Forecast Sheet", "Forecast Sheet", Ico.ChartLine, "FS"))
             .Group("DataOutlineGroup", "Outline", null, priority: 70,
                 g => g
-                .Large("Group#GroupRowsBtn_Click", "Group", Ico.Group, "G", menu: m => m.Item("Group#GroupRowsMenuItem_Click", "Group", "G", "G"))
-                .Large("Ungroup#UngroupRowsBtn_Click", "Ungroup", Ico.Group, "U", menu: m => m.Item("Ungroup#UngroupRowsMenuItem_Click", "Ungroup", "U", "U").Separator().Item("Clear Outline", "Clear Outline", "C", "C"))
+                .SplitButton(
+                    "Group#GroupRowsBtn_Click",
+                    "Group",
+                    new RibbonMenu([new RibbonMenuItem("Group", "Group#GroupRowsMenuItem_Click", "G", "G")]),
+                    control => control with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        Icon = new RibbonCommandIcon(Ico.Group),
+                        KeyTip = "G",
+                    })
+                .SplitButton(
+                    "Ungroup#UngroupRowsBtn_Click",
+                    "Ungroup",
+                    new RibbonMenu([
+                        new RibbonMenuItem("Ungroup", "Ungroup#UngroupRowsMenuItem_Click", "U", "U"),
+                        RibbonMenuItem.Separator(),
+                        new RibbonMenuItem("Clear Outline", "Clear Outline", "C", "C"),
+                    ]),
+                    control => control with
+                    {
+                        PreferredLayout = RibbonCommandLayoutKind.Large,
+                        Icon = new RibbonCommandIcon(Ico.Group),
+                        KeyTip = "U",
+                    })
                 .Large("Subtotal", "Subtotal", Ico.Sum, "B")
                 .Medium("Hide Detail", "Hide Detail", Ico.List, "H")
                 .Medium("Show Detail", "Show Detail", Ico.List, "J"))

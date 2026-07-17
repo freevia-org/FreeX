@@ -734,7 +734,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         source.Should().Contain("using FreeX.App.Presentation.DrawingUI;");
         displayBoundsBlock.Should().Contain("DrawingObjectViewportPlanner.TryCreateDisplayedObjectRect(");
         displayBoundsBlock.Should().Contain("var rowHeaderWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;");
-        displayBoundsBlock.Should().Contain("var columnHeaderHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;");
+        displayBoundsBlock.Should().Contain("var columnHeaderHeight = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;");
         displayBoundsBlock.Should().NotContain("TryGetDisplayedColumnLeft(viewport.ColMetrics, drawingObject.AnchorCol");
         displayBoundsBlock.Should().NotContain("TryGetDisplayedRowTop(viewport.RowMetrics, drawingObject.AnchorRow");
         sharedPlanner.Should().Contain("rowHeaderWidth + (drawingObject.Left * zoomFactor)");

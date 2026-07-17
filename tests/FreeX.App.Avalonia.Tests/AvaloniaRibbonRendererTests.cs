@@ -90,6 +90,11 @@ public sealed class AvaloniaRibbonRendererTests
         }
     }
 
+    private sealed class RecordingCommand(Action execute) : IRibbonCommand
+    {
+        public void Execute(RibbonCommandContext context) => execute();
+    }
+
     [Fact]
     public Task BuildTabContent_ProducesNonEmptyVisualTree() => RunOnUiThread(() =>
     {
@@ -157,6 +162,33 @@ public sealed class AvaloniaRibbonRendererTests
         Assert.NotEmpty(collapsedButtons);
         Assert.All(collapsedButtons, b => Assert.IsType<MenuFlyout>(b.Flyout));
         Assert.True(content.Bounds.Width <= 180);
+    });
+
+    [Fact]
+    public Task CollapsedGroup_FlattensSplitButtonPrimaryAndAdditionalActions() => RunOnUiThread(() =>
+    {
+        var executed = false;
+        var registry = new RibbonCommandRegistry();
+        registry.Register("paste", new RecordingCommand(() => executed = true));
+        var content = AvaloniaRibbonRenderer.BuildTabContent(BuildHomeTab(), registry);
+        var window = new Window { Width = 180, Height = 200, Content = content };
+        window.Show();
+        window.Measure(new Size(180, 200));
+        window.Arrange(new Rect(0, 0, 180, 200));
+
+        var clipboardButton = content.GetLogicalDescendants()
+            .OfType<Button>()
+            .Single(button => Equals(button.Tag, "collapsed:clipboard"));
+        var flyout = Assert.IsType<MenuFlyout>(clipboardButton.Flyout);
+        var items = flyout.Items.OfType<MenuItem>().ToList();
+
+        Assert.Contains(items, item => Equals(item.Header, "Paste") && Equals(item.Tag, "paste") && item.Items.Count == 0);
+        Assert.Contains(items, item => Equals(item.Header, "Paste Special") && Equals(item.Tag, "pasteSpecial"));
+        Assert.DoesNotContain(items, item => Equals(item.Header, "Paste") && item.Items.Count > 0);
+
+        items.Single(item => Equals(item.Tag, "paste"))
+            .RaiseEvent(new global::Avalonia.Interactivity.RoutedEventArgs(MenuItem.ClickEvent));
+        Assert.True(executed);
     });
 
     [Fact]

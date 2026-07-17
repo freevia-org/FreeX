@@ -44,6 +44,10 @@ public sealed class XlsxWorksheetRowColumnLayoutReaderSubtotalOutlineTests
                         new XAttribute("r", "4"),
                         new XAttribute("hidden", "1"),
                         new XAttribute("outlineLevel", "1"),
+                        new XAttribute("collapsed", "1")),
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "5"),
                         new XAttribute("collapsed", "1")))));
 
     [Fact]
@@ -59,14 +63,15 @@ public sealed class XlsxWorksheetRowColumnLayoutReaderSubtotalOutlineTests
         layout.RowColumnLayout.HiddenRows.Should().NotContain(3u);
         layout.RowColumnLayout.GroupHiddenRows.Should().NotContain(3u);
 
-        // A genuinely hidden detail row with no "collapsed" of its own is unaffected.
-        layout.RowColumnLayout.HiddenRows.Should().Contain(2u);
-        layout.RowColumnLayout.GroupHiddenRows.Should().NotContain(2u);
+        // Hidden outlined detail is classified as group-owned, not manually hidden.
+        layout.RowColumnLayout.HiddenRows.Should().NotContain(2u);
+        layout.RowColumnLayout.GroupHiddenRows.Should().Contain(2u);
 
         // A row that is both hidden AND the anchor of its own collapsed inner group still
         // participates in GroupHiddenRows.
-        layout.RowColumnLayout.HiddenRows.Should().Contain(4u);
+        layout.RowColumnLayout.HiddenRows.Should().NotContain(4u);
         layout.RowColumnLayout.GroupHiddenRows.Should().Contain(4u);
+        layout.RowColumnLayout.CollapsedAnchorRows.Should().Contain([3u, 4u]);
     }
 
     [Fact]
@@ -81,10 +86,11 @@ public sealed class XlsxWorksheetRowColumnLayoutReaderSubtotalOutlineTests
         layout.RowColumnLayout.HiddenRows.Should().NotContain(3u);
         layout.RowColumnLayout.GroupHiddenRows.Should().NotContain(3u);
 
-        layout.RowColumnLayout.HiddenRows.Should().Contain(2u);
-        layout.RowColumnLayout.GroupHiddenRows.Should().NotContain(2u);
+        layout.RowColumnLayout.HiddenRows.Should().NotContain(2u);
+        layout.RowColumnLayout.GroupHiddenRows.Should().Contain(2u);
 
-        layout.RowColumnLayout.HiddenRows.Should().Contain(4u);
+        layout.RowColumnLayout.HiddenRows.Should().NotContain(4u);
         layout.RowColumnLayout.GroupHiddenRows.Should().Contain(4u);
+        layout.RowColumnLayout.CollapsedAnchorRows.Should().Contain([3u, 4u]);
     }
 }
