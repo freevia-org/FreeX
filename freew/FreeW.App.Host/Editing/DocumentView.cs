@@ -7467,6 +7467,10 @@ public sealed class DocumentView : RichTextBox
             foreach (var modelCell in modelRow.Cells)
             {
                 var span = Math.Max(1, modelCell.GridSpan);
+                var cellMargins = modelCell.Margins ?? table.DefaultCellMargins;
+                var contentTopMarginDip = cellMargins is null
+                    ? 0
+                    : PageLayout.PointsToDip(cellMargins.TopPt);
                 var wpfCell = new WpfTableCell
                 {
                     // TableCell.Padding controls the external gap in WPF, while Word's tblCellMar is
@@ -7540,7 +7544,8 @@ public sealed class DocumentView : RichTextBox
                         document,
                         vAlign,
                         rowHeightPx,
-                        cellBorderPlan)));
+                        cellBorderPlan,
+                        contentTopMarginDip)));
                 }
                 else if (rowHeightPx is not null)
                 {
@@ -7551,7 +7556,8 @@ public sealed class DocumentView : RichTextBox
                         document,
                         vAlign,
                         rowHeightPx,
-                        cellBorderPlan)));
+                        cellBorderPlan,
+                        contentTopMarginDip)));
                 }
                 else if (modelCell.TextDirection != CellTextDirection.Horizontal)
                 {
@@ -7660,7 +7666,8 @@ public sealed class DocumentView : RichTextBox
         TextDocument document,
         TableCellVerticalAlignment verticalAlignment,
         double? minHeightPx,
-        TableCellBorderVisualPlan borderPlan)
+        TableCellBorderVisualPlan borderPlan,
+        double contentTopMarginDip)
     {
         var grid = new System.Windows.Controls.Grid();
         if (minHeightPx is { } minHeight)
@@ -7668,6 +7675,13 @@ public sealed class DocumentView : RichTextBox
 
         var stack = new System.Windows.Controls.StackPanel
         {
+            // WPF TableCell.Padding changes outer table geometry, while a StackPanel.Margin
+            // changes the measured row height. Apply Word's top cell margin as a render-only
+            // offset; the horizontal margins require a width-aware compositor so native WPF does
+            // not rewrap a fixed-height Word row.
+            RenderTransform = contentTopMarginDip > 0
+                ? new TranslateTransform(0, contentTopMarginDip)
+                : Transform.Identity,
             VerticalAlignment = verticalAlignment switch
             {
                 TableCellVerticalAlignment.Center => VerticalAlignment.Center,

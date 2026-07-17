@@ -1066,6 +1066,13 @@ public sealed class DocumentViewRoundTripTests
         tables.Should().OnlyContain(table =>
             Math.Abs(table.CellSpacing - PageLayout.PointsToDip(sourceTable.CellSpacingPt!.Value)) < 0.001,
             "every physical table segment must retain Word's authored tblCellSpacing");
+        var firstContentHost = tables[0].RowGroups[0].Rows[0].Cells[0].Blocks
+            .OfType<BlockUIContainer>()
+            .Should().ContainSingle().Subject.Child.Should().BeOfType<Grid>().Subject;
+        var contentOffset = firstContentHost.Children.OfType<StackPanel>()
+            .Should().ContainSingle().Which.RenderTransform.Should().BeOfType<System.Windows.Media.TranslateTransform>().Subject;
+        contentOffset.X.Should().Be(0, "horizontal Word cell margins require width-aware composition");
+        contentOffset.Y.Should().Be(PageLayout.PointsToDip(sourceTable.Rows[0].Cells[0].Margins!.TopPt));
 
         var pageRows = tables
             .Select(table => table.RowGroups.SelectMany(group => group.Rows).ToList())
