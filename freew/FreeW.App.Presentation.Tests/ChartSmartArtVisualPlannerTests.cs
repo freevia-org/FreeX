@@ -23,6 +23,9 @@ public sealed class ChartSmartArtVisualPlannerTests
             line.X1 == scene.PlotBounds.X && line.X2 == scene.PlotBounds.Right);
         scene.AxisLines.Should().Contain(line =>
             line.Y1 == scene.PlotBounds.Bottom && line.Y2 == scene.PlotBounds.Bottom + 4);
+        scene.AxisLines.Should().Contain(line =>
+            line.X1 == scene.PlotBounds.X && line.X2 == scene.PlotBounds.X &&
+            line.Y1 == scene.PlotBounds.Y && line.Y2 == scene.PlotBounds.Bottom);
         scene.Legend.Should().HaveCount(2);
         scene.Texts.Count(text => text.Kind == ChartSceneTextKind.ValueAxis).Should().Be(4);
         scene.Texts.Count(text => text.Kind == ChartSceneTextKind.CategoryAxis).Should().Be(2);
@@ -237,7 +240,7 @@ public sealed class ChartSmartArtVisualPlannerTests
 
         var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 400, 224);
 
-        scene.PlotBounds.Should().Be(new ChartSceneRect(68, 54, 316, 64));
+        scene.PlotBounds.Should().Be(new ChartSceneRect(66, 54, 318, 64));
         scene.Texts.Single(text => text.Kind == ChartSceneTextKind.AxisTitle && text.Text == "Quarter")
             .Y.Should().Be(145);
         scene.Texts.Single(text => text.Kind == ChartSceneTextKind.AxisTitle && text.Text == "USD")

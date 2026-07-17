@@ -481,7 +481,7 @@ public static class ChartSmartArtVisualPlanner
             ? 62 + (legendCount > 0 ? 14 : 0)
             : 30;
         var plotLeft = hasAxisTitles
-            ? (chart.Kind == ChartKind.Scatter ? 49 : 44) + valueTitleWidth
+            ? (chart.Kind == ChartKind.Scatter ? 49 : 42) + valueTitleWidth
             : 32 + valueTitleWidth;
         var plotRightMargin = hasAxisTitles ? chart.Kind == ChartKind.Scatter ? 25 : 16 : 8;
         var plot = new ChartSceneRect(
@@ -548,8 +548,7 @@ public static class ChartSmartArtVisualPlanner
             {
                 var zeroY = plot.Bottom - axis.ZeroFraction * plot.Height;
                 axisLines.Add(new ChartSceneLine(plot.X, zeroY, plot.Right, zeroY, axisStroke, 1));
-                if (chart.Kind == ChartKind.Scatter)
-                    axisLines.Add(new ChartSceneLine(plot.X, plot.Y, plot.X, plot.Bottom, axisStroke, 1));
+                axisLines.Add(new ChartSceneLine(plot.X, plot.Y, plot.X, plot.Bottom, axisStroke, 1));
             }
         }
 
