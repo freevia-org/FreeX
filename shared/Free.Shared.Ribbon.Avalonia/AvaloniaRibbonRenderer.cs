@@ -1258,7 +1258,9 @@ public static class AvaloniaRibbonRenderer
         };
         primary.Click += (_, _) => Execute(control.CommandId, registry, afterExecute);
 
-        var dropdown = new DropDownButton
+        // Use a plain Button with an attached flyout. DropDownButton supplies its own built-in
+        // arrow in addition to Content, which doubled the shared chevron on Linux.
+        var dropdown = new Button
         {
             Content = Chevron(new Thickness(0), palette),
             Tag = $"{control.CommandId.Value}.Dropdown",

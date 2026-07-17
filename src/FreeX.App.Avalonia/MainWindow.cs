@@ -4442,8 +4442,14 @@ public sealed partial class MainWindow : Window
         // of pageBreakOverlay above so Normal view gets it too.
         var manualPageBreakOverlay = BuildManualPageBreakOverlay(viewport, showHeadings, zoomFactor);
         var outlineOverlay = BuildOutlineOverlay(viewport, showHeadings, zoomFactor);
+        if (outlineOverlay is not null)
+        {
+            AvaloniaGrid.SetRowSpan(outlineOverlay, grid.RowDefinitions.Count);
+            AvaloniaGrid.SetColumnSpan(outlineOverlay, grid.ColumnDefinitions.Count);
+            grid.Children.Add(outlineOverlay);
+        }
 
-        if (overlay.Children.Count == 0 && pageBreakOverlay is null && manualPageBreakOverlay is null && outlineOverlay is null)
+        if (overlay.Children.Count == 0 && pageBreakOverlay is null && manualPageBreakOverlay is null)
             return grid;
 
         var composite = new AvaloniaGrid
@@ -4457,9 +4463,6 @@ public sealed partial class MainWindow : Window
             composite.Children.Add(manualPageBreakOverlay);
         if (overlay.Children.Count > 0)
             composite.Children.Add(overlay);
-        if (outlineOverlay is not null)
-            composite.Children.Add(outlineOverlay);
-
         return composite;
     }
 
