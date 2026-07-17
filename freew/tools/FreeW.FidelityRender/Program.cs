@@ -624,8 +624,13 @@ static void RenderDocumentComposite(
                 var hfPage = RenderHfSlot(footerSlot, doc, thisPageWDip, headerFooterBandDip, i + 1, pageNumberText, pageCount);
                 if (hfPage is not null)
                 {
+                    // Unlike headers, Word anchors an explicit footer distance at the
+                    // footer's baseline.  The 36-DIP paginator viewport includes seven
+                    // extra trailing DIPs, so using it as the placement band lifts the
+                    // rendered paragraph above Word's footer position.
+                    const double explicitFooterBandDip = 29;
                     var footerTop = thisPageSettings.FooterDistancePt > 0
-                        ? thisPixH - PageLayout.PointsToDip(thisPageSettings.FooterDistancePt) - headerFooterBandDip
+                        ? thisPixH - PageLayout.PointsToDip(thisPageSettings.FooterDistancePt) - explicitFooterBandDip
                         : thisPixH - thisMarginBottom + 16;
                     var hfVis = new DrawingVisual();
                     using (var dc = hfVis.RenderOpen())

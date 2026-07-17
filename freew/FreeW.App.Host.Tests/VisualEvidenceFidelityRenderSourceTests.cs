@@ -100,6 +100,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("thisPageSettings.HeaderDistancePt > 0");
         source.Should().Contain("PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)");
         source.Should().Contain("PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)");
+        source.Should().Contain("const double explicitFooterBandDip = 29");
         source.Should().Contain("flow.PagePadding = new Thickness(");
         project.Should().Contain("FreeW.App.Presentation");
         project.Should().Contain("PackageReference Include=\"SkiaSharp\"");
