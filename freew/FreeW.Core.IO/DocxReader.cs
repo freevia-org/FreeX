@@ -2460,18 +2460,9 @@ public static class DocxReader
             run.RevisionDateXml = revision.DateXml;
         }
 
-        var image = ReadImage(r, archive, imageRelationships);
-        if (image is not null)
-        {
-            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
-            ApplyRevision(imageRun);
-            paragraph.Runs.Add(imageRun);
-            return;
-        }
-
         // A w:drawing whose anchor references a wpg:wgp group element is a floating drawing group.
-        // Must be checked BEFORE ReadWordArt/ReadShape because wpg:wgp contains nested wps:wsp children
-        // and those readers use Descendants() to find a candidate object.
+        // Must be checked before the generic image, WordArt, and shape readers because a group can contain
+        // nested pic:pic / wps:wsp children that those readers would otherwise claim as the outer run.
         var drawingGroup = ReadDrawingGroup(r, archive, imageRelationships);
         if (drawingGroup is not null)
         {
@@ -2480,6 +2471,15 @@ public static class DocxReader
             groupRun.HyperlinkAnchor = hyperlinkAnchor;
             ApplyRevision(groupRun);
             paragraph.Runs.Add(groupRun);
+            return;
+        }
+
+        var image = ReadImage(r, archive, imageRelationships);
+        if (image is not null)
+        {
+            var imageRun = new Run(string.Empty) { Image = image, HyperlinkUrl = hyperlinkUrl, HyperlinkAnchor = hyperlinkAnchor, HyperlinkTooltip = hyperlinkTooltip, CommentId = commentId };
+            ApplyRevision(imageRun);
+            paragraph.Runs.Add(imageRun);
             return;
         }
 
@@ -5166,7 +5166,42 @@ public static class DocxReader
             group.HeightPt = EmuToPoints(extent.Attribute("cy")?.Value ?? "0");
         }
 
-        // Reconstruct children from wps:wsp elements inside wpg:wgp.
+        // Picture children are native pic:pic elements in wpg:wgp. Decode them before the rich
+        // word-processing-shape children so FreeW's authored image-first groups retain their order.
+        foreach (var picture in wgp.Descendants(Pic + "pic"))
+        {
+            var xfrm = picture.Element(Pic + "spPr")?.Element(A + "xfrm");
+            var off = xfrm?.Element(A + "off");
+            var ext = xfrm?.Element(A + "ext");
+            var ox = EmuToPoints(off?.Attribute("x")?.Value ?? "0");
+            var oy = EmuToPoints(off?.Attribute("y")?.Value ?? "0");
+            var cw = EmuToPoints(ext?.Attribute("cx")?.Value ?? "36");
+            var ch = EmuToPoints(ext?.Attribute("cy")?.Value ?? "36");
+            var relationshipId = picture.Descendants(A + "blip").FirstOrDefault()?.Attribute(R + "embed")?.Value;
+            var childDocPr = picture.Element(Pic + "nvPicPr")?.Element(Pic + "cNvPr");
+            InlineImage image;
+            if (relationshipId is not null
+                && imageRelationships.TryGetValue(relationshipId, out var target)
+                && LoadMedia(archive, target) is { } bytes)
+            {
+                image = new InlineImage(bytes, cw, ch, ResolveImageFormat(target, bytes))
+                {
+                    AltText = childDocPr?.Attribute("descr")?.Value
+                };
+            }
+            else
+            {
+                image = new InlineImage([], cw, ch)
+                {
+                    AltText = childDocPr?.Attribute("descr")?.Value
+                };
+            }
+            ApplyPictureFormat(picture, image);
+            group.Children.Add(image);
+            group.ChildOffsets.Add((ox, oy));
+        }
+
+        // Reconstruct shape and WordArt children from wps:wsp elements inside wpg:wgp.
         foreach (var wsp in wgp.Elements(Wps + "wsp"))
         {
             var childDocPr = wsp.Element(Wps + "cNvPr") ?? wsp.Element(Wp + "docPr");

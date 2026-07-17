@@ -12,6 +12,8 @@ namespace FreeW.Core.IO.Tests;
 public sealed class DrawingGroupRoundTripTests
 {
     private static readonly XNamespace A   = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace Pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+    private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Wp  = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
     private static readonly XNamespace Wpg = "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup";
     private static readonly XNamespace Wps = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
@@ -139,6 +141,21 @@ public sealed class DrawingGroupRoundTripTests
         var xml = DocXml(DocumentWith(TwoMemberGroup()));
         var wgp = xml.Descendants(Wpg + "wgp").Single();
         wgp.Element(Wpg + "grpSpPr").Should().NotBeNull("wpg:grpSpPr must be present inside wpg:wgp");
+    }
+
+    [Fact]
+    public void DrawingGroup_ImageChild_EmitsNativePictureAndRoundTripsMedia()
+    {
+        var document = DocumentWith(TwoMemberGroup());
+        var xml = DocXml(document);
+
+        var picture = xml.Descendants(Wpg + "wgp").Single().Elements(Pic + "pic").Single();
+        picture.Descendants(A + "blip").Single().Attribute(R + "embed")!.Value.Should().StartWith("rIdImg");
+
+        var recovered = RoundTrip(document);
+        var group = ((Paragraph)recovered.Blocks[0]).Runs.Single(run => run.DrawingGroup is not null).DrawingGroup!;
+        group.Children[0].Should().BeOfType<InlineImage>()
+            .Which.Bytes.Should().Equal(Png());
     }
 
     [Fact]
