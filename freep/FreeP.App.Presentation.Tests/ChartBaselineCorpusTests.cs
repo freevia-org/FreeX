@@ -405,14 +405,14 @@ public sealed class ChartBaselineCorpusTests
             .Select(facet => facet.Fill.Color)
             .Should()
             .Equal(
-                new SrgbColor(0x44, 0x74, 0xC7),
-                new SrgbColor(0xF1, 0x80, 0x32),
-                new SrgbColor(0xB7, 0x60, 0x26),
-                new SrgbColor(0x97, 0xBD, 0x80),
                 new SrgbColor(0x99, 0xBD, 0x80),
                 new SrgbColor(0xA3, 0xC9, 0x89),
                 new SrgbColor(0x97, 0xBD, 0x80),
-                new SrgbColor(0x99, 0xBD, 0x80));
+                new SrgbColor(0x99, 0xBD, 0x80),
+                new SrgbColor(0x44, 0x74, 0xC7),
+                new SrgbColor(0xF1, 0x80, 0x32),
+                new SrgbColor(0xB7, 0x60, 0x26),
+                new SrgbColor(0x97, 0xBD, 0x80));
         surfaceGeometry.RenderFacets
             .Skip(8)
             .Select(facet => facet.Fill.Color)

@@ -2958,6 +2958,11 @@ public static partial class ChartRenderPlanner
                 categoryCount,
                 seriesColors,
                 triangulateCompleteCells: true)
+                // PowerPoint paints the rear surface rows first so the nearer
+                // row owns shared projected pixels at the fold between cells.
+                .OrderByDescending(facet => facet.SeriesIndex)
+                .ThenBy(facet => facet.CategoryIndex)
+                .ToArray()
             : facets;
         if (UsesImportedSurfaceBoundaryFaces(chart))
         {
