@@ -5,6 +5,7 @@ using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using FreeW.App.Host.Editing;
+using FreeW.App.Presentation.DocumentView;
 using FreeW.Core.Model;
 
 namespace FreeW.App.Host.Tests;
@@ -129,11 +130,11 @@ public sealed class FidelityRenderCompositeTests
             dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, pixW, pixH));
         bmp.Render(bgVis);
 
-        // Layer 1b: watermark tiled.
+        // Layer 1b: fixed VML watermark.
         var wm = page.EffectiveWatermark;
         if (wm is not null)
         {
-            var wmBmp = RenderWatermarkTile(wm, pageColor, pixW, pixH);
+            var wmBmp = RenderWatermarkPage(wm, pageColor, pixW, pixH);
             var wmVis = new DrawingVisual();
             using (var dc = wmVis.RenderOpen())
                 dc.DrawImage(wmBmp, new Rect(0, 0, pixW, pixH));
@@ -232,54 +233,34 @@ public sealed class FidelityRenderCompositeTests
     }
 
     /// <summary>
-    /// Renders the watermark as a full-page tiled bitmap (headless-safe).
-    /// VisualBrush(Grid) from BuildWatermarkBrush doesn't work headlessly because the Grid is
-    /// never measured; we replicate the same result by rendering the TextBlock tile directly.
+    /// Renders Word's single fixed-size VML watermark shape for the composite smoke tests.
     /// </summary>
-    private static RenderTargetBitmap RenderWatermarkTile(WatermarkOptions options, Color pageColor, int pixW, int pixH)
+    private static RenderTargetBitmap RenderWatermarkPage(WatermarkOptions options, Color pageColor, int pixW, int pixH)
     {
         var baseColor  = ParseHexColor(options.FontColorHex, Color.FromRgb(0x80, 0x80, 0x80));
         var alpha      = (byte)Math.Clamp((int)Math.Round(options.Opacity * 255), 0, 255);
         var foreground = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
 
-        var label = new System.Windows.Controls.TextBlock
-        {
-            Text            = options.Text,
-            FontSize        = 48,
-            FontWeight      = FontWeights.Bold,
-            FontFamily      = new FontFamily(options.FontFamily),
-            Foreground      = foreground,
-            LayoutTransform = options.Layout == WatermarkLayout.Horizontal
-                ? null
-                : new RotateTransform(-45),
-        };
-        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        label.Arrange(new Rect(label.DesiredSize));
-
-        int tileW = (int)Math.Max(240, label.DesiredSize.Width  + 80);
-        int tileH = (int)Math.Max(240, label.DesiredSize.Height + 80);
-
-        var tileBmp = new RenderTargetBitmap(tileW, tileH, 96, 96, PixelFormats.Pbgra32);
-        var tileVis = new DrawingVisual();
-        using (var dc = tileVis.RenderOpen())
-        {
-            dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, tileW, tileH));
-            double offX = (tileW - label.DesiredSize.Width)  / 2;
-            double offY = (tileH - label.DesiredSize.Height) / 2;
-            dc.PushTransform(new TranslateTransform(offX, offY));
-            dc.DrawRectangle(new VisualBrush(label) { Stretch = Stretch.None },
-                null, new Rect(0, 0, label.DesiredSize.Width, label.DesiredSize.Height));
-            dc.Pop();
-        }
-        tileBmp.Render(tileVis);
-
         var pageBmp = new RenderTargetBitmap(pixW, pixH, 96, 96, PixelFormats.Pbgra32);
         var pageVis = new DrawingVisual();
         using (var dc = pageVis.RenderOpen())
         {
-            for (int y = 0; y < pixH; y += tileH)
-            for (int x = 0; x < pixW; x += tileW)
-                dc.DrawImage(tileBmp, new Rect(x, y, tileW, tileH));
+            var plan = WatermarkVisualPlanner.BuildTextLayout(options, pixW, pixH);
+            if (plan is not null)
+            {
+                var typeface = new Typeface(new FontFamily(options.FontFamily), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+                var unitText = new FormattedText(options.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 1, foreground, 1);
+                var fontSize = Math.Clamp(plan.WidthDip / Math.Max(1, unitText.Width), 1, 130)
+                    * WatermarkVisualPlanner.TextPathGlyphScale;
+                var text = new FormattedText(options.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, foreground, 1);
+                dc.PushClip(new RectangleGeometry(new Rect(0, 0, pixW, pixH)));
+                if (Math.Abs(plan.RotationDegrees) > 0.01)
+                    dc.PushTransform(new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip));
+                dc.DrawText(text, new Point(plan.CenterXDip - text.Width / 2, plan.CenterYDip - text.Height / 2));
+                if (Math.Abs(plan.RotationDegrees) > 0.01)
+                    dc.Pop();
+                dc.Pop();
+            }
         }
         pageBmp.Render(pageVis);
         return pageBmp;

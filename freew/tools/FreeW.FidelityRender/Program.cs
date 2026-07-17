@@ -507,14 +507,11 @@ static void RenderDocumentComposite(
                 // Layer 1: solid page background.
                 dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, thisPixW, thisPixH));
 
-                // Layer 1b: watermark tiled over the page background.
-                // BuildWatermarkBrush returns a VisualBrush(Grid) where the Grid is not measured.
-                // We build the watermark content manually (TextBlock rendered to bitmap) so it
-                // works headlessly, then tile that bitmap as the watermark pattern.
+                // Layer 1b: Word's one fixed-size VML text-path watermark over the page background.
                 var wm = thisPageSettings.EffectiveWatermark;
                 if (wm is not null)
                 {
-                    var wmBmp = RenderWatermarkTile(wm, pageColor, thisPixW, thisPixH);
+                    var wmBmp = RenderWatermarkPage(wm, pageColor, thisPixW, thisPixH);
                     dc.DrawImage(wmBmp, new Rect(0, 0, thisPixW, thisPixH));
                 }
 
@@ -803,11 +800,7 @@ static (Brush Fill, Brush Stroke) ReviewMarkupBalloonColors(int ordinal) => (ord
 };
 
 /// <summary>
-/// Renders the watermark as a tiled bitmap (headless-safe alternative to BuildWatermarkBrush).
-/// BuildWatermarkBrush works in the live app because the Grid it returns is used as a RichTextBox
-/// Background (which WPF lays out before painting). Headlessly, the Grid is never measured, so
-/// the VisualBrush(Grid) produces nothing. We replicate the same visual: measure+arrange a
-/// TextBlock, render it to a tile bitmap, then tile across the full page.
+/// Renders Word's single fixed-size VML watermark shape for the headless composite path.
 /// </summary>
 static string? DetectWpfRenderTargetBitmapFailure()
 {
@@ -1358,7 +1351,7 @@ static SKColor ParseSkiaColor(string? hex, SKColor fallback)
     return fallback;
 }
 
-static RenderTargetBitmap RenderWatermarkTile(WatermarkOptions options, Color pageColor, int pixW, int pixH)
+static RenderTargetBitmap RenderWatermarkPage(WatermarkOptions options, Color pageColor, int pixW, int pixH)
 {
     if (options.IsPicture)
         return RenderPictureWatermark(options, pageColor, pixW, pixH);
@@ -1367,50 +1360,26 @@ static RenderTargetBitmap RenderWatermarkTile(WatermarkOptions options, Color pa
     var alpha = (byte)Math.Clamp((int)Math.Round(options.Opacity * 255), 0, 255);
     var foreground = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
 
-    // Build the TextBlock tile (matches BuildWatermarkBrush exactly).
-    var label = new System.Windows.Controls.TextBlock
-    {
-        Text           = options.Text,
-        FontSize       = 48,
-        FontWeight     = FontWeights.Bold,
-        FontFamily     = new FontFamily(options.FontFamily),
-        Foreground     = foreground,
-        LayoutTransform = options.Layout == WatermarkLayout.Horizontal
-            ? null
-            : new RotateTransform(-45),
-    };
-    label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-    label.Arrange(new Rect(label.DesiredSize));
-
-    // The tile size matches BuildWatermarkBrush.Viewport.
-    int tileW = (int)Math.Max(240, label.DesiredSize.Width  + 80);
-    int tileH = (int)Math.Max(240, label.DesiredSize.Height + 80);
-
-    // Render the tile: page background colour + watermark label centred.
-    var tileBmp = new RenderTargetBitmap(tileW, tileH, 96, 96, PixelFormats.Pbgra32);
-    var tileVis = new DrawingVisual();
-    using (var dc = tileVis.RenderOpen())
-    {
-        // Page background behind the watermark text.
-        dc.DrawRectangle(new SolidColorBrush(pageColor), null, new Rect(0, 0, tileW, tileH));
-        // Centre the label in the tile.
-        double offX = (tileW - label.DesiredSize.Width)  / 2;
-        double offY = (tileH - label.DesiredSize.Height) / 2;
-        dc.PushTransform(new TranslateTransform(offX, offY));
-        dc.DrawRectangle(new VisualBrush(label) { Stretch = Stretch.None },
-            null, new Rect(0, 0, label.DesiredSize.Width, label.DesiredSize.Height));
-        dc.Pop();
-    }
-    tileBmp.Render(tileVis);
-
-    // Tile the watermark across the full page.
     var pageBmp = new RenderTargetBitmap(pixW, pixH, 96, 96, PixelFormats.Pbgra32);
     var pageVis = new DrawingVisual();
     using (var dc = pageVis.RenderOpen())
     {
-        for (int y = 0; y < pixH; y += tileH)
-        for (int x = 0; x < pixW; x += tileW)
-            dc.DrawImage(tileBmp, new Rect(x, y, tileW, tileH));
+        var plan = WatermarkVisualPlanner.BuildTextLayout(options, pixW, pixH);
+        if (plan is not null)
+        {
+            var typeface = new Typeface(new FontFamily(options.FontFamily), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+            var unitText = new FormattedText(options.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 1, foreground, 1);
+            var fontSize = Math.Clamp(plan.WidthDip / Math.Max(1, unitText.Width), 1, 130)
+                * WatermarkVisualPlanner.TextPathGlyphScale;
+            var text = new FormattedText(options.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, foreground, 1);
+            dc.PushClip(new RectangleGeometry(new Rect(0, 0, pixW, pixH)));
+            if (Math.Abs(plan.RotationDegrees) > 0.01)
+                dc.PushTransform(new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip));
+            dc.DrawText(text, new Point(plan.CenterXDip - text.Width / 2, plan.CenterYDip - text.Height / 2));
+            if (Math.Abs(plan.RotationDegrees) > 0.01)
+                dc.Pop();
+            dc.Pop();
+        }
     }
     pageBmp.Render(pageVis);
     return pageBmp;

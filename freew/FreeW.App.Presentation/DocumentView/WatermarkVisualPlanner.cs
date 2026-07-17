@@ -14,8 +14,50 @@ public sealed record PictureWatermarkLayoutPlan(
     public double CenterYDip => YDip + HeightDip / 2;
 }
 
+public sealed record TextWatermarkLayoutPlan(
+    double XDip,
+    double YDip,
+    double WidthDip,
+    double HeightDip,
+    double RotationDegrees)
+{
+    public double CenterXDip => XDip + WidthDip / 2;
+    public double CenterYDip => YDip + HeightDip / 2;
+}
+
 public static class WatermarkVisualPlanner
 {
+    // FreeW writes text watermarks as Word's conventional VML text-path shape. Its 468 x 117pt
+    // extent, rather than a tiled label, determines the visible text scale and placement.
+    private const double WordTextWatermarkWidthDip = 624;
+    private const double WordTextWatermarkHeightDip = 156;
+    public const double TextPathGlyphScale = 0.50;
+
+    public static TextWatermarkLayoutPlan? BuildTextLayout(
+        WatermarkOptions options,
+        double pageWidthDip,
+        double pageHeightDip)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (options.IsPicture
+            || string.IsNullOrWhiteSpace(options.Text)
+            || pageWidthDip <= 0
+            || pageHeightDip <= 0)
+        {
+            return null;
+        }
+
+        var width = Math.Min(pageWidthDip, WordTextWatermarkWidthDip);
+        var height = Math.Min(pageHeightDip, WordTextWatermarkHeightDip);
+        return new TextWatermarkLayoutPlan(
+            XDip: (pageWidthDip - width) / 2,
+            YDip: (pageHeightDip - height) / 2,
+            WidthDip: width,
+            HeightDip: height,
+            RotationDegrees: options.Layout == WatermarkLayout.Diagonal ? -45 : 0);
+    }
+
     public static PictureWatermarkLayoutPlan? BuildPictureLayout(
         WatermarkOptions options,
         double pageWidthDip,
