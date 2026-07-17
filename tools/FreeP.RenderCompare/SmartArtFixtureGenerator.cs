@@ -28,6 +28,7 @@ internal static class SmartArtFixtureGenerator
     private static readonly XNamespace P   = "http://schemas.openxmlformats.org/presentationml/2006/main";
     private static readonly XNamespace A   = "http://schemas.openxmlformats.org/drawingml/2006/main";
     private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+    private static readonly XNamespace P15 = "http://schemas.microsoft.com/office/powerpoint/2012/main";
     private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
     private static readonly XNamespace Dsp = "http://schemas.microsoft.com/office/drawing/2008/diagram";
     private static readonly XNamespace Pkg = "http://schemas.openxmlformats.org/package/2006/relationships";
@@ -57,6 +58,7 @@ internal static class SmartArtFixtureGenerator
         if (UsePowerPointGenerator())
         {
             GenerateWithPowerPoint(outputPath);
+            EnsurePresentationGuideList(outputPath);
             return;
         }
 
@@ -198,7 +200,67 @@ internal static class SmartArtFixtureGenerator
                 ("rIdDraw1", DgmDrawRelType, $"drawing{si}.xml")));
         }
 
+        EnsurePresentationGuideList(outputPath);
         Console.WriteLine($"  Written: {outputPath}");
+    }
+
+    private static void EnsurePresentationGuideList(string outputPath)
+    {
+        var tempPath = outputPath + ".guide.tmp";
+        var entries = new List<(string Name, byte[] Bytes)>();
+        XDocument presentation;
+        using (var archive = ZipFile.OpenRead(outputPath))
+        {
+            var entry = archive.GetEntry("ppt/presentation.xml")
+                ?? throw new InvalidDataException("SmartArt fixture is missing ppt/presentation.xml.");
+            using var stream = entry.Open();
+            presentation = XDocument.Load(stream);
+            foreach (var sourceEntry in archive.Entries)
+            {
+                using var sourceStream = sourceEntry.Open();
+                using var bytes = new MemoryStream();
+                sourceStream.CopyTo(bytes);
+                entries.Add((sourceEntry.FullName, bytes.ToArray()));
+            }
+        }
+
+        var root = presentation.Root
+            ?? throw new InvalidDataException("SmartArt fixture has no presentation root.");
+        if (root.Element(P + "extLst")?.Elements(P + "ext")
+                .Any(ext => (string?)ext.Attribute("uri") == "{EFAFB233-063F-42B5-8137-9DF3F51BA10A}") == true)
+            return;
+
+        root.SetAttributeValue(XNamespace.Xmlns + "p15", P15.NamespaceName);
+        root.Add(new XElement(P + "extLst",
+            new XElement(P + "ext",
+                new XAttribute("uri", "{EFAFB233-063F-42B5-8137-9DF3F51BA10A}"),
+                new XElement(P15 + "sldGuideLst"))));
+
+        using var presentationBytes = new MemoryStream();
+        presentation.Save(presentationBytes);
+        var rewrittenPresentation = presentationBytes.ToArray();
+        var tempEntry = entries.FindIndex(item => item.Name == "ppt/presentation.xml");
+        entries[tempEntry] = ("ppt/presentation.xml", rewrittenPresentation);
+
+        try
+        {
+            using (var rebuilt = ZipFile.Open(tempPath, ZipArchiveMode.Create))
+            {
+                foreach (var (name, bytes) in entries)
+                {
+                    var replacement = rebuilt.CreateEntry(name, CompressionLevel.Optimal);
+                    using var output = replacement.Open();
+                    output.Write(bytes, 0, bytes.Length);
+                }
+            }
+
+            File.Move(tempPath, outputPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(tempPath))
+                File.Delete(tempPath);
+        }
     }
 
     private static bool UsePowerPointGenerator()

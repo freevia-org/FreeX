@@ -222,6 +222,7 @@ public static class PptxPackageWriter
             {
                 new SlideLayout { Id = "rId1", Name = "Blank", LayoutType = SlideLayoutType.Blank, MasterId = masters[0].Id }
             };
+        bool hasSomeNotes = presentation.Slides.Any(s => s.Notes is not null);
 
         // Collect media extensions used across all slides (for [Content_Types].xml Defaults).
         var mediaExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -412,6 +413,8 @@ public static class PptxPackageWriter
             var themePath = $"ppt/theme/theme{mi + 1}.xml";
             WriteEntry(archive, themePath, BuildThemeXml(masterThemes[mi]));
         }
+        if (hasSomeNotes)
+            WriteEntry(archive, "ppt/theme/theme2.xml", BuildThemeXml(presentation.Theme));
 
         // --- 5. presProps, viewProps, tableStyles ---
         WriteEntry(archive, "ppt/presProps.xml", BuildPresPropsXml(packageSnapshot));
@@ -490,13 +493,12 @@ public static class PptxPackageWriter
         var modernAuthorMap = BuildModernAuthorMap(presentation.Slides);
 
         // Emit a single minimal notesMaster if any slide has notes.
-        bool hasSomeNotes = presentation.Slides.Any(s => s.Notes is not null);
         if (hasSomeNotes)
         {
             WriteEntry(archive, "ppt/notesMasters/notesMaster1.xml", BuildNotesMasterXml());
-            // notesMaster rels: -> theme (reuse the same theme1.xml)
+            // PowerPoint gives the notes master its own theme part.
             var nmRels = new OpcRelationshipDocument();
-            nmRels.Add("rId1", ThemeRelType, "../theme/theme1.xml");
+            nmRels.Add("rId1", ThemeRelType, "../theme/theme2.xml");
             WriteRels(archive, "ppt/notesMasters/notesMaster1.xml", nmRels, packageSnapshot);
         }
 
@@ -706,9 +708,13 @@ public static class PptxPackageWriter
         presRels.Add($"rId{masterRelIdStart + masters.Count}", ViewPropsRelType, "viewProps.xml");
         presRels.Add($"rId{masterRelIdStart + masters.Count + 1}", TableStylesRelType, "tableStyles.xml");
         int extraPresRelOffset = 2; // next available offset after tableStyles
+        presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", ThemeRelType, "theme/theme1.xml");
+        extraPresRelOffset++;
+        string? notesMasterRelId = null;
         if (hasSomeNotes)
         {
-            presRels.Add($"rId{masterRelIdStart + masters.Count + extraPresRelOffset}", NotesMasterRelType, "notesMasters/notesMaster1.xml");
+            notesMasterRelId = $"rId{masterRelIdStart + masters.Count + extraPresRelOffset}";
+            presRels.Add(notesMasterRelId, NotesMasterRelType, "notesMasters/notesMaster1.xml");
             extraPresRelOffset++;
         }
         if (hasLegacyComments)
@@ -727,7 +733,7 @@ public static class PptxPackageWriter
             .ToList();
 
         WriteEntry(archive, "ppt/presentation.xml",
-            BuildPresentationXml(presentation, sldIdElements, masterRelIds));
+            BuildPresentationXml(presentation, sldIdElements, masterRelIds, notesMasterRelId));
 
         if (presentation.RecordingMediaArtifacts.Count > 0)
         {
@@ -854,6 +860,8 @@ public static class PptxPackageWriter
         // MM4: one theme Override entry per master (theme1.xml, theme2.xml, …).
         for (int mi = 0; mi < masters.Count; mi++)
             overrides.Add(Override(CT, $"/ppt/theme/theme{mi + 1}.xml", ThemeCT));
+        if (p.Slides.Any(s => s.Notes is not null))
+            overrides.Add(Override(CT, "/ppt/theme/theme2.xml", ThemeCT));
 
         for (int mi = 0; mi < masters.Count; mi++)
             overrides.Add(Override(CT, $"/ppt/slideMasters/slideMaster{mi + 1}.xml", SlideMasterCT));
@@ -1023,7 +1031,8 @@ public static class PptxPackageWriter
     private static XDocument BuildPresentationXml(
         Presentation p,
         List<XElement> sldIdElements,
-        List<(string relId, string masterPath)> masterRelIds)
+        List<(string relId, string masterPath)> masterRelIds,
+        string? notesMasterRelId)
     {
         var slideWidthEmu = p.SlideSizeCxEmu > 0
             ? p.SlideSizeCxEmu
@@ -1046,6 +1055,11 @@ public static class PptxPackageWriter
                     new XElement(P + "sldMasterId",
                         new XAttribute("id", 2147483648u + (uint)i),
                         new XAttribute(R + "id", mr.relId)))),
+            notesMasterRelId is not null
+                ? new XElement(P + "notesMasterIdLst",
+                    new XElement(P + "notesMasterId",
+                        new XAttribute(R + "id", notesMasterRelId)))
+                : null,
             new XElement(P + "sldIdLst", sldIdElements),
             new XElement(P + "sldSz",
                 new XAttribute("cx", slideWidthEmu),
@@ -1053,7 +1067,8 @@ public static class PptxPackageWriter
                 new XAttribute("type", "screen16x9")),
             new XElement(P + "notesSz",
                 new XAttribute("cx", notesPageWidthEmu),
-                new XAttribute("cy", notesPageHeightEmu)));
+                new XAttribute("cy", notesPageHeightEmu)),
+            BuildDefaultTextStyleEl());
 
         var slideIdToRelId = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         for (int i = 0; i < p.Slides.Count && i < sldIdElements.Count; i++)
@@ -1271,8 +1286,43 @@ public static class PptxPackageWriter
                     new XElement(P + "spTree",
                         GrpSpHeader(),
                         slideImgSp,
-                        notesBodySp))));
+                        notesBodySp)),
+                new XElement(P + "clrMapOvr",
+                    new XElement(A + "masterClrMapping"))));
     }
+
+    private static XElement BuildDefaultTextStyleEl()
+    {
+        var defaultTextStyle = new XElement(P + "defaultTextStyle",
+            new XElement(A + "defPPr",
+                new XElement(A + "defRPr", new XAttribute("lang", "en-US"))));
+
+        for (int level = 1; level <= 9; level++)
+        {
+            defaultTextStyle.Add(
+                new XElement(A + $"lvl{level}pPr",
+                    new XAttribute("marL", 457200L * (level - 1)),
+                    new XAttribute("algn", "l"),
+                    new XAttribute("defTabSz", 914400),
+                    new XAttribute("rtl", "0"),
+                    new XAttribute("eaLnBrk", "1"),
+                    new XAttribute("latinLnBrk", "0"),
+                    new XAttribute("hangingPunct", "1"),
+                    BuildDefaultTextRunPropertiesEl()));
+        }
+
+        return defaultTextStyle;
+    }
+
+    private static XElement BuildDefaultTextRunPropertiesEl() =>
+        new XElement(A + "defRPr",
+            new XAttribute("sz", "1800"),
+            new XAttribute("kern", "1200"),
+            new XElement(A + "solidFill",
+                new XElement(A + "schemeClr", new XAttribute("val", "tx1"))),
+            new XElement(A + "latin", new XAttribute("typeface", "+mn-lt")),
+            new XElement(A + "ea", new XAttribute("typeface", "+mn-ea")),
+            new XElement(A + "cs", new XAttribute("typeface", "+mn-cs")));
 
     /// <summary>
     /// Converts a <see cref="TextBody"/> into the p:txBody element suitable for a notes placeholder.
@@ -1297,6 +1347,10 @@ public static class PptxPackageWriter
             new XElement(P + "notesMaster",
                 NsAttr("p", P), NsAttr("a", A), NsAttr("r", R),
                 new XElement(P + "cSld",
+                    new XElement(P + "bg",
+                        new XElement(P + "bgRef",
+                            new XAttribute("idx", "1001"),
+                            new XElement(A + "schemeClr", new XAttribute("val", "bg1")))),
                     new XElement(P + "spTree",
                         new XElement(P + "nvGrpSpPr",
                             new XElement(P + "cNvPr", new XAttribute("id", "1"), new XAttribute("name", "")),
@@ -1307,14 +1361,48 @@ public static class PptxPackageWriter
                                 new XElement(A + "off", new XAttribute("x", "0"), new XAttribute("y", "0")),
                                 new XElement(A + "ext", new XAttribute("cx", "0"), new XAttribute("cy", "0")),
                                 new XElement(A + "chOff", new XAttribute("x", "0"), new XAttribute("y", "0")),
-                                new XElement(A + "chExt", new XAttribute("cx", "0"), new XAttribute("cy", "0")))))),
+                                new XElement(A + "chExt", new XAttribute("cx", "0"), new XAttribute("cy", "0"))))),
+                    new XElement(P + "extLst",
+                        new XElement(P + "ext",
+                            new XAttribute("uri", "{BB962C8B-B14F-4D97-AF65-F5344CB8AC3E}"),
+                            new XElement(P14 + "creationId",
+                                new XAttribute(XNamespace.Xmlns + "p14", P14.NamespaceName),
+                                new XAttribute("val", "1"))))),
                 new XElement(P + "clrMap",
                     new XAttribute("bg1", "lt1"),   new XAttribute("tx1", "dk1"),
                     new XAttribute("bg2", "lt2"),   new XAttribute("tx2", "dk2"),
                     new XAttribute("accent1", "accent1"), new XAttribute("accent2", "accent2"),
                     new XAttribute("accent3", "accent3"), new XAttribute("accent4", "accent4"),
                     new XAttribute("accent5", "accent5"), new XAttribute("accent6", "accent6"),
-                    new XAttribute("hlink", "hlink"), new XAttribute("folHlink", "folHlink"))));
+                    new XAttribute("hlink", "hlink"), new XAttribute("folHlink", "folHlink")),
+                BuildNotesStyleEl()));
+
+    private static XElement BuildNotesStyleEl()
+    {
+        var notesStyle = new XElement(P + "notesStyle");
+        for (int level = 1; level <= 9; level++)
+        {
+            notesStyle.Add(
+                new XElement(A + $"lvl{level}pPr",
+                    new XAttribute("marL", 457200L * (level - 1)),
+                    new XAttribute("algn", "l"),
+                    new XAttribute("defTabSz", 914400),
+                    new XAttribute("rtl", "0"),
+                    new XAttribute("eaLnBrk", "1"),
+                    new XAttribute("latinLnBrk", "0"),
+                    new XAttribute("hangingPunct", "1"),
+                    new XElement(A + "defRPr",
+                        new XAttribute("sz", "1200"),
+                        new XAttribute("kern", "1200"),
+                        new XElement(A + "solidFill",
+                            new XElement(A + "schemeClr", new XAttribute("val", "tx1"))),
+                        new XElement(A + "latin", new XAttribute("typeface", "+mn-lt")),
+                        new XElement(A + "ea", new XAttribute("typeface", "+mn-ea")),
+                        new XElement(A + "cs", new XAttribute("typeface", "+mn-cs")))));
+        }
+
+        return notesStyle;
+    }
 
     // ── commentAuthors.xml ────────────────────────────────────────────────────────
 
