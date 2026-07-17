@@ -73,6 +73,8 @@ public sealed class ChartBaselineCorpusTests
             .Should().Equal("0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200");
         scene.SecondaryAxis.Labels.Select(label => label.Text)
             .Should().Equal("0", "1000", "2000", "3000", "4000", "5000", "6000", "7000", "8000");
+        scene.SecondaryAxis.Ticks.Should().HaveCount(
+            9 + 8 * (ChartRenderPlanner.ImportedComboSecondaryMinorTickDivisions - 1));
     }
 
     [Fact]
