@@ -981,7 +981,7 @@ public sealed class EquationVisualPlannerTests
             signature.Contains("spacing=nary", StringComparison.Ordinal)
             && signature.Contains("limitPlacement=above-below", StringComparison.Ordinal)
             && signature.Contains("operandGapEm=0.16", StringComparison.Ordinal)
-            && signature.Contains("operatorScale=1.45", StringComparison.Ordinal));
+            && signature.Contains("operatorScale=1.32", StringComparison.Ordinal));
         evidence.SlotGeometrySignatures.Should().Contain(signature =>
             signature.Contains("slot=fraction-numerator", StringComparison.Ordinal)
             && signature.Contains("roles=Text,Base,Superscript", StringComparison.Ordinal));

@@ -402,7 +402,7 @@ public static class EquationVisualPlanner
     public const double StructureFontSizeScale = 0.9;
     public const double SuperscriptBaselineOffsetEm = 0.25;
     public const double SubscriptBaselineOffsetEm = -0.18;
-    public const double LargeOperatorFontSizeScale = 1.45;
+    public const double LargeOperatorFontSizeScale = 1.32;
     public const double DecoratorFontSizeScale = 0.85;
     public const double DelimiterFontSizeScale = 1.25;
     public const double ScriptHorizontalGapEm = 0.06;
