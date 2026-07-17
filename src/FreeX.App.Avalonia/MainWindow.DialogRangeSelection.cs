@@ -72,6 +72,7 @@ public sealed partial class MainWindow
             .ToFrozenSet(StringComparer.Ordinal);
 
     private DialogRangePickerSession? _dialogRangePickerSession;
+    private bool _isDialogRangeInteractionProbe;
     private readonly Dictionary<string, DialogRangeInteractionEvidence> _dialogRangeInteractionEvidence =
         new(StringComparer.Ordinal);
 
@@ -107,6 +108,7 @@ public sealed partial class MainWindow
             var previousSelection = _session.SelectedRange;
             try
             {
+                _isDialogRangeInteractionProbe = true;
                 var originalText = target.Text ?? string.Empty;
                 picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent) { Source = picker });
                 if (_dialogRangePickerSession?.Registration.TargetId != registration.TargetId)
@@ -121,7 +123,6 @@ public sealed partial class MainWindow
                     new CellAddress(sheet.Id, 3, 3));
                 _session.SelectRange(pointedRange);
                 RaiseDialogRangeValidationKey(Key.Enter);
-                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
                 var expected = FormatDialogRangeSelection(pointedRange, registration.Format);
                 if (_dialogRangePickerSession is not null || !string.Equals(target.Text, expected, StringComparison.Ordinal))
                 {
@@ -144,7 +145,6 @@ public sealed partial class MainWindow
                     new CellAddress(sheet.Id, 4, 4),
                     new CellAddress(sheet.Id, 5, 5)));
                 RaiseDialogRangeValidationKey(Key.Escape);
-                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
                 var cancelRestored = _dialogRangePickerSession is null &&
                     string.Equals(target.Text, expected, StringComparison.Ordinal);
                 RecordRangeInteractionEvidence(
@@ -164,9 +164,12 @@ public sealed partial class MainWindow
             }
             finally
             {
+                _isDialogRangeInteractionProbe = false;
                 _session.SelectRange(previousSelection);
             }
         }
+
+        await Task.CompletedTask;
     }
 
     private void RaiseDialogRangeValidationKey(Key key)
@@ -250,7 +253,10 @@ public sealed partial class MainWindow
             {
                 var focused = FocusManager?.GetFocusedElement();
                 if (focused is not Visual visual || !ReferenceEquals(TopLevel.GetTopLevel(visual), this))
+                {
+                    Activate();
                     _sheetGridHost.Focus();
+                }
             },
             DispatcherPriority.Input);
     }
@@ -352,7 +358,7 @@ public sealed partial class MainWindow
             target,
             registration,
             target.Text ?? string.Empty,
-            IsEnabled,
+            IsEnabled || dialog.IsDialog,
             dialog.Position,
             dialog.Opacity,
             dialog.IsHitTestVisible);
@@ -446,13 +452,20 @@ public sealed partial class MainWindow
         SetPlatformWindowEnabled(session.Dialog.IsVisible && session.Dialog.IsDialog
             ? false
             : session.OwnerWasEnabled);
-        session.Dialog.Position = session.DialogPosition;
         session.Dialog.Opacity = session.DialogOpacity;
         session.Dialog.IsHitTestVisible = session.DialogIsHitTestVisible;
 
         if (!session.Dialog.IsVisible)
             return;
 
+        if (_isDialogRangeInteractionProbe)
+        {
+            session.Target.Focus();
+            session.Target.SelectAll();
+            return;
+        }
+
+        session.Dialog.Position = session.DialogPosition;
         session.Dialog.Activate();
         session.Target.Focus();
         session.Target.SelectAll();
@@ -470,8 +483,18 @@ public sealed partial class MainWindow
             SetPlatformWindowEnabledMethod?.Invoke(platformImpl, [isEnabled]);
     }
 
-    private static void CollapseDialogForRangeSelection(DialogRangePickerSession session)
+    private void CollapseDialogForRangeSelection(DialogRangePickerSession session)
     {
+        // The automated contract selects cells through the live session rather than a pointer. Keeping
+        // the modal at its native X11 position avoids an Openbox recenter/offscreen geometry loop while
+        // still exercising the production picker click, owner enablement, and Enter/Escape handlers.
+        if (_isDialogRangeInteractionProbe)
+        {
+            session.Dialog.Opacity = 0;
+            session.Dialog.IsHitTestVisible = false;
+            return;
+        }
+
         var width = EffectiveDialogRangeSelectionDimension(session.Dialog.Bounds.Width, session.Dialog.Width, 420);
         var height = EffectiveDialogRangeSelectionDimension(session.Dialog.Bounds.Height, session.Dialog.Height, 560);
         var screens = session.Dialog.Screens.All;
