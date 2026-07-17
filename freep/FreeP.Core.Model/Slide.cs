@@ -550,6 +550,12 @@ public sealed class SlideShape
 public sealed class Slide
 {
     /// <summary>
+    /// Whether the slide is hidden from slideshow presentation. The default is visible,
+    /// matching PresentationML omission semantics for <c>p:sld/@show</c>.
+    /// </summary>
+    public bool IsHidden { get; set; }
+
+    /// <summary>
     /// Stable identifier for the slide (integer from the slide list; stored as string for
     /// round-trip stability with the legacy .fxp format).
     /// </summary>

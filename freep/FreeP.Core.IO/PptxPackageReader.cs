@@ -917,6 +917,9 @@ public static class PptxPackageReader
         var xml = OpcXml.TryLoadXml(archive, slidePath);
         if (xml?.Root is null) return slide;
 
+        slide.IsHidden = xml.Root.Attribute("show")?.Value is { } show &&
+            (show == "0" || string.Equals(show, "false", StringComparison.OrdinalIgnoreCase));
+
         // Layout via rels
         var slideRels = OpcRelationships.LoadTargets(archive, GetRelationshipPartPath(slidePath));
         var layoutTarget = OpcRelationships.FirstTargetByType(slideRels, SlideLayoutRelType);
