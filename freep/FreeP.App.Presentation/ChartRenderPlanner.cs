@@ -3060,9 +3060,9 @@ public static partial class ChartRenderPlanner
         // 360x189 PowerPoint plot used by the imported baseline chart.
         var points = new[]
         {
-            new ChartPlanPoint(plot.X + 146.0 * scaleX, plot.Y + 168.0 * scaleY),
-            new ChartPlanPoint(plot.X + 172.0 * scaleX, plot.Y + 122.0 * scaleY),
-            new ChartPlanPoint(plot.X + 231.0 * scaleX, plot.Y + 151.0 * scaleY),
+            new ChartPlanPoint(plot.X + 144.0 * scaleX, plot.Y + 167.0 * scaleY),
+            new ChartPlanPoint(plot.X + 172.0 * scaleX, plot.Y + 121.0 * scaleY),
+            new ChartPlanPoint(plot.X + 234.0 * scaleX, plot.Y + 153.0 * scaleY),
         };
         var stroke = new ChartStrokePlan(
             new SrgbColor(0x00, 0x00, 0x00),
