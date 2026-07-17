@@ -252,6 +252,7 @@ public sealed partial class MainWindow
         string? targetSurfaceId = null)
     {
         var results = new List<ParitySurfaceResult>();
+        ResetDialogInteractionContracts();
         var captureAll = string.IsNullOrWhiteSpace(targetSurfaceId);
         var requestedSurfaceId = targetSurfaceId ?? "";
         var requestedCatalogRoute = captureAll
@@ -2150,6 +2151,7 @@ public sealed partial class MainWindow
         Func<Task> opener)
     {
         var pngName = surfaceId + ".png";
+        var ownerFocusBeforeOpen = PrepareOwnerFocusForDialogContract();
         var preexisting = OwnedWindows.ToHashSet();
 
         Task openerTask;
@@ -2168,6 +2170,7 @@ public sealed partial class MainWindow
         {
             // The opener may have early-returned (e.g. a guard) without showing a window; record honestly.
             await AwaitOpenerQuietlyAsync(openerTask);
+            RecordDialogInteractionOpenFailure(surfaceId, "Dialog window did not open within the wait window.");
             return new ParitySurfaceResult(surfaceId, kind, pngName, Captured: false, "Dialog window did not open within the wait window (guard or unavailable surface).");
         }
 
@@ -2201,7 +2204,20 @@ public sealed partial class MainWindow
         }
         finally
         {
-            try { dialog.Close(); } catch { /* closing best-effort */ }
+            try
+            {
+                await RecordDialogInteractionContractAsync(
+                    surfaceId,
+                    dialog,
+                    ownerFocusBeforeOpen,
+                    openerTask,
+                    opener);
+            }
+            catch (Exception ex)
+            {
+                RecordDialogInteractionOpenFailure(surfaceId, $"Contract probe threw: {ex.GetType().Name}: {ex.Message}");
+            }
+            try { if (dialog.IsVisible) dialog.Close(); } catch { /* closing best-effort */ }
             await AwaitOpenerQuietlyAsync(openerTask);
         }
 
@@ -2238,6 +2254,7 @@ public sealed partial class MainWindow
     {
         var results = new List<ParitySurfaceResult>();
         var defaultPng = surfaceId + ".png";
+        var ownerFocusBeforeOpen = PrepareOwnerFocusForDialogContract();
         var preexisting = OwnedWindows.ToHashSet();
 
         Task openerTask;
@@ -2255,6 +2272,7 @@ public sealed partial class MainWindow
         if (dialog is null)
         {
             await AwaitOpenerQuietlyAsync(openerTask);
+            RecordDialogInteractionOpenFailure(surfaceId, "Dialog window did not open within the wait window.");
             results.Add(new ParitySurfaceResult(surfaceId, kind, defaultPng, Captured: false, "Dialog window did not open within the wait window (guard or unavailable surface)."));
             return results;
         }
@@ -2309,7 +2327,20 @@ public sealed partial class MainWindow
         }
         finally
         {
-            try { dialog.Close(); } catch { /* closing best-effort */ }
+            try
+            {
+                await RecordDialogInteractionContractAsync(
+                    surfaceId,
+                    dialog,
+                    ownerFocusBeforeOpen,
+                    openerTask,
+                    opener);
+            }
+            catch (Exception ex)
+            {
+                RecordDialogInteractionOpenFailure(surfaceId, $"Contract probe threw: {ex.GetType().Name}: {ex.Message}");
+            }
+            try { if (dialog.IsVisible) dialog.Close(); } catch { /* closing best-effort */ }
             await AwaitOpenerQuietlyAsync(openerTask);
         }
 

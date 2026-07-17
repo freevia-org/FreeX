@@ -39,6 +39,7 @@ public sealed partial class MainWindow
                 Note: surface.Note));
         }
         AddDialogInventoryResults(results, capturedSurfaces);
+        results.AddRange(BuildDialogInteractionContractResults());
 
         return results;
     }
