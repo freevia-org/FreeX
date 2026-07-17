@@ -1983,10 +1983,12 @@ public static class DocumentViewLayoutPlanner
     }
 
     private static double EstimateWordArtWidthPt(WordArt wordArt) =>
-        Math.Max(72, wordArt.FontSizePt * Math.Max(1, wordArt.Text.Length) * 0.62);
+        wordArt.WidthPt is > 0 ? wordArt.WidthPt.Value
+            : Math.Max(72, wordArt.FontSizePt * Math.Max(1, wordArt.Text.Length) * 0.62);
 
     private static double EstimateWordArtHeightPt(WordArt wordArt) =>
-        Math.Max(40, wordArt.FontSizePt * 1.6);
+        wordArt.HeightPt is > 0 ? wordArt.HeightPt.Value
+            : Math.Max(40, wordArt.FontSizePt * 1.6);
 
     private static bool TryGetFloatingKind(object modelObject, out DocumentFloatingObjectKind kind)
     {

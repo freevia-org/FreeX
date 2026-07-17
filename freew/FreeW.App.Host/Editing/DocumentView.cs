@@ -76,6 +76,9 @@ public sealed class DocumentView : RichTextBox
     // Matches the shared planner's default page-space gap around wrapped objects.
     private const double FloatingWrapGapDip = 9.0;
 
+    // WPF Figure adds clearance beyond its declared box; Word page anchors do not.
+    private const double FloatingFigureWrapInsetDip = 17.0;
+
     /// <summary>Document default run size in points, used when a run inherits its size.</summary>
     private const double DefaultFontSizePt = 11;
 
@@ -7321,7 +7324,10 @@ public sealed class DocumentView : RichTextBox
                 isPaginationSegment)
         };
         if (isPaginationSegment)
+        {
+            wpf.Margin = ResolveTableBlockMargin(table, document);
             wpf.CellSpacing = 0;
+        }
         var columns = table.ColumnCount;
         for (var c = 0; c < columns; c++)
         {
@@ -7561,6 +7567,26 @@ public sealed class DocumentView : RichTextBox
         }
         wpf.RowGroups.Add(group);
         return wpf;
+    }
+
+    private static Thickness ResolveTableBlockMargin(ModelTable table, TextDocument document)
+    {
+        var indent = Math.Max(0, table.IndentFromLeftPt ?? 0) * PxPerPoint;
+        var widthPt = table.PreferredWidthPt is > 0
+            ? table.PreferredWidthPt.Value
+            : table.ColumnWidthsPt.Count > 0
+                ? table.ColumnWidthsPt.Where(width => width > 0).Sum()
+                : 0;
+        if (widthPt <= 0 || table.Alignment == TableAlignment.Left)
+            return new Thickness(indent, 0, 0, 0);
+
+        var metrics = DocumentViewLayoutPlanner.BuildPageMetrics(document.Page);
+        var contentWidth = document.Page.ColumnCount > 1
+            ? DocumentViewLayoutPlanner.BuildColumnPlan(document.Page, metrics.ContentWidthDip, usePageColumns: true).WidthDip
+            : metrics.ContentWidthDip;
+        var slack = Math.Max(0, contentWidth - widthPt * PxPerPoint - indent);
+        var alignmentOffset = table.Alignment == TableAlignment.Center ? slack / 2 : slack;
+        return new Thickness(indent + alignmentOffset, 0, 0, 0);
     }
 
     private static System.Windows.Controls.Grid BuildCellContentHost(
@@ -8640,7 +8666,9 @@ public sealed class DocumentView : RichTextBox
 
         if (run.Image is { IsFloating: true })
         {
-            widthDip = Math.Max(1, rect.WidthDip);
+            // WPF's Figure adds its own effective clearance around the wrap box. Calibrate the
+            // synthetic figure width to the edge-to-text behavior Word uses for page anchors.
+            widthDip = Math.Max(1, rect.WidthDip - FloatingFigureWrapInsetDip);
             heightDip = Math.Max(1, rect.HeightDip);
             horizontalOffsetDip = rect.LeftDip;
             verticalOffsetDip = rect.TopDip;

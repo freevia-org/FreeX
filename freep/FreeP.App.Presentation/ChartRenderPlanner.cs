@@ -504,6 +504,7 @@ public sealed class ChartScenePlan
 {
     public ChartFramePlan Frame { get; init; }
     public ChartSceneGeometryKind GeometryKind { get; init; }
+    public bool UsesStockLineFallback { get; init; }
     public ChartTextPlan? Title { get; init; }
     public bool DrawFlatGrid { get; init; }
     public bool DrawProjectedThreeDBarFrame { get; init; }
@@ -1396,6 +1397,7 @@ public static partial class ChartRenderPlanner
         {
             Frame = frame,
             GeometryKind = geometryKind,
+            UsesStockLineFallback = UsesStockLineFallback(chart),
             Title = title,
             DrawFlatGrid = !UsesProjectedSurfaceFrame(chart) &&
                 !UsesImportedThreeDColumnDefaults(chart) &&
@@ -4055,9 +4057,9 @@ public static partial class ChartRenderPlanner
 
         var (secondaryMin, secondaryMax, _) = ComputeSecondaryValueAxisRange(chart);
         double secondaryRange = secondaryMax - secondaryMin;
-        double stepX = plot.Width / Math.Max(1, categoryCount - 1);
-        var depth = BuildClassicThreeDDepthPlan(chart, plot);
         bool importedLineMarkers = chart.ChartType == ChartType.LineMarkers && UsesImportedTextMetrics(chart);
+        double stepX = plot.Width / Math.Max(1, importedLineMarkers ? categoryCount : categoryCount - 1);
+        var depth = BuildClassicThreeDDepthPlan(chart, plot);
         var primitives = new List<ChartLineSeriesPrimitive>();
 
         for (int seriesIndex = 0; seriesIndex < chart.Series.Count; seriesIndex++)
@@ -4079,7 +4081,9 @@ public static partial class ChartRenderPlanner
                 if (rawValue is null)
                     continue;
 
-                double x = plot.X + categoryIndex * stepX;
+                double x = importedLineMarkers
+                    ? plot.X + (categoryIndex + 0.5) * stepX
+                    : plot.X + categoryIndex * stepX;
                 double y = plot.Bottom - (rawValue.Value - effectiveMin) / effectiveRange * plot.Height;
                 points[categoryIndex] = new ChartPlanPoint(x, y);
             }

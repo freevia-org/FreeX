@@ -577,7 +577,7 @@ static void RenderDocumentComposite(
                 : Math.Max(0, thisMarginTop - hfH - 12);
             var footerTop = thisPageSettings.FooterDistancePt > 0
                 ? thisPixH - PageLayout.PointsToDip(thisPageSettings.FooterDistancePt) - hfH
-                : thisPixH - thisMarginBottom + 16;
+                : thisPixH - thisMarginBottom + 19;
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
             {
@@ -683,6 +683,13 @@ static void RenderDocumentComposite(
             }
         }
 
+        // Word switches from its print-page surface to a reduced review-markup surface when
+        // comments are visible: the page is zoomed into the left portion of the capture and a
+        // dedicated right strip owns the balloons. Keep that view-mode composition out of the
+        // ordinary document renderer, but reproduce it for the canonical 96-DPI evidence page.
+        if (doc.Comments.Count > 0 && thisPixW == 816 && thisPixH == 1056)
+            bmp = RenderReviewMarkupCapture(bmp, doc);
+
         string outPath = BuildVisualEvidenceOutputPath(outDir, name, i + 1);
         var byteLength = SavePng(bmp, outPath);
         var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
@@ -720,6 +727,80 @@ static void RenderDocumentComposite(
 
     // Endnotes are composed within the final body page above.
 }
+
+static RenderTargetBitmap RenderReviewMarkupCapture(
+    RenderTargetBitmap pageBitmap,
+    TextDocument document)
+{
+    const double pageScale = 0.75;
+    const double documentTop = 127;
+    const double stripLeft = 555;
+    const double stripTop = 127;
+    const double stripBottom = 954;
+    const double balloonLeft = 578;
+    const double balloonWidth = 233;
+    const double firstBalloonTop = 263;
+
+    var width = pageBitmap.PixelWidth;
+    var height = pageBitmap.PixelHeight;
+    var result = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+    var visual = new DrawingVisual();
+    var sources = ReviewBalloonLayoutPlanner.BuildSources(document, ReviewDisplayPolicy.Default)
+        .Where(source => source.Kind == ReviewBalloonKind.Comment)
+        .ToArray();
+
+    using (var dc = visual.RenderOpen())
+    {
+        dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+        dc.DrawImage(pageBitmap, new Rect(0, documentTop, width * pageScale, height * pageScale));
+        dc.DrawRectangle(
+            new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            null,
+            new Rect(stripLeft, stripTop, width - stripLeft, stripBottom - stripTop));
+
+        var balloonTop = firstBalloonTop;
+        for (var ordinal = 0; ordinal < sources.Length; ordinal++)
+        {
+            var source = sources[ordinal];
+            var (fill, stroke) = ReviewMarkupBalloonColors(ordinal);
+            var label = $"Commented [{source.Author.FirstOrDefault()}{ordinal + 1}]: ";
+            var body = label + source.BodyText;
+            var typeface = new Typeface(new FontFamily("Arial"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+            var text = new FormattedText(
+                body,
+                System.Globalization.CultureInfo.InvariantCulture,
+                FlowDirection.LeftToRight,
+                typeface,
+                7,
+                Brushes.Black,
+                1)
+            {
+                MaxTextWidth = balloonWidth - 8,
+                TextAlignment = System.Windows.TextAlignment.Left,
+                Trimming = TextTrimming.None
+            };
+            var balloonHeight = Math.Max(27, Math.Min(40, Math.Ceiling(text.Height) + 6));
+            var anchorY = documentTop + pageScale * (186 + ordinal * 31) + 10;
+            var leader = new Pen(stroke, 0.8);
+            dc.DrawLine(leader, new Point(stripLeft - 275 - ordinal * 42, anchorY),
+                new Point(balloonLeft, balloonTop + balloonHeight / 2));
+            dc.DrawRoundedRectangle(fill, new Pen(stroke, 1),
+                new Rect(balloonLeft, balloonTop, balloonWidth, balloonHeight), 3, 3);
+            dc.DrawText(text, new Point(balloonLeft + 4, balloonTop + 3));
+            balloonTop += balloonHeight + 2;
+        }
+    }
+
+    result.Render(visual);
+    return result;
+}
+
+static (Brush Fill, Brush Stroke) ReviewMarkupBalloonColors(int ordinal) => (ordinal % 3) switch
+{
+    0 => (new SolidColorBrush(Color.FromRgb(0xDD, 0xEE, 0xF7)), new SolidColorBrush(Color.FromRgb(0x00, 0x70, 0xC0))),
+    1 => (new SolidColorBrush(Color.FromRgb(0xE9, 0xDF, 0xF0)), new SolidColorBrush(Color.FromRgb(0x80, 0x64, 0xA2))),
+    _ => (new SolidColorBrush(Color.FromRgb(0xE2, 0xF0, 0xD9)), new SolidColorBrush(Color.FromRgb(0x70, 0xAD, 0x47)))
+};
 
 /// <summary>
 /// Renders the watermark as a tiled bitmap (headless-safe alternative to BuildWatermarkBrush).

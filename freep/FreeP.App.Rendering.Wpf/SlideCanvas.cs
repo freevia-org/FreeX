@@ -741,7 +741,7 @@ public sealed class SlideCanvas : FrameworkElement
 
         if (scene.Title is { } title)
         {
-            if (chart.ChartType == ChartType.Stock && !chart.HasHighLowLines)
+            if (scene.UsesStockLineFallback)
             {
                 // The imported line-series fallback uses the classic Office title
                 // raster, whose visible glyph block is slightly narrower and lower
@@ -873,7 +873,7 @@ public sealed class SlideCanvas : FrameworkElement
         foreach (var label in scene.ValueAxisLabels)
         {
             var labelBounds = ToRect(label.Bounds);
-            if (chart.ChartType == ChartType.Stock && !chart.HasHighLowLines)
+            if (scene.UsesStockLineFallback)
             {
                 // The imported stock fallback's value labels sit in a wider
                 // left gutter in PowerPoint than WPF's generic text placement.
@@ -2511,8 +2511,10 @@ public sealed class SlideCanvas : FrameworkElement
                             var reflectionMask = new LinearGradientBrush
                             {
                                 MappingMode = BrushMappingMode.RelativeToBoundingBox,
-                                StartPoint = new Point(0.5, 0),
-                                EndPoint = new Point(0.5, 1),
+                                // Reflections use a negative Y scale. Reverse the
+                                // mask direction so opacity fades away from the glyph.
+                                StartPoint = new Point(0.5, 1),
+                                EndPoint = new Point(0.5, 0),
                             };
                             reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(Colors.White, 0));
                             reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(

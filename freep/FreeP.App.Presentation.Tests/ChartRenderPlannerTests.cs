@@ -2582,6 +2582,28 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildLineSeriesPrimitives_ImportedLineMarkersUseCategoryCenters()
+    {
+        var series = new ChartSeries { Name = "2023" };
+        series.Values.AddRange(new double?[] { 80, 100, 60, 90 });
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.LineMarkers,
+            TextStyle = new ChartTextStyle { FontSizePt = 18.0, IsImplicitDefault = true }
+        };
+        chart.Categories.AddRange(new[] { "North", "South", "East", "West" });
+        chart.Series.Add(series);
+
+        var plan = ChartRenderPlanner.BuildLineSeriesPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 400, 100),
+            withMarkers: true);
+
+        plan.Should().ContainSingle();
+        plan[0].Points.Select(point => point!.Value.X).Should().Equal(50.0, 150.0, 250.0, 350.0);
+    }
+
+    [Fact]
     public void BuildScatterPrimitivePlan_DisplayBlanksAsSpan_ConnectsAcrossBlankYPoint()
     {
         var series = new ChartSeries { Name = "XY" };

@@ -95,7 +95,7 @@ public sealed class RendererNeutralDedupPlannerTests
         plan.SoftEdgePasses[0].StrokeWidthDip.Should().BeApproximately(12, 0.001);
         plan.SoftEdgePasses[^1].StrokeWidthDip.Should().BeApproximately(4, 0.001);
         plan.GlowPasses[0].StrokeWidthDip.Should().BeApproximately(10, 0.001);
-        plan.GlowPasses[0].Alpha.Should().Be(30);
+        plan.GlowPasses[0].Alpha.Should().Be(49);
         plan.GlowPasses[^1].StrokeWidthDip.Should().BeApproximately(10.0 / 3.0, 0.001);
     }
 

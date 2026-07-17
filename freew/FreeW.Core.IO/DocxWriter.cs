@@ -3659,10 +3659,10 @@ public static class DocxWriter
     /// </summary>
     private static XElement BuildWordArtDrawing(WordArt wordArt, IdAllocator ids)
     {
-        // WordArt has no intrinsic geometry size in the FreeW model; derive a sensible text-box extent from
-        // the font size and text length so the inline drawing has a non-zero extent (Word recomputes it).
-        var heightPt = wordArt.FontSizePt * 1.6;
-        var widthPt = Math.Max(1, wordArt.Text.Length) * wordArt.FontSizePt * 0.62;
+        // Preserve imported text-box geometry. New WordArt still falls back to a sensible extent based
+        // on its font size and text length.
+        var heightPt = wordArt.HeightPt is > 0 ? wordArt.HeightPt.Value : wordArt.FontSizePt * 1.6;
+        var widthPt = wordArt.WidthPt is > 0 ? wordArt.WidthPt.Value : Math.Max(1, wordArt.Text.Length) * wordArt.FontSizePt * 0.62;
         var cx = PointsToEmu(widthPt);
         var cy = PointsToEmu(heightPt);
         var docPrId = ids.NextShapeDrawingId();
@@ -4723,6 +4723,10 @@ public static class DocxWriter
             throw new InvalidOperationException("Native Organization Chart data template requires a complete semantic chain.");
 
         var idMap = new Dictionary<string, string>(StringComparer.Ordinal);
+        var semanticPointIndexes = semanticPoints
+            .Select((point, index) => (Id: point.Attribute("modelId")!.Value, Index: index))
+            .ToDictionary(item => item.Id, item => item.Index, StringComparer.Ordinal);
+        var parentTransitionIndexes = new Dictionary<string, int>(StringComparer.Ordinal);
         var semanticIndex = 0;
         var transitionIndex = 0;
         foreach (var point in points)
@@ -4732,6 +4736,8 @@ public static class DocxWriter
                 continue;
 
             var type = point.Attribute("type")?.Value;
+            if (type == "parTrans")
+                parentTransitionIndexes[oldId] = transitionIndex;
             var newId = type switch
             {
                 "doc" => SmartArtModelId(0),
@@ -4780,8 +4786,22 @@ public static class DocxWriter
         foreach (var point in points.Where(point => point.Attribute("type")?.Value == "pres"))
         {
             var assoc = point.Element(Dgm + "prSet")?.Attribute("presAssocID");
+            var originalAssocId = assoc?.Value;
             if (assoc is not null && idMap.TryGetValue(assoc.Value, out var mappedAssoc))
                 assoc.Value = mappedAssoc;
+
+            var presentationName = point.Element(Dgm + "prSet")?.Attribute("presName")?.Value;
+            if (presentationName?.StartsWith("rootText", StringComparison.Ordinal) == true
+                && originalAssocId is not null
+                && semanticPointIndexes.TryGetValue(originalAssocId, out var nodeIndex))
+            {
+                point.SetAttributeValue("modelId", SmartArtModelId(9000 + nodeIndex * 5 + 3));
+            }
+            else if (originalAssocId is not null
+                     && parentTransitionIndexes.TryGetValue(originalAssocId, out var parentTransitionIndex))
+            {
+                point.SetAttributeValue("modelId", SmartArtModelId(7500 + parentTransitionIndex));
+            }
         }
 
         var docPrSet = points.Single(point => point.Attribute("type")?.Value == "doc")
@@ -5119,7 +5139,7 @@ public static class DocxWriter
 
                     var parent = positions[parentIndex];
                     var child = positions[i];
-                    var x = Math.Min(parent.X + boxW / 2, child.X + boxW / 2);
+                    var x = Math.Min(parent.X + hierarchyBoxW / 2, child.X + hierarchyBoxW / 2);
                     var y = Math.Min(parent.Y + hierarchyBoxH, child.Y);
                     var width = Math.Max(1L, Math.Abs((parent.X + hierarchyBoxW / 2) - (child.X + hierarchyBoxW / 2)));
                     var height = Math.Max(1L, Math.Abs(child.Y - (parent.Y + hierarchyBoxH)));
@@ -5139,27 +5159,17 @@ public static class DocxWriter
                 {
                     var position = positions[i];
                     var fillHex = colorScheme.FillHexAt(i).TrimStart('#').ToUpperInvariant();
-                    // Word's hierarchy drawing pairs a filled backing shape with a light foreground/text shape.
-                    AddCachedShape(
-                        SmartArtModelId(9000 + i * 5 + 2),
-                        position.X,
-                        position.Y,
-                        hierarchyBoxW,
-                        hierarchyBoxH,
-                        "roundRect",
-                        hierarchyAccentHex,
-                        lineHex: hierarchyAccentHex);
+                    // The cache shape must identify the presentation graph's text node. Word then keeps
+                    // the cached geometry instead of replacing it with a disconnected fallback shape.
                     AddCachedShape(
                         SmartArtModelId(9000 + i * 5 + 3),
                         position.X,
                         position.Y,
                         hierarchyBoxW,
                         hierarchyBoxH,
-                        "roundRect",
-                        textHex,
+                        "rect",
+                        hierarchyAccentHex,
                         text: nodes[i].Node.Text,
-                        fillScheme: "lt1",
-                        fillAlpha: "90000",
                         lineHex: hierarchyAccentHex);
                 }
             }
