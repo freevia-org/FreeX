@@ -2451,7 +2451,10 @@ public sealed class SlideCanvas : FrameworkElement
                             };
                             reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(Colors.White, 0));
                             reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
-                                Color.FromArgb(0, 255, 255, 255), 1));
+                                Color.FromArgb(0, 255, 255, 255), Math.Max(0.001, reflection.EndPos)));
+                            if (reflection.EndPos < 0.999)
+                                reflectionMask.GradientStops.Add(new System.Windows.Media.GradientStop(
+                                    Color.FromArgb(0, 255, 255, 255), 1));
                             if (reflectionMask.CanFreeze) reflectionMask.Freeze();
                             dc.PushOpacityMask(reflectionMask);
                             dc.PushOpacity(reflection.Alpha / 255.0);

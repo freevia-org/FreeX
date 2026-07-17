@@ -208,6 +208,9 @@ public sealed class RunTextReflection
 
     /// <summary>Vertical scale from a:reflection @sy. Negative values mirror vertically.</summary>
     public double ScaleY { get; set; } = -1.0;
+
+    /// <summary>Normalized end position of the reflection fade from a:reflection @endPos.</summary>
+    public double EndPos { get; set; } = 1.0;
 }
 
 /// <summary>

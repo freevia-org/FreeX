@@ -2548,15 +2548,21 @@ public sealed class SlideCanvas : Control
                         double reflectionY = reflection.ScaleY < 0
                             ? plan.GlyphBoundsDip.Y + plan.GlyphBoundsDip.Height + reflection.OffsetY
                             : plan.GlyphBoundsDip.Y + reflection.OffsetY;
+                        double reflectionEndPos = Math.Clamp(reflection.EndPos, 0.0, 1.0);
+                        var reflectionStops = new GradientStops
+                        {
+                            new AvGradientStop(Colors.White, 0),
+                            new AvGradientStop(
+                                Color.FromArgb(0, 255, 255, 255),
+                                Math.Max(0.001, reflectionEndPos)),
+                        };
+                        if (reflectionEndPos < 0.999)
+                            reflectionStops.Add(new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1));
                         var reflectionMask = new LinearGradientBrush
                         {
                             StartPoint = new RelativePoint(0.5, 0, RelativeUnit.Relative),
                             EndPoint = new RelativePoint(0.5, 1, RelativeUnit.Relative),
-                            GradientStops = new GradientStops
-                            {
-                                new AvGradientStop(Colors.White, 0),
-                                new AvGradientStop(Color.FromArgb(0, 255, 255, 255), 1),
-                            }
+                            GradientStops = reflectionStops
                         };
                         using var maskScope = dc.PushOpacityMask(
                             reflectionMask,

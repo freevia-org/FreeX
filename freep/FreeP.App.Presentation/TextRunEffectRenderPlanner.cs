@@ -22,7 +22,8 @@ public abstract record TextRunEffectPass
         double ScaleY,
         byte Alpha,
         double BlurDip,
-        ResolvedFill FillBrush) : TextRunEffectPass;
+        ResolvedFill FillBrush,
+        double EndPos) : TextRunEffectPass;
 
     public sealed record Glow(
         double StrokeWidthDip,
@@ -178,7 +179,8 @@ public static class TextRunEffectRenderPlanner
             scaleY,
             reflection.Alpha,
             reflection.BlurDip,
-            fillBrush));
+            fillBrush,
+            Math.Clamp(reflection.EndPos, 0.0, 1.0)));
     }
 
     private static void AddGlowPasses(List<TextRunEffectPass> passes, ResolvedRunGlow glow)
