@@ -5746,9 +5746,6 @@ public sealed class DocumentView : RichTextBox
         var heightPx = plan.Rect.HeightDip;
 
         var isSelected = _selectedFloatingObjects.Contains(group);
-        var borderColor = isSelected
-            ? System.Windows.Media.Brushes.DodgerBlue
-            : System.Windows.Media.Brushes.SlateGray;
 
         var innerCanvas = new Canvas
         {
@@ -5786,8 +5783,8 @@ public sealed class DocumentView : RichTextBox
         {
             Width = widthPx,
             Height = heightPx,
-            BorderBrush = borderColor,
-            BorderThickness = new Thickness(isSelected ? 2 : 1.5),
+            BorderBrush = isSelected ? System.Windows.Media.Brushes.DodgerBlue : null,
+            BorderThickness = isSelected ? new Thickness(2) : new Thickness(0),
             Background = System.Windows.Media.Brushes.Transparent,
             Child = innerCanvas,
             Tag = group

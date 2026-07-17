@@ -437,6 +437,8 @@ public sealed class FloatingObjectRenderTests
         view.SetFloatingCanvas(canvas);
 
         var groupRoot = canvas.Children.OfType<Border>().Single(border => ReferenceEquals(border.Tag, group));
+        groupRoot.BorderBrush.Should().BeNull("unselected groups have no authored outline");
+        groupRoot.BorderThickness.Should().Be(new Thickness(0), "the group frame is selection-only chrome");
         LogicalDescendants<System.Windows.Controls.Image>(groupRoot)
             .Should()
             .ContainSingle(imageElement => ReferenceEquals(imageElement.Tag, image));
@@ -454,6 +456,11 @@ public sealed class FloatingObjectRenderTests
             .ToList();
         texts.Should().Contain(["Grouped sales", "Q1", "Plan", "Build"]);
         texts.Should().NotContain(["Image", "Column Chart", "SmartArt"]);
+
+        view.SelectFloatingObject(group);
+        var selectedGroupRoot = canvas.Children.OfType<Border>().Single(border => ReferenceEquals(border.Tag, group));
+        selectedGroupRoot.BorderBrush.Should().BeSameAs(System.Windows.Media.Brushes.DodgerBlue);
+        selectedGroupRoot.BorderThickness.Should().Be(new Thickness(2));
     }
 
     [StaFact]
