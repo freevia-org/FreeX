@@ -59,7 +59,10 @@ public sealed partial class MainWindow
         {
             Title = UiText.Get("MovePivot_Title"),
             Width = 420,
-            SizeToContent = SizeToContent.Height,
+            Height = 180,
+            MinWidth = 420,
+            MinHeight = 180,
+            SizeToContent = SizeToContent.Manual,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             CanResize = false,
             ShowInTaskbar = false,
