@@ -1152,19 +1152,33 @@ public static class DocxReader
         // the model's paragraph list (the model carries no per-header table) but preserve all text + runs.
         foreach (var p in root.Descendants(W + "p"))
         {
-            // FreeW's page watermark is stored in a VML-only paragraph in the header. It is also
-            // represented by custom document properties, so keeping this empty layout paragraph in
-            // the model only consumes header height and can hide the real header text on render.
-            // Restrict the filter to FreeW's stable shape IDs so ordinary Word image/VML headers survive.
-            var isFreeWWatermarkParagraph = p.Descendants(V + "shape")
-                .Any(shape => shape.Attribute("id")?.Value is
-                    "PowerPlusWaterMarkObject" or "PowerPlusPictureWaterMarkObject");
-            if (isFreeWWatermarkParagraph)
+            // Watermarks are represented by custom document properties, not header content. Strip only
+            // FreeW's stable watermark runs, preserving the visible paragraph that owns an inline anchor.
+            var contentParagraph = new XElement(p);
+            var watermarkRuns = contentParagraph.Descendants(W + "r")
+                .Where(IsFreeWWatermarkRun)
+                .ToList();
+            foreach (var watermarkRun in watermarkRuns)
+                watermarkRun.Remove();
+
+            if (watermarkRuns.Count > 0 && !contentParagraph.Descendants(W + "r").Any())
                 continue;
 
-            result.Paragraphs.Add(ReadParagraph(p, archive, partImageRelationships, hyperlinkRelationships, noNumbering));
+            result.Paragraphs.Add(ReadParagraph(contentParagraph, archive, partImageRelationships, hyperlinkRelationships, noNumbering));
         }
         return result;
+    }
+
+    private static bool IsFreeWWatermarkRun(XElement run)
+    {
+        var hasTextWatermark = run.Descendants(V + "shape")
+            .Any(shape => shape.Attribute("id")?.Value is
+                "PowerPlusWaterMarkObject" or "PowerPlusPictureWaterMarkObject");
+        var hasPictureWatermark = run.Descendants(Wp + "anchor")
+            .Any(anchor => anchor.Attribute("behindDoc")?.Value == "1"
+                && anchor.Descendants(A + "blip")
+                    .Any(blip => blip.Attribute(R + "embed")?.Value == "rIdWatermarkImage"));
+        return (hasTextWatermark || hasPictureWatermark) && !run.Descendants(W + "t").Any();
     }
 
     /// <summary>

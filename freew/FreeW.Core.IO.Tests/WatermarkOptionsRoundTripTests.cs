@@ -195,7 +195,7 @@ public class WatermarkOptionsRoundTripTests
     }
 
     [Fact]
-    public void WatermarkOptions_AppendsAnchorAfterVisibleHeaderContent()
+    public void WatermarkOptions_EmbedsAnchorInLastVisibleHeaderParagraph()
     {
         var doc = new TextDocument
         {
@@ -207,13 +207,10 @@ public class WatermarkOptionsRoundTripTests
         var word = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
         var paragraphs = xml.Root!.Elements(word + "p").ToList();
 
+        paragraphs.Should().ContainSingle("a watermark must not add a layout paragraph beside visible header content");
         paragraphs[0].Value.Should().Contain("Visible header");
-        paragraphs[^1].Descendants(XNamespace.Get("urn:schemas-microsoft-com:vml") + "shape")
-            .Should().ContainSingle("the watermark anchor follows visible header paragraphs");
-        paragraphs[^1].Element(word + "pPr")!.Element(word + "spacing")!
-            .Attribute(word + "line")!.Value.Should().Be("1");
-        paragraphs[^1].Element(word + "pPr")!.Element(word + "spacing")!
-            .Attribute(word + "lineRule")!.Value.Should().Be("exact");
+        paragraphs[0].Descendants(XNamespace.Get("urn:schemas-microsoft-com:vml") + "shape")
+            .Should().ContainSingle("the floating watermark must share the visible header paragraph's anchor");
     }
 
     [Fact]
@@ -245,6 +242,27 @@ public class WatermarkOptionsRoundTripTests
         stream.Position = 0;
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
         zip.GetEntry("word/media/header1_watermark1.png").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void PictureWatermark_DoesNotConsumeVisibleHeaderParagraph()
+    {
+        var doc = new TextDocument
+        {
+            Header = new HeaderFooter("Visible header")
+        };
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = Convert.FromBase64String(
+                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
+        };
+
+        var loaded = RoundTrip(doc);
+
+        loaded.Header.Should().NotBeNull();
+        loaded.Header!.Paragraphs.Should().ContainSingle();
+        loaded.Header.Paragraphs[0].PlainText.Should().Be("Visible header");
+        loaded.Header.Paragraphs[0].Runs.Should().NotContain(run => run.Image != null);
     }
 
     // ── Legacy Watermark migration ────────────────────────────────────────

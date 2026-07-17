@@ -1381,18 +1381,24 @@ public static class DocxWriter
 
         if (part.Watermark is not null)
         {
-            // A floating watermark still needs an anchoring paragraph in the header story. Keep that
-            // paragraph after real header content: Word otherwise lays out its empty line first and
-            // shifts the visible header down by one line.
-            root.Add(part.WatermarkImage is { } picture
-                ? BuildPictureWatermarkParagraph(picture)
-                : BuildWatermarkParagraph(part.Watermark));
+            // A floating watermark needs a header-story anchor. When visible header content already
+            // exists, append the anchor run to its final paragraph: a separate paragraph reserves an
+            // extra Word line and shifts the document body. Watermark-only headers still need their
+            // own minimal paragraph.
+            var watermarkRun = part.WatermarkImage is { } picture
+                ? BuildPictureWatermarkRun(picture)
+                : BuildWatermarkRun(part.Watermark);
+            var lastVisibleParagraph = root.Elements(W + "p").LastOrDefault();
+            if (lastVisibleParagraph is not null)
+                lastVisibleParagraph.Add(watermarkRun);
+            else
+                root.Add(new XElement(W + "p", WatermarkAnchorParagraphProperties(), watermarkRun));
         }
 
         return new XDocument(root);
     }
 
-    private static XElement BuildWatermarkParagraph(WatermarkOptions options)
+    private static XElement BuildWatermarkRun(WatermarkOptions options)
     {
         var color = NormalizeHex(options.FontColorHex, "808080");
         var opacity = Math.Clamp(options.Opacity, 0, 1)
@@ -1457,48 +1463,44 @@ public static class DocxWriter
                 new XAttribute("string", options.Text)),
             new XElement(W10 + "wrap", new XAttribute("anchorx", "margin"), new XAttribute("anchory", "margin")));
 
-        return new XElement(W + "p",
-            WatermarkAnchorParagraphProperties(),
-            new XElement(W + "r",
-                new XElement(W + "pict",
-                    textShapeType,
-                    shape)));
+        return new XElement(W + "r",
+            new XElement(W + "pict",
+                textShapeType,
+                shape));
     }
 
-    private static XElement BuildPictureWatermarkParagraph(ImagePart picture)
+    private static XElement BuildPictureWatermarkRun(ImagePart picture)
     {
         var image = picture.Image;
         var cx = PointsToEmu(image.WidthPt);
         var cy = PointsToEmu(image.HeightPt);
 
-        return new XElement(W + "p",
-            WatermarkAnchorParagraphProperties(),
-            new XElement(W + "r",
-                new XElement(W + "drawing",
-                    new XElement(Wp + "anchor",
-                        new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
-                        new XAttribute("distT", 0), new XAttribute("distB", 0),
-                        new XAttribute("distL", 0), new XAttribute("distR", 0),
-                        new XAttribute("simplePos", 0),
-                        new XAttribute("relativeHeight", 0),
-                        new XAttribute("behindDoc", 1),
-                        new XAttribute("locked", 0),
-                        new XAttribute("layoutInCell", 1),
-                        new XAttribute("allowOverlap", 1),
-                        new XElement(Wp + "simplePos", new XAttribute("x", 0), new XAttribute("y", 0)),
-                        new XElement(Wp + "positionH",
-                            new XAttribute("relativeFrom", "margin"),
-                            new XElement(Wp + "align", "center")),
-                        new XElement(Wp + "positionV",
-                            new XAttribute("relativeFrom", "margin"),
-                            new XElement(Wp + "align", "center")),
-                        new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
-                        new XElement(Wp + "effectExtent",
-                            new XAttribute("l", 0), new XAttribute("t", 0),
-                            new XAttribute("r", 0), new XAttribute("b", 0)),
-                        new XElement(Wp + "wrapNone"),
-                        BuildDocPr(picture),
-                        BuildPicGraphic(picture, cx, cy)))));
+        return new XElement(W + "r",
+            new XElement(W + "drawing",
+                new XElement(Wp + "anchor",
+                    new XAttribute(XNamespace.Xmlns + "wp", Wp.NamespaceName),
+                    new XAttribute("distT", 0), new XAttribute("distB", 0),
+                    new XAttribute("distL", 0), new XAttribute("distR", 0),
+                    new XAttribute("simplePos", 0),
+                    new XAttribute("relativeHeight", 0),
+                    new XAttribute("behindDoc", 1),
+                    new XAttribute("locked", 0),
+                    new XAttribute("layoutInCell", 1),
+                    new XAttribute("allowOverlap", 1),
+                    new XElement(Wp + "simplePos", new XAttribute("x", 0), new XAttribute("y", 0)),
+                    new XElement(Wp + "positionH",
+                        new XAttribute("relativeFrom", "margin"),
+                        new XElement(Wp + "align", "center")),
+                    new XElement(Wp + "positionV",
+                        new XAttribute("relativeFrom", "margin"),
+                        new XElement(Wp + "align", "center")),
+                    new XElement(Wp + "extent", new XAttribute("cx", cx), new XAttribute("cy", cy)),
+                    new XElement(Wp + "effectExtent",
+                        new XAttribute("l", 0), new XAttribute("t", 0),
+                        new XAttribute("r", 0), new XAttribute("b", 0)),
+                    new XElement(Wp + "wrapNone"),
+                    BuildDocPr(picture),
+                    BuildPicGraphic(picture, cx, cy))));
     }
 
     private static XElement WatermarkAnchorParagraphProperties() =>
