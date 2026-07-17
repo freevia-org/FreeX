@@ -83,7 +83,11 @@ public static class DocxWriter
         // Assign an external relationship id to every distinct hyperlink target the same way.
         var hyperlinks = CollectHyperlinks(document);
         // Emit a numbering part only when at least one paragraph is decorated as a list.
-        var hasLists = EnumerateParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
+        var hasChapterNumberedHeading = document.Page.PageNumberChapterStyleLevel is int chapterStyleLevel
+            && chapterStyleLevel is >= 1 and <= 3
+            && EnumerateParagraphs(document).Any(p => p.StyleId == $"Heading{chapterStyleLevel}");
+        var hasLists = hasChapterNumberedHeading
+            || EnumerateParagraphs(document).Any(p => p.Formatting.ListKind != ListKind.None);
 
         // Preserved numbering FreeW does not model: when the source carried a numbering.xml AND at least one
         // paragraph (or paragraph STYLE) kept its original w:numPr (because FreeW did not map it to a ListKind),
@@ -233,6 +237,7 @@ public static class DocxWriter
                 hasLists,
                 preservedNumbering,
                 document.MultiLevelList.NumberFormats,
+                document.Page.PageNumberChapterStyleLevel,
                 restartOverrides));
         // One part per (section × header/footer × type) slot with content. Each part XML carries its inline
         // images via PART-LOCAL r:embed ids resolved against its own word/_rels/<part>.xml.rels, and its
@@ -6925,13 +6930,17 @@ public static class DocxWriter
         bool includeFreeWNumbering,
         PreservedNumberingPlan? preserved,
         IReadOnlyList<ListNumberFormat> multiLevelNumberFormats,
+        int? chapterPageNumberStyleLevel,
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
-        XElement Lvl(int level, string numFmt, string lvlText) =>
+        XElement Lvl(int level, string numFmt, string lvlText, string? paragraphStyleId = null) =>
             new(W + "lvl",
                 new XAttribute(W + "ilvl", level),
                 new XElement(W + "start", new XAttribute(W + "val", 1)),
                 new XElement(W + "numFmt", new XAttribute(W + "val", numFmt)),
+                paragraphStyleId is null
+                    ? null
+                    : new XElement(W + "pStyle", new XAttribute(W + "val", paragraphStyleId)),
                 new XElement(W + "lvlText", new XAttribute(W + "val", lvlText)),
                 new XElement(W + "lvlJc", new XAttribute(W + "val", "left")),
                 new XElement(W + "pPr",
@@ -6946,12 +6955,20 @@ public static class DocxWriter
         // Legal/outline numbering: level n's text is "%1.%2....%(n+1)." - the dotted run of all ancestor
         // counters. e.g. level 0 -> "%1.", level 2 -> "%1.%2.%3.". Each level's own counter can use a
         // modelled decimal/letter/Roman number style.
+        var chapterNumberingStyleId = chapterPageNumberStyleLevel is >= 1 and <= 3
+            ? $"Heading{chapterPageNumberStyleLevel.Value}"
+            : null;
+        var chapterNumberingLevel = chapterPageNumberStyleLevel is >= 1
+            ? chapterPageNumberStyleLevel.Value - 1
+            : -1;
+
         XElement MultiLevelAbstractNum(int abstractNumId) =>
             new(W + "abstractNum", new XAttribute(W + "abstractNumId", abstractNumId),
                 new XAttribute(W + "multiLevelType", "multilevel"),
                 Enumerable.Range(0, ListLevelCount).Select(level => Lvl(level,
                     MultiLevelListMarkerFormatter.ToOoxmlToken(GetMultiLevelNumberFormat(level)),
-                    string.Concat(Enumerable.Range(1, level + 1).Select(n => $"%{n}.")))));
+                    string.Concat(Enumerable.Range(1, level + 1).Select(n => $"%{n}.")),
+                    level == chapterNumberingLevel ? chapterNumberingStyleId : null)));
 
         ListNumberFormat GetMultiLevelNumberFormat(int level) =>
             level < multiLevelNumberFormats.Count ? multiLevelNumberFormats[level] : ListNumberFormat.Decimal;
@@ -7746,6 +7763,17 @@ public static class DocxWriter
             if (style.Type != StyleType.Character)
             {
                 var pPr = BuildStyleParagraphProperties(style.Paragraph);
+                var chapterStyleLevel = document.Page.PageNumberChapterStyleLevel;
+                if (chapterStyleLevel is int chapterStyleLevelValue
+                    && chapterStyleLevelValue is >= 1 and <= 3
+                    && style.PreservedNumbering is null
+                    && style.Id == $"Heading{chapterStyleLevelValue}")
+                {
+                    pPr ??= new XElement(W + "pPr");
+                    pPr.AddFirst(new XElement(W + "numPr",
+                        new XElement(W + "ilvl", new XAttribute(W + "val", chapterStyleLevelValue - 1)),
+                        new XElement(W + "numId", new XAttribute(W + "val", MultiLevelNumId))));
+                }
                 // Style-level numbering FreeW does not model: when the style carried an original w:numPr and
                 // the merge plan remapped that numId (a definition exists in the preserved numbering.xml),
                 // re-emit a numPr pointing at the REMAPPED numId (disjoint from FreeW's fixed ids), keeping
@@ -7759,6 +7787,14 @@ public static class DocxWriter
                     pPr.Add(new XElement(W + "numPr",
                         new XElement(W + "ilvl", new XAttribute(W + "val", sn.Ilvl)),
                         new XElement(W + "numId", new XAttribute(W + "val", mappedNumId))));
+                }
+                // Word's chapter-prefixed PAGE fields identify their chapter source through the
+                // paragraph style outline level. The built-in heading ids are semantic headings
+                // even when their numbering is applied directly to individual paragraphs.
+                if (BuiltInHeadingOutlineLevel(style.Id) is { } outlineLevel)
+                {
+                    pPr ??= new XElement(W + "pPr");
+                    pPr.Add(new XElement(W + "outlineLvl", new XAttribute(W + "val", outlineLevel)));
                 }
                 if (pPr is not null)
                     element.Add(pPr);
@@ -7783,6 +7819,14 @@ public static class DocxWriter
 
         return new XDocument(styles);
     }
+
+    private static int? BuiltInHeadingOutlineLevel(string styleId) => styleId switch
+    {
+        "Heading1" => 0,
+        "Heading2" => 1,
+        "Heading3" => 2,
+        _ => null
+    };
 
     /// <summary>
     /// Collects all distinct <see cref="Table.TableStyleId"/> values referenced by any table in

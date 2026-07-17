@@ -65,7 +65,11 @@ public sealed class PageNumberFormatRoundTripTests
     {
         var doc = TextDocument.CreateEmpty();
         doc.Blocks.Clear();
-        doc.Blocks.Add(new Paragraph("Chapter") { StyleId = "Heading1" });
+        doc.Blocks.Add(new Paragraph("Chapter")
+        {
+            StyleId = "Heading1",
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel }
+        });
         doc.Blocks.Add(new Paragraph("Body"));
         doc.Page.PageNumberChapterStyleLevel = 1;
         doc.Page.PageNumberChapterSeparator = PageNumberChapterSeparator.Colon;
@@ -73,13 +77,26 @@ public sealed class PageNumberFormatRoundTripTests
 
         var read = RoundTrip(doc);
         var xml = DocumentXml(doc);
+        var styles = StylesXml(doc);
+        var numbering = NumberingXml(doc);
         var pgNumType = xml.Descendants(W + "sectPr").Last().Element(W + "pgNumType");
+        var chapterLevel = numbering.Descendants(W + "abstractNum")
+            .Single(numbering => numbering.Attribute(W + "abstractNumId")?.Value == "2")
+            .Elements(W + "lvl")
+            .Single(level => level.Attribute(W + "ilvl")?.Value == "0");
+        var headingStyle = styles.Descendants(W + "style")
+            .Single(style => style.Attribute(W + "styleId")?.Value == "Heading1");
 
         read.Page.PageNumberChapterStyleLevel.Should().Be(1);
         read.Page.PageNumberChapterSeparator.Should().Be(PageNumberChapterSeparator.Colon);
         pgNumType.Should().NotBeNull();
         pgNumType!.Attribute(W + "chapStyle")!.Value.Should().Be("1");
         pgNumType.Attribute(W + "chapSep")!.Value.Should().Be("colon");
+        chapterLevel.Element(W + "pStyle")!.Attribute(W + "val")!.Value.Should().Be("Heading1");
+        headingStyle.Element(W + "pPr")!.Element(W + "numPr")!
+            .Element(W + "numId")!.Attribute(W + "val")!.Value.Should().Be("3");
+        headingStyle.Element(W + "pPr")!.Element(W + "outlineLvl")!
+            .Attribute(W + "val")!.Value.Should().Be("0");
     }
 
     private static TextDocument RoundTrip(TextDocument document)
@@ -96,6 +113,24 @@ public sealed class PageNumberFormatRoundTripTests
         DocxWriter.Write(document, stream);
         using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
         using var entry = zip.GetEntry("word/document.xml")!.Open();
+        return XDocument.Load(entry);
+    }
+
+    private static XDocument StylesXml(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/styles.xml")!.Open();
+        return XDocument.Load(entry);
+    }
+
+    private static XDocument NumberingXml(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/numbering.xml")!.Open();
         return XDocument.Load(entry);
     }
 
