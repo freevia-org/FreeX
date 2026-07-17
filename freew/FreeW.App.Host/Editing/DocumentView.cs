@@ -4485,7 +4485,13 @@ public sealed class DocumentView : RichTextBox
                 // Stash the exact model ListKind on the list's Tag: WPF renders Number and MultiLevel with
                 // the same Decimal marker, so ReadList recovers the kind from this Tag rather than inferring
                 // it from the marker (which can't tell MultiLevel from Number) — see ReadList/FromMarkerStyle.
-                var list = new WpfList { MarkerStyle = ToMarkerStyle(kind), Tag = kind };
+                var list = new WpfList
+                {
+                    MarkerStyle = ToMarkerStyle(kind),
+                    Tag = kind,
+                    // WPF adds an 8-DIP top/bottom list envelope; Word derives list spacing from its paragraphs.
+                    Margin = new Thickness(0)
+                };
                 // WPF reserves its default marker gutter even when MarkerStyle is None. Multilevel
                 // markers are drawn explicitly below, so collapse that gutter and apply Word's numbered
                 // hanging indent directly to each paragraph instead.

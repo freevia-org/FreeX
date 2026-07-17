@@ -138,6 +138,8 @@ public sealed class MultiLevelMarkerTests
         var list = view.Document.Blocks.Should().ContainSingle()
             .Which.Should().BeOfType<List>().Subject;
         list.MarkerOffset.Should().Be(0);
+        list.Margin.Should().Be(new System.Windows.Thickness(0),
+            "Word list paragraphs carry their own spacing without WPF adding a list envelope");
 
         var paragraphs = list.ListItems
             .Select(item => item.Blocks.Should().ContainSingle().Which.Should().BeOfType<System.Windows.Documents.Paragraph>().Subject)
