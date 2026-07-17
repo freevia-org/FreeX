@@ -22854,6 +22854,9 @@ public sealed partial class MainWindow : Window
 
     private async Task MainWindow_KeyDownAsync(KeyEventArgs e)
     {
+        if (TryHandleLegacyDataFilterSequence(e))
+            return;
+
         if (TryHandleRibbonKeyTips(e))
             return;
 

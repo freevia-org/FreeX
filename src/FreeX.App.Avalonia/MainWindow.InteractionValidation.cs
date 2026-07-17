@@ -1,4 +1,4 @@
-using Avalonia.Input;
+﻿using Avalonia.Input;
 using Avalonia.Threading;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
@@ -129,13 +129,20 @@ public sealed partial class MainWindow
         {
             var interaction = scenario.Interactions[index];
             var catalogRouted = TryResolveSharedShortcutInteraction(interaction, out var route);
-            var behaviorProbed = InteractiveValidationKeyboardShortcutScenarioIds.Contains(scenario.Id);
+            var interactionId = $"{scenario.Id}:{index}";
+            var exactBehaviorProbed =
+                InteractiveValidationLegacyDataFilterInteractionIds.Contains(interactionId);
+            var behaviorProbed =
+                InteractiveValidationKeyboardShortcutScenarioIds.Contains(scenario.Id) ||
+                exactBehaviorProbed;
             var externalBoundary = scenario.IsNative || scenario.IsExternal;
             results.Add(new InteractionValidationResult(
-                Id: $"{scenario.Id}:{index}",
+                Id: interactionId,
                 Category: "shortcut-scenario",
                 Status: catalogRouted || behaviorProbed ? "passed" : "skipped",
-                EvidenceLevel: behaviorProbed
+                EvidenceLevel: exactBehaviorProbed
+                    ? "host-gesture-behavior-tested"
+                    : behaviorProbed
                     ? "planner-driven-behavior-tested"
                     : catalogRouted ? "shared-catalog-routed"
                     : externalBoundary ? "native-or-external-boundary" : "catalogued-awaiting-behavior-probe",
