@@ -10000,7 +10000,7 @@ public sealed class DocumentView : Control
     private IReadOnlyList<(int Block, Rect Rect)> SimpleMarkupChangeBarSnapshot()
     {
         var policy = CurrentReviewDisplayPolicy;
-        if (!policy.ShouldShowSimpleMarkupChangeBar)
+        if (!policy.ShouldShowRevisionMarginBar)
             return [];
 
         return _placed

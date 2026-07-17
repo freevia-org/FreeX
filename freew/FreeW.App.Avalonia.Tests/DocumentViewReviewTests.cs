@@ -498,6 +498,26 @@ public sealed class DocumentViewReviewTests
     }
 
     [Fact]
+    public async Task DisplayForReview_AllMarkup_uses_inline_markup_and_change_bar()
+    {
+        bool insertedStyled = false;
+        int changeBars = 0;
+        var ran = await OnUiThread(() =>
+        {
+            var view = Build(DocWithInsertionAndDeletion());
+            view.ApplyDisplayForReview(ReviewDisplayMode.AllMarkup);
+
+            insertedStyled = view.ReviewGlyphsForTest.Any(g =>
+                g.Revision == RevisionKind.Inserted && g.IsRevisionStyled);
+            changeBars = view.SimpleMarkupChangeBarsForTest.Count;
+        });
+        if (!ran) return;
+
+        insertedStyled.Should().BeTrue();
+        changeBars.Should().BeGreaterThan(0, "All Markup keeps Word-style changed-paragraph cues");
+    }
+
+    [Fact]
     public async Task ShowMarkup_toggles_hide_visual_chrome_but_preserve_model_data()
     {
         bool revisionStyled = true, commentHighlighted = true, commentAnchorPreserved = false;

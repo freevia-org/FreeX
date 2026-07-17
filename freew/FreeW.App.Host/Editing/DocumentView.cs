@@ -4887,16 +4887,16 @@ public sealed class DocumentView : RichTextBox
         SyncLineNumberAdorner();
     }
 
-    // The change-bar adorner is shown only in Simple Markup mode. Null when the adorner is not active.
+    // The change-bar adorner is shown in Word's markup display modes. Null when it is not active.
     private ChangeBarAdorner? _changeBarAdorner;
 
     // Add, remove, or refresh the change-bar overlay to match the current DisplayForReview mode. Mirrors
     // SyncFormattingMarksAdorner: the adorner layer only exists once the control is in a visual tree, so
-    // when it is not yet available we defer via a one-shot Loaded handler. Switching away from Simple
-    // Markup removes the overlay; switching in invalidates it so it repaints against the new Document.
+    // when it is not available we defer via a one-shot Loaded handler. Switching away from markup removes
+    // the overlay; switching in invalidates it so it repaints against the new Document.
     private void SyncChangeBarAdorner()
     {
-        var enabled = CurrentReviewDisplayPolicy.ShouldShowSimpleMarkupChangeBar;
+        var enabled = CurrentReviewDisplayPolicy.ShouldShowRevisionMarginBar;
         var layer = AdornerLayer.GetAdornerLayer(this);
         if (layer is null)
         {
@@ -8548,8 +8548,8 @@ public sealed class DocumentView : RichTextBox
         // round-trip the kind/author/date in every display mode. The visual chrome (colour, decoration,
         // visibility) depends on the current Display for Review mode:
         //
-        //   AllMarkup    — revision colour + underline (insertions) or strikethrough (deletions), but only
-        //                  when Show Markup > Insertions and Deletions is also ON.
+        //   AllMarkup    — revision colour + underline (insertions) or strikethrough (deletions), plus
+        //                  Word-style left-margin bars, when Show Markup > Insertions and Deletions is ON.
         //   SimpleMarkup — inline rendering identical to No Markup (final form); a left-margin change bar
         //                  is painted by ChangeBarAdorner for paragraphs that carry any revision run.
         //   NoMarkup     — insertions rendered as plain text (no colour/decoration); deleted runs rendered

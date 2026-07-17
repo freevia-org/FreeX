@@ -26,6 +26,14 @@ public readonly record struct ReviewDisplayPolicy(
 
     public bool ShouldShowSimpleMarkupChangeBar => DisplayMode == ReviewDisplayMode.SimpleMarkup;
 
+    /// <summary>
+    /// Whether changed paragraphs receive Word-style margin bars. Word keeps these cues visible
+    /// in both All Markup and Simple Markup; hiding insertion/deletion markup suppresses them.
+    /// </summary>
+    public bool ShouldShowRevisionMarginBar =>
+        ShowInsertionsAndDeletions
+        && DisplayMode is ReviewDisplayMode.AllMarkup or ReviewDisplayMode.SimpleMarkup;
+
     public bool ShouldHighlightComments =>
         ShowComments && DisplayMode is ReviewDisplayMode.AllMarkup or ReviewDisplayMode.SimpleMarkup;
 

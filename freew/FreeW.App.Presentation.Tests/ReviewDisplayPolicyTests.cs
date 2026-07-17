@@ -69,6 +69,28 @@ public sealed class ReviewDisplayPolicyTests
         policy.ShouldApplyRevisionStyling(RevisionKind.Deleted).Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(ReviewDisplayMode.AllMarkup, true)]
+    [InlineData(ReviewDisplayMode.SimpleMarkup, true)]
+    [InlineData(ReviewDisplayMode.NoMarkup, false)]
+    [InlineData(ReviewDisplayMode.Original, false)]
+    public void Revision_margin_bars_follow_markup_display_mode(
+        ReviewDisplayMode mode,
+        bool expected)
+    {
+        new ReviewDisplayPolicy(mode).ShouldShowRevisionMarginBar.Should().Be(expected);
+    }
+
+    [Fact]
+    public void Revision_margin_bars_respect_the_insertions_and_deletions_toggle()
+    {
+        var policy = new ReviewDisplayPolicy(
+            ReviewDisplayMode.AllMarkup,
+            ShowInsertionsAndDeletions: false);
+
+        policy.ShouldShowRevisionMarginBar.Should().BeFalse();
+    }
+
     [Fact]
     public void Comment_and_formatting_highlights_follow_show_markup_toggles()
     {
