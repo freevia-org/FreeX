@@ -363,7 +363,7 @@ public static class ChartSmartArtVisualPlanner
     // Word's native gallery drawing scales cached SmartArt text differently from the nominal a:rPr sizes.
     // These values are calibrated against the live Word COM raster for the authored native gallery probes.
     private const double WordOrgChartRenderedTextSizePt = 22;
-    private const double WordPyramidRenderedTextSizePt = 14;
+    private const double WordPyramidRenderedTextSizePt = 28;
     private static readonly IReadOnlyList<string> WordScatterMarkerPaletteHex =
         ChartColorScheme.FindById("mono-blue")!.Colors;
     // Word's unstylized single-series column and bar charts assign their category points from

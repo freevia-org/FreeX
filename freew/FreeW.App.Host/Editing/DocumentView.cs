@@ -11800,12 +11800,7 @@ public sealed class DocumentView : RichTextBox
         {
             Width = widthPx,
             Height = heightPx,
-            // Word's native Basic Pyramid gallery includes a small inline ascent/descent envelope
-            // around the diagram. Preserve that envelope so the bands and following paragraph land
-            // at the same page coordinates as Word's reflowed native drawing.
-            Margin = plan.LayoutId == "pyramid1"
-                ? new Thickness(2, 4, 0, 6)
-                : new Thickness(0),
+            Margin = new Thickness(0),
             // Keep the page surface opaque for deterministic WPF evidence while suppressing the
             // editor-only frame around Word-authored SmartArt.
             Background = Brushes.White,

@@ -556,7 +556,7 @@ public sealed class ChartSmartArtVisualPlannerTests
         plan.Nodes.Select(node => node.FillHex).Should().OnlyContain(hex => hex == "#7F0000");
         plan.Nodes.Select(node => node.TextHex).Should().OnlyContain(hex => hex == "#000000");
         plan.Nodes.Select(node => node.FontSizeDip)
-            .Should().OnlyContain(size => Math.Abs(size - 14 * 96.0 / 72.0) < 0.001);
+            .Should().OnlyContain(size => Math.Abs(size - 28 * 96.0 / 72.0) < 0.001);
         plan.LayoutGeometry.Should().NotBeNull();
         var geometry = plan.LayoutGeometry!;
         geometry.NaturalWidth.Should().Be(300);

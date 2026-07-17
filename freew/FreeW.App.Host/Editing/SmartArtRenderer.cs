@@ -391,6 +391,9 @@ internal static class SmartArtRenderer
         double targetWidth,
         double targetHeight)
     {
+        if (IsNativeWordPyramidLayout(plan))
+            return BuildNativeWordPyramidLayout(plan, targetWidth, targetHeight);
+
         if (plan.UsesWordLayeredGalleryStyle
             && plan.LayoutId is "list1" or "process1" or "cycle1" or "radial1")
         {
@@ -457,6 +460,62 @@ internal static class SmartArtRenderer
             VerticalAlignment = VerticalAlignment.Stretch,
             Child = canvas
         };
+    }
+
+    private static bool IsNativeWordPyramidLayout(SmartArtVisualPlan plan) =>
+        string.Equals(plan.LayoutId, "pyramid1", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(plan.ColorScheme.Id, "accent2", StringComparison.OrdinalIgnoreCase)
+        && (string.Equals(plan.Style.Id, "flat1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(plan.Style.Id, "simple1", StringComparison.OrdinalIgnoreCase));
+
+    private static FrameworkElement BuildNativeWordPyramidLayout(
+        SmartArtVisualPlan plan,
+        double targetWidth,
+        double targetHeight)
+    {
+        var width = Math.Max(1, targetWidth);
+        var height = Math.Max(1, targetHeight);
+        var canvas = new Canvas
+        {
+            Width = width,
+            Height = height,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Stretch
+        };
+        if (plan.Nodes.Count == 0)
+            return canvas;
+
+        // Word's native Basic Pyramid gallery is one solid triangle. Its logical nodes control
+        // label placement only; Word does not draw separate trapezoid bands between them.
+        canvas.Children.Add(new Polygon
+        {
+            Points = new PointCollection(
+            [
+                new Point(width / 2, 0),
+                new Point(width, height),
+                new Point(0, height)
+            ]),
+            Fill = new SolidColorBrush(ParseHex(plan.Nodes[0].FillHex))
+        });
+
+        for (var index = 0; index < plan.Nodes.Count; index++)
+        {
+            var node = plan.Nodes[index];
+            var label = new TextBlock
+            {
+                Text = node.Text,
+                Foreground = new SolidColorBrush(ParseHex(node.TextHex)),
+                FontSize = Math.Max(1, node.FontSizeDip),
+                TextWrapping = TextWrapping.NoWrap,
+                TextAlignment = System.Windows.TextAlignment.Center
+            };
+            label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Canvas.SetLeft(label, (width - label.DesiredSize.Width) / 2);
+            Canvas.SetTop(label, height * (index + 0.5) / plan.Nodes.Count - label.DesiredSize.Height / 2);
+            canvas.Children.Add(label);
+        }
+
+        return canvas;
     }
 
     // Word's stock SmartArt galleries materialise a dark backing shape behind a smaller, light

@@ -338,28 +338,25 @@ public sealed class SmartArtRenderingTests
             .Single(border => ReferenceEquals(border.Tag, sa));
         Assert.Equal(0, outer.BorderThickness.Left);
         Assert.Null(outer.BorderBrush);
-        Assert.Equal(new Thickness(2, 4, 0, 6), outer.Margin);
+        Assert.Equal(new Thickness(0), outer.Margin);
 
         foreach (var text in new[] { "Top", "Middle", "Lower", "Base" })
         {
-            var node = NodeBorder(view, text);
-            var textBlock = Assert.IsType<TextBlock>(node.Child);
+            var textBlock = LogicalDescendants<TextBlock>(outer).Single(block => block.Text == text);
             var foreground = Assert.IsType<SolidColorBrush>(textBlock.Foreground).Color;
             Assert.Equal(Colors.Black, foreground);
-            Assert.InRange(textBlock.FontSize, 18.665, 18.668);
+            Assert.InRange(textBlock.FontSize, 37.332, 37.335);
         }
 
         var canvas = LogicalDescendants<Canvas>(outer).Single();
-        var top = NodeBorder(view, "Top");
-        var baseNode = NodeBorder(view, "Base");
-        Assert.InRange(Canvas.GetLeft(top), 113.99, 114.01);
-        Assert.InRange(Canvas.GetTop(top), 5.99, 6.01);
-        Assert.InRange(Canvas.GetLeft(baseNode), 5.99, 6.01);
-        Assert.InRange(Canvas.GetTop(baseNode), 110.99, 111.01);
+        var top = LogicalDescendants<TextBlock>(outer).Single(block => block.Text == "Top");
+        var baseNode = LogicalDescendants<TextBlock>(outer).Single(block => block.Text == "Base");
+        Assert.InRange(Canvas.GetTop(top), 0.15, 0.20);
+        Assert.InRange(Canvas.GetTop(baseNode), 150.15, 150.20);
         var polygons = LogicalDescendants<Polygon>(canvas);
-        Assert.Equal(4, polygons.Count);
-        foreach (var polygon in polygons)
-            Assert.Equal(Color.FromRgb(0x7F, 0x00, 0x00), Assert.IsType<SolidColorBrush>(polygon.Fill).Color);
+        var pyramid = Assert.Single(polygons);
+        Assert.Equal(Color.FromRgb(0x7F, 0x00, 0x00), Assert.IsType<SolidColorBrush>(pyramid.Fill).Color);
+        pyramid.Points.Should().ContainInOrder(new Point(200, 0), new Point(400, 200), new Point(0, 200));
     }
 
     [StaTheory]
