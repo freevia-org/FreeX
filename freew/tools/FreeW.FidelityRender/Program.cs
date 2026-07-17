@@ -520,18 +520,26 @@ static void RenderDocumentComposite(
             using (var dc = borderVisual.RenderOpen())
             {
                 var borderColor = ParseHexColor(pb.ColorHex, Colors.Black);
-                var pen = new Pen(new SolidColorBrush(borderColor),
-                    Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0)));
                 // w:pgBorders defaults to Measure from: Page with w:space="24" points. Keep
                 // the WPF evidence surface aligned with the Avalonia and Print Preview paths.
                 double edgeInset = Math.Min(
                     PageLayout.PointsToDip(24),
                     Math.Min(thisPixW, thisPixH) / 4.0);
-                double ins = edgeInset + pen.Thickness / 2;
-                dc.DrawRectangle(null, pen,
-                    new Rect(ins, ins,
-                        Math.Max(0, thisPixW - 2 * ins),
-                        Math.Max(0, thisPixH - 2 * ins)));
+                var borderWidth = Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0));
+                if (pb.LineStyle == BorderLineStyle.Double)
+                {
+                    // Word's double page frame uses two narrower strokes separated by one full
+                    // authored-width gap; a single thick WPF pen loses that visible geometry.
+                    var strokeWidth = borderWidth * 0.75;
+                    var pen = new Pen(new SolidColorBrush(borderColor), strokeWidth);
+                    DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);
+                    DrawPageBorderFrame(dc, pen, edgeInset + borderWidth * (4.0 / 3.0), thisPixW, thisPixH);
+                }
+                else
+                {
+                    var pen = new Pen(new SolidColorBrush(borderColor), borderWidth);
+                    DrawPageBorderFrame(dc, pen, edgeInset, thisPixW, thisPixH);
+                }
             }
             bmp.Render(borderVisual);
         }
@@ -1429,6 +1437,15 @@ static BitmapSource? TryDecodeWatermarkImage(byte[]? bytes)
     {
         return null;
     }
+}
+
+static void DrawPageBorderFrame(DrawingContext drawingContext, Pen pen, double edgeInset, double width, double height)
+{
+    var inset = edgeInset + pen.Thickness / 2;
+    drawingContext.DrawRectangle(null, pen,
+        new Rect(inset, inset,
+            Math.Max(0, width - 2 * inset),
+            Math.Max(0, height - 2 * inset)));
 }
 
 /// <summary>
