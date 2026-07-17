@@ -148,7 +148,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
     }
 
     [Fact]
-    public void ChartContextualTabs_UseSharedQuickFormatCycler()
+    public void ChartContextualTabs_UseSharedQuickFormattingAndProductionStyleDialog()
     {
         var chartTabsSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.ChartTabs.cs"));
         var chartDialogSources = string.Join(
@@ -163,7 +163,7 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.ReadFirstSeriesFormat(chart).FillColor");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
         chartTabsSource.Should().Contain("ChartWorkflowTargetPlanner.FindSelectedChart(_session.ActiveSheet, _selectedDrawingObjectId)");
-        chartTabsSource.Should().Contain("ChartStylePlanner.NextStyleId(chart.ChartStyleId)");
+        chartTabsSource.Should().Contain("RunGuarded(ShowChartStyleDialogAsync)");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.NextPlotAreaBorderThickness(chart.PlotAreaBorderThickness)");
         chartTabsSource.Should().Contain("ChartQuickFormatCycler.MergeFirstSeriesFillColor(chart, chosen)");
         chartDialogSources.Should().Contain("ChartQuickFormatCycler.DefaultSeriesColor");
@@ -427,10 +427,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         runnerSource.Should().NotContain("-screen 0 1600x1000x24");
         captureSource.Should().Contain("private const int ParityCaptureTitleBarHeight = 30;");
         captureSource.Should().Contain("RenderWindowWithCapturedTitleBarToPng(this, ParityCaptureWindowWidth, ParityCaptureWindowHeight");
-        captureSource.Should().Contain("RenderWindowClientContentToBitmap(window, pixelWidth, contentHeight)");
+        captureSource.Should().Contain("RenderWindowClientContentToBitmap(window, pixelWidth, pixelHeight)");
+        captureSource.Should().Contain("Capture that frame directly so reports do not prepend a second synthetic title bar.");
         captureSource.Should().Contain("window.Height = height;");
         captureSource.Should().Contain("window.Content as Visual ?? window");
-        captureSource.Should().Contain("CreateParityCapturedTitleBar(FormatParityCapturedWindowTitle(window.Title ?? \"FreeX\"))");
+        captureSource.Should().NotContain("AddGridChild(composite, CreateParityCapturedTitleBar(");
         captureSource.Should().Contain("CreateParityCapturedAppIcon()");
         captureSource.Should().Contain("TryCreateParityCapturedAppIconFromResource()");
         captureSource.Should().Contain("TryDecodeParityCapturedIcoPngFrame(iconPath, desiredSize: 48)");

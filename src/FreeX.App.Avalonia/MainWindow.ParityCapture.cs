@@ -2464,31 +2464,11 @@ public sealed partial class MainWindow
     {
         var pixelWidth = Math.Max(1, width);
         var pixelHeight = Math.Max(1, height);
-        var contentHeight = Math.Max(1, pixelHeight - ParityCaptureTitleBarHeight);
 
-        using var contentBitmap = RenderWindowClientContentToBitmap(window, pixelWidth, contentHeight);
-        var composite = new AvaloniaGrid
-        {
-            Width = pixelWidth,
-            Height = pixelHeight,
-            Background = Brushes.White,
-            RowDefinitions =
-            {
-                new RowDefinition { Height = new GridLength(ParityCaptureTitleBarHeight) },
-                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
-            },
-        };
-
-        AddGridChild(composite, CreateParityCapturedTitleBar(FormatParityCapturedWindowTitle(window.Title ?? "FreeX")), 0, 0);
-        AddGridChild(composite, new Image
-        {
-            Source = contentBitmap,
-            Stretch = Stretch.Fill,
-            Width = pixelWidth,
-            Height = contentHeight,
-        }, 1, 0);
-
-        RenderVisualToPng(composite, pixelWidth, pixelHeight, path);
+        // The shared frame is part of the client visual tree, including its real QAT and title text.
+        // Capture that frame directly so reports do not prepend a second synthetic title bar.
+        using var bitmap = RenderWindowClientContentToBitmap(window, pixelWidth, pixelHeight);
+        bitmap.Save(path);
     }
 
     private static RenderTargetBitmap RenderWindowClientContentToBitmap(MainWindow window, int width, int height)

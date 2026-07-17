@@ -23,7 +23,7 @@ internal sealed record DialogInteractionContractEvidence(
 
 public sealed partial class MainWindow
 {
-    private const int DialogInteractionSettleMilliseconds = 75;
+    internal static Func<Window, Key, RawInputModifiers, string?>? DialogKeySenderOverride { get; set; }
     private readonly Dictionary<string, DialogInteractionContractEvidence> _dialogInteractionContracts =
         new(StringComparer.Ordinal);
 
@@ -88,7 +88,9 @@ public sealed partial class MainWindow
                   ",actual=" + DescribeInputElement(ownerFocusAfterClose);
 
         if (defaultButton is not null && IsSafeDefaultAction(surfaceId, defaultButton))
+        {
             defaultEnter = await ExerciseSafeDefaultEnterAsync(surfaceId, opener);
+        }
 
         var hasFailure = IsFailed(initialFocus) || IsFailed(forward) || IsFailed(backward) ||
             IsFailed(escape) || IsFailed(ownerRestore) || IsFailed(defaultEnter);
@@ -196,6 +198,12 @@ public sealed partial class MainWindow
         RawInputModifiers modifiers,
         out string error)
     {
+        if (DialogKeySenderOverride is { } senderOverride)
+        {
+            error = senderOverride(dialog, key, modifiers) ?? "";
+            return error.Length == 0;
+        }
+
         try
         {
             // Avalonia 12 keeps raw-input construction behind PrivateApi in its reference assembly.
@@ -266,12 +274,24 @@ public sealed partial class MainWindow
         }
     }
 
-    private static async Task SettleDialogInteractionAsync()
+    private static Task SettleDialogInteractionAsync()
     {
-        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
-        Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-        await Task.Delay(DialogInteractionSettleMilliseconds);
+        return SettleDialogInteractionCoreAsync();
+
+        static async Task SettleDialogInteractionCoreAsync()
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+            await Task.Delay(75);
+        }
     }
+
+    internal static bool SendDialogKeyForTest(
+        Window dialog,
+        Key key,
+        RawInputModifiers modifiers,
+        out string error) =>
+        TrySendRawDialogKey(dialog, key, modifiers, out error);
 
     private static int CountDialogTabStops(Window dialog) =>
         dialog.GetVisualDescendants()
