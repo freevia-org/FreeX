@@ -402,7 +402,9 @@ public static class DrawingObjectVisualPlanner
             double tangent;
             if (warp == WordArtWarp.ArchUp)
             {
-                centerY = boundsHeightDip / 2 - archDepth / 2 + archDepth * normalizedX * normalizedX;
+                // Word anchors ArchUp text at the top of its text box; its upper glyphs are clipped
+                // rather than vertically centered within the drawing bounds.
+                centerY = boundsHeightDip * 0.2 - archDepth / 2 + archDepth * normalizedX * normalizedX;
                 tangent = 2 * archDepth * normalizedX / normalizedHalfSpan;
             }
             else

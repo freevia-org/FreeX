@@ -5447,6 +5447,7 @@ public sealed class DocumentView : RichTextBox
         {
             Width = 1,
             Height = 1,
+            ClipToBounds = true,
             Background = fillBrush,
             Effect = effect
         };

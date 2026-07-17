@@ -221,6 +221,8 @@ public sealed class DrawingObjectVisualPlannerTests
         plan.Glyphs[0].CenterXNormalized.Should().BeApproximately(0.35, 0.001);
         plan.Glyphs[1].CenterXNormalized.Should().BeApproximately(0.5, 0.001);
         plan.Glyphs[2].CenterXNormalized.Should().BeApproximately(0.65, 0.001);
+        plan.Glyphs[1].CenterYNormalized.Should().BeLessThan(0.2,
+            "Word anchors ArchUp glyphs toward the top of their drawing bounds");
         plan.Glyphs[1].CenterYNormalized.Should().BeLessThan(plan.Glyphs[0].CenterYNormalized);
         plan.Glyphs[0].RotationRadians.Should().BeLessThan(0);
         plan.Glyphs[1].RotationRadians.Should().BeApproximately(0, 0.001);

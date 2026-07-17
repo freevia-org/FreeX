@@ -330,6 +330,8 @@ public sealed class FloatingObjectRenderTests
         view.SetFloatingCanvas(canvas);
 
         var root = canvas.Children.OfType<Canvas>().Single();
+        root.ClipToBounds.Should().BeTrue(
+            "Word clips warped WordArt to its floating text-box bounds");
         root.Background.Should().BeOfType<SolidColorBrush>()
             .Which.Color.Should().Be(Color.FromRgb(0x24, 0x24, 0x24));
 
