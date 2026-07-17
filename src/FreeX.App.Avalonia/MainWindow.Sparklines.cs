@@ -76,16 +76,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(dataRangeBox, "SparklineDataRangeBox");
         AutomationProperties.SetName(dataRangeBox, UiText.Get("Sparkline_DataRange"));
 
-        // Windows shows a range-picker button to the right of each range field; clicking it fills the
-        // field from the current sheet selection.
+        // Windows shows a range-picker button to the right of each range field.
         var selectDataRangeButton = new Button { Content = UiText.Get("Sparkline_SelectDataRange"), MinWidth = 140 };
         ApplySparklineButtonChrome(selectDataRangeButton, 140);
         AutomationProperties.SetAutomationId(selectDataRangeButton, "SparklineSelectDataRangeButton");
-        selectDataRangeButton.Click += (_, _) =>
-        {
-            var sel = _session.SelectedRange;
-            dataRangeBox.Text = sel.CellCount > 1 ? FormatRangeReference(sel) : FormatCellReference(_session.ActiveCell);
-        };
 
         var locationBox = new TextBox
         {
@@ -99,8 +93,6 @@ public sealed partial class MainWindow
         var selectLocationRangeButton = new Button { Content = UiText.Get("Sparkline_SelectLocationRange"), MinWidth = 140 };
         ApplySparklineButtonChrome(selectLocationRangeButton, 140);
         AutomationProperties.SetAutomationId(selectLocationRangeButton, "SparklineSelectLocationRangeButton");
-        selectLocationRangeButton.Click += (_, _) =>
-            locationBox.Text = FormatCellReference(_session.ActiveCell);
 
         var typeBox = BuildKindComboBox("SparklineTypeBox", kind);
         ApplySparklineComboBoxChrome(typeBox);
@@ -161,6 +153,8 @@ public sealed partial class MainWindow
         content.Children.Add(typeBox);
         content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
+        AttachDialogRangePicker(dialog, selectDataRangeButton, dataRangeBox, "range.sparklines.data-range");
+        AttachDialogRangePicker(dialog, selectLocationRangeButton, locationBox, "range.sparklines.location-range");
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)

@@ -63,12 +63,6 @@ public sealed partial class MainWindow
         var browseButton = new Button { Content = "...", Width = 28, MinWidth = 28 };
         ApplyDataOpsButtonChrome(browseButton);
         AutomationProperties.SetAutomationId(browseButton, "ConsolidateBrowseReferenceButton");
-        browseButton.Click += (_, _) =>
-        {
-            // The picker pre-fills the reference field with the current selection.
-            if (string.IsNullOrWhiteSpace(referenceBox.Text))
-                referenceBox.Text = FormatRangeReference(_session.SelectedRange);
-        };
 
         var referencesList = new ListBox { MinHeight = ConsolidateDialogPlanner.ReferencesListHeight };
         ApplyDataOpsListBoxChrome(referencesList);
@@ -92,8 +86,6 @@ public sealed partial class MainWindow
         var destinationBrowseButton = new Button { Content = "...", Width = 28, MinWidth = 28 };
         ApplyDataOpsButtonChrome(destinationBrowseButton);
         AutomationProperties.SetAutomationId(destinationBrowseButton, "ConsolidateBrowseDestinationButton");
-        destinationBrowseButton.Click += (_, _) =>
-            destinationBox.Text = FormatRangeReference(_session.SelectedRange);
 
         var topRowBox = new CheckBox { Content = UiText.Get("TableLoc_ConsolidateTopRow") };
         ApplyDataOpsCheckBoxChrome(topRowBox);
@@ -273,6 +265,8 @@ public sealed partial class MainWindow
                 },
             },
         };
+        AttachDialogRangePicker(dialog, browseButton, referenceBox, "range.consolidate.reference");
+        AttachDialogRangePicker(dialog, destinationBrowseButton, destinationBox, "range.consolidate.destination-cell");
 
         await dialog.ShowDialog(this);
     }

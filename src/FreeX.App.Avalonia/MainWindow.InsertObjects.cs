@@ -265,12 +265,7 @@ public sealed partial class MainWindow
         };
         ApplyInsertObjectFixedButtonChrome(rangePicker, 28);
         AutomationProperties.SetName(rangePicker, UiText.Get(CreateTableDialogPlanner.RangePickerAutomationNameKey));
-        rangePicker.Click += (_, _) =>
-        {
-            rangeBox.Text = FormatRangeReference(_session.SelectedRange);
-            rangeBox.Focus();
-            rangeBox.SelectAll();
-        };
+        AutomationProperties.SetAutomationId(rangePicker, "CreateTableRangePicker");
 
         var headersBox = new CheckBox
         {
@@ -340,6 +335,7 @@ public sealed partial class MainWindow
                 buttonRow,
             },
         };
+        AttachDialogRangePicker(dialog, rangePicker, rangeBox, "range.create-table.range");
         dialog.Opened += (_, _) =>
         {
             rangeBox.Focus();

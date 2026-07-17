@@ -394,12 +394,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(rangeBox, rangeField.AutomationId);
 
         // Reference-picker ("...") button to the left of the range box, matching the WPF
-        // DialogReferencePicker editor. In this in-dialog shell it focuses the range box for editing
-        // rather than driving a collapse-to-grid pick, but keeps the layout at parity with Windows.
+        // DialogReferencePicker editor.
         var rangePickButton = CreateChartButton("...", 30);
         AutomationProperties.SetName(rangePickButton, UiText.Get(SelectDataSourcePlanner.SelectRangeAutomationNameResourceKey));
         AutomationProperties.SetAutomationId(rangePickButton, "SelectChartDataRangePickButton");
-        rangePickButton.Click += (_, _) => rangeBox.Focus();
 
         var rangeRow = new StackPanel
         {
@@ -668,6 +666,7 @@ public sealed partial class MainWindow
                 buttonRow,
             },
         };
+        AttachDialogRangePicker(dialog, rangePickButton, rangeBox, "range.chart-data-source.range");
 
         return await dialog.ShowDialog<SelectDataSourceResult?>(this);
     }
