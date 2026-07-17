@@ -1083,7 +1083,11 @@ public sealed class SlideCanvas : FrameworkElement
                     foreach (var interval in GetPieDepthArcIntervals(primitive))
                     {
                         dc.DrawGeometry(
-                            ToBrush(ShadeImportedThreeDPieSidewall(depthFill, interval.Start, interval.End)),
+                            ToBrush(ShadeImportedThreeDPieSidewall(
+                                depthFill,
+                                interval.Start,
+                                interval.End,
+                                primitive.PointIndex)),
                             null,
                             ToPieSliceDepthGeometry(primitive, interval.Start, interval.End));
                     }
@@ -1185,10 +1189,13 @@ public sealed class SlideCanvas : FrameworkElement
     private static ChartFillPlan ShadeImportedThreeDPieSidewall(
         ChartFillPlan fill,
         double startAngle,
-        double endAngle)
+        double endAngle,
+        int pointIndex)
     {
-        double midpoint = (startAngle + endAngle) / 2;
-        double factor = 0.35 + 0.4 * Math.Clamp(Math.Sin(midpoint), 0, 1);
+        double factor = ChartRenderPlanner.ResolveImportedThreeDPieSidewallFactor(
+            pointIndex,
+            startAngle,
+            endAngle);
         return new ChartFillPlan(
             new SrgbColor(
                 ScalePieSidewallChannel(fill.Color.R, factor),
