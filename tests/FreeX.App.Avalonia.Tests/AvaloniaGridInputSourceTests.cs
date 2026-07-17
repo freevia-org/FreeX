@@ -118,6 +118,30 @@ public sealed class AvaloniaGridInputSourceTests
     }
 
     [Fact]
+    public void DrawingObjects_ExposeWpfParityResizeAndRotationHandles()
+    {
+        var windowSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var interactionSource = File.ReadAllText(RepoFile(
+            "src", "FreeX.App.Avalonia", "MainWindow.DrawingObjectInteraction.cs"));
+
+        windowSource.Should().Contain("CreateDrawingObjectSelectionAdorner(width, height, drawingObject.RotationDegrees)");
+        windowSource.Should().Contain("TryBeginDrawingObjectDrag(renderPlan, container, surface, adorner, args)");
+        windowSource.Should().Contain("WireDrawingObjectDragMoveRelease(renderPlan, container, surface)");
+
+        interactionSource.Should().Contain("private const double DrawingObjectHandleSize = 8;");
+        interactionSource.Should().Contain("private const double DrawingObjectRotationGripDiameter = 10;");
+        interactionSource.Should().Contain("ObjectDragPlanner.RotationGripOffset");
+        interactionSource.Should().Contain("ObjectDragPlanner.HitTestHandle(");
+        interactionSource.Should().Contain("ObjectDragPlanner.CalculateDragTransform(");
+        interactionSource.Should().Contain("ObjectDragPlanner.CalculateRotationDegrees(");
+        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeWithAnchorCommand(");
+        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildResizeCommand(");
+        interactionSource.Should().Contain("DrawingObjectCommandPlanner.BuildRotateCommand(");
+        interactionSource.Should().Contain("args.Pointer.Capture(container);");
+        interactionSource.Should().Contain("args.Pointer.Capture(null);");
+    }
+
+    [Fact]
     public void WorksheetHeaders_ResolvePointerDragAcrossVisibleHeaderMetrics()
     {
         var source = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
