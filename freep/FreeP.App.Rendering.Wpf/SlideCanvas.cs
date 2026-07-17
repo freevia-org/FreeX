@@ -26,6 +26,8 @@ namespace FreeP.App.Rendering.Wpf;
 /// </summary>
 public sealed class SlideCanvas : FrameworkElement
 {
+    private const double ImportedAptosWpfRasterScale = 0.95;
+
     // WPF has no native blur filter for glyph geometry. Keep its translated
     // shadow rings tighter while preserving shared authored offsets for Avalonia.
     private const double TextShadowBlurSpreadScale = 0.6;
@@ -1945,6 +1947,7 @@ public sealed class SlideCanvas : FrameworkElement
         }
 
         var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);
+        bool useImportedAptosRasterScale = UsesImportedAptosFont(renderText);
         foreach (var placement in plan.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
@@ -1969,11 +1972,29 @@ public sealed class SlideCanvas : FrameworkElement
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
                         ft.MaxTextWidth = placement.MaxWidthDip;
+                    if (useImportedAptosRasterScale)
+                    {
+                        double centerX = para.Align == TextAlign.Center
+                            ? bounds.X + bounds.Width * 0.5
+                            : placement.X;
+                        dc.PushTransform(new ScaleTransform(
+                            ImportedAptosWpfRasterScale,
+                            1.0,
+                            centerX,
+                            placement.Y));
+                    }
                     dc.DrawText(ft, new Point(placement.X, placement.Y));
+                    if (useImportedAptosRasterScale)
+                        dc.Pop();
                     break;
             }
         }
     }
+
+    private static bool UsesImportedAptosFont(ResolvedTextLayout text) =>
+        text.Paragraphs
+            .SelectMany(paragraph => paragraph.Runs)
+            .Any(run => run.FontFamily.StartsWith("Aptos", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
     /// Wave 19A: draws a bullet glyph or number string at the given position.
