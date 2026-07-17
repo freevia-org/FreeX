@@ -25,6 +25,11 @@ param(
     [ValidateRange(1, 100)]
     [int]$ContextBatchSize = 25,
 
+    [ValidateRange(0, 100000)]
+    [int]$ContextStart = 0,
+
+    [string]$ResumeReportDirectory = "",
+
     [switch]$SkipImageBuild,
     [switch]$SkipPublish
 )
@@ -36,7 +41,14 @@ $currentSessionPath = Join-Path $repoRoot "artifacts/linux-interactive/freex/cur
 $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
 $reportStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
-$reportDirectory = Join-Path $repoRoot "artifacts/linux-interactive/freex/interaction-validation/$reportStamp"
+$reportDirectory = if ([string]::IsNullOrWhiteSpace($ResumeReportDirectory)) {
+    Join-Path $repoRoot "artifacts/linux-interactive/freex/interaction-validation/$reportStamp"
+} else {
+    if (-not (Test-Path -LiteralPath $ResumeReportDirectory -PathType Container)) {
+        throw "Resume report directory does not exist: $ResumeReportDirectory"
+    }
+    (Resolve-Path -LiteralPath $ResumeReportDirectory).Path
+}
 New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
 
 function Read-CompletedJsonManifest {
@@ -96,6 +108,23 @@ try {
     $authoritativeContextCount = $null
     $coreSections = @("ribbon-bindings", "shortcuts", "range-inventory", "editing")
     foreach ($coreSection in $coreSections) {
+        $existingCorePath = Join-Path $reportDirectory "core-$coreSection.json"
+        if (Test-Path -LiteralPath $existingCorePath -PathType Leaf) {
+            $batchManifest = Read-CompletedJsonManifest -Path $existingCorePath -Deadline (Get-Date).AddMinutes(1)
+            if ($null -eq $batchManifest) {
+                throw "Existing core interaction section '$coreSection' is incomplete: $existingCorePath"
+            }
+            if ($null -eq $authoritativeDialogCount) {
+                $authoritativeDialogCount = [int]$batchManifest.dialogCatalogCount
+                $authoritativeRibbonCount = [int]$batchManifest.ribbonCommandCatalogCount
+                $authoritativeContextCount = [int]$batchManifest.contextMenuDispatchCatalogCount
+            }
+            if ($null -eq $manifest) { $manifest = $batchManifest }
+            $combinedResults += @($batchManifest.results)
+            Write-Host "Reusing core interaction section '$coreSection'."
+            continue
+        }
+
         $appArguments = @(
             "--interaction-validation", "/work/validation",
             "--interaction-validation-dialog-start", "0",
@@ -140,7 +169,17 @@ try {
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
-    for ($contextStart = 0; $contextStart -lt $authoritativeContextCount; $contextStart += $ContextBatchSize) {
+    if ($ContextStart -gt 0) {
+        foreach ($existingContextPath in Get-ChildItem -LiteralPath $reportDirectory -Filter "context-batch-*.json" -File) {
+            $existingContextManifest = Read-CompletedJsonManifest -Path $existingContextPath.FullName -Deadline (Get-Date).AddMinutes(1)
+            if ($null -eq $existingContextManifest) {
+                throw "Existing context batch is incomplete: $($existingContextPath.FullName)"
+            }
+            $combinedResults += @($existingContextManifest.results)
+        }
+    }
+
+    for ($contextStart = $ContextStart; $contextStart -lt $authoritativeContextCount; $contextStart += $ContextBatchSize) {
         $contextCount = [Math]::Min($ContextBatchSize, $authoritativeContextCount - $contextStart)
         $appArguments = @(
             "--interaction-validation", "/work/validation",
