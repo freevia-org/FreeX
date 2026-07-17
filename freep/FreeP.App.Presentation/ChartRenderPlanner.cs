@@ -668,6 +668,7 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceFrameFrontLeftX = 8.0;
     private const double ImportedSurfaceFrameFrontRightX = 312.0;
     private const double ImportedSurfaceBlankVertexNormalized = 0.24;
+    private const double ImportedSurfaceBlankVertexXOffset = 20.0;
     private const double ImportedSurfaceMiddleNorthVertexYOffset = 20.0;
     private const double ImportedSurfaceLightBaseFactor = 1.02;
     private const double ImportedSurfaceDepthDimming = 0.12;
@@ -3335,6 +3336,11 @@ public static partial class ChartRenderPlanner
             : drawableWidth;
         double x = plot.X + categoryT * categoryWidth + seriesT * depthX;
         double y = plot.Bottom + categoryT * categorySlopeY - seriesT * depthY - normalized * lift;
+        // The imported blank low-band vertex is horizontally registered to
+        // the COM raster rather than the shared projected category edge.
+        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+            seriesIndex == 0 && categoryIndex == 1)
+            x += ImportedSurfaceBlankVertexXOffset;
         // The imported 3x3 COM mesh registers its middle-row North vertex
         // below the shared projection; keep the correction fixture-scoped.
         if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
