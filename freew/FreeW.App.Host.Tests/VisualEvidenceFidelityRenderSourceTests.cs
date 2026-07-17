@@ -15,7 +15,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidencePlanner.EnsureTrusted(row)");
         source.Should().Contain("int actualPageCount = Math.Max(1, paginator.PageCount);");
         source.Should().Contain("int pageCount = Math.Min(actualPageCount, maxPages);");
-        source.Should().Contain("pageNumberText, actualPageCount");
+        source.Should().Contain("box.PageNumberText, actualPageCount");
         source.Should().Contain("ComputeWpfPixelStats(");
         source.Should().Contain("FreeWVisualEvidencePlanner.ResolveSectionOrdinal");
         source.Should().Contain("sectionRelativePageNumber");

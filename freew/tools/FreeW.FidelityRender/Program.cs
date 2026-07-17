@@ -580,83 +580,64 @@ static void RenderDocumentComposite(
         // fresh DocumentView + paginator. This mirrors BuildHfSubEditor's wrapper-document approach
         // (see PageBox.cs) and works headlessly because the paginator's DocumentPage.Visual is a
         // fully-realized WPF visual that RenderTargetBitmap can rasterize.
+        if (panel is not null && i < panel.PageBoxes.Count)
         {
-            var ownerHf = pageBox?.OwnerSectionHf ?? doc.FinalSectionHeadersFooters;
-            var fallbackHeader = pageBox is null
-                ? ResolveSoftwareHeaderFooterSlot(doc, i + 1, header: true)?.Value
-                : null;
-            var fallbackFooter = pageBox is null
-                ? ResolveSoftwareHeaderFooterSlot(doc, i + 1, header: false)?.Value
-                : null;
-            var headerSlot = pageBox?.HeaderSlotName is { } hSlotName
-                ? ResolveHfSlotByName(ownerHf, hSlotName)
-                : fallbackHeader;
-            var footerSlot = pageBox?.FooterSlotName is { } fSlotName
-                ? ResolveHfSlotByName(ownerHf, fSlotName)
-                : fallbackFooter;
-            var logicalPageNumber = Math.Max(1, thisPageSettings.PageNumberStartAt ?? 1) + i;
-            var pageNumberText = pageBox?.PageNumberText
-                ?? PageNumberFormatDialogPlanner.FormatPageNumber(
-                    logicalPageNumber,
-                    thisPageSettings.PageNumberFormat);
+            var box = panel.PageBoxes[i];
+            const double hfH = 36;
+            var ownerHf = box.OwnerSectionHf ?? doc.FinalSectionHeadersFooters;
 
-            if (headerSlot is not null && !headerSlot.IsEmpty)
+            if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
             {
-                var hfPage = RenderHfSlot(headerSlot, doc, thisPageWDip, headerFooterBandDip, i + 1, pageNumberText, actualPageCount);
-                if (hfPage is not null)
+                var hfSlot = ResolveHfSlotByName(ownerHf, hSlotName);
+                if (hfSlot is not null && !hfSlot.IsEmpty)
                 {
-                    // Word measures an explicit header distance from the page edge. Its
-                    // implicit/default header distance instead uses the calibrated upper reserve.
-                    var headerTop = thisPageSettings.HeaderDistancePt > 0
-                        ? PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)
-                        : Math.Max(0, thisMarginTop - headerFooterBandDip - 12);
-                    var hfVis = new DrawingVisual();
-                    using (var dc = hfVis.RenderOpen())
-                        dc.DrawRectangle(new VisualBrush(hfPage.Visual)
-                        {
-                            Stretch = Stretch.None,
-                            AlignmentX = AlignmentX.Left,
-                            AlignmentY = AlignmentY.Top
-                        },
-                            null, new Rect(thisMarginLeft, headerTop,
-                                thisPageWDip - thisMarginLeft - thisMarginRight, headerFooterBandDip));
-                    bmp.Render(hfVis);
+                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, actualPageCount);
+                    if (hfPage is not null)
+                    {
+                        var hfVis = new DrawingVisual();
+                        using (var dc = hfVis.RenderOpen())
+                            dc.DrawRectangle(new VisualBrush(hfPage.Visual)
+                            {
+                                Stretch = Stretch.None,
+                                AlignmentX = AlignmentX.Left,
+                                AlignmentY = AlignmentY.Top
+                            },
+                                null, new Rect(thisMarginLeft, thisMarginTop + 2,
+                                    thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
+                        bmp.Render(hfVis);
+                    }
                 }
             }
 
-            if (footerSlot is not null && !footerSlot.IsEmpty)
+            if (box.FooterSubEditor is not null && box.FooterSlotName is { } fSlotName)
             {
-                var hfPage = RenderHfSlot(footerSlot, doc, thisPageWDip, headerFooterBandDip, i + 1, pageNumberText, actualPageCount);
-                if (hfPage is not null)
+                var fSlot = ResolveHfSlotByName(ownerHf, fSlotName);
+                if (fSlot is not null && !fSlot.IsEmpty)
                 {
-                    // Unlike headers, Word anchors an explicit footer distance at the
-                    // footer's baseline.  The 36-DIP paginator viewport includes seven
-                    // extra trailing DIPs, so using it as the placement band lifts the
-                    // rendered paragraph above Word's footer position.
-                    const double explicitFooterBandDip = 29;
-                    var footerTop = thisPageSettings.FooterDistancePt > 0
-                        ? thisPixH - PageLayout.PointsToDip(thisPageSettings.FooterDistancePt) - explicitFooterBandDip
-                        : thisPixH - thisMarginBottom + 16;
-                    var hfVis = new DrawingVisual();
-                    using (var dc = hfVis.RenderOpen())
-                        dc.DrawRectangle(new VisualBrush(hfPage.Visual)
-                        {
-                            Stretch = Stretch.None,
-                            AlignmentX = AlignmentX.Left,
-                            AlignmentY = AlignmentY.Top
-                        },
-                            null, new Rect(thisMarginLeft, footerTop,
-                                thisPageWDip - thisMarginLeft - thisMarginRight, headerFooterBandDip));
-                    bmp.Render(hfVis);
+                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, actualPageCount);
+                    if (hfPage is not null)
+                    {
+                        var hfVis = new DrawingVisual();
+                        using (var dc = hfVis.RenderOpen())
+                            dc.DrawRectangle(new VisualBrush(hfPage.Visual)
+                            {
+                                Stretch = Stretch.None,
+                                AlignmentX = AlignmentX.Left,
+                                AlignmentY = AlignmentY.Top
+                            },
+                                null, new Rect(thisMarginLeft, thisPixH - thisMarginBottom + 2,
+                                    thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
+                        bmp.Render(hfVis);
+                    }
                 }
             }
 
             // ─ Layer 6: footnote region (separator + footnote texts above footer) ─────────────────
             // Render footnotes that appear on this page.  We draw them above the footer zone using
             // the same TextBlock approach as PageBox.BuildNoteRegion.
-            if (pageBox is not null && pageBox.FootnoteIds.Count > 0)
+            if (box.FootnoteIds.Count > 0)
             {
-                var footnoteBmp = RenderNoteRegion(doc, pageBox.FootnoteIds, Array.Empty<int>(),
+                var footnoteBmp = RenderNoteRegion(doc, box.FootnoteIds, Array.Empty<int>(),
                     thisPageWDip, thisMarginLeft, thisMarginRight, isEndnotePage: false);
                 if (footnoteBmp is not null)
                 {
