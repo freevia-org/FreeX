@@ -1242,7 +1242,7 @@ public sealed partial class MainWindow : Window
                     ["home.orientation"] = () => ApplySelectedRangeTextRotation(45, "Rotated text for", "Orientation failed."),
                     ["home.formatCells"] = () => _ = ShowFormatCellsDialogAsync(),
                     // View tab (Window group) + Formulas tab.
-                    ["view.unhide"] = () => _ = UnhideSheetAsync(),
+                    ["view.unhide"] = () => RunGuarded(ShowUnhideWindowDialogAsync),
                     ["formulas.showFormulas"] = ToggleShowFormulas,
                     // Formulas Function Library category buttons open the function picker.
                     ["formulas.lookupReference"] = InsertFunction,

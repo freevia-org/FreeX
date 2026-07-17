@@ -830,18 +830,7 @@ public sealed partial class MainWindow
 
     private void CycleChartStyle()
     {
-        if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
-        if (!TryGetSelectedChart("Chart Styles", out var chart))
-            return;
-
-        // Chart styles are 1..48 (SetChartStyleCommand clamps). Step in fours like Excel's gallery rows;
-        // wrap back to 1 after 48.
-        var next = ChartStylePlanner.NextStyleId(chart.ChartStyleId);
-        var result = _session.ExecuteReviewCommand(new SetChartStyleCommand(_session.ActiveSheet.Id, chart.Id, next));
-        RefreshShell(result.Success
-            ? UiText.Format("ChartLoc_AppliedChartStyle", next)
-            : result.ErrorMessage ?? UiText.Get("ChartLoc_ChartStylesFailed"));
+        RunGuarded(ShowChartStyleDialogAsync);
     }
 
     private void CycleChartSecondaryAxis()

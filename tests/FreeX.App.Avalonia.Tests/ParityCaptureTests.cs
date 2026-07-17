@@ -99,11 +99,8 @@ public sealed class ParityCaptureTests
                 : route.AvaloniaProductionSurface.Length > 0 && route.MissingReason.Length == 0,
             "every row must resolve to production UI or an explicit missing classification with a reason");
 
-        routes.Where(route => route.IsMissing).Select(route => route.CatalogId)
-            .Should().Equal(
-                "dialog.ChartStyleDialog",
-                "dialog.HeaderFooterPictureFormatDialog",
-                "dialog.UnhideWindowDialog");
+        routes.Should().NotContain(route => route.IsMissing,
+            "the portable host now implements every authoritative dialog surface");
     }
 
     [Fact]
@@ -246,7 +243,7 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
-    public async Task CaptureParitySurfaces_ReturnsExplicitMissingResult_ForMissingCatalogDialog()
+    public async Task CaptureParitySurfaces_CapturesChartStyleCatalogDialog()
     {
         var outputDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -265,9 +262,8 @@ public sealed class ParityCaptureTests
 
                 results.Should().ContainSingle();
                 results[0].Id.Should().Be("dialog.ChartStyle");
-                results[0].Captured.Should().BeFalse();
-                results[0].Note.Should().StartWith("Missing Avalonia production dialog:");
-                results[0].Note.Should().Contain("no chart-style dialog");
+                results[0].Captured.Should().BeTrue(results[0].Note);
+                AssertCapturedPng(outputDirectory, results[0]);
 
                 window.Close();
             }, CancellationToken.None);

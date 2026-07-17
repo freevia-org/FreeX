@@ -296,6 +296,8 @@ public sealed partial class MainWindow
     {
         PageSetupDialogFields? result = null;
         var initial = surface.Fields;
+        var headerPictures = initial.HeaderPictures;
+        var footerPictures = initial.FooterPictures;
         var dialog = new Window
         {
             Title = UiText.Get(PageSetupDialogPlanner.TitleResourceKey),
@@ -439,6 +441,42 @@ public sealed partial class MainWindow
         var footerRightBox = new TextBox { Text = initial.Footer.Right, MinWidth = 120 };
         ApplyPageLayoutTextBoxChrome(footerRightBox);
         AutomationProperties.SetAutomationId(footerRightBox, "PageSetupCustomFooterRightBox");
+
+        var formatHeaderPictureButton = new Button
+        {
+            Content = UiText.Get("FormatPicture_Title"),
+            IsEnabled = headerPictures.Left is not null || headerPictures.Center is not null || headerPictures.Right is not null,
+        };
+        ApplyPageLayoutButtonChrome(formatHeaderPictureButton, 128);
+        AutomationProperties.SetAutomationId(formatHeaderPictureButton, "PageSetupFormatHeaderPictureButton");
+        formatHeaderPictureButton.Click += async (_, _) =>
+        {
+            var preferred = headerLeftBox.IsFocused
+                ? HeaderFooterEditorSection.Left
+                : headerRightBox.IsFocused
+                    ? HeaderFooterEditorSection.Right
+                    : HeaderFooterEditorSection.Center;
+            if (await ShowHeaderFooterPictureSetFormatDialogAsync(headerPictures, preferred) is { } updated)
+                headerPictures = updated;
+        };
+
+        var formatFooterPictureButton = new Button
+        {
+            Content = UiText.Get("FormatPicture_Title"),
+            IsEnabled = footerPictures.Left is not null || footerPictures.Center is not null || footerPictures.Right is not null,
+        };
+        ApplyPageLayoutButtonChrome(formatFooterPictureButton, 128);
+        AutomationProperties.SetAutomationId(formatFooterPictureButton, "PageSetupFormatFooterPictureButton");
+        formatFooterPictureButton.Click += async (_, _) =>
+        {
+            var preferred = footerLeftBox.IsFocused
+                ? HeaderFooterEditorSection.Left
+                : footerRightBox.IsFocused
+                    ? HeaderFooterEditorSection.Right
+                    : HeaderFooterEditorSection.Center;
+            if (await ShowHeaderFooterPictureSetFormatDialogAsync(footerPictures, preferred) is { } updated)
+                footerPictures = updated;
+        };
 
         // A preset selection fills the matching custom center box (mirrors the WPF preset combo).
         headerPresetBox.SelectionChanged += (_, _) =>
@@ -635,8 +673,8 @@ public sealed partial class MainWindow
             FirstPageFooter = initial.FirstPageFooter,
             EvenPageHeader = initial.EvenPageHeader,
             EvenPageFooter = initial.EvenPageFooter,
-            HeaderPictures = initial.HeaderPictures,
-            FooterPictures = initial.FooterPictures,
+            HeaderPictures = headerPictures,
+            FooterPictures = footerPictures,
             FirstPageHeaderPictures = initial.FirstPageHeaderPictures,
             FirstPageFooterPictures = initial.FirstPageFooterPictures,
             EvenPageHeaderPictures = initial.EvenPageHeaderPictures,
@@ -768,6 +806,7 @@ public sealed partial class MainWindow
                             Spacing = 6,
                             Children = { headerLeftBox, headerCenterBox, headerRightBox },
                         },
+                        formatHeaderPictureButton,
                         PageSetupLabel(UiText.Get("PageSetup_FooterPreset")),
                         footerPresetBox,
                         new TextBlock { Text = StripDisplayMnemonic(UiText.Get("PageSetup_CustomFooter")), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 4, 0, 0) },
@@ -777,6 +816,7 @@ public sealed partial class MainWindow
                             Spacing = 6,
                             Children = { footerLeftBox, footerCenterBox, footerRightBox },
                         },
+                        formatFooterPictureButton,
                         differentFirstPageCheck,
                         differentOddEvenCheck,
                         scaleWithDocumentCheck,
