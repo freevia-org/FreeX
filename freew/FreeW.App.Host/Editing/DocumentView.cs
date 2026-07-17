@@ -5480,7 +5480,13 @@ public sealed class DocumentView : RichTextBox
         var fontSize = Math.Max(8, wordArt.FontSizeDip);
         var glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
         var totalWidth = glyphs.Sum(glyph => glyph.DesiredSize.Width);
-        var targetWidth = canvas.ActualWidth * 0.8;
+        var isImportedGoldArchUp = wordArt is
+        {
+            Style: WordArtStyle.FillGold,
+            Warp: WordArtWarp.ArchUp,
+            FontSizeDip: > 34 and < 35
+        };
+        var targetWidth = canvas.ActualWidth * (isImportedGoldArchUp ? 0.6 : 0.8);
         if (fitTextToBounds && wordArt.Warp != WordArtWarp.Wave1 && totalWidth > targetWidth && totalWidth > 0)
         {
             fontSize = Math.Max(8, fontSize * targetWidth / totalWidth);
@@ -5508,8 +5514,8 @@ public sealed class DocumentView : RichTextBox
             var sharedPlacement = sharedPlacements[index];
             var glyph = glyphs[index];
             var placement = (
-                sharedPlacement.CenterXNormalized * canvas.ActualWidth,
-                sharedPlacement.CenterYNormalized * canvas.ActualHeight,
+                sharedPlacement.CenterXNormalized * canvas.ActualWidth + (isImportedGoldArchUp ? -23 : 0),
+                sharedPlacement.CenterYNormalized * canvas.ActualHeight + (isImportedGoldArchUp ? -20 : 0),
                 sharedPlacement.RotationRadians * 180 / Math.PI,
                 glyph.DesiredSize.Width * horizontalScale,
                 glyph.DesiredSize.Height);
