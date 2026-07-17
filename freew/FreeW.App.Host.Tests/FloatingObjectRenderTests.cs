@@ -248,6 +248,9 @@ public sealed class FloatingObjectRenderTests
         view.SetFloatingCanvas(canvas);
 
         var groupRoot = canvas.Children.OfType<Border>().Single(border => ReferenceEquals(border.Tag, group));
+        groupRoot.BorderThickness.Should().Be(new Thickness(0));
+        groupRoot.BorderBrush.Should().BeSameAs(Brushes.Transparent,
+            "an unselected drawing group has no visible container in Word");
         var child = LogicalDescendants<System.Windows.Shapes.Ellipse>(groupRoot).Single();
         var effect = child.Effect.Should().BeOfType<DropShadowEffect>().Subject;
         effect.Color.Should().Be(Color.FromRgb(0x44, 0x72, 0xC4));
