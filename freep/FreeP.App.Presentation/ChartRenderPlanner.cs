@@ -3178,9 +3178,9 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 305.0 * scaleX, plot.Y + 41.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 358.0 * scaleX, plot.Y + 26.0 * scaleY),
-                    new ChartPlanPoint(plot.X + 348.0 * scaleX, plot.Y + 48.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 301.0 * scaleX, plot.Y + 42.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 360.0 * scaleX, plot.Y + 25.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 349.0 * scaleX, plot.Y + 50.0 * scaleY),
                 },
                 new ChartFillPlan(new SrgbColor(0xE7, 0xAD, 0x00), 255),
                 stroke,
