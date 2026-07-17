@@ -960,7 +960,7 @@ public static class SlideCompositor
             {
                 var translated = SlideCloner.CloneShape(fallback);
                 TranslateCachedSmartArtShape(translated, shape.OffsetXEmu, shape.OffsetYEmu);
-                ApplyCachedSmartArtStyle(translated, smart.Data, theme);
+                ApplyCachedSmartArtStyle(translated, smart, theme);
                 ComposeShape(translated, slide, presentation, theme, ops, effectiveClrMap: effectiveClrMap);
             }
         }
@@ -994,9 +994,28 @@ public static class SlideCompositor
 
     private static void ApplyCachedSmartArtStyle(
         SlideShape shape,
-        SmartArtData? data,
+        SmartArtShape smart,
         PresentationTheme theme)
     {
+        var data = smart.Data;
+
+        // PowerPoint's simple1/accent1_2 hierarchy cache uses a distinct
+        // connector color from the generic accent1 shade. Keep this correction
+        // on the cached-drawing path because hierarchy3 is intentionally not a
+        // live-layout admission yet.
+        if (IsSimpleAccentHierarchy(smart)
+            && shape.AutoShapeKind == DrawingShapeKind.Rectangle
+            && shape.Outline is ShapeOutline.Visible line)
+        {
+            var connectorColor = new ThemeAwareColor(SrgbColor.FromRgb(0x0E4B66));
+            shape.Outline = new ShapeOutline.Visible(
+                connectorColor,
+                line.WidthPt,
+                line.Dash,
+                line.BeginLineEnd,
+                line.EndLineEnd);
+        }
+
         // IncreasingCircleProcess is outside the bounded live-layout set. Its
         // cached background ellipses use the accent1 tint from the XML cache,
         // while PowerPoint renders the bgShp role as the neutral Office gray.
@@ -1022,8 +1041,13 @@ public static class SlideCompositor
         }
 
         foreach (var child in shape.Children)
-            ApplyCachedSmartArtStyle(child, data, theme);
+            ApplyCachedSmartArtStyle(child, smart, theme);
     }
+
+    private static bool IsSimpleAccentHierarchy(SmartArtShape smart) =>
+        smart.Data?.LayoutUniqueId.EndsWith("/hierarchy3", StringComparison.OrdinalIgnoreCase) == true
+        && smart.QuickStyle?.UniqueId.EndsWith("/quickstyle/simple1", StringComparison.OrdinalIgnoreCase) == true
+        && smart.Colors?.UniqueId.EndsWith("/colors/accent1_2", StringComparison.OrdinalIgnoreCase) == true;
 
     private static SrgbColor ResolveSmartArtNeutralBackground(PresentationTheme theme)
     {

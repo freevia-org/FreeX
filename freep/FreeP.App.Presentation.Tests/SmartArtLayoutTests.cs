@@ -1464,6 +1464,71 @@ public sealed class SmartArtLayoutTests
     }
 
     [Fact]
+    public void Compositor_CachedSimpleAccentHierarchy_UsesPowerPointConnectorColor()
+    {
+        var smart = new SmartArtShape
+        {
+            Data = new SmartArtData
+            {
+                Family = SmartArtFamily.Hierarchy,
+                LayoutUniqueId = "urn:microsoft.com/office/officeart/2005/8/layout/hierarchy3"
+            },
+            QuickStyle = new SmartArtQuickStyleMetadata
+            {
+                UniqueId = "urn:microsoft.com/office/officeart/2005/8/quickstyle/simple1"
+            },
+            Colors = new SmartArtColorMetadata
+            {
+                UniqueId = "urn:microsoft.com/office/officeart/2005/8/colors/accent1_2"
+            }
+        };
+        smart.FallbackShapes.Add(new SlideShape
+        {
+            Id = 70,
+            Kind = SlideShapeKind.AutoShape,
+            AutoShapeKind = DrawingShapeKind.Rectangle,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx / 2,
+            ExtentCyEmu = FrameCy / 2,
+            Outline = new ShapeOutline.Visible(SrgbColor.FromRgb(0x0D3A4E), 1.0)
+        });
+
+        var container = new SlideShape
+        {
+            Id = 71,
+            Kind = SlideShapeKind.SmartArt,
+            OffsetXEmu = FrameX,
+            OffsetYEmu = FrameY,
+            ExtentCxEmu = FrameCx,
+            ExtentCyEmu = FrameCy,
+            SmartArt = smart
+        };
+        var pres = PresentationModel.CreateEmpty();
+        pres.Slides[0].Shapes.Clear();
+        pres.Slides[0].Shapes.Add(container);
+
+        var line = SlideCompositor.Compose(pres, pres.Slides[0])
+            .OfType<DrawOp.Shape>()
+            .Single(op => op.Outline is ResolvedOutline.Visible);
+
+        ((ResolvedOutline.Visible)line.Outline).Color.Should().Be(SrgbColor.FromRgb(0x0E4B66));
+    }
+
+    [Fact]
+    public void Compositor_ImportedSmartArtCorpus_UsesCachedConnectorCalibration()
+    {
+        var root = TestWorkspaceFileLocator.FindDirectoryContainingFileFromBaseDirectory("FreeP.slnx");
+        var deck = Path.Combine(root, "tools", "FreeP.RenderCompare", "corpus", "14-smartart-live.pptx");
+        var presentation = FreeP.Core.IO.PptxPackageReader.Read(deck);
+        var ops = SlideCompositor.Compose(presentation, presentation.Slides[1]);
+
+        ops.OfType<DrawOp.Shape>()
+            .Count(op => op.Outline is ResolvedOutline.Visible outline && outline.Color == SrgbColor.FromRgb(0x0E4B66))
+            .Should().BeGreaterThan(0);
+    }
+
+    [Fact]
     public void Compositor_FallsBackToCachedDrawing_WhenFamilyUnknown()
     {
         // SmartArt with Unknown family + fallback shapes
