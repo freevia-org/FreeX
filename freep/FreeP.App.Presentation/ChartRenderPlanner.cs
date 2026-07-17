@@ -630,6 +630,8 @@ public static partial class ChartRenderPlanner
     public const double StockTickWidthFraction = 0.32;
     public const double StockVolumeBandHeightFraction = 0.28;
     public const double StockVolumeBarWidthFraction = 0.55;
+    public const double StockFallbackLineSeriesStrokeThickness = 2.0;
+    public const double StockFallbackMarkerRadius = 4.0;
     public const double SurfaceCellStrokeThickness = 0.4;
     public const double SurfaceFacetStrokeThickness = 0.55;
     public const double SurfaceWireframeStrokeThickness = 0.7;
@@ -2799,7 +2801,9 @@ public static partial class ChartRenderPlanner
                 seriesColors,
                 fillPlans,
                 ShouldSpanBlankSegments(chart),
-                StockFallbackMarkerSymbols[seriesIndex % StockFallbackMarkerSymbols.Length]));
+                automaticMarkerSymbol: StockFallbackMarkerSymbols[seriesIndex % StockFallbackMarkerSymbols.Length],
+                automaticMarkerRadius: StockFallbackMarkerRadius,
+                defaultLineThickness: StockFallbackLineSeriesStrokeThickness));
         }
 
         return primitives;
