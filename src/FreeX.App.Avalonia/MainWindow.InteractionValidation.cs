@@ -27,15 +27,22 @@ public sealed partial class MainWindow
 
         var surfacesDirectory = Path.Combine(outputDirectory, "surfaces");
         Directory.CreateDirectory(surfacesDirectory);
-        var capturedSurfaces = await CaptureParitySurfacesAsync(surfacesDirectory);
+        var capturedSurfaces = await CaptureParitySurfacesAsync(
+            surfacesDirectory,
+            interactionOnly: true);
         foreach (var surface in capturedSurfaces)
         {
+            var rendered = !string.IsNullOrWhiteSpace(surface.PngFileName);
             results.Add(new InteractionValidationResult(
                 Id: surface.Id,
                 Category: surface.Kind == ParitySurfaceKind.Dialog ? "dialog" : "surface",
                 Status: surface.Captured ? "passed" : "failed",
-                EvidenceLevel: surface.Kind == ParitySurfaceKind.Dialog ? "opened-and-rendered" : "rendered",
-                Evidence: Path.Combine("surfaces", surface.PngFileName).Replace('\\', '/'),
+                EvidenceLevel: surface.Kind == ParitySurfaceKind.Dialog
+                    ? rendered ? "opened-and-rendered" : "opened-and-keyboard-probed"
+                    : "rendered",
+                Evidence: rendered
+                    ? Path.Combine("surfaces", surface.PngFileName).Replace('\\', '/')
+                    : "production dialog opener",
                 Note: surface.Note));
         }
         AddDialogInventoryResults(results, capturedSurfaces);
@@ -48,28 +55,35 @@ public sealed partial class MainWindow
         List<InteractionValidationResult> results,
         IReadOnlyList<ParitySurfaceResult> capturedSurfaces)
     {
-        var capturedDialogIds = capturedSurfaces
+        var capturedDialogs = capturedSurfaces
             .Where(surface => surface.Kind == ParitySurfaceKind.Dialog && surface.Captured)
-            .Select(surface => surface.Id)
-            .ToHashSet(StringComparer.Ordinal);
+            .ToArray();
 
         foreach (var dialog in InteractionSurfaceCatalog.Dialogs)
         {
             var route = ParityInteractionDialogRoutes.SingleOrDefault(candidate =>
                 string.Equals(candidate.CatalogId, dialog.Id, StringComparison.Ordinal));
-            var captured = route is not null && !route.IsMissing && capturedDialogIds.Any(capturedId =>
-                string.Equals(capturedId, route.SurfaceId, StringComparison.Ordinal) ||
-                capturedId.StartsWith(route.SurfaceId + ".", StringComparison.Ordinal));
+            var capturedSurface = route is null || route.IsMissing
+                ? null
+                : capturedDialogs.FirstOrDefault(surface =>
+                    string.Equals(surface.Id, route.SurfaceId, StringComparison.Ordinal) ||
+                    surface.Id.StartsWith(route.SurfaceId + ".", StringComparison.Ordinal));
+            var captured = capturedSurface is not null;
+            var rendered = captured && !string.IsNullOrWhiteSpace(capturedSurface!.PngFileName);
             results.Add(new InteractionValidationResult(
                 Id: dialog.Id,
                 Category: "dialog-inventory",
                 Status: captured ? "passed" : "failed",
-                EvidenceLevel: captured ? "opened-rendered-closed" : "catalogued-not-exercised",
+                EvidenceLevel: captured
+                    ? rendered ? "opened-rendered-closed" : "opened-keyboard-probed-closed"
+                    : "catalogued-not-exercised",
                 Evidence: route is null
                     ? dialog.Name
                     : $"{dialog.Name} -> {route.AvaloniaProductionSurface}",
                 Note: captured
-                    ? $"{dialog.Modality}; initial focus, traversal, submit/cancel, and focus return remain separate contract checks."
+                    ? rendered
+                        ? $"{dialog.Modality}; initial focus, traversal, submit/cancel, and focus return remain separate contract checks."
+                        : $"{dialog.Modality}; opened via the production route without rasterization; detailed keyboard/focus evidence is in dialog-contract."
                     : route?.MissingReason.Length > 0
                         ? route.MissingReason
                         : "The authoritative WPF dialog surface has no matching Avalonia interaction-validation opener."));

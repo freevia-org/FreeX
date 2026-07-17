@@ -249,7 +249,8 @@ public sealed partial class MainWindow
     internal async Task<IReadOnlyList<ParitySurfaceResult>> CaptureParitySurfacesAsync(
         string outputDirectory,
         int? maxDialogSurfaces = null,
-        string? targetSurfaceId = null)
+        string? targetSurfaceId = null,
+        bool interactionOnly = false)
     {
         var results = new List<ParitySurfaceResult>();
         ResetDialogInteractionContracts();
@@ -263,9 +264,9 @@ public sealed partial class MainWindow
             requestedSurfaceId = requestedCatalogRoute.SurfaceId;
 
         // ── Ribbon tabs + grid: render the live shell window with each tab selected. ──
-        if (captureAll || requestedSurfaceId.StartsWith("tab.", StringComparison.Ordinal) ||
+        if (!interactionOnly && (captureAll || requestedSurfaceId.StartsWith("tab.", StringComparison.Ordinal) ||
             requestedSurfaceId.StartsWith("contextual.", StringComparison.Ordinal) ||
-            requestedSurfaceId.StartsWith("grid.", StringComparison.Ordinal))
+            requestedSurfaceId.StartsWith("grid.", StringComparison.Ordinal)))
         {
             var ribbonTabControl = FindParityRibbonTabControl();
             foreach (var (surfaceId, tabId) in ParityStaticRibbonTabs)
@@ -315,7 +316,12 @@ public sealed partial class MainWindow
 
         foreach (var (surfaceId, opener) in dialogOpeners)
         {
-            results.Add(await CaptureModalSurfaceAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener));
+            results.Add(await CaptureModalSurfaceAsync(
+                outputDirectory,
+                surfaceId,
+                ParitySurfaceKind.Dialog,
+                opener,
+                render: !interactionOnly));
             ReleaseCompletedDialogCaptureResources();
         }
 
@@ -333,7 +339,13 @@ public sealed partial class MainWindow
 
         foreach (var (surfaceId, opener, tabNames) in tabDialogs)
         {
-            results.AddRange(await CaptureModalTabsAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener, tabNames));
+            results.AddRange(await CaptureModalTabsAsync(
+                outputDirectory,
+                surfaceId,
+                ParitySurfaceKind.Dialog,
+                opener,
+                tabNames,
+                render: !interactionOnly));
             ReleaseCompletedDialogCaptureResources();
         }
 
@@ -370,7 +382,8 @@ public sealed partial class MainWindow
                     outputDirectory,
                     route.SurfaceId,
                     ParitySurfaceKind.Dialog,
-                    opener));
+                    opener,
+                    render: !interactionOnly));
                 ReleaseCompletedDialogCaptureResources();
             }
 
@@ -391,7 +404,7 @@ public sealed partial class MainWindow
             }
         }
 
-        foreach (var surfaceId in ParityBackstageSurfaces)
+        foreach (var surfaceId in interactionOnly ? [] : ParityBackstageSurfaces)
         {
             if (captureAll || string.Equals(requestedSurfaceId, surfaceId, StringComparison.Ordinal))
                 results.Add(CaptureBackstageSurface(outputDirectory, surfaceId));
@@ -2165,7 +2178,8 @@ public sealed partial class MainWindow
         string outputDirectory,
         string surfaceId,
         ParitySurfaceKind kind,
-        Func<Task> opener)
+        Func<Task> opener,
+        bool render = true)
     {
         var pngName = surfaceId + ".png";
         var ownerFocusBeforeOpen = PrepareOwnerFocusForDialogContract();
@@ -2194,6 +2208,17 @@ public sealed partial class MainWindow
         ParitySurfaceResult result;
         try
         {
+            if (!render)
+            {
+                result = new ParitySurfaceResult(
+                    surfaceId,
+                    kind,
+                    "",
+                    Captured: true,
+                    "Opened through the production route for keyboard and focus validation; visual capture is a separate parity lane.");
+                return result;
+            }
+
             if (TryGetFixedModalCaptureSize(surfaceId, out var fixedWidth, out var fixedHeight))
             {
                 dialog.SizeToContent = SizeToContent.Manual;
@@ -2267,7 +2292,8 @@ public sealed partial class MainWindow
         string surfaceId,
         ParitySurfaceKind kind,
         Func<Task> opener,
-        string[] tabNames)
+        string[] tabNames,
+        bool render = true)
     {
         var results = new List<ParitySurfaceResult>();
         var defaultPng = surfaceId + ".png";
@@ -2296,6 +2322,17 @@ public sealed partial class MainWindow
 
         try
         {
+            if (!render)
+            {
+                results.Add(new ParitySurfaceResult(
+                    surfaceId,
+                    kind,
+                    "",
+                    Captured: true,
+                    "Opened through the production route for keyboard and focus validation; tab rendering is a separate parity lane."));
+                return results;
+            }
+
             // Default surface first (whatever tab the dialog opens on). Pump once before
             // rendering so SizeToContent tab dialogs settle to the same frame the tab
             // captures use after changing SelectedIndex.
