@@ -740,7 +740,24 @@ public sealed class SlideCanvas : FrameworkElement
             new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
 
         if (scene.Title is { } title)
+        {
+            if (chart.ChartType == ChartType.Stock && !chart.HasHighLowLines)
+            {
+                // The imported line-series fallback uses the classic Office title
+                // raster, whose visible glyph block is slightly narrower and lower
+                // than WPF's default FormattedText placement.
+                title = title with
+                {
+                    Bounds = title.Bounds with
+                    {
+                        X = title.Bounds.X + 5.0,
+                        Y = title.Bounds.Y + 2.0
+                    }
+                };
+            }
+
             DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment), fontFamily: title.FontFamily);
+        }
 
         if (!scene.Frame.HasPlot)
             return;
