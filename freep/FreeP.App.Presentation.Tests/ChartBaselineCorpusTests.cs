@@ -658,6 +658,17 @@ public sealed class ChartBaselineCorpusTests
         scene.LineSeries.SelectMany(series => series.Markers)
             .Select(marker => marker.Radius)
             .Should().OnlyContain(radius => radius == ChartRenderPlanner.ImportedLineMarkerRadius);
+        scene.LegendItems.Should().HaveCount(2);
+        scene.LegendItems.Select(item => item.IsLine)
+            .Should().OnlyContain(isLine => isLine);
+        scene.LegendItems.Select(item => item.MarkerSymbol)
+            .Should().Equal(
+                ChartMarkerPrimitiveSymbol.Diamond,
+                ChartMarkerPrimitiveSymbol.Square);
+        scene.LegendItems.Select(item => item.SwatchBounds.Width)
+            .Should().OnlyContain(width => width == ChartRenderPlanner.ImportedLineMarkerLegendSwatchWidth);
+        scene.LegendItems[0].Label.Bounds.X
+            .Should().Be(scene.LegendItems[0].SwatchBounds.X + ChartRenderPlanner.ImportedLineMarkerLegendLabelInset);
     }
 
     [Fact]

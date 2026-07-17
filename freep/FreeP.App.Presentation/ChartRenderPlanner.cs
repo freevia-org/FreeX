@@ -573,6 +573,9 @@ public static partial class ChartRenderPlanner
     public const double ImportedRadarLegendSwatchWidth = 29.0;
     public const double ImportedRadarLegendSwatchHeight = 12.0;
     public const double ImportedRadarLegendLabelInset = 29.0;
+    public const double ImportedLineMarkerLegendSwatchWidth = 29.0;
+    public const double ImportedLineMarkerLegendSwatchHeight = 12.0;
+    public const double ImportedLineMarkerLegendLabelInset = 29.0;
     public const double ImportedRadarLegendXOffset = 11.0;
     public const double ImportedRadarLegendLineHeight = 38.0;
     public const double ImportedRadarLegendVerticalOffset = 10.0;
@@ -1460,6 +1463,8 @@ public static partial class ChartRenderPlanner
         bool importedRadarLineLegend = frame.IsRadar && chart.RadarStyle != RadarStyle.Filled;
         bool importedMarkerLegend = UsesImportedTextMetrics(chart) &&
             (UsesImportedSingleScatterDefaults(chart) || UsesImportedBubbleDefaults(chart));
+        bool importedLineMarkerLegend = UsesImportedTextMetrics(chart) &&
+            chart.ChartType == ChartType.LineMarkers;
         double legendLineHeight = importedCombo
             ? ImportedComboLegendLineHeight
             : importedRadarLineLegend
@@ -1495,21 +1500,28 @@ public static partial class ChartRenderPlanner
             double itemY = verticalLegend ? firstItemY + itemIndex * legendLineHeight : legendBounds.Y;
             bool lineSeries = !frame.IsPie &&
                 (chart.Series[sourceItemIndex].OverrideChartType is ChartType.Line or ChartType.LineMarkers ||
+                 chart.ChartType is ChartType.Line or ChartType.LineMarkers ||
                  importedRadarLineLegend);
+            bool lineMarkerSeries = !frame.IsPie &&
+                (chart.ChartType == ChartType.LineMarkers ||
+                 chart.Series[sourceItemIndex].OverrideChartType == ChartType.LineMarkers);
             double swatchWidth = importedCombo
                 ? ImportedComboLegendSwatchWidth
                 : importedRadarLineLegend
                     ? ImportedRadarLegendSwatchWidth
+                    : importedLineMarkerLegend ? ImportedLineMarkerLegendSwatchWidth
                     : importedMarkerLegend ? 12.0 : 8.0;
             double swatchHeight = importedCombo
                 ? lineSeries ? 12.0 : ImportedComboLegendSwatchHeight
                 : importedRadarLineLegend
                     ? ImportedRadarLegendSwatchHeight
+                    : importedLineMarkerLegend ? ImportedLineMarkerLegendSwatchHeight
                     : importedMarkerLegend ? 12.0 : 8.0;
             double labelInset = importedCombo
                 ? ImportedComboLegendSwatchWidth + 4.0
                 : importedRadarLineLegend
                     ? ImportedRadarLegendLabelInset
+                : importedLineMarkerLegend ? ImportedLineMarkerLegendLabelInset
                 : importedMarkerLegend ? 30.0 : 10.0;
             double textWidth = verticalLegend
                 ? importedMarkerLegend
@@ -1547,14 +1559,17 @@ public static partial class ChartRenderPlanner
                             ShouldVaryPointColors(chart))
                         : ResolveSeriesFill(sourceItemIndex, seriesColors, alpha: 255, fillPlans)
                     : new ChartFillPlan(color, Alpha: 255),
-                IsLine: (importedCombo || importedRadarLineLegend) && lineSeries)
+                IsLine: lineSeries)
             {
-                MarkerSymbol = importedMarkerLegend
-                    ? chart.ChartType == ChartType.Bubble
-                        ? ChartMarkerPrimitiveSymbol.Circle
-                        : ResolveImportedLineMarkerSymbol(sourceItemIndex)
-                    : null,
-                IsLineOnly = importedRadarLineLegend
+                MarkerSymbol = importedLineMarkerLegend
+                        ? ResolveImportedLineMarkerSymbol(sourceItemIndex)
+                    : importedMarkerLegend
+                        ? chart.ChartType == ChartType.Bubble
+                            ? ChartMarkerPrimitiveSymbol.Circle
+                            : ResolveImportedLineMarkerSymbol(sourceItemIndex)
+                        : null,
+                IsLineOnly = importedRadarLineLegend ||
+                    (!importedCombo && lineSeries && !lineMarkerSeries)
             };
             items.Add(legendItem);
         }
