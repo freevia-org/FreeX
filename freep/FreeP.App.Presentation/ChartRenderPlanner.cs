@@ -579,6 +579,13 @@ public static partial class ChartRenderPlanner
     public const double ImportedLineMarkerLegendSwatchWidth = 29.0;
     public const double ImportedLineMarkerLegendSwatchHeight = 12.0;
     public const double ImportedLineMarkerLegendLabelInset = 29.0;
+    public const double ImportedStyle2LegendSwatchSize = 14.0;
+    public const double ImportedStyle2LegendLineHeight = 37.0;
+    public const double ImportedStyle2LegendLabelInset = 20.0;
+    public const double ImportedStyle2LegendLabelOffset = -7.0;
+    public const double ImportedStyle2LegendVerticalOffset = 9.0;
+    public const double ImportedStyle2ColumnLegendXOffset = 8.0;
+    public const double ImportedStyle2BarLegendXOffset = -10.0;
     public const double ImportedRadarLegendXOffset = 11.0;
     public const double ImportedRadarLegendLineHeight = 38.0;
     public const double ImportedRadarLegendVerticalOffset = 10.0;
@@ -777,6 +784,11 @@ public static partial class ChartRenderPlanner
         !UsesImportedComboDefaults(chart) &&
         chart.DataLabels is null &&
         chart.ChartType is ChartType.ColumnClustered or ChartType.LineMarkers;
+
+    private static bool UsesImportedStyle2ColumnBarLegend(ChartShape chart) =>
+        chart.StyleId == 2 &&
+        UsesImportedTextMetrics(chart) &&
+        chart.ChartType is ChartType.ColumnClustered or ChartType.BarClustered;
 
     /// <summary>
     /// Chart parts without an authored style use PowerPoint's classic default
@@ -1489,12 +1501,15 @@ public static partial class ChartRenderPlanner
             (UsesImportedSingleScatterDefaults(chart) || UsesImportedBubbleDefaults(chart));
         bool importedLineMarkerLegend = UsesImportedTextMetrics(chart) &&
             chart.ChartType == ChartType.LineMarkers;
+        bool importedStyle2ColumnBarLegend = UsesImportedStyle2ColumnBarLegend(chart);
         double legendLineHeight = importedCombo
             ? ImportedComboLegendLineHeight
             : importedPieLegend
                 ? ImportedPieLegendLineHeight
             : importedRadarLineLegend
                 ? ImportedRadarLegendLineHeight
+            : importedStyle2ColumnBarLegend
+                ? ImportedStyle2LegendLineHeight
             : ResolveLegendLineHeight(chart);
         int maxItems = (int)Math.Max(1, verticalLegend ? legendBounds.Height / legendLineHeight : legendWidth / 80);
         int itemsToShow = Math.Min(itemCount, maxItems);
@@ -1511,6 +1526,8 @@ public static partial class ChartRenderPlanner
             firstItemY += ImportedRadarLegendVerticalOffset;
         if (importedPieLegend && verticalLegend && !hasManualLayout)
             firstItemY += ImportedPieLegendVerticalOffset;
+        if (importedStyle2ColumnBarLegend && verticalLegend && !hasManualLayout)
+            firstItemY += ImportedStyle2LegendVerticalOffset;
         for (int itemIndex = 0; itemIndex < itemsToShow; itemIndex++)
         {
             int sourceItemIndex = frame.IsPie
@@ -1525,6 +1542,10 @@ public static partial class ChartRenderPlanner
                         ? legendBounds.X + ImportedRadarLegendXOffset
                     : importedPieLegendRightOffset
                         ? legendBounds.X + ImportedPieLegendRightOffset
+                    : importedStyle2ColumnBarLegend
+                        ? legendBounds.X + (frame.IsBar
+                            ? ImportedStyle2BarLegendXOffset
+                            : ImportedStyle2ColumnLegendXOffset)
                     : legendBounds.X
                 : legendBounds.X + itemIndex * 80.0;
             double itemY = verticalLegend ? firstItemY + itemIndex * legendLineHeight : legendBounds.Y;
@@ -1541,6 +1562,8 @@ public static partial class ChartRenderPlanner
                     ? ImportedPieLegendSwatchSize
                 : importedRadarLineLegend
                     ? ImportedRadarLegendSwatchWidth
+                : importedStyle2ColumnBarLegend
+                    ? ImportedStyle2LegendSwatchSize
                     : importedLineMarkerLegend ? ImportedLineMarkerLegendSwatchWidth
                     : importedMarkerLegend ? 12.0 : 8.0;
             double swatchHeight = importedCombo
@@ -1549,6 +1572,8 @@ public static partial class ChartRenderPlanner
                     ? ImportedPieLegendSwatchSize
                 : importedRadarLineLegend
                     ? ImportedRadarLegendSwatchHeight
+                : importedStyle2ColumnBarLegend
+                    ? ImportedStyle2LegendSwatchSize
                     : importedLineMarkerLegend ? ImportedLineMarkerLegendSwatchHeight
                     : importedMarkerLegend ? 12.0 : 8.0;
             double labelInset = importedCombo
@@ -1557,6 +1582,8 @@ public static partial class ChartRenderPlanner
                     ? ImportedPieLegendLabelInset
                 : importedRadarLineLegend
                     ? ImportedRadarLegendLabelInset
+                : importedStyle2ColumnBarLegend
+                    ? ImportedStyle2LegendLabelInset
                 : importedLineMarkerLegend ? ImportedLineMarkerLegendLabelInset
                 : importedMarkerLegend ? 30.0 : 10.0;
             double textWidth = verticalLegend
@@ -1583,7 +1610,11 @@ public static partial class ChartRenderPlanner
                         text,
                         new ChartPlanRect(
                             itemX + labelInset,
-                            itemY + (importedCombo ? ImportedComboLegendLabelOffset : 0.0),
+                            itemY + (importedCombo
+                                ? ImportedComboLegendLabelOffset
+                                : importedStyle2ColumnBarLegend
+                                    ? ImportedStyle2LegendLabelOffset
+                                    : 0.0),
                             textWidth,
                             legendLineHeight),
                     IsBold: false,

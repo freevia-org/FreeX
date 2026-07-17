@@ -307,6 +307,41 @@ public sealed class ChartBaselineCorpusTests
     }
 
     [Fact]
+    public void ChartsCorpus_Style2ColumnAndBarLegendsUsePowerPointKeyGeometry()
+    {
+        var deckPath = Path.Combine(FindCorpusDirectory(), "06-charts.pptx");
+        var presentation = PptxPackageReader.Read(deckPath);
+        var charts = new[] { 0, 3 }
+            .Select(slideIndex => presentation.Slides[slideIndex].Shapes
+                .Single(shape => shape.Kind == SlideShapeKind.Chart).Chart!)
+            .ToArray();
+
+        var column = ChartRenderPlanner.BuildScenePlan(charts[0], new ChartPlanRect(0, 0, 1280, 720));
+        var bar = ChartRenderPlanner.BuildScenePlan(charts[1], new ChartPlanRect(0, 0, 1280, 720));
+
+        column.LegendItems.Should().HaveCount(2);
+        bar.LegendItems.Should().HaveCount(2);
+        column.LegendItems.Should().OnlyContain(item =>
+            item.SwatchBounds.Width == ChartRenderPlanner.ImportedStyle2LegendSwatchSize &&
+            item.SwatchBounds.Height == ChartRenderPlanner.ImportedStyle2LegendSwatchSize);
+        bar.LegendItems.Should().OnlyContain(item =>
+            item.SwatchBounds.Width == ChartRenderPlanner.ImportedStyle2LegendSwatchSize &&
+            item.SwatchBounds.Height == ChartRenderPlanner.ImportedStyle2LegendSwatchSize);
+        (column.LegendItems[1].SwatchBounds.Y - column.LegendItems[0].SwatchBounds.Y)
+            .Should().Be(ChartRenderPlanner.ImportedStyle2LegendLineHeight);
+        (bar.LegendItems[1].SwatchBounds.Y - bar.LegendItems[0].SwatchBounds.Y)
+            .Should().Be(ChartRenderPlanner.ImportedStyle2LegendLineHeight);
+        column.LegendItems[0].SwatchBounds.X
+            .Should().BeApproximately(
+                column.LegendItems[0].Label.Bounds.X - ChartRenderPlanner.ImportedStyle2LegendLabelInset,
+                0.0001);
+        bar.LegendItems[0].SwatchBounds.X
+            .Should().BeApproximately(
+                bar.LegendItems[0].Label.Bounds.X - ChartRenderPlanner.ImportedStyle2LegendLabelInset,
+                0.0001);
+    }
+
+    [Fact]
     public void ChartBaselineDepthCorpusDeck_ExercisesSharedPlannerDecisions()
     {
         var deckPath = Path.Combine(FindCorpusDirectory(), "22-chart-baseline-depth.pptx");
