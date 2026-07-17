@@ -971,7 +971,9 @@ public sealed partial class MainWindow : Window
         // real fixture workbook inside CaptureGridRangeAsync.  Every other startup path keeps the normal
         // loader/fallback behavior.
         StartupWorkbookLoadResult? source = null;
-        if (App.ParityCaptureOptions is not null || App.GridCaptureOptions is not null)
+        if (App.ParityCaptureOptions is not null ||
+            App.GridCaptureOptions is not null ||
+            App.InteractionValidationOptions is not null)
         {
             _session = _sessionFactory.CreateParityDemo(InitialViewportHeight, InitialViewportWidth, includeObjects: true);
         }
@@ -1552,12 +1554,13 @@ public sealed partial class MainWindow : Window
         }
         ribbonCallbacks = ribbonCallbacks with { ExtraCommands = ribbonExtraCommands };
 
-        var (ribbon, refreshRibbonToggleStates) = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
+        var (ribbon, refreshRibbonToggleStates, ribbonCommandRegistry) = FreeX.App.Avalonia.Ribbon.AvaloniaRibbonHost.Build(
             () => _session,
             RefreshShell,
             ribbonCallbacks,
             _ribbonContextSource);
         _refreshRibbonToggleStates = refreshRibbonToggleStates;
+        _ribbonCommandRegistry = ribbonCommandRegistry;
         _ribbonControl = ribbon;
         ConfigureWorksheetRibbonFlyouts(ribbon);
         ribbon.Loaded += (_, _) => ConfigureWorksheetRibbonFlyouts(ribbon);
@@ -3977,8 +3980,8 @@ public sealed partial class MainWindow : Window
         _newSheetButton.IsEnabled = isIdle;
         _undoButton.IsEnabled = isIdle && _session.CanUndo;
         _redoButton.IsEnabled = isIdle && _session.CanRedo;
-        _cutButton.IsEnabled = isIdle;
         RefreshAvaloniaQuickAccessToolbarState();
+        _cutButton.IsEnabled = isIdle;
         _copyButton.IsEnabled = isIdle;
         _pasteButton.IsEnabled = isIdle;
         _pasteSpecialButton.IsEnabled = isIdle;
@@ -9044,6 +9047,12 @@ public sealed partial class MainWindow : Window
                 break;
             case WorksheetContextMenuAction.ShowNotes:
                 _ = ShowNotesListAsync();
+                break;
+            case WorksheetContextMenuAction.ShowHideNote:
+                ToggleActiveCellNoteVisibility();
+                break;
+            case WorksheetContextMenuAction.ShowAllNotes:
+                ToggleAllNotesVisibility();
                 break;
             // Hyperlink submenu → existing hyperlink handlers.
             case WorksheetContextMenuAction.Hyperlink:

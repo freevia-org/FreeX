@@ -17,6 +17,7 @@ public sealed partial class MainWindow
     {
         var results = new List<InteractionValidationResult>();
         AddRibbonBindingResults(results);
+        AddRibbonInteractionExecutionResults(results);
         AddShortcutRoutingResults(results);
         AddShortcutScenarioInventoryResults(results);
         AddContextMenuCatalogResults(results);
