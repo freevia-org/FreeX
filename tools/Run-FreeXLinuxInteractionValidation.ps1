@@ -376,7 +376,7 @@ try {
         $summary[[string]$group.Name] = [int]$group.Count
     }
     $summary.total = @($manifest.results).Count
-    $manifest.summary = $summary
+    $manifest.summary = [pscustomobject]$summary
     $manifestPath = Join-Path $reportDirectory "interaction-validation.json"
     [IO.File]::WriteAllText(
         $manifestPath,
