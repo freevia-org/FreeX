@@ -7359,8 +7359,11 @@ public sealed class DocumentView : RichTextBox
                 paginationPage?.PageNumber ?? 1,
                 isPaginationSegment)
         };
-        if (isPaginationSegment)
-            wpf.CellSpacing = 0;
+        // tblCellSpacing is physical table geometry in Word, including on repeated-header segments.
+        // Keep it on the rendered WPF table so the page planner's occupied-row calculation and the
+        // visible inter-cell gaps describe the same document.
+        if (table.CellSpacingPt is > 0)
+            wpf.CellSpacing = PageLayout.PointsToDip(table.CellSpacingPt.Value);
         var columns = table.ColumnCount;
         for (var c = 0; c < columns; c++)
         {

@@ -1042,6 +1042,9 @@ public sealed class DocumentViewRoundTripTests
         tables.Should().HaveCount(3);
         sections.Should().HaveCount(3);
         sections.Select(section => section.BreakPageBefore).Should().Equal(false, true, true);
+        tables.Should().OnlyContain(table =>
+            Math.Abs(table.CellSpacing - PageLayout.PointsToDip(sourceTable.CellSpacingPt!.Value)) < 0.001,
+            "every physical table segment must retain Word's authored tblCellSpacing");
 
         var pageRows = tables
             .Select(table => table.RowGroups.SelectMany(group => group.Rows).ToList())
