@@ -1702,20 +1702,10 @@ public static partial class ChartRenderPlanner
             !frame.IsBar)
         {
             double categoryStep = plot.Width / Math.Max(1, chart.Categories.Count);
-            for (int index = 0; index < chart.Categories.Count; index++)
+            double edgeOffset = ImportedPercentStackedGridEdgeOffsetX;
+            for (int index = 0; index <= chart.Categories.Count; index++)
             {
-                double x = plot.X + index * categoryStep + categoryStep / 2.0;
-                lines.Add(new ChartGridLinePlan(
-                    new ChartPlanPoint(x, plot.Y),
-                    new ChartPlanPoint(x, plot.Bottom)));
-            }
-
-            foreach (double x in new[]
-            {
-                plot.X + ImportedPercentStackedGridEdgeOffsetX,
-                plot.Right + ImportedPercentStackedGridEdgeOffsetX
-            })
-            {
+                double x = Math.Ceiling(plot.X + edgeOffset + index * categoryStep);
                 lines.Add(new ChartGridLinePlan(
                     new ChartPlanPoint(x, plot.Y),
                     new ChartPlanPoint(x, plot.Bottom)));
