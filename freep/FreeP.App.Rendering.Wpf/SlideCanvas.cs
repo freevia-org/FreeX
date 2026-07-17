@@ -26,6 +26,10 @@ namespace FreeP.App.Rendering.Wpf;
 /// </summary>
 public sealed class SlideCanvas : FrameworkElement
 {
+    // WPF has no native blur filter for glyph geometry. Keep its translated
+    // shadow rings tighter while preserving shared authored offsets for Avalonia.
+    private const double TextShadowBlurSpreadScale = 0.6;
+
     // ── Dependency properties ──────────────────────────────────────────────────
 
     public static readonly DependencyProperty PresentationProperty =
@@ -2512,7 +2516,16 @@ public sealed class SlideCanvas : FrameworkElement
                         {
                             var shadowBrush = new SolidColorBrush(Color.FromArgb(shadow.Alpha, shadow.Color.R, shadow.Color.G, shadow.Color.B));
                             if (shadowBrush.CanFreeze) shadowBrush.Freeze();
-                            dc.PushTransform(new TranslateTransform(shadow.OffsetX, shadow.OffsetY));
+                            double offsetX = shadow.OffsetX;
+                            double offsetY = shadow.OffsetY;
+                            if (shadow.IsBlurPass)
+                            {
+                                offsetX = shadow.BaseOffsetX +
+                                    (shadow.OffsetX - shadow.BaseOffsetX) * TextShadowBlurSpreadScale;
+                                offsetY = shadow.BaseOffsetY +
+                                    (shadow.OffsetY - shadow.BaseOffsetY) * TextShadowBlurSpreadScale;
+                            }
+                            dc.PushTransform(new TranslateTransform(offsetX, offsetY));
                             dc.DrawGeometry(shadowBrush, null, geo);
                             dc.Pop();
                             break;

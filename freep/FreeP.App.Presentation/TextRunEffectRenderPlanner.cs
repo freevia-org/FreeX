@@ -14,7 +14,13 @@ public abstract record TextRunEffectPass
         byte Alpha,
         double BlurDip,
         double SpreadDip,
-        bool IsBlurPass) : TextRunEffectPass;
+        bool IsBlurPass) : TextRunEffectPass
+    {
+        // Blur rings are authored around this core offset. WPF may apply a
+        // renderer-local effective spread without changing shared geometry.
+        public double BaseOffsetX { get; init; }
+        public double BaseOffsetY { get; init; }
+    }
 
     public sealed record Reflection(
         double OffsetX,
@@ -148,7 +154,11 @@ public static class TextRunEffectRenderPlanner
                         passAlpha,
                         shadow.BlurDip,
                         spread,
-                        IsBlurPass: true));
+                        IsBlurPass: true)
+                    {
+                        BaseOffsetX = dx,
+                        BaseOffsetY = dy
+                    });
                 }
             }
         }

@@ -558,6 +558,10 @@ public sealed class WordArtTests : IDisposable
         shadows[^1].IsBlurPass.Should().BeFalse();
         shadows[0].IsBlurPass.Should().BeTrue();
         shadows[0].SpreadDip.Should().BeGreaterThan(0);
+        shadows[15].SpreadDip.Should().BeApproximately(3, 0.001,
+            "the shared plan preserves the authored blur-ring spread");
+        shadows[15].BaseOffsetX.Should().BeApproximately(8, 0.001);
+        shadows[15].BaseOffsetY.Should().BeApproximately(0, 0.001);
     }
 
     [Fact]
@@ -794,6 +798,11 @@ public sealed class WordArtTests : IDisposable
             source.Should().NotContain("WordArtWarpPlanner.ComputeYOffset(warpPreset");
             source.Should().NotContain("TryClassifyPreset(");
         }
+
+        wpf.Should().Contain("TextShadowBlurSpreadScale",
+            "the measured blur-ring calibration is WPF-compositor local");
+        avalonia.Should().NotContain("TextShadowBlurSpreadScale",
+            "Avalonia must retain the shared authored shadow offsets");
     }
 
     // ─── SlideCloner ─────────────────────────────────────────────────────────
