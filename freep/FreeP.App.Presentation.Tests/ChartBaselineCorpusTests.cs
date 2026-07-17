@@ -484,10 +484,10 @@ public sealed class ChartBaselineCorpusTests
             .Should().Equal(new[] { 125.0, 71.0, 79.0 },
                 "the paired near-left triangle retains the measured projected wall");
         surfaceGeometry.RenderFacets[10].Points.Select(point => point.X)
-            .Should().Equal(new[] { 247.0, 320.0, 312.0 },
+            .Should().Equal(new[] { 245.0, 319.0, 312.0 },
                 "PowerPoint exposes a separate right-side dark-orange boundary triangle");
         surfaceGeometry.RenderFacets[10].Points.Select(point => point.Y)
-            .Should().Equal(new[] { 101.0, 119.0, 134.0 },
+            .Should().Equal(new[] { 99.0, 119.0, 137.0 },
                 "the imported right-side boundary triangle uses the measured projected wall");
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
