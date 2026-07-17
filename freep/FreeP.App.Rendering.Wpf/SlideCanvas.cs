@@ -396,7 +396,7 @@ public sealed class SlideCanvas : FrameworkElement
         if (hasContour)
         {
             var cColor  = fx.ContourColor ?? new SrgbColor(0x60, 0x60, 0x60);
-            var contourBrush = new SolidColorBrush(Color.FromArgb(200, cColor.R, cColor.G, cColor.B));
+            var contourBrush = new SolidColorBrush(Color.FromArgb(255, cColor.R, cColor.G, cColor.B));
             if (contourBrush.CanFreeze) contourBrush.Freeze();
             var contourPen = new Pen(contourBrush, Math.Max(0.5, fx.ContourWidthDip));
             if (contourPen.CanFreeze) contourPen.Freeze();

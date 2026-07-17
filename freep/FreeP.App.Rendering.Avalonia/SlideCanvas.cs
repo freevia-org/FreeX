@@ -343,7 +343,7 @@ public sealed class SlideCanvas : Control
         if (hasContour && geo is not null)
         {
             var cColor     = fx.ContourColor ?? new SrgbColor(0x60, 0x60, 0x60);
-            var cBrush     = new SolidColorBrush(Color.FromArgb(200, cColor.R, cColor.G, cColor.B));
+            var cBrush     = new SolidColorBrush(Color.FromArgb(255, cColor.R, cColor.G, cColor.B));
             var contourPen = new Pen(cBrush, Math.Max(0.5, fx.ContourWidthDip));
             dc.DrawGeometry(null, contourPen, geo);
         }
