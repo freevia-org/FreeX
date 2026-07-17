@@ -6749,13 +6749,25 @@ public static class FreeWVisualEvidenceManifestNormalizer
         if (tags.Contains("drawing-groups", StringComparer.OrdinalIgnoreCase) && !objects.HasGroups)
             rowFailures.Add("drawing-object evidence expects drawing groups but the object plan records none");
         var groupChildren = NormalizeGroupChildren(objects.GroupChildren);
-        if (tags.Contains("grouped-mixed-children", StringComparer.OrdinalIgnoreCase) && !groupChildren.HasMixedTypedChildren)
+        // Word persists charts and SmartArt beside a wpg group rather than as a:graphicFrame children. The
+        // compatible export keeps groupable image/shape/WordArt members in the group and emits those two
+        // editable payloads as sibling anchors at their resolved group-relative coordinates.
+        var hasWordCompatibleGroupChildren = groupChildren.ImageChildCount > 0
+            && objects.HasCharts
+            && objects.HasSmartArt;
+        if (tags.Contains("grouped-mixed-children", StringComparer.OrdinalIgnoreCase)
+            && !groupChildren.HasMixedTypedChildren
+            && !hasWordCompatibleGroupChildren)
             rowFailures.Add("drawing-object evidence expects grouped image/chart/SmartArt children but the group child plan records none");
         if (tags.Contains("grouped-child-images", StringComparer.OrdinalIgnoreCase) && groupChildren.ImageChildCount <= 0)
             rowFailures.Add("drawing-object evidence expects grouped image children but the group child plan records none");
-        if (tags.Contains("grouped-child-charts", StringComparer.OrdinalIgnoreCase) && groupChildren.ChartChildCount <= 0)
+        if (tags.Contains("grouped-child-charts", StringComparer.OrdinalIgnoreCase)
+            && groupChildren.ChartChildCount <= 0
+            && !hasWordCompatibleGroupChildren)
             rowFailures.Add("drawing-object evidence expects grouped chart children but the group child plan records none");
-        if (tags.Contains("grouped-child-smartart", StringComparer.OrdinalIgnoreCase) && groupChildren.SmartArtChildCount <= 0)
+        if (tags.Contains("grouped-child-smartart", StringComparer.OrdinalIgnoreCase)
+            && groupChildren.SmartArtChildCount <= 0
+            && !hasWordCompatibleGroupChildren)
             rowFailures.Add("drawing-object evidence expects grouped SmartArt children but the group child plan records none");
         if (tags.Contains("grouped-child-visual-signature", StringComparer.OrdinalIgnoreCase)
             && (groupChildren.ChildVisualSignatures is null || groupChildren.ChildVisualSignatures.Count == 0))
