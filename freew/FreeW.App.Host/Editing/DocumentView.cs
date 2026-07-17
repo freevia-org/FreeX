@@ -13909,6 +13909,67 @@ public sealed class DocumentView : RichTextBox
         Focus();
     }
 
+    /// <summary>
+    /// Gets the laid-out vertical center of a review anchor in this editor's coordinate space. The model
+    /// offset is resolved against the rendered paragraph's ordinary text runs; synthetic numbering and
+    /// other view-only runs do not consume model characters. Returns null until WPF has geometry for the
+    /// block, allowing callers to use a stable provisional position during layout.
+    /// </summary>
+    internal double? TryGetReviewAnchorY(int modelBlockIndex, int modelOffset)
+    {
+        if (modelBlockIndex < 0 || LeafBlockAtModelIndex(modelBlockIndex) is not WpfParagraph paragraph)
+            return null;
+
+        var remainingOffset = Math.Max(0, modelOffset);
+        foreach (var run in ReviewAnchorRuns(paragraph.Inlines))
+        {
+            var runLength = run.Text.Length;
+            if (remainingOffset <= runLength)
+                return TryGetTextPointerCenterY(run.ContentStart.GetPositionAtOffset(remainingOffset, LogicalDirection.Forward));
+            remainingOffset -= runLength;
+        }
+
+        return TryGetTextPointerCenterY(paragraph.ContentEnd);
+    }
+
+    private static IEnumerable<WpfRun> ReviewAnchorRuns(InlineCollection inlines)
+    {
+        foreach (var inline in inlines)
+        {
+            switch (inline)
+            {
+                case WpfRun { Tag: MultiLevelMarker }:
+                case WpfRun { Tag: PageBreakMarker }:
+                case WpfRun { Tag: PageBreakSpacerMarker }:
+                case WpfRun { Tag: RunMarkers { Comment: { IsReference: true } } }:
+                    break;
+                case WpfRun run:
+                    yield return run;
+                    break;
+                case Span span:
+                    foreach (var nestedRun in ReviewAnchorRuns(span.Inlines))
+                        yield return nestedRun;
+                    break;
+            }
+        }
+    }
+
+    private static double? TryGetTextPointerCenterY(TextPointer? pointer)
+    {
+        if (pointer is null)
+            return null;
+
+        try
+        {
+            var rect = pointer.GetCharacterRect(LogicalDirection.Forward);
+            return rect.IsEmpty || rect.Height <= 0 ? null : rect.Top + rect.Height / 2;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
     // Find the FlowDocument leaf block whose model index equals modelBlockIndex, numbering leaf blocks
     // in document order exactly as NumberLeafBlocks/CommitToModel do (lists flatten into their item
     // paragraphs; a table counts as one leaf). Returns null if the index is past the last leaf block.

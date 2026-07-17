@@ -130,6 +130,39 @@ public sealed class ReviewBalloonLayoutPlannerTests
     }
 
     [Fact]
+    public void BuildLayout_uses_laid_out_anchor_coordinates_and_falls_back_when_one_is_missing()
+    {
+        var sources = new[]
+        {
+            new ReviewBalloonSource(ReviewBalloonKind.Comment, "A", "one", 0, 0, 1),
+            new ReviewBalloonSource(ReviewBalloonKind.Insertion, "B", "two", 1, 0, 0),
+        };
+
+        var layouts = ReviewBalloonLayoutPlanner.BuildLayout(
+            sources,
+            viewportHeight: 400,
+            anchorYs: [42, null]);
+
+        layouts[0].LeaderStartY.Should().Be(42);
+        layouts[0].BalloonMidY.Should().Be(42);
+        layouts[1].LeaderStartY.Should().Be(300);
+        layouts[1].BalloonMidY.Should().Be(300);
+    }
+
+    [Fact]
+    public void BuildLayout_clamps_laid_out_anchor_coordinates_to_canvas()
+    {
+        var source = new ReviewBalloonSource(ReviewBalloonKind.Comment, "A", "one", 0, 0, 1);
+
+        var layouts = ReviewBalloonLayoutPlanner.BuildLayout(
+            [source],
+            viewportHeight: 400,
+            anchorYs: [-20]);
+
+        layouts[0].LeaderStartY.Should().Be(0);
+    }
+
+    [Fact]
     public void BuildLayout_avoids_balloon_collisions_when_viewport_is_short()
     {
         var sources = Enumerable.Range(0, 4)

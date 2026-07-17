@@ -103,6 +103,43 @@ public sealed class ThesaurusAndBalloonsTests
 
     // ── BalloonOverlay ───────────────────────────────────────────────────────────────────────────────
 
+    [StaFact]
+    public void DocumentView_ReviewAnchors_UseLaidOutParagraphGeometry()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("First paragraph."));
+        document.Blocks.Add(new Paragraph("Second paragraph."));
+
+        var editor = new DocumentView();
+        editor.LoadModel(document);
+        var window = new System.Windows.Window
+        {
+            Content = editor,
+            Width = 420,
+            Height = 260,
+            ShowInTaskbar = false,
+            WindowStyle = System.Windows.WindowStyle.None,
+        };
+
+        try
+        {
+            window.Show();
+            window.UpdateLayout();
+
+            var firstAnchorY = editor.TryGetReviewAnchorY(0, 0);
+            var secondAnchorY = editor.TryGetReviewAnchorY(1, 0);
+
+            firstAnchorY.Should().NotBeNull();
+            secondAnchorY.Should().NotBeNull();
+            secondAnchorY!.Value.Should().BeGreaterThan(firstAnchorY!.Value);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
     /// <summary>
     /// When balloons mode is disabled (default), the canvas has Width=0 and no children.
     /// </summary>

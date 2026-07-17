@@ -133,7 +133,23 @@ public static class ReviewBalloonLayoutPlanner
         double viewportHeight,
         ReviewBalloonLayoutOptions? options = null)
     {
+        return BuildLayout(sources, viewportHeight, anchorYs: null, options);
+    }
+
+    /// <summary>
+    /// Builds review-balloon geometry using the laid-out Y coordinate for each source when available.
+    /// Missing or invalid coordinates retain the deterministic ordinal placement used before the editor
+    /// has completed a WPF layout pass.
+    /// </summary>
+    public static IReadOnlyList<ReviewBalloonLayout> BuildLayout(
+        IReadOnlyList<ReviewBalloonSource> sources,
+        double viewportHeight,
+        IReadOnlyList<double?>? anchorYs,
+        ReviewBalloonLayoutOptions? options = null)
+    {
         ArgumentNullException.ThrowIfNull(sources);
+        if (anchorYs is not null && anchorYs.Count != sources.Count)
+            throw new ArgumentException("Anchor coordinates must correspond one-to-one with balloon sources.", nameof(anchorYs));
 
         var layoutOptions = options ?? new ReviewBalloonLayoutOptions();
         var canvasHeight = viewportHeight > 0 ? viewportHeight : 800;
@@ -143,7 +159,11 @@ public static class ReviewBalloonLayoutPlanner
 
         for (var i = 0; i < sources.Count; i++)
         {
-            var leaderStartY = canvasHeight * (i + 0.5) / totalSlots;
+            var ordinalAnchorY = canvasHeight * (i + 0.5) / totalSlots;
+            var suppliedAnchorY = anchorYs?[i];
+            var leaderStartY = suppliedAnchorY is { } anchorY && double.IsFinite(anchorY)
+                ? Math.Clamp(anchorY, 0, canvasHeight)
+                : ordinalAnchorY;
             leaderStartYs[i] = leaderStartY;
             desiredBalloonYs[i] = leaderStartY - layoutOptions.BalloonHeight / 2;
         }

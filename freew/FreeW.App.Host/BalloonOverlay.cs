@@ -22,10 +22,9 @@ namespace FreeW.App.Host;
 /// Layout rule: balloons are stacked top-to-bottom with 8px gaps; each balloon has a fixed height
 /// (60px) and fills the strip width (180px). The leader line connects the balloon's left edge midpoint
 /// to the center of the editor at a fixed horizontal offset (the strip's left edge = the editor's right
-/// edge). Actual text-position Y is approximated via a per-item ordinal mapping (proportional to the
-/// sorted order in the document) since WPF FlowDocument doesn't expose per-range screen coordinates
-/// without a full measure pass — the vertical position tracks the relative order faithfully even if
-/// not pixel-exact.
+/// edge). Its leader start is taken from the marked text's live FlowDocument geometry. Before WPF has
+/// completed its layout pass, the planner uses a deterministic ordinal fallback so the review surface
+/// remains available while the document is being constructed.
 ///
 /// State flag: <see cref="BalloonsEnabled"/> toggles the mode; consumers call <see cref="Rebuild"/>
 /// whenever the document changes or the flag is toggled.
@@ -105,10 +104,11 @@ internal sealed class BalloonOverlay
         if (!BalloonsEnabled) return;
 
         var canvasHeight = _canvas.ActualHeight > 0 ? _canvas.ActualHeight : 800;
-        var layouts = ReviewBalloonLayoutPlanner.BuildLayout(
+        var sources = ReviewBalloonLayoutPlanner.BuildSources(
             _editor.Model,
-            _editor.CurrentReviewDisplayPolicy,
-            canvasHeight);
+            _editor.CurrentReviewDisplayPolicy);
+        var anchorYs = BuildAnchorYs(sources);
+        var layouts = ReviewBalloonLayoutPlanner.BuildLayout(sources, canvasHeight, anchorYs);
 
         foreach (var layout in layouts)
         {
@@ -122,6 +122,25 @@ internal sealed class BalloonOverlay
                 layout.Ordinal);
             DrawBalloon(item, layout.BalloonX, layout.BalloonY, layout.LeaderStartY);
         }
+    }
+
+    private IReadOnlyList<double?> BuildAnchorYs(IReadOnlyList<ReviewBalloonSource> sources)
+    {
+        System.Windows.Point editorOrigin;
+        try
+        {
+            editorOrigin = _editor.TranslatePoint(new System.Windows.Point(0, 0), _canvas);
+        }
+        catch (InvalidOperationException)
+        {
+            return new double?[sources.Count];
+        }
+
+        return sources
+            .Select<ReviewBalloonSource, double?>(source => _editor.TryGetReviewAnchorY(source.BlockIndex, source.Offset) is { } y
+                ? y + editorOrigin.Y
+                : null)
+            .ToArray();
     }
 
     private sealed record BalloonItem(
