@@ -489,6 +489,12 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.RenderFacets[10].Points.Select(point => point.Y)
             .Should().Equal(new[] { 99.0, 119.0, 137.0 },
                 "the imported right-side boundary triangle uses the measured projected wall");
+        surfaceGeometry.RenderFacets[12].Points.Select(point => point.X)
+            .Should().Equal(new[] { 201.0, 236.0, 306.0 },
+                "the imported rear green boundary face uses the measured right registration");
+        surfaceGeometry.RenderFacets[12].Points.Select(point => point.Y)
+            .Should().Equal(new[] { 72.0, 42.0, 33.0 },
+                "the imported rear green boundary face uses the measured vertical registration");
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
         surfaceGeometry.FrameSegments.Should().HaveCount(45,
