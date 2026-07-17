@@ -7,6 +7,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Shell;
 using FluentAssertions;
+using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Services;
 using FreeX.Core.Calc;
 using FreeX.Core.Commands;
@@ -404,7 +405,7 @@ public sealed partial class MainWindowRibbonKeyTipTests
         public IReadOnlyList<string> PivotListItems(string listName) =>
             (_window.FindName(listName) as ListBox)?.Items
                 .Cast<object>()
-                .Select(item => PivotUiPlanner.GetFieldListCaption(item) ?? item.ToString() ?? string.Empty)
+                .Select(item => PivotUiHostHelpers.GetFieldListCaption(item) ?? item.ToString() ?? string.Empty)
                 .Where(item => item.Length > 0)
                 .ToList() ?? [];
 

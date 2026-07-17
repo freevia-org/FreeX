@@ -2469,7 +2469,8 @@ public sealed class AvaloniaShellSourceTests
         // The multi-tab dialogs are registered through the per-tab capture table (ParityTabDialogOpeners),
         // which emits one PNG per tab/category in addition to the default surface.
         parityCaptureSource.Should().Contain("private IReadOnlyList<(string SurfaceId, Func<Task> Opener, string[] TabNames)> ParityTabDialogOpeners() =>");
-        parityCaptureSource.Should().Contain("await CaptureModalTabsAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener, tabNames)");
+        parityCaptureSource.Should().Contain("results.AddRange(await CaptureModalTabsAsync(");
+        parityCaptureSource.Should().Contain("render: !interactionOnly));");
         parityCaptureSource.Should().Contain("private async Task<IReadOnlyList<ParitySurfaceResult>> CaptureModalTabsAsync(");
         parityCaptureSource.Should().Contain("(\"dialog.FormatCells\", () => ShowFormatCellsDialogAsync(),");
         parityCaptureSource.Should().Contain("[\"Number\", \"Alignment\", \"Font\", \"Border\", \"Fill\", \"Protection\"]),");
@@ -3478,7 +3479,7 @@ public sealed class AvaloniaShellSourceTests
 
         var handlerIndex = normalizedSource.IndexOf("private async Task ShowReviewSummaryDialogAsync(bool focusAccessibility = false)", StringComparison.Ordinal);
         handlerIndex.Should().BeGreaterThanOrEqualTo(0);
-        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowFormatCellsDialogAsync()", handlerIndex, StringComparison.Ordinal);
+        var nextMethodIndex = normalizedSource.IndexOf("\n    private async Task ShowFormatCellsDialogAsync(int initialTabIndex = 0)", handlerIndex, StringComparison.Ordinal);
         nextMethodIndex.Should().BeGreaterThan(handlerIndex);
         var routeSource = normalizedSource[handlerIndex..nextMethodIndex];
 
@@ -4053,7 +4054,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private NativeMenuItem CreateNativeBorderPresetMenuItem(CellBorderPreset preset)");
         source.Should().Contain("ApplySelectedRangeBorderPreset(preset);");
         source.Should().Contain("private void ApplySelectedRangeBorderPreset(CellBorderPreset preset)");
-        source.Should().Contain("var result = _session.SetSelectedRangeBorderPreset(preset);");
+        source.Should().Contain("var result = _session.ApplySelectedRangeCompactFormat(");
         source.Should().Contain("ShowEditIssue(result.ErrorMessage ?? \"Borders failed.\");");
         source.Should().Contain("RefreshShell($\"Applied {presetName} to {rangeReference}\");");
         source.Should().Contain("var nativeBordersPresetCount = _bordersMenuItem.Menu?");

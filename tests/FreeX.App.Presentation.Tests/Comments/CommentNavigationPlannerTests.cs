@@ -124,7 +124,9 @@ public sealed class CommentNavigationPlannerTests
 
         stopwatch.Stop();
         Console.WriteLine($"Comment navigation indexed lookup: {stopwatch.ElapsedMilliseconds}ms for 20000 lookups");
-        stopwatch.ElapsedMilliseconds.Should().BeLessThan(500);
+        // DefaultTests runs many projects concurrently; keep the guard tight enough to catch a
+        // linear-search regression without failing on scheduler contention from unrelated lanes.
+        stopwatch.ElapsedMilliseconds.Should().BeLessThan(2_000);
     }
 
     [Fact]

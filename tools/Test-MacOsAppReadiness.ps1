@@ -1208,6 +1208,7 @@ function Test-SourceWiring {
         },
         @{
             Path = "src\FreeX.App.Avalonia\MainWindow.cs"
+            AdditionalPathPattern = "MainWindow*.cs"
             Markers = @(
                 "private const string NativeWorkbookExtension = `".fxl`";",
                 "using FreeX.Core.Calc;",
@@ -1603,7 +1604,7 @@ function Test-SourceWiring {
                 "AutomationProperties.SetItemStatus(container, selected ? `"Selected`" : `"Not selected`");",
                 "container.PointerPressed += (_, args) =>",
                 "if (args.Key is Key.Enter or Key.Space)",
-                "CreateSelectedDrawingObjectAdorner()",
+                "CreateDrawingObjectSelectionAdorner(",
                 "ClearSelectedDrawingObject();",
                 "CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme)",
                 "CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme)",
@@ -3175,7 +3176,15 @@ function Test-SourceWiring {
     foreach ($contract in $sourceContracts) {
         $sourcePath = Resolve-RepoPath $contract.Path
         Assert-FileExists -Path $sourcePath -Label "macOS source wiring file"
-        $sourceText = Get-Content -LiteralPath $sourcePath -Raw
+        $sourceFiles = @($sourcePath)
+        if (-not [string]::IsNullOrWhiteSpace([string]$contract.AdditionalPathPattern)) {
+            $sourceFiles += @(Get-ChildItem -LiteralPath (Split-Path -Parent $sourcePath) `
+                -Filter ([string]$contract.AdditionalPathPattern) -File |
+                Select-Object -ExpandProperty FullName)
+        }
+        $sourceText = @($sourceFiles | Select-Object -Unique | ForEach-Object {
+            Get-Content -LiteralPath $_ -Raw
+        }) -join [Environment]::NewLine
         foreach ($marker in $contract.Markers) {
             Assert-ContainsText -Text $sourceText -Needle $marker -Message "macOS source wiring is missing '$marker' in $($contract.Path)."
         }

@@ -146,22 +146,24 @@ public sealed partial class RibbonScreenshotTourPlannerTests
             .Select(width => width.Label)
             .ToArray();
 
+        var support = WorkspaceFileLocator.ReadAllText("tools", "ScreenshotCaptureSupport.ps1");
+        var widthBlock = Regex.Match(
+            support,
+            @"\$defaultCaptureWidths\s*=\s*@\((?<widths>.*?)\)\s*function Resolve-CaptureWidths",
+            RegexOptions.Singleline);
+        widthBlock.Success.Should().BeTrue("the shared capture support should declare the default ribbon evidence width matrix");
+
+        var actualLabels = Regex
+            .Matches(widthBlock.Groups["widths"].Value, @"Label\s*=\s*""(?<label>[^""]+)""")
+            .Select(match => match.Groups["label"].Value)
+            .ToArray();
+        actualLabels.Should().Equal(expectedLabels);
+
         foreach (var scriptName in new[] { "screenshot_excel.ps1", "screenshot_ribbon.ps1" })
         {
             var source = WorkspaceFileLocator.ReadAllText("tools", scriptName);
-            var widthBlock = Regex.Match(
-                source,
-                @"\$defaultCaptureWidths\s*=\s*@\((?<widths>.*?)\)\s*function Resolve-CaptureWidths",
-                RegexOptions.Singleline);
-
-            widthBlock.Success.Should().BeTrue($"{scriptName} should declare the default ribbon evidence width matrix");
-
-            var actualLabels = Regex
-                .Matches(widthBlock.Groups["widths"].Value, @"Label\s*=\s*""(?<label>[^""]+)""")
-                .Select(match => match.Groups["label"].Value)
-                .ToArray();
-
-            actualLabels.Should().Equal(expectedLabels);
+            source.Should().Contain("ScreenshotCaptureSupport.ps1");
+            source.Should().Contain("Resolve-CaptureWidths $Widths");
         }
     }
 

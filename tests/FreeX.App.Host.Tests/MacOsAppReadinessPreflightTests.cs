@@ -2323,7 +2323,7 @@ public sealed class MacOsAppReadinessPreflightTests
                     AutomationProperties.SetItemStatus(container, selected ? "Selected" : "Not selected");
                     container.PointerPressed += (_, args) => { };
                     if (args.Key is Key.Enter or Key.Space) { }
-                    CreateSelectedDrawingObjectAdorner();
+                    CreateDrawingObjectSelectionAdorner();
                     ClearSelectedDrawingObject();
                     CreateDrawingObjectVisual(renderPlan, width, height, _session.Workbook.Theme);
                     CreateDrawingCellRangeSnapshotVisual(renderPlan, width, height, theme);

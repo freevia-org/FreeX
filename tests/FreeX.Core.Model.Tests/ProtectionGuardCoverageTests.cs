@@ -244,6 +244,7 @@ public class ProtectionGuardCoverageTests
         ["AllowEditRangeCommand"] = "Adds an allowed-edit range; part of protection setup, not blocked.",
         ["RemoveAllowEditRangeCommand"] = "Removes an allowed-edit range; part of protection setup.",
         ["ClearAllowEditRangesCommand"] = "Clears allowed-edit ranges; part of protection setup.",
+        ["SetAllowEditRangePasswordCommand"] = "Sets allowed-edit range credentials; part of protection setup.",
 
         // Chart commands — AddChartSheetCommand covered in WorkbookStructure set; others pending
         ["AddChartCommand"] = "Chart insertion; EditObjects audit pending.",

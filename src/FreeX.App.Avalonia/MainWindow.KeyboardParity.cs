@@ -476,7 +476,24 @@ public sealed partial class MainWindow
             PostMessage(handle, WindowSystemCommandMessage, command, 0);
     }
 
-    [DllImport("user32.dll", SetLastError = true)]
+    private static readonly Lazy<PostMessageDelegate?> PostMessageNative = new(CreatePostMessageDelegate);
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool PostMessage(nint windowHandle, uint message, nuint wParam, nint lParam);
+    private delegate bool PostMessageDelegate(nint windowHandle, uint message, nuint wParam, nint lParam);
+
+    private static bool PostMessage(nint windowHandle, uint message, nuint wParam, nint lParam) =>
+        PostMessageNative.Value?.Invoke(windowHandle, message, wParam, lParam) == true;
+
+    private static PostMessageDelegate? CreatePostMessageDelegate()
+    {
+        if (!OperatingSystem.IsWindows() ||
+            !NativeLibrary.TryLoad("user32.dll", out var libraryHandle) ||
+            !NativeLibrary.TryGetExport(libraryHandle, "PostMessageW", out var functionPointer))
+        {
+            return null;
+        }
+
+        return Marshal.GetDelegateForFunctionPointer<PostMessageDelegate>(functionPointer);
+    }
 }

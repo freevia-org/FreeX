@@ -102,8 +102,7 @@ public sealed class LinuxWorksheetEditingParityTests
             var target = new CellAddress(sheet.Id, 2, 2);
             var formulaBox = GetField<TextBox>(window, "_formulaBox");
 
-            window.Session.BeginFormulaEdit(formulaAddress);
-            formulaBox.Text = "=";
+            window.BeginFormulaEditForTest(formulaAddress, "=");
             formulaBox.CaretIndex = 1;
             formulaBox.SelectionStart = 1;
             formulaBox.SelectionEnd = 1;

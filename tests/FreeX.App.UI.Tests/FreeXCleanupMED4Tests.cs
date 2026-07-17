@@ -2,6 +2,7 @@ using System.Collections;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using FluentAssertions;
 using FreeX.App.UI;
 using FreeX.Core.Model;
@@ -78,9 +79,13 @@ public sealed class FreeXCleanupMED4Tests
             };
 
             var peer = UIElementAutomationPeer.CreatePeerForElement(grid);
+            var provider = peer.GetPattern(PatternInterface.Grid).Should().BeAssignableTo<IGridProvider>().Subject;
 
-            // Force peer creation for the initial 2x2 viewport (rows 1-2, cols 1-2).
-            _ = peer.GetChildren();
+            // Force peer creation through the public UIA grid contract. AutomationPeer.GetChildren()
+            // may return WPF's cached child list without re-entering GetChildrenCore.
+            for (var row = 0; row < 2; row++)
+            for (var column = 0; column < 2; column++)
+                _ = provider.GetItem(row, column);
             GetCellPeerCacheCount(peer).Should().Be(4);
 
             // Simulate scrolling through many disjoint viewports, as happens when a UIA client
@@ -88,7 +93,9 @@ public sealed class FreeXCleanupMED4Tests
             for (uint page = 2; page <= 50; page++)
             {
                 grid.Viewport = GridViewTestHelpers.CreateTwoByTwoViewport(startRow: page * 1000, startColumn: page * 100);
-                _ = peer.GetChildren();
+                for (var row = 0; row < 2; row++)
+                for (var column = 0; column < 2; column++)
+                    _ = provider.GetItem(row, column);
             }
 
             // Before the fix, every visited (row, col) pair stayed cached forever: 50 pages x 4
@@ -159,6 +166,10 @@ public sealed class FreeXCleanupMED4Tests
 
             var peer = UIElementAutomationPeer.CreatePeerForElement(grid);
             _ = peer.GetChildren().Single();
+
+            // A viewport notification establishes the active-cell display baseline; merely asking
+            // WPF for cached automation children is not guaranteed to invoke the peer again.
+            grid.Viewport = new ViewportModel(cells, [new RowMetric(1, 20, 0)], [new ColMetric(1, 64, 0)]);
             GetLastNotifiedActiveCellDisplayText(peer).Should().Be("2");
 
             // Re-assigning an equal Viewport (e.g. an unrelated render-cache refresh) must not

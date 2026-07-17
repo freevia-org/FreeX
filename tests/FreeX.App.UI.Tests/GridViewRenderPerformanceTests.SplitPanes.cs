@@ -437,11 +437,11 @@ public sealed partial class GridViewRenderPerformanceTests
             renderSplitPaneCells.IndexOf("if (style?.ShrinkToFit == true && !wrapText)", StringComparison.Ordinal)];
 
         renderSplitPaneCells.Should().Contain("var wrapText = style?.WrapText == true;");
-        renderSplitPaneCells.Should().Contain("var useDefaultTextLayout = !hasSplitRichRuns && CanUseDefaultFormattedText(style, wrapText);");
-        renderSplitPaneCells.Should().Contain("var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4) : 0;");
+        renderSplitPaneCells.Should().Contain("var useDefaultTextLayout = !hasSplitRichRuns && !isEffectivelyRightToLeft && CanUseDefaultFormattedText(style, wrapText);");
+        renderSplitPaneCells.Should().Contain("var wrapMaxTextWidth = wrapText ? Math.Max(1, rect.Width - 4 - indentPx) : 0;");
         renderSplitPaneCells.Should().Contain("var wrapTextAlignment = TextAlignment.Left;");
         renderSplitPaneCells.Should().Contain("if (!useDefaultTextLayout && wrapText)");
-        renderSplitPaneCells.Should().Contain("useDefaultWrappedTextLayout = !hasSplitRichRuns && CanUseDefaultWrappedFormattedText(style);");
+        renderSplitPaneCells.Should().Contain("useDefaultWrappedTextLayout = !hasSplitRichRuns && !isEffectivelyRightToLeft && CanUseDefaultWrappedFormattedText(style);");
         renderSplitPaneCells.Should().Contain("GetDefaultWrappedFormattedText(renderText, fontSize, wrapMaxTextWidth, wrapTextAlignment, pixelsPerDip)");
         textSetup.Should().NotContain("CreateCellTypeface");
         textSetup.Should().NotContain("BrushForCellColor");

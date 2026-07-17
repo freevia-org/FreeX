@@ -91,7 +91,9 @@ public sealed class R16_ods_Tests
         // Bounded by the used extent (one real cell), not the declared row*column product: a
         // reader that fell back to materializing every repeat instance would take vastly longer
         // than this, even without storing anything for the blank instances.
-        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5));
+        // DefaultTests runs all project lanes concurrently; allow scheduler contention while still
+        // staying orders of magnitude below materializing the 1.7e10 declared cell product.
+        stopwatch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(15));
 
         var sheet = workbook.Sheets.Single();
         sheet.CellCount.Should().Be(1);

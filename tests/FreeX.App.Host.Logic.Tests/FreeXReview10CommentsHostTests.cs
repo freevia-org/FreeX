@@ -92,12 +92,13 @@ public sealed class FreeXReview10CommentsHostTests
         // and pass that author (via FreeXOptions.NormalizeUserName(_options.UserName)) instead of
         // leaving the SetThreadedCommentCommand/ApplyThreadedCommentChangesCommand author parameters
         // on their "FreeX" default, which was the root cause of P5.
-        var source = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewCommands.cs");
-        var normalizedSource = source.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var adapterSource = DialogSourceTestSupport.ReadHostSources("MainWindow.ReviewSessionController.cs");
+        var mutationSource = DialogSourceTestSupport.ReadPresentationSources(
+            "Comments", "PresentationCommentMutationService.cs");
 
-        source.Should().Contain("FreeXOptions.NormalizeUserName(_options.UserName)");
-        source.Should().Contain("new SetThreadedCommentCommand(_currentSheetId, r.Start, result.ReplyText, author)");
-        normalizedSource.Should().Contain(
-            "result.RootText,\n                                result.ReplyText,\n                                result.IsResolved,\n                                replyAuthor)");
+        adapterSource.Should().Contain("FreeXOptions.NormalizeUserName(_options.UserName)");
+        mutationSource.Should().Contain("new SetThreadedCommentCommand(sheetId, range.Start, result.ReplyText, author)");
+        mutationSource.Should().Contain("new ApplyThreadedCommentChangesCommand(");
+        mutationSource.Should().MatchRegex(@"result\.IsResolved,\s+author\)\)");
     }
 }

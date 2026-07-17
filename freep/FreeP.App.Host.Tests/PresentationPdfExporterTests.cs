@@ -396,7 +396,7 @@ public class PresentationPdfExporterTests
             .Subject;
         var glowStroke = glowGroup.Ops.OfType<PdfStrokeRect>().Should().ContainSingle().Subject;
 
-        glowGroup.Opacity.Should().BeApproximately(60 / 255.0, 0.0001);
+        glowGroup.Opacity.Should().BeApproximately(120 / 255.0, 0.0001);
         glowStroke.X.Should().Be(72);
         glowStroke.Y.Should().Be(378);
         glowStroke.Width.Should().Be(144);

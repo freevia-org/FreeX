@@ -134,7 +134,7 @@ public sealed partial class LocalizationResourceTests
             "AppLocalization.Bootstrap.ApplyAppLanguage(options.AppLanguage);",
             StringComparison.Ordinal);
 
-        install.Should().BeGreaterOrEqualTo(0);
+        install.Should().BeGreaterThanOrEqualTo(0);
         apply.Should().BeGreaterThan(install);
         source.Should().NotContain("new ResourceShellStrings");
         source.Should().NotContain("new ResourceBackstageStrings");
