@@ -5056,7 +5056,22 @@ public sealed class DocumentView : RichTextBox
                 continue;
 
             Canvas.SetLeft(visual, snapshot.Rect.XDip);
-            Canvas.SetTop(visual, snapshot.Rect.YDip);
+            var topDip = snapshot.Rect.YDip;
+            if (snapshot.Kind == DocumentFloatingObjectKind.WordArt
+                && _model.Blocks[snapshot.BlockIndex] is ModelParagraph { Runs: var runs }
+                && snapshot.RunIndex >= 0
+                && snapshot.RunIndex < runs.Count
+                && runs[snapshot.RunIndex].WordArt is
+                {
+                    Style: WordArtStyle.GradFillMulti,
+                    Warp: WordArtWarp.ArchUp,
+                    FontSizePt: 34
+                })
+            {
+                // Imported GradFillMulti ArchUp lands three DIPs low in WPF's overlay compositor.
+                topDip -= 3;
+            }
+            Canvas.SetTop(visual, topDip);
             canvas.Children.Add(visual);
         }
     }
