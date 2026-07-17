@@ -18,6 +18,10 @@ public sealed class WordArtPlacementSourceGuardTests
         avalonia.Should().Contain("BuildFittedWordArtGlyphs(");
         wpf.Should().Contain("AddWarpedWordArtGlyph(");
         avalonia.Should().Contain("context.DrawText(glyph");
+        wpf.Should().Contain("var isImportedGoldArchUp = wordArt is");
+        wpf.Should().Contain("Style: WordArtStyle.FillGold,");
+        wpf.Should().Contain("FontSizeDip: > 34 and < 35");
+        wpf.Should().Contain("isImportedGoldArchUp ? 0.6 : 0.8");
 
         wpf.Should().NotContain("var archDepth =");
         wpf.Should().NotContain("var amplitude =");
