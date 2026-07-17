@@ -486,9 +486,6 @@ static void RenderDocumentComposite(
         var (thisMarginLeft, thisMarginTop, thisMarginRight, thisMarginBottom) =
             PageLayout.MarginsDip(thisPageSettings);
         const double headerFooterBandDip = 36;
-        var bodyOffsetTop = pageBox is null && thisPageSettings.HeaderDistancePt > 0 && headerSlotName is not null
-            ? headerFooterBandDip
-            : 0;
 
         int thisPixW = (int)Math.Max(1, Math.Round(thisPageWDip));
         int thisPixH = (int)Math.Max(1, Math.Round(thisPageHDip));
@@ -524,8 +521,10 @@ static void RenderDocumentComposite(
                 // Layer 2: body FlowDocument content (the paginator's Visual is already laid out).
                 // We use VisualBrush here because DocumentPage.Visual IS a fully-realized visual
                 // that the WPF paginator has already laid out; it works correctly headlessly.
+                // FlowDocument pages already include their top page padding. Adding a header-band offset
+                // here shifts paginator pages that lack an editable PageBox (such as table continuations).
                 dc.DrawRectangle(new VisualBrush(docPage.Visual) { Stretch = Stretch.None },
-                    null, new Rect(0, bodyOffsetTop, pageWDip, pageHDip));
+                    null, new Rect(0, 0, pageWDip, pageHDip));
             }
             bmp.Render(composite);
         }
