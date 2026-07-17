@@ -424,6 +424,8 @@ public sealed class ChartBaselineCorpusTests
                 new SrgbColor(0x81, 0xA1, 0x6E));
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
+        surfaceGeometry.FrameSegments.Should().HaveCount(45,
+            "the imported PowerPoint frame carries 26 value-axis and 6 category-axis tick strokes");
         surfaceGeometry.FrameSegments[0].Start.X
             .Should().BeApproximately(8.0, 0.0001,
                 "the imported PowerPoint front frame edge starts inside the plot gutter");
