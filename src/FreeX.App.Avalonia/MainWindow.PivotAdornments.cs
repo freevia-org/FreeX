@@ -100,12 +100,15 @@ public sealed partial class MainWindow
         var capturedTarget = menuTarget;
         buttonBorder.PointerPressed += (_, args) =>
         {
-            if (args.GetCurrentPoint(buttonBorder).Properties.IsLeftButtonPressed)
+            var point = args.GetCurrentPoint(buttonBorder);
+            if (point.Properties.IsLeftButtonPressed)
             {
                 OpenPivotHeaderDropdownMenuFromCell(buttonBorder, capturedTarget);
                 args.Handled = true;
             }
         };
+        buttonBorder.Focusable = true;
+        AttachPivotChartHeaderContextMenu(buttonBorder, capturedTarget);
 
         var grid = new AvaloniaGrid { ClipToBounds = true };
         if (content is Control existing)

@@ -54,9 +54,10 @@ public sealed partial class MainWindow
                 continue;
 
             Control visual;
+            ChartLayout layout;
             try
             {
-                var layout = ChartLayoutEngine.Layout(request);
+                layout = ChartLayoutEngine.Layout(request);
                 var renderer = new AvaloniaChartRenderer(chart, _session.Workbook.Theme);
                 visual = renderer.Render(layout, width, height);
             }
@@ -65,7 +66,7 @@ public sealed partial class MainWindow
                 continue;
             }
 
-            var container = CreateSelectableChartContainer(chart, visual, width, height);
+            var container = CreateSelectableChartContainer(chart, layout, visual, width, height);
             // Chart Left/Top are sheet-absolute pixels; positioning is exact at the scroll origin and
             // tracks the grid origin otherwise (the viewport does not expose the scrolled sheet offset).
             Canvas.SetLeft(container, headerLeft + (chart.Left * zoomFactor));
@@ -74,7 +75,12 @@ public sealed partial class MainWindow
         }
     }
 
-    private Control CreateSelectableChartContainer(ChartModel chart, Control visual, double width, double height)
+    private Control CreateSelectableChartContainer(
+        ChartModel chart,
+        ChartLayout layout,
+        Control visual,
+        double width,
+        double height)
     {
         var selected = IsSelectedChart(chart);
         var container = new AvaloniaGrid
@@ -126,6 +132,10 @@ public sealed partial class MainWindow
             WireChartDragMoveRelease(chart, container);
 
         container.Children.Add(visual);
+        if (BuildWaterfallPointContextOverlay(chart, layout) is { } pointOverlay)
+            container.Children.Add(pointOverlay);
+        if (BuildPivotChartFieldButtonOverlay(chart) is { } fieldButtons)
+            container.Children.Add(fieldButtons);
         if (selected)
             container.Children.Add(CreateChartSelectionAdorner(width, height));
 

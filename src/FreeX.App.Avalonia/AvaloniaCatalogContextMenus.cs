@@ -40,6 +40,22 @@ internal static class AvaloniaManagedContextMenu
                 menu.Items.OfType<MenuItem>().FirstOrDefault(item => item.IsEnabled)?.Focus());
         };
         menu.Closed += (_, _) => Dispatcher.UIThread.Post(() => anchor.Focus());
+        menu.KeyDown += (_, args) =>
+        {
+            if (args.Key != Key.Escape)
+                return;
+
+            menu.Close();
+            args.Handled = true;
+        };
+        anchor.PointerPressed += (_, args) =>
+        {
+            if (!args.GetCurrentPoint(anchor).Properties.IsRightButtonPressed)
+                return;
+
+            menu.Open(anchor);
+            args.Handled = true;
+        };
         anchor.KeyDown += (_, args) =>
         {
             if (!IsKeyboardInvocation(args.Key, args.KeyModifiers))

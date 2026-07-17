@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using FreeX.App.Services.Ribbon;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -107,4 +108,80 @@ public sealed class AvaloniaCatalogContextMenuTests
         anchor.ContextMenu.Should().BeSameAs(menu);
         menu.Items.Cast<MenuItem>().Single().Header.Should().Be("Item 1");
     });
+
+    [Fact]
+    public Task PivotField_RendersAvailableAndBucketVariantsAndDispatches() => RunOnUiThread(() =>
+    {
+        var actions = new List<PivotFieldContextMenuAction>();
+        var available = AvaloniaPivotFieldContextMenu.BuildItems(false, key => key, actions.Add);
+        var bucket = AvaloniaPivotFieldContextMenu.BuildItems(true, key => key, actions.Add);
+
+        available.OfType<MenuItem>().Should().HaveCount(7);
+        bucket.OfType<MenuItem>().Should().HaveCount(8);
+        bucket.OfType<MenuItem>().Last().Header.Should().Be("MainWindow_Content_Remove");
+        bucket.OfType<MenuItem>().Last().RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        actions.Should().Equal(PivotFieldContextMenuAction.Remove);
+    });
+
+    [Fact]
+    public Task PivotChart_RendersFilterAndNoFilterVariantsWithPlannerEnablement() => RunOnUiThread(() =>
+    {
+        var filtered = AvaloniaPivotChartFieldContextMenu.BuildItems(
+            PivotChartState(hasFilterState: true),
+            _ => { }).OfType<MenuItem>().ToArray();
+        var noFilter = AvaloniaPivotChartFieldContextMenu.BuildItems(
+            PivotChartState(hasFilterState: false),
+            _ => { }).OfType<MenuItem>().ToArray();
+
+        filtered.First().Header.Should().Be("Region: Filtered");
+        filtered.Single(item => Equals(item.Tag, PivotChartFieldContextMenuAction.ClearFilter))
+            .IsEnabled.Should().BeTrue();
+        noFilter.Should().NotContain(item => Equals(item.Tag, PivotChartFieldContextMenuAction.Summary));
+        noFilter.Single(item => Equals(item.Tag, PivotChartFieldContextMenuAction.SelectItems))
+            .IsEnabled.Should().BeFalse();
+    });
+
+    [Fact]
+    public Task WaterfallPoint_RendersRegularTotalAndInvalidVariantsAndDispatches() => RunOnUiThread(() =>
+    {
+        var chart = CreateWaterfallChart();
+        var dispatchCount = 0;
+        var regular = AvaloniaWaterfallPointContextMenu.BuildItems(chart, 0, () => dispatchCount++)
+            .Cast<MenuItem>().Single();
+        var total = AvaloniaWaterfallPointContextMenu.BuildItems(chart, 3, () => { })
+            .Cast<MenuItem>().Single();
+        var invalid = AvaloniaWaterfallPointContextMenu.BuildItems(chart, 9, () => { })
+            .Cast<MenuItem>().Single();
+
+        regular.IsChecked.Should().BeFalse();
+        total.IsChecked.Should().BeTrue();
+        invalid.IsEnabled.Should().BeFalse();
+        regular.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        dispatchCount.Should().Be(1);
+    });
+
+    private static PivotChartFieldContextMenuState PivotChartState(bool hasFilterState) => new(
+        HasFilterState: hasFilterState,
+        OverallSummary: "Region: Filtered",
+        SelectItemsHeader: "Select Items...",
+        LabelFilterHeader: "Label Filter...",
+        ValueFilterHeader: "Value Filter...",
+        ClearFilterHeader: "Clear Filters from Region",
+        CanValueFilter: hasFilterState,
+        HasAnyFilter: hasFilterState,
+        CanValueFieldSettings: true);
+
+    private static ChartModel CreateWaterfallChart()
+    {
+        var sheetId = SheetId.New();
+        return new ChartModel
+        {
+            Type = ChartType.Waterfall,
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(
+                new CellAddress(sheetId, 1, 1),
+                new CellAddress(sheetId, 5, 2)),
+        };
+    }
 }

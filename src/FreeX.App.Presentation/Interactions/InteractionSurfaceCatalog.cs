@@ -154,13 +154,6 @@ public static class InteractionSurfaceCatalog
                 IsApplicable: null,
                 InteractionImplementationCapability.Unverified));
 
-    private static readonly InteractionPlatformCapabilities WpfManagedPortableMissing =
-        new(
-            ManagedCapability,
-            new InteractionPlatformCapability(
-                IsApplicable: false,
-                InteractionImplementationCapability.Missing));
-
     private static readonly InteractionExpectations DialogExpectations =
         new(
             InteractionExpectation.Required,
@@ -299,7 +292,7 @@ public static class InteractionSurfaceCatalog
                 ["Pivot field is targeted"],
                 Variants("available-fields", "filters-bucket", "columns-bucket", "rows-bucket", "values-bucket"),
                 ["FreeX.App.Services.Ribbon.PivotFieldContextMenuPlanner.BuildPivotFieldCommands"],
-                WpfManagedPortableMissing),
+                ManagedOnBothPlatforms),
             CreatePivotHeaderRow(),
             ContextRow(
                 "context-menu.pivot-chart",
@@ -309,7 +302,7 @@ public static class InteractionSurfaceCatalog
                 ["PivotChart field button or pivot header is targeted"],
                 Variants("filter-state", "no-filter-state"),
                 ["FreeX.App.Services.Ribbon.PivotChartFieldContextMenuState"],
-                WpfManagedPortableMissing),
+                ManagedOnBothPlatforms),
             ContextRow(
                 "context-menu.recent-files",
                 "Backstage recent files",
@@ -339,7 +332,7 @@ public static class InteractionSurfaceCatalog
                 ["Waterfall chart data point is targeted"],
                 Variants("regular-point", "total-point", "invalid-point"),
                 ["FreeX.Core.Model.ChartModel", "pointIndex"],
-                WpfManagedPortableMissing),
+                ManagedOnBothPlatforms),
             CreateAutoFilterCriteriaRow(),
             CreateNativeApplicationMenuRow()
         });

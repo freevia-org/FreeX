@@ -144,24 +144,26 @@ public sealed class InteractionSurfaceCatalogTests
     }
 
     [Fact]
-    public void MissingPortableContextFamilies_AreExplicitAndExcludedFromApplicableRows()
+    public void AllManagedContextFamilies_AreApplicableOnPortableDesktop()
     {
-        var missingFamilies = new[]
+        var managedFamilies = new[]
         {
             ContextMenuFamily.PivotField,
             ContextMenuFamily.PivotChart,
-            ContextMenuFamily.WaterfallPoint
+            ContextMenuFamily.WaterfallPoint,
+            ContextMenuFamily.RecentFiles,
+            ContextMenuFamily.QuickAccessToolbar
         };
-        var missingRows = InteractionSurfaceCatalog.ContextMenus
-            .Where(row => missingFamilies.Contains(row.ContextFamily!.Value))
+        var managedRows = InteractionSurfaceCatalog.ContextMenus
+            .Where(row => managedFamilies.Contains(row.ContextFamily!.Value))
             .ToArray();
 
-        missingRows.Should().HaveCount(missingFamilies.Length);
-        missingRows.Should().OnlyContain(row =>
-            row.Platforms.PortableDesktop.IsApplicable == false &&
-            row.Platforms.PortableDesktop.Implementation == InteractionImplementationCapability.Missing);
+        managedRows.Should().HaveCount(managedFamilies.Length);
+        managedRows.Should().OnlyContain(row =>
+            row.Platforms.PortableDesktop.IsApplicable == true &&
+            row.Platforms.PortableDesktop.Implementation == InteractionImplementationCapability.ManagedSurface);
         InteractionSurfaceCatalog.ForPlatform(InteractionPlatform.PortableDesktop)
-            .Should().NotContain(row => missingFamilies.Contains(row.ContextFamily ?? default));
+            .Should().Contain(row => managedFamilies.Contains(row.ContextFamily ?? default));
     }
 
     [Fact]

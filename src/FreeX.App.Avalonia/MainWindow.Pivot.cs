@@ -319,6 +319,7 @@ public sealed partial class MainWindow
             foreach (var (bucket, _) in _pivotDropZones)
                 bucket.Background = PivotBucketBackground;
         };
+        AttachPivotFieldContextMenu(chip, pivot, headers, field);
         return chip;
     }
 
