@@ -6125,6 +6125,7 @@ public static class DocxWriter
         // freew:ext — FreeW-private extension persisting ColorSchemeId and QuickLayoutId losslessly.
         // Written as a c:extLst / c:ext child with a private URI so Word ignores it gracefully.
         XNamespace freew = "http://schemas.freew.dev/chart-design/2026";
+        XNamespace mc = "http://schemas.openxmlformats.org/markup-compatibility/2006";
         XElement? extLst = null;
         if (!string.IsNullOrEmpty(chart.ColorSchemeId) || chart.QuickLayoutId > 0)
         {
@@ -6141,6 +6142,9 @@ public static class DocxWriter
                 new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
                 new XAttribute(XNamespace.Xmlns + "r", R.NamespaceName),
+                extLst is null ? null : new XAttribute(XNamespace.Xmlns + "freew", freew.NamespaceName),
+                extLst is null ? null : new XAttribute(XNamespace.Xmlns + "mc", mc.NamespaceName),
+                extLst is null ? null : new XAttribute(mc + "Ignorable", "freew"),
                 styleElement,
                 chartElement,
                 // c:externalData ties the chart to its editable companion workbook (resolved via the chart
