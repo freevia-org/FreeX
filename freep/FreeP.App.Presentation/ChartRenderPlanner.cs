@@ -243,7 +243,10 @@ public readonly record struct ChartTextPlan(
     bool IsBold,
     double FontSize,
     ChartPlanTextAlignment Alignment,
-    ChartAxisLabelFormatPlan? AxisLabelFormat = null);
+    ChartAxisLabelFormatPlan? AxisLabelFormat = null)
+{
+    public string? FontFamily { get; init; }
+}
 
 public readonly record struct ChartBarDepthPlan(
     int GapDepthPercent,
@@ -1248,6 +1251,11 @@ public static partial class ChartRenderPlanner
                 IsBold: !UsesClassicOfficeChartStyle(chart),
                 FontSize: ResolveTitleFontSize(chart, 9.0),
                 Alignment: ChartPlanTextAlignment.Center)
+            {
+                // Classic Office chart titles use Arial while axis/legend roles
+                // retain their Calibri defaults.
+                FontFamily = UsesClassicOfficeChartStyle(chart) ? "Arial" : null
+            }
             : null;
 
         if (!frame.HasPlot)
