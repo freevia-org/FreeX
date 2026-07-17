@@ -538,7 +538,7 @@ static void RenderDocumentComposite(
             {
                 var borderColor = ParseHexColor(pb.ColorHex, Colors.Black);
                 var pen = new Pen(new SolidColorBrush(borderColor),
-                    Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0)));
+                    Math.Max(1, PageLayout.PointsToDip(pb.WidthPt)));
                 // w:pgBorders defaults to Measure from: Page with w:space="24" points. Keep
                 // the WPF evidence surface aligned with the Avalonia and Print Preview paths.
                 double edgeInset = Math.Min(
@@ -549,6 +549,14 @@ static void RenderDocumentComposite(
                     new Rect(ins, ins,
                         Math.Max(0, thisPixW - 2 * ins),
                         Math.Max(0, thisPixH - 2 * ins)));
+                if (pb.LineStyle == BorderLineStyle.Double)
+                {
+                    var innerInset = ins + pen.Thickness + 1.5;
+                    dc.DrawRectangle(null, pen,
+                        new Rect(innerInset, innerInset,
+                            Math.Max(0, thisPixW - 2 * innerInset),
+                            Math.Max(0, thisPixH - 2 * innerInset)));
+                }
             }
             bmp.Render(borderVisual);
         }

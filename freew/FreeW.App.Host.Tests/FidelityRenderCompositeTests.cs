@@ -154,13 +154,21 @@ public sealed class FidelityRenderCompositeTests
             using (var dc = bv.RenderOpen())
             {
                 var bc  = ParseHexColor(pb.ColorHex, Colors.Black);
-                var pen = new Pen(new SolidColorBrush(bc), Math.Max(1, pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0)));
+                var pen = new Pen(new SolidColorBrush(bc), Math.Max(1, PageLayout.PointsToDip(pb.WidthPt)));
                 var edgeInset = Math.Min(PageLayout.PointsToDip(24), Math.Min(pixW, pixH) / 4.0);
                 double ins = edgeInset + pen.Thickness / 2;
                 dc.DrawRectangle(null, pen,
                     new Rect(ins, ins,
                         Math.Max(0, pixW - 2 * ins),
                         Math.Max(0, pixH - 2 * ins)));
+                if (pb.LineStyle == BorderLineStyle.Double)
+                {
+                    var innerInset = ins + pen.Thickness + 1.5;
+                    dc.DrawRectangle(null, pen,
+                        new Rect(innerInset, innerInset,
+                            Math.Max(0, pixW - 2 * innerInset),
+                            Math.Max(0, pixH - 2 * innerInset)));
+                }
             }
             bmp.Render(bv);
         }

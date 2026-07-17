@@ -89,6 +89,10 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("const double FootnoteTrailingReserveDip = 15.0;");
         source.Should().Contain("thisPixH - thisMarginBottom - fnH - FootnoteTrailingReserveDip");
         source.Should().Contain("PageLayout.PointsToDip(24)");
+        source.Should().Contain("PageLayout.PointsToDip(pb.WidthPt)");
+        source.Should().NotContain("pb.WidthPt * PageLayout.DipPerPoint * (96.0 / 72.0)");
+        source.Should().Contain("pb.LineStyle == BorderLineStyle.Double");
+        source.Should().Contain("pen.Thickness + 1.5");
         source.Should().Contain("thisPixW - 2 * ins");
         source.Should().Contain("width - inset");
         source.Should().Contain("ResolveSoftwareHeaderFooterSlot(doc, i + 1, header: true)");
