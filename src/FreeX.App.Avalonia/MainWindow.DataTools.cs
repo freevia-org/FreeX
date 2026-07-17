@@ -37,7 +37,7 @@ public sealed partial class MainWindow
 
         if (TryGetAutoFilterReapplyRange(sheet, out var filterRange))
         {
-            foreach (var column in sheet.AutoFilter!.FilterColumns)
+            foreach (var column in sheet.AutoFilter!.FilterColumns.ToArray())
             {
                 if (column.ColumnId < 0 || (uint)column.ColumnId >= filterRange.ColCount)
                     continue;

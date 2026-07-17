@@ -726,9 +726,23 @@ public sealed partial class MainWindow : Window
     internal static IReadOnlySet<string> InteractiveValidationKeyboardShortcutScenarioIds { get; } =
         new[]
         {
+            "shortcut.data.filter-toggle-reapply",
+            "shortcut.data.outline-group",
+            "shortcut.editing.copy-from-above",
+            "shortcut.editing.copy-value-from-above",
+            "shortcut.editing.current-date-time",
+            "shortcut.editing.formula-bar",
+            "shortcut.formulas.calculate",
+            "shortcut.formulas.expand-formula-bar",
+            "shortcut.formulas.trace-references",
+            "shortcut.insert.chart",
             "shortcut.navigation.commit-forward",
             "shortcut.navigation.commit-backward",
+            "shortcut.navigation.scroll-active-cell",
+            "shortcut.selection.cycle-active-corner",
             "shortcut.formulas.reference-mode",
+            "shortcut.view.keyboard-zoom",
+            "shortcut.view.outline-symbols",
         }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
@@ -13198,12 +13212,12 @@ public sealed partial class MainWindow : Window
             : normalized[..(maxLength - 3)] + "...";
     }
 
-    private async Task ShowFormatCellsDialogAsync()
+    private async Task ShowFormatCellsDialogAsync(int initialTabIndex = 0)
     {
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        var selection = await ShowFormatCellsInputDialogAsync();
+        var selection = await ShowFormatCellsInputDialogAsync(initialTabIndex: initialTabIndex);
         if (selection is null)
             return;
 
@@ -13252,7 +13266,8 @@ public sealed partial class MainWindow : Window
     }
 
     internal async Task<FormatCellsDialogResult?> ShowFormatCellsInputDialogAsync(
-        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null)
+        Action<FormatCellsDialogSmokeProbe>? launchSmokeProbe = null,
+        int initialTabIndex = 0)
     {
         const double formatCellsDialogWidth = 620;
         const double formatCellsDefaultDialogHeight = 540;
@@ -14649,7 +14664,7 @@ public sealed partial class MainWindow : Window
             });
         var tabStrip = new TabControl
         {
-            SelectedIndex = 0,
+            SelectedIndex = Math.Clamp(initialTabIndex, 0, 5),
             Padding = new Thickness(0),
             ItemsSource = new[]
             {
@@ -14698,7 +14713,13 @@ public sealed partial class MainWindow : Window
                 buttonRow,
             },
         };
-        dialog.Opened += (_, _) => numberFormatBox.Focus();
+        dialog.Opened += (_, _) =>
+        {
+            if (tabStrip.SelectedIndex == 2)
+                fontNameBox.Focus();
+            else
+                numberFormatBox.Focus();
+        };
         if (launchSmokeProbe is not null)
         {
             dialog.Opened += (_, _) =>
@@ -22854,6 +22875,9 @@ public sealed partial class MainWindow : Window
             e.Handled = true;
             return;
         }
+
+        if (await TryHandleAvaloniaHostShortcutAsync(e))
+            return;
 
         if (e.Key == Key.Enter &&
             HasHyperlinkActivationModifier(e.KeyModifiers) &&
