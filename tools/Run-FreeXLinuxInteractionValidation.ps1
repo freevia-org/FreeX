@@ -91,6 +91,16 @@ try {
         }
         $x11Manifest = Get-Content -LiteralPath $ExistingX11Manifest -Raw | ConvertFrom-Json
         $x11ProbeExit = if (@($x11Manifest.results | Where-Object status -eq "failed").Count -gt 0) { 1 } else { 0 }
+
+        # Bounded validation batches always reuse the published payload. A resumed run that skips
+        # physical X11 probes still needs to refresh that payload once unless explicitly told not to.
+        if (-not $SkipPublish) {
+            & $harness @desktopStartArguments
+            if ($LASTEXITCODE -ne 0) {
+                throw "Linux interaction-validation payload failed to publish."
+            }
+            & $harness -Action Stop -App FreeX -Port $Port
+        }
     } else {
         # Phase one sends real X11 keyboard and pointer events through the production handlers.
         & $harness @desktopStartArguments
