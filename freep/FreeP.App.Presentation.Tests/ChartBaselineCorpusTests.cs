@@ -148,6 +148,20 @@ public sealed class ChartBaselineCorpusTests
         pie.DataLabels!.ShowValue.Should().BeTrue();
         pie.DataLabels.ShowPercent.Should().BeTrue();
         pie.DataLabels.Separator.Should().Be(", ");
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            pie,
+            new ChartPlanRect(0, 0, 1280, 720));
+        scene.LegendItems.Should().HaveCount(4);
+        scene.LegendItems.Should().OnlyContain(item =>
+            item.SwatchBounds.Width == ChartRenderPlanner.ImportedPieLegendSwatchSize &&
+            item.SwatchBounds.Height == ChartRenderPlanner.ImportedPieLegendSwatchSize);
+        (scene.LegendItems[1].SwatchBounds.Y - scene.LegendItems[0].SwatchBounds.Y)
+            .Should().Be(ChartRenderPlanner.ImportedPieLegendLineHeight);
+        scene.LegendItems[0].Label.TextColor
+            .Should().Be(new SrgbColor(0x00, 0x00, 0x00));
+        scene.DataLabels.Should().OnlyContain(label =>
+            label.TextColor == new SrgbColor(0x00, 0x00, 0x00));
     }
 
     [Fact]
@@ -167,6 +181,12 @@ public sealed class ChartBaselineCorpusTests
         charts[1].HasAutomaticTitle.Should().BeTrue();
         charts[3].Title.Should().Be("Series1");
         charts[3].HasAutomaticTitle.Should().BeTrue();
+
+        var doughnutScene = ChartRenderPlanner.BuildScenePlan(
+            charts[0],
+            new ChartPlanRect(0, 0, 1280, 720));
+        doughnutScene.LegendItems[0].SwatchBounds.X
+            .Should().BeGreaterThan(doughnutScene.Frame.Bounds.Right - doughnutScene.Frame.LegendAreaWidth);
     }
 
     [Fact]
