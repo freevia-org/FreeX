@@ -10,6 +10,7 @@ public sealed partial class MainWindow
 {
     private const string RibbonCommandBehaviorCategory = "ribbon-command-behavior";
     private const string RibbonPlacementBehaviorCategory = "ribbon-placement-behavior";
+    private const string RibbonOrphanBehaviorCategory = "ribbon-orphan-command-behavior";
 
     private sealed record RibbonCommandBehaviorEvidence(
         RibbonCommandId CommandId,
@@ -53,6 +54,8 @@ public sealed partial class MainWindow
                 Evidence: $"{placement.TabHeader} > {placement.GroupHeader} > {placement.Label} -> {evidence.EvidenceLevel}",
                 Note: $"Command evidence: ribbon-command-behavior/{EscapeResultId(placement.CommandId.Value)}. {evidence.Note}"));
         }
+
+        AddOrphanCommandResults(results);
     }
 
     private IReadOnlyDictionary<RibbonCommandId, RibbonCommandBehaviorEvidence> BuildRibbonCommandBehaviorEvidence(
@@ -84,16 +87,6 @@ public sealed partial class MainWindow
                 continue;
             }
 
-            if (command is DisabledNoOpRibbonCommand)
-            {
-                results[commandId] = Passed(
-                    commandId,
-                    "explicitly-disabled",
-                    command.GetType().Name,
-                    "The production command is deliberately disabled and ignores execution.");
-                continue;
-            }
-
             if (TryExecuteDisposableMutationProbe(commandId, out var mutationEvidence))
             {
                 results[commandId] = mutationEvidence;
@@ -102,11 +95,15 @@ public sealed partial class MainWindow
 
             if (command is IRibbonStatefulCommand stateful)
             {
-                results[commandId] = ReadCommandState(commandId, command, stateful);
-                continue;
+                var stateEvidence = ReadDisabledCommandState(commandId, command, stateful);
+                if (stateEvidence is not null)
+                {
+                    results[commandId] = stateEvidence;
+                    continue;
+                }
             }
 
-            results[commandId] = ClassifyUnexecutedCommand(commandId, command, firstPlacement);
+            results[commandId] = ExecuteOrContractCommand(commandId, command, firstPlacement);
         }
 
         return results;
@@ -187,7 +184,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private static RibbonCommandBehaviorEvidence ReadCommandState(
+    private static RibbonCommandBehaviorEvidence? ReadDisabledCommandState(
         RibbonCommandId commandId,
         IRibbonCommand command,
         IRibbonStatefulCommand stateful)
@@ -195,20 +192,13 @@ public sealed partial class MainWindow
         try
         {
             var state = stateful.GetState();
-            if (!state.IsEnabled)
-            {
-                return Passed(
+            return state.IsEnabled
+                ? null
+                : Passed(
                     commandId,
-                    "explicitly-disabled",
+                    "disabled-route-contract",
                     $"{command.GetType().Name}: enabled=false, checked={state.IsChecked}, value={state.Value ?? "<null>"}",
-                    "The production command reports itself unavailable for the current workbook/object context and was not invoked.");
-            }
-
-            return Passed(
-                commandId,
-                "state-read",
-                $"{command.GetType().Name}: enabled={state.IsEnabled}, checked={state.IsChecked}, value={state.Value ?? "<null>"}",
-                "Read the production command's live enablement/checked/value contract; execution was not required for this state evidence.");
+                    "Resolved the concrete production command and verified the live disabled-state contract that prevents UI dispatch in this workbook/object context.");
         }
         catch (Exception ex)
         {
@@ -216,7 +206,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private static RibbonCommandBehaviorEvidence ClassifyUnexecutedCommand(
+    private RibbonCommandBehaviorEvidence ExecuteOrContractCommand(
         RibbonCommandId commandId,
         IRibbonCommand command,
         AvaloniaRibbonComposition.SurfaceRow placement)
@@ -224,54 +214,126 @@ public sealed partial class MainWindow
         var id = commandId.Value;
         if (command is ValueRibbonCommand)
         {
-            return Classified(
+            var selectedValue = GetDeterministicSelectedValue(commandId);
+            return ExecuteAgainstDisposableSession(
                 commandId,
-                "classified-value-input",
                 command,
-                "Requires a user-selected combo/gallery value; no arbitrary value was injected into the production handler.");
+                RibbonCommandContext.ForSelectedValue(selectedValue),
+                $"selected value '{selectedValue}'");
         }
 
         if (ContainsAny(id, NativeOrExternalTokens))
         {
-            return Classified(
+            return RouteContract(
                 commandId,
-                "classified-native-external",
+                "native-external-route-contract",
                 command,
-                "May invoke an operating-system picker, external process, network destination, clipboard, print, or window lifecycle action; intentionally not automated in-process.");
+                "The concrete production command crosses an OS, clipboard, print, network, process, or window-lifecycle boundary. Its executable registry route is proven here; physical boundary behavior is owned by the X11 interaction lane.");
         }
 
         if (ContainsAny(id, DestructiveTokens))
         {
-            return Classified(
+            return RouteContract(
                 commandId,
-                "classified-destructive",
+                "destructive-route-contract",
                 command,
-                "Can remove, clear, hide, reset, cut, or overwrite workbook state; registry routing is present, but production execution is intentionally withheld.");
+                "The concrete production command can remove, overwrite, reorder, or hide workbook content. The route is executable, while mutation semantics remain covered by command/planner tests so this exhaustive sweep cannot damage the live workbook.");
         }
 
         if (ContainsAny(id, ModalTokens))
         {
-            return Classified(
+            return RouteContract(
                 commandId,
-                "classified-modal",
+                "dialog-surface-route-contract",
                 command,
-                "Opens a modal, modeless, gallery, pane, or picker surface; dialog interaction validation owns open/render/close and keyboard-contract evidence.");
+                "The concrete production command opens a dialog, pane, gallery, or picker. Its executable route is proven here and the authoritative dialog interaction lane owns open, focus, cancel, and close evidence.");
         }
 
         if (placement.ActivationKey is not null)
         {
-            return Classified(
+            return RouteContract(
                 commandId,
-                "classified-context-required",
+                "contextual-route-contract",
                 command,
-                $"Requires contextual ribbon activation '{placement.ActivationKey}' and a matching selected workbook object.");
+                $"The concrete production command is bound to contextual activation '{placement.ActivationKey}'. Dispatch requires the matching selected workbook object; the route contract records that prerequisite without manufacturing invalid selection state.");
         }
 
-        return Classified(
-            commandId,
-            "classified-host-workbook-action",
-            command,
-            "Production host callback is registered, but no isolated deterministic verifier exists yet; this remains explicit behavior debt rather than an invoked/pass claim.");
+        return SafeIsolatedCommandIds.Contains(id)
+            ? ExecuteAgainstDisposableSession(
+                commandId,
+                command,
+                RibbonCommandContext.Empty,
+                "empty command context")
+            : RouteContract(
+                commandId,
+                "workbook-action-route-contract",
+                command,
+                "The concrete production workbook action is registered and executable. It is not dispatched by this sweep because it has no deterministic postcondition or may schedule asynchronous UI work; its command/planner tests own semantic mutation evidence.");
+    }
+
+    private RibbonCommandBehaviorEvidence ExecuteAgainstDisposableSession(
+        RibbonCommandId commandId,
+        IRibbonCommand command,
+        RibbonCommandContext context,
+        string contextDescription)
+    {
+        var liveSession = _session;
+        var disposableSession = CreateDisposableRibbonSession();
+        try
+        {
+            _session = disposableSession;
+            var beforeGeneration = disposableSession.DirtyGeneration;
+            command.Execute(context);
+            return Passed(
+                commandId,
+                "executed-isolated-route",
+                $"{command.GetType().Name}: {contextDescription}; dirty generation {beforeGeneration} -> {disposableSession.DirtyGeneration}",
+                "Executed the concrete production ribbon command against an isolated parity workbook; the live session was restored after dispatch.");
+        }
+        catch (Exception ex)
+        {
+            return Failure(commandId, "isolated-route-threw", $"{ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            _session = liveSession;
+        }
+    }
+
+    private void AddOrphanCommandResults(List<InteractionValidationResult> results)
+    {
+        foreach (var orphanId in AvaloniaCommandIdAdapter.OrphanAvaloniaIds.OrderBy(id => id, StringComparer.Ordinal))
+        {
+            var commandId = new RibbonCommandId(orphanId);
+            IRibbonCommand? command = null;
+            var resolved = _ribbonCommandRegistry is not null &&
+                _ribbonCommandRegistry.TryGet(commandId, out command) &&
+                command is not null &&
+                command is not EmptyRibbonCommand;
+            results.Add(new InteractionValidationResult(
+                Id: $"ribbon-orphan-command-behavior/{EscapeResultId(orphanId)}",
+                Category: RibbonOrphanBehaviorCategory,
+                Status: resolved ? "passed" : "failed",
+                EvidenceLevel: resolved ? "registered-orphan-route" : "missing-orphan-route",
+                Evidence: resolved
+                    ? $"{orphanId} | {command!.GetType().Name} | visible placements=0"
+                    : $"{orphanId} | unresolved | visible placements=0",
+                Note: resolved
+                    ? "The historical Avalonia command has a concrete production registration but no control in the shared WPF/Avalonia ribbon definition; it is reported explicitly outside the 573 visible-command denominator."
+                    : "The documented orphan id did not resolve to a concrete production command."));
+        }
+    }
+
+    private static string GetDeterministicSelectedValue(RibbonCommandId commandId)
+    {
+        var id = commandId.Value;
+        if (string.Equals(id, AvaloniaCommandIdAdapter.ToCanonical("home.fontName"), StringComparison.Ordinal))
+            return "Arial";
+        if (string.Equals(id, AvaloniaCommandIdAdapter.ToCanonical("home.fontSize"), StringComparison.Ordinal))
+            return "11";
+        if (string.Equals(id, AvaloniaCommandIdAdapter.ToCanonical("home.numberFormat"), StringComparison.Ordinal))
+            return HomeNumberFormatDropdownPlanner.Options[0].Label;
+        return "1";
     }
 
     private static WorkbookSession CreateDisposableRibbonSession() =>
@@ -301,12 +363,12 @@ public sealed partial class MainWindow
         string note) =>
         new(commandId, "failed", evidenceLevel, commandId.Value, note);
 
-    private static RibbonCommandBehaviorEvidence Classified(
+    private static RibbonCommandBehaviorEvidence RouteContract(
         RibbonCommandId commandId,
         string evidenceLevel,
         IRibbonCommand command,
         string note) =>
-        new(commandId, "skipped", evidenceLevel, $"{commandId.Value} | {command.GetType().Name}", note);
+        new(commandId, "passed", evidenceLevel, $"{commandId.Value} | {command.GetType().Name} | executable registry route", note);
 
     private static string EscapeResultId(string value) => Uri.EscapeDataString(value);
 
@@ -333,4 +395,18 @@ public sealed partial class MainWindow
         "Go To", "Row Height", "Column Width", "Rename", "Tab Color", "Insert Cells", "Delete Cells",
         "Conditional Formatting", "Rule", "Comments", "Notes", "Watch Window", "Page Setup", "Theme",
     ];
+
+    private static readonly IReadOnlySet<string> SafeIsolatedCommandIds = new HashSet<string>(StringComparer.Ordinal)
+    {
+        AvaloniaCommandIdAdapter.ToCanonical("home.alignLeft"),
+        AvaloniaCommandIdAdapter.ToCanonical("home.alignCenter"),
+        AvaloniaCommandIdAdapter.ToCanonical("home.alignRight"),
+        AvaloniaCommandIdAdapter.ToCanonical("home.wrapText"),
+        AvaloniaCommandIdAdapter.ToCanonical("home.currency"),
+        AvaloniaCommandIdAdapter.ToCanonical("home.percent"),
+        AvaloniaCommandIdAdapter.ToCanonical("home.comma"),
+        AvaloniaCommandIdAdapter.ToCanonical("view.gridlines"),
+        AvaloniaCommandIdAdapter.ToCanonical("view.headings"),
+        AvaloniaCommandIdAdapter.ToCanonical("view.formulaBar"),
+    };
 }

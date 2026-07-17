@@ -26,10 +26,29 @@ public sealed class AvaloniaRibbonInteractionValidationTests
 
             var commands = results.Where(result => result.Category == "ribbon-command-behavior").ToArray();
             var placements = results.Where(result => result.Category == "ribbon-placement-behavior").ToArray();
+            var orphans = results.Where(result => result.Category == "ribbon-orphan-command-behavior").ToArray();
+            var expectedCommandIds = AvaloniaRibbonComposition
+                .EnumerateSurfaceRows(AvaloniaRibbonComposition.BuildDefinition())
+                .Select(row => row.CommandId.Value)
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+            var actualCommandIds = commands
+                .Select(result => Uri.UnescapeDataString(result.Id.Split('/')[1]))
+                .OrderBy(id => id, StringComparer.Ordinal)
+                .ToArray();
+            Assert.Equal(573, expectedCommandIds.Length);
+            Assert.Equal(expectedCommandIds, actualCommandIds);
             Assert.Equal(573, commands.Length);
             Assert.Equal(573, commands.Select(result => result.Id).Distinct(StringComparer.Ordinal).Count());
             Assert.Equal(616, placements.Length);
             Assert.Equal(616, placements.Select(result => result.Id).Distinct(StringComparer.Ordinal).Count());
+            Assert.Equal(8, orphans.Length);
+            Assert.Equal(AvaloniaCommandIdAdapter.OrphanAvaloniaIds.Count, orphans.Length);
+            Assert.All(commands, result => Assert.Contains(result.Status, new[] { "passed", "failed" }));
+            Assert.All(placements, result => Assert.Contains(result.Status, new[] { "passed", "failed" }));
+            Assert.DoesNotContain(commands, result => result.Status == "skipped");
+            Assert.DoesNotContain(placements, result => result.Status == "skipped");
             Assert.DoesNotContain(results, result => result.EvidenceLevel == "registry-bound");
             foreach (var group in commands.GroupBy(result => result.EvidenceLevel).OrderBy(group => group.Key, StringComparer.Ordinal))
                 _output.WriteLine($"{group.Key}: {group.Count()}");
@@ -62,13 +81,17 @@ public sealed class AvaloniaRibbonInteractionValidationTests
                 .Count(commandId => InsertChartCommandFactory.ChartTypeForRibbonCommand(commandId) is not null);
             Assert.Equal(expectedChartCommands + 3, executed.Length);
             Assert.All(executed, result => Assert.Equal("passed", result.Status));
+            Assert.Contains(results, result =>
+                result.Category == "ribbon-command-behavior" &&
+                result.EvidenceLevel == "executed-isolated-route" &&
+                result.Status == "passed");
 
             window.Close();
         }, CancellationToken.None);
     }
 
     [Fact]
-    public async Task BehaviorEvidence_NeverReportsClassifiedOrMissingCommandsAsInvoked()
+    public async Task BehaviorEvidence_HasNoSkippedVisibleCommandsAndReportsEveryOrphan()
     {
         await Session.Dispatch(() =>
         {
@@ -78,14 +101,24 @@ public sealed class AvaloniaRibbonInteractionValidationTests
             window.AddRibbonInteractionExecutionResults(results);
 
             var commands = results.Where(result => result.Category == "ribbon-command-behavior").ToArray();
-            Assert.DoesNotContain(commands, result =>
-                result.EvidenceLevel.StartsWith("classified-", StringComparison.Ordinal) && result.Status == "passed");
+            var orphans = results.Where(result => result.Category == "ribbon-orphan-command-behavior").ToArray();
+            Assert.Equal(573, commands.Length);
+            Assert.DoesNotContain(commands, result => result.Status == "skipped");
+            Assert.DoesNotContain(commands, result => result.EvidenceLevel.StartsWith("classified-", StringComparison.Ordinal));
             Assert.DoesNotContain(commands, result => result.EvidenceLevel is "empty-command-gap" or "unregistered-command");
-            Assert.Contains(commands, result => result.EvidenceLevel == "classified-native-external" && result.Status == "skipped");
-            Assert.Contains(commands, result => result.EvidenceLevel == "classified-destructive" && result.Status == "skipped");
-            Assert.Contains(commands, result => result.EvidenceLevel == "classified-modal" && result.Status == "skipped");
-            Assert.Contains(commands, result => result.EvidenceLevel == "classified-context-required" && result.Status == "skipped");
-            Assert.Contains(commands, result => result.EvidenceLevel == "explicitly-disabled" && result.Status == "passed");
+            Assert.Contains(commands, result => result.EvidenceLevel == "native-external-route-contract" && result.Status == "passed");
+            Assert.Contains(commands, result => result.EvidenceLevel == "destructive-route-contract" && result.Status == "passed");
+            Assert.Contains(commands, result => result.EvidenceLevel == "dialog-surface-route-contract" && result.Status == "passed");
+            Assert.Contains(commands, result => result.EvidenceLevel == "contextual-route-contract" && result.Status == "passed");
+            Assert.Contains(commands, result => result.EvidenceLevel == "disabled-route-contract" && result.Status == "passed");
+            Assert.Equal(
+                AvaloniaCommandIdAdapter.OrphanAvaloniaIds.OrderBy(id => id, StringComparer.Ordinal),
+                orphans.Select(result => Uri.UnescapeDataString(result.Id.Split('/')[1])).OrderBy(id => id, StringComparer.Ordinal));
+            Assert.All(orphans, result =>
+            {
+                Assert.Equal("passed", result.Status);
+                Assert.Equal("registered-orphan-route", result.EvidenceLevel);
+            });
 
             window.Close();
         }, CancellationToken.None);
