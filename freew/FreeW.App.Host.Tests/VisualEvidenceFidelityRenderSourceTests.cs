@@ -99,11 +99,10 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("pen.Thickness + 1.5");
         source.Should().Contain("thisPixW - 2 * ins");
         source.Should().Contain("width - inset");
-        source.Should().Contain("ResolveSoftwareHeaderFooterSlot(doc, i + 1, header: true)");
-        source.Should().Contain("thisPageSettings.HeaderDistancePt > 0");
-        source.Should().Contain("PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)");
-        source.Should().Contain("PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)");
-        source.Should().Contain("const double explicitFooterBandDip = 29");
+        source.Should().Contain("if (panel is not null && i < panel.PageBoxes.Count)");
+        source.Should().Contain("var box = panel.PageBoxes[i];");
+        source.Should().Contain("box.HeaderSubEditor is not null");
+        source.Should().Contain("box.FooterSubEditor is not null");
         source.Should().Contain("DocumentView.UseWordTableFidelitySurfaces = true");
         source.Should().Contain("flow.PagePadding = new Thickness(");
         project.Should().Contain("FreeW.App.Presentation");
