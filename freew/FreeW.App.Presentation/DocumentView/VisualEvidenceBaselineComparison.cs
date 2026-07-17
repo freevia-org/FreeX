@@ -100,7 +100,11 @@ public static class FreeWVisualBaselineComparisonPlanner
         {
             ["page-composition-columns"] = "f2-columns",
             ["page-composition-border-watermark"] = "f2-border-watermark",
-            ["page-composition-floating-image"] = "f2-01-float-wrap"
+            ["page-composition-floating-image"] = "f2-01-float-wrap",
+            // The generated Backstage evidence uses a fidelity suffix so it can coexist with other
+            // app-surface captures. The DOCX sent through Word has the shorter document name.
+            ["backstage-print-preview-fidelity"] = "backstage-print-preview",
+            ["backstage-pdf-export-fidelity"] = "backstage-pdf-export"
         };
 
     private static readonly IReadOnlySet<string> DirectWordBaselineScenarioIds =
@@ -578,6 +582,15 @@ public static class FreeWVisualBaselineComparisonPlanner
 
     private static string ExpectedBaselineOutputName(FreeWVisualEvidenceNormalizedRow row, string scenarioId)
     {
+        if (BaselineScenarioAliases.TryGetValue(row.ScenarioId, out var baselineScenarioId)
+            && string.Equals(baselineScenarioId, scenarioId, StringComparison.OrdinalIgnoreCase))
+        {
+            var sourceOutputName = Path.GetFileName(row.OutputName);
+            var sourcePrefix = row.ScenarioId + "_";
+            if (sourceOutputName.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
+                return scenarioId + sourceOutputName[(sourcePrefix.Length - 1)..];
+        }
+
         try
         {
             return FreeWVisualEvidencePlanner.ExpectedOutputName(

@@ -181,6 +181,32 @@ public sealed class VisualEvidenceBaselinePolicyTests
             "equation-structures_p1.png"]);
     }
 
+    [Theory]
+    [InlineData("backstage-print-preview-fidelity", "backstage-print-preview")]
+    [InlineData("backstage-pdf-export-fidelity", "backstage-pdf-export")]
+    public void WordBaselinePolicy_MapsBackstageFidelityOutputsToWordExportNames(
+        string scenarioId,
+        string baselineScenarioId)
+    {
+        var row = BuildRow(
+            scenarioId,
+            FreeWVisualEvidenceManifestNormalizer.WpfHostId,
+            scenarioId + "_p2.png",
+            pageNumber: 2,
+            pageCount: 2);
+
+        var policy = FreeWVisualBaselineComparisonPlanner.ResolveWordBaselinePolicy(row);
+        var candidates = FreeWVisualBaselineComparisonPlanner.BuildBaselineCandidateRelativePaths(row);
+
+        policy.IsComparable.Should().BeTrue();
+        policy.BaselineScenarioId.Should().Be(baselineScenarioId);
+        FreeWVisualBaselineComparisonPlanner.BuildBaselineMatchKey(row)
+            .Should().Be($"{baselineScenarioId}/p2/{baselineScenarioId}_p2.png");
+        candidates.Should().Contain([
+            $"{baselineScenarioId}/{baselineScenarioId}_p2.png",
+            $"{baselineScenarioId}_p2.png"]);
+    }
+
     [Fact]
     public void WordBaselinePolicy_KeepsHeaderFooterImageProofsDirectlyComparable()
     {
