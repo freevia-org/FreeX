@@ -280,7 +280,11 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         buildContentBlock.Should().Contain("var root = new AvaloniaGrid();");
         buildContentBlock.Should().Contain("root.Children.Add(frame.Root);");
         buildContentBlock.Should().Contain("root.Children.Add(BuildBackstageOverlay());");
-        buildContentBlock.Should().Contain("return root;");
+        buildContentBlock.Should().Contain("SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(");
+        buildContentBlock.Should().Contain("Window: this,");
+        buildContentBlock.Should().Contain("Body: root,");
+        buildContentBlock.Should().Contain("PopulateQuickAccessToolbar(windowFrame.QatHost);");
+        buildContentBlock.Should().Contain("return windowFrame.Root;");
         AssertBefore(buildContentBlock, "Ribbon: ribbon,", "WorkArea: BuildWorkbookWorkArea(),");
         AssertBefore(buildContentBlock, "WorkArea: BuildWorkbookWorkArea(),", "StatusBar: statusBar,");
         AssertBefore(buildContentBlock, "StatusBar: statusBar,", "BottomPanelsAboveStatus: [sheetTabs],");
@@ -295,6 +299,36 @@ public sealed class AvaloniaMainWindowChromeSourceTests
         statusBarBlock.Should().NotContain("var grid = new AvaloniaGrid");
         statusBarBlock.Should().NotContain("AddGridChild(grid, leftPanel");
         statusBarBlock.Should().NotContain("Child = grid");
+    }
+
+    [Fact]
+    public void QuickAccessToolbar_UsesTheSharedTitleBarHostAndReloadsOptionsBeforeMutation()
+    {
+        var mainSource = File.ReadAllText(RepoFile("src", "FreeX.App.Avalonia", "MainWindow.cs"));
+        var contextMenuSource = File.ReadAllText(RepoFile(
+            "src",
+            "FreeX.App.Avalonia",
+            "MainWindow.CatalogContextMenus.cs"));
+        var sharedFrameSource = File.ReadAllText(RepoFile(
+            "shared",
+            "Free.Shared.Shell.Avalonia",
+            "SisterAppWindowFrameBuilder.cs"));
+
+        mainSource.Should().Contain("TopPanelsBelowRibbon: [formulaBar]");
+        mainSource.Should().NotContain("TopPanelsBelowRibbon: [BuildQuickAccessToolbar(), formulaBar]");
+        contextMenuSource.Should().Contain("private void PopulateQuickAccessToolbar(Panel titleBarHost)");
+        contextMenuSource.Should().NotContain("private Control BuildQuickAccessToolbar()");
+        contextMenuSource.Should().Contain("WindowDecorationsElementRole.User");
+        AssertBefore(
+            contextMenuSource,
+            "var latestOptions = AppOptionsStore.Load();",
+            "latestOptions.QuickAccessToolbarCommands =");
+
+        sharedFrameSource.Should().Contain("spec.Window.ExtendClientAreaToDecorationsHint = true;");
+        sharedFrameSource.Should().Contain("spec.Window.ExtendClientAreaTitleBarHeightHint = spec.TitleBarHeight;");
+        sharedFrameSource.Should().Contain("WindowDecorationsElementRole.TitleBar");
+        sharedFrameSource.Should().Contain("WindowDecorationsElementRole.User");
+        sharedFrameSource.Should().NotContain("SystemDecorations =");
     }
 
     [Fact]

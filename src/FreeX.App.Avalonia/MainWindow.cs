@@ -325,6 +325,8 @@ public sealed partial class MainWindow : Window
     private const string PlatformAboutSummary = "Built with .NET 10, Avalonia, ClosedXML.";
     private const string SheetTabContextHelpText = "Selects this sheet. Press F6 repeatedly to reach sheet tabs, use arrow keys to switch sheets, or right-click/press Shift+F10 for sheet tab options.";
     private static readonly IBrush WindowBackground = Brush(246, 247, 249);
+    private static readonly IBrush TitleBarSurface =
+        ResolveTokenBrush("FreeXTitleBarBrush") ?? Brush(23, 50, 77);
     private static readonly IBrush HeaderBackground = Brush(242, 242, 242);
     private static readonly IBrush HeaderForeground = Brushes.Black;
     private static readonly IBrush GridLine = Brush(231, 231, 231);
@@ -1575,12 +1577,19 @@ public sealed partial class MainWindow : Window
             WorkArea: BuildWorkbookWorkArea(),
             StatusBar: statusBar,
             BottomPanelsAboveStatus: [sheetTabs],
-            TopPanelsBelowRibbon: [BuildQuickAccessToolbar(), formulaBar]));
+            TopPanelsBelowRibbon: [formulaBar]));
 
         var root = new AvaloniaGrid();
         root.Children.Add(frame.Root);
         root.Children.Add(BuildBackstageOverlay());
-        return root;
+
+        var windowFrame = SisterAppWindowFrameBuilder.Build(new SisterAppWindowFrameSpec(
+            Window: this,
+            Body: root,
+            TitleBarBackground: TitleBarSurface,
+            TitleBarForeground: StatusBarForeground));
+        PopulateQuickAccessToolbar(windowFrame.QatHost);
+        return windowFrame.Root;
     }
 
     private void ConfigureWorksheetRibbonFlyouts(Control ribbon)

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
@@ -26,25 +27,26 @@ public sealed partial class MainWindow
     private readonly Dictionary<string, Button> _avaloniaQuickAccessButtons =
         new(StringComparer.OrdinalIgnoreCase);
     private AppOptions? _avaloniaQuickAccessOptions;
+    private Panel? _avaloniaQuickAccessTitleBarHost;
 
     internal StackPanel AvaloniaQuickAccessToolbarForTest => _avaloniaQuickAccessToolbar;
+    internal Panel? AvaloniaQuickAccessTitleBarHostForTest => _avaloniaQuickAccessTitleBarHost;
 
-    private Control BuildQuickAccessToolbar()
+    private void PopulateQuickAccessToolbar(Panel titleBarHost)
     {
+        ArgumentNullException.ThrowIfNull(titleBarHost);
+
+        _avaloniaQuickAccessTitleBarHost = titleBarHost;
+        titleBarHost.Children.Clear();
+        titleBarHost.Children.Add(_avaloniaQuickAccessToolbar);
+        AutomationProperties.SetAutomationId(_avaloniaQuickAccessToolbar, "QuickAccessToolbar");
+        AutomationProperties.SetName(_avaloniaQuickAccessToolbar, "Quick Access Toolbar");
+        WindowDecorationProperties.SetElementRole(
+            _avaloniaQuickAccessToolbar,
+            WindowDecorationsElementRole.User);
+
         _avaloniaQuickAccessOptions = AppOptionsStore.Load();
         RebuildAvaloniaQuickAccessToolbar();
-
-        var host = new Border
-        {
-            Background = Brushes.White,
-            BorderBrush = ToolbarBorder,
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            MinHeight = 28,
-            Child = _avaloniaQuickAccessToolbar,
-        };
-        AutomationProperties.SetAutomationId(host, "QuickAccessToolbar");
-        AutomationProperties.SetName(host, "Quick Access Toolbar");
-        return host;
     }
 
     private void RebuildAvaloniaQuickAccessToolbar()
@@ -79,9 +81,10 @@ public sealed partial class MainWindow
             Padding = new Thickness(3),
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
-            Content = AvaloniaRibbonIcons.BuildMonochrome(command.IconKind, 16, command.Id, PrimaryInk),
+            Content = AvaloniaRibbonIcons.BuildMonochrome(command.IconKind, 16, command.Id, StatusBarForeground),
             Tag = command.Id,
         };
+        WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
         AutomationProperties.SetAutomationId(button, command.AutomationId);
         AutomationProperties.SetName(button, UiText.Get(command.TitleResourceKey));
         ToolTip.SetTip(button, UiText.Get(command.TitleResourceKey));
@@ -103,9 +106,10 @@ public sealed partial class MainWindow
                 RibbonCommandIconKind.ChevronDown,
                 8,
                 $"{command.Id}-history",
-                PrimaryInk),
+                StatusBarForeground),
             Tag = $"{command.Id}.History",
         };
+        WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
         AutomationProperties.SetAutomationId(button, $"{command.Id}QatHistoryButton");
         AutomationProperties.SetName(button, $"{command.CommandName} history");
         var menu = AvaloniaManagedContextMenu.Attach(
@@ -121,11 +125,18 @@ public sealed partial class MainWindow
         AvaloniaManagedContextMenu.Attach(
             anchor,
             () => AvaloniaQuickAccessToolbarContextMenu.BuildCustomizationItems(
-                new QuickAccessToolbarCustomizationMenuState(
-                    commandId,
-                    _avaloniaQuickAccessOptions?.QuickAccessToolbarCommands ?? QuickAccessToolbarCatalog.DefaultCommandIds),
+                CreateAvaloniaQuickAccessCustomizationMenuState(commandId),
                 UiText.Get,
                 ApplyAvaloniaQuickAccessCustomization));
+
+    private QuickAccessToolbarCustomizationMenuState CreateAvaloniaQuickAccessCustomizationMenuState(
+        string commandId)
+    {
+        _avaloniaQuickAccessOptions = AppOptionsStore.Load();
+        return new QuickAccessToolbarCustomizationMenuState(
+            commandId,
+            _avaloniaQuickAccessOptions.QuickAccessToolbarCommands);
+    }
 
     private void AttachRibbonQuickAccessCustomization(Button button)
     {
@@ -162,9 +173,6 @@ public sealed partial class MainWindow
 
     private void ApplyAvaloniaQuickAccessCustomization(QuickAccessToolbarMenuCommand command)
     {
-        if (_avaloniaQuickAccessOptions is null)
-            return;
-
         var action = command.Action switch
         {
             QuickAccessToolbarMenuAction.Add => QuickAccessToolbarCustomizationAction.Add,
@@ -174,12 +182,16 @@ public sealed partial class MainWindow
         if (action is null)
             return;
 
-        _avaloniaQuickAccessOptions.QuickAccessToolbarCommands =
+        // Options can be changed while this window is open. Reload immediately before mutation so
+        // saving QAT customization cannot overwrite unrelated settings with the startup snapshot.
+        var latestOptions = AppOptionsStore.Load();
+        latestOptions.QuickAccessToolbarCommands =
             QuickAccessToolbarCustomizationPlanner.Apply(
-                _avaloniaQuickAccessOptions.QuickAccessToolbarCommands,
+                latestOptions.QuickAccessToolbarCommands,
                 command.CommandId,
                 action.Value).ToList();
-        AppOptionsStore.Save(_avaloniaQuickAccessOptions);
+        AppOptionsStore.Save(latestOptions);
+        _avaloniaQuickAccessOptions = latestOptions;
         RebuildAvaloniaQuickAccessToolbar();
     }
 
