@@ -8940,7 +8940,13 @@ public sealed class DocumentView : RichTextBox
         var topAndBottomWidthDip = FloatingWrapReservationTextWidthDip(document);
         var reservation = DocumentViewLayoutPlanner.BuildFloatingWrapReservation(run, topAndBottomWidthDip);
         if (reservation is not null)
+        {
+            // The overlay canvas owns page-positioned charts. Reserving a top-and-bottom band at the
+            // source run instead makes WPF skip text before it reaches the chart's actual page band.
+            if (reservation.Wrapping == ImageWrapping.TopAndBottom && run.Chart is not null)
+                return WrapHyperlinkIfNeeded(run, new WpfRun(string.Empty) { Tag = marker });
             return BuildFloatingWrapReservationFloater(marker, run, reservation, document);
+        }
 
         return WrapHyperlinkIfNeeded(run, new WpfRun(string.Empty) { Tag = marker });
     }

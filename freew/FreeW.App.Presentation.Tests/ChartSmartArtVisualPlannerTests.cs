@@ -211,17 +211,17 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Fact]
-    public void ChartScene_SingleSeriesWordStyleUsesCategoryLegend()
+    public void ChartScene_SingleSeriesColumnUsesWordCategoryLegend()
     {
         var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2", "Q3", "Q4"],
             [1.4, 1.8, 1.6, 2.2], seriesName: "Revenue");
-        chart.StyleId = 7;
-        chart.QuickLayoutId = 9;
         chart.ShowLegend = true;
 
         var scene = ChartSmartArtVisualPlanner.BuildChartScene(chart, 300, 168);
 
         scene.Legend.Select(entry => entry.Text).Should().ContainInOrder("Q1", "Q2", "Q3", "Q4");
+        scene.PaletteHex.Should().ContainInOrder("#000000", "#2F5496", "#1F3864", "#FFC000");
+        scene.Bars.Select(bar => bar.FillHex).Should().ContainInOrder("#000000", "#2F5496", "#1F3864", "#FFC000");
     }
 
     [Fact]

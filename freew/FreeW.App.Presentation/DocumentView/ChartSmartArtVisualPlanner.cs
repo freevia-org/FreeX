@@ -366,6 +366,11 @@ public static class ChartSmartArtVisualPlanner
     private const double WordPyramidRenderedTextSizePt = 14;
     private static readonly IReadOnlyList<string> WordScatterMarkerPaletteHex =
         ChartColorScheme.FindById("mono-blue")!.Colors;
+    // Word's unstylized single-series column and bar charts assign their category points from
+    // this legacy palette. It differs from the model's default series palette but is a render-only
+    // behavior, so an authored scheme or style still takes precedence below.
+    private static readonly IReadOnlyList<string> WordDefaultCategoryPaletteHex =
+        ["#000000", "#2F5496", "#1F3864", "#FFC000"];
 
     public static ChartVisualPlan BuildChartPlan(Chart chart)
     {
@@ -440,7 +445,12 @@ public static class ChartSmartArtVisualPlanner
         // Keep the authored scheme in the plan for round-trip semantics, but match Word in the scene.
         var scenePalette = chart.Kind == ChartKind.Scatter
             ? WordScatterMarkerPaletteHex
-            : plan.PaletteHex;
+            : chart.Kind is ChartKind.Column or ChartKind.Bar
+              && chart.Series.Count == 1
+              && chart.StyleId <= 0
+              && string.IsNullOrWhiteSpace(chart.ColorSchemeId)
+                ? WordDefaultCategoryPaletteHex
+                : plan.PaletteHex;
         // These Word gallery combinations retain their authored style flags but render a clean plot
         // area in the live COM baseline, so this is intentionally a scene-only override.
         var renderGridlines = plan.ShowGridlines
@@ -567,7 +577,7 @@ public static class ChartSmartArtVisualPlanner
                         var y = value >= 0 ? zeroY - barHeight : zeroY;
                         bars.Add(new ChartSceneBar(
                             new ChartSceneRect(x, y, Math.Max(1, seriesWidth - 1), Math.Max(1, barHeight)),
-                            plan.PaletteHex[(seriesCount == 1 ? category : series) % plan.PaletteHex.Count]));
+                            scenePalette[(seriesCount == 1 ? category : series) % scenePalette.Count]));
                         if (plan.ShowDataLabels)
                         {
                             texts.Add(new ChartSceneText(
@@ -613,7 +623,7 @@ public static class ChartSmartArtVisualPlanner
                         var y = plot.Y + category * groupHeight + pad + series * seriesHeight;
                         bars.Add(new ChartSceneBar(
                             new ChartSceneRect(x, y, Math.Max(1, barWidth), Math.Max(1, seriesHeight - 1)),
-                            plan.PaletteHex[(seriesCount == 1 ? category : series) % plan.PaletteHex.Count]));
+                            scenePalette[(seriesCount == 1 ? category : series) % scenePalette.Count]));
                         if (plan.ShowDataLabels)
                         {
                             texts.Add(new ChartSceneText(
@@ -781,8 +791,7 @@ public static class ChartSmartArtVisualPlanner
         !isPie
         && chart.Kind is ChartKind.Column or ChartKind.Bar
         && chart.Series.Count == 1
-        && plan.ShowLegend
-        && chart.StyleId is 7 or 8;
+        && plan.ShowLegend;
 
     private static (double Minimum, double Maximum, double Step) BuildScatterAxis(IReadOnlyList<double> values)
     {

@@ -80,6 +80,34 @@ public sealed class ChartRenderingTests
         Assert.Empty(legendSwatches);
     }
 
+    [StaFact]
+    public void FloatingTopAndBottomChart_UsesOverlayMarkerAndSurvivesCommit()
+    {
+        var chart = Chart.Create(ChartKind.Column, ["Q1", "Q2"], [1.2, 1.7], "Revenue");
+        chart.Placement = new FloatingPlacement
+        {
+            Wrapping = ImageWrapping.TopAndBottom,
+            HorizontalOffsetPt = 210,
+            VerticalOffsetPt = 120,
+        };
+        var document = TextDocument.CreateEmpty();
+        ((Paragraph)document.Blocks[0]).Runs.Add(new Run("before "));
+        ((Paragraph)document.Blocks[0]).Runs.Add(Run.FromChart(chart));
+        ((Paragraph)document.Blocks[0]).Runs.Add(new Run(" after"));
+        var view = new DocumentView();
+
+        view.LoadModel(document);
+
+        var rendered = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single();
+        Assert.Empty(rendered.Inlines.OfType<System.Windows.Documents.Floater>());
+
+        view.CommitToModel();
+
+        var committed = (Paragraph)view.Model.Blocks[0];
+        Assert.Same(chart, committed.Runs[1].Chart);
+        Assert.Equal(ImageWrapping.TopAndBottom, committed.Runs[1].Chart!.Placement!.Wrapping);
+    }
+
     // ── Chart Design gallery render tests ─────────────────────────────────────────────────────────
 
     private static DocumentView ViewWithStyledChart(int styleId = 0, string? colorSchemeId = null, int quickLayoutId = 0)
