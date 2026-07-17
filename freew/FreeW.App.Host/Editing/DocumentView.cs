@@ -86,6 +86,14 @@ public sealed class DocumentView : RichTextBox
     // surrounding line box. The transform is calibrated to Word's cached footnote/endnote references.
     private const double NoteReferenceSuperscriptOffsetDip = 5.0;
 
+    // WPF TextBlock glyphs start a few DIPs inside their layout box. The dedicated fidelity table
+    // surface compensates at the content edge, independently of row measurement and pagination.
+    private const double FidelityTableTextEdgeInsetDip = 3.0;
+
+    // Word includes repeated-header border chrome outside the authored exact row height. Its
+    // top double and bottom thick edges consume five DIPs before the first body row.
+    private const double FidelityTableHeaderChromeReserveDip = 5.0;
+
     private TextDocument _model = TextDocument.CreateEmpty();
     private DocumentViewDepthLayoutPlan _viewDepthLayout =
         DocumentViewDepthLayoutPlanner.Build(FreeWViewDepthMode.LiveEditor);
@@ -121,6 +129,18 @@ public sealed class DocumentView : RichTextBox
     /// </summary>
     [ThreadStatic]
     internal static int _renderHfPageCount;
+
+    // The visual-evidence renderer can opt into fixed table surfaces that use the model's Word
+    // geometry directly. The interactive editor deliberately remains on native FlowDocument tables
+    // so caret editing, selection and commit semantics are unchanged.
+    [ThreadStatic]
+    private static bool _useWordTableFidelitySurfaces;
+
+    public static bool UseWordTableFidelitySurfaces
+    {
+        get => _useWordTableFidelitySurfaces;
+        set => _useWordTableFidelitySurfaces = value;
+    }
 
     private readonly DocumentCommandBus _commands;
     private readonly ScaleTransform _zoomTransform = new(ZoomLevels.Default, ZoomLevels.Default);
@@ -7288,6 +7308,9 @@ public sealed class DocumentView : RichTextBox
             page: document.Page,
             firstPageLeadingContentHeightDip: leadingContentHeightDip);
         var paginationPlan = tableLayoutPlan.Pagination;
+        if (UseWordTableFidelitySurfaces && !TableHasVerticalMerges(table))
+            return BuildWordTableFidelityBlocks(table, document, tableLayoutPlan);
+
         if (ShouldRenderPlannedTablePages(table, paginationPlan))
         {
             var blocks = new List<System.Windows.Documents.Block>();
@@ -7313,6 +7336,220 @@ public sealed class DocumentView : RichTextBox
         }
 
         return [BuildTable(table, document, sourceBlockIndex, tableLayoutPlan)];
+    }
+
+    private static IReadOnlyList<System.Windows.Documents.Block> BuildWordTableFidelityBlocks(
+        ModelTable table,
+        TextDocument document,
+        DocumentTableLayoutPlan tableLayoutPlan)
+    {
+        var pages = tableLayoutPlan.Pagination.Pages;
+        var blocks = new List<System.Windows.Documents.Block>();
+        foreach (var (page, index) in pages.Select((page, index) => (page, index)))
+        {
+            var block = new BlockUIContainer(BuildWordTableFidelitySurface(table, document, tableLayoutPlan, page))
+            {
+                Margin = new Thickness(0)
+            };
+            if (index == 0)
+            {
+                blocks.Add(block);
+            }
+            else
+            {
+                var section = new System.Windows.Documents.Section
+                {
+                    BreakPageBefore = true,
+                    Margin = new Thickness(0)
+                };
+                section.Blocks.Add(block);
+                blocks.Add(section);
+            }
+        }
+
+        return blocks;
+    }
+
+    private static FrameworkElement BuildWordTableFidelitySurface(
+        ModelTable table,
+        TextDocument document,
+        DocumentTableLayoutPlan tableLayoutPlan,
+        DocumentTablePaginationPagePlan pagePlan)
+    {
+        var columnCount = Math.Max(1, table.ColumnCount);
+        var contentWidth = PageLayout.ContentAreaDip(document.Page).Width;
+        var columnWidths = new double[columnCount];
+        var explicitWidth = tableLayoutPlan.ColumnWidthsDip.Sum();
+        if (explicitWidth > 0)
+        {
+            for (var index = 0; index < columnCount; index++)
+                columnWidths[index] = index < tableLayoutPlan.ColumnWidthsDip.Count
+                    ? tableLayoutPlan.ColumnWidthsDip[index]
+                    : 0;
+        }
+        else
+        {
+            var fallbackWidth = (table.PreferredWidthPt is > 0
+                ? PageLayout.PointsToDip(table.PreferredWidthPt.Value)
+                : contentWidth) / columnCount;
+            for (var index = 0; index < columnCount; index++)
+                columnWidths[index] = fallbackWidth;
+        }
+
+        var tableWidth = Math.Max(1, columnWidths.Sum());
+        var spacing = Math.Max(0, PageLayout.PointsToDip(table.CellSpacingPt ?? 0));
+        var tableHeight = Math.Max(1, pagePlan.RenderRows.Sum(row =>
+            row.EstimatedHeightDip + (table.Formatting.HeaderRow && row.SourceRowIndex == 0
+                ? FidelityTableHeaderChromeReserveDip
+                : 0)));
+        var contentHost = new Grid
+        {
+            Width = Math.Max(contentWidth, tableWidth),
+            Height = tableHeight,
+            ClipToBounds = false
+        };
+        var surface = new Canvas
+        {
+            Width = tableWidth,
+            Height = tableHeight,
+            HorizontalAlignment = table.Alignment switch
+            {
+                TableAlignment.Center => HorizontalAlignment.Center,
+                TableAlignment.Right => HorizontalAlignment.Right,
+                _ => HorizontalAlignment.Left
+            },
+            VerticalAlignment = VerticalAlignment.Top,
+            ClipToBounds = false
+        };
+
+        if (table.Formatting.Borders)
+        {
+            var style = table.TableStyleId is { Length: > 0 } styleId
+                ? DocumentTableStyle.FindById(styleId)
+                : null;
+            var tableBorder = TryParseColor(style?.BorderColorHex, out var borderColor)
+                ? new SolidColorBrush(borderColor)
+                : new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A));
+            surface.Children.Add(new Border
+            {
+                Width = tableWidth,
+                Height = tableHeight,
+                BorderBrush = tableBorder,
+                BorderThickness = new Thickness(0.5),
+                IsHitTestVisible = false
+            });
+        }
+
+        var cellPlans = tableLayoutPlan.Cells.ToDictionary(
+            cell => (cell.RowIndex, cell.CellIndex),
+            cell => cell.EffectiveFill);
+        var y = 0.0;
+        foreach (var renderRow in pagePlan.RenderRows)
+        {
+            if (renderRow.SourceRowIndex < 0 || renderRow.SourceRowIndex >= table.Rows.Count)
+                continue;
+
+            var modelRow = table.Rows[renderRow.SourceRowIndex];
+            var headerChromeReserve = table.Formatting.HeaderRow && renderRow.SourceRowIndex == 0
+                ? FidelityTableHeaderChromeReserveDip
+                : 0;
+            var rowHeight = Math.Max(1, renderRow.EstimatedHeightDip - 2 * spacing + headerChromeReserve);
+            var x = 0.0;
+            for (var cellIndex = 0; cellIndex < modelRow.Cells.Count; cellIndex++)
+            {
+                var modelCell = modelRow.Cells[cellIndex];
+                var span = Math.Clamp(Math.Max(1, modelCell.GridSpan), 1, columnCount);
+                // The model's column widths are positioned by accumulated grid columns, rather than
+                // the physical visual cell widths, so merged cells retain their Word grid span.
+                var startColumn = modelRow.Cells.Take(cellIndex).Sum(cell => Math.Max(1, cell.GridSpan));
+                var cellWidth = 0.0;
+                for (var columnIndex = startColumn; columnIndex < Math.Min(columnWidths.Length, startColumn + span); columnIndex++)
+                    cellWidth += columnWidths[columnIndex];
+
+                var visualWidth = Math.Max(1, cellWidth - 2 * spacing);
+                var cellSurface = BuildWordTableFidelityCell(
+                    modelCell,
+                    document,
+                    cellPlans.TryGetValue((renderRow.SourceRowIndex, cellIndex), out var fill) ? fill : DocumentTableCellEffectiveFillPlan.Empty,
+                    visualWidth,
+                    rowHeight,
+                    table.Formatting.Borders,
+                    table.DefaultCellMargins);
+                Canvas.SetLeft(cellSurface, x + spacing);
+                Canvas.SetTop(cellSurface, y + spacing);
+                surface.Children.Add(cellSurface);
+                x += cellWidth;
+            }
+
+            y += renderRow.EstimatedHeightDip + headerChromeReserve;
+        }
+
+        contentHost.Children.Add(surface);
+        return contentHost;
+    }
+
+    private static FrameworkElement BuildWordTableFidelityCell(
+        ModelTableCell cell,
+        TextDocument document,
+        DocumentTableCellEffectiveFillPlan fillPlan,
+        double width,
+        double height,
+        bool tableBorders,
+        TableCellMargins? defaultCellMargins)
+    {
+        var grid = new Grid { Width = width, Height = height, ClipToBounds = true };
+        var background = TryParseColor(fillPlan.EffectiveFillHex, out var fillColor)
+            ? new SolidColorBrush(fillColor)
+            : Brushes.Transparent;
+        grid.Children.Add(new Border
+        {
+            Background = background,
+            BorderBrush = tableBorders ? new SolidColorBrush(Color.FromRgb(0x1F, 0x4E, 0x79)) : Brushes.Transparent,
+            BorderThickness = tableBorders ? new Thickness(0.5) : new Thickness(0)
+        });
+
+        var cellBorderPlan = TableCellBorderVisualPlanner.Build(cell.Borders, PxPerPoint);
+        if (cellBorderPlan.HasVisibleEdges)
+        {
+            var borderChrome = new TableCellBorderChrome(cellBorderPlan)
+            {
+                IsHitTestVisible = false,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch
+            };
+            Panel.SetZIndex(borderChrome, 2);
+            grid.Children.Add(borderChrome);
+        }
+
+        var firstParagraph = cell.Paragraphs.FirstOrDefault() ?? new ModelParagraph();
+        var firstRun = firstParagraph.Runs.FirstOrDefault() ?? new ModelRun(string.Empty);
+        var formatting = Resolve(firstRun, firstParagraph, document);
+        var margins = cell.Margins ?? defaultCellMargins ?? TableCellMargins.Default;
+        var text = new TextBlock
+        {
+            Text = string.Join(Environment.NewLine, cell.Paragraphs.Select(paragraph => paragraph.PlainText)),
+            TextWrapping = TextWrapping.Wrap,
+            TextAlignment = ToWpfAlignment(Resolve(firstParagraph, document).Alignment),
+            FontFamily = new FontFamily(formatting.FontFamily ?? "Calibri"),
+            FontSize = (formatting.FontSizePt ?? DefaultFontSizePt) * PxPerPoint,
+            FontWeight = fillPlan.EffectiveBold || formatting.Bold ? FontWeights.Bold : FontWeights.Normal,
+            FontStyle = formatting.Italic ? FontStyles.Italic : FontStyles.Normal,
+            Foreground = TryParseColor(formatting.ColorHex, out var textColor) ? new SolidColorBrush(textColor) : Brushes.Black,
+            Margin = new Thickness(
+                PageLayout.PointsToDip(margins.LeftPt) + FidelityTableTextEdgeInsetDip,
+                PageLayout.PointsToDip(margins.TopPt) + FidelityTableTextEdgeInsetDip,
+                PageLayout.PointsToDip(margins.RightPt),
+                PageLayout.PointsToDip(margins.BottomPt)),
+            VerticalAlignment = cell.VerticalAlignment switch
+            {
+                TableCellVerticalAlignment.Center => VerticalAlignment.Center,
+                TableCellVerticalAlignment.Bottom => VerticalAlignment.Bottom,
+                _ => VerticalAlignment.Top
+            }
+        };
+        Panel.SetZIndex(text, 1);
+        grid.Children.Add(text);
+        return grid;
     }
 
     private static double EstimateLeadingContentHeightDip(TextDocument document, int sourceBlockIndex)

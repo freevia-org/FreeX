@@ -200,7 +200,16 @@ static void RenderDocumentComposite(
 
     // ═══ LAYER 2: Build FlowDocument with correct column layout ═══════════════════════════════════
     var bodyView = new DocumentView { Width = pageWDip };
-    bodyView.LoadModel(doc);
+    var priorTableFidelityMode = DocumentView.UseWordTableFidelitySurfaces;
+    DocumentView.UseWordTableFidelitySurfaces = true;
+    try
+    {
+        bodyView.LoadModel(doc);
+    }
+    finally
+    {
+        DocumentView.UseWordTableFidelitySurfaces = priorTableFidelityMode;
+    }
 
     // Detach the FlowDocument so we can paginate it ourselves (same pattern as bare path).
     FlowDocument flow = bodyView.Document;

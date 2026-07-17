@@ -1093,6 +1093,40 @@ public sealed class DocumentViewRoundTripTests
             .Which.Rows.Should().HaveCount(sourceTable.Rows.Count);
     }
 
+    [StaFact]
+    public void TableFidelitySurface_UsesModelGeometryWithoutChangingEditableTableRendering()
+    {
+        var document = FreeWVisualEvidenceDocumentFactory.BuildTablePageCompositionStressDocument();
+        var sourceTable = document.Blocks.OfType<Table>().Single();
+        var originalMode = DocumentView.UseWordTableFidelitySurfaces;
+        try
+        {
+            DocumentView.UseWordTableFidelitySurfaces = true;
+            var fidelityView = new DocumentView();
+            fidelityView.LoadModel(document);
+
+            var fidelitySurfaces = FlattenBlocks(fidelityView.Document.Blocks)
+                .OfType<BlockUIContainer>()
+                .ToList();
+            fidelitySurfaces.Should().HaveCount(3, "the planned table pages render as fixed Word-geometry surfaces");
+            var firstSurfaceHost = fidelitySurfaces[0].Child.Should().BeOfType<Grid>().Subject;
+            var surface = firstSurfaceHost.Children.OfType<Canvas>().Should().ContainSingle().Subject;
+            surface.Width.Should().BeApproximately(sourceTable.ColumnWidthsPt.Sum() * (96.0 / 72.0), 0.01);
+            surface.Height.Should().BeGreaterThan(0);
+            RenderedTables(fidelityView.Document).Should().BeEmpty();
+
+            DocumentView.UseWordTableFidelitySurfaces = false;
+            var editableView = new DocumentView();
+            editableView.LoadModel(document);
+            RenderedTables(editableView.Document).Should().HaveCount(3,
+                "the interactive editor retains WPF tables for editing and commit semantics");
+        }
+        finally
+        {
+            DocumentView.UseWordTableFidelitySurfaces = originalMode;
+        }
+    }
+
     private static string RenderedRowText(System.Windows.Documents.TableRow row)
     {
         var text = row.Cells.SelectMany(RenderedCellParagraphs)
@@ -1102,25 +1136,25 @@ public sealed class DocumentViewRoundTripTests
 
     private static List<System.Windows.Documents.Table> RenderedTables(FlowDocument document)
     {
-        static IEnumerable<System.Windows.Documents.Block> FlattenSections(BlockCollection blocks)
-        {
-            foreach (var block in blocks)
-            {
-                if (block is System.Windows.Documents.Section section)
-                {
-                    foreach (var nested in FlattenSections(section.Blocks))
-                        yield return nested;
-                }
-                else
-                {
-                    yield return block;
-                }
-            }
-        }
-
-        return FlattenSections(document.Blocks)
+        return FlattenBlocks(document.Blocks)
             .OfType<System.Windows.Documents.Table>()
             .ToList();
+    }
+
+    private static IEnumerable<System.Windows.Documents.Block> FlattenBlocks(BlockCollection blocks)
+    {
+        foreach (var block in blocks)
+        {
+            if (block is System.Windows.Documents.Section section)
+            {
+                foreach (var nested in FlattenBlocks(section.Blocks))
+                    yield return nested;
+            }
+            else
+            {
+                yield return block;
+            }
+        }
     }
 
     private static List<System.Windows.Documents.Section> RenderedTableSections(FlowDocument document) =>
