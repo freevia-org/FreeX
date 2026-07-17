@@ -4286,8 +4286,10 @@ public static class DocxReader
 
     private static string? NormalizeSmartArtColorId(string? colorId) => colorId?.ToLowerInvariant() switch
     {
-        // Word's built-in accent1_2 is FreeW's named Accent 1 gallery entry.
+        // Word's native gallery suffixes differ from FreeW's concise palette ids.
         "accent1_2" => "accent1",
+        "accent2_1" => "accent2",
+        "accent3_1" => "accent3",
         _ => colorId
     };
 

@@ -1258,7 +1258,10 @@ public static class ChartSmartArtVisualPlanner
         SmartArtStyle style) =>
         string.Equals(layoutId, "orgchart1", StringComparison.OrdinalIgnoreCase)
         && string.Equals(colorScheme.Id, "accent1", StringComparison.OrdinalIgnoreCase)
-        && string.Equals(style.Id, "intense1", StringComparison.OrdinalIgnoreCase);
+        // The OOXML writer emits Word's native simple1 body for every SmartArt style, so the
+        // persisted document reads back as simple1 even when the author selected intense1.
+        && (string.Equals(style.Id, "intense1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(style.Id, "simple1", StringComparison.OrdinalIgnoreCase));
 
     private static List<SmartArtNodeVisualPlan> ApplyNativeWordOrgChartStyle(
         IReadOnlyList<SmartArtNodeVisualPlan> nodes) =>
@@ -1283,7 +1286,9 @@ public static class ChartSmartArtVisualPlanner
         SmartArtStyle style) =>
         string.Equals(layoutId, "pyramid1", StringComparison.OrdinalIgnoreCase)
         && string.Equals(colorScheme.Id, "accent2", StringComparison.OrdinalIgnoreCase)
-        && string.Equals(style.Id, "flat1", StringComparison.OrdinalIgnoreCase);
+        // See the matching org-chart case: a serialized flat1 diagram uses the simple1 body.
+        && (string.Equals(style.Id, "flat1", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(style.Id, "simple1", StringComparison.OrdinalIgnoreCase));
 
     private static List<SmartArtNodeVisualPlan> ApplyNativeWordPyramidStyle(
         IReadOnlyList<SmartArtNodeVisualPlan> nodes) =>

@@ -623,6 +623,21 @@ public class SmartArtRoundTripTests
         diagram.ColorSchemeId.Should().Be("colorful2");
     }
 
+    [Theory]
+    [InlineData("accent1")]
+    [InlineData("accent2")]
+    [InlineData("accent3")]
+    public void NativeAccentColorSchemeId_RoundTrips_ViaColorsPart(string colorSchemeId)
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["Top", "Base"]);
+        smartArt.ColorSchemeId = colorSchemeId;
+
+        var read = RoundTrip(SingleDiagramDocument(smartArt));
+
+        var diagram = read.Paragraphs.Single().Runs.Single(r => r.SmartArt is not null).SmartArt!;
+        diagram.ColorSchemeId.Should().Be(colorSchemeId);
+    }
+
     [Fact]
     public void StyleId_RoundTrips_ViaQuickStylePart()
     {

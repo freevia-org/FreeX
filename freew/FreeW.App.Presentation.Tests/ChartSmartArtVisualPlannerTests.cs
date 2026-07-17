@@ -572,6 +572,27 @@ public sealed class ChartSmartArtVisualPlannerTests
     }
 
     [Theory]
+    [InlineData("intense1", "orgchart1", "accent1", "#1F3864")]
+    [InlineData("flat1", "pyramid1", "accent2", "#7F0000")]
+    [InlineData("simple1", "orgchart1", "accent1", "#1F3864")]
+    [InlineData("simple1", "pyramid1", "accent2", "#7F0000")]
+    public void SmartArtPlan_UsesWordNativeStyleAfterWriterSimplifiesGalleryBody(
+        string styleId,
+        string layoutId,
+        string colorSchemeId,
+        string expectedFillHex)
+    {
+        var smartArt = SmartArt.Create(SmartArtKind.List, ["One", "Two"]);
+        smartArt.LayoutId = layoutId;
+        smartArt.ColorSchemeId = colorSchemeId;
+        smartArt.StyleId = styleId;
+
+        var plan = ChartSmartArtVisualPlanner.BuildSmartArtPlan(smartArt);
+
+        plan.Nodes.Select(node => node.FillHex).Should().OnlyContain(hex => hex == expectedFillHex);
+    }
+
+    [Theory]
     [InlineData("list1", "BasicList", 4, 0, 128, 154)]
     [InlineData("vertbullet1", "VerticalBulletList", 4, 0, 128, 154)]
     [InlineData("process1", "BasicProcess", 4, 3, 344, 46)]
