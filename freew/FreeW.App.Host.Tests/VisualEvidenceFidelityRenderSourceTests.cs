@@ -15,7 +15,7 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("FreeWVisualEvidencePlanner.EnsureTrusted(row)");
         source.Should().Contain("int actualPageCount = Math.Max(1, paginator.PageCount);");
         source.Should().Contain("int pageCount = Math.Min(actualPageCount, maxPages);");
-        source.Should().Contain("pageNumberText, actualPageCount");
+        source.Should().Contain("box.PageNumberText, actualPageCount");
         source.Should().Contain("ComputeWpfPixelStats(");
         source.Should().Contain("FreeWVisualEvidencePlanner.ResolveSectionOrdinal");
         source.Should().Contain("sectionRelativePageNumber");
@@ -94,6 +94,13 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("PageLayout.PointsToDip(24)");
         source.Should().Contain("thisPixW - 2 * ins");
         source.Should().Contain("width - inset");
+        source.Should().Contain("if (panel is not null && i < panel.PageBoxes.Count)");
+        source.Should().Contain("var box = panel.PageBoxes[i];");
+        source.Should().Contain("box.HeaderSubEditor is not null");
+        source.Should().Contain("box.FooterSubEditor is not null");
+        source.Should().Contain("var headerTop = thisPageSettings.HeaderDistancePt > 0");
+        source.Should().Contain("var footerTop = thisPageSettings.FooterDistancePt > 0");
+        source.Should().Contain("flow.PagePadding = new Thickness(");
         project.Should().Contain("FreeW.App.Presentation");
         project.Should().Contain("PackageReference Include=\"SkiaSharp\"");
     }
