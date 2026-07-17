@@ -58,6 +58,63 @@ public sealed partial class MainWindow
         ClearSelectionAndEdit,
     }
 
+    internal readonly record struct AvaloniaHostShortcutRule(
+        Key Key,
+        KeyModifiers Modifiers,
+        AvaloniaHostShortcut Shortcut);
+
+    internal static IReadOnlyList<AvaloniaHostShortcutRule> AvaloniaHostShortcutRules { get; } =
+    [
+        R(Key.T, Ctrl, AvaloniaHostShortcut.CreateTable),
+        R(Key.L, Ctrl, AvaloniaHostShortcut.CreateTable),
+        R(Key.OemSemicolon, Ctrl, AvaloniaHostShortcut.InsertCurrentDate),
+        R(Key.OemSemicolon, CtrlShift, AvaloniaHostShortcut.InsertCurrentTime),
+        R(Key.D8, Ctrl, AvaloniaHostShortcut.ToggleOutlineSymbols),
+        R(Key.F3, None, AvaloniaHostShortcut.PasteName),
+        R(Key.F3, Ctrl, AvaloniaHostShortcut.NameManager),
+        R(Key.F3, CtrlShift, AvaloniaHostShortcut.CreateNamesFromSelection),
+        R(Key.F7, None, AvaloniaHostShortcut.SpellCheck),
+        R(Key.F5, Ctrl, AvaloniaHostShortcut.RestoreWorkbookWindow),
+        R(Key.F7, Ctrl, AvaloniaHostShortcut.MoveWorkbookWindow),
+        R(Key.F8, Ctrl, AvaloniaHostShortcut.SizeWorkbookWindow),
+        R(Key.F6, Ctrl, AvaloniaHostShortcut.SwitchToNextWorkbookWindow),
+        R(Key.Tab, Ctrl, AvaloniaHostShortcut.SwitchToNextWorkbookWindow),
+        R(Key.F6, CtrlShift, AvaloniaHostShortcut.SwitchToPreviousWorkbookWindow),
+        R(Key.Tab, CtrlShift, AvaloniaHostShortcut.SwitchToPreviousWorkbookWindow),
+        R(Key.F9, Ctrl, AvaloniaHostShortcut.MinimizeWorkbookWindow),
+        R(Key.F10, Ctrl, AvaloniaHostShortcut.MaximizeOrRestoreWorkbookWindow),
+        R(Key.F9, CtrlAltShift, AvaloniaHostShortcut.RebuildDependenciesAndCalculate),
+        R(Key.F10, AltShift, AvaloniaHostShortcut.OpenErrorChecking),
+        R(Key.U, CtrlShift, AvaloniaHostShortcut.ToggleFormulaBarExpansion),
+        R(Key.L, CtrlShift, AvaloniaHostShortcut.ToggleFilter),
+        R(Key.L, CtrlAlt, AvaloniaHostShortcut.ReapplyFilter),
+        R(Key.Q, Ctrl, AvaloniaHostShortcut.QuickAnalysis),
+        R(Key.F1, Alt, AvaloniaHostShortcut.InsertEmbeddedChart),
+        R(Key.F11, None, AvaloniaHostShortcut.InsertChartSheet),
+        R(Key.Right, AltShift, AvaloniaHostShortcut.GroupSelection),
+        R(Key.Left, AltShift, AvaloniaHostShortcut.UngroupSelection),
+        R(Key.F, CtrlShift, AvaloniaHostShortcut.OpenFormatCellsFont),
+        R(Key.P, CtrlShift, AvaloniaHostShortcut.OpenFormatCellsFont),
+        R(Key.F2, Shift, AvaloniaHostShortcut.NewNote),
+        R(Key.F2, CtrlShift, AvaloniaHostShortcut.NewThreadedComment),
+        R(Key.F2, Ctrl, AvaloniaHostShortcut.EditInFormulaBar),
+        R(Key.OemPlus, CtrlAlt, AvaloniaHostShortcut.ZoomIn),
+        R(Key.Add, CtrlAlt, AvaloniaHostShortcut.ZoomIn),
+        R(Key.OemMinus, CtrlAlt, AvaloniaHostShortcut.ZoomOut),
+        R(Key.Subtract, CtrlAlt, AvaloniaHostShortcut.ZoomOut),
+        R(Key.OemQuotes, Ctrl, AvaloniaHostShortcut.CopyFormulaFromAbove),
+        R(Key.OemQuotes, CtrlShift, AvaloniaHostShortcut.CopyValueFromAbove),
+        R(Key.Back, Ctrl, AvaloniaHostShortcut.ScrollActiveCellIntoView),
+        R(Key.OemPeriod, Ctrl, AvaloniaHostShortcut.CycleSelectionCorner),
+        R(Key.Decimal, Ctrl, AvaloniaHostShortcut.CycleSelectionCorner),
+        R(Key.OemOpenBrackets, Ctrl, AvaloniaHostShortcut.SelectDirectPrecedents),
+        R(Key.OemCloseBrackets, Ctrl, AvaloniaHostShortcut.SelectDirectDependents),
+        R(Key.OemOpenBrackets, CtrlShift, AvaloniaHostShortcut.SelectAllPrecedents),
+        R(Key.OemCloseBrackets, CtrlShift, AvaloniaHostShortcut.SelectAllDependents),
+        R(Key.Back, None, AvaloniaHostShortcut.ClearSelectionAndEdit),
+        R(Key.Back, Shift, AvaloniaHostShortcut.ClearSelectionAndEdit),
+    ];
+
     internal static bool TryResolveAvaloniaHostShortcutForTest(
         Key key,
         KeyModifiers modifiers,
@@ -71,54 +128,32 @@ public sealed partial class MainWindow
         KeyModifiers modifiers,
         out AvaloniaHostShortcut shortcut)
     {
-        var resolved = (key, modifiers) switch
+        foreach (var rule in AvaloniaHostShortcutRules)
         {
-            (Key.T or Key.L, KeyModifiers.Control) => AvaloniaHostShortcut.CreateTable,
-            (Key.OemSemicolon, KeyModifiers.Control) => AvaloniaHostShortcut.InsertCurrentDate,
-            (Key.OemSemicolon, KeyModifiers.Control | KeyModifiers.Shift) => AvaloniaHostShortcut.InsertCurrentTime,
-            (Key.D8, KeyModifiers.Control) => AvaloniaHostShortcut.ToggleOutlineSymbols,
-            (Key.F3, KeyModifiers.None) => AvaloniaHostShortcut.PasteName,
-            (Key.F3, KeyModifiers.Control) => AvaloniaHostShortcut.NameManager,
-            (Key.F3, KeyModifiers.Control | KeyModifiers.Shift) => AvaloniaHostShortcut.CreateNamesFromSelection,
-            (Key.F7, KeyModifiers.None) => AvaloniaHostShortcut.SpellCheck,
-            (Key.F5, KeyModifiers.Control) => AvaloniaHostShortcut.RestoreWorkbookWindow,
-            (Key.F7, KeyModifiers.Control) => AvaloniaHostShortcut.MoveWorkbookWindow,
-            (Key.F8, KeyModifiers.Control) => AvaloniaHostShortcut.SizeWorkbookWindow,
-            (Key.F6 or Key.Tab, KeyModifiers.Control) => AvaloniaHostShortcut.SwitchToNextWorkbookWindow,
-            (Key.F6 or Key.Tab, KeyModifiers.Control | KeyModifiers.Shift) => AvaloniaHostShortcut.SwitchToPreviousWorkbookWindow,
-            (Key.F9, KeyModifiers.Control) => AvaloniaHostShortcut.MinimizeWorkbookWindow,
-            (Key.F10, KeyModifiers.Control) => AvaloniaHostShortcut.MaximizeOrRestoreWorkbookWindow,
-            (Key.F9, KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Shift) => AvaloniaHostShortcut.RebuildDependenciesAndCalculate,
-            (Key.F10, KeyModifiers.Alt | KeyModifiers.Shift) => AvaloniaHostShortcut.OpenErrorChecking,
-            (Key.U, KeyModifiers.Control | KeyModifiers.Shift) => AvaloniaHostShortcut.ToggleFormulaBarExpansion,
-            (Key.L, KeyModifiers.Control | KeyModifiers.Shift) => AvaloniaHostShortcut.ToggleFilter,
-            (Key.L, KeyModifiers.Control | KeyModifiers.Alt) => AvaloniaHostShortcut.ReapplyFilter,
-            (Key.Q, KeyModifiers.Control) => AvaloniaHostShortcut.QuickAnalysis,
-            (Key.F1, KeyModifiers.Alt) => AvaloniaHostShortcut.InsertEmbeddedChart,
-            (Key.F11, KeyModifiers.None) => AvaloniaHostShortcut.InsertChartSheet,
-            (Key.Right, KeyModifiers.Alt | KeyModifiers.Shift) => AvaloniaHostShortcut.GroupSelection,
-            (Key.Left, KeyModifiers.Alt | KeyModifiers.Shift) => AvaloniaHostShortcut.UngroupSelection,
-            (Key.F or Key.P, KeyModifiers.Control | KeyModifiers.Shift) => AvaloniaHostShortcut.OpenFormatCellsFont,
-            (Key.F2, KeyModifiers.Shift) => AvaloniaHostShortcut.NewNote,
-            (Key.F2, KeyModifiers.Control | KeyModifiers.Shift) => AvaloniaHostShortcut.NewThreadedComment,
-            (Key.F2, KeyModifiers.Control) => AvaloniaHostShortcut.EditInFormulaBar,
-            (Key.OemPlus or Key.Add, KeyModifiers.Control | KeyModifiers.Alt) => AvaloniaHostShortcut.ZoomIn,
-            (Key.OemMinus or Key.Subtract, KeyModifiers.Control | KeyModifiers.Alt) => AvaloniaHostShortcut.ZoomOut,
-            (Key.OemQuotes, KeyModifiers.Control) => AvaloniaHostShortcut.CopyFormulaFromAbove,
-            (Key.OemQuotes, KeyModifiers.Control | KeyModifiers.Shift) => AvaloniaHostShortcut.CopyValueFromAbove,
-            (Key.Back, KeyModifiers.Control) => AvaloniaHostShortcut.ScrollActiveCellIntoView,
-            (Key.OemPeriod or Key.Decimal, KeyModifiers.Control) => AvaloniaHostShortcut.CycleSelectionCorner,
-            (Key.OemOpenBrackets, KeyModifiers.Control) => AvaloniaHostShortcut.SelectDirectPrecedents,
-            (Key.OemCloseBrackets, KeyModifiers.Control) => AvaloniaHostShortcut.SelectDirectDependents,
-            (Key.OemOpenBrackets, KeyModifiers.Control | KeyModifiers.Shift) => AvaloniaHostShortcut.SelectAllPrecedents,
-            (Key.OemCloseBrackets, KeyModifiers.Control | KeyModifiers.Shift) => AvaloniaHostShortcut.SelectAllDependents,
-            (Key.Back, KeyModifiers.None or KeyModifiers.Shift) => AvaloniaHostShortcut.ClearSelectionAndEdit,
-            _ => (AvaloniaHostShortcut?)null,
-        };
+            if (rule.Key != key || rule.Modifiers != modifiers)
+                continue;
 
-        shortcut = resolved.GetValueOrDefault();
-        return resolved.HasValue;
+            shortcut = rule.Shortcut;
+            return true;
+        }
+
+        shortcut = default;
+        return false;
     }
+
+    private static AvaloniaHostShortcutRule R(
+        Key key,
+        KeyModifiers modifiers,
+        AvaloniaHostShortcut shortcut) => new(key, modifiers, shortcut);
+
+    private const KeyModifiers None = KeyModifiers.None;
+    private const KeyModifiers Ctrl = KeyModifiers.Control;
+    private const KeyModifiers Shift = KeyModifiers.Shift;
+    private const KeyModifiers Alt = KeyModifiers.Alt;
+    private const KeyModifiers CtrlShift = KeyModifiers.Control | KeyModifiers.Shift;
+    private const KeyModifiers CtrlAlt = KeyModifiers.Control | KeyModifiers.Alt;
+    private const KeyModifiers AltShift = KeyModifiers.Alt | KeyModifiers.Shift;
+    private const KeyModifiers CtrlAltShift = KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Shift;
 
     private async Task<bool> TryHandleAvaloniaHostShortcutAsync(KeyEventArgs args)
     {

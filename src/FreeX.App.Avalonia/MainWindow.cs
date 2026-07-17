@@ -726,26 +726,9 @@ public sealed partial class MainWindow : Window
     internal WorkbookSession Session => _session;
 
     internal static IReadOnlySet<string> InteractiveValidationKeyboardShortcutScenarioIds { get; } =
-        new[]
-        {
-            "shortcut.data.filter-toggle-reapply",
-            "shortcut.data.outline-group",
-            "shortcut.editing.copy-from-above",
-            "shortcut.editing.copy-value-from-above",
-            "shortcut.editing.current-date-time",
-            "shortcut.editing.formula-bar",
-            "shortcut.formulas.calculate",
-            "shortcut.formulas.expand-formula-bar",
-            "shortcut.formulas.trace-references",
-            "shortcut.insert.chart",
-            "shortcut.navigation.commit-forward",
-            "shortcut.navigation.commit-backward",
-            "shortcut.navigation.scroll-active-cell",
-            "shortcut.selection.cycle-active-corner",
-            "shortcut.formulas.reference-mode",
-            "shortcut.view.keyboard-zoom",
-            "shortcut.view.outline-symbols",
-        }.ToFrozenSet(StringComparer.Ordinal);
+        FreeX.App.Presentation.InteractionValidation.InteractiveValidationInventory.KeyboardShortcuts
+            .Select(scenario => scenario.Id)
+            .ToFrozenSet(StringComparer.Ordinal);
 
     /// <summary>
     /// Test-only seam that rebuilds the worksheet grid (as <see cref="RefreshShell"/> does on every

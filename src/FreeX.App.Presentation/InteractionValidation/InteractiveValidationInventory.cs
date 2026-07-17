@@ -1,3 +1,5 @@
+using FreeX.App.Presentation.Shell;
+
 namespace FreeX.App.Presentation.InteractionValidation;
 
 [Flags]
@@ -7,6 +9,7 @@ public enum ShortcutModifierKeys
     Control = 1,
     Shift = 2,
     Alt = 4,
+    Meta = 8,
 }
 
 public enum ShortcutInteractionKind
@@ -77,11 +80,10 @@ public static class InteractiveValidationInventory
     public static IReadOnlyList<KeyboardShortcutValidationScenario> KeyboardShortcuts { get; } =
     [
         Shortcut("shortcut.file.new-workbook", "File", "WorkbookLifecycle", "Ctrl+N", "Creates a blank workbook."),
-        Shortcut("shortcut.file.open", "File", "WorkbookLifecycle", "Ctrl+O", "Opens the workbook file picker.", isNative: true),
-        Shortcut("shortcut.file.save", "File", "WorkbookLifecycle", "Ctrl+S", "Saves to the current path or opens Save As when a path cannot be reused."),
-        Shortcut("shortcut.file.save-as", "File", "WorkbookLifecycle", "F12", "Opens Save As.", isNative: true),
+        Shortcut("shortcut.file.open", "File", "WorkbookLifecycle", "Ctrl+O / Ctrl+F12", "Opens the workbook file picker.", ["Ctrl+F12"], isNative: true),
+        Shortcut("shortcut.file.save", "File", "WorkbookLifecycle", "Ctrl+S / Shift+F12", "Saves to the current path or opens Save As when a path cannot be reused.", ["Shift+F12"]),
         Shortcut("shortcut.file.close-workbook", "File", "WorkbookLifecycle", "Ctrl+W / Ctrl+F4", "Closes the current workbook window.", ["Ctrl+F4"]),
-        Shortcut("shortcut.file.print", "File", "PrintWorkflow", "Ctrl+P", "Opens FreeX print preview with keyboard-accessible print settings and Page Setup controls."),
+        Shortcut("shortcut.file.print", "File", "PrintWorkflow", "Ctrl+P / Ctrl+Shift+F12", "Opens FreeX print preview with keyboard-accessible print settings and Page Setup controls.", ["Ctrl+Shift+F12"]),
 
         Shortcut("shortcut.edit.undo", "Edit", "CommandHistory", "Ctrl+Z / Alt+Backspace", "Undoes the last command-bus action.", ["Alt+Backspace"]),
         Shortcut("shortcut.edit.redo", "Edit", "CommandHistory", "Ctrl+Y / Ctrl+Shift+Z", "Redoes the last undone command-bus action.", ["Ctrl+Shift+Z"]),
@@ -125,6 +127,7 @@ public static class InteractiveValidationInventory
         Shortcut("shortcut.editing.cell-editor", "Editing", "WorksheetEditing", "F2", "Enters cell edit mode."),
         Shortcut("shortcut.editing.formula-bar", "Editing", "WorksheetEditing", "Ctrl+F2", "Moves editing focus to the formula bar."),
         Shortcut("shortcut.editing.clear-contents", "Editing", "WorksheetEditing", "Delete", "Clears the selected cells' contents."),
+        Shortcut("shortcut.editing.clear-and-edit", "Editing", "WorksheetEditing", "Backspace / Shift+Backspace", "Clears the active cell and enters inline editing.", ["Shift+Backspace"]),
         Shortcut("shortcut.editing.insert-delete", "Editing", "WorksheetStructure", "Ctrl++ / Ctrl+-", "Inserts or deletes selected rows, columns, or shifted cells through the appropriate prompt.", ["Ctrl+Shift+=", "Ctrl+-"]),
 
         Shortcut("shortcut.row-column.rows-hide-unhide", "Row/Column", "RowColumnLayout", "Ctrl+9 / Ctrl+Shift+9", "Hides or unhides the selected rows.", ["Ctrl+Shift+9"]),
@@ -159,6 +162,7 @@ public static class InteractiveValidationInventory
         Shortcut("shortcut.view.keyboard-zoom", "View", "WorksheetView", "Ctrl+Alt+= / Ctrl+Alt+-", "Zooms the worksheet in or out from the keyboard.", ["Ctrl+Alt+-"]),
 
         Shortcut("shortcut.data.filter-toggle-reapply", "Data", "AutoFilter", "Ctrl+Shift+L / Ctrl+Alt+L", "Toggles AutoFilter or reapplies the remembered filter.", ["Ctrl+Alt+L", "Alt+D, F, F"]),
+        Shortcut("shortcut.data.flash-fill", "Data", "FlashFill", "Ctrl+E", "Runs Flash Fill for the active selection."),
         Shortcut("shortcut.data.dropdown", "Data", "DataDropdowns", "Alt+Down", "Opens the active validation list or AutoFilter dropdown with keyboard navigation."),
         Shortcut("shortcut.data.outline-group", "Data", "WorksheetOutline", "Alt+Shift+Right / Alt+Shift+Left", "Groups or ungroups the selected rows or columns.", ["Alt+Shift+Left"]),
 
@@ -258,14 +262,22 @@ public static class InteractiveValidationInventory
         bool isExternal = false) =>
         new(id, area, owner, displayChord, aliases ?? [], InteractionsFor(id), expectedBehavior, isNative, isExternal);
 
-    private static IReadOnlyList<ShortcutInteractionDescriptor> InteractionsFor(string id) => id switch
+    private static IReadOnlyList<ShortcutInteractionDescriptor> InteractionsFor(string id)
+    {
+        var windowsInteractions = WindowsInteractionsFor(id);
+        var nativeInteractions = NativeMenuInteractionsFor(windowsInteractions);
+        return nativeInteractions.Count == 0
+            ? windowsInteractions
+            : [.. windowsInteractions, .. nativeInteractions];
+    }
+
+    private static IReadOnlyList<ShortcutInteractionDescriptor> WindowsInteractionsFor(string id) => id switch
     {
         "shortcut.file.new-workbook" => [K("Ctrl+N", Workbook, "N", Ctrl)],
-        "shortcut.file.open" => [K("Ctrl+O", Workbook, "O", Ctrl)],
-        "shortcut.file.save" => [K("Ctrl+S", Workbook, "S", Ctrl)],
-        "shortcut.file.save-as" => [K("F12", Workbook, "F12")],
+        "shortcut.file.open" => [K("Ctrl+O", Workbook, "O", Ctrl), K("Ctrl+F12", Workbook, "F12", Ctrl)],
+        "shortcut.file.save" => [K("Ctrl+S", Workbook, "S", Ctrl), K("Shift+F12", Workbook, "F12", Shift)],
         "shortcut.file.close-workbook" => [K("Ctrl+W", Workbook, "W", Ctrl), K("Ctrl+F4", Workbook, "F4", Ctrl)],
-        "shortcut.file.print" => [K("Ctrl+P", Workbook, "P", Ctrl)],
+        "shortcut.file.print" => [K("Ctrl+P", Workbook, "P", Ctrl), K("Ctrl+Shift+F12", Workbook, "F12", CtrlShift)],
 
         "shortcut.edit.undo" => [K("Ctrl+Z", Workbook, "Z", Ctrl), K("Alt+Backspace", Workbook, "Backspace", Alt)],
         "shortcut.edit.redo" => [K("Ctrl+Y", Workbook, "Y", Ctrl), K("Ctrl+Shift+Z", Workbook, "Z", CtrlShift)],
@@ -313,11 +325,12 @@ public static class InteractiveValidationInventory
         "shortcut.selection.visible-cells" => [K("Alt+;", WorksheetSelection, "Semicolon", Alt)],
         "shortcut.selection.notes-comments" => [K("Ctrl+Shift+O", WorksheetSelection, "O", CtrlShift)],
         "shortcut.selection.extend-or-add-mode" => [K("F8", WorksheetSelection, "F8"), K("Shift+F8", WorksheetSelection, "F8", Shift)],
-        "shortcut.selection.cycle-active-corner" => [K("Ctrl+.", WorksheetSelection, "Period", Ctrl)],
+        "shortcut.selection.cycle-active-corner" => [K("Ctrl+.", WorksheetSelection, "Period", Ctrl), K("Ctrl+Numpad Decimal", WorksheetSelection, "Decimal", Ctrl)],
 
         "shortcut.editing.cell-editor" => [K("F2", Worksheet, "F2")],
         "shortcut.editing.formula-bar" => [K("Ctrl+F2", Worksheet, "F2", Ctrl)],
         "shortcut.editing.clear-contents" => [K("Delete", WorksheetSelection, "Delete")],
+        "shortcut.editing.clear-and-edit" => [K("Backspace", Worksheet, "Backspace"), K("Shift+Backspace", Worksheet, "Backspace", Shift)],
         "shortcut.editing.insert-delete" => [K("Ctrl++", WorksheetSelection, "Plus", Ctrl), K("Ctrl+Shift+=", WorksheetSelection, "Equals", CtrlShift), K("Ctrl+-", WorksheetSelection, "Minus", Ctrl)],
 
         "shortcut.row-column.rows-hide-unhide" => [K("Ctrl+9", WorksheetSelection, "9", Ctrl), K("Ctrl+Shift+9", WorksheetSelection, "9", CtrlShift)],
@@ -361,7 +374,13 @@ public static class InteractiveValidationInventory
         "shortcut.help.online" => [K("F1", Application, "F1")],
 
         "shortcut.view.mouse-zoom" => [Mouse("Ctrl+Mouse Wheel", Worksheet, "MouseWheel", Ctrl)],
-        "shortcut.view.keyboard-zoom" => [K("Ctrl+Alt+=", Worksheet, "Equals", CtrlAlt), K("Ctrl+Alt+-", Worksheet, "Minus", CtrlAlt)],
+        "shortcut.view.keyboard-zoom" =>
+        [
+            K("Ctrl+Alt+=", Worksheet, "Equals", CtrlAlt),
+            K("Ctrl+Alt+Numpad +", Worksheet, "NumpadPlus", CtrlAlt),
+            K("Ctrl+Alt+-", Worksheet, "Minus", CtrlAlt),
+            K("Ctrl+Alt+Numpad -", Worksheet, "NumpadMinus", CtrlAlt),
+        ],
 
         "shortcut.data.filter-toggle-reapply" =>
         [
@@ -369,6 +388,7 @@ public static class InteractiveValidationInventory
             K("Ctrl+Alt+L", Worksheet, "L", CtrlAlt),
             S("Alt+D, F, F", Worksheet, ShortcutInteractionKind.KeySequence, G("D", Alt), G("F"), G("F")),
         ],
+        "shortcut.data.flash-fill" => [K("Ctrl+E", WorksheetSelection, "E", Ctrl)],
         "shortcut.data.dropdown" => [K("Alt+Down", DataValidationListOrFilterHeader, "ArrowDown", Alt, ShortcutInteractionKind.ContextualKeyGesture)],
         "shortcut.data.outline-group" => [K("Alt+Shift+Right", WorksheetSelection, "ArrowRight", AltShift), K("Alt+Shift+Left", WorksheetSelection, "ArrowLeft", AltShift)],
 
@@ -429,6 +449,52 @@ public static class InteractiveValidationInventory
         S("End, then Right", Worksheet, ShortcutInteractionKind.KeySequence, G("End"), G("ArrowRight")),
     ];
 
+    private static IReadOnlyList<ShortcutInteractionDescriptor> NativeMenuInteractionsFor(
+        IReadOnlyList<ShortcutInteractionDescriptor> windowsInteractions)
+    {
+        var routed = windowsInteractions
+            .Select(interaction =>
+                TryResolveWindowsInteraction(interaction, out var route)
+                    ? (Interaction: interaction, Route: (WorkbookShortcutRoute?)route)
+                    : (Interaction: interaction, Route: (WorkbookShortcutRoute?)null))
+            .Where(item => item.Route is not null)
+            .ToArray();
+        var native = new List<ShortcutInteractionDescriptor>();
+
+        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules)
+        {
+            if (rule.NativeMenuChord is not { } chord || chord == rule.WindowsChord)
+                continue;
+
+            var source = routed.FirstOrDefault(item => item.Route == rule.Route).Interaction;
+            if (source is null)
+                continue;
+
+            native.Add(K(
+                Display(chord),
+                source.Context,
+                KeyName(chord.Key),
+                Modifiers(chord.Modifiers)));
+        }
+
+        return native
+            .DistinctBy(interaction => (interaction.Steps[0].Key, interaction.Steps[0].Modifiers))
+            .ToArray();
+    }
+
+    private static bool TryResolveWindowsInteraction(
+        ShortcutInteractionDescriptor interaction,
+        out WorkbookShortcutRoute route)
+    {
+        route = default;
+        return interaction.Steps.Count == 1 &&
+            TryWorkbookKey(interaction.Steps[0].Key, out var key) &&
+            WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
+                key,
+                WorkbookModifiers(interaction.Steps[0].Modifiers),
+                out route);
+    }
+
     private static IReadOnlyList<ShortcutInteractionDescriptor> RibbonKeytipInteractions()
     {
         var interactions = new List<ShortcutInteractionDescriptor>();
@@ -439,9 +505,116 @@ public static class InteractiveValidationInventory
         }
 
         foreach (var key in new[] { "1", "2", "3" })
+        {
+            interactions.Add(S($"Alt, then {key}", Ribbon, ShortcutInteractionKind.RibbonKeytipSequence, G("Alt"), G(key)));
             interactions.Add(K($"Alt+{key}", Ribbon, key, Alt));
+        }
+
+        foreach (var sequence in DocumentedNestedRibbonKeytips())
+            interactions.Add(RibbonSequence(sequence));
 
         return interactions;
+    }
+
+    private static IReadOnlyList<string[]> DocumentedNestedRibbonKeytips() =>
+    [
+        .. new[] { "H", "N", "O", "S", "A", "P", "E", "I", "R", "C", "D", "T", "Z" }
+            .Select(command => new[] { "F", command }),
+        ["J", "A"], ["J", "D"], ["J", "C"], ["J", "F"], ["J", "S"], ["J", "P"],
+        ["N", "SH", "R"], ["N", "CH"],
+        ["M", "U"], ["M", "O"],
+        ["P", "M"], ["P", "OR"], ["P", "SZ"], ["P", "PA"],
+        ["P", "BK", "I"], ["P", "BK", "R"], ["P", "BK", "A"],
+        ["R", "N"], ["R", "PN"],
+        ["W", "L"], ["W", "P"], ["W", "I"],
+        ["W", "VG"], ["W", "VH"], ["W", "VF"], ["W", "RU"],
+        ["W", "Q", "2"], ["W", "Z1"], ["W", "ZS"],
+        ["W", "FP", "R"], ["W", "FP", "C"], ["W", "FP", "F"], ["W", "FP", "U"],
+        ["W", "SP"], ["W", "A", "V"], ["W", "A", "C"],
+        ["A", "W"], ["A", "G", "G"], ["A", "U", "U"],
+        ["H", "B", "S", "D"],
+    ];
+
+    private static ShortcutInteractionDescriptor RibbonSequence(IReadOnlyList<string> tokens)
+    {
+        var steps = new List<ShortcutGestureStep> { G(tokens[0][0].ToString(), Alt) };
+        foreach (var token in tokens.Skip(1))
+        foreach (var character in token)
+            steps.Add(G(character.ToString()));
+        return S($"Alt,{string.Join(',', tokens)}", Ribbon, ShortcutInteractionKind.RibbonKeytipSequence, [.. steps]);
+    }
+
+    private static bool TryWorkbookKey(string key, out WorkbookShortcutKey workbookKey)
+    {
+        workbookKey = default;
+        var normalized = key switch
+        {
+            "Backspace" => nameof(WorkbookShortcutKey.Back),
+            "Grave" => nameof(WorkbookShortcutKey.Oem3),
+            "Minus" => nameof(WorkbookShortcutKey.OemMinus),
+            "Plus" or "Equals" => nameof(WorkbookShortcutKey.OemPlus),
+            "1" => nameof(WorkbookShortcutKey.D1),
+            "2" => nameof(WorkbookShortcutKey.D2),
+            "3" => nameof(WorkbookShortcutKey.D3),
+            "4" => nameof(WorkbookShortcutKey.D4),
+            "5" => nameof(WorkbookShortcutKey.D5),
+            "6" => nameof(WorkbookShortcutKey.D6),
+            "7" => nameof(WorkbookShortcutKey.D7),
+            "PageUp" => nameof(WorkbookShortcutKey.PageUp),
+            "PageDown" => nameof(WorkbookShortcutKey.PageDown),
+            _ when key.All(char.IsAsciiDigit) => null,
+            _ => key,
+        };
+        return normalized is not null && Enum.TryParse(normalized, ignoreCase: true, out workbookKey);
+    }
+
+    private static WorkbookShortcutModifiers WorkbookModifiers(ShortcutModifierKeys modifiers)
+    {
+        var result = WorkbookShortcutModifiers.None;
+        if (modifiers.HasFlag(ShortcutModifierKeys.Control)) result |= WorkbookShortcutModifiers.Control;
+        if (modifiers.HasFlag(ShortcutModifierKeys.Shift)) result |= WorkbookShortcutModifiers.Shift;
+        if (modifiers.HasFlag(ShortcutModifierKeys.Alt)) result |= WorkbookShortcutModifiers.Alt;
+        if (modifiers.HasFlag(ShortcutModifierKeys.Meta)) result |= WorkbookShortcutModifiers.Meta;
+        return result;
+    }
+
+    private static ShortcutModifierKeys Modifiers(WorkbookShortcutModifiers modifiers)
+    {
+        var result = ShortcutModifierKeys.None;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Control)) result |= ShortcutModifierKeys.Control;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Shift)) result |= ShortcutModifierKeys.Shift;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Alt)) result |= ShortcutModifierKeys.Alt;
+        if (modifiers.HasFlag(WorkbookShortcutModifiers.Meta)) result |= ShortcutModifierKeys.Meta;
+        return result;
+    }
+
+    private static string KeyName(WorkbookShortcutKey key) => key switch
+    {
+        WorkbookShortcutKey.Back => "Backspace",
+        WorkbookShortcutKey.Oem3 => "Grave",
+        WorkbookShortcutKey.OemMinus => "Minus",
+        WorkbookShortcutKey.OemPlus => "Plus",
+        WorkbookShortcutKey.D1 => "1",
+        WorkbookShortcutKey.D2 => "2",
+        WorkbookShortcutKey.D3 => "3",
+        WorkbookShortcutKey.D4 => "4",
+        WorkbookShortcutKey.D5 => "5",
+        WorkbookShortcutKey.D6 => "6",
+        WorkbookShortcutKey.D7 => "7",
+        WorkbookShortcutKey.PageUp => "PageUp",
+        WorkbookShortcutKey.PageDown => "PageDown",
+        _ => key.ToString(),
+    };
+
+    private static string Display(WorkbookShortcutChord chord)
+    {
+        var parts = new List<string>();
+        if (chord.Modifiers.HasFlag(WorkbookShortcutModifiers.Meta)) parts.Add("Cmd");
+        if (chord.Modifiers.HasFlag(WorkbookShortcutModifiers.Control)) parts.Add("Ctrl");
+        if (chord.Modifiers.HasFlag(WorkbookShortcutModifiers.Alt)) parts.Add("Alt");
+        if (chord.Modifiers.HasFlag(WorkbookShortcutModifiers.Shift)) parts.Add("Shift");
+        parts.Add(KeyName(chord.Key));
+        return string.Join('+', parts);
     }
 
     private static ShortcutInteractionDescriptor K(

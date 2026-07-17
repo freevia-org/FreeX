@@ -1,5 +1,6 @@
 using FluentAssertions;
 using FreeX.App.Presentation.InteractionValidation;
+using FreeX.App.Presentation.Shell;
 
 namespace FreeX.App.Presentation.Tests.InteractionValidation;
 
@@ -8,17 +9,23 @@ public sealed class InteractiveValidationInventoryTests
     [Fact]
     public void KeyboardShortcuts_ContainTheDocumentedLogicalScenariosByArea()
     {
-        InteractiveValidationInventory.KeyboardShortcuts.Should().HaveCount(93);
+        InteractiveValidationInventory.KeyboardShortcuts.Should().HaveCount(94);
+        InteractiveValidationInventory.KeyboardShortcuts.Sum(scenario => scenario.Interactions.Count)
+            .Should().Be(276);
+        InteractiveValidationInventory.KeyboardShortcuts
+            .SelectMany(scenario => scenario.Interactions)
+            .Count(interaction => interaction.Steps.Any(step => step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)))
+            .Should().Be(28);
 
         AreaCounts(InteractiveValidationInventory.KeyboardShortcuts, scenario => scenario.Area)
             .Should().BeEquivalentTo(new Dictionary<string, int>(StringComparer.Ordinal)
             {
                 ["Analysis"] = 1,
                 ["Clipboard"] = 4,
-                ["Data"] = 3,
+                ["Data"] = 4,
                 ["Edit"] = 2,
-                ["Editing"] = 12,
-                ["File"] = 6,
+                ["Editing"] = 13,
+                ["File"] = 5,
                 ["Find"] = 2,
                 ["Formatting"] = 8,
                 ["Formulas"] = 9,
@@ -136,6 +143,62 @@ public sealed class InteractiveValidationInventoryTests
         InteractiveValidationInventory.WorksheetRangeTargets.Should().OnlyContain(target => !target.IsNative && !target.IsExternal);
     }
 
+    [Fact]
+    public void SharedWorkbookRegistry_ExactlyMatchesStructuredScenarioChords()
+    {
+        var interactions = InteractiveValidationInventory.KeyboardShortcuts
+            .SelectMany(scenario => scenario.Interactions.Select(interaction => (scenario.Id, Interaction: interaction)))
+            .Where(item => item.Interaction.Steps.Count == 1)
+            .Select(item => (item.Id, item.Interaction, Chord: ToWorkbookChord(item.Interaction.Steps[0])))
+            .Where(item => item.Chord is not null)
+            .ToArray();
+
+        foreach (var rule in WorkbookKeyboardShortcutCatalog.Rules)
+        {
+            interactions.Where(item =>
+                    item.Chord == rule.WindowsChord &&
+                    WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
+                        item.Chord!.Value.Key,
+                        item.Chord.Value.Modifiers,
+                        out var route) &&
+                    route == rule.Route)
+                .Select(item => $"{item.Id}:{item.Interaction.DisplayText}")
+                .Should().ContainSingle($"{rule.Route} {rule.WindowsChord} must have one Windows scenario interaction");
+
+            if (rule.NativeMenuChord is not { } nativeChord || nativeChord == rule.WindowsChord)
+                continue;
+
+            interactions.Where(item =>
+                    item.Chord == nativeChord &&
+                    WorkbookKeyboardShortcutCatalog.TryGetNativeMenuRoute(
+                        item.Chord!.Value.Key,
+                        item.Chord.Value.Modifiers,
+                        out var route) &&
+                    route == rule.Route)
+                .Select(item => $"{item.Id}:{item.Interaction.DisplayText}")
+                .Should().ContainSingle($"{rule.Route} {nativeChord} must have one native scenario interaction");
+        }
+
+        var representedWindows = interactions
+            .Where(item => WorkbookKeyboardShortcutCatalog.TryGetWindowsRoute(
+                item.Chord!.Value.Key,
+                item.Chord.Value.Modifiers,
+                out _))
+            .Select(item => item.Chord!.Value)
+            .ToArray();
+        representedWindows.Should().BeEquivalentTo(
+            WorkbookKeyboardShortcutCatalog.Rules.Select(rule => rule.WindowsChord));
+
+        var representedNativeOnly = interactions
+            .Where(item => item.Chord!.Value.Modifiers.HasFlag(WorkbookShortcutModifiers.Meta))
+            .Select(item => item.Chord!.Value)
+            .ToArray();
+        representedNativeOnly.Should().BeEquivalentTo(
+            WorkbookKeyboardShortcutCatalog.Rules
+                .Where(rule => rule.NativeMenuChord is { } native && native != rule.WindowsChord)
+                .Select(rule => rule.NativeMenuChord!.Value));
+    }
+
     private static Dictionary<string, int> AreaCounts<T>(
         IEnumerable<T> records,
         Func<T, string> areaSelector) =>
@@ -143,4 +206,35 @@ public sealed class InteractiveValidationInventoryTests
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
 
     private static bool HasText(string value) => !string.IsNullOrWhiteSpace(value);
+
+    private static WorkbookShortcutChord? ToWorkbookChord(ShortcutGestureStep step)
+    {
+        var keyName = step.Key switch
+        {
+            "Backspace" => nameof(WorkbookShortcutKey.Back),
+            "Grave" => nameof(WorkbookShortcutKey.Oem3),
+            "Minus" => nameof(WorkbookShortcutKey.OemMinus),
+            "Plus" or "Equals" => nameof(WorkbookShortcutKey.OemPlus),
+            "1" => nameof(WorkbookShortcutKey.D1),
+            "2" => nameof(WorkbookShortcutKey.D2),
+            "3" => nameof(WorkbookShortcutKey.D3),
+            "4" => nameof(WorkbookShortcutKey.D4),
+            "5" => nameof(WorkbookShortcutKey.D5),
+            "6" => nameof(WorkbookShortcutKey.D6),
+            "7" => nameof(WorkbookShortcutKey.D7),
+            "PageUp" => nameof(WorkbookShortcutKey.PageUp),
+            "PageDown" => nameof(WorkbookShortcutKey.PageDown),
+            _ when step.Key.All(char.IsAsciiDigit) => null,
+            _ => step.Key,
+        };
+        if (keyName is null || !Enum.TryParse<WorkbookShortcutKey>(keyName, ignoreCase: true, out var key))
+            return null;
+
+        var modifiers = WorkbookShortcutModifiers.None;
+        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Control)) modifiers |= WorkbookShortcutModifiers.Control;
+        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Shift)) modifiers |= WorkbookShortcutModifiers.Shift;
+        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Alt)) modifiers |= WorkbookShortcutModifiers.Alt;
+        if (step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)) modifiers |= WorkbookShortcutModifiers.Meta;
+        return new WorkbookShortcutChord(key, modifiers);
+    }
 }

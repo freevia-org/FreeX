@@ -18,23 +18,7 @@ public sealed class AvaloniaWorksheetKeyboardEditingTests
     public void InteractiveValidationScenarioIds_AreStableInventoryEntries()
     {
         MainWindow.InteractiveValidationKeyboardShortcutScenarioIds.Should().BeEquivalentTo(
-            "shortcut.data.filter-toggle-reapply",
-            "shortcut.data.outline-group",
-            "shortcut.editing.copy-from-above",
-            "shortcut.editing.copy-value-from-above",
-            "shortcut.editing.current-date-time",
-            "shortcut.editing.formula-bar",
-            "shortcut.formulas.calculate",
-            "shortcut.formulas.expand-formula-bar",
-            "shortcut.formulas.trace-references",
-            "shortcut.insert.chart",
-            "shortcut.navigation.commit-forward",
-            "shortcut.navigation.commit-backward",
-            "shortcut.navigation.scroll-active-cell",
-            "shortcut.selection.cycle-active-corner",
-            "shortcut.view.keyboard-zoom",
-            "shortcut.view.outline-symbols",
-            "shortcut.formulas.reference-mode");
+            InteractiveValidationInventory.KeyboardShortcuts.Select(scenario => scenario.Id));
         MainWindow.InteractiveValidationKeyboardShortcutScenarioIds.Should().OnlyContain(
             id => InteractiveValidationInventory.KeyboardShortcuts.Any(scenario => scenario.Id == id));
     }
