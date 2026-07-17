@@ -137,6 +137,27 @@ public sealed class DocumentViewHeaderFooterTests
             "footer Y must be above the bottom edge of the page");
     }
 
+    [Fact]
+    public async Task Footer_line_box_ends_at_configured_footer_distance()
+    {
+        IReadOnlyList<(string Text, double Y, TextAlignment Alignment)>? items = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFooter("My Footer");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+            view.Measure(new Size(816, 4000));
+            items = view.HeaderFooterItems;
+        });
+
+        if (!ran) return;
+        var item = items!.Single();
+        const double pageBottom = 24.0 + 792.0 * (96.0 / 72.0);
+        const double footerAnchor = pageBottom - 36.0 * (96.0 / 72.0);
+        item.Y.Should().BeLessThan(footerAnchor - 1,
+            "the footer text must leave room for its line box above Word's footer-distance anchor");
+    }
+
     // ── Test 3: first-page header variant is used on page 1 when DifferentFirstPage ─────────────────
 
     [Fact]

@@ -195,6 +195,28 @@ public class WatermarkOptionsRoundTripTests
     }
 
     [Fact]
+    public void WatermarkOptions_AppendsAnchorAfterVisibleHeaderContent()
+    {
+        var doc = new TextDocument
+        {
+            Header = new HeaderFooter("Visible header")
+        };
+        doc.Page.WatermarkOptions = new WatermarkOptions("CONFIDENTIAL");
+
+        var xml = ReadHeaderXml(doc);
+        var word = XNamespace.Get("http://schemas.openxmlformats.org/wordprocessingml/2006/main");
+        var paragraphs = xml.Root!.Elements(word + "p").ToList();
+
+        paragraphs[0].Value.Should().Contain("Visible header");
+        paragraphs[^1].Descendants(XNamespace.Get("urn:schemas-microsoft-com:vml") + "shape")
+            .Should().ContainSingle("the watermark anchor follows visible header paragraphs");
+        paragraphs[^1].Element(word + "pPr")!.Element(word + "spacing")!
+            .Attribute(word + "line")!.Value.Should().Be("1");
+        paragraphs[^1].Element(word + "pPr")!.Element(word + "spacing")!
+            .Attribute(word + "lineRule")!.Value.Should().Be("exact");
+    }
+
+    [Fact]
     public void PictureWatermark_EmitsHeaderRelationshipAndMedia()
     {
         var doc = new TextDocument();

@@ -3539,18 +3539,40 @@ public sealed class DocumentView : Control
             // Emit footer.
             if (footerActive)
             {
-                // Footer distance is from the BOTTOM of the page upward; the footer text
-                // starts at: pageBottom - footerDistDip (+ a line-height offset per line).
+                // Footer distance is anchored to the bottom of the footer's line box, not its
+                // top edge. Emit from the legacy anchor then lift the complete footer extent.
                 var pageBottom = pageTop + _pageHeightPx;
-                var hfY = pageBottom - footerDistDip;
-                EmitHfParagraphs(footer!, hfY, hfWidth, pageNumberText, _pageCount,
+                var footerStart = _headerFooterItems.Count;
+                var footerAnchorY = pageBottom - footerDistDip;
+                EmitHfParagraphs(footer!, footerAnchorY, hfWidth, pageNumberText, _pageCount,
                     pi => MakeHfTarget(sectionHf, footerSlot, pi),
                     slots.FooterSlotName,
                     pi + 1,
                     pageSection.SectionIndex + 1,
                     pageSection.SectionRelativePageNumber);
+                LiftFooterToAnchor(footerStart, footerAnchorY);
             }
         }
+    }
+
+    /// <summary>
+    /// Word measures the footer distance to the lower edge of its final line. The render items are emitted
+    /// top-down, so rebase their complete extent after their line heights are known.
+    /// </summary>
+    private void LiftFooterToAnchor(int firstFooterItem, double anchorY)
+    {
+        if (firstFooterItem >= _headerFooterItems.Count)
+            return;
+
+        var footerBottom = _headerFooterItems
+            .Skip(firstFooterItem)
+            .Max(item => item.Y + item.LineHeight);
+        var lift = footerBottom - anchorY;
+        if (Math.Abs(lift) < 0.01)
+            return;
+
+        for (var index = firstFooterItem; index < _headerFooterItems.Count; index++)
+            _headerFooterItems[index].Y -= lift;
     }
 
     /// <summary>

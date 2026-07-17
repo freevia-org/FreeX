@@ -1373,18 +1373,21 @@ public static class DocxWriter
         var drawings = RunDrawings.Empty() with { Images = imagesByRun };
         var noHyperlinks = new Dictionary<string, string>(StringComparer.Ordinal);
 
-        if (part.Watermark is not null)
-        {
-            root.Add(part.WatermarkImage is { } picture
-                ? BuildPictureWatermarkParagraph(picture)
-                : BuildWatermarkParagraph(part.Watermark));
-        }
-
         if (part.Content.Paragraphs.Count == 0 && part.Watermark is null)
             root.Add(new XElement(W + "p"));
         else
             foreach (var paragraph in part.Content.Paragraphs)
                 root.Add(BuildParagraph(paragraph, drawings, noHyperlinks));
+
+        if (part.Watermark is not null)
+        {
+            // A floating watermark still needs an anchoring paragraph in the header story. Keep that
+            // paragraph after real header content: Word otherwise lays out its empty line first and
+            // shifts the visible header down by one line.
+            root.Add(part.WatermarkImage is { } picture
+                ? BuildPictureWatermarkParagraph(picture)
+                : BuildWatermarkParagraph(part.Watermark));
+        }
 
         return new XDocument(root);
     }
@@ -1455,6 +1458,7 @@ public static class DocxWriter
             new XElement(W10 + "wrap", new XAttribute("anchorx", "margin"), new XAttribute("anchory", "margin")));
 
         return new XElement(W + "p",
+            WatermarkAnchorParagraphProperties(),
             new XElement(W + "r",
                 new XElement(W + "pict",
                     textShapeType,
@@ -1468,6 +1472,7 @@ public static class DocxWriter
         var cy = PointsToEmu(image.HeightPt);
 
         return new XElement(W + "p",
+            WatermarkAnchorParagraphProperties(),
             new XElement(W + "r",
                 new XElement(W + "drawing",
                     new XElement(Wp + "anchor",
@@ -1495,6 +1500,14 @@ public static class DocxWriter
                         BuildDocPr(picture),
                         BuildPicGraphic(picture, cx, cy)))));
     }
+
+    private static XElement WatermarkAnchorParagraphProperties() =>
+        new(W + "pPr",
+            // The shape is floating, but Word still lays out its owning paragraph. Keep that paragraph at
+            // one twip so it anchors the watermark without adding a visible line to the header/body flow.
+            new XElement(W + "spacing",
+                new XAttribute(W + "line", 1),
+                new XAttribute(W + "lineRule", "exact")));
 
     private static string NormalizeHex(string? value, string fallback)
     {
