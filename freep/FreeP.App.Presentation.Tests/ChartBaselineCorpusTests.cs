@@ -317,8 +317,8 @@ public sealed class ChartBaselineCorpusTests
         stockFallback.Select(series => series.Markers[0].Symbol).Should().Equal(
             ChartMarkerPrimitiveSymbol.Diamond,
             ChartMarkerPrimitiveSymbol.Square,
-            ChartMarkerPrimitiveSymbol.X,
-            ChartMarkerPrimitiveSymbol.Triangle);
+            ChartMarkerPrimitiveSymbol.Triangle,
+            ChartMarkerPrimitiveSymbol.X);
         stockFallback[0].Points[0]!.Value.X.Should().BeApproximately(60, 0.0001,
             "stock fallback points sit at PowerPoint category-band centers");
         ChartRenderPlanner.ComputePrimaryValueAxisRange(stock).Should().Be((0, 18, 2),

@@ -664,6 +664,14 @@ public static partial class ChartRenderPlanner
     [
         ChartMarkerPrimitiveSymbol.Diamond,
         ChartMarkerPrimitiveSymbol.Square,
+        ChartMarkerPrimitiveSymbol.Triangle,
+        ChartMarkerPrimitiveSymbol.X
+    ];
+
+    private static readonly ChartMarkerPrimitiveSymbol[] ImportedLineMarkerSymbols =
+    [
+        ChartMarkerPrimitiveSymbol.Diamond,
+        ChartMarkerPrimitiveSymbol.Square,
         ChartMarkerPrimitiveSymbol.X,
         ChartMarkerPrimitiveSymbol.Triangle
     ];
@@ -830,7 +838,7 @@ public static partial class ChartRenderPlanner
             : series.MarkerStyle;
 
     private static ChartMarkerPrimitiveSymbol ResolveImportedLineMarkerSymbol(int seriesIndex) =>
-        StockFallbackMarkerSymbols[Math.Abs(seriesIndex) % StockFallbackMarkerSymbols.Length];
+        ImportedLineMarkerSymbols[Math.Abs(seriesIndex) % ImportedLineMarkerSymbols.Length];
 
     private static ChartMarkerPrimitiveSymbol ResolveMarkerSymbol(ChartMarkerStyle? markerStyle)
     {
