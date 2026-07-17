@@ -359,7 +359,8 @@ $runResult = Invoke-Docker -Arguments @(
     "--name", $containerName,
     "--label", "$labelName=true",
     "--label", "$labelName.app=$appKey",
-    "--memory", "2g",
+    # Exhaustive parity runs retain rendered evidence for every dialog and need more than 2 GB.
+    "--memory", "4g",
     "--shm-size", "256m",
     "--publish", $portBinding,
     "--env", "APP_EXECUTABLE=$($definition.Executable)",
