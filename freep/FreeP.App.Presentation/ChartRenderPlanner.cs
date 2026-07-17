@@ -570,8 +570,8 @@ public static partial class ChartRenderPlanner
     public const double ImportedCartesianCategoryLabelOffset = 16.0;
     public const double ImportedCartesianValueLabelRightGap = 22.0;
     public const double ImportedCartesianValueLabelVerticalOffset = 13.0;
-    public const double ImportedSurfacePointOffsetX = 2.0;
-    public const double ImportedSurfacePointOffsetY = -4.0;
+    public const double ImportedSurfacePointOffsetX = 3.5;
+    public const double ImportedSurfacePointOffsetY = -9.0;
     public const double LineMarkerRadius = 3.0;
     public const double ImportedLineMarkerRadius = 5.0;
     public const double LineMarkerStrokeThickness = 0.75;
