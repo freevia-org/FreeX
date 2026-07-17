@@ -3434,7 +3434,7 @@ public static partial class ChartRenderPlanner
             (0, 0, 0) => new SrgbColor(0x44, 0x74, 0xC7),
             (0, 0, 1) => new SrgbColor(0xF1, 0x80, 0x32),
             (0, 1, 0) => new SrgbColor(0xB7, 0x60, 0x26),
-            (0, 1, 1) => new SrgbColor(0xD5, 0x70, 0x2C),
+            (0, 1, 1) => new SrgbColor(0x97, 0xBD, 0x80),
             (1, 0, 0) => new SrgbColor(0x99, 0xBD, 0x80),
             (1, 0, 1) => new SrgbColor(0xA3, 0xC9, 0x89),
             (1, 1, 0) => new SrgbColor(0x97, 0xBD, 0x80),
