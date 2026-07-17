@@ -670,6 +670,7 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceBlankVertexNormalized = 0.24;
     private const double ImportedSurfaceBlankVertexXOffset = 20.0;
     private const double ImportedSurfaceMiddleNorthVertexYOffset = 20.0;
+    private const double ImportedSurfaceRearNorthVertexYOffset = 14.0;
     private const double ImportedSurfaceLightBaseFactor = 1.02;
     private const double ImportedSurfaceDepthDimming = 0.12;
     private const double ImportedSurfaceNearRowFalloff = 0.25;
@@ -3346,6 +3347,9 @@ public static partial class ChartRenderPlanner
         if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
             seriesIndex == 1 && categoryIndex == 0)
             y += ImportedSurfaceMiddleNorthVertexYOffset;
+        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+            seriesIndex == 2 && categoryIndex == 0)
+            y += ImportedSurfaceRearNorthVertexYOffset;
         return new ChartPlanPoint(
             Math.Round(x + (usesImportedTextMetrics ? ImportedSurfacePointOffsetX : 0.0), 4),
             Math.Round(y + (usesImportedTextMetrics ? ImportedSurfacePointOffsetY : 0.0), 4));

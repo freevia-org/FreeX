@@ -407,6 +407,9 @@ public sealed class ChartBaselineCorpusTests
         surfaceGeometry.Points.Single(point => point.SeriesIndex == 1 && point.CategoryIndex == 0).Point.Y
             .Should().BeApproximately(98.93, 0.0001,
                 "the imported COM mesh registers the middle-row North vertex below the shared projection");
+        surfaceGeometry.Points.Single(point => point.SeriesIndex == 2 && point.CategoryIndex == 0).Point.Y
+            .Should().BeApproximately(25.86, 0.0001,
+                "the imported COM mesh registers the rear-row North vertex below the shared projection");
         surfaceGeometry.Facets.Should().HaveCount(4);
         surfaceGeometry.WireframeSegments.Should().HaveCountGreaterThan(surfaceGeometry.Facets.Count);
         surfaceGeometry.ContourSegments.Should().BeEmpty(
