@@ -78,6 +78,7 @@ public sealed class DocumentView : RichTextBox
 
     // WPF Figure adds clearance beyond its declared box; Word page anchors do not.
     private const double FloatingFigureWrapInsetDip = 17.0;
+    private const double FloatingFigureWrapHeightInsetDip = 17.0;
 
     /// <summary>Document default run size in points, used when a run inherits its size.</summary>
     private const double DefaultFontSizePt = 11;
@@ -8684,9 +8685,9 @@ public sealed class DocumentView : RichTextBox
         if (run.Image is { IsFloating: true })
         {
             // WPF's Figure adds its own effective clearance around the wrap box. Calibrate the
-            // synthetic figure width to the edge-to-text behavior Word uses for page anchors.
+            // synthetic figure dimensions to the edge-to-text behavior Word uses for page anchors.
             widthDip = Math.Max(1, rect.WidthDip - FloatingFigureWrapInsetDip);
-            heightDip = Math.Max(1, rect.HeightDip);
+            heightDip = Math.Max(1, rect.HeightDip - FloatingFigureWrapHeightInsetDip);
             horizontalOffsetDip = rect.LeftDip;
             verticalOffsetDip = rect.TopDip;
         }

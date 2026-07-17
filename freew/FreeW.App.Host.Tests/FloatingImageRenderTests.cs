@@ -210,8 +210,8 @@ public sealed class FloatingImageRenderTests
         var visualOnlyFigure = paragraphs[0].Inlines.OfType<Figure>().Should().ContainSingle()
             .Which;
         visualOnlyFigure.Tag.Should().BeNull("the copied wrap band must be visual-only");
-        visualOnlyFigure.Width.Value.Should().BeApproximately(96, 0.01);
-        visualOnlyFigure.Height.Value.Should().BeApproximately(72, 0.01);
+        visualOnlyFigure.Width.Value.Should().BeApproximately(79, 0.01);
+        visualOnlyFigure.Height.Value.Should().BeApproximately(55, 0.01);
         visualOnlyFigure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.PageLeft);
         visualOnlyFigure.VerticalAnchor.Should().Be(FigureVerticalAnchor.PageTop);
         visualOnlyFigure.WrapDirection.Should().Be(WrapDirection.Both);
