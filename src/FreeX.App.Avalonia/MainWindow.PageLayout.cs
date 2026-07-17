@@ -807,7 +807,7 @@ public sealed partial class MainWindow
             Items = { pageTab, marginsTab, headerFooterTab, sheetTab },
         };
         AutomationProperties.SetAutomationId(tabs, PageSetupDialogPlanner.TabsAutomationId);
-        ApplyClassicTabChrome(tabs);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
 
         void SelectValidationRoute(PageSetupValidationRoute route)
         {

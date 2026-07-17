@@ -75,6 +75,14 @@ public sealed class PptxRepairCorpusValidityTests
         using var archive = ZipFile.OpenRead(deckPath);
         var contentTypes = LoadXml(archive, "[Content_Types].xml");
         XNamespace contentTypeNamespace = "http://schemas.openxmlformats.org/package/2006/content-types";
+        XNamespace presentationNamespace = PresentationNamespace;
+
+        var hasPresentationGuideList = LoadXml(archive, "ppt/presentation.xml")
+            .Descendants(presentationNamespace + "ext")
+            .Any(element =>
+                (string?)element.Attribute("uri") == "{EFAFB233-063F-42B5-8137-9DF3F51BA10A}" &&
+                element.Element(XName.Get("sldGuideLst", "http://schemas.microsoft.com/office/powerpoint/2012/main")) != null);
+        hasPresentationGuideList.Should().BeTrue();
 
         var slideRelationship = LoadXml(archive, "ppt/slides/_rels/slide1.xml.rels")
             .Root!
@@ -160,6 +168,31 @@ public sealed class PptxRepairCorpusValidityTests
         var deckPath = Path.Combine(FindCorpusDirectory(), "21-comments-notes.pptx");
         using var archive = ZipFile.OpenRead(deckPath);
         XNamespace presentationNamespace = PresentationNamespace;
+        XNamespace drawingNamespace = "http://schemas.openxmlformats.org/drawingml/2006/main";
+        var presentation = LoadXml(archive, "ppt/presentation.xml");
+        var notesMasterId = presentation
+            .Descendants(presentationNamespace + "notesMasterId")
+            .Single()
+            .Attribute(XName.Get("id", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"))!
+            .Value;
+        LoadXml(archive, "ppt/_rels/presentation.xml.rels")
+            .Descendants(XName.Get("Relationship", PackageRelationshipNamespace))
+            .Should()
+            .Contain(element =>
+                (string?)element.Attribute("Id") == notesMasterId &&
+                (string?)element.Attribute("Target") == "notesMasters/notesMaster1.xml");
+        var notesStyle = LoadXml(archive, "ppt/notesMasters/notesMaster1.xml")
+            .Descendants(presentationNamespace + "notesStyle")
+            .SingleOrDefault();
+        notesStyle.Should().NotBeNull();
+        notesStyle!.Elements(drawingNamespace + "lvl1pPr").Should().HaveCount(1);
+        var notesSlidesHaveColorMapOverrides = archive.Entries
+            .Where(entry => entry.FullName.StartsWith("ppt/notesSlides/notesSlide", StringComparison.OrdinalIgnoreCase)
+                && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            .Select(entry => LoadXml(archive, entry.FullName))
+            .All(notesSlide => notesSlide.Descendants(presentationNamespace + "clrMapOvr")
+                .Any(element => element.Element(drawingNamespace + "masterClrMapping") != null));
+        notesSlidesHaveColorMapOverrides.Should().BeTrue();
         var notesShapeIdsBySlide = archive.Entries
             .Where(entry => entry.FullName.StartsWith("ppt/notesSlides/notesSlide", StringComparison.OrdinalIgnoreCase)
                 && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))

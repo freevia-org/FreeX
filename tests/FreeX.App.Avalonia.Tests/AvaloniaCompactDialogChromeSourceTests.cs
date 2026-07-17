@@ -133,6 +133,31 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("public static void ApplyListBox(");
         source.Should().Contain("new Setter(Layoutable.MinHeightProperty, style.ListBoxItemMinHeight)");
         source.Should().Contain("public static StackPanel CreateActionRow(");
+        source.Should().Contain("public static void ApplyClassicTabChrome(TabControl tabControl)");
+        source.Should().Contain("Name(\"PART_ItemsPresenter\")");
+        source.Should().Contain("Name(\"PART_SelectedContentHost\")");
+        source.Should().Contain("new Thickness(0, 0, -1, -1)");
+        source.Should().Contain("FuncControlTemplate<TabItem>");
+    }
+
+    [Fact]
+    public void EveryDialogTabControl_UsesSharedClassicChrome()
+    {
+        var paths = new[]
+        {
+            new[] { "src", "FreeX.App.Avalonia", "MainWindow.cs" },
+            new[] { "src", "FreeX.App.Avalonia", "MainWindow.PageLayout.cs" },
+            new[] { "src", "FreeX.App.Avalonia", "MainWindow.PivotFilters.cs" },
+            new[] { "src", "FreeX.App.Avalonia", "MainWindow.PivotFieldSettings.cs" },
+            new[] { "src", "FreeX.App.Avalonia", "MainWindow.PivotOptions.cs" },
+            new[] { "src", "FreeX.App.Avalonia", "MainWindow.Symbol.cs" },
+            new[] { "freew", "FreeW.App.Avalonia", "OptionsDialog.cs" },
+        };
+        var source = string.Join(Environment.NewLine, paths.Select(path => File.ReadAllText(RepoFile(path))));
+
+        CountOccurrences(source, "new TabControl").Should().Be(10);
+        CountOccurrences(source, "AvaloniaCompactDialogChrome.ApplyClassicTabChrome(").Should().Be(10);
+        source.Should().NotContain("private static void ApplyClassicTabChrome");
     }
 
     [Fact]
@@ -440,6 +465,9 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().NotContain("new Setter(global::Avalonia.Controls.Control.MinHeightProperty, 24.0)");
         source.Should().NotContain("new Setter(TemplatedControl.FontSizeProperty, 12.0)");
     }
+
+    private static int CountOccurrences(string source, string value) =>
+        source.Split(value, StringSplitOptions.None).Length - 1;
 
     private static string RepoFile(params string[] parts)
     {

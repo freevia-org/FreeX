@@ -1,6 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
@@ -28,6 +31,9 @@ public static class AvaloniaCompactDialogChrome
     private static readonly IBrush ButtonBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(112, 112, 112));
     private static readonly IBrush InputBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(130, 130, 130));
     private static readonly IBrush ValidationStatusBrush = new ImmutableSolidColorBrush(Color.FromRgb(0x80, 0x00, 0x00));
+    private static readonly IBrush DialogTabPaneBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(192, 192, 192));
+    private static readonly IBrush DialogInactiveTabBorderBrush = new ImmutableSolidColorBrush(Color.FromRgb(160, 160, 160));
+    private static readonly IBrush DialogInactiveTabBackgroundBrush = new ImmutableSolidColorBrush(Color.FromRgb(243, 243, 243));
 
     public static void ApplyButton(
         Button button,
@@ -136,6 +142,72 @@ public static class AvaloniaCompactDialogChrome
                 new Setter(TemplatedControl.FontSizeProperty, style.FontSize),
             },
         });
+    }
+
+    /// <summary>
+    /// Applies the classic Windows dialog tab treatment: bordered inactive tabs, a white selected tab,
+    /// and a selected-tab body that overlaps the content pane so no gap or separator line remains.
+    /// </summary>
+    public static void ApplyClassicTabChrome(TabControl tabControl)
+    {
+        ArgumentNullException.ThrowIfNull(tabControl);
+
+        var headerPresenterStyle = new Style(s => s
+            .OfType<TabControl>()
+            .Template()
+            .OfType<ItemsPresenter>()
+            .Name("PART_ItemsPresenter"));
+        headerPresenterStyle.Setters.Add(new Setter(Layoutable.MarginProperty, new Thickness(0)));
+        tabControl.Styles.Add(headerPresenterStyle);
+
+        var contentPaneStyle = new Style(s => s
+            .OfType<TabControl>()
+            .Template()
+            .OfType<ContentPresenter>()
+            .Name("PART_SelectedContentHost"));
+        contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, DialogTabPaneBorderBrush));
+        contentPaneStyle.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1)));
+        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.PaddingProperty, new Thickness(12)));
+        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
+        tabControl.Styles.Add(contentPaneStyle);
+
+        var tabStyle = new Style(s => s.OfType<TabItem>());
+        tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, DialogInactiveTabBorderBrush));
+        tabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
+        tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, DialogInactiveTabBackgroundBrush));
+        tabStyle.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, Brushes.Black));
+        tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(10, 4)));
+        tabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, -1, 0)));
+        tabControl.Styles.Add(tabStyle);
+
+        var selectedTabStyle = new Style(s => s.OfType<TabItem>().Class(":selected"));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, Brushes.White));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, DialogTabPaneBorderBrush));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, -1, -1)));
+        selectedTabStyle.Setters.Add(new Setter(TabItem.ZIndexProperty, 1));
+        tabControl.Styles.Add(selectedTabStyle);
+
+        var classicTabTemplate = new FuncControlTemplate<TabItem>((tab, _) =>
+        {
+            var presenter = new ContentPresenter
+            {
+                Name = "PART_ContentPresenter",
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(HeaderedContentControl.Header)) { Source = tab });
+            presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(HeaderedContentControl.HeaderTemplate)) { Source = tab });
+            presenter.Bind(ContentPresenter.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = tab });
+
+            var root = new Border { Name = "PART_LayoutRoot" };
+            root.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = tab });
+            root.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = tab });
+            root.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = tab });
+            root.Child = presenter;
+            return root;
+        });
+        tabStyle.Setters.Add(new Setter(TemplatedControl.TemplateProperty, classicTabTemplate));
     }
 
     public static StackPanel CreateActionRow(IReadOnlyList<Control> controls, Thickness margin = default)
