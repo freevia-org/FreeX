@@ -36,6 +36,18 @@ public sealed class ContextMenuInteractionValidationTests
 
         inventory.Select(row => row.Id).Should().OnlyHaveUniqueItems();
         inventory.Should().OnlyContain(row => !string.IsNullOrWhiteSpace(row.ProductionRoute));
+
+        var nativeRows = inventory.Count(row => row.FamilyId == "context-menu.native-application");
+        var disabledRows = inventory.Count(row => !row.IsEnabled);
+        var managedDispatches = inventory
+            .Where(row => row.IsEnabled && row.FamilyId != "context-menu.native-application")
+            .Select(row => $"{row.FamilyId}|{row.VariantId}|{row.ActionKey}")
+            .Distinct(StringComparer.Ordinal)
+            .Count();
+        _output.WriteLine($"total inventory rows: {inventory.Count}");
+        _output.WriteLine($"managed production dispatch probes: {managedDispatches}");
+        _output.WriteLine($"explicit-disabled rows: {disabledRows}");
+        _output.WriteLine($"native-boundary skipped rows: {nativeRows}");
     }
 
     [Fact]
