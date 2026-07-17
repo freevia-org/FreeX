@@ -575,7 +575,7 @@ static void RenderDocumentComposite(
                 ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
                 : DefaultHeaderFooterDistanceDip;
             var headerTop = headerDistance;
-            var footerTop = thisPixH - footerDistance - hfH;
+            var footerTop = thisPixH - footerDistance - hfH + 7;
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
             {
