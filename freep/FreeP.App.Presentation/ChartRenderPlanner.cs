@@ -564,6 +564,7 @@ public static partial class ChartRenderPlanner
     public const double ImportedComboPlotBottomReduction = 1.5;
     public const double ImportedComboPlotTopOffset = 1.0;
     public const double ImportedComboSecondaryLabelCompensation = 8.0;
+    public const int ImportedComboSecondaryMinorTickDivisions = 5;
     public const double ImportedComboLegendRightCompensation = 8.0;
     public const double ImportedCartesianGridLinePixelOffset = 0.5;
     public const double ImportedPercentStackedGridEdgeOffsetX = 19.0;
@@ -2358,6 +2359,21 @@ public static partial class ChartRenderPlanner
                 FontSize: ResolveTextFontSize(chart, 6.5),
                 Alignment: ChartPlanTextAlignment.Left,
                 AxisLabelFormat: BuildAxisLabelFormatPlan(chart.SecondaryValueAxis)));
+        }
+
+        if (UsesImportedComboDefaults(chart))
+        {
+            for (int majorIndex = 0; majorIndex < tickCount; majorIndex++)
+            {
+                for (int minorIndex = 1; minorIndex < ImportedComboSecondaryMinorTickDivisions; minorIndex++)
+                {
+                    double minorFraction = minorIndex / (double)ImportedComboSecondaryMinorTickDivisions;
+                    double y = plot.Bottom - plot.Height * (majorIndex + minorFraction) / steps;
+                    ticks.Add(new ChartGridLinePlan(
+                        new ChartPlanPoint(plot.Right, y),
+                        new ChartPlanPoint(plot.Right + AxisMinorTickLength, y)));
+                }
+            }
         }
 
         ChartAxisTitlePlan? title = null;
