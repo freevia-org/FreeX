@@ -250,12 +250,14 @@ public class TableOfAuthoritiesRoundTripTests
             SourceType.WebSite);
 
         var reopenedParagraphs = reopened.Blocks.OfType<Paragraph>().ToList();
-        reopenedParagraphs.Any(paragraph =>
-            paragraph.Runs.Any(run => run.ComplexField is { Keyword: "CITATION" })
-            && paragraph.Formatting.PageBreakBefore).Should().BeTrue();
-        reopenedParagraphs.Any(paragraph =>
+        var firstCitationIndex = reopenedParagraphs.FindIndex(paragraph =>
+            paragraph.Runs.Any(run => run.ComplexField is { Keyword: "CITATION" }));
+        var pageBreakIndex = reopenedParagraphs.FindIndex(paragraph =>
             paragraph.Runs.Count == 0
-            && !paragraph.Formatting.PageBreakBefore).Should().BeTrue();
+            && paragraph.Formatting.PageBreakBefore);
+        firstCitationIndex.Should().BeGreaterThanOrEqualTo(0);
+        pageBreakIndex.Should().BeGreaterThan(firstCitationIndex,
+            "the serialized empty page break follows the citation/authority run in Word");
 
         var rewritten = WriteDocx(reopened);
         EntryXml(rewritten, "customXml/item1.xml").Root!.Name.Should().Be(B + "Sources");
@@ -288,11 +290,11 @@ public class TableOfAuthoritiesRoundTripTests
             .Where(paragraph => paragraph.StyleId == TableOfAuthorities.EntryStyleId)
             .Select(paragraph => paragraph.PlainText)
             .ToList();
-        // Word relocates the explicit break to the first citation paragraph, so both authority marks render
-        // on page 2 even though the cached generated TOA paragraphs retain their original sentinel values.
+        // The explicit break follows the first authority run, so rebuilding from the reopened model retains
+        // the same Word physical-page references as the cached generated TOA paragraphs.
         rebuiltToaEntries.Should().Contain([
-            "Example v. FreeW, 123 F.4th 456 (2026)\t2",
-            "Free Software Evidence Act, 42 U.S.C. 2026\t2"
+            "Example v. FreeW, 123 F.4th 456 (2026)\t1, 2",
+            "Free Software Evidence Act, 42 U.S.C. 2026\t1"
         ]);
     }
 

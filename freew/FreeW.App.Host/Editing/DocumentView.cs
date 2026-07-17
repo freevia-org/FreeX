@@ -6698,6 +6698,8 @@ public sealed class DocumentView : RichTextBox
             case WpfRun { Tag: PageBreakMarker }:
                 modelParagraph.Runs.Add(ModelRun.PageBreak());
                 break;
+            case WpfRun { Tag: PageBreakSpacerMarker }:
+                break;
             case Floater floater when HasFloatingWrapReservationMarker(floater):
                 ReadFloatingWrapReservationFloater(modelParagraph, floater, hyperlinkUrl, hyperlinkAnchor, hyperlinkTooltip);
                 break;
@@ -8031,6 +8033,18 @@ public sealed class DocumentView : RichTextBox
                 suppressedFloatingWrapRuns);
         }
 
+        // Word gives an otherwise empty page-break-before paragraph a normal line box on the new page.
+        // WPF collapses truly empty paragraphs to zero height, pulling the following paragraph upward.
+        // Keep an invisible, tagged non-breaking space solely for layout; ReadInline discards it on commit.
+        if (runs.Count == 0 && paraFmt.PageBreakBefore)
+        {
+            wpf.Inlines.Add(new WpfRun("\u00A0")
+            {
+                Foreground = Brushes.Transparent,
+                Tag = new PageBreakSpacerMarker()
+            });
+        }
+
         return wpf;
     }
 
@@ -9297,6 +9311,9 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>Carried on a manual page-break WPF run's Tag so CommitToModel can round-trip it.</summary>
     private sealed record PageBreakMarker;
+
+    /// <summary>Invisible layout-only line retained for an empty page-break-before paragraph.</summary>
+    private sealed record PageBreakSpacerMarker;
 
     /// <summary>
     /// Carried on a zero-width WPF run's Tag for a floating image so <see cref="ReadInline"/> can

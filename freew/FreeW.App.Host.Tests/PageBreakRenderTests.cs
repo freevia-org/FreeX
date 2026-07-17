@@ -42,4 +42,28 @@ public sealed class PageBreakRenderTests
         var paragraph = view.Model.Blocks.OfType<Paragraph>().First();
         Assert.Contains(paragraph.Runs, r => r.IsPageBreak);
     }
+
+    [StaFact]
+    public void EmptyPageBreakBefore_UsesLayoutSpacerWithoutChangingTheModel()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Before break"));
+        doc.Blocks.Add(DocumentOps.CreatePageBreak());
+        doc.Blocks.Add(new Paragraph("After break"));
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var breakParagraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().ElementAt(1);
+        Assert.Single(breakParagraph.Inlines);
+        Assert.Equal("\u00A0", new System.Windows.Documents.TextRange(
+            breakParagraph.ContentStart, breakParagraph.ContentEnd).Text.TrimEnd('\r', '\n'));
+
+        view.CommitToModel();
+
+        var readBreak = view.Model.Blocks.OfType<Paragraph>().ElementAt(1);
+        Assert.Empty(readBreak.Runs);
+        Assert.True(readBreak.Formatting.PageBreakBefore);
+    }
 }
