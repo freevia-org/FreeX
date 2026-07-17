@@ -268,6 +268,10 @@ public sealed partial class XlsxFileAdapter
         var sheetPr = worksheetXml.Root?.Element(worksheetNs + "sheetPr");
         var pageSetUpPr = sheetPr?.Element(worksheetNs + "pageSetUpPr");
         var outlinePr = sheetPr?.Element(worksheetNs + "outlinePr");
+        XlsxWorksheetRowColumnLayoutReader.ClassifyCollapsedOutlineHidden(
+            rowColumnLayout,
+            ParseOptionalBool(outlinePr?.Attribute("summaryBelow")?.Value) ?? true,
+            ParseOptionalBool(outlinePr?.Attribute("summaryRight")?.Value) ?? true);
         var pageSetup = worksheetXml.Root?.Element(worksheetNs + "pageSetup");
         var headerFooter = worksheetXml.Root?.Element(worksheetNs + "headerFooter");
         var pageMargins = worksheetXml.Root?.Element(worksheetNs + "pageMargins");

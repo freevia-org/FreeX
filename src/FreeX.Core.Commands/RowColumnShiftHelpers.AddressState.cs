@@ -13,6 +13,8 @@ internal static partial class RowColumnShiftHelpers
             CaptureUIntIntDictionary(sheet.ColOutlineLevels),
             CaptureUIntSet(sheet.GroupHiddenRows),
             CaptureUIntSet(sheet.GroupHiddenCols),
+            CaptureUIntSet(sheet.CollapsedAnchorRows),
+            CaptureUIntSet(sheet.CollapsedAnchorCols),
             CaptureList(sheet.AllowEditRanges),
             CaptureAllowEditRangePasswords(sheet),
             CaptureAllowEditRangeUnlocked(sheet),
@@ -299,6 +301,8 @@ internal static partial class RowColumnShiftHelpers
         RestoreDictionary(sheet.ColOutlineLevels, snapshot.ColOutlineLevels);
         RestoreSet(sheet.GroupHiddenRows, snapshot.GroupHiddenRows);
         RestoreSet(sheet.GroupHiddenCols, snapshot.GroupHiddenCols);
+        RestoreSet(sheet.CollapsedAnchorRows, snapshot.CollapsedAnchorRows);
+        RestoreSet(sheet.CollapsedAnchorCols, snapshot.CollapsedAnchorCols);
         RestoreList(sheet.AllowEditRanges, snapshot.AllowEditRanges);
         RestoreAllowEditRangePasswords(sheet, snapshot.AllowEditRangePasswords);
         RestoreAllowEditRangeUnlocked(sheet, snapshot.UnlockedAllowEditRanges);
@@ -519,11 +523,13 @@ internal static partial class RowColumnShiftHelpers
         {
             RestoreDictionary(sheet.RowOutlineLevels, ShiftDictionaryKeys(snapshot.RowOutlineLevels, shift));
             RestoreSet(sheet.GroupHiddenRows, ShiftIndexes(snapshot.GroupHiddenRows, shift));
+            RestoreSet(sheet.CollapsedAnchorRows, ShiftIndexes(snapshot.CollapsedAnchorRows, shift));
         }
         else
         {
             RestoreDictionary(sheet.ColOutlineLevels, ShiftDictionaryKeys(snapshot.ColOutlineLevels, shift));
             RestoreSet(sheet.GroupHiddenCols, ShiftIndexes(snapshot.GroupHiddenCols, shift));
+            RestoreSet(sheet.CollapsedAnchorCols, ShiftIndexes(snapshot.CollapsedAnchorCols, shift));
         }
     }
 
@@ -1994,6 +2000,8 @@ internal sealed record AddressBearingStateSnapshot(
     IReadOnlyDictionary<uint, int> ColOutlineLevels,
     IReadOnlyCollection<uint> GroupHiddenRows,
     IReadOnlyCollection<uint> GroupHiddenCols,
+    IReadOnlyCollection<uint> CollapsedAnchorRows,
+    IReadOnlyCollection<uint> CollapsedAnchorCols,
     IReadOnlyList<GridRange> AllowEditRanges,
     IReadOnlyList<KeyValuePair<GridRange, string?>> AllowEditRangePasswords,
     IReadOnlyList<GridRange> UnlockedAllowEditRanges,

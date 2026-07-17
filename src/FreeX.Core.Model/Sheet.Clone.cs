@@ -9,7 +9,8 @@ public sealed partial class Sheet
     /// Creates a deep copy of this sheet with a new <paramref name="newId"/> and <paramref name="newName"/>.
     /// All model-layer properties are copied, including the previously missed fields:
     /// <c>BackgroundImage</c>, <c>RowOutlineLevels</c>, <c>ColOutlineLevels</c>,
-    /// <c>GroupHiddenRows</c>, <c>GroupHiddenCols</c>, <c>CommentAuthors</c>, <c>ShownComments</c>,
+    /// <c>GroupHiddenRows</c>, <c>GroupHiddenCols</c>, <c>CollapsedAnchorRows</c>,
+    /// <c>CollapsedAnchorCols</c>, <c>CommentAuthors</c>, <c>ShownComments</c>,
     /// <c>CellWatchesMetadata</c>, and <c>IgnoredErrorsMetadata</c>.
     /// Drawing collections (Charts, TextBoxes, DrawingShapes, Pictures, Sparklines) are intentionally
     /// left empty; the caller (e.g. <c>DuplicateSheetCommand</c>) is responsible for copying those.
@@ -565,6 +566,10 @@ public sealed partial class Sheet
             copy.GroupHiddenRows.Add(row);
         foreach (var col in GroupHiddenCols)
             copy.GroupHiddenCols.Add(col);
+        foreach (var row in CollapsedAnchorRows)
+            copy.CollapsedAnchorRows.Add(row);
+        foreach (var col in CollapsedAnchorCols)
+            copy.CollapsedAnchorCols.Add(col);
     }
 
     private static WorksheetPageBreaksMetadataModel? ClonePageBreaksMetadata(WorksheetPageBreaksMetadataModel? metadata)

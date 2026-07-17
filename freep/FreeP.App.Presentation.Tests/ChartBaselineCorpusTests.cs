@@ -365,7 +365,7 @@ public sealed class ChartBaselineCorpusTests
             surface,
             new ChartPlanRect(0, 0, 360, 189));
         surfaceGeometry.Points.Single(point => point.SeriesIndex == 0 && point.CategoryIndex == 0).Point.Y
-            .Should().BeApproximately(142.5, 0.0001,
+            .Should().BeApproximately(137.5, 0.0001,
                 "Surface3D height follows the PowerPoint value axis instead of normalizing to the smallest data value");
         surfaceGeometry.Facets.Should().HaveCount(4);
         surfaceGeometry.WireframeSegments.Should().HaveCountGreaterThan(surfaceGeometry.Facets.Count);
@@ -381,20 +381,20 @@ public sealed class ChartBaselineCorpusTests
             .ToArray();
         firstSurfaceCellFacets.Should().HaveCount(2);
         firstSurfaceCellFacets[0].Points.Select(point => point.X)
-            .Should().Equal(new[] { 2.0, 152.75, 198.375 },
+            .Should().Equal(new[] { 3.5, 154.25, 199.875 },
                 "PowerPoint splits the imported blank low-band cell along the 0-2 diagonal");
         firstSurfaceCellFacets[1].Points.Select(point => point.X)
-            .Should().Equal(new[] { 2.0, 198.375, 64.0 },
+            .Should().Equal(new[] { 3.5, 199.875, 65.5 },
                 "the paired imported blank-cell triangle closes the 0-2 split");
         firstSurfaceCellFacets
             .SelectMany(facet => facet.Points)
-            .Single(point => point.X == 152.75)
+            .Single(point => point.X == 154.25)
             .Y
             .Should()
-            .BeApproximately(163.1, 0.0001,
+            .BeApproximately(158.1, 0.0001,
                 "PowerPoint registers the imported blank low-band vertex below the interpolated surface");
         surfaceGeometry.Points.Single(point => point.SeriesIndex == 2 && point.CategoryIndex == 0).Point.X
-            .Should().BeApproximately(126.0, 0.0001,
+            .Should().BeApproximately(127.5, 0.0001,
                 "PowerPoint's rear-left surface vertex follows the projected frame depth wall");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Fill.Alpha == 255,
             "PowerPoint's imported Surface3D facets are opaque fills");
@@ -424,6 +424,8 @@ public sealed class ChartBaselineCorpusTests
                 new SrgbColor(0x81, 0xA1, 0x6E));
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
+        surfaceGeometry.FrameSegments.Should().HaveCount(45,
+            "the imported PowerPoint frame carries 26 value-axis and 6 category-axis tick strokes");
         surfaceGeometry.FrameSegments[0].Start.X
             .Should().BeApproximately(8.0, 0.0001,
                 "the imported PowerPoint front frame edge starts inside the plot gutter");

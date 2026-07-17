@@ -570,8 +570,8 @@ public static partial class ChartRenderPlanner
     public const double ImportedCartesianCategoryLabelOffset = 16.0;
     public const double ImportedCartesianValueLabelRightGap = 22.0;
     public const double ImportedCartesianValueLabelVerticalOffset = 13.0;
-    public const double ImportedSurfacePointOffsetX = 2.0;
-    public const double ImportedSurfacePointOffsetY = -4.0;
+    public const double ImportedSurfacePointOffsetX = 3.5;
+    public const double ImportedSurfacePointOffsetY = -9.0;
     public const double LineMarkerRadius = 3.0;
     public const double ImportedLineMarkerRadius = 5.0;
     public const double LineMarkerStrokeThickness = 0.75;
@@ -3272,7 +3272,88 @@ public static partial class ChartRenderPlanner
             AddSurfaceFrameSegment(segments, depthWall, backWall, stroke);
         }
 
+        if (usesImportedTextMetrics)
+            AddImportedSurfaceAxisTicks(segments, plot, stroke);
+
         return segments;
+    }
+
+    private static void AddImportedSurfaceAxisTicks(
+        List<ChartLineSegmentPrimitive> segments,
+        ChartPlanRect plot,
+        ChartStrokePlan stroke)
+    {
+        // PowerPoint's SVG shape export retains these axis ticks as vector
+        // paths; keep their normalized positions with the imported frame.
+        double scaleX = plot.Width / ImportedSurfaceReferencePlotWidth;
+        double scaleY = plot.Height / 189.0;
+        var valueTicks = new (double StartX, double EndX, double Y)[]
+        {
+            (6.5, -0.5, 150.5),
+            (5.5, -0.5, 145.5),
+            (5.5, -0.5, 140.5),
+            (5.5, -1.5, 135.5),
+            (4.5, -1.5, 129.5),
+            (4.5, -2.5, 124.5),
+            (4.5, -2.5, 119.5),
+            (3.5, -2.5, 114.5),
+            (3.5, -2.5, 108.5),
+            (2.5, -3.5, 103.5),
+            (2.5, -3.5, 98.5),
+            (2.5, -4.5, 92.5),
+            (1.5, -4.5, 87.5),
+            (1.5, -4.5, 81.5),
+            (1.5, -5.5, 76.5),
+            (0.5, -5.5, 70.5),
+            (0.5, -5.5, 65.5),
+            (0.5, -5.5, 59.5),
+            (0.5, -6.5, 54.5),
+            (-0.5, -6.5, 48.5),
+            (-0.5, -6.5, 43.5)
+        };
+        foreach (var tick in valueTicks)
+        {
+            AddSurfaceFrameSegment(
+                segments,
+                new ChartPlanPoint(plot.X + tick.StartX * scaleX, plot.Y + tick.Y * scaleY),
+                new ChartPlanPoint(plot.X + tick.EndX * scaleX, plot.Y + tick.Y * scaleY),
+                stroke);
+        }
+
+        var majorValueTicks = new (double StartX, double EndX, double Y)[]
+        {
+            (7.5, -1.5, 150.5),
+            (5.5, -2.5, 124.5),
+            (4.5, -4.5, 98.5),
+            (2.5, -6.5, 70.5),
+            (0.5, -7.5, 43.5)
+        };
+        foreach (var tick in majorValueTicks)
+        {
+            AddSurfaceFrameSegment(
+                segments,
+                new ChartPlanPoint(plot.X + tick.StartX * scaleX, plot.Y + tick.Y * scaleY),
+                new ChartPlanPoint(plot.X + tick.EndX * scaleX, plot.Y + tick.Y * scaleY),
+                stroke);
+        }
+
+        var categoryTicks = new (double X, double Y, double Length)[]
+        {
+            (71.5, 156.5, 6.0),
+            (223.5, 176.5, 6.0),
+            (307.5, 187.5, 6.0),
+            (3.5, 146.5, 9.0),
+            (144.5, 164.5, 9.0),
+            (307.5, 186.5, 8.0)
+        };
+        foreach (var tick in categoryTicks)
+        {
+            AddSurfaceFrameSegment(
+                segments,
+                new ChartPlanPoint(plot.X + tick.X * scaleX, plot.Y + tick.Y * scaleY),
+                new ChartPlanPoint(plot.X + tick.X * scaleX, plot.Y + (tick.Y + tick.Length) * scaleY),
+                stroke);
+        }
     }
 
     private static ChartPlanPoint InterpolateSurfaceFramePoint(

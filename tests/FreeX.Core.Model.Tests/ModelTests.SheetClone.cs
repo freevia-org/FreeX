@@ -53,6 +53,8 @@ public partial class SheetCloneTests
         src.ColOutlineLevels[3] = 1;
         src.GroupHiddenRows.Add(5);
         src.GroupHiddenCols.Add(3);
+        src.CollapsedAnchorRows.Add(6);
+        src.CollapsedAnchorCols.Add(4);
 
         var copy = src.Clone(SheetId.New(), "Copy");
 
@@ -60,6 +62,8 @@ public partial class SheetCloneTests
         copy.ColOutlineLevels.Should().ContainKey(3).WhoseValue.Should().Be(1);
         copy.GroupHiddenRows.Should().Contain(5u);
         copy.GroupHiddenCols.Should().Contain(3u);
+        copy.CollapsedAnchorRows.Should().Contain(6u);
+        copy.CollapsedAnchorCols.Should().Contain(4u);
     }
 
     [Fact]
@@ -78,6 +82,8 @@ public partial class SheetCloneTests
         src.ColOutlineLevels[3] = 1;
         src.GroupHiddenRows.Add(5);
         src.GroupHiddenCols.Add(3);
+        src.CollapsedAnchorRows.Add(6);
+        src.CollapsedAnchorCols.Add(4);
 
         var copy = src.Clone(SheetId.New(), "Copy");
 
@@ -92,6 +98,8 @@ public partial class SheetCloneTests
         copy.ColOutlineLevels.Should().ContainKey(3).WhoseValue.Should().Be(1);
         copy.GroupHiddenRows.Should().Contain(5u);
         copy.GroupHiddenCols.Should().Contain(3u);
+        copy.CollapsedAnchorRows.Should().Contain(6u);
+        copy.CollapsedAnchorCols.Should().Contain(4u);
     }
 
     [Fact]

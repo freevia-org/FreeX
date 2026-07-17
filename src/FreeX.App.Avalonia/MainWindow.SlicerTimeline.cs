@@ -415,7 +415,7 @@ public sealed partial class MainWindow
         }
 
         var headerLeft = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
-        var headerTop = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var headerTop = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
         var left = headerLeft + fromLeft + (EmusToPixels(anchor.From.ColumnOffsetEmu) * zoomFactor);
         var top = headerTop + fromTop + (EmusToPixels(anchor.From.RowOffsetEmu) * zoomFactor);
         var right = headerLeft + toLeft + (EmusToPixels(anchor.To.ColumnOffsetEmu) * zoomFactor);

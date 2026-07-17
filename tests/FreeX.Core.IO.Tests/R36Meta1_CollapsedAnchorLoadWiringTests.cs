@@ -134,6 +134,47 @@ public sealed class R36Meta1_CollapsedAnchorLoadWiringTests
     }
 
     [Fact]
+    public void LoadedWorkbook_RemoveOnlyCollapsedAnchor_ResaveDropsSourceCollapsedMarker()
+    {
+        var sourceWorkbook = new Workbook("CollapsedAnchorPatchBaseline");
+        var sourceSheet = sourceWorkbook.AddSheet("Sheet1");
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 1, 1), new TextValue("detail"));
+        sourceSheet.SetCell(new CellAddress(sourceSheet.Id, 2, 1), new TextValue("subtotal"));
+        sourceSheet.RowOutlineLevels[1] = 1;
+        sourceSheet.GroupHiddenRows.Add(1);
+        sourceSheet.CollapsedAnchorRows.Add(2);
+        sourceSheet.ColOutlineLevels[1] = 1;
+        sourceSheet.GroupHiddenCols.Add(1);
+        sourceSheet.CollapsedAnchorCols.Add(2);
+
+        var source = new MemoryStream();
+        var adapter = new XlsxFileAdapter();
+        adapter.Save(sourceWorkbook, source);
+        source.Position = 0;
+
+        var loaded = adapter.Load(source);
+        loaded.GetSheetAt(0).CollapsedAnchorRows.Clear();
+        loaded.GetSheetAt(0).CollapsedAnchorCols.Clear();
+
+        var saved = new MemoryStream();
+        adapter.Save(loaded, saved);
+        saved.Position = 0;
+
+        adapter.LastSaveDiagnostics.Path.Should().Be(XlsxSavePath.FullSave, adapter.LastSaveDiagnostics.Reason);
+
+        using var archive = new ZipArchive(saved, ZipArchiveMode.Read, leaveOpen: false);
+        var worksheetXml = XlsxPackageTestFixtures.LoadPackageXml(archive, "xl/worksheets/sheet1.xml");
+        GetRow(worksheetXml, 2).Attribute("collapsed").Should().BeNull();
+        worksheetXml.Root!
+            .Element(WorksheetNs + "cols")!
+            .Elements(WorksheetNs + "col")
+            .Where(column =>
+                int.Parse((string)column.Attribute("min")!) <= 2 &&
+                2 <= int.Parse((string)column.Attribute("max")!))
+            .Should().NotContain(column => column.Attribute("collapsed") != null);
+    }
+
+    [Fact]
     public void Load_PlainHiddenGroupRows_WithNoAnchor_LeavesCollapsedAnchorRowsEmpty_NoRegression()
     {
         // Sibling no-regression case: a loaded sheet with plain hidden group rows and no collapsed
@@ -156,5 +197,6 @@ public sealed class R36Meta1_CollapsedAnchorLoadWiringTests
 
         loadedSheet.CollapsedAnchorRows.Should().BeEmpty();
         loadedSheet.HiddenRows.Should().Contain([1u, 2u]);
+        loadedSheet.GroupHiddenRows.Should().NotContain([1u, 2u]);
     }
 }

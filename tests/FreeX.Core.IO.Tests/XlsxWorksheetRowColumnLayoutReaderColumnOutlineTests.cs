@@ -61,12 +61,12 @@ public sealed class XlsxWorksheetRowColumnLayoutReaderColumnOutlineTests
         layout.RowColumnLayout.HiddenCols.Should().NotContain(5u);
         layout.RowColumnLayout.GroupHiddenCols.Should().NotContain(5u);
 
-        // Columns C and D: genuinely hidden detail columns with no "collapsed" of their own are
-        // unaffected -- still hidden, but not via GroupHiddenCols.
-        layout.RowColumnLayout.HiddenCols.Should().Contain(3u);
-        layout.RowColumnLayout.HiddenCols.Should().Contain(4u);
-        layout.RowColumnLayout.GroupHiddenCols.Should().NotContain(3u);
-        layout.RowColumnLayout.GroupHiddenCols.Should().NotContain(4u);
+        // Columns C and D are outline-owned hidden detail, not manually hidden columns.
+        layout.RowColumnLayout.HiddenCols.Should().NotContain(3u);
+        layout.RowColumnLayout.HiddenCols.Should().NotContain(4u);
+        layout.RowColumnLayout.GroupHiddenCols.Should().Contain(3u);
+        layout.RowColumnLayout.GroupHiddenCols.Should().Contain(4u);
+        layout.RowColumnLayout.CollapsedAnchorCols.Should().Contain(5u);
 
         // Column B: a plain outer-group member (no hidden/collapsed) stays fully unaffected.
         layout.RowColumnLayout.ColOutlineLevels.Should().Contain(2u, 1);
@@ -89,12 +89,18 @@ public sealed class XlsxWorksheetRowColumnLayoutReaderColumnOutlineTests
                         new XAttribute("max", "5"),
                         new XAttribute("hidden", "1"),
                         new XAttribute("outlineLevel", "1"),
+                        new XAttribute("collapsed", "1")),
+                    new XElement(
+                        WorksheetNs + "col",
+                        new XAttribute("min", "6"),
+                        new XAttribute("max", "6"),
                         new XAttribute("collapsed", "1"))),
                 new XElement(WorksheetNs + "sheetData")));
 
         var layout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheet, WorksheetNs);
 
-        layout.RowColumnLayout.HiddenCols.Should().Contain(5u);
+        layout.RowColumnLayout.HiddenCols.Should().NotContain(5u);
         layout.RowColumnLayout.GroupHiddenCols.Should().Contain(5u);
+        layout.RowColumnLayout.CollapsedAnchorCols.Should().Contain(5u);
     }
 }

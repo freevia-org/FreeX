@@ -15,6 +15,7 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.SetStyleOnly(5, 2, style);
         sheet.RowOutlineLevels[5] = 2;
         sheet.GroupHiddenRows.Add(5);
+        sheet.CollapsedAnchorRows.Add(6);
         sheet.AllowEditRanges.Add(Range(sheet, 5, 1, 6, 2));
         sheet.PrintTitleRows = new WorksheetRepeatRange(5, 6);
         sheet.RowPageBreaksMetadata = PageBreakMetadata(5);
@@ -67,6 +68,7 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.GetStyleOnly(5, 2).Should().BeNull();
         sheet.RowOutlineLevels[7].Should().Be(2);
         sheet.GroupHiddenRows.Should().Contain(7);
+        sheet.CollapsedAnchorRows.Should().Contain(8);
         sheet.AllowEditRanges.Should().ContainSingle().Which.Should().Be(Range(sheet, 7, 1, 8, 2));
         sheet.PrintTitleRows.Should().Be(new WorksheetRepeatRange(7, 8));
         sheet.RowPageBreaksMetadata!.BreakNativeAttributes.Should().ContainKey(7);
@@ -95,6 +97,7 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.GetStyleOnly(5, 2).Should().Be(style);
         sheet.RowOutlineLevels[5].Should().Be(2);
         sheet.GroupHiddenRows.Should().Contain(5);
+        sheet.CollapsedAnchorRows.Should().Contain(6);
         workbook.WatchedCells.Should().ContainSingle().Which.Should().Be(Addr(sheet, 5, 3));
         sheet.AutoFilter!.Reference.Should().Be("A5:C8");
         sheet.TextBoxes.Should().ContainSingle().Which.Anchor.Should().Be(Addr(sheet, 5, 1));
@@ -111,6 +114,7 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.SetStyleOnly(6, 2, style);
         sheet.RowOutlineLevels[6] = 3;
         sheet.GroupHiddenRows.Add(6);
+        sheet.CollapsedAnchorRows.Add(7);
         workbook.WatchedCells.AddRange([Addr(sheet, 3, 3), Addr(sheet, 6, 3)]);
         sheet.CellWatchesMetadata = CellWatchMetadata("C3", "C6");
         sheet.AutoFilter = new WorksheetAutoFilterModel("A6:C8", null);
@@ -160,6 +164,7 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.GetStyleOnly(4, 2).Should().Be(style);
         sheet.RowOutlineLevels[4].Should().Be(3);
         sheet.GroupHiddenRows.Should().Contain(4);
+        sheet.CollapsedAnchorRows.Should().Contain(5);
         workbook.WatchedCells.Should().ContainSingle().Which.Should().Be(Addr(sheet, 4, 3));
         sheet.CellWatchesMetadata!.WatchNativeAttributes.Should().ContainKey("C4");
         sheet.CellWatchesMetadata.WatchNativeAttributes.Should().NotContainKey("C3");
@@ -180,6 +185,7 @@ public sealed class RowColumnShiftAddressStateTests
 
         sheet.GetStyleOnly(3, 2).Should().Be(style);
         sheet.GetStyleOnly(6, 2).Should().Be(style);
+        sheet.CollapsedAnchorRows.Should().Contain(7);
         workbook.WatchedCells.Should().Equal(Addr(sheet, 3, 3), Addr(sheet, 6, 3));
         sheet.DrawingShapes.Should().ContainSingle().Which.Anchor.Should().Be(Addr(sheet, 3, 1));
         sheet.StructuredTables.Should().ContainSingle().Which.Range.Should().Be(Range(sheet, 6, 1, 8, 3));
@@ -194,6 +200,7 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.SetStyleOnly(2, 5, style);
         sheet.ColOutlineLevels[5] = 2;
         sheet.GroupHiddenCols.Add(5);
+        sheet.CollapsedAnchorCols.Add(6);
         workbook.WatchedCells.Add(Addr(sheet, 2, 5));
         sheet.CellWatchesMetadata = CellWatchMetadata("E2");
         sheet.AutoFilter = new WorksheetAutoFilterModel("B2:D5", null);
@@ -238,6 +245,7 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.GetStyleOnly(2, 6).Should().Be(style);
         sheet.ColOutlineLevels[6].Should().Be(2);
         sheet.GroupHiddenCols.Should().Contain(6);
+        sheet.CollapsedAnchorCols.Should().Contain(7);
         workbook.WatchedCells.Should().ContainSingle().Which.Should().Be(Addr(sheet, 2, 6));
         sheet.CellWatchesMetadata!.WatchNativeAttributes.Should().ContainKey("F2");
         sheet.AutoFilter!.Reference.Should().Be("B2:E5");
@@ -255,6 +263,7 @@ public sealed class RowColumnShiftAddressStateTests
 
         sheet.GetStyleOnly(2, 5).Should().Be(style);
         sheet.ColOutlineLevels[5].Should().Be(2);
+        sheet.CollapsedAnchorCols.Should().Contain(6);
         workbook.WatchedCells.Should().ContainSingle().Which.Should().Be(Addr(sheet, 2, 5));
         sheet.AutoFilter!.Reference.Should().Be("B2:D5");
         sheet.AutoFilter.FilterColumns.Should().ContainSingle().Which.ColumnId.Should().Be(1);
@@ -269,6 +278,7 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.SetStyleOnly(2, 5, style);
         sheet.ColOutlineLevels[5] = 2;
         sheet.GroupHiddenCols.Add(5);
+        sheet.CollapsedAnchorCols.Add(6);
         workbook.WatchedCells.AddRange([Addr(sheet, 2, 3), Addr(sheet, 2, 5)]);
         sheet.CellWatchesMetadata = CellWatchMetadata("C2", "E2");
         sheet.AutoFilter = new WorksheetAutoFilterModel("B2:E5", null);
@@ -315,6 +325,7 @@ public sealed class RowColumnShiftAddressStateTests
         sheet.GetStyleOnly(2, 4).Should().Be(style);
         sheet.ColOutlineLevels[4].Should().Be(2);
         sheet.GroupHiddenCols.Should().Contain(4);
+        sheet.CollapsedAnchorCols.Should().Contain(5);
         workbook.WatchedCells.Should().ContainSingle().Which.Should().Be(Addr(sheet, 2, 4));
         sheet.CellWatchesMetadata!.WatchNativeAttributes.Should().ContainKey("D2");
         sheet.CellWatchesMetadata.WatchNativeAttributes.Should().NotContainKey("C2");
@@ -334,6 +345,7 @@ public sealed class RowColumnShiftAddressStateTests
 
         sheet.GetStyleOnly(2, 3).Should().Be(style);
         sheet.GetStyleOnly(2, 5).Should().Be(style);
+        sheet.CollapsedAnchorCols.Should().Contain(6);
         workbook.WatchedCells.Should().Equal(Addr(sheet, 2, 3), Addr(sheet, 2, 5));
         sheet.DrawingShapes.Should().ContainSingle().Which.Anchor.Should().Be(Addr(sheet, 2, 3));
         sheet.AutoFilter!.Reference.Should().Be("B2:E5");

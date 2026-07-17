@@ -24,7 +24,12 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
                         new XAttribute("outlineLevel", "1"),
                         new XAttribute("collapsed", "1"),
                         new XAttribute("customWidth", "1"),
-                        new XAttribute("width", "12.75"))),
+                        new XAttribute("width", "12.75")),
+                    new XElement(
+                        WorksheetNs + "col",
+                        new XAttribute("min", "4"),
+                        new XAttribute("max", "4"),
+                        new XAttribute("collapsed", "1"))),
                 new XElement(WorksheetNs + "sheetData",
                     new XElement(
                         WorksheetNs + "row",
@@ -36,7 +41,11 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
                         new XAttribute("collapsed", "1"),
                         Cell("A5", style: "4"),
                         Cell("B5", null, "e", new XElement(WorksheetNs + "f", "1/0"), new XElement(WorksheetNs + "v", "#DIV/0!")),
-                        Cell("C5", "6", null, new XElement(WorksheetNs + "v", "text")))),
+                        Cell("C5", "6", null, new XElement(WorksheetNs + "v", "text"))),
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "6"),
+                        new XAttribute("collapsed", "1"))),
                 new XElement(WorksheetNs + "extLst",
                     new XElement(
                         WorksheetNs + "row",
@@ -53,16 +62,18 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
 
         var layout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheet, WorksheetNs);
 
-        layout.RowColumnLayout.HiddenRows.Should().Equal(5u);
+        layout.RowColumnLayout.HiddenRows.Should().BeEmpty();
         layout.RowColumnLayout.RowHeights[5].Should().BeApproximately(24, 0.0001);
         layout.RowColumnLayout.RowOutlineLevels.Should().Contain(5u, 2);
         layout.RowColumnLayout.GroupHiddenRows.Should().Equal(5u);
-        layout.RowColumnLayout.HiddenCols.Should().Equal(2u, 3u);
+        layout.RowColumnLayout.HiddenCols.Should().BeEmpty();
         layout.RowColumnLayout.ColumnWidths.Should().Contain(2u, 12.75);
         layout.RowColumnLayout.ColumnWidths.Should().Contain(3u, 12.75);
         layout.RowColumnLayout.ColOutlineLevels.Should().Contain(2u, 1);
         layout.RowColumnLayout.ColOutlineLevels.Should().Contain(3u, 1);
-        layout.RowColumnLayout.GroupHiddenCols.Should().Equal(2u, 3u);
+        layout.RowColumnLayout.GroupHiddenCols.Should().BeEquivalentTo([2u, 3u]);
+        layout.RowColumnLayout.CollapsedAnchorRows.Should().BeEquivalentTo([5u, 6u]);
+        layout.RowColumnLayout.CollapsedAnchorCols.Should().BeEquivalentTo([2u, 3u, 4u]);
 
         layout.CellLayout.HasStyleOnlyCells.Should().BeTrue();
         layout.CellLayout.ExplicitStyleOnlyCells.Should().Equal((5u, 1u, 4));
@@ -76,46 +87,51 @@ public sealed class XlsxWorksheetSheetDataLayoutReaderTests
     [Fact]
     public void ReadSheetDataLayout_StreamingParserMatchesDirectSheetDataAndFlagsNativeMetadata()
     {
-        var worksheet = new XDocument(
-            new XElement(WorksheetNs + "worksheet",
-                new XElement(WorksheetNs + "sheetData",
+        var sheetData = new XElement(
+            WorksheetNs + "sheetData",
+            new XElement(
+                WorksheetNs + "row",
+                new XAttribute("r", "5"),
+                new XAttribute("hidden", "1"),
+                new XAttribute("ht", "18"),
+                new XAttribute("customHeight", "1"),
+                new XAttribute("outlineLevel", "2"),
+                new XAttribute("collapsed", "1"),
+                new XAttribute("thickTop", "1"),
+                Cell("A5", style: "4"),
+                Cell(
+                    "B5",
+                    null,
+                    "e",
                     new XElement(
-                        WorksheetNs + "row",
-                        new XAttribute("r", "5"),
-                        new XAttribute("hidden", "1"),
-                        new XAttribute("ht", "18"),
-                        new XAttribute("customHeight", "1"),
-                        new XAttribute("outlineLevel", "2"),
-                        new XAttribute("collapsed", "1"),
-                        new XAttribute("thickTop", "1"),
-                        Cell("A5", style: "4"),
-                        Cell(
-                            "B5",
-                            null,
-                            "e",
-                            new XElement(
-                                WorksheetNs + "f",
-                                new XAttribute("t", "shared"),
-                                "1/0"),
-                            new XElement(WorksheetNs + "v", "#DIV/0!")),
-                        Cell(
-                            "C5",
-                            "6",
-                            "inlineStr",
-                            new XElement(
-                                WorksheetNs + "is",
-                                new XElement(
-                                    WorksheetNs + "r",
-                                    new XElement(WorksheetNs + "t", "rich"))))))));
+                        WorksheetNs + "f",
+                        new XAttribute("t", "shared"),
+                        "1/0"),
+                    new XElement(WorksheetNs + "v", "#DIV/0!")),
+                Cell(
+                    "C5",
+                    "6",
+                    "inlineStr",
+                    new XElement(
+                        WorksheetNs + "is",
+                        new XElement(
+                            WorksheetNs + "r",
+                            new XElement(WorksheetNs + "t", "rich"))))),
+            new XElement(
+                WorksheetNs + "row",
+                new XAttribute("r", "6"),
+                new XAttribute("collapsed", "1")));
+        var worksheet = new XDocument(new XElement(WorksheetNs + "worksheet", sheetData));
 
         using var reader = worksheet.Root!.Element(WorksheetNs + "sheetData")!.CreateReader();
 
         var layout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(reader, WorksheetNs);
 
-        layout.RowColumnLayout.HiddenRows.Should().Equal(5u);
+        layout.RowColumnLayout.HiddenRows.Should().BeEmpty();
         layout.RowColumnLayout.RowHeights[5].Should().BeApproximately(24, 0.0001);
         layout.RowColumnLayout.RowOutlineLevels.Should().Contain(5u, 2);
         layout.RowColumnLayout.GroupHiddenRows.Should().Equal(5u);
+        layout.RowColumnLayout.CollapsedAnchorRows.Should().BeEquivalentTo([5u, 6u]);
         layout.CellLayout.HasStyleOnlyCells.Should().BeTrue();
         layout.CellLayout.ExplicitStyleOnlyCells.Should().Equal((5u, 1u, 4));
         layout.CellLayout.ExplicitPopulatedCellStyles.Should().Equal((5u, 3u, 6));
