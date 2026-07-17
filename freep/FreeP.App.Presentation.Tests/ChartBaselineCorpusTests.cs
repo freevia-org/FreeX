@@ -373,7 +373,7 @@ public sealed class ChartBaselineCorpusTests
             "PowerPoint's imported Surface3D baseline uses the projected frame and wireframe without contour overlays");
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 3).Should().Be(2);
         surfaceGeometry.Facets.Count(facet => facet.Points.Count == 4).Should().Be(2);
-        surfaceGeometry.RenderFacets.Should().HaveCount(12,
+        surfaceGeometry.RenderFacets.Should().HaveCount(15,
             "imported PowerPoint Surface3D cells render a continuous triangulated surface and projected boundary faces");
         surfaceGeometry.RenderFacets.Should().OnlyContain(facet => facet.Points.Count == 3);
         var firstSurfaceCellFacets = surfaceGeometry.RenderFacets
@@ -410,7 +410,7 @@ public sealed class ChartBaselineCorpusTests
                 new SrgbColor(0x97, 0xBD, 0x80),
                 new SrgbColor(0x99, 0xBD, 0x80),
                 new SrgbColor(0x44, 0x74, 0xC7),
-                new SrgbColor(0xD5, 0x70, 0x2C),
+                new SrgbColor(0xF1, 0x80, 0x32),
                 new SrgbColor(0xB7, 0x60, 0x26),
                 new SrgbColor(0x97, 0xBD, 0x80));
         surfaceGeometry.RenderFacets
@@ -418,10 +418,31 @@ public sealed class ChartBaselineCorpusTests
             .Select(facet => facet.Fill.Color)
             .Should()
             .Equal(
+                new SrgbColor(0xD5, 0x70, 0x2C),
+                new SrgbColor(0xD5, 0x70, 0x2C),
+                new SrgbColor(0xD5, 0x70, 0x2C),
                 new SrgbColor(0x34, 0x58, 0x97),
                 new SrgbColor(0x8B, 0xAB, 0x74),
                 new SrgbColor(0xE7, 0xAD, 0x00),
                 new SrgbColor(0x81, 0xA1, 0x6E));
+        surfaceGeometry.RenderFacets[8].Points.Select(point => point.X)
+            .Should().Equal(new[] { 5.0, 72.0, 132.0 },
+                "PowerPoint exposes a separate near-left dark-orange boundary triangle");
+        surfaceGeometry.RenderFacets[8].Points.Select(point => point.Y)
+            .Should().Equal(new[] { 122.0, 71.0, 71.0 },
+                "the imported near-left boundary triangle uses the measured projected wall");
+        surfaceGeometry.RenderFacets[9].Points.Select(point => point.X)
+            .Should().Equal(new[] { 5.0, 132.0, 174.0 },
+                "the paired near-left triangle closes the measured projected polygon");
+        surfaceGeometry.RenderFacets[9].Points.Select(point => point.Y)
+            .Should().Equal(new[] { 122.0, 71.0, 79.0 },
+                "the paired near-left triangle retains the measured projected wall");
+        surfaceGeometry.RenderFacets[10].Points.Select(point => point.X)
+            .Should().Equal(new[] { 247.0, 320.0, 312.0 },
+                "PowerPoint exposes a separate right-side dark-orange boundary triangle");
+        surfaceGeometry.RenderFacets[10].Points.Select(point => point.Y)
+            .Should().Equal(new[] { 101.0, 119.0, 134.0 },
+                "the imported right-side boundary triangle uses the measured projected wall");
         surfaceGeometry.FrameSegments.Should().NotBeEmpty(
             "PowerPoint renders the projected Surface3D frame behind the facets");
         surfaceGeometry.FrameSegments.Should().HaveCount(45,
