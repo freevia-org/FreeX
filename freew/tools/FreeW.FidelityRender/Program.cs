@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 using FreeW.App.Host;
 using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
+using FreeW.App.Presentation.Ribbon;
 using FreeW.Core.IO;
 using FreeW.Core.Model;
 using SkiaSharp;
@@ -444,6 +445,11 @@ static void RenderDocumentComposite(
         panel = null;
     }
 
+    // The body paginator expands a planned multi-page table into physical page sections, while the
+    // editable panel's block assignment has only the original model table block. Resolve the later
+    // page slots from the final generated segment's owning section instead of dropping page chrome.
+    var differentOddEvenHeaderFooterPages = HeaderFooterPagePlanner.UsesDifferentOddEvenPages(doc);
+
     // ═══ Per-page compositing ═════════════════════════════════════════════════════════════════════
     // Word appends endnotes after the final body content when that page has room. They are not a
     // separate, empty document page merely because the document contains endnotes.
@@ -470,6 +476,17 @@ static void RenderDocumentComposite(
             headerSlotName = pageBox.HeaderSlotName;
             footerSlotName = pageBox.FooterSlotName;
             hasFootnotes = pageBox.FootnoteIds.Count > 0;
+        }
+        else if (hasMultiPageTable && panel is not null && panel.PageBoxes.Count > 0)
+        {
+            var generatedSegmentBox = panel.PageBoxes[^1];
+            thisPageSettings = generatedSegmentBox.PageGeometry;
+            var generatedSegmentSlots = HeaderFooterPagePlanner.ResolveSlots(
+                generatedSegmentBox.OwnerSectionHf ?? doc.FinalSectionHeadersFooters,
+                i + 1,
+                thisPageSettings,
+                differentOddEvenHeaderFooterPages);
+            footerSlotName = generatedSegmentSlots.FooterSlotName;
         }
 
         var (thisPageWDip, thisPageHDip) = PageLayout.PageSizeDip(thisPageSettings);
@@ -646,6 +663,41 @@ static void RenderDocumentComposite(
             }
 
             // Endnotes are composed after the final body page below rather than at their references.
+        }
+        else if (hasMultiPageTable && panel is not null && panel.PageBoxes.Count > 0)
+        {
+            var generatedSegmentBox = panel.PageBoxes[^1];
+            var ownerHf = generatedSegmentBox.OwnerSectionHf ?? doc.FinalSectionHeadersFooters;
+            var slots = HeaderFooterPagePlanner.ResolveSlots(
+                ownerHf,
+                i + 1,
+                thisPageSettings,
+                differentOddEvenHeaderFooterPages);
+            const double hfH = 36;
+            const double DefaultHeaderFooterDistanceDip = 48;
+            var footerDistance = thisPageSettings.FooterDistancePt > 0
+                ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
+                : DefaultHeaderFooterDistanceDip;
+            var footerTop = thisPixH - footerDistance - hfH + 7;
+
+            if (slots.Footer is { IsEmpty: false } footerSlot)
+            {
+                var hfPage = RenderHfSlot(footerSlot, doc, thisPageWDip, hfH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount);
+                if (hfPage is not null)
+                {
+                    var hfVis = new DrawingVisual();
+                    using (var dc = hfVis.RenderOpen())
+                        dc.DrawRectangle(new VisualBrush(hfPage.Visual)
+                        {
+                            Stretch = Stretch.None,
+                            AlignmentX = AlignmentX.Left,
+                            AlignmentY = AlignmentY.Top
+                        },
+                            null, new Rect(thisMarginLeft, footerTop,
+                                thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
+                    bmp.Render(hfVis);
+                }
+            }
         }
 
         // Word's default endnote layout continues after the body text on the final physical page

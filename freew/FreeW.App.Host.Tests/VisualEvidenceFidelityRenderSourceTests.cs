@@ -118,6 +118,17 @@ public sealed class VisualEvidenceFidelityRenderSourceTests
         source.Should().Contain("if (options.IsPicture)");
     }
 
+    [Fact]
+    public void FidelityRender_GeneratedTablePagesResolveTheirFooterSlot()
+    {
+        var source = File.ReadAllText(RepositoryFile("freew", "tools", "FreeW.FidelityRender", "Program.cs"));
+
+        source.Should().Contain("else if (hasMultiPageTable && panel is not null && panel.PageBoxes.Count > 0)");
+        source.Should().Contain("generatedSegmentBox.OwnerSectionHf ?? doc.FinalSectionHeadersFooters");
+        source.Should().Contain("HeaderFooterPagePlanner.ResolveSlots(");
+        source.Should().Contain("footerSlotName = generatedSegmentSlots.FooterSlotName");
+    }
+
     private static string RepositoryFile(params string[] parts)
     {
         var directory = AppContext.BaseDirectory;
