@@ -182,6 +182,26 @@ function Invoke-WordRetry {
     throw "$Operation failed after $TimeoutSeconds seconds: $($lastError.Exception.Message)"
 }
 
+function Update-WordDocumentFields {
+    param(
+        [object]$Document,
+        [object]$Word
+    )
+
+    # Word publishes the cached result text stored in the DOCX unless fields are recalculated first.
+    # StoryRanges covers headers, footers, text boxes, and the main document story; NextStoryRange walks
+    # linked stories such as the first/even/default header and footer variants.
+    foreach ($storyRange in @($Document.StoryRanges)) {
+        $range = $storyRange
+        while ($range) {
+            Invoke-WordRetry -Operation 'Update Word fields' -Word $Word -Action {
+                [void]$range.Fields.Update()
+            }
+            $range = $range.NextStoryRange
+        }
+    }
+}
+
 function Get-WordApplication {
     param(
         [string]$ProgId,
@@ -254,6 +274,7 @@ try {
                 $word.Documents.Open($fixture.FullName, $false, $true, $false)
             } -Word $word
             Invoke-WordRetry -Operation "Activate $($fixture.Name)" -Word $word -Action { $doc.Activate() }
+            Update-WordDocumentFields -Document $doc -Word $word
             $code = @"
 `$ErrorActionPreference = 'Stop'
 `$deadline = [DateTime]::UtcNow.AddSeconds(30)
