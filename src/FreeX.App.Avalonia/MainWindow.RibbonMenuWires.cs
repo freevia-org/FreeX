@@ -237,12 +237,15 @@ public sealed partial class MainWindow
     // (The per-group +/- boundary toggle that WPF's grid raises via OnOutlineGroupToggleRequested
     // has no Avalonia counterpart yet — the Avalonia shell has no outline-gutter click surface in
     // its grid rendering to wire it to; that remains a separate, grid-rendering-level gap.)
+    // MainWindow.OutlineGrid.cs now supplies the Avalonia gutter and routes +/- through the same
+    // undo-aware session command path.
     private void ShowOutlineDetail()
     {
         var range = _session.SelectedRange;
         var axis = OutlineGroupingService.GetGroupingAxis(range);
         var result = axis == OutlineGroupingAxis.Columns
-            ? _session.ExecuteReviewCommand(new ExpandColGroupCommand(_session.ActiveSheet.Id, 1))
+            ? _session.ExecuteReviewCommand(new ExpandColGroupCommand(
+                _session.ActiveSheet.Id, 1, range.Start.Col, range.End.Col))
             : _session.ExecuteReviewCommand(new ExpandRowGroupCommand(_session.ActiveSheet.Id, 1, range.Start.Row, range.End.Row));
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_ShownDetail")
@@ -254,7 +257,8 @@ public sealed partial class MainWindow
         var range = _session.SelectedRange;
         var axis = OutlineGroupingService.GetGroupingAxis(range);
         var result = axis == OutlineGroupingAxis.Columns
-            ? _session.ExecuteReviewCommand(new CollapseColGroupCommand(_session.ActiveSheet.Id, 1))
+            ? _session.ExecuteReviewCommand(new CollapseColGroupCommand(
+                _session.ActiveSheet.Id, 1, range.Start.Col, range.End.Col))
             : _session.ExecuteReviewCommand(new CollapseRowGroupCommand(_session.ActiveSheet.Id, 1, range.Start.Row, range.End.Row));
         RefreshShell(result.Success
             ? UiText.Get("RibbonWire_HidDetail")

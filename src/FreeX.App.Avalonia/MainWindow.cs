@@ -302,7 +302,7 @@ public sealed partial class MainWindow : Window
             >= 1_000     => 36,
             _            => HeaderColumnWidth,
         };
-        return baseWidth * zoomFactor;
+        return baseWidth * zoomFactor + GetRowOutlineGutterWidth(viewport, zoomFactor);
     }
     private const double InitialViewportHeight = 880;
     private const double InitialViewportWidth = 1440;
@@ -4313,7 +4313,7 @@ public sealed partial class MainWindow : Window
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(GetDisplayedColumnWidth(metric, zoomFactor)) });
 
         if (showHeadings)
-            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(HeaderRowHeight * zoomFactor) });
+            grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(GetColumnHeaderHeight(viewport, zoomFactor)) });
         foreach (var metric in rowMetrics)
             grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(GetDisplayedRowHeight(metric, zoomFactor)) });
 
@@ -4441,8 +4441,9 @@ public sealed partial class MainWindow : Window
         // which is called unconditionally regardless of WorksheetViewMode). Build it independently
         // of pageBreakOverlay above so Normal view gets it too.
         var manualPageBreakOverlay = BuildManualPageBreakOverlay(viewport, showHeadings, zoomFactor);
+        var outlineOverlay = BuildOutlineOverlay(viewport, showHeadings, zoomFactor);
 
-        if (overlay.Children.Count == 0 && pageBreakOverlay is null && manualPageBreakOverlay is null)
+        if (overlay.Children.Count == 0 && pageBreakOverlay is null && manualPageBreakOverlay is null && outlineOverlay is null)
             return grid;
 
         var composite = new AvaloniaGrid
@@ -4456,6 +4457,8 @@ public sealed partial class MainWindow : Window
             composite.Children.Add(manualPageBreakOverlay);
         if (overlay.Children.Count > 0)
             composite.Children.Add(overlay);
+        if (outlineOverlay is not null)
+            composite.Children.Add(outlineOverlay);
 
         return composite;
     }
@@ -4484,7 +4487,7 @@ public sealed partial class MainWindow : Window
             MinimumDisplayedRowHeight);
 
         var rowHeaderWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
-        var columnHeaderHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var columnHeaderHeight = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
         var actualWidth = CalculateDisplayedGridWidth(viewport, showHeadings, zoomFactor);
         var actualHeight = CalculateDisplayedGridHeight(viewport, showHeadings, zoomFactor);
 
@@ -4874,7 +4877,7 @@ public sealed partial class MainWindow : Window
             return;
 
         var headerWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
-        var headerHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var headerHeight = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
 
         if (frozenPanes.Rows > 0)
         {
@@ -5966,7 +5969,7 @@ public sealed partial class MainWindow : Window
         // drawingObject.AnchorRow/drawingObject.AnchorCol identify the source anchor; Left/Top
         // carry the projected viewport offsets, including preserved sub-cell positioning.
         var rowHeaderWidth = showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0;
-        var columnHeaderHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var columnHeaderHeight = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
         if (!DrawingObjectViewportPlanner.TryCreateDisplayedObjectRect(
                 drawingObject,
                 rowHeaderWidth,
@@ -6008,7 +6011,7 @@ public sealed partial class MainWindow : Window
         var columnMetric = viewport.ColMetrics.First(metric => metric.Col == address.Col);
         var rowMetric = viewport.RowMetrics.First(metric => metric.Row == address.Row);
         left = (showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0) + columnLeft;
-        top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
+        top = (showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0) + rowTop;
         width = GetDisplayedColumnWidth(columnMetric, zoomFactor);
         height = GetDisplayedRowHeight(rowMetric, zoomFactor);
         return true;
@@ -6049,7 +6052,7 @@ public sealed partial class MainWindow : Window
         }
 
         left = (showHeadings ? GetRowHeaderWidth(viewport, zoomFactor) : 0) + columnLeft;
-        top = (showHeadings ? HeaderRowHeight * zoomFactor : 0) + rowTop;
+        top = (showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0) + rowTop;
         width = visibleColumns.Sum(metric => GetDisplayedColumnWidth(metric, zoomFactor));
         height = visibleRows.Sum(metric => GetDisplayedRowHeight(metric, zoomFactor));
         return width > 0 && height > 0;
@@ -6104,7 +6107,7 @@ public sealed partial class MainWindow : Window
 
     private static double CalculateDisplayedGridHeight(ViewportModel viewport, bool showHeadings, double zoomFactor)
     {
-        var height = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var height = showHeadings ? GetColumnHeaderHeight(viewport, zoomFactor) : 0;
         foreach (var metric in CombineSplitRowMetrics(viewport))
             height += GetDisplayedRowHeight(metric, zoomFactor);
 
@@ -6129,7 +6132,7 @@ public sealed partial class MainWindow : Window
             return;
 
         var rowTopByRow = new Dictionary<uint, double>(rowMetrics.Count);
-        var rowTop = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var rowTop = showHeadings ? GetColumnHeaderHeight(_session.Viewport, zoomFactor) : 0;
         foreach (var metric in rowMetrics)
         {
             rowTopByRow[metric.Row] = rowTop;
@@ -6468,6 +6471,7 @@ public sealed partial class MainWindow : Window
     private Control CreateColumnHeaderCell(uint col, ColMetric metric, bool selected, double zoomFactor)
     {
         var header = CreateHeaderCell(CellAddress.NumberToColumnName(col), selected, zoomFactor);
+        header.Padding = new Thickness(0, GetColumnOutlineGutterHeight(_session.Viewport, zoomFactor), 0, 0);
         header.Cursor = new Cursor(StandardCursorType.Hand);
         header.PointerPressed += (_, args) =>
         {
@@ -6509,6 +6513,7 @@ public sealed partial class MainWindow : Window
     private Control CreateRowHeaderCell(uint row, RowMetric metric, bool selected, double zoomFactor)
     {
         var header = CreateHeaderCell(row.ToString(), selected, zoomFactor);
+        header.Padding = new Thickness(GetRowOutlineGutterWidth(_session.Viewport, zoomFactor), 0, 0, 0);
         header.Cursor = new Cursor(StandardCursorType.Hand);
         header.PointerPressed += (_, args) =>
         {
@@ -6783,7 +6788,7 @@ public sealed partial class MainWindow : Window
 
         var zoomFactor = GetActiveZoomFactor();
         var pos = args.GetPosition(_sheetGridHost);
-        if (pos.Y < 0 || pos.Y > HeaderRowHeight * zoomFactor)
+        if (pos.Y < 0 || pos.Y > GetColumnHeaderHeight(_session.Viewport, zoomFactor))
             return false;
 
         var left = GetRowHeaderWidth(_session.Viewport, zoomFactor);
@@ -6813,7 +6818,7 @@ public sealed partial class MainWindow : Window
         if (pos.X < 0 || pos.X > GetRowHeaderWidth(_session.Viewport, zoomFactor))
             return false;
 
-        var top = HeaderRowHeight * zoomFactor;
+        var top = GetColumnHeaderHeight(_session.Viewport, zoomFactor);
         foreach (var metric in CombineSplitRowMetrics(_session.Viewport))
         {
             var bottom = top + GetDisplayedRowHeight(metric, zoomFactor);
@@ -6835,7 +6840,7 @@ public sealed partial class MainWindow : Window
         var sheet = _session.ActiveSheet;
         var zoomFactor = GetActiveZoomFactor();
         var left = sheet.ShowHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0;
-        var top = sheet.ShowHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var top = sheet.ShowHeadings ? GetColumnHeaderHeight(_session.Viewport, zoomFactor) : 0;
 
         if (pos.X < left || pos.Y < top)
             return false;
@@ -25034,7 +25039,7 @@ public sealed partial class MainWindow : Window
         var bounds = _sheetScrollViewer.Bounds;
         var zoomFactor = GetActiveZoomFactor();
         var showHeadings = _session.ActiveSheet.ShowHeadings;
-        var headerHeight = showHeadings ? HeaderRowHeight * zoomFactor : 0;
+        var headerHeight = showHeadings ? GetColumnHeaderHeight(_session.Viewport, zoomFactor) : 0;
         var headerWidth = showHeadings ? GetRowHeaderWidth(_session.Viewport, zoomFactor) : 0;
         if (bounds.Height <= headerHeight || bounds.Width <= headerWidth)
         {
