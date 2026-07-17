@@ -695,6 +695,36 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceGeometryPlan_UsesAuthoredView3DForSurfaceProjection()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        var baseline = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        chart.View3D = new Chart3DView
+        {
+            RotationX = 30,
+            RotationY = 40,
+            Perspective = 60,
+            HeightPercent = 140,
+            DepthPercent = 180,
+        };
+        var authoredView = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        var baselinePoint = baseline.Points.Single(point =>
+            point.SeriesIndex == 1 && point.CategoryIndex == 1);
+        var authoredPoint = authoredView.Points.Single(point =>
+            point.SeriesIndex == 1 && point.CategoryIndex == 1);
+        authoredPoint.Point.X.Should().BeGreaterThan(baselinePoint.Point.X,
+            "a larger authored azimuth and depth should move the rear category farther right");
+        authoredPoint.Point.Y.Should().BeLessThan(baselinePoint.Point.Y,
+            "a taller authored camera should raise the projected surface");
+    }
+
+    [Fact]
     public void UsesProjectedSurfaceFrame_OnlyForSurface3D()
     {
         ChartRenderPlanner.UsesProjectedSurfaceFrame(new ChartShape { ChartType = ChartType.Surface3D })

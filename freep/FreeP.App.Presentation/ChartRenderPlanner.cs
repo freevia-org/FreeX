@@ -2926,7 +2926,8 @@ public static partial class ChartRenderPlanner
                     cell.CategoryIndex,
                     heightNormalized,
                     chart.ChartType == ChartType.Surface3D,
-                    UsesImportedTextMetrics(chart)),
+                    UsesImportedTextMetrics(chart),
+                    chart.View3D),
                 cell.Value,
                 cell.NormalizedValue);
             pointsByKey[(cell.SeriesIndex, cell.CategoryIndex)] = point;
@@ -2944,7 +2945,8 @@ public static partial class ChartRenderPlanner
                 seriesCount,
                 categoryCount,
                 valueAxisMin,
-                valueAxisRange)
+                valueAxisRange,
+                chart.View3D)
             : pointsByKey;
         var wireframe = BuildSurfaceWireframeSegments(renderPointsByKey, seriesCount, categoryCount);
         var facets = BuildSurfaceFacetPrimitives(chart, pointsByKey, seriesCount, categoryCount, seriesColors);
@@ -2956,6 +2958,11 @@ public static partial class ChartRenderPlanner
                 categoryCount,
                 seriesColors,
                 triangulateCompleteCells: true)
+                // PowerPoint paints the rear surface rows first so the nearer
+                // row owns shared projected pixels at the fold between cells.
+                .OrderByDescending(facet => facet.SeriesIndex)
+                .ThenBy(facet => facet.CategoryIndex)
+                .ToArray()
             : facets;
         if (UsesImportedSurfaceBoundaryFaces(chart))
         {
@@ -3050,10 +3057,11 @@ public static partial class ChartRenderPlanner
         AddImportedSurfaceBlankPointFallbacks(
             IReadOnlyDictionary<(int Series, int Category), ChartSurfacePointPrimitive> points,
             ChartPlanRect plot,
-            int seriesCount,
-            int categoryCount,
-            double valueAxisMin,
-            double valueAxisRange)
+        int seriesCount,
+        int categoryCount,
+        double valueAxisMin,
+        double valueAxisRange,
+        Chart3DView? view3D)
     {
         var renderPoints = new Dictionary<(int Series, int Category), ChartSurfacePointPrimitive>(points);
         for (int seriesIndex = 0; seriesIndex < seriesCount; seriesIndex++)
@@ -3080,7 +3088,8 @@ public static partial class ChartRenderPlanner
                             categoryIndex,
                             normalized: ImportedSurfaceBlankVertexNormalized,
                             isThreeD: true,
-                            usesImportedTextMetrics: true),
+                            usesImportedTextMetrics: true,
+                            view3D: view3D),
                         valueAxisMin,
                         ImportedSurfaceBlankVertexNormalized);
                     continue;
@@ -3145,7 +3154,8 @@ public static partial class ChartRenderPlanner
         int categoryIndex,
         double normalized,
         bool isThreeD,
-        bool usesImportedTextMetrics)
+        bool usesImportedTextMetrics,
+        Chart3DView? view3D)
     {
         double categoryT = categoryCount <= 1 ? 0 : categoryIndex / (double)(categoryCount - 1);
         double seriesT = seriesCount <= 1 ? 0 : seriesIndex / (double)(seriesCount - 1);
@@ -3165,6 +3175,12 @@ public static partial class ChartRenderPlanner
         double lift = Math.Min(
             plot.Height * (usesImportedTextMetrics ? 0.90 : 0.50),
             usesImportedTextMetrics ? 170.0 : 88.0);
+        ApplySurfaceView3DScales(
+            view3D,
+            ref depthX,
+            ref depthY,
+            ref categorySlopeY,
+            ref lift);
         double drawableWidth = Math.Max(1, plot.Width - depthX);
         double categoryWidth = usesImportedTextMetrics
             ? plot.Width * (ImportedSurfaceFrontCategoryWidth / ImportedSurfaceReferencePlotWidth) -
@@ -3176,6 +3192,40 @@ public static partial class ChartRenderPlanner
         return new ChartPlanPoint(
             Math.Round(x + (usesImportedTextMetrics ? ImportedSurfacePointOffsetX : 0.0), 4),
             Math.Round(y + (usesImportedTextMetrics ? ImportedSurfacePointOffsetY : 0.0), 4));
+    }
+
+    private static void ApplySurfaceView3DScales(
+        Chart3DView? view3D,
+        ref double depthX,
+        ref double depthY,
+        ref double categorySlopeY,
+        ref double lift)
+    {
+        if (view3D is null)
+            return;
+
+        // The default imported Surface3D camera is rotX=15, rotY=20,
+        // perspective=30, hPercent=100, depthPercent=100. Normalize explicit
+        // camera values against that Office baseline so the calibrated imported
+        // geometry remains unchanged while authored camera changes take effect.
+        double rotationX = Math.Clamp(Math.Abs(view3D.RotationX ?? 15), 0, 90);
+        double rotationY = Math.Clamp(Math.Abs(view3D.RotationY ?? 20), 0, 90);
+        double elevationRatio = Math.Sin(rotationX * Math.PI / 180.0) /
+            Math.Sin(15.0 * Math.PI / 180.0);
+        double azimuthRatio = Math.Sin(rotationY * Math.PI / 180.0) /
+            Math.Sin(20.0 * Math.PI / 180.0);
+        double depthRatio = Math.Clamp((view3D.DepthPercent ?? 100) / 100.0, 0.1, 5.0);
+        double heightRatio = Math.Clamp((view3D.HeightPercent ?? 100) / 100.0, 0.1, 5.0);
+        double perspectiveRatio = 1.0 +
+            (Math.Clamp(view3D.Perspective ?? 30, 0, 100) - 30) / 100.0 * 0.15;
+
+        depthX *= azimuthRatio * depthRatio;
+        depthY *= elevationRatio * depthRatio;
+        categorySlopeY *= elevationRatio;
+        lift *= heightRatio *
+            Math.Cos(rotationX * Math.PI / 180.0) /
+            Math.Cos(15.0 * Math.PI / 180.0) *
+            perspectiveRatio;
     }
 
     private static IReadOnlyList<ChartLineSegmentPrimitive> BuildSurfaceFrameSegments(
