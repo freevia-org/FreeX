@@ -9041,6 +9041,8 @@ public sealed class DocumentView : RichTextBox
                 HorizontalOffset = horizontalOffsetDip,
                 VerticalOffset = verticalOffsetDip,
                 WrapDirection = WrapDirection.Both,
+                // This is a physical reservation band, not a content figure. Word adds no extra clearance.
+                Margin = new Thickness(0),
             };
         }
 
