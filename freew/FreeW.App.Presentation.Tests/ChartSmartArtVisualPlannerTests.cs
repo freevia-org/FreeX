@@ -242,7 +242,8 @@ public sealed class ChartSmartArtVisualPlannerTests
             .Y.Should().Be(145);
         scene.Texts.Single(text => text.Kind == ChartSceneTextKind.AxisTitle && text.Text == "USD")
             .X.Should().Be(32);
-        scene.Legend.Should().OnlyContain(entry => entry.SwatchY == 201 && entry.TextY == 201);
+        scene.Legend.Select(entry => entry.SwatchX).Should().ContainInOrder(136d, 171d, 206d, 241d);
+        scene.Legend.Should().OnlyContain(entry => entry.SwatchY == 199 && entry.TextY == 199);
     }
 
     [Fact]

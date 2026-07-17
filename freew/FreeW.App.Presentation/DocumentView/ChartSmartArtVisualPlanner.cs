@@ -768,15 +768,20 @@ public static class ChartSmartArtVisualPlanner
 
         if (legendCount > 0)
         {
-            var entryWidth = Math.Max(48, plot.Width / legendCount);
+            // Word packs a single-series column/bar category legend into a compact, centered run.
+            // Series legends and pie-category legends retain their plot-distributed layout.
+            var entryWidth = useCategoryLegend ? 35d : Math.Max(48, plot.Width / legendCount);
+            var legendStart = useCategoryLegend
+                ? frame.CenterX - entryWidth * legendCount / 2 + 6
+                : plot.X;
             for (var index = 0; index < legendCount; index++)
             {
                 var label = isPie
                     || useCategoryLegend
                     ? index < chart.Categories.Count && !string.IsNullOrEmpty(chart.Categories[index]) ? chart.Categories[index] : $"Item {index + 1}"
                     : index < chart.Series.Count && !string.IsNullOrEmpty(chart.Series[index].Name) ? chart.Series[index].Name! : $"Series {index + 1}";
-                var x = plot.X + index * entryWidth;
-                var y = hasAxisTitles ? frame.Height - legendHeight - 5 : frame.Height - legendHeight + 3;
+                var x = legendStart + index * entryWidth;
+                var y = hasAxisTitles ? frame.Height - legendHeight - 7 : frame.Height - legendHeight + 3;
                 legend.Add(new ChartSceneLegendEntry(label, x, y, 8, x + 11, y));
             }
         }
