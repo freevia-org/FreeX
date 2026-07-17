@@ -13,7 +13,8 @@ internal sealed record InteractionValidationOptions(
     bool IncludeCoreResults = true,
     int RibbonCommandStart = 0,
     int RibbonCommandCount = int.MaxValue,
-    bool RibbonOnly = false)
+    bool RibbonOnly = false,
+    string? CoreSection = null)
 {
     public const string Argument = "--interaction-validation";
     public const string DialogStartArgument = "--interaction-validation-dialog-start";
@@ -22,6 +23,7 @@ internal sealed record InteractionValidationOptions(
     public const string RibbonStartArgument = "--interaction-validation-ribbon-start";
     public const string RibbonCountArgument = "--interaction-validation-ribbon-count";
     public const string RibbonOnlyArgument = "--interaction-validation-ribbon-only";
+    public const string CoreSectionArgument = "--interaction-validation-core-section";
 
     public static bool TryParse(
         IReadOnlyList<string> args,
@@ -41,6 +43,7 @@ internal sealed record InteractionValidationOptions(
         var ribbonCommandStart = 0;
         var ribbonCommandCount = int.MaxValue;
         var ribbonOnly = false;
+        string? coreSection = null;
         for (var index = 0; index < args.Count; index++)
         {
             if (string.Equals(args[index], DialogOnlyArgument, StringComparison.OrdinalIgnoreCase))
@@ -52,6 +55,18 @@ internal sealed record InteractionValidationOptions(
             if (string.Equals(args[index], RibbonOnlyArgument, StringComparison.OrdinalIgnoreCase))
             {
                 ribbonOnly = true;
+                continue;
+            }
+
+            if (string.Equals(args[index], CoreSectionArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                if (index + 1 >= args.Count || string.IsNullOrWhiteSpace(args[++index]))
+                {
+                    startupArguments = [];
+                    error = $"{CoreSectionArgument} requires a section name.";
+                    return false;
+                }
+                coreSection = args[index];
                 continue;
             }
 
@@ -110,7 +125,8 @@ internal sealed record InteractionValidationOptions(
                 includeCoreResults,
                 ribbonCommandStart,
                 ribbonCommandCount,
-                ribbonOnly);
+                ribbonOnly,
+                coreSection);
         startupArguments = filtered.ToArray();
         return true;
     }
@@ -165,7 +181,8 @@ internal static class InteractionValidationCoordinator
                 options.IncludeCoreResults,
                 options.RibbonCommandStart,
                 options.RibbonCommandCount,
-                options.RibbonOnly);
+                options.RibbonOnly,
+                options.CoreSection);
             WriteManifest(options.OutputDirectory, results);
             exitCode = results.Any(result => string.Equals(result.Status, "failed", StringComparison.Ordinal)) ? 1 : 0;
             diagnostics?.RecordEvent("interaction_validation", new Dictionary<string, string?>

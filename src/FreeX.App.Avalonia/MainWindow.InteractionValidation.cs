@@ -19,21 +19,32 @@ public sealed partial class MainWindow
         bool includeCoreResults = true,
         int ribbonCommandStart = 0,
         int ribbonCommandCount = int.MaxValue,
-        bool ribbonOnly = false)
+        bool ribbonOnly = false,
+        string? coreSection = null)
     {
         var results = new List<InteractionValidationResult>();
         if (includeCoreResults)
         {
-            if (!ribbonOnly)
+            bool Includes(string section) => coreSection is null ||
+                string.Equals(coreSection, section, StringComparison.OrdinalIgnoreCase);
+
+            if (!ribbonOnly && Includes("ribbon-bindings"))
                 AddRibbonBindingResults(results);
-            AddRibbonInteractionExecutionResults(results, ribbonCommandStart, ribbonCommandCount);
+            if (ribbonCommandCount > 0)
+                AddRibbonInteractionExecutionResults(results, ribbonCommandStart, ribbonCommandCount);
             if (!ribbonOnly)
             {
-                AddShortcutRoutingResults(results);
-                await AddShortcutScenarioInteractionResultsAsync(results);
-                await AddContextMenuInteractionResultsAsync(results);
-                AddDialogRangeTargetInventoryResults(results);
-                await AddPhysicalEditingInteractionResultsAsync(results);
+                if (Includes("shortcuts"))
+                {
+                    AddShortcutRoutingResults(results);
+                    await AddShortcutScenarioInteractionResultsAsync(results);
+                }
+                if (Includes("context-menus"))
+                    await AddContextMenuInteractionResultsAsync(results);
+                if (Includes("range-inventory"))
+                    AddDialogRangeTargetInventoryResults(results);
+                if (Includes("editing"))
+                    await AddPhysicalEditingInteractionResultsAsync(results);
             }
         }
 

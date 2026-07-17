@@ -90,6 +90,50 @@ try {
     $combinedResults = @()
     $authoritativeDialogCount = $null
     $authoritativeRibbonCount = $null
+    $coreSections = @("ribbon-bindings", "shortcuts", "context-menus", "range-inventory", "editing")
+    foreach ($coreSection in $coreSections) {
+        $appArguments = @(
+            "--interaction-validation", "/work/validation",
+            "--interaction-validation-dialog-start", "0",
+            "--interaction-validation-dialog-count", "0",
+            "--interaction-validation-ribbon-start", "0",
+            "--interaction-validation-ribbon-count", "0",
+            "--interaction-validation-core-section", $coreSection
+        )
+        Write-Host "Running core interaction section '$coreSection'..."
+        & $harness -Action Start -App FreeX -Port $Port -Replace -SkipImageBuild -SkipPublish -AppArgument $appArguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Linux core interaction section '$coreSection' failed to start."
+        }
+
+        $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+        $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
+        $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline
+        if ($null -eq $batchManifest) {
+            $appLogPath = Join-Path ([string]$session.sessionDirectory) "logs/app.log"
+            $appLog = if (Test-Path -LiteralPath $appLogPath) { Get-Content -LiteralPath $appLogPath -Raw } else { "" }
+            throw "Core interaction section '$coreSection' did not write a complete manifest within $TimeoutMinutes minute(s).`n$appLog"
+        }
+        if ($batchManifest.error) {
+            throw "Core interaction section '$coreSection' failed: $($batchManifest.error)"
+        }
+
+        if ($null -eq $authoritativeDialogCount) {
+            $authoritativeDialogCount = [int]$batchManifest.dialogCatalogCount
+            $authoritativeRibbonCount = [int]$batchManifest.ribbonCommandCatalogCount
+            if ($authoritativeDialogCount -le 0 -or $authoritativeRibbonCount -le 0) {
+                throw "Interaction validation reported invalid catalog counts."
+            }
+            Write-Host "Authoritative dialog routes: $authoritativeDialogCount"
+            Write-Host "Authoritative ribbon commands: $authoritativeRibbonCount"
+        }
+        if ($null -eq $manifest) { $manifest = $batchManifest }
+        $combinedResults += @($batchManifest.results)
+        Copy-Item -LiteralPath $batchManifestPath -Destination (Join-Path $reportDirectory "core-$coreSection.json") -Force
+        & $harness -Action Stop -App FreeX -Port $Port
+    }
+
     for ($dialogStart = 0; $null -eq $authoritativeDialogCount -or $dialogStart -lt $authoritativeDialogCount; $dialogStart += $DialogBatchSize) {
         $dialogCount = if ($null -eq $authoritativeDialogCount) {
             $DialogBatchSize
@@ -100,12 +144,8 @@ try {
             "--interaction-validation", "/work/validation",
             "--interaction-validation-dialog-start", [string]$dialogStart,
             "--interaction-validation-dialog-count", [string]$dialogCount,
-            "--interaction-validation-ribbon-start", "0",
-            "--interaction-validation-ribbon-count", [string]$RibbonBatchSize
+            "--interaction-validation-dialog-only"
         )
-        if ($dialogStart -gt 0) {
-            $appArguments += "--interaction-validation-dialog-only"
-        }
 
         Write-Host "Running dialog interaction batch $dialogStart..$($dialogStart + $dialogCount - 1)..."
         $batchStartArguments = @{
@@ -161,7 +201,7 @@ try {
 
     # Ribbon commands are isolated into bounded app processes. Production ribbon dispatch can rebuild
     # substantial visual state, and Avalonia retains some subscriptions until process shutdown.
-    for ($ribbonStart = $RibbonBatchSize; $ribbonStart -lt $authoritativeRibbonCount; $ribbonStart += $RibbonBatchSize) {
+    for ($ribbonStart = 0; $ribbonStart -lt $authoritativeRibbonCount; $ribbonStart += $RibbonBatchSize) {
         $ribbonCount = [Math]::Min($RibbonBatchSize, $authoritativeRibbonCount - $ribbonStart)
         $appArguments = @(
             "--interaction-validation", "/work/validation",
