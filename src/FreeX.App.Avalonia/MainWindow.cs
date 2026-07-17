@@ -1476,6 +1476,7 @@ public sealed partial class MainWindow : Window
         // Merge in the Help-tab + contextual-tab (Chart/Picture/Shape/Table/Pivot) command handlers.
         var ribbonExtraCommands = new Dictionary<string, Action>(
             ribbonCallbacks.ExtraCommands!, StringComparer.Ordinal);
+        RegisterHomeBorderRibbonActions(ribbonExtraCommands);
         RegisterPageLayoutRibbonActions(ribbonExtraCommands);
         foreach (var (id, action) in BuildContextualTabCommands())
             ribbonExtraCommands[id] = action;
@@ -20881,7 +20882,11 @@ public sealed partial class MainWindow : Window
 
         var rangeReference = FormatRangeReference(_session.SelectedRange);
         var presetName = CellBorderPresetPlanner.GetDisplayName(preset);
-        var result = _session.SetSelectedRangeBorderPreset(preset);
+        var result = _session.ApplySelectedRangeCompactFormat(
+            new StyleDiff(),
+            preset,
+            _borderPickerStyle,
+            _borderPickerColor);
         if (!result.Success)
         {
             RefreshShell(_statusText.Text ?? "Ready");
