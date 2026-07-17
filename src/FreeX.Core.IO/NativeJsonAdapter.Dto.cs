@@ -523,6 +523,8 @@ public sealed partial class NativeJsonAdapter
         public WorksheetSheetPropertiesMetadataDto? SheetPropertiesMetadata { get; set; }
         public List<uint> GroupHiddenRows { get; set; } = [];
         public List<uint> GroupHiddenCols { get; set; } = [];
+        public List<uint> CollapsedAnchorRows { get; set; } = [];
+        public List<uint> CollapsedAnchorCols { get; set; } = [];
         public WorksheetViewMode ViewMode { get; set; } = WorksheetViewMode.Normal;
         public bool? ShowGridlines { get; set; }
         public bool? ShowHeadings { get; set; }

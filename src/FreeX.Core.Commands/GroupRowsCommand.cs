@@ -11,6 +11,7 @@ public sealed class GroupRowsCommand : IWorkbookCommand
     private readonly bool _preserveExistingHierarchy;
     private Dictionary<uint, int>? _previousLevels;
     private HashSet<uint>? _previouslyHiddenByGroup;
+    private HashSet<uint>? _previousCollapsedAnchors;
 
     public string Label => _level > 0 ? "Group Rows" : "Ungroup Rows";
 
@@ -32,6 +33,7 @@ public sealed class GroupRowsCommand : IWorkbookCommand
 
         _previousLevels = [];
         _previouslyHiddenByGroup = [];
+        _previousCollapsedAnchors = _level == 0 ? [.. sheet.CollapsedAnchorRows] : null;
         for (uint r = _startRow; r <= _endRow; r++)
         {
             sheet.RowOutlineLevels.TryGetValue(r, out var prev);
@@ -45,6 +47,18 @@ public sealed class GroupRowsCommand : IWorkbookCommand
             else
                 sheet.RowOutlineLevels[r] = OutlineGroupingService.GetGroupedOutlineLevel(prev, _level, _preserveExistingHierarchy);
         }
+
+        if (_level == 0)
+        {
+            RowGroupAnchorHelper.RemoveInvalidAnchorsAffectedByRange(
+                sheet.RowOutlineLevels,
+                sheet.GroupHiddenRows,
+                sheet.CollapsedAnchorRows,
+                sheet.OutlineSummaryBelow ?? true,
+                _startRow,
+                _endRow);
+        }
+
         return new CommandOutcome(true);
     }
 
@@ -62,6 +76,8 @@ public sealed class GroupRowsCommand : IWorkbookCommand
         if (_previouslyHiddenByGroup is not null)
             foreach (var r in _previouslyHiddenByGroup)
                 sheet.GroupHiddenRows.Add(r);
+        if (_previousCollapsedAnchors is not null)
+            RowGroupAnchorHelper.RestoreSet(sheet.CollapsedAnchorRows, _previousCollapsedAnchors);
     }
 }
 
@@ -169,7 +185,52 @@ internal static class RowGroupAnchorHelper
 
     /// <summary>Returns the anchor row for a run, or null when summaryBelow is false and the run starts at row 1 (no row above to anchor to).</summary>
     public static uint? ComputeAnchor(bool summaryBelow, uint runStart, uint runEnd) =>
-        summaryBelow ? runEnd + 1 : (runStart > 1 ? runStart - 1 : null);
+        summaryBelow
+            ? (runEnd < CellAddress.MaxRow ? runEnd + 1 : null)
+            : (runStart > 1 ? runStart - 1 : null);
+
+    public static void RemoveInvalidAnchorsAffectedByRange(
+        IReadOnlyDictionary<uint, int> levels,
+        IReadOnlySet<uint> hiddenRows,
+        HashSet<uint> anchors,
+        bool summaryBelow,
+        uint affectedStart,
+        uint affectedEnd)
+    {
+        foreach (var anchor in anchors.ToList())
+        {
+            uint detailRow;
+            if (summaryBelow)
+            {
+                if (anchor <= 1)
+                    continue;
+                detailRow = anchor - 1;
+            }
+            else
+            {
+                if (anchor >= CellAddress.MaxRow)
+                    continue;
+                detailRow = anchor + 1;
+            }
+
+            if (detailRow < affectedStart || detailRow > affectedEnd)
+                continue;
+
+            levels.TryGetValue(anchor, out var anchorLevel);
+            if (!hiddenRows.Contains(detailRow) ||
+                !levels.TryGetValue(detailRow, out var detailLevel) ||
+                detailLevel <= anchorLevel)
+            {
+                anchors.Remove(anchor);
+            }
+        }
+    }
+
+    public static void RestoreSet(HashSet<uint> target, IEnumerable<uint> values)
+    {
+        target.Clear();
+        target.UnionWith(values);
+    }
 }
 
 /// <summary>
@@ -183,8 +244,8 @@ public sealed class CollapseRowGroupCommand : IWorkbookCommand
     private readonly int _level;
     private readonly uint? _selectionStart;
     private readonly uint? _selectionEnd;
-    private HashSet<uint>? _newly;
-    private HashSet<uint>? _newlyAnchored;
+    private HashSet<uint>? _previousHiddenRows;
+    private HashSet<uint>? _previousCollapsedAnchors;
 
     public string Label => "Collapse Group";
 
@@ -202,8 +263,8 @@ public sealed class CollapseRowGroupCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
             return protectedOutcome;
 
-        _newly = [];
-        _newlyAnchored = [];
+        _previousHiddenRows = [.. sheet.GroupHiddenRows];
+        _previousCollapsedAnchors = [.. sheet.CollapsedAnchorRows];
         var summaryBelow = sheet.OutlineSummaryBelow ?? true;
 
         if (_selectionStart is { } selStart)
@@ -218,24 +279,17 @@ public sealed class CollapseRowGroupCommand : IWorkbookCommand
                 if (sheet.GroupHiddenRows.Contains(row))
                     continue;
                 sheet.GroupHiddenRows.Add(row);
-                _newly.Add(row);
             }
 
-            if (RowGroupAnchorHelper.ComputeAnchor(summaryBelow, group.Start, group.End) is { } anchor &&
-                sheet.CollapsedAnchorRows.Add(anchor))
-            {
-                _newlyAnchored.Add(anchor);
-            }
+            if (RowGroupAnchorHelper.ComputeAnchor(summaryBelow, group.Start, group.End) is { } anchor)
+                sheet.CollapsedAnchorRows.Add(anchor);
             return new CommandOutcome(true);
         }
 
         foreach (var (row, lvl) in sheet.RowOutlineLevels)
         {
             if (lvl >= _level && !sheet.GroupHiddenRows.Contains(row))
-            {
                 sheet.GroupHiddenRows.Add(row);
-                _newly.Add(row);
-            }
         }
 
         // Anchor placement is based on every row currently qualifying at this level (not just the
@@ -249,24 +303,18 @@ public sealed class CollapseRowGroupCommand : IWorkbookCommand
         }
         foreach (var run in RowGroupAnchorHelper.GetContiguousRuns(qualifyingRows))
         {
-            if (RowGroupAnchorHelper.ComputeAnchor(summaryBelow, run.Start, run.End) is { } anchor &&
-                sheet.CollapsedAnchorRows.Add(anchor))
-            {
-                _newlyAnchored.Add(anchor);
-            }
+            if (RowGroupAnchorHelper.ComputeAnchor(summaryBelow, run.Start, run.End) is { } anchor)
+                sheet.CollapsedAnchorRows.Add(anchor);
         }
         return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
     {
-        if (_newly is null) return;
+        if (_previousHiddenRows is null || _previousCollapsedAnchors is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var row in _newly)
-            sheet.GroupHiddenRows.Remove(row);
-        if (_newlyAnchored is not null)
-            foreach (var row in _newlyAnchored)
-                sheet.CollapsedAnchorRows.Remove(row);
+        RowGroupAnchorHelper.RestoreSet(sheet.GroupHiddenRows, _previousHiddenRows);
+        RowGroupAnchorHelper.RestoreSet(sheet.CollapsedAnchorRows, _previousCollapsedAnchors);
     }
 }
 
@@ -281,8 +329,8 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
     private readonly int _level;
     private readonly uint? _selectionStart;
     private readonly uint? _selectionEnd;
-    private HashSet<uint>? _removed;
-    private HashSet<uint>? _removedAnchors;
+    private HashSet<uint>? _previousHiddenRows;
+    private HashSet<uint>? _previousCollapsedAnchors;
 
     public string Label => "Expand Group";
 
@@ -300,8 +348,8 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
             return protectedOutcome;
 
-        _removed = [];
-        _removedAnchors = [];
+        _previousHiddenRows = [.. sheet.GroupHiddenRows];
+        _previousCollapsedAnchors = [.. sheet.CollapsedAnchorRows];
         var summaryBelow = sheet.OutlineSummaryBelow ?? true;
 
         if (_selectionStart is { } selStart)
@@ -316,17 +364,18 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
                 if (!sheet.RowOutlineLevels.TryGetValue(row, out var lvl) || lvl < group.Level)
                     continue;
                 sheet.GroupHiddenRows.Remove(row);
-                _removed.Add(row);
             }
 
             // The group's detail rows are visible again, so its anchor no longer summarizes a
             // collapsed run -- clear the stale collapsed marker so a later save doesn't re-stamp
             // collapsed="1" on a row that has nothing left to summarize.
-            if (RowGroupAnchorHelper.ComputeAnchor(summaryBelow, group.Start, group.End) is { } anchor &&
-                sheet.CollapsedAnchorRows.Remove(anchor))
-            {
-                _removedAnchors.Add(anchor);
-            }
+            RowGroupAnchorHelper.RemoveInvalidAnchorsAffectedByRange(
+                sheet.RowOutlineLevels,
+                sheet.GroupHiddenRows,
+                sheet.CollapsedAnchorRows,
+                summaryBelow,
+                group.Start,
+                group.End);
             return new CommandOutcome(true);
         }
 
@@ -335,7 +384,6 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
             if (sheet.RowOutlineLevels.TryGetValue(row, out var lvl) && lvl >= _level)
             {
                 sheet.GroupHiddenRows.Remove(row);
-                _removed.Add(row);
             }
         }
 
@@ -349,25 +397,22 @@ public sealed class ExpandRowGroupCommand : IWorkbookCommand
                 qualifyingRows.Add(row);
         }
         foreach (var run in RowGroupAnchorHelper.GetContiguousRuns(qualifyingRows))
-        {
-            if (RowGroupAnchorHelper.ComputeAnchor(summaryBelow, run.Start, run.End) is { } anchor &&
-                sheet.CollapsedAnchorRows.Remove(anchor))
-            {
-                _removedAnchors.Add(anchor);
-            }
-        }
+            RowGroupAnchorHelper.RemoveInvalidAnchorsAffectedByRange(
+                sheet.RowOutlineLevels,
+                sheet.GroupHiddenRows,
+                sheet.CollapsedAnchorRows,
+                summaryBelow,
+                run.Start,
+                run.End);
         return new CommandOutcome(true);
     }
 
     public void Revert(ICommandContext ctx)
     {
-        if (_removed is null) return;
+        if (_previousHiddenRows is null || _previousCollapsedAnchors is null) return;
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var row in _removed)
-            sheet.GroupHiddenRows.Add(row);
-        if (_removedAnchors is not null)
-            foreach (var row in _removedAnchors)
-                sheet.CollapsedAnchorRows.Add(row);
+        RowGroupAnchorHelper.RestoreSet(sheet.GroupHiddenRows, _previousHiddenRows);
+        RowGroupAnchorHelper.RestoreSet(sheet.CollapsedAnchorRows, _previousCollapsedAnchors);
     }
 }
 
@@ -378,7 +423,8 @@ public sealed class SetRowOutlineGroupCollapsedCommand : IWorkbookCommand
     private readonly uint _endRow;
     private readonly int _level;
     private readonly bool _collapsed;
-    private Dictionary<uint, bool>? _previousHiddenStates;
+    private HashSet<uint>? _previousHiddenRows;
+    private HashSet<uint>? _previousCollapsedAnchors;
 
     public string Label => _collapsed ? "Collapse Row Group" : "Expand Row Group";
 
@@ -401,17 +447,39 @@ public sealed class SetRowOutlineGroupCollapsedCommand : IWorkbookCommand
         if (CommandGuards.RejectIfProtectedWithoutPermission(sheet, SheetProtectionPermission.FormatRows) is { } protectedOutcome)
             return protectedOutcome;
 
-        _previousHiddenStates = [];
+        _previousHiddenRows = [.. sheet.GroupHiddenRows];
+        _previousCollapsedAnchors = [.. sheet.CollapsedAnchorRows];
+        var qualifyingRows = new List<uint>();
         foreach (var (row, level) in sheet.RowOutlineLevels)
         {
             if (row < _startRow || row > _endRow || level < _level)
                 continue;
 
-            _previousHiddenStates[row] = sheet.GroupHiddenRows.Contains(row);
+            qualifyingRows.Add(row);
             if (_collapsed)
                 sheet.GroupHiddenRows.Add(row);
             else
                 sheet.GroupHiddenRows.Remove(row);
+        }
+
+        var summaryBelow = sheet.OutlineSummaryBelow ?? true;
+        foreach (var run in RowGroupAnchorHelper.GetContiguousRuns(qualifyingRows))
+        {
+            if (_collapsed)
+            {
+                if (RowGroupAnchorHelper.ComputeAnchor(summaryBelow, run.Start, run.End) is { } anchor)
+                    sheet.CollapsedAnchorRows.Add(anchor);
+            }
+            else
+            {
+                RowGroupAnchorHelper.RemoveInvalidAnchorsAffectedByRange(
+                    sheet.RowOutlineLevels,
+                    sheet.GroupHiddenRows,
+                    sheet.CollapsedAnchorRows,
+                    summaryBelow,
+                    run.Start,
+                    run.End);
+            }
         }
 
         return new CommandOutcome(true);
@@ -419,15 +487,10 @@ public sealed class SetRowOutlineGroupCollapsedCommand : IWorkbookCommand
 
     public void Revert(ICommandContext ctx)
     {
-        if (_previousHiddenStates is null) return;
+        if (_previousHiddenRows is null || _previousCollapsedAnchors is null) return;
 
         var sheet = ctx.GetSheet(_sheetId);
-        foreach (var (row, wasHidden) in _previousHiddenStates)
-        {
-            if (wasHidden)
-                sheet.GroupHiddenRows.Add(row);
-            else
-                sheet.GroupHiddenRows.Remove(row);
-        }
+        RowGroupAnchorHelper.RestoreSet(sheet.GroupHiddenRows, _previousHiddenRows);
+        RowGroupAnchorHelper.RestoreSet(sheet.CollapsedAnchorRows, _previousCollapsedAnchors);
     }
 }
