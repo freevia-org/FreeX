@@ -269,6 +269,21 @@ public sealed class ChartBaselineCorpusTests
         plan.Series.Should().HaveCount(2);
         plan.Series.Should().OnlyContain(series =>
             series.Stroke.Thickness == ChartRenderPlanner.ImportedRadarSeriesStrokeThickness);
+
+        var scene = ChartRenderPlanner.BuildScenePlan(
+            chart,
+            new ChartPlanRect(0, 0, 1280, 720));
+        scene.LegendItems.Should().HaveCount(2);
+        scene.LegendItems.Should().OnlyContain(item => item.IsLine && item.IsLineOnly);
+        scene.LegendItems.Should().OnlyContain(item =>
+            item.SwatchBounds.Width == ChartRenderPlanner.ImportedRadarLegendSwatchWidth &&
+            item.SwatchBounds.Height == ChartRenderPlanner.ImportedRadarLegendSwatchHeight);
+        scene.LegendItems[0].Label.Bounds.X
+            .Should().BeApproximately(
+                scene.LegendItems[0].SwatchBounds.X + ChartRenderPlanner.ImportedRadarLegendLabelInset,
+                0.0001);
+        (scene.LegendItems[1].SwatchBounds.Y - scene.LegendItems[0].SwatchBounds.Y)
+            .Should().Be(ChartRenderPlanner.ImportedRadarLegendLineHeight);
     }
 
     [Fact]
