@@ -12,6 +12,8 @@ namespace FreeW.Core.IO.Tests;
 public sealed class DrawingGroupRoundTripTests
 {
     private static readonly XNamespace A   = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    private static readonly XNamespace C   = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+    private static readonly XNamespace Dgm = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
     private static readonly XNamespace Pic = "http://schemas.openxmlformats.org/drawingml/2006/picture";
     private static readonly XNamespace R   = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
     private static readonly XNamespace Wp  = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
@@ -115,6 +117,34 @@ public sealed class DrawingGroupRoundTripTests
         return grp;
     }
 
+    private static DrawingGroup GraphicFrameGroup()
+    {
+        var grp = new DrawingGroup { WidthPt = 300, HeightPt = 150 };
+        grp.Placement.Wrapping = ImageWrapping.Square;
+
+        grp.Children.Add(new InlineImage(Png(), 36, 24));
+        grp.ChildOffsets.Add((0, 0));
+
+        grp.Children.Add(new Shape(ShapeKind.Rectangle, 48, 32));
+        grp.ChildOffsets.Add((0, 30));
+
+        var chart = new Chart { Kind = ChartKind.Column, WidthPt = 120, HeightPt = 96, Title = "Grouped chart" };
+        chart.Categories.AddRange(["A", "B"]);
+        chart.Series.Add(new ChartSeries { Name = "Values", Values = { 2, 5 } });
+        grp.Children.Add(chart);
+        grp.ChildOffsets.Add((56, 12));
+
+        grp.Children.Add(new WordArt("Grouped", WordArtStyle.FillBlue, 14));
+        grp.ChildOffsets.Add((118, 6));
+
+        var smartArt = new SmartArt { Kind = SmartArtKind.Process, WidthPt = 108, HeightPt = 72 };
+        smartArt.Nodes.AddRange([new SmartArtNode("One"), new SmartArtNode("Two")]);
+        grp.Children.Add(smartArt);
+        grp.ChildOffsets.Add((180, 42));
+
+        return grp;
+    }
+
     private static TextDocument DocumentWith(DrawingGroup grp)
     {
         var doc = new TextDocument();
@@ -173,6 +203,18 @@ public sealed class DrawingGroupRoundTripTests
 
         children[1].Descendants(A + "glow").Should().NotBeEmpty();
         children[1].Descendants(A + "prstTxWarp").Single().Attribute("prst")?.Value.Should().Be("textWave1");
+    }
+
+    [Fact]
+    public void DrawingGroup_EmitsChartAndSmartArtAsWordCompatibleSiblingAnchors()
+    {
+        var xml = DocXml(DocumentWith(GraphicFrameGroup()));
+
+        xml.Descendants(Wpg + "wgp").Single().Elements(A + "graphicFrame").Should().BeEmpty();
+        xml.Descendants(Wp + "anchor").Single(anchor => anchor.Descendants(C + "chart").Any())
+            .Descendants(C + "chart").Single().Attribute(R + "id")!.Value.Should().StartWith("rIdChart");
+        xml.Descendants(Wp + "anchor").Single(anchor => anchor.Descendants(Dgm + "relIds").Any())
+            .Descendants(Dgm + "relIds").Should().NotBeEmpty();
     }
 
     // ── Two-member round-trip ────────────────────────────────────────────────────────────────────
@@ -270,6 +312,27 @@ public sealed class DrawingGroupRoundTripTests
         wordArt.Style.Should().Be(WordArtStyle.GlowGold);
         wordArt.FontSizePt.Should().BeApproximately(24, 0.1);
         wordArt.Warp.Should().Be(WordArtWarp.Wave1);
+    }
+
+    [Fact]
+    public void DrawingGroup_ChartAndSmartArtChildren_RoundTripAsNativeSiblingObjects()
+    {
+        var recovered = RoundTrip(DocumentWith(GraphicFrameGroup()));
+        var runs = ((Paragraph)recovered.Blocks[0]).Runs;
+        var grp = runs.Single(r => r.DrawingGroup is not null).DrawingGroup!;
+
+        grp.Children.Should().HaveCount(3);
+        grp.Children[0].Should().BeOfType<InlineImage>();
+        grp.Children[1].Should().BeOfType<Shape>();
+        grp.Children[2].Should().BeOfType<WordArt>();
+        var chart = runs.Single(run => run.Chart is not null).Chart!;
+        chart.Title.Should().Be("Grouped chart");
+        chart.WidthPt.Should().BeApproximately(120, 1.0);
+        chart.Series.Single().Values.Should().Equal(2, 5);
+        var smartArt = runs.Single(run => run.SmartArt is not null).SmartArt!;
+        smartArt.Kind.Should().Be(SmartArtKind.Process);
+        smartArt.WidthPt.Should().BeApproximately(108, 1.0);
+        smartArt.Nodes.Select(node => node.Text).Should().Equal("One", "Two");
     }
 
     // ── Existing floating objects are unaffected ─────────────────────────────────────────────────

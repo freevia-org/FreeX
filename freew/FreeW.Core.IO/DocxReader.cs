@@ -5265,6 +5265,29 @@ public static class DocxReader
             }
         }
 
+        // Some producers retain charts and SmartArt as native a:graphicFrame group children. The frame owns
+        // its local transform, while its chart/diagram relationships still resolve against document.xml.rels.
+        foreach (var frame in wgp.Elements(A + "graphicFrame"))
+        {
+            var xfrm = frame.Element(A + "xfrm");
+            var off = xfrm?.Element(A + "off");
+            var ext = xfrm?.Element(A + "ext");
+            var ox = EmuToPoints(off?.Attribute("x")?.Value ?? "0");
+            var oy = EmuToPoints(off?.Attribute("y")?.Value ?? "0");
+            var cw = EmuToPoints(ext?.Attribute("cx")?.Value ?? "36");
+            var ch = EmuToPoints(ext?.Attribute("cy")?.Value ?? "36");
+            var childDocPr = frame.Element(A + "nvGraphicFramePr")?.Element(A + "cNvPr");
+            var fakeRun = BuildGroupGraphicFrameRun(frame, childDocPr, cw, ch);
+            var child = ReadChart(fakeRun, archive, imageRelationships)
+                ?? (object?)ReadSmartArt(fakeRun, archive, imageRelationships);
+
+            if (child is not null)
+            {
+                group.Children.Add(child);
+                group.ChildOffsets.Add((ox, oy));
+            }
+        }
+
         return group.Children.Count >= 2 ? group : null;
     }
 
@@ -5282,6 +5305,20 @@ public static class DocxReader
                         new XElement(A + "graphicData",
                             new XAttribute("uri", Wps.NamespaceName),
                             new XElement(wsp))))));
+    }
+
+    private static XElement BuildGroupGraphicFrameRun(XElement frame, XElement? childDocPr, double widthPt, double heightPt)
+    {
+        var graphic = frame.Element(A + "graphic");
+        return new XElement(W + "r",
+            new XElement(W + "drawing",
+                new XElement(Wp + "inline",
+                    new XElement(Wp + "extent",
+                        new XAttribute("cx", PointsToEmu(widthPt)),
+                        new XAttribute("cy", PointsToEmu(heightPt))),
+                    childDocPr is null ? null : new XElement(Wp + "docPr",
+                        childDocPr.Attributes().Where(attribute => !attribute.IsNamespaceDeclaration)),
+                    graphic is null ? null : new XElement(graphic))));
     }
 
     /// <summary>

@@ -319,21 +319,27 @@ public static class DocxWriter
     private static List<ChartPart> CollectCharts(TextDocument document, HashSet<string> usedPartNames)
     {
         var charts = new List<ChartPart>();
+        void Add(Chart chart)
+        {
+            var index = charts.Count + 1;
+            var chartFileName = NextAvailableChartFileName(usedPartNames);
+            var embeddingFileName = NextAvailablePartFileName(
+                usedPartNames,
+                "word/embeddings",
+                "Microsoft_Excel_Worksheet",
+                "xlsx");
+            charts.Add(new ChartPart(chart, $"rIdChart{index}", chartFileName, (uint)index, embeddingFileName, "rId1"));
+        }
+
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
+            {
                 if (run.Chart is { } chart)
-                {
-                    var index = charts.Count + 1;
-                    var chartFileName = NextAvailableChartFileName(usedPartNames);
-                    var embeddingFileName = NextAvailablePartFileName(
-                        usedPartNames,
-                        "word/embeddings",
-                        "Microsoft_Excel_Worksheet",
-                        "xlsx");
-                    // The external-data rId is part-LOCAL (it lives in word/charts/_rels/chartN.xml.rels), so a
-                    // fixed "rId1" per chart is fine and never collides with the document-level ids above.
-                    charts.Add(new ChartPart(chart, $"rIdChart{index}", chartFileName, (uint)index, embeddingFileName, "rId1"));
-                }
+                    Add(chart);
+                if (run.DrawingGroup is { } group)
+                    foreach (var groupedChart in group.Children.OfType<Chart>())
+                        Add(groupedChart);
+            }
         return charts;
     }
 
@@ -416,27 +422,33 @@ public static class DocxWriter
     private static List<SmartArtPart> CollectSmartArts(TextDocument document)
     {
         var smartArts = new List<SmartArtPart>();
+        void Add(SmartArt smartArt)
+        {
+            var index = smartArts.Count + 1;
+            smartArts.Add(new SmartArtPart(
+                smartArt,
+                $"rIdDgmData{index}",
+                $"rIdDgmLayout{index}",
+                $"rIdDgmStyle{index}",
+                $"rIdDgmColors{index}",
+                $"data{index}.xml",
+                $"layout{index}.xml",
+                $"quickStyle{index}.xml",
+                $"colors{index}.xml",
+                $"rIdDgmDrawing{index}",
+                $"drawing{index}.xml",
+                (uint)index));
+        }
+
         foreach (var paragraph in EnumerateParagraphs(document))
             foreach (var run in paragraph.Runs)
+            {
                 if (run.SmartArt is { } smartArt)
-                {
-                    var index = smartArts.Count + 1;
-                    smartArts.Add(new SmartArtPart(
-                        smartArt,
-                        $"rIdDgmData{index}",
-                        $"rIdDgmLayout{index}",
-                        $"rIdDgmStyle{index}",
-                        $"rIdDgmColors{index}",
-                        $"data{index}.xml",
-                        $"layout{index}.xml",
-                        $"quickStyle{index}.xml",
-                        $"colors{index}.xml",
-                        // Word resolves dgm:dataModelExt/@relId against the document-level relationship
-                        // set, matching the native package.
-                        $"rIdDgmDrawing{index}",
-                        $"drawing{index}.xml",
-                        (uint)index));
-                }
+                    Add(smartArt);
+                if (run.DrawingGroup is { } group)
+                    foreach (var groupedSmartArt in group.Children.OfType<SmartArt>())
+                        Add(groupedSmartArt);
+            }
         return smartArts;
     }
 
@@ -1235,8 +1247,10 @@ public static class DocxWriter
         var imagesByRun = new Dictionary<Run, ImagePart>();
         var groupedImages = new Dictionary<InlineImage, ImagePart>();
         var chartsByRun = new Dictionary<Run, ChartPart>();
+        var groupedCharts = new Dictionary<Chart, ChartPart>();
         var embeddedByRun = new Dictionary<Run, EmbeddedObjectPart>();
         var smartArtsByRun = new Dictionary<Run, SmartArtPart>();
+        var groupedSmartArts = new Dictionary<SmartArt, SmartArtPart>();
         var nextImage = 0;
         var nextChart = 0;
         var nextEmbedded = 0;
@@ -1253,10 +1267,16 @@ public static class DocxWriter
                 }
                 if (run.Chart is not null)
                     chartsByRun[run] = charts[nextChart++];
+                if (run.DrawingGroup is { } chartGroup)
+                    foreach (var groupedChart in chartGroup.Children.OfType<Chart>())
+                        groupedCharts[groupedChart] = charts[nextChart++];
                 if (run.EmbeddedObject is not null)
                     embeddedByRun[run] = embeddedObjects[nextEmbedded++];
                 if (run.SmartArt is not null)
                     smartArtsByRun[run] = smartArts[nextSmartArt++];
+                if (run.DrawingGroup is { } smartArtGroup)
+                    foreach (var groupedSmartArt in smartArtGroup.Children.OfType<SmartArt>())
+                        groupedSmartArts[groupedSmartArt] = smartArts[nextSmartArt++];
             }
 
         // Map each document-referenced preserved part to its assigned rIdPreserved{N} (same order/ids as
@@ -1272,6 +1292,8 @@ public static class DocxWriter
             smartArtsByRun,
             ids,
             groupedImages,
+            groupedCharts,
+            groupedSmartArts,
             preservedDrawingRelIds,
             document.DefaultParagraph);
 
@@ -1362,6 +1384,8 @@ public static class DocxWriter
         IReadOnlyDictionary<Run, SmartArtPart> SmartArts,
         IdAllocator Ids,
         IReadOnlyDictionary<InlineImage, ImagePart> GroupImages,
+        IReadOnlyDictionary<Chart, ChartPart> GroupCharts,
+        IReadOnlyDictionary<SmartArt, SmartArtPart> GroupSmartArts,
         IReadOnlyDictionary<string, string>? PreservedDrawingRelIds = null,
         ParagraphFormatting? DocumentDefaultParagraph = null)
     {
@@ -1371,7 +1395,9 @@ public static class DocxWriter
             new Dictionary<Run, EmbeddedObjectPart>(),
             new Dictionary<Run, SmartArtPart>(),
             new IdAllocator(),
-            new Dictionary<InlineImage, ImagePart>());
+            new Dictionary<InlineImage, ImagePart>(),
+            new Dictionary<Chart, ChartPart>(),
+            new Dictionary<SmartArt, SmartArtPart>());
     }
 
     /// <summary>
@@ -2433,7 +2459,7 @@ public static class DocxWriter
                 while (i < runs.Count && ReferenceEquals(runs[i].Control, control)
                     && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId
                     && SameRevision(head, runs[i]))
-                    content.Add(BuildRun(runs[i++], drawings));
+                    content.Add(BuildRunElements(runs[i++], drawings));
                 var sdt = new XElement(W + "sdt", BuildSdtProperties(control), content);
                 Content(head, sdt);
                 continue;
@@ -2529,7 +2555,7 @@ public static class DocxWriter
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
                 while (i < runs.Count && runs[i].HyperlinkUrl == url && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
-                    hyperlink.Add(BuildRun(runs[i++], drawings));
+                    hyperlink.Add(BuildRunElements(runs[i++], drawings));
                 Content(head, hyperlink);
             }
             else if (anchor is { Length: > 0 })
@@ -2539,13 +2565,14 @@ public static class DocxWriter
                     hyperlink.Add(new XAttribute(W + "tooltip", tooltip));
                 var head = runs[i];
                 while (i < runs.Count && runs[i].HyperlinkAnchor == anchor && runs[i].HyperlinkTooltip == tooltip && (runs[i].IsCommentReference ? null : runs[i].CommentId) == openCommentId && SameRevision(head, runs[i]))
-                    hyperlink.Add(BuildRun(runs[i++], drawings));
+                    hyperlink.Add(BuildRunElements(runs[i++], drawings));
                 Content(head, hyperlink);
             }
             else
             {
                 var run = runs[i++];
-                Content(run, BuildRun(run, drawings));
+                foreach (var element in BuildRunElements(run, drawings))
+                    Content(run, element);
             }
         }
 
@@ -2965,6 +2992,41 @@ public static class DocxWriter
         return BuildTextRun(run, drawings);
     }
 
+    private static IEnumerable<XElement> BuildRunElements(Run run, RunDrawings drawings)
+    {
+        yield return BuildRun(run, drawings);
+
+        if (run.DrawingGroup is not { } group)
+            yield break;
+
+        // Word drops a:graphicFrame children from wpg:wgp on DOCX reload. Keep the children Word can group
+        // inside wpg, but serialize charts and SmartArt as sibling anchors at their group-relative positions.
+        // This preserves their editable native payloads and visible placement in Word's durable package form.
+        for (var i = 0; i < group.Children.Count; i++)
+        {
+            var child = group.Children[i];
+            var (x, y) = i < group.ChildOffsets.Count ? group.ChildOffsets[i] : (0.0, 0.0);
+            var placement = GroupChildPlacement(group.Placement, x, y, i + 1);
+            XElement? drawing = child switch
+            {
+                Chart chart when drawings.GroupCharts.TryGetValue(chart, out var chartPart) =>
+                    BuildChartDrawing(chartPart, placement),
+                SmartArt smartArt when drawings.GroupSmartArts.TryGetValue(smartArt, out var smartArtPart) =>
+                    BuildSmartArtDrawing(smartArtPart, placement),
+                _ => null
+            };
+            if (drawing is null)
+                continue;
+
+            var siblingRun = new XElement(W + "r");
+            var rPr = BuildRunProperties(run.Formatting);
+            if (rPr is not null)
+                siblingRun.Add(rPr);
+            siblingRun.Add(drawing);
+            yield return siblingRun;
+        }
+    }
+
     // A textless marker run (footnote/endnote reference): carries the run's own formatting forced to
     // superscript, then the marker element. Preserves bold/colour/size that a caller put on the marker.
     private static XElement MarkerRun(Run run, XElement marker)
@@ -3336,7 +3398,24 @@ public static class DocxWriter
                     new XAttribute("r", 0), new XAttribute("b", 0)),
                 BuildWrap(placement.Wrapping),
                 docPr,
-                graphic));
+            graphic));
+    }
+
+    private static FloatingPlacement GroupChildPlacement(
+        FloatingPlacement groupPlacement,
+        double childOffsetXPt,
+        double childOffsetYPt,
+        int childOrder)
+    {
+        return new FloatingPlacement
+        {
+            Wrapping = groupPlacement.Wrapping == ImageWrapping.Inline ? ImageWrapping.Square : groupPlacement.Wrapping,
+            HorizontalAnchor = groupPlacement.HorizontalAnchor,
+            VerticalAnchor = groupPlacement.VerticalAnchor,
+            HorizontalOffsetPt = groupPlacement.HorizontalOffsetPt + childOffsetXPt,
+            VerticalOffsetPt = groupPlacement.VerticalOffsetPt + childOffsetYPt,
+            ZOrderIndex = groupPlacement.ZOrderIndex + childOrder
+        };
     }
 
     /// <summary>The wp:positionH/@relativeFrom token for a horizontal anchor.</summary>
@@ -4244,7 +4323,7 @@ public static class DocxWriter
     /// but the graphicData wraps a c:chart reference rather than a pic:pic. The c namespace is declared on
     /// the c:chart element so the reference is self-describing.
     /// </summary>
-    private static XElement BuildChartDrawing(ChartPart part)
+    private static XElement BuildChartDrawing(ChartPart part, FloatingPlacement? placementOverride = null)
     {
         var cx = PointsToEmu(part.Chart.WidthPt);
         var cy = PointsToEmu(part.Chart.HeightPt);
@@ -4259,7 +4338,8 @@ public static class DocxWriter
                     new XAttribute(XNamespace.Xmlns + "c", C.NamespaceName),
                     new XAttribute(R + "id", part.RelationshipId))));
 
-        if (part.Chart.IsFloating && part.Chart.Placement is { } chartPlacement)
+        var chartPlacement = placementOverride ?? (part.Chart.IsFloating ? part.Chart.Placement : null);
+        if (chartPlacement is not null)
             return BuildAnchorContainer(cx, cy, chartDocPr, chartGraphic, chartPlacement);
 
         return new XElement(W + "drawing",
@@ -4350,7 +4430,7 @@ public static class DocxWriter
     /// dgm:relIds carrying the four relationship ids (r:dm=data, r:lo=layout, r:qs=quickStyle, r:cs=colors).
     /// Mirrors <see cref="BuildChartDrawing"/> but references four parts instead of one.
     /// </summary>
-    private static XElement BuildSmartArtDrawing(SmartArtPart part)
+    private static XElement BuildSmartArtDrawing(SmartArtPart part, FloatingPlacement? placementOverride = null)
     {
         var cx = PointsToEmu(part.SmartArt.WidthPt);
         var cy = PointsToEmu(part.SmartArt.HeightPt);
@@ -4372,7 +4452,8 @@ public static class DocxWriter
                     new XAttribute(R + "qs", part.QuickStyleRelationshipId),
                     new XAttribute(R + "cs", part.ColorsRelationshipId))));
 
-        if (part.SmartArt.IsFloating && part.SmartArt.Placement is { } smartArtPlacement)
+        var smartArtPlacement = placementOverride ?? (part.SmartArt.IsFloating ? part.SmartArt.Placement : null);
+        if (smartArtPlacement is not null)
             return BuildAnchorContainer(cx, cy, smartArtDocPr, smartArtGraphic, smartArtPlacement);
 
         return new XElement(W + "drawing",
@@ -4395,8 +4476,9 @@ public static class DocxWriter
     /// Builds the <c>w:drawing/wp:anchor</c> for a <see cref="DrawingGroup"/>, emitting the group as
     /// <c>wpg:wgp</c> inside <c>a:graphicData[uri=wpg]</c>. Shape and WordArt children reuse their normal
     /// DrawingML <c>wps:wsp</c> bodies with a group-local <c>a:xfrm</c>; grouped images emit a real
-    /// <c>pic:pic</c> payload backed by the document media relationship. Other unsupported child kinds remain
-    /// lightweight placeholders. Groups are always floating (no inline path).
+    /// <c>pic:pic</c> payload backed by the document media relationship. Charts and SmartArt are emitted as
+    /// sibling anchors because Word does not persist their <c>a:graphicFrame</c> group children on reload.
+    /// Other unsupported child kinds remain lightweight placeholders. Groups are always floating (no inline path).
     /// </summary>
     private static XElement BuildDrawingGroupDrawing(DrawingGroup group, RunDrawings drawings)
     {
@@ -4414,6 +4496,8 @@ public static class DocxWriter
         for (var i = 0; i < group.Children.Count; i++)
         {
             var child = group.Children[i];
+            if (child is Chart or SmartArt)
+                continue;
             var (ox, oy) = i < group.ChildOffsets.Count ? group.ChildOffsets[i] : (0.0, 0.0);
             var childW = group.ChildWidthPt(i);
             var childH = group.ChildHeightPt(i);
