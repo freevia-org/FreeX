@@ -329,4 +329,50 @@ public sealed class FillSeriesPlannerTests
 
         FillSeriesPlanner.BuildLinearSeriesEdits(sheet, range, step: 1, FillSeriesDirection.Rows).Should().BeEmpty();
     }
+
+    // R48-commands-fill-series-3-2: a multi-column selection whose very FIRST column lacks a
+    // valid seed must not wipe out the OTHER columns' perfectly valid, independent seeds --
+    // Excel fills every column whose own top cell has a valid seed and leaves only the
+    // invalid-seed columns untouched.
+    [Fact]
+    public void BuildLinearSeriesEdits_FillsOtherColumnsWhenOnlyFirstColumnLacksASeed()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 2),
+            new CellAddress(sheet.Id, 3, 4));
+        // Column B (col 2): no seed at all (left blank) -- must be left alone.
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 3), new NumberValue(5));   // Column C seed
+        sheet.SetCell(new CellAddress(sheet.Id, 1, 4), new NumberValue(10));  // Column D seed
+
+        var edits = FillSeriesPlanner.BuildLinearSeriesEdits(sheet, range, step: 1, FillSeriesDirection.Columns);
+
+        edits.Select(edit => edit.Address).Should().Equal(
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 3, 3),
+            new CellAddress(sheet.Id, 2, 4),
+            new CellAddress(sheet.Id, 3, 4));
+        edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(6, 7, 11, 12);
+    }
+
+    // Sibling no-regression case: the previously-correct "single seed, continue the running
+    // series into later blank columns" behavior must still work once per-column validation
+    // stops aborting the whole plan for an invalid FIRST seed.
+    [Fact]
+    public void BuildLinearSeriesEdits_StillChainsIntoLaterBlankColumnAfterASingleSeed()
+    {
+        var sheet = new Sheet(SheetId.New(), "Sheet1");
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 2, 2),
+            new CellAddress(sheet.Id, 3, 3));
+        sheet.SetCell(range.Start, new NumberValue(10));
+
+        var edits = FillSeriesPlanner.BuildLinearSeriesEdits(sheet, range, step: 2, FillSeriesDirection.Columns);
+
+        edits.Select(edit => edit.Address).Should().Equal(
+            new CellAddress(sheet.Id, 3, 2),
+            new CellAddress(sheet.Id, 2, 3),
+            new CellAddress(sheet.Id, 3, 3));
+        edits.Select(edit => ((NumberValue)edit.NewCell.Value).Value).Should().Equal(12, 14, 16);
+    }
 }

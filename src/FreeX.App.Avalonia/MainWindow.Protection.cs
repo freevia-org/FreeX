@@ -1,3 +1,7 @@
+using System.Linq;
+using System.Xml;
+using System.Xml.Linq;
+
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -403,6 +407,13 @@ public sealed partial class MainWindow
                     return;
                 }
 
+                // Core's ProtectWorkbookCommand has no windows-protection parameter (see
+                // ProtectWorkbookOptions remarks: "the Core model does not persist this flag"), so
+                // the dialog's own "Windows" choice is threaded onto the saved-file representation
+                // here, directly on the preserved workbookProtection metadata bag, instead of being
+                // silently dropped.
+                ApplyWorkbookLockWindows(_session.Workbook, options.ProtectWindows);
+
                 RefreshShell(UiText.Get("ShellLoc_ProtectedWorkbook"));
                 dialog.Close();
             };
@@ -415,6 +426,63 @@ public sealed partial class MainWindow
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Sets or clears the <c>lockWindows</c> attribute on the workbook's preserved
+    /// <c>workbookProtection</c> metadata bag so the Protect Workbook dialog's "Windows" checkbox
+    /// actually round-trips to <c>&lt;workbookProtection lockWindows="1"/&gt;</c> on save, matching
+    /// real Excel. Core's <see cref="FreeX.Core.Commands.ProtectWorkbookCommand"/> only models
+    /// Structure protection (see <see cref="ProtectWorkbookOptions"/> remarks), so this reaches
+    /// directly into <see cref="Workbook.ProtectionMetadata"/> — the same "residual, not-yet-modelled
+    /// XLSX attribute" bag that <c>XlsxWorkbookMetadataWriter.ApplyProtection</c> re-applies verbatim
+    /// (excluding the Core-managed <c>lockStructure</c>/<c>workbookPassword</c> attributes) — rather
+    /// than requiring a new Core command parameter.
+    /// <para>
+    /// Always clones the current bag (via <see cref="NativeXmlPreserveBag.Clone"/>) before mutating
+    /// it, instead of mutating in place: <see cref="FreeX.Core.Commands.ProtectWorkbookCommand"/>'s
+    /// own undo support snapshots the pre-command <see cref="Workbook.ProtectionMetadata"/>
+    /// reference, and mutating that same (possibly still-referenced) instance here would corrupt
+    /// Undo by leaking this write into the "previous" snapshot.
+    /// </para>
+    /// </summary>
+    internal static void ApplyWorkbookLockWindows(Workbook workbook, bool lockWindows)
+    {
+        var current = workbook.ProtectionMetadata;
+        var raw = current?.Get("workbookProtection");
+
+        XElement element;
+        if (!string.IsNullOrWhiteSpace(raw))
+        {
+            try
+            {
+                element = XElement.Parse(raw);
+            }
+            catch (XmlException)
+            {
+                // Malformed preserved payload from an older save; start fresh rather than risk
+                // corrupting content we don't understand.
+                element = new XElement("e");
+            }
+        }
+        else
+        {
+            element = new XElement("e");
+        }
+
+        if (lockWindows)
+            element.SetAttributeValue("lockWindows", "1");
+        else
+            element.Attribute("lockWindows")?.Remove();
+
+        var clone = current?.Clone() ?? new NativeXmlPreserveBag();
+        clone.Set(
+            "workbookProtection",
+            element.Attributes().Any() || element.HasElements
+                ? element.ToString(SaveOptions.DisableFormatting)
+                : null);
+
+        workbook.ProtectionMetadata = clone;
+    }
 
     /// <summary>
     /// Returns the localized string for <paramref name="key"/> when it exists in the catalog, otherwise the

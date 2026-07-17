@@ -97,7 +97,11 @@ public sealed class RemoveDuplicateRowsCommand : IWorkbookCommand
             _richTextRunsSnapshot = [];
             _filterHiddenRowsSnapshot = [];
             _valueFilterHiddenRowsSnapshot = [];
-            _mergeSnapshot = [];
+            // Nothing was moved/cleared, so no merge snapshot is taken — Revert must leave every
+            // merge on the sheet (in-range or not) exactly as it is. An empty list here would make
+            // Revert's `sheet.ReplaceMergedRegions(_mergeSnapshot)` wipe every merge on the entire
+            // sheet, not just the operated range (see R48-commands-undo-redo-inverse-3-1).
+            _mergeSnapshot = null;
             return new CommandOutcome(true);
         }
 

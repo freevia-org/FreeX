@@ -95,12 +95,26 @@ public partial class MainWindow
         UpdateViewport();
     }
 
+    /// <summary>
+    /// Whether the Fill ▸ Series dialog is worth opening for the selection's leading cell.
+    /// Linear/Growth/Date only ever operate on a Number/Date seed (FillSeriesPlanner's
+    /// BuildLinearSeriesEdits/BuildGrowthSeriesEdits/BuildDateSeriesEdits each require one), but
+    /// AutoFill also supports a text seed -- it replays a fill-handle-style text-list/pattern
+    /// detection (e.g. "Item 1" -&gt; "Item 2") via BuildAutoFillSeriesEdits /
+    /// AutofillCommand.TryCreateAutoFillTextSeries. The type picker only appears inside the
+    /// dialog itself, so the entry gate must admit every seed type any series type can act on --
+    /// Number, Date, or Text -- rather than requiring Number/Date before the user has even had a
+    /// chance to choose AutoFill.
+    /// </summary>
+    private static bool CanStartFillSeries(ScalarValue? startValue) =>
+        startValue is NumberValue or DateTimeValue or TextValue;
+
     private void FillSeriesMenuItem_Click(object sender, RoutedEventArgs e)
     {
         if (SheetGrid.SelectedRange is not { } range) return;
         var sheet = _workbook.GetSheet(_currentSheetId); if (sheet is null) return;
         var startValue = sheet.GetValue(range.Start.Row, range.Start.Col);
-        if (startValue is not NumberValue and not DateTimeValue)
+        if (!CanStartFillSeries(startValue))
         {
             _messageService.ShowWarning(
                 UiText.Get("FillSeriesStep_SelectNumericOrDateStartMessage"),

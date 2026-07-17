@@ -898,7 +898,7 @@ public sealed partial class FormulaEvaluator
             if (candidate is ErrorValue)
                 continue;
 
-            if (BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
+            if (candidate is not BlankValue && BuiltInFunctions.ApproxLookupTypeClass(candidate) != lookupClass) continue;
             if (BuiltInFunctions.CompareScalar(candidate, lookupValue) <= 0)
                 matchIndex = index;
         }
