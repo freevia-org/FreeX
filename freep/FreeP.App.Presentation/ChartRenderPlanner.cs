@@ -246,6 +246,7 @@ public readonly record struct ChartTextPlan(
     ChartAxisLabelFormatPlan? AxisLabelFormat = null)
 {
     public string? FontFamily { get; init; }
+    public SrgbColor? TextColor { get; init; }
 }
 
 public readonly record struct ChartBarDepthPlan(
@@ -477,6 +478,7 @@ public readonly record struct ChartDataLabelPlan(
     public ChartPlanRect? LegendKeyBounds { get; init; }
     public ChartFillPlan? LegendKeyFill { get; init; }
     public bool WrapText { get; init; }
+    public SrgbColor? TextColor { get; init; }
 }
 
 public readonly record struct ChartLegendItemPlan(
@@ -579,6 +581,11 @@ public static partial class ChartRenderPlanner
     public const double ImportedRadarLegendXOffset = 11.0;
     public const double ImportedRadarLegendLineHeight = 38.0;
     public const double ImportedRadarLegendVerticalOffset = 10.0;
+    public const double ImportedPieLegendSwatchSize = 14.0;
+    public const double ImportedPieLegendLabelInset = 20.0;
+    public const double ImportedPieLegendLineHeight = 37.0;
+    public const double ImportedPieLegendVerticalOffset = 32.0;
+    public const double ImportedPieLegendRightOffset = 20.0;
     public const double ImportedCartesianGridLinePixelOffset = 0.5;
     public const double ImportedPercentStackedGridEdgeOffsetX = 19.0;
     public const double ImportedCartesianCategoryLabelOffset = 16.0;
@@ -708,6 +715,10 @@ public static partial class ChartRenderPlanner
     private static bool UsesImportedTextMetrics(ChartShape chart) =>
         chart.TextStyle?.FontSizePt is >= 12.0;
 
+    private static bool UsesImportedPieLegendDefaults(ChartShape chart) =>
+        UsesImportedTextMetrics(chart) &&
+        chart.ChartType is ChartType.Pie or ChartType.Doughnut;
+
     private static bool UsesImportedThreeDColumnDefaults(ChartShape chart) =>
         UsesImportedTextMetrics(chart) &&
         chart.ThreeDStyle == ChartThreeDStyle.Column;
@@ -795,7 +806,9 @@ public static partial class ChartRenderPlanner
         UsesImportedTextMetrics(chart) ? 60.0 : BarCategoryLabelWidth;
 
     private static double ResolveLegendLineHeight(ChartShape chart) =>
-        UsesImportedTextMetrics(chart) ? 28.0 : LegendHeight;
+        UsesImportedPieLegendDefaults(chart)
+            ? ImportedPieLegendLineHeight
+            : UsesImportedTextMetrics(chart) ? 28.0 : LegendHeight;
 
     private static double ResolveDataLabelHeight(ChartShape chart) =>
         UsesImportedTextMetrics(chart) ? 26.0 : 11.0;
@@ -1270,7 +1283,10 @@ public static partial class ChartRenderPlanner
             {
                 // Classic Office chart titles use Arial while axis/legend roles
                 // retain their Calibri defaults.
-                FontFamily = UsesClassicOfficeChartStyle(chart) ? "Arial" : null
+                FontFamily = UsesClassicOfficeChartStyle(chart) ? "Arial" : null,
+                TextColor = UsesImportedPieLegendDefaults(chart)
+                    ? new SrgbColor(0x00, 0x00, 0x00)
+                    : null
             }
             : null;
 
@@ -1460,6 +1476,9 @@ public static partial class ChartRenderPlanner
                     : 0
             : chart.Series.Count;
         bool importedCombo = UsesImportedComboDefaults(chart);
+        bool importedPieLegend = UsesImportedPieLegendDefaults(chart);
+        bool importedPieLegendRightOffset = importedPieLegend &&
+            (chart.ChartType == ChartType.Doughnut || chart.DataLabels is null);
         bool importedRadarLineLegend = frame.IsRadar && chart.RadarStyle != RadarStyle.Filled;
         bool importedMarkerLegend = UsesImportedTextMetrics(chart) &&
             (UsesImportedSingleScatterDefaults(chart) || UsesImportedBubbleDefaults(chart));
@@ -1467,6 +1486,8 @@ public static partial class ChartRenderPlanner
             chart.ChartType == ChartType.LineMarkers;
         double legendLineHeight = importedCombo
             ? ImportedComboLegendLineHeight
+            : importedPieLegend
+                ? ImportedPieLegendLineHeight
             : importedRadarLineLegend
                 ? ImportedRadarLegendLineHeight
             : ResolveLegendLineHeight(chart);
@@ -1483,6 +1504,8 @@ public static partial class ChartRenderPlanner
             firstItemY += ImportedComboLegendVerticalOffset;
         if (importedRadarLineLegend && verticalLegend && !hasManualLayout)
             firstItemY += ImportedRadarLegendVerticalOffset;
+        if (importedPieLegend && verticalLegend && !hasManualLayout)
+            firstItemY += ImportedPieLegendVerticalOffset;
         for (int itemIndex = 0; itemIndex < itemsToShow; itemIndex++)
         {
             int sourceItemIndex = frame.IsPie
@@ -1495,6 +1518,8 @@ public static partial class ChartRenderPlanner
                     ? plot.Right + (chart.ChartType == ChartType.Bubble ? 30.0 : 32.0)
                     : importedRadarLineLegend
                         ? legendBounds.X + ImportedRadarLegendXOffset
+                    : importedPieLegendRightOffset
+                        ? legendBounds.X + ImportedPieLegendRightOffset
                     : legendBounds.X
                 : legendBounds.X + itemIndex * 80.0;
             double itemY = verticalLegend ? firstItemY + itemIndex * legendLineHeight : legendBounds.Y;
@@ -1507,18 +1532,24 @@ public static partial class ChartRenderPlanner
                  chart.Series[sourceItemIndex].OverrideChartType == ChartType.LineMarkers);
             double swatchWidth = importedCombo
                 ? ImportedComboLegendSwatchWidth
+                : importedPieLegend
+                    ? ImportedPieLegendSwatchSize
                 : importedRadarLineLegend
                     ? ImportedRadarLegendSwatchWidth
                     : importedLineMarkerLegend ? ImportedLineMarkerLegendSwatchWidth
                     : importedMarkerLegend ? 12.0 : 8.0;
             double swatchHeight = importedCombo
                 ? lineSeries ? 12.0 : ImportedComboLegendSwatchHeight
+                : importedPieLegend
+                    ? ImportedPieLegendSwatchSize
                 : importedRadarLineLegend
                     ? ImportedRadarLegendSwatchHeight
                     : importedLineMarkerLegend ? ImportedLineMarkerLegendSwatchHeight
                     : importedMarkerLegend ? 12.0 : 8.0;
             double labelInset = importedCombo
                 ? ImportedComboLegendSwatchWidth + 4.0
+                : importedPieLegend
+                    ? ImportedPieLegendLabelInset
                 : importedRadarLineLegend
                     ? ImportedRadarLegendLabelInset
                 : importedLineMarkerLegend ? ImportedLineMarkerLegendLabelInset
@@ -1543,16 +1574,21 @@ public static partial class ChartRenderPlanner
                     itemY + (importedCombo && lineSeries ? 2.0 : 3.0),
                     swatchWidth,
                     swatchHeight),
-                new ChartTextPlan(
-                    text,
-                    new ChartPlanRect(
-                        itemX + labelInset,
-                        itemY + (importedCombo ? ImportedComboLegendLabelOffset : 0.0),
-                        textWidth,
-                        legendLineHeight),
+                    new ChartTextPlan(
+                        text,
+                        new ChartPlanRect(
+                            itemX + labelInset,
+                            itemY + (importedCombo ? ImportedComboLegendLabelOffset : 0.0),
+                            textWidth,
+                            legendLineHeight),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 7.0),
-                    Alignment: ChartPlanTextAlignment.Left),
+                    Alignment: ChartPlanTextAlignment.Left)
+                    {
+                        TextColor = importedPieLegend
+                            ? new SrgbColor(0x00, 0x00, 0x00)
+                            : null
+                    },
                 fillPlans is not null
                     ? frame.IsPie
                         ? ResolvePointFill(chart.Series[0], 0, sourceItemIndex, seriesColors, alpha: 255, fillPlans,
@@ -6960,7 +6996,12 @@ public static partial class ChartRenderPlanner
                     Bounds: new ChartPlanRect(labelX - labelWidth / 2, labelY - ResolveDataLabelHeight(chart) / 2, labelWidth, ResolveDataLabelHeight(chart)),
                     IsBold: false,
                     FontSize: ResolveTextFontSize(chart, 6.5),
-                    Alignment: ChartPlanTextAlignment.Center));
+                    Alignment: ChartPlanTextAlignment.Center)
+                {
+                    TextColor = UsesImportedPieLegendDefaults(chart)
+                        ? new SrgbColor(0x00, 0x00, 0x00)
+                        : null
+                });
             }
 
             startAngle += sweepAngle;

@@ -959,7 +959,7 @@ public sealed class SlideCanvas : Control
         dc.DrawRectangle(null, null, frameRect);
 
         if (scene.Title is { } title)
-            DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment), fontFamily: title.FontFamily);
+            DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment), textColor: title.TextColor, fontFamily: title.FontFamily);
 
         if (!scene.Frame.HasPlot)
             return;
@@ -1035,6 +1035,7 @@ public sealed class SlideCanvas : Control
                 label.IsBold,
                 label.FontSize,
                 ToTextAlignment(label.Alignment),
+                textColor: label.TextColor,
                 maxLineCount: label.WrapText ? 2 : 1);
         }
 
@@ -1051,7 +1052,8 @@ public sealed class SlideCanvas : Control
                 DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
                     label.IsBold,
                     label.FontSize,
-                    ToTextAlignment(label.Alignment));
+                    ToTextAlignment(label.Alignment),
+                    textColor: label.TextColor);
             }
         }
 
@@ -1063,7 +1065,8 @@ public sealed class SlideCanvas : Control
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
                 label.IsBold,
                 label.FontSize,
-                ToTextAlignment(label.Alignment));
+                ToTextAlignment(label.Alignment),
+                textColor: label.TextColor);
         }
 
         foreach (var label in scene.ValueAxisLabels)
@@ -1071,7 +1074,8 @@ public sealed class SlideCanvas : Control
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
                 label.IsBold,
                 label.FontSize,
-                ToTextAlignment(label.Alignment));
+                ToTextAlignment(label.Alignment),
+                textColor: label.TextColor);
         }
 
         foreach (var label in scene.SurfaceSeriesAxisLabels)
@@ -1079,7 +1083,8 @@ public sealed class SlideCanvas : Control
             DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
                 label.IsBold,
                 label.FontSize,
-                ToTextAlignment(label.Alignment));
+                ToTextAlignment(label.Alignment),
+                textColor: label.TextColor);
         }
 
         foreach (var titlePlan in scene.AxisTitles)
@@ -1143,7 +1148,8 @@ public sealed class SlideCanvas : Control
             DrawChartLabel(dc, item.Label.Text, ToRect(item.Label.Bounds),
                 item.Label.IsBold,
                 item.Label.FontSize,
-                ToTextAlignment(item.Label.Alignment));
+                ToTextAlignment(item.Label.Alignment),
+                textColor: item.Label.TextColor);
         }
     }
 
