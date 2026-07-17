@@ -2200,6 +2200,8 @@ public sealed partial class MainWindow
         bool render = true)
     {
         var pngName = surfaceId + ".png";
+        if (!render)
+            AppendInteractionDialogProgress(outputDirectory, surfaceId, "starting");
         var ownerFocusBeforeOpen = PrepareOwnerFocusForDialogContract();
         var preexisting = OwnedWindows.ToHashSet();
 
@@ -2215,6 +2217,8 @@ public sealed partial class MainWindow
         }
 
         var dialog = await WaitForOwnedDialogAsync(preexisting);
+        if (!render)
+            AppendInteractionDialogProgress(outputDirectory, surfaceId, dialog is null ? "not-opened" : "opened");
         if (dialog is null)
         {
             // The opener may have early-returned (e.g. a guard) without showing a window; record honestly.
@@ -2228,6 +2232,7 @@ public sealed partial class MainWindow
         {
             if (!render)
             {
+                AppendInteractionDialogProgress(outputDirectory, surfaceId, "ready-for-contract");
                 result = new ParitySurfaceResult(
                     surfaceId,
                     kind,
@@ -2264,6 +2269,8 @@ public sealed partial class MainWindow
         }
         finally
         {
+            if (!render)
+                AppendInteractionDialogProgress(outputDirectory, surfaceId, "contract-starting");
             try
             {
                 await RecordDialogInteractionContractAsync(
@@ -2277,11 +2284,31 @@ public sealed partial class MainWindow
             {
                 RecordDialogInteractionOpenFailure(surfaceId, $"Contract probe threw: {ex.GetType().Name}: {ex.Message}");
             }
+            if (!render)
+                AppendInteractionDialogProgress(outputDirectory, surfaceId, "contract-complete");
             try { if (dialog.IsVisible) dialog.Close(); } catch { /* closing best-effort */ }
             await AwaitOpenerQuietlyAsync(openerTask);
         }
 
         return result;
+    }
+
+    private static void AppendInteractionDialogProgress(
+        string outputDirectory,
+        string surfaceId,
+        string stage)
+    {
+        try
+        {
+            Directory.CreateDirectory(outputDirectory);
+            File.AppendAllText(
+                Path.Combine(outputDirectory, "dialog-progress.log"),
+                $"{DateTimeOffset.UtcNow:O}\t{surfaceId}\t{stage}{Environment.NewLine}");
+        }
+        catch
+        {
+            // Progress diagnostics must never alter validation behavior.
+        }
     }
 
     private static bool TryGetFixedModalCaptureSize(string surfaceId, out double width, out double height)

@@ -274,17 +274,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private static Task SettleDialogInteractionAsync()
-    {
-        return SettleDialogInteractionCoreAsync();
-
-        static async Task SettleDialogInteractionCoreAsync()
-        {
-            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
-            Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-            await Task.Delay(75);
-        }
-    }
+    private static Task SettleDialogInteractionAsync() => Task.Delay(75);
 
     internal static bool SendDialogKeyForTest(
         Window dialog,
