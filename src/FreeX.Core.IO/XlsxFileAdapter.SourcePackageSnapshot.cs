@@ -7705,6 +7705,8 @@ public sealed partial class XlsxFileAdapter
             ReplaceDictionary(sheet.ColOutlineLevels, baseline.ColOutlineLevels);
             ReplaceSet(sheet.GroupHiddenRows, baseline.GroupHiddenRows);
             ReplaceSet(sheet.GroupHiddenCols, baseline.GroupHiddenCols);
+            ReplaceSet(sheet.CollapsedAnchorRows, baseline.CollapsedAnchorRows);
+            ReplaceSet(sheet.CollapsedAnchorCols, baseline.CollapsedAnchorCols);
             sheet.OutlineSummaryBelow = baseline.OutlineSummaryBelow;
             sheet.OutlineSummaryRight = baseline.OutlineSummaryRight;
             sheet.ShowOutlineSymbols = baseline.ShowOutlineSymbols;
@@ -8763,6 +8765,8 @@ public sealed partial class XlsxFileAdapter
         IReadOnlyDictionary<uint, int> ColOutlineLevels,
         IReadOnlySet<uint> GroupHiddenRows,
         IReadOnlySet<uint> GroupHiddenCols,
+        IReadOnlySet<uint> CollapsedAnchorRows,
+        IReadOnlySet<uint> CollapsedAnchorCols,
         bool? OutlineSummaryBelow,
         bool? OutlineSummaryRight,
         bool? ShowOutlineSymbols,
@@ -8780,6 +8784,8 @@ public sealed partial class XlsxFileAdapter
             CopyDictionary(sheet.ColOutlineLevels),
             CopySet(sheet.GroupHiddenRows),
             CopySet(sheet.GroupHiddenCols),
+            CopySet(sheet.CollapsedAnchorRows),
+            CopySet(sheet.CollapsedAnchorCols),
             sheet.OutlineSummaryBelow,
             sheet.OutlineSummaryRight,
             sheet.ShowOutlineSymbols,
@@ -8793,6 +8799,8 @@ public sealed partial class XlsxFileAdapter
             DictionaryEquals(ColOutlineLevels, current.ColOutlineLevels) &&
             SetEquals(GroupHiddenRows, current.GroupHiddenRows) &&
             SetEquals(GroupHiddenCols, current.GroupHiddenCols) &&
+            SetEquals(CollapsedAnchorRows, current.CollapsedAnchorRows) &&
+            SetEquals(CollapsedAnchorCols, current.CollapsedAnchorCols) &&
             OutlineSummaryBelow == current.OutlineSummaryBelow &&
             OutlineSummaryRight == current.OutlineSummaryRight &&
             ShowOutlineSymbols == current.ShowOutlineSymbols &&

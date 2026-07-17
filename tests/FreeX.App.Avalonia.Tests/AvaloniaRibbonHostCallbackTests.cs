@@ -160,6 +160,18 @@ public sealed class AvaloniaRibbonHostCallbackTests
     }
 
     [Fact]
+    public void BuildDefinition_OutlineGroupAndUngroupAreTrueSplitButtons()
+    {
+        var outline = AvaloniaRibbonComposition.BuildDefinition()
+            .FindTab("DataTab")!
+            .FindGroup("DataOutlineGroup")!;
+
+        Assert.IsType<RibbonSplitButton>(outline.Controls[0]);
+        Assert.IsType<RibbonSplitButton>(outline.Controls[1]);
+        Assert.IsType<RibbonButton>(outline.Controls[2]);
+    }
+
+    [Fact]
     public void BuildDefinition_ShapesUsesTheCompleteSharedGallery()
     {
         var draw = AvaloniaRibbonComposition.BuildDefinition().Tabs.Single(tab => tab.Id == "DrawTab");

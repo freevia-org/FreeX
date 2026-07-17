@@ -176,6 +176,8 @@ public sealed class NativeJsonFidelityInventoryTests
         dst.ShowOutlineSymbols.Should().Be(src.ShowOutlineSymbols);
         dst.GroupHiddenRows.Should().BeEquivalentTo(src.GroupHiddenRows);
         dst.GroupHiddenCols.Should().BeEquivalentTo(src.GroupHiddenCols);
+        dst.CollapsedAnchorRows.Should().BeEquivalentTo(src.CollapsedAnchorRows);
+        dst.CollapsedAnchorCols.Should().BeEquivalentTo(src.CollapsedAnchorCols);
     }
 
     [Fact]
@@ -509,6 +511,8 @@ public sealed class NativeJsonFidelityInventoryTests
         main.ShowOutlineSymbols = true;
         main.GroupHiddenRows.Add(6);
         main.GroupHiddenCols.Add(4);
+        main.CollapsedAnchorRows.Add(8);
+        main.CollapsedAnchorCols.Add(5);
 
         // ── Cells: values, formulas, styles ──────────────────────────────────
         main.SetCell(new CellAddress(main.Id, 1, 1), new TextValue("Hello"));

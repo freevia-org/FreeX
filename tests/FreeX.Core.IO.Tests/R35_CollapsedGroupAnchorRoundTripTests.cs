@@ -208,10 +208,9 @@ public sealed class R35_CollapsedGroupAnchorRoundTripTests
 
         var layout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheet, WorksheetNs);
 
-        // Row 1 is a plain hidden detail row (hidden="1", no "collapsed" of its own): tracked in
-        // HiddenRows, not as a collapsed anchor.
-        layout.RowColumnLayout.HiddenRows.Should().Contain(1u);
-        layout.RowColumnLayout.GroupHiddenRows.Should().NotContain(1u);
+        // Row 1 is outline-owned hidden detail, not a manually hidden row or an anchor.
+        layout.RowColumnLayout.HiddenRows.Should().NotContain(1u);
+        layout.RowColumnLayout.GroupHiddenRows.Should().Contain(1u);
 
         // Row 2 is the visible anchor: collapsed="1", no "hidden" and no "outlineLevel" of its own.
         layout.RowColumnLayout.CollapsedAnchorRows.Should().NotBeNull();
@@ -219,6 +218,103 @@ public sealed class R35_CollapsedGroupAnchorRoundTripTests
         layout.RowColumnLayout.CollapsedAnchorRows!.Should().NotContain(1u);
         layout.RowColumnLayout.HiddenRows.Should().NotContain(2u);
         layout.RowColumnLayout.GroupHiddenRows.Should().NotContain(2u);
+    }
+
+    [Fact]
+    public void ReadSheetDataLayout_HiddenCollapsedInnerAnchor_IsBothGroupHiddenAndAnchor()
+    {
+        var worksheet = new XDocument(
+            new XElement(WorksheetNs + "worksheet",
+                new XElement(WorksheetNs + "sheetData",
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "4"),
+                        new XAttribute("hidden", "1"),
+                        new XAttribute("outlineLevel", "1"),
+                        new XAttribute("collapsed", "1")),
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "5"),
+                        new XAttribute("collapsed", "1")))));
+
+        var layout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheet, WorksheetNs);
+
+        layout.RowColumnLayout.HiddenRows.Should().NotContain(4u);
+        layout.RowColumnLayout.GroupHiddenRows.Should().Contain(4u);
+        layout.RowColumnLayout.CollapsedAnchorRows.Should().Contain(4u);
+    }
+
+    [Fact]
+    public void ReadSheetDataLayout_ManualHiddenDimensions_StaySeparateFromOutlineHiddenState()
+    {
+        var worksheet = new XDocument(
+            new XElement(WorksheetNs + "worksheet",
+                new XElement(WorksheetNs + "cols",
+                    new XElement(
+                        WorksheetNs + "col",
+                        new XAttribute("min", "2"),
+                        new XAttribute("max", "2"),
+                        new XAttribute("hidden", "1"),
+                        new XAttribute("outlineLevel", "1"))),
+                new XElement(WorksheetNs + "sheetData",
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "3"),
+                        new XAttribute("hidden", "1"),
+                        new XAttribute("outlineLevel", "1")))));
+
+        var layout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheet, WorksheetNs);
+
+        layout.RowColumnLayout.HiddenRows.Should().Contain(3u);
+        layout.RowColumnLayout.GroupHiddenRows.Should().NotContain(3u);
+        layout.RowColumnLayout.HiddenCols.Should().Contain(2u);
+        layout.RowColumnLayout.GroupHiddenCols.Should().NotContain(2u);
+    }
+
+    [Fact]
+    public void ReadSheetDataLayout_SummaryBefore_ClassifiesHiddenRunsAfterTheirAnchors()
+    {
+        var worksheet = new XDocument(
+            new XElement(WorksheetNs + "worksheet",
+                new XElement(WorksheetNs + "sheetPr",
+                    new XElement(
+                        WorksheetNs + "outlinePr",
+                        new XAttribute("summaryBelow", "0"),
+                        new XAttribute("summaryRight", "0"))),
+                new XElement(WorksheetNs + "cols",
+                    new XElement(
+                        WorksheetNs + "col",
+                        new XAttribute("min", "2"),
+                        new XAttribute("max", "2"),
+                        new XAttribute("collapsed", "1")),
+                    new XElement(
+                        WorksheetNs + "col",
+                        new XAttribute("min", "3"),
+                        new XAttribute("max", "4"),
+                        new XAttribute("hidden", "1"),
+                        new XAttribute("outlineLevel", "1"))),
+                new XElement(WorksheetNs + "sheetData",
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "2"),
+                        new XAttribute("collapsed", "1")),
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "3"),
+                        new XAttribute("hidden", "1"),
+                        new XAttribute("outlineLevel", "1")),
+                    new XElement(
+                        WorksheetNs + "row",
+                        new XAttribute("r", "4"),
+                        new XAttribute("hidden", "1"),
+                        new XAttribute("outlineLevel", "1")))));
+
+        var layout = XlsxWorksheetRowColumnLayoutReader.ReadSheetDataLayout(worksheet, WorksheetNs);
+
+        layout.RowColumnLayout.GroupHiddenRows.Should().Contain([3u, 4u]);
+        layout.RowColumnLayout.HiddenRows.Should().NotContain([3u, 4u]);
+        layout.RowColumnLayout.GroupHiddenCols.Should().Contain([3u, 4u]);
+        layout.RowColumnLayout.HiddenCols.Should().NotContain([3u, 4u]);
     }
 
     [Fact]

@@ -201,6 +201,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             foreach (var attribute in sourceColumn.Attributes())
             {
                 if (IsOfficeRevisionAttribute(attribute) ||
+                    IsOutlineStateAttribute(attribute) ||
                     targetColumn.Attribute(attribute.Name) is not null)
                 {
                     continue;
@@ -254,6 +255,7 @@ internal static partial class XlsxWorksheetMetadataPreserver
             {
                 if (IsOfficeRevisionAttribute(attribute) ||
                     IsStylesheetIndexRowAttribute(attribute) ||
+                    IsOutlineStateAttribute(attribute) ||
                     targetRow.Attribute(attribute.Name) is not null)
                 {
                     continue;
@@ -277,6 +279,10 @@ internal static partial class XlsxWorksheetMetadataPreserver
 
         return changed;
     }
+
+    private static bool IsOutlineStateAttribute(XAttribute attribute) =>
+        attribute.Name.Namespace == XNamespace.None &&
+        attribute.Name.LocalName is "hidden" or "outlineLevel" or "collapsed";
 
     private static bool MergeWorksheetCellAttributes(
         XElement? sourceSheetData,

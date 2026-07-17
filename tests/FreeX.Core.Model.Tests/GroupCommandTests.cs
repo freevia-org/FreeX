@@ -129,6 +129,7 @@ public class GroupCommandTests
         new GroupRowsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
         new CollapseRowGroupCommand(sheet.Id, 1).Apply(ctx);
         sheet.GroupHiddenRows.Should().Contain(2).And.Contain(4);
+        sheet.CollapsedAnchorRows.Should().ContainSingle().Which.Should().Be(5);
         sheet.IsRowEffectivelyHidden(3).Should().BeTrue();
     }
 
@@ -168,6 +169,7 @@ public class GroupCommandTests
         new CollapseRowGroupCommand(sheet.Id, 1).Apply(ctx);
         new ExpandRowGroupCommand(sheet.Id, 1).Apply(ctx);
         sheet.GroupHiddenRows.Should().NotContain(2);
+        sheet.CollapsedAnchorRows.Should().BeEmpty();
         sheet.IsRowEffectivelyHidden(2).Should().BeFalse();
     }
 
@@ -183,10 +185,12 @@ public class GroupCommandTests
 
         sheet.GroupHiddenRows.Should().BeEquivalentTo([2u, 3u, 4u]);
         sheet.GroupHiddenRows.Should().NotContain(8u);
+        sheet.CollapsedAnchorRows.Should().ContainSingle().Which.Should().Be(5u);
 
         command.Revert(ctx);
 
         sheet.GroupHiddenRows.Should().BeEmpty();
+        sheet.CollapsedAnchorRows.Should().BeEmpty();
     }
 
     [Fact]
@@ -244,6 +248,7 @@ public class GroupCommandTests
         collapseCmd.Apply(ctx);
         collapseCmd.Revert(ctx);
         sheet.GroupHiddenRows.Should().BeEmpty();
+        sheet.CollapsedAnchorRows.Should().BeEmpty();
     }
 
     [Fact]
@@ -343,6 +348,7 @@ public class GroupCommandTests
         new GroupColumnsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
         new CollapseColGroupCommand(sheet.Id, 1).Apply(ctx);
         sheet.GroupHiddenCols.Should().Contain(2).And.Contain(4);
+        sheet.CollapsedAnchorCols.Should().ContainSingle().Which.Should().Be(5);
         sheet.IsColEffectivelyHidden(3).Should().BeTrue();
     }
 
@@ -382,6 +388,7 @@ public class GroupCommandTests
         new CollapseColGroupCommand(sheet.Id, 1).Apply(ctx);
         new ExpandColGroupCommand(sheet.Id, 1).Apply(ctx);
         sheet.GroupHiddenCols.Should().NotContain(2);
+        sheet.CollapsedAnchorCols.Should().BeEmpty();
         sheet.IsColEffectivelyHidden(2).Should().BeFalse();
     }
 
@@ -397,10 +404,12 @@ public class GroupCommandTests
 
         sheet.GroupHiddenCols.Should().BeEquivalentTo([2u, 3u, 4u]);
         sheet.GroupHiddenCols.Should().NotContain(8u);
+        sheet.CollapsedAnchorCols.Should().ContainSingle().Which.Should().Be(5u);
 
         command.Revert(ctx);
 
         sheet.GroupHiddenCols.Should().BeEmpty();
+        sheet.CollapsedAnchorCols.Should().BeEmpty();
     }
 
     [Fact]
@@ -445,6 +454,7 @@ public class GroupCommandTests
 
         sheet.IsRowEffectivelyHidden(3).Should().BeFalse();
         sheet.RowOutlineLevels.Should().NotContainKey(3);
+        sheet.CollapsedAnchorRows.Should().BeEmpty();
     }
 
     [Fact]
@@ -460,6 +470,32 @@ public class GroupCommandTests
 
         sheet.RowOutlineLevels[3].Should().Be(1);
         sheet.IsRowEffectivelyHidden(3).Should().BeTrue();
+        sheet.CollapsedAnchorRows.Should().ContainSingle().Which.Should().Be(5u);
+    }
+
+    [Fact]
+    public void ClearOutline_ClearsAndRestoresCollapsedAnchorsWithHiddenDetails()
+    {
+        var (_, sheet, ctx) = Setup();
+        new GroupRowsCommand(sheet.Id, 2, 4, 1).Apply(ctx);
+        new GroupColumnsCommand(sheet.Id, 2, 3, 1).Apply(ctx);
+        new CollapseRowGroupCommand(sheet.Id, 1).Apply(ctx);
+        new CollapseColGroupCommand(sheet.Id, 1).Apply(ctx);
+        var command = new ClearWorksheetOutlineCommand(sheet.Id);
+
+        command.Apply(ctx);
+
+        sheet.GroupHiddenRows.Should().BeEmpty();
+        sheet.GroupHiddenCols.Should().BeEmpty();
+        sheet.CollapsedAnchorRows.Should().BeEmpty();
+        sheet.CollapsedAnchorCols.Should().BeEmpty();
+
+        command.Revert(ctx);
+
+        sheet.GroupHiddenRows.Should().BeEquivalentTo([2u, 3u, 4u]);
+        sheet.GroupHiddenCols.Should().BeEquivalentTo([2u, 3u]);
+        sheet.CollapsedAnchorRows.Should().ContainSingle().Which.Should().Be(5u);
+        sheet.CollapsedAnchorCols.Should().ContainSingle().Which.Should().Be(4u);
     }
 
     [Fact]

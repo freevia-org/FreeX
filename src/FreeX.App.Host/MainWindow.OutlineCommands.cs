@@ -44,22 +44,21 @@ public partial class MainWindow
         {
             var range = SheetGrid.SelectedRange;
             var axis = range is { } r ? OutlineGroupingService.GetGroupingAxis(r) : OutlineGroupingAxis.Rows;
-            if (axis == OutlineGroupingAxis.Columns)
-                return new CollapseColGroupCommand(_currentSheetId, 1);
+            if (range is { } columnRange && axis == OutlineGroupingAxis.Columns)
+                return new CollapseColGroupCommand(
+                    _currentSheetId,
+                    1,
+                    columnRange.Start.Col,
+                    columnRange.End.Col);
 
             return range is { } rowRange
                 ? new CollapseRowGroupCommand(_currentSheetId, 1, rowRange.Start.Row, rowRange.End.Row)
                 : new CollapseRowGroupCommand(_currentSheetId, 1);
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Collapse Group");
+        if (!TryExecuteRepeatableCommand(CreateCommand, "Collapse Group", out _))
             return;
-        }
 
-        _repeatPostAction = null;
         UpdateViewport();
     }
 
@@ -69,22 +68,21 @@ public partial class MainWindow
         {
             var range = SheetGrid.SelectedRange;
             var axis = range is { } r ? OutlineGroupingService.GetGroupingAxis(r) : OutlineGroupingAxis.Rows;
-            if (axis == OutlineGroupingAxis.Columns)
-                return new ExpandColGroupCommand(_currentSheetId, 1);
+            if (range is { } columnRange && axis == OutlineGroupingAxis.Columns)
+                return new ExpandColGroupCommand(
+                    _currentSheetId,
+                    1,
+                    columnRange.Start.Col,
+                    columnRange.End.Col);
 
             return range is { } rowRange
                 ? new ExpandRowGroupCommand(_currentSheetId, 1, rowRange.Start.Row, rowRange.End.Row)
                 : new ExpandRowGroupCommand(_currentSheetId, 1);
         }
 
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, "Expand Group");
+        if (!TryExecuteRepeatableCommand(CreateCommand, "Expand Group", out _))
             return;
-        }
 
-        _repeatPostAction = null;
         UpdateViewport();
     }
 
@@ -96,14 +94,9 @@ public partial class MainWindow
                 : new SetRowOutlineGroupCollapsedCommand(_currentSheetId, request.Start, request.End, request.Level, request.Collapse);
 
         var label = request.Collapse ? "Collapse Group" : "Expand Group";
-        var outcome = _commandBus.ExecuteRepeatable(_workbook.Id, CreateCommand);
-        if (!outcome.Success)
-        {
-            ShowCommandError(outcome, label);
+        if (!TryExecuteRepeatableCommand(CreateCommand, label, out _))
             return;
-        }
 
-        _repeatPostAction = null;
         UpdateViewport();
     }
 

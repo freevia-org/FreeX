@@ -155,6 +155,12 @@ public sealed partial class NativeJsonAdapter : IFileAdapter
             foreach (var column in sDto.GroupHiddenCols ?? [])
                 if (NativeJsonValueSanitizer.IsValidColumnIndex(column))
                     sheet.GroupHiddenCols.Add(column);
+            foreach (var row in sDto.CollapsedAnchorRows ?? [])
+                if (NativeJsonValueSanitizer.IsValidRowIndex(row))
+                    sheet.CollapsedAnchorRows.Add(row);
+            foreach (var column in sDto.CollapsedAnchorCols ?? [])
+                if (NativeJsonValueSanitizer.IsValidColumnIndex(column))
+                    sheet.CollapsedAnchorCols.Add(column);
             sheet.ViewMode = Enum.IsDefined(sDto.ViewMode) ? sDto.ViewMode : WorksheetViewMode.Normal;
             sheet.ShowGridlines = sDto.ShowGridlines ?? true;
             sheet.ShowHeadings = sDto.ShowHeadings ?? true;
