@@ -1001,6 +1001,32 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void CenteredFixedWidthPaginatedTable_RendersWithWordLikeBlockMargin()
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
+        var table = doc.Blocks.OfType<Table>().Single();
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = RenderedTables(view.Document).First();
+        var contentWidth = DocumentViewLayoutPlanner.BuildPageMetrics(doc.Page).ContentWidthDip;
+        var expected = (contentWidth - table.PreferredWidthPt!.Value * (96.0 / 72.0)) / 2;
+
+        Assert.InRange(rendered.Margin.Left, expected - 0.01, expected + 0.01);
+        Assert.Equal(0, rendered.Margin.Right);
+    }
+
+    [StaFact]
+    public void CenteredFixedWidthFlowTable_LeavesTheWpfBlockMarginUntouched()
+    {
+        var doc = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        double.IsNaN(RenderedTables(view.Document).First().Margin.Left).Should().BeTrue();
+    }
+
+    [StaFact]
     public void TablePagination_WithoutRepeatHeader_RendersPlannedPageBreakSegments()
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildTablePaginationRepeatHeaderDocument();
