@@ -293,6 +293,7 @@ public sealed partial class MainWindow
             },
         };
         AutomationProperties.SetAutomationId(tabs, "PivotTableOptionsTabs");
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
 
         var buttonRow = AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel]);
 

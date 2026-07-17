@@ -9,6 +9,7 @@ using Avalonia.Media;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using Free.Shared.Shell.Avalonia;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 
@@ -293,7 +294,7 @@ public sealed partial class MainWindow
             },
         };
         AutomationProperties.SetAutomationId(tabs, "PivotItemFilterTabs");
-        ApplyClassicTabChrome(tabs);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
 
         // WPF layout: "Clear Filters from This Field" at bottom-left; [OK][Cancel] at bottom-right.
         var clearFiltersBtn = new Button

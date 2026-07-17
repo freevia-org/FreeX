@@ -10960,7 +10960,7 @@ public sealed partial class MainWindow : Window
             SelectedIndex = 0,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
-        ApplyClassicTabChrome(tabs);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
 
         // ── Shared options ──────────────────────────────────────────────────────
         var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
@@ -14398,7 +14398,7 @@ public sealed partial class MainWindow : Window
             },
         };
         AutomationProperties.SetAutomationId(tabStrip, "FormatCellsTabStrip");
-        ApplyClassicTabChrome(tabStrip);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabStrip);
 
         void ApplyFormatCellsDialogFrameForSelectedTab()
         {
@@ -14460,80 +14460,6 @@ public sealed partial class MainWindow : Window
 
         await dialog.ShowDialog(this);
         return result;
-    }
-
-    // Avalonia's default TabControl theme renders a borderless content pane and
-    // borderless inactive tabs, which diverges from the WPF/Windows "classic" Format
-    // Cells dialog (bordered tab pane + outlined inactive tabs). These template-targeting
-    // styles restore that look so the Linux dialog matches the Windows screenshot.
-    private static void ApplyClassicTabChrome(TabControl tabStrip)
-    {
-        var paneBorder = FormulaBarControlBorder; // light gray (192,192,192)
-        var inactiveTabBorder = Brush(160, 160, 160);
-        var inactiveTabBackground = Brush(243, 243, 243);
-
-        // Bordered content pane around the selected tab's content.
-        var contentPaneStyle = new Style(s => s
-            .OfType<TabControl>()
-            .Template()
-            .OfType<ContentPresenter>()
-            .Name("PART_SelectedContentHost"));
-        contentPaneStyle.Setters.Add(new Setter(Border.BorderBrushProperty, paneBorder));
-        contentPaneStyle.Setters.Add(new Setter(Border.BorderThicknessProperty, new Thickness(1)));
-        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.PaddingProperty, new Thickness(12)));
-        contentPaneStyle.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, Brushes.White));
-        tabStrip.Styles.Add(contentPaneStyle);
-
-        // Outlined inactive tabs (classic look). Default + non-selected. The bottom
-        // border is omitted so the tab strip sits flush against the pane below.
-        var tabStyle = new Style(s => s.OfType<TabItem>());
-        tabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, inactiveTabBorder));
-        tabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
-        tabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, inactiveTabBackground));
-        // Classic dialog tabs use black text on both selected and unselected tabs (Windows), not the
-        // Fluent accent foreground the theme applies to the selected tab.
-        tabStyle.Setters.Add(new Setter(TemplatedControl.ForegroundProperty, Brush(0, 0, 0)));
-        tabStyle.Setters.Add(new Setter(TabItem.PaddingProperty, new Thickness(10, 4)));
-        // No vertical margin keeps the tab row touching the pane (removes the gap);
-        // the small right margin separates adjacent tabs.
-        tabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, 2, 0)));
-        tabStrip.Styles.Add(tabStyle);
-
-        // Selected tab: white body that overlaps the pane's top border by 1px so the
-        // border visually BREAKS under the active tab name and the tab merges into the
-        // pane (matching the Windows classic tab look). The bottom margin of -1 pulls
-        // the white tab down over the gray pane line directly beneath it.
-        var selectedTabStyle = new Style(s => s.OfType<TabItem>().Class(":selected"));
-        selectedTabStyle.Setters.Add(new Setter(TabItem.BackgroundProperty, Brushes.White));
-        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderBrushProperty, paneBorder));
-        selectedTabStyle.Setters.Add(new Setter(TabItem.BorderThicknessProperty, new Thickness(1, 1, 1, 0)));
-        selectedTabStyle.Setters.Add(new Setter(TabItem.MarginProperty, new Thickness(0, 0, 2, -1)));
-        selectedTabStyle.Setters.Add(new Setter(TabItem.ZIndexProperty, 1));
-        tabStrip.Styles.Add(selectedTabStyle);
-
-        // Replace the Fluent TabItem template (which draws an accent "pipe"/underline on the selected
-        // tab) with a plain bordered content host. This gives the classic Win32 dialog-tab look — a
-        // raised bordered tab that merges into the pane, with NO coloured underline — and the
-        // border/background come from the styles above (selected = white, unselected = light gray).
-        var classicTabTemplate = new FuncControlTemplate<TabItem>((tab, _) =>
-        {
-            var presenter = new ContentPresenter
-            {
-                Name = "PART_ContentPresenter",
-                HorizontalContentAlignment = AvaloniaHorizontalAlignment.Center,
-                VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
-            };
-            presenter.Bind(ContentPresenter.ContentProperty, new Binding(nameof(HeaderedContentControl.Header)) { Source = tab });
-            presenter.Bind(ContentPresenter.ContentTemplateProperty, new Binding(nameof(HeaderedContentControl.HeaderTemplate)) { Source = tab });
-            presenter.Bind(ContentPresenter.PaddingProperty, new Binding(nameof(TemplatedControl.Padding)) { Source = tab });
-            var root = new Border { Name = "PART_LayoutRoot" };
-            root.Bind(Border.BackgroundProperty, new Binding(nameof(TemplatedControl.Background)) { Source = tab });
-            root.Bind(Border.BorderBrushProperty, new Binding(nameof(TemplatedControl.BorderBrush)) { Source = tab });
-            root.Bind(Border.BorderThicknessProperty, new Binding(nameof(TemplatedControl.BorderThickness)) { Source = tab });
-            root.Child = presenter;
-            return root;
-        });
-        tabStyle.Setters.Add(new Setter(TemplatedControl.TemplateProperty, classicTabTemplate));
     }
 
     private static TabItem CreateFormatCellsTab(string header, string automationId, Control content)
@@ -19643,7 +19569,7 @@ public sealed partial class MainWindow : Window
             },
         };
         AutomationProperties.SetAutomationId(tabStrip, "DataValidationTabStrip");
-        ApplyClassicTabChrome(tabStrip);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabStrip);
 
         var buttonRow = new StackPanel
         {
@@ -24928,6 +24854,7 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(tabControl, UiText.Get("LegalNotices_LegalNoticeSections"));
         AutomationProperties.SetAutomationId(tabControl, "LegalNoticesSectionTabs");
         AutomationProperties.SetHelpText(tabControl, UiText.Get("LegalNotices_ChooseALegalNoticeSectionToReadAndCopy"));
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabControl);
 
         var intro = new TextBlock
         {

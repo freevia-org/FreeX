@@ -71,6 +71,7 @@ internal sealed class OptionsDialog : Window
         AvaloniaCompactDialogChrome.ApplyValidationStatus(_status, DialogChromeStyle, new Thickness(16, 8, 16, 0));
 
         var tabs = new TabControl { Margin = new Thickness(14, 14, 14, 0) };
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
         tabs.Items.Add(new TabItem { Header = _surface.Tabs[0].Header, Content = BuildGeneralTab() });
         tabs.Items.Add(new TabItem { Header = _surface.AutoCorrect.Header, Content = BuildAutoCorrectTab() });
         tabs.Items.Add(new TabItem { Header = _surface.AutoFormat.Header, Content = BuildAutoFormatTab() });

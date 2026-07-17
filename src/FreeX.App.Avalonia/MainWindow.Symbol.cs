@@ -246,7 +246,7 @@ public sealed partial class MainWindow
                 new TabItem { Header = "Special Characters", Content = specialPanel },
             },
         };
-        ApplyClassicTabChrome(tabs);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
 
         var details = CreateSymbolDetailsPanel(preview, selectedName, selectedSubset, selectedCode, symbol => ApplySelection(symbol));
         // Right details column: 210px to comfortably fit "Inverted Exclamation Mark" in SemiBold on Linux/Skia.
