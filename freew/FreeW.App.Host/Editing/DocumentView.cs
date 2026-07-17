@@ -5481,7 +5481,7 @@ public sealed class DocumentView : RichTextBox
         var glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
         var totalWidth = glyphs.Sum(glyph => glyph.DesiredSize.Width);
         var targetWidth = canvas.ActualWidth * 0.8;
-        if (fitTextToBounds && totalWidth > targetWidth && totalWidth > 0)
+        if (fitTextToBounds && wordArt.Warp != WordArtWarp.Wave1 && totalWidth > targetWidth && totalWidth > 0)
         {
             fontSize = Math.Max(8, fontSize * targetWidth / totalWidth);
             glyphs = CreateWordArtGlyphs(wordArt.Text, fontSize, wordArt.Bold, foreground);
@@ -5491,9 +5491,12 @@ public sealed class DocumentView : RichTextBox
         if (glyphs.Count == 0 || totalWidth <= 0)
             return;
 
+        var horizontalScale = fitTextToBounds && wordArt.Warp == WordArtWarp.Wave1
+            ? canvas.ActualWidth / totalWidth
+            : 1;
         var sharedPlacements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
             wordArt.Warp,
-            glyphs.Select(glyph => glyph.DesiredSize.Width).ToList(),
+            glyphs.Select(glyph => glyph.DesiredSize.Width * horizontalScale).ToList(),
             canvas.ActualWidth,
             canvas.ActualHeight).Glyphs;
 
@@ -5508,15 +5511,15 @@ public sealed class DocumentView : RichTextBox
                 sharedPlacement.CenterXNormalized * canvas.ActualWidth,
                 sharedPlacement.CenterYNormalized * canvas.ActualHeight,
                 sharedPlacement.RotationRadians * 180 / Math.PI,
-                glyph.DesiredSize.Width,
+                glyph.DesiredSize.Width * horizontalScale,
                 glyph.DesiredSize.Height);
             var character = wordArt.Text[index].ToString();
             if (outlineBrush is not null)
             {
                 foreach (var offset in new[] { (-0.8, 0.0), (0.8, 0.0), (0.0, -0.8), (0.0, 0.8) })
-                    AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, outlineBrush, placement, offset);
+                    AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, outlineBrush, placement, horizontalScale, offset);
             }
-            AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, foreground, placement, (0, 0));
+            AddWarpedWordArtGlyph(canvas, character, fontSize, wordArt.Bold, foreground, placement, horizontalScale, (0, 0));
         }
     }
 
@@ -5551,6 +5554,7 @@ public sealed class DocumentView : RichTextBox
         bool bold,
         System.Windows.Media.Brush foreground,
         (double CenterX, double CenterY, double RotationDegrees, double Width, double Height) placement,
+        double horizontalScale,
         (double X, double Y) offset)
     {
         var glyph = new TextBlock
@@ -5562,7 +5566,16 @@ public sealed class DocumentView : RichTextBox
             Foreground = foreground,
             TextWrapping = TextWrapping.NoWrap,
             RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = new RotateTransform(placement.RotationDegrees)
+            RenderTransform = horizontalScale == 1
+                ? new RotateTransform(placement.RotationDegrees)
+                : new TransformGroup
+                {
+                    Children =
+                    {
+                        new ScaleTransform(horizontalScale, 1),
+                        new RotateTransform(placement.RotationDegrees)
+                    }
+                }
         };
         Canvas.SetLeft(glyph, placement.CenterX - placement.Width / 2 + offset.X);
         Canvas.SetTop(glyph, placement.CenterY - placement.Height / 2 + offset.Y);

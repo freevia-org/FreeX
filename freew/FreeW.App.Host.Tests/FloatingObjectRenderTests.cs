@@ -305,7 +305,7 @@ public sealed class FloatingObjectRenderTests
     [StaFact]
     public void FloatingOverlay_RendersWarpedWordArtWithContrastingTextAndFill()
     {
-        var wordArt = new WordArt("Warped FX", WordArtStyle.GlowBlue, 28)
+        var wordArt = new WordArt("FreeW CONFIDENTIAL", WordArtStyle.GlowBlue, 28)
         {
             Warp = WordArtWarp.Wave1,
             Placement = new FloatingPlacement
@@ -338,7 +338,11 @@ public sealed class FloatingObjectRenderTests
         glyphs.Should().HaveCount(wordArt.Text.Length);
         glyphs.All(glyph => glyph.Foreground is SolidColorBrush brush && brush.Color == Colors.White)
             .Should().BeTrue();
-        glyphs.Any(glyph => glyph.RenderTransform is RotateTransform rotation && Math.Abs(rotation.Angle) > 0.1)
+        glyphs.All(glyph => glyph.RenderTransform is TransformGroup).Should().BeTrue();
+        var transforms = glyphs.Select(glyph => (TransformGroup)glyph.RenderTransform).ToList();
+        transforms.All(transform => transform.Children.OfType<ScaleTransform>().Single().ScaleX > 1).Should().BeTrue();
+        transforms.Any(transform => transform.Children.OfType<RotateTransform>()
+                .Any(rotation => Math.Abs(rotation.Angle) > 0.1))
             .Should().BeTrue();
     }
 
