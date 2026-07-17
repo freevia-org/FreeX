@@ -439,6 +439,12 @@ public sealed class ChartBaselineCorpusTests
                 new SrgbColor(0x8B, 0xAB, 0x74),
                 new SrgbColor(0xE7, 0xAD, 0x00),
                 new SrgbColor(0x81, 0xA1, 0x6E));
+        surfaceGeometry.RenderFacets[11].Points.Select(point => point.X)
+            .Should().Equal(new[] { 144.0, 172.0, 234.0 },
+                "the imported blue boundary face follows the widened COM registration");
+        surfaceGeometry.RenderFacets[11].Points.Select(point => point.Y)
+            .Should().Equal(new[] { 167.0, 121.0, 153.0 },
+                "the imported blue boundary face retains the measured top-edge registration");
         surfaceGeometry.RenderFacets[8].Points.Select(point => point.X)
             .Should().Equal(new[] { 5.0, 72.0, 132.0 },
                 "PowerPoint exposes a separate near-left dark-orange boundary triangle");
@@ -658,6 +664,17 @@ public sealed class ChartBaselineCorpusTests
         scene.LineSeries.SelectMany(series => series.Markers)
             .Select(marker => marker.Radius)
             .Should().OnlyContain(radius => radius == ChartRenderPlanner.ImportedLineMarkerRadius);
+        scene.LegendItems.Should().HaveCount(2);
+        scene.LegendItems.Select(item => item.IsLine)
+            .Should().OnlyContain(isLine => isLine);
+        scene.LegendItems.Select(item => item.MarkerSymbol)
+            .Should().Equal(
+                ChartMarkerPrimitiveSymbol.Diamond,
+                ChartMarkerPrimitiveSymbol.Square);
+        scene.LegendItems.Select(item => item.SwatchBounds.Width)
+            .Should().OnlyContain(width => width == ChartRenderPlanner.ImportedLineMarkerLegendSwatchWidth);
+        scene.LegendItems[0].Label.Bounds.X
+            .Should().Be(scene.LegendItems[0].SwatchBounds.X + ChartRenderPlanner.ImportedLineMarkerLegendLabelInset);
     }
 
     [Fact]

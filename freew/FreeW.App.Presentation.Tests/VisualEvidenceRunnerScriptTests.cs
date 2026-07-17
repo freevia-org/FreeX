@@ -12,6 +12,7 @@ public sealed class VisualEvidenceRunnerScriptTests
             "Run-FreeWWordBaselineEvidence.ps1"));
 
         source.Should().Contain("FreeW.FidelityRender");
+        source.Should().Contain("[int]$MaxPagesPerDocument = 4");
         source.Should().Contain("\"--composite\", \"--software-fallback\"");
         source.Should().Contain("-AllowMissingWord");
         source.Should().Contain("[switch]$UseVisibleWordPublish");
@@ -137,7 +138,7 @@ public sealed class VisualEvidenceRunnerScriptTests
         source.Should().Contain("Unknown ScenarioSet '$ScenarioSet'");
         source.Should().Contain("$effectiveScenarioIds = @($effectiveScenarioIds | Select-Object -Unique)");
         source.Should().Contain("Render-WordBaseline.ps1");
-        source.Should().Contain("Resolve-RepositoryPath $WordBaselineDir");
+        source.Should().Contain("Resolve-ToolRepoPath -Path $WordBaselineDir -RepoRoot $repoRoot");
         source.Should().Contain("Join-Path $wordBaselineRenderRoot 'word'");
         source.Should().Contain("Test-Path -LiteralPath $wordBaselineRoot -PathType Container");
         source.Should().Contain("-WordBaselineUnavailableReason cannot be combined with -WordBaselineDir or -IncludeWordBaseline.");

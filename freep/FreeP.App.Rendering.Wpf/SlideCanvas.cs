@@ -740,7 +740,24 @@ public sealed class SlideCanvas : FrameworkElement
             new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
 
         if (scene.Title is { } title)
+        {
+            if (chart.ChartType == ChartType.Stock && !chart.HasHighLowLines)
+            {
+                // The imported line-series fallback uses the classic Office title
+                // raster, whose visible glyph block is slightly narrower and lower
+                // than WPF's default FormattedText placement.
+                title = title with
+                {
+                    Bounds = title.Bounds with
+                    {
+                        X = title.Bounds.X + 5.0,
+                        Y = title.Bounds.Y + 2.0
+                    }
+                };
+            }
+
             DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment), fontFamily: title.FontFamily);
+        }
 
         if (!scene.Frame.HasPlot)
             return;
@@ -852,7 +869,19 @@ public sealed class SlideCanvas : FrameworkElement
 
         foreach (var label in scene.ValueAxisLabels)
         {
-            DrawChartLabel(dc, label.Text, ToRect(label.Bounds),
+            var labelBounds = ToRect(label.Bounds);
+            if (chart.ChartType == ChartType.Stock && !chart.HasHighLowLines)
+            {
+                // The imported stock fallback's value labels sit in a wider
+                // left gutter in PowerPoint than WPF's generic text placement.
+                labelBounds = new Rect(
+                    labelBounds.X + 10.0,
+                    labelBounds.Y + 6.0,
+                    labelBounds.Width,
+                    labelBounds.Height);
+            }
+
+            DrawChartLabel(dc, label.Text, labelBounds,
                 label.IsBold,
                 label.FontSize,
                 ToTextAlignment(label.Alignment));
@@ -872,7 +901,40 @@ public sealed class SlideCanvas : FrameworkElement
         foreach (var item in scene.LegendItems)
         {
             var swatch = ToRect(item.SwatchBounds);
-            if (item.MarkerSymbol is { } markerSymbol)
+            if (item.IsLine)
+            {
+                double centerY = swatch.Top + swatch.Height / 2.0;
+                dc.DrawLine(
+                    ToPen(new ChartStrokePlan(
+                        item.Fill.Color,
+                        item.Fill.Alpha,
+                        ChartRenderPlanner.ImportedLineSeriesStrokeThickness)),
+                    new Point(swatch.Left, centerY),
+                    new Point(swatch.Right, centerY));
+                if (item.MarkerSymbol is { } markerSymbol)
+                {
+                    DrawChartMarker(
+                        dc,
+                        new ChartCirclePrimitive(
+                            -1,
+                            -1,
+                            new ChartPlanPoint(
+                                item.SwatchBounds.X + item.SwatchBounds.Width / 2.0,
+                                item.SwatchBounds.Y + item.SwatchBounds.Height / 2.0),
+                            Math.Min(item.SwatchBounds.Width, item.SwatchBounds.Height) / 2.0,
+                            markerSymbol,
+                            item.Fill,
+                            Stroke: null));
+                }
+                else if (!item.IsLineOnly)
+                {
+                    dc.DrawRectangle(
+                        ToBrush(item.Fill),
+                        null,
+                        new Rect(swatch.Left + swatch.Width / 2.0 - 4.0, centerY - 4.0, 8.0, 8.0));
+                }
+            }
+            else if (item.MarkerSymbol is { } markerSymbol)
             {
                 DrawChartMarker(
                     dc,
@@ -886,24 +948,6 @@ public sealed class SlideCanvas : FrameworkElement
                         markerSymbol,
                         item.Fill,
                         Stroke: null));
-            }
-            else if (item.IsLine)
-            {
-                double centerY = swatch.Top + swatch.Height / 2.0;
-                dc.DrawLine(
-                    ToPen(new ChartStrokePlan(
-                        item.Fill.Color,
-                        item.Fill.Alpha,
-                        ChartRenderPlanner.ImportedLineSeriesStrokeThickness)),
-                    new Point(swatch.Left, centerY),
-                    new Point(swatch.Right, centerY));
-                if (!item.IsLineOnly)
-                {
-                    dc.DrawRectangle(
-                        ToBrush(item.Fill),
-                        null,
-                        new Rect(swatch.Left + swatch.Width / 2.0 - 4.0, centerY - 4.0, 8.0, 8.0));
-                }
             }
             else
             {

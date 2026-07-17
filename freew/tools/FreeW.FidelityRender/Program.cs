@@ -83,7 +83,7 @@ if (args.Length < 2)
 
 string input = args[0];
 string outDir = args[1];
-int maxPages = args.Length > 2 && int.TryParse(args[2], out var mp) ? Math.Max(1, mp) : 3;
+int maxPages = args.Length > 2 && int.TryParse(args[2], out var mp) ? Math.Max(1, mp) : 4;
 
 int exit = 0;
 var sta = new Thread(() => exit = composite
@@ -368,7 +368,10 @@ static void RenderDocumentComposite(
     var paginator = ((IDocumentPaginatorSource)flow).DocumentPaginator;
     paginator.PageSize = new Size(pageWDip, pageHDip);
     paginator.ComputePageCount();
-    int pageCount = Math.Min(Math.Max(1, paginator.PageCount), maxPages);
+    // An export limit controls emitted PNGs, never the document's logical page count. In
+    // particular, PAGE/NUMPAGES fields must keep reporting the full paginator result.
+    int actualPageCount = Math.Max(1, paginator.PageCount);
+    int pageCount = Math.Min(actualPageCount, maxPages);
 
     // ═══ LAYER 4: Floating objects ════════════════════════════════════════════════════════════════
     // Build the floating-objects canvas exactly as the live editor does, then rasterize its
@@ -457,7 +460,7 @@ static void RenderDocumentComposite(
     // separate, empty document page merely because the document contains endnotes.
     var endnoteIds = doc.Endnotes.Keys.OrderBy(id => id).ToList();
     var hasEndnotes = endnoteIds.Count > 0;
-    var evidencePageCount = pageCount;
+    var evidencePageCount = actualPageCount;
     var sectionPageCounters = new Dictionary<int, int>();
 
     for (int i = 0; i < pageCount; i++)
@@ -569,6 +572,12 @@ static void RenderDocumentComposite(
             const double hfH = 36;
 
             var ownerHf = box.OwnerSectionHf ?? doc.FinalSectionHeadersFooters;
+            var headerTop = thisPageSettings.HeaderDistancePt > 0
+                ? PageLayout.PointsToDip(thisPageSettings.HeaderDistancePt)
+                : Math.Max(0, thisMarginTop - hfH - 12);
+            var footerTop = thisPageSettings.FooterDistancePt > 0
+                ? thisPixH - PageLayout.PointsToDip(thisPageSettings.FooterDistancePt) - hfH
+                : thisPixH - thisMarginBottom + 16;
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
             {
@@ -576,7 +585,7 @@ static void RenderDocumentComposite(
                 var hfSlot = ResolveHfSlotByName(ownerHf, hSlotName);
                 if (hfSlot is not null && !hfSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, pageCount);
+                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, actualPageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -587,7 +596,7 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, thisMarginTop + 2,
+                                null, new Rect(thisMarginLeft, headerTop,
                                     thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
@@ -599,7 +608,7 @@ static void RenderDocumentComposite(
                 var fSlot = ResolveHfSlotByName(ownerHf, fSlotName);
                 if (fSlot is not null && !fSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, pageCount);
+                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, actualPageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -610,7 +619,7 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, thisPixH - thisMarginBottom + 2,
+                                null, new Rect(thisMarginLeft, footerTop,
                                     thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
                         bmp.Render(hfVis);
                     }
@@ -706,7 +715,7 @@ static void RenderDocumentComposite(
             document: doc);
         FreeWVisualEvidencePlanner.EnsureTrusted(row);
         evidence.Add(row);
-        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({thisPixW}x{thisPixH}, {pageCount} pages, composite)");
+        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({thisPixW}x{thisPixH}, {pageCount}/{actualPageCount} pages emitted, composite)");
     }
 
     // Endnotes are composed within the final body page above.
