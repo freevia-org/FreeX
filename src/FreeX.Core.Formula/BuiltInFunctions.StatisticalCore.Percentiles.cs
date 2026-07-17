@@ -110,6 +110,41 @@ public static partial class BuiltInFunctions
         return PercentileExcScalar(rv, new NumberValue(quart / 4.0));
     }
 
+    private static ScalarValue Trimmean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
+    {
+        if (args[0] is ErrorValue e0) return e0;
+        var rv = args[0] is RangeValue range
+            ? range
+            : new RangeValue(new ScalarValue[1, 1] { { args[0] } });
+        if (args[1] is ErrorValue e) return e;
+        if (args[1] is RangeValue percentRange) return MapUnaryTextRange(percentRange, percentValue => TrimmeanScalar(rv, percentValue));
+        return TrimmeanScalar(rv, args[1]);
+    }
+
+    private static ScalarValue TrimmeanScalar(RangeValue rv, ScalarValue percentValue)
+    {
+        // ToNumber throws #VALUE! for a non-numeric percent (e.g. unparseable text); that
+        // exception is caught by the evaluator's function-call dispatch and surfaces as
+        // ErrorValue.Value, matching Excel's #VALUE! for a non-numeric percent argument.
+        double percent = ToNumber(percentValue);
+        if (percent < 0 || percent >= 1) return ErrorValue.Num;
+
+        var (nums, err) = CollectRangeNumbers(rv);
+        if (err is not null) return err;
+        var sorted = nums!;
+        if (sorted.Count == 0) return ErrorValue.Num;
+        sorted.Sort();
+
+        int trim = (int)Math.Floor(sorted.Count * percent / 2.0);
+        int remaining = sorted.Count - (2 * trim);
+        if (remaining <= 0) return ErrorValue.Num;
+
+        double sum = 0;
+        for (int i = trim; i < sorted.Count - trim; i++)
+            sum += sorted[i];
+        return NumberResult(sum / remaining);
+    }
+
     private static ScalarValue Geomean(IReadOnlyList<ScalarValue> args, IEvalContext ctx)
     {
         var (nums, err) = CollectNumbers(args);

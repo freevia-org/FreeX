@@ -1,0 +1,88 @@
+using FluentAssertions;
+
+using FreeX.App.Avalonia;
+using FreeX.Core.Model;
+
+namespace FreeX.App.Avalonia.Tests;
+
+/// <summary>
+/// Regression tests for R48-io-workbook-sheet-protection-3-1: the Avalonia Protect Workbook
+/// dialog's "Windows" checkbox must actually round-trip to
+/// <c>&lt;workbookProtection lockWindows="1"/&gt;</c> on save instead of being silently dropped.
+/// <see cref="MainWindow.ApplyWorkbookLockWindows"/> is the (internal, test-visible) helper that
+/// threads the dialog's Windows choice onto <see cref="Workbook.ProtectionMetadata"/> after the
+/// Core protect-workbook command runs (Core itself has no lockWindows model).
+/// </summary>
+public sealed class MainWindowProtectionLockWindowsTests
+{
+    [Fact]
+    public void ApplyWorkbookLockWindows_WindowsChecked_OnBrandNewWorkbook_WritesLockWindowsAttribute()
+    {
+        // Failure scenario: a never-before-protected workbook, Protect Workbook with both
+        // Structure and Windows checked. Pre-fix, ProtectWorkbookOptions.ProtectWindows was
+        // collected from the checkbox but never reached any saved-file representation, so
+        // workbook.ProtectionMetadata stayed null / carried no lockWindows attribute at all.
+        var workbook = new Workbook("Book");
+        workbook.ProtectionMetadata.Should().BeNull("a brand-new workbook has no preserved protection metadata yet");
+
+        MainWindow.ApplyWorkbookLockWindows(workbook, lockWindows: true);
+
+        workbook.ProtectionMetadata.Should().NotBeNull();
+        var raw = workbook.ProtectionMetadata!.Get("workbookProtection");
+        raw.Should().NotBeNullOrWhiteSpace();
+        raw.Should().Contain("lockWindows=\"1\"",
+            "checking Windows in the dialog must produce the same on-disk attribute real Excel writes");
+    }
+
+    [Fact]
+    public void ApplyWorkbookLockWindows_WindowsUnchecked_NoRegression_NoLockWindowsAttributeWritten()
+    {
+        // Sibling no-regression case: the previously-correct path (Windows left unchecked) must
+        // continue to leave no lockWindows attribute behind.
+        var workbook = new Workbook("Book");
+
+        MainWindow.ApplyWorkbookLockWindows(workbook, lockWindows: false);
+
+        var raw = workbook.ProtectionMetadata?.Get("workbookProtection");
+        (raw is null || !raw.Contains("lockWindows")).Should().BeTrue(
+            "leaving Windows unchecked must not fabricate a lockWindows attribute");
+    }
+
+    [Fact]
+    public void ApplyWorkbookLockWindows_PreservesUnrelatedAttributesAlreadyInTheBag()
+    {
+        // A prior load may have preserved unrelated workbookProtection attributes FreeX doesn't
+        // model at all (e.g. lockRevision) -- setting lockWindows must not clobber them.
+        var workbook = new Workbook("Book");
+        var bag = new NativeXmlPreserveBag();
+        bag.Set("workbookProtection", "<e lockRevision=\"1\"/>");
+        workbook.ProtectionMetadata = bag;
+
+        MainWindow.ApplyWorkbookLockWindows(workbook, lockWindows: true);
+
+        var raw = workbook.ProtectionMetadata!.Get("workbookProtection");
+        raw.Should().Contain("lockRevision=\"1\"");
+        raw.Should().Contain("lockWindows=\"1\"");
+    }
+
+    [Fact]
+    public void ApplyWorkbookLockWindows_DoesNotMutateThePreExistingBagInstance()
+    {
+        // Guards the undo-safety note in ApplyWorkbookLockWindows: ProtectWorkbookCommand's own
+        // undo snapshots the pre-command ProtectionMetadata *reference*. If this helper mutated
+        // that same instance in place instead of cloning, Undo (Revert restoring the "previous"
+        // snapshot) would incorrectly restore a bag that already carries the new lockWindows
+        // attribute.
+        var workbook = new Workbook("Book");
+        var originalBag = new NativeXmlPreserveBag();
+        originalBag.Set("workbookProtection", "<e/>");
+        workbook.ProtectionMetadata = originalBag;
+
+        MainWindow.ApplyWorkbookLockWindows(workbook, lockWindows: true);
+
+        // The helper must have replaced ProtectionMetadata with a distinct object...
+        workbook.ProtectionMetadata.Should().NotBeSameAs(originalBag);
+        // ...leaving the original (what an undo snapshot would have captured) untouched.
+        originalBag.Get("workbookProtection").Should().NotContain("lockWindows");
+    }
+}

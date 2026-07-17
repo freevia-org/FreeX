@@ -209,33 +209,31 @@ public static class FillSeriesPlanner
         FillSeriesDirection seriesIn,
         double? stopValue = null)
     {
-        if (sheet.GetValue(range.Start.Row, range.Start.Col) is not NumberValue startValue)
-            return [];
-
         var edits = new List<(CellAddress, Cell)>();
-        var value = startValue.Value;
+        var value = 0d;
+        var hasValue = false;
         foreach (var address in EnumerateSeriesAddresses(sheet.Id, range, seriesIn))
         {
-            if (address.Row == range.Start.Row && address.Col == range.Start.Col)
-            {
-                value += step;
-                continue;
-            }
-
-            // Excel treats every row/column in the selection as its own series line: if that
-            // line's own leading cell (the top cell of its column for "Series in Columns", or the
-            // leading cell of its row for "Series in Rows") already holds a number, that value is
-            // the seed for this line and is preserved as-is rather than being overwritten and
-            // chained into from the previous line's running value. Just like the range's own start
-            // cell (handled above), the running value for the REST of that line must advance one
-            // step past this seed, not sit on the seed itself -- otherwise the next cell in the line
-            // would be written with the seed's own value instead of seed + step.
+            // Excel treats every row/column in the selection as its own series line: each
+            // line's own leading cell (the top cell of its column for "Series in Columns", or
+            // the leading cell of its row for "Series in Rows") reseeds that line when it holds
+            // a number. This check must run for EVERY line's leading cell, not just once up
+            // front against the selection's very first cell -- otherwise an invalid seed in the
+            // very first column/row would wipe out every other column/row's perfectly valid
+            // fill too. A line whose leading cell is not numeric simply does not reseed: if a
+            // running value has already been established by an earlier line in the selection it
+            // keeps chaining forward (matching a fill-handle drag across the whole rectangle),
+            // and if no value has been established yet the line is left untouched until one is.
             if (IsSeriesLineStart(address, range, seriesIn) &&
                 sheet.GetValue(address.Row, address.Col) is NumberValue lineSeed)
             {
                 value = lineSeed.Value + step;
+                hasValue = true;
                 continue;
             }
+
+            if (!hasValue)
+                continue;
 
             if (IsPastStopValue(value, step, stopValue))
                 break;
@@ -254,32 +252,33 @@ public static class FillSeriesPlanner
         FillSeriesDirection seriesIn,
         double? stopValue = null)
     {
-        if (sheet.GetValue(range.Start.Row, range.Start.Col) is not NumberValue startValue)
-            return [];
-
         var edits = new List<(CellAddress, Cell)>();
-        var value = startValue.Value;
-        var ascending = IsGrowthAscending(value, step);
+        var value = 0d;
+        var ascending = false;
+        var hasValue = false;
         foreach (var address in EnumerateSeriesAddresses(sheet.Id, range, seriesIn))
         {
-            if (address.Row == range.Start.Row && address.Col == range.Start.Col)
-            {
-                value *= step;
-                continue;
-            }
-
             // Same per-line-seed handling as BuildLinearSeriesEdits: every row/column in the
             // selection is its own independent series line, so a line whose own leading cell
-            // already holds a number reseeds THAT line -- both the running value and the
+            // holds a number reseeds THAT line -- both the running value and the
             // ascending/descending direction used for the Stop Value clamp below, since two
-            // different lines' own seeds can trend in opposite directions for the same step.
+            // different lines' own seeds can trend in opposite directions for the same step. This
+            // check runs for every line, not just the selection's first, so one column's invalid
+            // seed can never wipe out another column's valid one. A line whose leading cell is
+            // not numeric does not reseed: an already-established running value keeps chaining
+            // forward into it, and if no value has been established yet the line is left
+            // untouched until one is.
             if (IsSeriesLineStart(address, range, seriesIn) &&
                 sheet.GetValue(address.Row, address.Col) is NumberValue lineSeed)
             {
                 ascending = IsGrowthAscending(lineSeed.Value, step);
                 value = lineSeed.Value * step;
+                hasValue = true;
                 continue;
             }
+
+            if (!hasValue)
+                continue;
 
             if (IsPastStopValue(value, ascending, stopValue))
                 break;
@@ -299,28 +298,22 @@ public static class FillSeriesPlanner
         FillSeriesDateUnit dateUnit,
         double? stopValue = null)
     {
-        if (sheet.GetValue(range.Start.Row, range.Start.Col) is not DateTimeValue startValue)
-            return [];
-
         var edits = new List<(CellAddress, Cell)>();
-        var seed = startValue.Value;
-        var value = seed;
-        var preserveEndOfMonth = IsLastDayOfMonth(startValue.ToDateTime());
+        var seed = 0d;
+        var value = 0d;
+        var preserveEndOfMonth = false;
         var stepIndex = 0;
+        var hasValue = false;
         foreach (var address in EnumerateSeriesAddresses(sheet.Id, range, seriesIn))
         {
-            if (address.Row == range.Start.Row && address.Col == range.Start.Col)
-            {
-                stepIndex++;
-                value = NextDateSerial(seed, value, step, dateUnit, preserveEndOfMonth, stepIndex);
-                continue;
-            }
-
             // Same per-line-seed handling as BuildLinearSeriesEdits/BuildGrowthSeriesEdits: a
             // line (column, for "Series in Columns"; row, for "Series in Rows") whose own
-            // leading cell already holds a date restarts the Month/Year end-of-month clamp and
-            // step count from THAT date, instead of continuing the running value chained from a
-            // previous, unrelated line.
+            // leading cell holds a date restarts the Month/Year end-of-month clamp and step
+            // count from THAT date. This check runs for every line, not just the selection's
+            // first, so one column's invalid seed can never wipe out another column's valid one.
+            // A line whose leading cell is not a date does not reseed: an already-established
+            // running value keeps chaining forward into it, and if no value has been established
+            // yet the line is left untouched until one is.
             if (IsSeriesLineStart(address, range, seriesIn) &&
                 sheet.GetValue(address.Row, address.Col) is DateTimeValue lineSeed)
             {
@@ -328,8 +321,12 @@ public static class FillSeriesPlanner
                 preserveEndOfMonth = IsLastDayOfMonth(lineSeed.ToDateTime());
                 stepIndex = 1;
                 value = NextDateSerial(seed, seed, step, dateUnit, preserveEndOfMonth, stepIndex);
+                hasValue = true;
                 continue;
             }
+
+            if (!hasValue)
+                continue;
 
             if (IsPastStopValue(value, step, stopValue))
                 break;

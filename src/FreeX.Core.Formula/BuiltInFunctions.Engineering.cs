@@ -182,6 +182,15 @@ public static partial class BuiltInFunctions
         ["p"] = 1e-12, ["f"] = 1e-15, ["a"] = 1e-18, ["z"] = 1e-21, ["y"] = 1e-24
     };
 
+    // Excel's CONVERT only allows a metric prefix on this small set of base-metric
+    // unit abbreviations (weight/mass, distance, time, pressure, force, energy,
+    // power, area, volume, speed, information). Imperial/named units (mi, ft, lbm,
+    // gal, yr, ...) never take a prefix.
+    private static readonly HashSet<string> ConvertPrefixableUnits = new(StringComparer.Ordinal)
+    {
+        "g", "m", "sec", "s", "Pa", "N", "J", "W", "m2", "m^2", "l", "L", "m3", "m^3", "m/s", "bit", "byte"
+    };
+
     private static readonly Dictionary<string, double> ConvertBinaryPrefixes = new(StringComparer.Ordinal)
     {
         ["Yi"] = Math.Pow(2, 80), ["Zi"] = Math.Pow(2, 70), ["Ei"] = Math.Pow(2, 60), ["Pi"] = Math.Pow(2, 50),
@@ -236,7 +245,8 @@ public static partial class BuiltInFunctions
             string rest = unit[prefixLength..];
             if (ConvertPrefixes.TryGetValue(p, out double pFactor)
                 && ConvertUnits.TryGetValue(rest, out var rEntry)
-                && rEntry.Cat != UnitCategory.Temperature)
+                && rEntry.Cat != UnitCategory.Temperature
+                && ConvertPrefixableUnits.Contains(rest))
             {
                 cat = rEntry.Cat;
                 factor = rEntry.Factor * pFactor;

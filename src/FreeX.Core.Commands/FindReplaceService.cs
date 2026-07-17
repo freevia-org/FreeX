@@ -46,7 +46,14 @@ public sealed record FindOptions(
     SheetId? CurrentSheetId = null,
     FindSearchOrder SearchOrder = FindSearchOrder.ByRows,
     FindLookIn LookIn = FindLookIn.Values,
-    StyleDiff? RequiredFormat = null);
+    StyleDiff? RequiredFormat = null,
+    // Excel: when more than one cell is selected before Find & Replace is opened, Replace All
+    // (and Find All) is automatically restricted to that selection instead of the whole
+    // sheet/workbook. Null (the default) means "no selection constraint" — every existing caller
+    // that never sets this keeps searching the whole Within-scoped sheet/workbook, unchanged. A
+    // non-null list is a set of ranges (Excel's "sqref" — a selection can be multiple
+    // non-contiguous areas); a candidate must fall inside at least one of them to match.
+    IReadOnlyList<GridRange>? SelectionScope = null);
 
 public sealed record ReplaceAllResult(int ReplacedCount, CommandOutcome? Failure);
 
@@ -96,6 +103,12 @@ public static class FindReplaceService
                 workbook: workbook,
                 skipNumberValues: skipNumbers))
             {
+                // A selection-scoped search (Excel: Replace All within an active multi-cell
+                // selection) only considers candidates inside one of the scope's ranges.
+                if (options.SelectionScope is { Count: > 0 } scope &&
+                    !ContainsAddress(scope, candidate.Address))
+                    continue;
+
                 // Excel's "Look in: Formulas" match text is the formula-bar text, which always
                 // includes the leading '=' that Cell.FormulaText intentionally omits (see
                 // Cell.cs). candidate.Text (from FindReplaceSearchPlanner) is the bare,
@@ -625,6 +638,18 @@ public static class FindReplaceService
         return matchEntireCell
             ? text.Equals(searchText, comparison)
             : text.Contains(searchText, comparison);
+    }
+
+    /// <summary>True when <paramref name="address"/> falls inside any range of a selection scope.</summary>
+    private static bool ContainsAddress(IReadOnlyList<GridRange> scope, CellAddress address)
+    {
+        foreach (var range in scope)
+        {
+            if (range.Contains(address))
+                return true;
+        }
+
+        return false;
     }
 
     private static Regex GetOrCreateSearchRegex(string searchText, StringComparison comparison, bool anchored) =>

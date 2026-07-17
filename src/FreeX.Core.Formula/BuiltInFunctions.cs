@@ -268,6 +268,7 @@ public static partial class BuiltInFunctions
         ["QUARTILE"]         = (QuartileInc, 2, 2),
         ["QUARTILE.INC"]     = (QuartileInc, 2, 2),
         ["QUARTILE.EXC"]     = (QuartileExc, 2, 2),
+        ["TRIMMEAN"]         = (Trimmean, 2, 2),
         ["GEOMEAN"]          = (Geomean, 1, 255),
         ["HARMEAN"]          = (Harmean, 1, 255),
         ["AVEDEV"]           = (Avedev, 1, 255),

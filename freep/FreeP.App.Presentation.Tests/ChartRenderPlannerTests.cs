@@ -3215,6 +3215,22 @@ public sealed class ChartRenderPlannerTests
         slices.Should().OnlyContain(slice => slice.DrawDepthSidewalls);
     }
 
+    [Theory]
+    [InlineData(0, 0.30)]
+    [InlineData(1, 0.80)]
+    [InlineData(2, 0.35)]
+    public void ResolveImportedThreeDPieSidewallFactor_UsesPowerPointSliceLighting(
+        int pointIndex,
+        double expectedFactor)
+    {
+        ChartRenderPlanner.ResolveImportedThreeDPieSidewallFactor(
+                pointIndex,
+                startAngle: 0.4,
+                endAngle: 1.2)
+            .Should()
+            .Be(expectedFactor);
+    }
+
     [Fact]
     public void BuildPieSlicePrimitives_VaryColorsUsesPointFallbackPalette()
     {

@@ -639,10 +639,32 @@ public partial class GridView
                 var winner = ResolveBorderEdgeWinner(style.BorderRight, neighborLeft);
                 DrawBorderEdge(dc, winner, new Point(x + w, y), new Point(x + w, y + h), _brushCache, _borderPenCache);
             }
-            if (style.BorderDiagonalDown.Style != BorderStyle.None)
-                DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(x, y), new Point(x + w, y + h), _brushCache);
-            if (style.BorderDiagonalUp.Style != BorderStyle.None)
-                DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(x, y + h), new Point(x + w, y), _brushCache);
+            if (style.BorderDiagonalDown.Style != BorderStyle.None || style.BorderDiagonalUp.Style != BorderStyle.None)
+            {
+                // A diagonal border must span the FULL merged rectangle (matching the fill/selection
+                // and comment-indicator passes above), not just the anchor cell's own un-merged
+                // footprint. Draw it only once, from the merge's anchor cell, widened to the merge's
+                // true extent -- otherwise every member cell (which shares the anchor's style) would
+                // redraw its own short diagonal segment inside its un-merged box.
+                var isMergeAnchor = merge is not { } anchorMerge || (cell.Row == anchorMerge.Start.Row && cell.Col == anchorMerge.Start.Col);
+                if (isMergeAnchor)
+                {
+                    double diagonalW = w;
+                    double diagonalH = h;
+                    if (merge is { } diagonalMerge)
+                    {
+                        for (uint c2 = diagonalMerge.Start.Col + 1; c2 <= diagonalMerge.End.Col; c2++)
+                            if (colLookupAll.TryGetValue(c2, out var cm2)) diagonalW += cm2.Width;
+                        for (uint r2 = diagonalMerge.Start.Row + 1; r2 <= diagonalMerge.End.Row; r2++)
+                            if (rowLookupAll.TryGetValue(r2, out var rm2)) diagonalH += rm2.Height;
+                    }
+
+                    if (style.BorderDiagonalDown.Style != BorderStyle.None)
+                        DrawBorderEdge(dc, style.BorderDiagonalDown, new Point(x, y), new Point(x + diagonalW, y + diagonalH), _brushCache);
+                    if (style.BorderDiagonalUp.Style != BorderStyle.None)
+                        DrawBorderEdge(dc, style.BorderDiagonalUp, new Point(x, y + diagonalH), new Point(x + diagonalW, y), _brushCache);
+                }
+            }
         }
 
         // Pass 2b: comment/note indicators
