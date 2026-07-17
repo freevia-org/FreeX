@@ -54,6 +54,11 @@ public sealed partial class MainWindow
         };
         ApplyDataOpsTextBoxChrome(rangeBox);
         AutomationProperties.SetAutomationId(rangeBox, "AllowEditRangeBox");
+        var rangePicker = CreateDialogRangePickerButton(
+            "AllowEditRangePickerButton",
+            UiText.Get("AllowEditRange_PickerAutomationName"));
+        AutomationProperties.SetHelpText(rangePicker, UiText.Get("AllowEditRange_PickerHelpText"));
+        ToolTip.SetTip(rangePicker, UiText.Get("AllowEditRange_PickerToolTip"));
 
         // Range-specific password (Excel's per-range "Range Password", distinct from the sheet password):
         // optional, so an empty box means the range stays freely editable once reached. WPF parity
@@ -276,7 +281,11 @@ public sealed partial class MainWindow
         var rangeGroup = new GroupBox
         {
             Header = StripDisplayMnemonic(UiText.Get("AllowEditRange_RangeLabel")),
-            Content = new Border { Padding = new Thickness(4), Child = rangeBox },
+            Content = new Border
+            {
+                Padding = new Thickness(4),
+                Child = BuildDialogRangePickerRow(rangeBox, rangePicker),
+            },
             Margin = new Thickness(0, 0, 0, 6),
         };
 
@@ -323,6 +332,7 @@ public sealed partial class MainWindow
                 },
             },
         };
+        AttachDialogRangePicker(dialog, rangePicker, rangeBox, "range.allow-edit-range.range");
 
         await dialog.ShowDialog(this);
     }

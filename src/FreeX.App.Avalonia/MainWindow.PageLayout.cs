@@ -513,6 +513,22 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(repeatColumnsBox, "PageSetupRepeatColumnsBox");
         AutomationProperties.SetHelpText(repeatColumnsBox, UiText.Get("PageSetup_RepeatColumnsHelp"));
 
+        var printAreaPicker = CreateDialogRangePickerButton(
+            "PageSetupPrintAreaPickerButton",
+            UiText.Get("PageSetup_SelectPrintArea"));
+        AutomationProperties.SetHelpText(printAreaPicker, UiText.Get("PageSetup_SelectPrintAreaHelpText"));
+        ToolTip.SetTip(printAreaPicker, UiText.Get("PageSetup_CollapseDialogAndSelectThePrintArea"));
+        var repeatRowsPicker = CreateDialogRangePickerButton(
+            "PageSetupRowsRepeatPickerButton",
+            UiText.Get("PageSetup_SelectRowsToRepeat"));
+        AutomationProperties.SetHelpText(repeatRowsPicker, UiText.Get("PageSetup_SelectRowsToRepeatHelpText"));
+        ToolTip.SetTip(repeatRowsPicker, UiText.Get("PageSetup_CollapseDialogAndSelectRowsToRepeatAtTop"));
+        var repeatColumnsPicker = CreateDialogRangePickerButton(
+            "PageSetupColumnsRepeatPickerButton",
+            UiText.Get("PageSetup_SelectColumnsToRepeat"));
+        AutomationProperties.SetHelpText(repeatColumnsPicker, UiText.Get("PageSetup_SelectColumnsToRepeatHelpText"));
+        ToolTip.SetTip(repeatColumnsPicker, UiText.Get("PageSetup_CollapseDialogAndSelectColumnsToRepeatAtLeft"));
+
         var gridlinesCheck = new CheckBox { Content = StripDisplayMnemonic(UiText.Get("PageSetup_PrintGridlines")), IsChecked = initial.PrintGridlines };
         ApplyPageLayoutCheckBoxChrome(gridlinesCheck);
         AutomationProperties.SetAutomationId(gridlinesCheck, "PageSetupPrintGridlinesCheck");
@@ -782,11 +798,11 @@ public sealed partial class MainWindow
                     Children =
                     {
                         PageSetupLabel(UiText.Get("PageSetup_PrintArea")),
-                        printAreaBox,
+                        BuildDialogRangePickerRow(printAreaBox, printAreaPicker),
                         PageSetupLabel(UiText.Get("PageSetup_RepeatRows")),
-                        repeatRowsBox,
+                        BuildDialogRangePickerRow(repeatRowsBox, repeatRowsPicker),
                         PageSetupLabel(UiText.Get("PageSetup_RepeatColumns")),
-                        repeatColumnsBox,
+                        BuildDialogRangePickerRow(repeatColumnsBox, repeatColumnsPicker),
                         gridlinesCheck,
                         headingsCheck,
                         blackAndWhiteCheck,
@@ -915,6 +931,9 @@ public sealed partial class MainWindow
             Margin = new Thickness(8),
             Children = { buttonRow, validationText, tabs },
         };
+        AttachDialogRangePicker(dialog, printAreaPicker, printAreaBox, "range.page-setup.print-area");
+        AttachDialogRangePicker(dialog, repeatRowsPicker, repeatRowsBox, "range.page-setup.rows-to-repeat");
+        AttachDialogRangePicker(dialog, repeatColumnsPicker, repeatColumnsBox, "range.page-setup.columns-to-repeat");
         dialog.Opened += (_, _) => FocusOpenPlan(openPlan);
 
         await dialog.ShowDialog(this);

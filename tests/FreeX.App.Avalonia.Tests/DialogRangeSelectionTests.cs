@@ -19,17 +19,65 @@ public sealed class DialogRangeSelectionTests
         "range.goal-seek.set-cell",
         "range.goal-seek.changing-cell",
         "range.chart-data-source.range",
+        "range.data-table.row-input-cell",
+        "range.data-table.column-input-cell",
+        "range.data-validation.formula-1",
+        "range.data-validation.formula-2",
+        "range.page-setup.print-area",
+        "range.page-setup.rows-to-repeat",
+        "range.page-setup.columns-to-repeat",
+        "range.allow-edit-range.range",
+        "range.text-to-columns.destination",
+        "range.resize-table.range",
     ];
 
     [Fact]
-    public void InteractiveValidationRangeTargetIds_ExactlyMatchTheElevenWiredInventoryTargets()
+    public void InteractiveValidationRangeTargetIds_ExactlyMatchTheTwentyOneWiredInventoryTargets()
     {
         MainWindow.InteractiveValidationRangeTargetIds.Should().BeEquivalentTo(ExpectedTargetIds);
-        MainWindow.InteractiveValidationRangeTargetIds.Should().HaveCount(11);
+        MainWindow.InteractiveValidationRangeTargetIds.Should().HaveCount(21);
         InteractiveValidationInventory.WorksheetRangeTargets
             .Where(target => MainWindow.InteractiveValidationRangeTargetIds.Contains(target.Id))
             .Select(target => target.Id)
             .Should().BeEquivalentTo(ExpectedTargetIds);
+    }
+
+    [Fact]
+    public void NeutralInventoryDialogBuilders_WireAllTenRangePickersToTheSharedSession()
+    {
+        var registrations = ReadSource("MainWindow.DialogRangeSelection.cs");
+        var pageLayout = ReadSource("MainWindow.PageLayout.cs");
+        var allowEditRange = ReadSource("MainWindow.AllowEditRange.cs");
+        var textToColumns = ReadSource("MainWindow.TextToColumns.cs");
+        var tableResize = ReadSource("MainWindow.TableResize.cs");
+
+        registrations.Should().Contain("new(\"range.data-table.row-input-cell\", \"DataTableCompactDialog\", \"DataTableRowInputCellPickerButton\", \"DataTableRowInputCellBox\", DialogRangeSelectionFormat.StartCell, CreatePickerWhenMissing: true)");
+        registrations.Should().Contain("new(\"range.data-table.column-input-cell\", \"DataTableCompactDialog\", \"DataTableColumnInputCellPickerButton\", \"DataTableColumnInputCellBox\", DialogRangeSelectionFormat.StartCell, CreatePickerWhenMissing: true)");
+        registrations.Should().Contain("new(\"range.data-validation.formula-1\", \"DataValidationCompactDialog\", \"DataValidationSourcePickerButton\", \"DataValidationFormula1Box\", DialogRangeSelectionFormat.DataValidationFormula, CreatePickerWhenMissing: true)");
+        registrations.Should().Contain("new(\"range.data-validation.formula-2\", \"DataValidationCompactDialog\", \"DataValidationSourcePicker2Button\", \"DataValidationFormula2Box\", DialogRangeSelectionFormat.DataValidationFormula, CreatePickerWhenMissing: true)");
+        pageLayout.Should().Contain("AttachDialogRangePicker(dialog, printAreaPicker, printAreaBox, \"range.page-setup.print-area\");");
+        pageLayout.Should().Contain("AttachDialogRangePicker(dialog, repeatRowsPicker, repeatRowsBox, \"range.page-setup.rows-to-repeat\");");
+        pageLayout.Should().Contain("AttachDialogRangePicker(dialog, repeatColumnsPicker, repeatColumnsBox, \"range.page-setup.columns-to-repeat\");");
+        allowEditRange.Should().Contain("AttachDialogRangePicker(dialog, rangePicker, rangeBox, \"range.allow-edit-range.range\");");
+        textToColumns.Should().Contain("AttachDialogRangePicker(dialog, destinationPicker, destinationBox, \"range.text-to-columns.destination\");");
+        tableResize.Should().Contain("AttachDialogRangePicker(dialog, rangePicker, rangeBox, \"range.resize-table.range\");");
+    }
+
+    [Fact]
+    public void NeutralInventoryFormatting_UsesTheWpfBehavioralFormatters()
+    {
+        var registrations = ReadSource("MainWindow.DialogRangeSelection.cs");
+        var textToColumns = ReadSource("MainWindow.TextToColumns.cs");
+
+        registrations.Should().Contain("DataValidationService.FormatListSourceRange(");
+        registrations.Should().Contain("PageSetupRangeSelectionTarget.PrintArea");
+        registrations.Should().Contain("PageSetupRangeSelectionTarget.RepeatRows");
+        registrations.Should().Contain("PageSetupRangeSelectionTarget.RepeatColumns");
+        textToColumns.Should().Contain("TextToColumnsDialogPlanner.TryParseDestination(");
+        textToColumns.Should().Contain("TextToColumnsApplyPlanner.MapResultToEdits(");
+        textToColumns.Should().Contain("destination,");
+        textToColumns.Should().Contain("destinationBox.TextChanged += (_, _) => overwriteConfirmed = false;");
+        textToColumns.Should().NotContain("warningText.IsVisible = false;\n            overwriteConfirmed = false;");
     }
 
     [Fact]

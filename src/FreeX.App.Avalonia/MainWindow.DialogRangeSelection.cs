@@ -12,6 +12,8 @@ using Avalonia.Platform;
 using Avalonia.Threading;
 
 using FreeX.App.Presentation;
+using FreeX.App.Presentation.PageLayout;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -31,6 +33,16 @@ public sealed partial class MainWindow
         new("range.goal-seek.set-cell", "GoalSeekCompactDialog", "GoalSeekSetCellPickerButton", "GoalSeekSetCellBox", DialogRangeSelectionFormat.StartCell),
         new("range.goal-seek.changing-cell", "GoalSeekCompactDialog", "GoalSeekChangingCellPickerButton", "GoalSeekChangingCellBox", DialogRangeSelectionFormat.StartCell),
         new("range.chart-data-source.range", "SelectChartDataDialog", "SelectChartDataRangePickButton", "SelectChartDataRangeBox", DialogRangeSelectionFormat.Range),
+        new("range.data-table.row-input-cell", "DataTableCompactDialog", "DataTableRowInputCellPickerButton", "DataTableRowInputCellBox", DialogRangeSelectionFormat.StartCell, CreatePickerWhenMissing: true),
+        new("range.data-table.column-input-cell", "DataTableCompactDialog", "DataTableColumnInputCellPickerButton", "DataTableColumnInputCellBox", DialogRangeSelectionFormat.StartCell, CreatePickerWhenMissing: true),
+        new("range.data-validation.formula-1", "DataValidationCompactDialog", "DataValidationSourcePickerButton", "DataValidationFormula1Box", DialogRangeSelectionFormat.DataValidationFormula, CreatePickerWhenMissing: true),
+        new("range.data-validation.formula-2", "DataValidationCompactDialog", "DataValidationSourcePicker2Button", "DataValidationFormula2Box", DialogRangeSelectionFormat.DataValidationFormula, CreatePickerWhenMissing: true),
+        new("range.page-setup.print-area", "PageSetupDialog", "PageSetupPrintAreaPickerButton", "PageSetupPrintAreaBox", DialogRangeSelectionFormat.PageSetupPrintArea),
+        new("range.page-setup.rows-to-repeat", "PageSetupDialog", "PageSetupRowsRepeatPickerButton", "PageSetupRepeatRowsBox", DialogRangeSelectionFormat.PageSetupRepeatRows),
+        new("range.page-setup.columns-to-repeat", "PageSetupDialog", "PageSetupColumnsRepeatPickerButton", "PageSetupRepeatColumnsBox", DialogRangeSelectionFormat.PageSetupRepeatColumns),
+        new("range.allow-edit-range.range", "AllowEditRangeDialog", "AllowEditRangePickerButton", "AllowEditRangeBox", DialogRangeSelectionFormat.Range),
+        new("range.text-to-columns.destination", "TextToColumnsDialog", "TextToColumnsDestinationPickerButton", "TextToColumnsDestinationBox", DialogRangeSelectionFormat.StartCell),
+        new("range.resize-table.range", "TableResizeDialog", "TableResizeRangePickerButton", "TableResizeRangeBox", DialogRangeSelectionFormat.Range),
     ];
 
     private static readonly ConditionalWeakTable<Button, DialogRangePickerRegistration> ConfiguredDialogRangePickers = new();
@@ -47,8 +59,8 @@ public sealed partial class MainWindow
 
     static MainWindow()
     {
-        // Advanced Filter and Goal Seek still live in the protected MainWindow.cs builder. Attach them
-        // when Avalonia assigns this MainWindow as owner, after their automation-labelled content exists.
+        // Some inventory dialogs still live in the protected MainWindow.cs builder. Attach their existing
+        // or registration-supplied picker controls after Avalonia assigns this MainWindow as owner.
         Window.OwnerProperty.Changed.AddClassHandler<Window>(DialogRangePickerOwnerChanged);
     }
 
@@ -74,9 +86,64 @@ public sealed partial class MainWindow
                 string.Equals(AutomationProperties.GetAutomationId(button), registration.PickerAutomationId, StringComparison.Ordinal));
             var target = controls.OfType<TextBox>().FirstOrDefault(textBox =>
                 string.Equals(AutomationProperties.GetAutomationId(textBox), registration.TextBoxAutomationId, StringComparison.Ordinal));
+            if (picker is null && target is not null && registration.CreatePickerWhenMissing)
+                picker = AddMissingDialogRangePicker(target, registration);
             if (picker is not null && target is not null)
                 AttachDialogRangePicker(dialog, picker, target, registration.TargetId);
         }
+    }
+
+    private static Button? AddMissingDialogRangePicker(
+        TextBox target,
+        DialogRangePickerRegistration registration)
+    {
+        if (target.Parent is not Panel parent)
+            return null;
+
+        var index = parent.Children.IndexOf(target);
+        if (index < 0)
+            return null;
+
+        var picker = CreateDialogRangePickerButton(
+            registration.PickerAutomationId,
+            $"Select worksheet range for {AutomationProperties.GetName(target) ?? "input"}");
+        parent.Children.RemoveAt(index);
+        parent.Children.Insert(index, BuildDialogRangePickerRow(target, picker));
+        return picker;
+    }
+
+    private static Button CreateDialogRangePickerButton(string automationId, string automationName)
+    {
+        var picker = new Button
+        {
+            Content = "...",
+            Width = 28,
+            MinWidth = 28,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        ApplyDialogButtonChrome(picker, 28);
+        AutomationProperties.SetAutomationId(picker, automationId);
+        AutomationProperties.SetName(picker, automationName);
+        AutomationProperties.SetHelpText(picker, UiText.Get("DialogReferencePicker_HelpText"));
+        ToolTip.SetTip(picker, UiText.Get("DialogReferencePicker_ToolTip"));
+        return picker;
+    }
+
+    private static Grid BuildDialogRangePickerRow(TextBox target, Button picker)
+    {
+        var row = new Grid
+        {
+            ColumnDefinitions =
+            {
+                new ColumnDefinition { Width = GridLength.Star },
+                new ColumnDefinition { Width = GridLength.Auto },
+            },
+        };
+        Grid.SetColumn(target, 0);
+        Grid.SetColumn(picker, 1);
+        row.Children.Add(target);
+        row.Children.Add(picker);
+        return row;
     }
 
     private void AttachDialogRangePicker(Window dialog, Button picker, TextBox target, string targetId)
@@ -241,15 +308,45 @@ public sealed partial class MainWindow
         return fallback;
     }
 
-    private static string FormatDialogRangeSelection(GridRange range, DialogRangeSelectionFormat format) =>
-        format == DialogRangeSelectionFormat.StartCell
-            ? SpreadsheetDisplayFormatter.FormatCellReference(range.Start, useR1C1ReferenceStyle: false)
-            : SpreadsheetDisplayFormatter.FormatRangeReference(range.Start, range.End, useR1C1ReferenceStyle: false);
+    private string FormatDialogRangeSelection(GridRange range, DialogRangeSelectionFormat format) =>
+        format switch
+        {
+            DialogRangeSelectionFormat.StartCell =>
+                SpreadsheetDisplayFormatter.FormatCellReference(range.Start, useR1C1ReferenceStyle: false),
+            DialogRangeSelectionFormat.DataValidationFormula =>
+                DataValidationService.FormatListSourceRange(
+                    range,
+                    _session.Workbook.GetSheet(range.Start.Sheet)?.Name,
+                    _session.ActiveSheet.Name),
+            DialogRangeSelectionFormat.PageSetupPrintArea =>
+                PageSetupRangeSelectionFormatter.Format(
+                    PageSetupRangeSelectionTarget.PrintArea,
+                    range,
+                    UseR1C1ReferenceStyle),
+            DialogRangeSelectionFormat.PageSetupRepeatRows =>
+                PageSetupRangeSelectionFormatter.Format(
+                    PageSetupRangeSelectionTarget.RepeatRows,
+                    range,
+                    UseR1C1ReferenceStyle),
+            DialogRangeSelectionFormat.PageSetupRepeatColumns =>
+                PageSetupRangeSelectionFormatter.Format(
+                    PageSetupRangeSelectionTarget.RepeatColumns,
+                    range,
+                    UseR1C1ReferenceStyle),
+            _ => SpreadsheetDisplayFormatter.FormatRangeReference(
+                range.Start,
+                range.End,
+                useR1C1ReferenceStyle: false),
+        };
 
     private enum DialogRangeSelectionFormat
     {
         Range,
         StartCell,
+        DataValidationFormula,
+        PageSetupPrintArea,
+        PageSetupRepeatRows,
+        PageSetupRepeatColumns,
     }
 
     private sealed record DialogRangePickerRegistration(
@@ -257,7 +354,8 @@ public sealed partial class MainWindow
         string DialogAutomationId,
         string PickerAutomationId,
         string TextBoxAutomationId,
-        DialogRangeSelectionFormat Format);
+        DialogRangeSelectionFormat Format,
+        bool CreatePickerWhenMissing = false);
 
     private sealed record DialogRangePickerSession(
         Window Dialog,

@@ -157,6 +157,18 @@ public sealed partial class MainWindow
         ApplyDataOpsComboBoxChrome(formatBox);
         AutomationProperties.SetAutomationId(formatBox, "TextToColumnsFormatBox");
 
+        var destinationBox = new TextBox
+        {
+            Text = FormatCellReference(range.Start),
+            MinWidth = 160,
+        };
+        ApplyDataOpsTextBoxChrome(destinationBox);
+        AutomationProperties.SetAutomationId(destinationBox, "TextToColumnsDestinationBox");
+        AutomationProperties.SetName(destinationBox, UiText.Get("TextToColumns_DestinationLabel"));
+        var destinationPicker = CreateDialogRangePickerButton(
+            "TextToColumnsDestinationPickerButton",
+            UiText.Get("TextToColumns_SelectDestinationCell"));
+
         // Advanced options (WPF parity: TextToColumnsDialog.ColumnFormats.cs's CreateAdvancedOptionsPanel) --
         // decimal/thousands separator overrides and trailing-minus negatives, so locale-mismatched or
         // mainframe-style numeric text can still import as numbers instead of silently staying text.
@@ -317,6 +329,7 @@ public sealed partial class MainWindow
         otherCharBox.TextChanged += (_, _) => RefreshPreview();
         qualifierBox.SelectionChanged += (_, _) => RefreshPreview();
         breaksBox.TextChanged += (_, _) => RefreshPreview();
+        destinationBox.TextChanged += (_, _) => overwriteConfirmed = false;
         delimitedButton.IsCheckedChanged += (_, _) => UpdateModeVisibility();
         fixedWidthButton.IsCheckedChanged += (_, _) => UpdateModeVisibility();
         formatColumnBox.SelectionChanged += (_, _) => SyncFormatBoxToSelectedColumn();
@@ -364,7 +377,20 @@ public sealed partial class MainWindow
         void ApplyWizardStep()
         {
             warningText.IsVisible = false;
-            overwriteConfirmed = false;
+
+            if (!TextToColumnsDialogPlanner.TryParseDestination(
+                    destinationBox.Text,
+                    range.Start,
+                    out var destination))
+            {
+                currentStep = 3;
+                SyncWizardNavigation();
+                warningText.Text = UiText.Get("TextToColumns_EnterASingleDestinationCellSuchAsF2");
+                warningText.IsVisible = true;
+                destinationBox.Focus();
+                destinationBox.SelectAll();
+                return;
+            }
 
             TextToColumnsOptions options;
             try
@@ -398,7 +424,12 @@ public sealed partial class MainWindow
                 trailingMinusBox.IsChecked == true);
 
             var result = TextToColumnsPlanner.Plan(sources, options);
-            var edits = TextToColumnsDialogPlanner.MapToEdits(sheet.Id, result, range, advancedOptions);
+            var edits = TextToColumnsApplyPlanner.MapResultToEdits(
+                sheet.Id,
+                result,
+                range,
+                destination,
+                advancedOptions);
             if (edits.Count == 0)
             {
                 warningText.Text = UiText.Get("TableLoc_TtcNoColumnsToWrite");
@@ -406,7 +437,7 @@ public sealed partial class MainWindow
                 return;
             }
 
-            var overwrites = TextToColumnsDialogPlanner.FindOverwriteTargets(sheet, edits, range);
+            var overwrites = TextToColumnsApplyPlanner.FindOverwriteTargets(sheet, edits, range);
             if (overwrites.Count > 0 && !overwriteConfirmed)
             {
                 overwriteConfirmed = true;
@@ -484,6 +515,21 @@ public sealed partial class MainWindow
                 new TextBlock { Text = UiText.Get("TableLoc_TtcColumnFormatLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
                 formatColumnBox,
                 formatBox,
+            },
+        };
+
+        var destinationRow = new StackPanel
+        {
+            Spacing = 4,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = StripDisplayMnemonic(UiText.Get("TextToColumns_DestinationLabel")),
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                },
+                BuildDialogRangePickerRow(destinationBox, destinationPicker),
             },
         };
 
@@ -602,6 +648,7 @@ public sealed partial class MainWindow
             Children =
             {
                 formatRow,
+                destinationRow,
                 advancedOptionsGroup,
                 statusText,
                 warningText,
@@ -636,6 +683,7 @@ public sealed partial class MainWindow
                 },
             },
         };
+        AttachDialogRangePicker(dialog, destinationPicker, destinationBox, "range.text-to-columns.destination");
 
         SyncWizardNavigation();
         UpdateModeVisibility();

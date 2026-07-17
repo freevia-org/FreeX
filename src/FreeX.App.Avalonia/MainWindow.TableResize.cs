@@ -47,6 +47,9 @@ public sealed partial class MainWindow
         ApplyTableResizeTextBoxChrome(rangeBox);
         AutomationProperties.SetAutomationId(rangeBox, "TableResizeRangeBox");
         AutomationProperties.SetName(rangeBox, UiText.Get("TableResize_BoxName"));
+        var rangePicker = CreateDialogRangePickerButton(
+            "TableResizeRangePickerButton",
+            UiText.Get("TableResize_BoxName"));
 
         var dialog = new Window
         {
@@ -86,9 +89,10 @@ public sealed partial class MainWindow
             FontSize = 12,
             FontFamily = FormulaBarFontFamily,
         });
-        content.Children.Add(rangeBox);
+        content.Children.Add(BuildDialogRangePickerRow(rangeBox, rangePicker));
         content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([ok, cancel], new Thickness(0, 12, 0, 0)));
         dialog.Content = content;
+        AttachDialogRangePicker(dialog, rangePicker, rangeBox, "range.resize-table.range");
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)
