@@ -21,6 +21,7 @@ using FreeX.App.Presentation.Backstage;
 using FreeX.App.Presentation.ConditionalFormatting;
 using FreeX.App.Presentation.DrawingUI;
 using FreeX.App.Presentation.Filtering;
+using FreeX.App.Presentation.Interactions;
 using FreeX.App.Presentation.PageLayout;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.App.Presentation.Protection;
@@ -36,6 +37,15 @@ using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
 
 namespace FreeX.App.Avalonia;
+
+internal sealed record ParityInteractionDialogRoute(
+    string CatalogId,
+    string SurfaceId,
+    string AvaloniaProductionSurface,
+    string MissingReason)
+{
+    public bool IsMissing => MissingReason.Length > 0;
+}
 
 /// <summary>
 /// Per-surface visual capture for the headless <c>--parity-capture</c> mode. Each surface is rendered to a PNG
@@ -87,6 +97,151 @@ public sealed partial class MainWindow
     ];
 
     /// <summary>
+    /// Stable mapping from the authoritative WPF-named interaction catalog to portable production UI.
+    /// Several Avalonia dialogs intentionally have different names or combine a WPF child dialog into a
+    /// larger production surface; those aliases are explicit here instead of relying on fuzzy name matching.
+    /// </summary>
+    internal static IReadOnlyList<ParityInteractionDialogRoute> ParityInteractionDialogRoutes { get; } =
+    [
+        Opened("AboutDialog", "dialog.About", "ShowAboutDialogAsync"),
+        Opened("AccessibilityCheckerDialog", "dialog.AccessibilityChecker", "ShowAccessibilityCheckerIssuesDialogAsync"),
+        Opened("ActivateSheetDialog", "dialog.ActivateSheet", "ShowSwitchWindowsDialogAsync"),
+        Opened("AddWatchDialog", "dialog.AddWatch", "ShowAddWatchDialogAsync"),
+        Opened("AdvancedFilterDialog", "dialog.AdvancedFilter", "ShowAdvancedFilterInputDialogAsync"),
+        Opened("AllowEditRangeDialog", "dialog.AllowEditRanges", "ShowAllowEditRangeDialogAsync"),
+        Opened("AutoFilterDialog", "dialog.AutoFilter", "ShowAutoFilterParityWindowAsync"),
+        Opened("BookmarkDialog", "dialog.Bookmark", "ShowHyperlinkSubPromptAsync (bookmark)"),
+        Opened("CellShiftDialog", "dialog.CellShift", "ShowInsertCellsDialogAsync"),
+        Opened("ChangeChartTypeDialog", "dialog.ChangeChartType", "ShowChangeChartTypeDialog"),
+        Opened("ChartAreaLegendDialog", "dialog.FormatChartArea", "ShowFormatChartAreaDialog"),
+        Opened("ChartAxisFormatDialog", "dialog.ChartAxisFormat", "ShowChartAxisFormatDialog"),
+        Opened("ChartBarFormatDialog", "dialog.ChartBarFormat", "ShowChartBarFormatDialog"),
+        Opened("ChartBubbleFormatDialog", "dialog.ChartBubbleFormat", "ShowChartBubbleFormatDialog"),
+        Opened("ChartDataLabelsDialog", "dialog.ChartDataLabels", "ShowChartDataLabelsDialog"),
+        Opened("ChartErrorBarsDialog", "dialog.ChartErrorBars", "ShowChartErrorBarsDialog"),
+        Opened("ChartPieFormatDialog", "dialog.ChartPieFormat", "ShowChartPieFormatDialog"),
+        Opened("ChartSeriesFormatDialog", "dialog.ChartSeriesFormat", "ShowChartSeriesFormatDialog"),
+        Opened("ChartStockFormatDialog", "dialog.ChartStockFormat", "ShowChartStockFormatDialog"),
+        Missing("ChartStyleDialog", "Avalonia applies chart styles directly by cycling the production style catalog; it has no chart-style dialog."),
+        Opened("ChartTitlesDialog", "dialog.ChartTitles", "ShowChartTitlesDialog"),
+        Opened("ChartTrendlineOptionsDialog", "dialog.ChartTrendlineOptions", "ShowChartTrendlineDialog"),
+        Opened("ColorPickerDialog", "dialog.ColorPicker", "ShowMoreColorsDialogAsync"),
+        Opened("ColorScaleRuleDialog", "dialog.ColorScaleRule", "ShowConditionalFormatNewRuleDialogAsync (ColorScale)"),
+        Opened("ColumnWidthDialog", "dialog.ColumnWidth", "ShowColumnWidthDialogAsync"),
+        Opened("CommentListWindow", "dialog.CommentList", "ShowNotesListAsync"),
+        Opened("ConditionalFormatDialog", "dialog.ConditionalFormatNewRule", "ShowConditionalFormatNewRuleDialogAsync"),
+        Opened("ConditionalFormatThresholdDialog", "dialog.ConditionalFormatThreshold", "ShowConditionalFormatValuePromptAsync"),
+        Opened("ConfirmPasswordDialog", "dialog.ProtectSheet", "ShowProtectSheetDialogAsync (integrated confirmation field)"),
+        Opened("ConsolidateDialog", "dialog.Consolidate", "ShowConsolidateDialogAsync"),
+        Opened("CreateNamesFromSelectionDialog", "dialog.CreateNamesFromSelection", "ShowCreateNamesFromSelectionDialogAsync"),
+        Opened("CreateTableDialog", "dialog.CreateTable", "ShowCreateTableDialogAsync"),
+        Opened("CustomViewNameDialog", "dialog.CustomViewName", "ShowAddCustomViewDialogAsync"),
+        Opened("CustomViewsDialog", "dialog.CustomViews", "ShowCustomViewsManagerDialogAsync"),
+        Opened("DataBarRuleDialog", "dialog.DataBarRule", "ShowConditionalFormatNewRuleDialogAsync (DataBar)"),
+        Opened("DataTableDialog", "dialog.DataTable", "ShowDataTableInputDialogAsync"),
+        Opened("DataValidationDialog", "dialog.DataValidation", "ShowDataValidationDialogAsync"),
+        Opened("ErrorCheckingDialog", "dialog.ErrorChecking", "ShowErrorCheckingDialogAsync"),
+        Opened("EvaluateFormulaDialog", "dialog.EvaluateFormula", "ShowEvaluateFormulaDialogAsync"),
+        Opened("ExportOptionsDialog", "dialog.ExportOptions", "ShowExportOptionsDialogAsync"),
+        Opened("FillSeriesStepDialog", "dialog.FillSeriesStep", "ShowFillSeriesDialogAsync"),
+        Opened("FindReplaceDialog", "dialog.FindReplace", "ShowFindReplaceTabbedDialogAsync"),
+        Opened("ForecastSheetDialog", "dialog.ForecastSheet", "ShowForecastSheetInputDialogAsync"),
+        Opened("FormatCellsDialog", "dialog.FormatCells", "ShowFormatCellsDialogAsync"),
+        Opened("FormatPictureDialog", "dialog.FormatPicture", "OpenFormatPictureDialogAsync"),
+        Opened("FunctionArgumentsDialog", "dialog.FunctionArguments", "ShowFunctionArgumentsDialogAsync"),
+        Opened("GoalSeekDialog", "dialog.GoalSeek", "ShowGoalSeekInputDialogAsync"),
+        Opened("GoalSeekStatusDialog", "dialog.GoalSeekStatus", "ShowGoalSeekStatusDialogAsync"),
+        Opened("GoToDialog", "dialog.GoTo", "ShowGoToDialogAsync"),
+        Opened("GoToSpecialDialog", "dialog.GoToSpecial", "ShowGoToSpecialDialogAsync"),
+        Opened("HeaderFooterDialog", "dialog.PageSetup.HeaderFooter", "ShowPageSetupDialogAsync (Header/Footer tab)"),
+        Missing("HeaderFooterPictureFormatDialog", "Avalonia preserves header/footer picture metadata but has no production picture-format dialog for it."),
+        Opened("HighlightCellsRuleDialog", "dialog.HighlightCellsRule", "ShowConditionalFormatNewRuleDialogAsync (CellValue)"),
+        Opened("HyperlinkDialog", "dialog.InsertHyperlink", "ShowInsertHyperlinkInputDialogAsync"),
+        Opened("IconSetRuleDialog", "dialog.IconSetRule", "ShowConditionalFormatNewRuleDialogAsync (IconSet)"),
+        Opened("InsertChartDialog", "dialog.InsertChart", "ShowChartTypePickerAsync"),
+        Opened("InsertFunctionDialog", "dialog.InsertFunction", "ShowInsertFunctionPickerDialogAsync"),
+        Opened("InsertSlicerDialog", "dialog.InsertSlicer", "ShowPivotControlPickerParityDialogAsync"),
+        Opened("InsertTimelineDialog", "dialog.InsertTimeline", "ShowPivotControlPickerParityDialogAsync"),
+        Opened("LegalNoticesDialog", "dialog.LegalNotices", "ShowLegalNoticesDialogAsync"),
+        Opened("ManageConditionalFormatsDialog", "dialog.ConditionalFormatManage", "ShowManageConditionalFormatsDialogAsync"),
+        Opened("MergeCellsContentWarningDialog", "dialog.MergeCellsContentWarning", "ShowMergeCellsContentWarningDialogAsync"),
+        Opened("MoveChartDialog", "dialog.MoveChart", "ShowMoveChartDialog"),
+        Opened("MoveOrCopySheetDialog", "dialog.MoveOrCopySheet", "ShowMoveOrCopySheetDialogAsync"),
+        Opened("MovePivotTableDialog", "dialog.MovePivotTable", "OpenPivotMoveDialogAsync"),
+        Opened("NameDefinitionDialog", "dialog.NameDefinition", "ShowDefineNameDialogAsync"),
+        Opened("NamedRangeDialog", "dialog.NamedRange", "ShowNameManagerDialogAsync"),
+        Opened("NewConditionalFormatRuleDialog", "dialog.ConditionalFormatNewRule", "ShowConditionalFormatNewRuleDialogAsync"),
+        Opened("ObjectSizeDialog", "dialog.ObjectSize", "ShowSizeDialogAsync"),
+        Opened("OptionsDialog", "dialog.Options", "ShowOptionsDialogAsync"),
+        Opened("OutlineGroupDialog", "dialog.OutlineGroup", "ShowOutlineSettingsDialogAsync"),
+        Opened("PageBreakDialog", "dialog.PageBreak", "ShowPageBreaksMenuAsync"),
+        Opened("PageSetupDialog", "dialog.PageSetup", "ShowPageSetupDialogAsync"),
+        Opened("PasswordProtectionDialog", "dialog.ProtectSheet", "ShowProtectSheetDialogAsync"),
+        Opened("PasteNamesDialog", "dialog.PasteNames", "ShowPasteNamesDialogAsync"),
+        Opened("PasteSpecialDialog", "dialog.PasteSpecial", "ShowPasteSpecialDialogAsync"),
+        Opened("PictureCropDialog", "dialog.PictureCrop", "OpenPictureCropDialogAsync"),
+        Opened("PivotCalculatedFieldDialog", "dialog.PivotCalculatedField", "OpenPivotCalculatedFieldDialogAsync"),
+        Opened("PivotCalculatedItemDialog", "dialog.PivotCalculatedItem", "OpenPivotCalculatedItemDialogAsync"),
+        Opened("PivotChartOptionsDialog", "dialog.PivotChartOptions", "OpenPivotChartOptionsAsync"),
+        Opened("PivotChartTypeDialog", "dialog.PivotChartType", "ChangeActivePivotChartTypeAsync"),
+        Opened("PivotFieldFilterDialog", "dialog.PivotFieldFilter", "OpenPivotItemFilterDialogAsync"),
+        Opened("PivotFieldGroupingDialog", "dialog.PivotFieldGrouping", "OpenPivotGroupFieldDialogAsync"),
+        Opened("PivotLabelFilterDialog", "dialog.PivotLabelFilter", "OpenPivotLabelFilterDialogAsync"),
+        Opened("PivotSortOptionsDialog", "dialog.PivotSortOptions", "OpenPivotSortOptionsDialogAsync"),
+        Opened("PivotStyleGalleryDialog", "dialog.PivotStyleGallery", "OpenPivotStyleGalleryDialogAsync"),
+        Opened("PivotTableDataSourceDialog", "dialog.PivotTableDataSource", "OpenPivotDataSourceDialogAsync"),
+        Opened("PivotTableDialog", "dialog.PivotTable", "ShowInsertPivotTableDialogAsync"),
+        Opened("PivotTableNameDialog", "dialog.PivotTableName", "OpenPivotNameDialogAsync"),
+        Opened("PivotTableOptionsDialog", "dialog.PivotTableOptions", "OpenPivotTableOptionsDialogAsync"),
+        Opened("PivotValueFieldSettingsDialog", "dialog.PivotValueFieldSettings", "OpenPivotValueFieldSettingsDialogAsync"),
+        Opened("PivotValueFilterDialog", "dialog.PivotValueFilter", "OpenPivotValueFilterDialogAsync"),
+        Opened("PrintPreviewDialog", "dialog.PrintPreview", "ShowPrintPreviewDialogAsync"),
+        Opened("RecommendedPivotTablesDialog", "dialog.RecommendedPivotTables", "ShowRecommendedPivotTablesDialogAsync"),
+        Opened("RemoveDuplicatesDialog", "dialog.RemoveDuplicates", "ShowRemoveDuplicatesInputDialogAsync"),
+        Opened("RotationDialog", "dialog.Rotation", "RotateSelectedDrawingObjectAsync"),
+        Opened("RowHeightDialog", "dialog.RowHeight", "ShowRowHeightDialogAsync"),
+        Opened("ScenarioManagerDialog", "dialog.ScenarioManager", "ShowScenarioManagerCompactDialogAsync"),
+        Opened("ScreenTipDialog", "dialog.ScreenTip", "ShowHyperlinkSubPromptAsync (ScreenTip)"),
+        Opened("SelectDataSourceDialog", "dialog.SelectDataSource", "ShowSelectDataDialogAsync"),
+        Opened("SelectionPaneDialog", "dialog.SelectionPane", "OpenSelectionPaneDialogAsync"),
+        Opened("ShapeEffectsDialog", "dialog.ShapeEffects", "OpenShapeEffectsDialogAsync"),
+        Opened("ShapeGradientDialog", "dialog.ShapeGradient", "OpenShapeGradientDialogAsync"),
+        Opened("SheetNameDialog", "dialog.RenameSheet", "ShowRenameSheetDialogAsync"),
+        Opened("SortDialog", "dialog.Sort", "ShowSortInputDialogAsync"),
+        Opened("SortOptionsDialog", "dialog.SortOptions", "ShowSortOptionsDialogAsync"),
+        Opened("SparklineDialog", "dialog.Sparkline", "ShowInsertSparklineDialogAsync"),
+        Opened("SpellCheckDialog", "dialog.SpellCheck", "ShowSpellingDialogAsync"),
+        Opened("SubtotalDialog", "dialog.Subtotal", "ShowSubtotalInputDialogAsync"),
+        Opened("SymbolPickerDialog", "dialog.SymbolPicker", "ShowSymbolPickerAsync"),
+        Opened("TextEntryDialog", "dialog.TextEntry", "ShowSingleInputDialogAsync"),
+        Opened("TextToColumnsDialog", "dialog.TextToColumns", "ShowTextToColumnsDialogAsync"),
+        Opened("ThreadedCommentDialog", "dialog.ThreadedComment", "ShowThreadedCommentEditorAsync"),
+        Opened("TopBottomRuleDialog", "dialog.TopBottomRule", "ShowConditionalFormatNewRuleDialogAsync (Top10)"),
+        Opened("UnhideSheetDialog", "dialog.UnhideSheet", "ShowUnhideSheetDialogAsync"),
+        Missing("UnhideWindowDialog", "Avalonia restores hidden windows through Arrange All and has no production Unhide Window dialog."),
+        Opened("WatchWindowDialog", "dialog.WatchWindow", "ShowWatchWindowDialogAsync"),
+        Opened("WorkbookStatisticsDialog", "dialog.WorkbookStatistics", "ShowWorkbookStatisticsDialogAsync"),
+        Opened("WorkbookThemeDialog", "dialog.WorkbookTheme", "ShowThemesGalleryAsync"),
+        Opened("ZoomDialog", "dialog.Zoom", "ShowZoomDialogAsync"),
+    ];
+
+    private static new ParityInteractionDialogRoute Opened(
+        string catalogName,
+        string surfaceId,
+        string avaloniaProductionSurface) =>
+        new("dialog." + catalogName, surfaceId, avaloniaProductionSurface, "");
+
+    private static ParityInteractionDialogRoute Missing(string catalogName, string reason) =>
+        new("dialog." + catalogName, "dialog." + TrimDialogSuffix(catalogName), "", reason);
+
+    private static string TrimDialogSuffix(string name) =>
+        name.EndsWith("Dialog", StringComparison.Ordinal)
+            ? name[..^"Dialog".Length]
+            : name.EndsWith("Window", StringComparison.Ordinal)
+                ? name[..^"Window".Length]
+                : name;
+
+    /// <summary>
     /// Renders every app surface to <c>&lt;outputDirectory&gt;/&lt;surfaceId&gt;.png</c> and returns the per-surface
     /// outcome list that drives the manifest. Runs on the UI thread (the coordinator awaits it from the
     /// <see cref="Window.Opened"/> handler). Each surface is wrapped so one failure does not stop the others.
@@ -99,6 +254,12 @@ public sealed partial class MainWindow
         var results = new List<ParitySurfaceResult>();
         var captureAll = string.IsNullOrWhiteSpace(targetSurfaceId);
         var requestedSurfaceId = targetSurfaceId ?? "";
+        var requestedCatalogRoute = captureAll
+            ? null
+            : ParityInteractionDialogRoutes.FirstOrDefault(route =>
+                string.Equals(route.CatalogId, requestedSurfaceId, StringComparison.Ordinal));
+        if (requestedCatalogRoute is not null)
+            requestedSurfaceId = requestedCatalogRoute.SurfaceId;
 
         // ── Ribbon tabs + grid: render the live shell window with each tab selected. ──
         if (captureAll || requestedSurfaceId.StartsWith("tab.", StringComparison.Ordinal) ||
@@ -168,6 +329,59 @@ public sealed partial class MainWindow
 
         foreach (var (surfaceId, opener, tabNames) in tabDialogs)
             results.AddRange(await CaptureModalTabsAsync(outputDirectory, surfaceId, ParitySurfaceKind.Dialog, opener, tabNames));
+
+        // The original 57 logical routes above intentionally retain their stable ids and tab expansion.
+        // Add only catalog routes that are not already represented by one of those production surfaces.
+        // This preserves every legacy capture while extending the interaction inventory to all 120 rows.
+        if (maxDialogSurfaces is null)
+        {
+            var existingSingleSurfaceIds = ParityDialogOpeners()
+                .Select(opener => opener.SurfaceId)
+                .ToHashSet(StringComparer.Ordinal);
+            var existingTabSurfaceIds = ParityTabDialogOpeners()
+                .Select(dialog => dialog.SurfaceId)
+                .ToArray();
+            var supplementalRoutes = ParityInteractionDialogRoutes
+                .Where(route => !route.IsMissing)
+                .Where(route => !existingSingleSurfaceIds.Contains(route.SurfaceId))
+                .Where(route => !existingTabSurfaceIds.Any(tabSurfaceId =>
+                    string.Equals(route.SurfaceId, tabSurfaceId, StringComparison.Ordinal) ||
+                    route.SurfaceId.StartsWith(tabSurfaceId + ".", StringComparison.Ordinal)))
+                .GroupBy(route => route.SurfaceId, StringComparer.Ordinal)
+                .Select(group => group.First())
+                .ToArray();
+
+            if (!captureAll)
+                supplementalRoutes = supplementalRoutes
+                    .Where(route => string.Equals(route.SurfaceId, requestedSurfaceId, StringComparison.Ordinal))
+                    .ToArray();
+
+            foreach (var route in supplementalRoutes)
+            {
+                var opener = ResolveSupplementalParityDialogOpener(route.CatalogId);
+                results.Add(await CaptureModalSurfaceAsync(
+                    outputDirectory,
+                    route.SurfaceId,
+                    ParitySurfaceKind.Dialog,
+                    opener));
+            }
+
+            var missingRoutes = ParityInteractionDialogRoutes.Where(route => route.IsMissing);
+            if (!captureAll)
+                missingRoutes = missingRoutes.Where(route =>
+                    ReferenceEquals(route, requestedCatalogRoute) ||
+                    string.Equals(route.SurfaceId, requestedSurfaceId, StringComparison.Ordinal));
+
+            foreach (var route in missingRoutes)
+            {
+                results.Add(new ParitySurfaceResult(
+                    route.SurfaceId,
+                    ParitySurfaceKind.Dialog,
+                    route.SurfaceId + ".png",
+                    Captured: false,
+                    "Missing Avalonia production dialog: " + route.MissingReason));
+            }
+        }
 
         foreach (var surfaceId in ParityBackstageSurfaces)
         {
@@ -261,6 +475,304 @@ public sealed partial class MainWindow
                 "Advanced", "CustomizeRibbon", "QuickAccessToolbar", "AddIns", "TrustCenter", "View",
             ]),
     ];
+
+    internal int ParityLegacyDialogImageCount =>
+        ParityDialogOpeners().Count +
+        ParityTabDialogOpeners().Sum(dialog => 1 + dialog.TabNames.Length);
+
+    private Func<Task> ResolveSupplementalParityDialogOpener(string catalogId) =>
+        catalogId switch
+        {
+            "dialog.ActivateSheetDialog" => ShowActivateSheetParityDialogAsync,
+            "dialog.BookmarkDialog" => async () =>
+            {
+                await ShowHyperlinkSubPromptAsync(this, "Bookmark", "Cell reference", "A1");
+            },
+            "dialog.CellShiftDialog" => ShowInsertCellsDialogAsync,
+            "dialog.ChartAxisFormatDialog" => () => ShowWithSelectedParityChartAsync(ShowChartXAxisFormatDialog),
+            "dialog.ChartBarFormatDialog" => () => ShowWithParityChartTypeAsync(ChartType.Bar, ShowChartBarFormatDialog),
+            "dialog.ChartBubbleFormatDialog" => () => ShowWithParityChartTypeAsync(ChartType.Bubble, ShowChartBubbleFormatDialog),
+            "dialog.ChartDataLabelsDialog" => () => ShowWithSelectedParityChartAsync(ShowChartDataLabelsDialog),
+            "dialog.ChartErrorBarsDialog" => () => ShowWithSelectedParityChartAsync(ShowChartErrorBarsDialog),
+            "dialog.ChartPieFormatDialog" => () => ShowWithParityChartTypeAsync(ChartType.Pie, ShowChartPieFormatDialog),
+            "dialog.ChartSeriesFormatDialog" => () => ShowWithSelectedParityChartAsync(ShowChartSeriesFormatDialog),
+            "dialog.ChartStockFormatDialog" => () => ShowWithParityChartTypeAsync(ChartType.Stock, ShowChartStockFormatDialog),
+            "dialog.ChartTitlesDialog" => () => ShowWithSelectedParityChartAsync(ShowChartTitlesDialog),
+            "dialog.ChartTrendlineOptionsDialog" => () => ShowWithSelectedParityChartAsync(ShowChartTrendlineDialog),
+            "dialog.ColorPickerDialog" => async () => { await ShowMoreColorsDialogAsync("More Colors", new CellColor(91, 155, 213)); },
+            "dialog.ColorScaleRuleDialog" => () => ShowConditionalFormatNewRuleDialogAsync(CfRuleType.ColorScale),
+            "dialog.ColumnWidthDialog" => ShowColumnWidthDialogAsync,
+            "dialog.CommentListWindow" => ShowCommentListParityDialogAsync,
+            "dialog.ConditionalFormatThresholdDialog" => async () =>
+            {
+                await ShowConditionalFormatValuePromptAsync("Conditional Formatting", "Threshold", "100");
+            },
+            "dialog.CreateNamesFromSelectionDialog" => ShowCreateNamesFromSelectionDialogAsync,
+            "dialog.CustomViewNameDialog" => async () => { await ShowAddCustomViewDialogAsync(); },
+            "dialog.DataBarRuleDialog" => () => ShowConditionalFormatNewRuleDialogAsync(CfRuleType.DataBar),
+            "dialog.FillSeriesStepDialog" => ShowFillSeriesDialogAsync,
+            "dialog.FormatPictureDialog" => () => ShowWithSelectedParityPictureAsync(OpenFormatPictureDialogAsync),
+            "dialog.FunctionArgumentsDialog" => ShowFunctionArgumentsParityDialogAsync,
+            "dialog.HighlightCellsRuleDialog" => () => ShowConditionalFormatNewRuleDialogAsync(CfRuleType.CellValue),
+            "dialog.IconSetRuleDialog" => () => ShowConditionalFormatNewRuleDialogAsync(CfRuleType.IconSet),
+            "dialog.InsertChartDialog" => async () => { await ShowChartTypePickerAsync(ChartType.Column); },
+            "dialog.InsertFunctionDialog" => async () => { await ShowInsertFunctionPickerDialogAsync(); },
+            "dialog.MergeCellsContentWarningDialog" => ShowMergeCellsWarningParityDialogAsync,
+            "dialog.MoveChartDialog" => () => ShowWithSelectedParityChartAsync(ShowMoveChartDialog),
+            "dialog.MoveOrCopySheetDialog" => ShowMoveOrCopySheetDialogAsync,
+            "dialog.MovePivotTableDialog" => () => ShowWithParityPivotAsync(OpenPivotMoveDialogAsync),
+            "dialog.NameDefinitionDialog" => async () => { await ShowDefineNameDialogAsync(seed: null); },
+            "dialog.NamedRangeDialog" => ShowNameManagerDialogAsync,
+            "dialog.ObjectSizeDialog" => () => ShowWithSelectedParityShapeAsync(ResizeSelectedDrawingObjectAsync),
+            "dialog.OutlineGroupDialog" => ShowOutlineSettingsDialogAsync,
+            "dialog.PageBreakDialog" => ShowPageBreaksMenuAsync,
+            "dialog.PasteNamesDialog" => ShowPasteNamesDialogAsync,
+            "dialog.PasteSpecialDialog" => ShowPasteSpecialDialogAsync,
+            "dialog.PictureCropDialog" => () => ShowWithSelectedParityPictureAsync(OpenPictureCropDialogAsync),
+            "dialog.PivotCalculatedFieldDialog" => () => ShowWithParityPivotAsync(OpenPivotCalculatedFieldDialogAsync),
+            "dialog.PivotCalculatedItemDialog" => () => ShowWithParityPivotAsync(OpenPivotCalculatedItemDialogAsync),
+            "dialog.PivotChartOptionsDialog" => () => ShowWithParityPivotChartAsync(OpenPivotChartOptionsAsync),
+            "dialog.PivotChartTypeDialog" => () => ShowWithParityPivotChartAsync(ChangeActivePivotChartTypeAsync),
+            "dialog.PivotFieldGroupingDialog" => () => ShowWithParityPivotAsync(OpenPivotGroupFieldDialogAsync),
+            "dialog.PivotLabelFilterDialog" => () => ShowWithParityPivotTargetAsync(OpenPivotLabelFilterDialogAsync),
+            "dialog.PivotSortOptionsDialog" => ShowPivotSortOptionsParityDialogAsync,
+            "dialog.PivotStyleGalleryDialog" => () => ShowWithParityPivotAsync(OpenPivotStyleGalleryDialogAsync),
+            "dialog.PivotTableDataSourceDialog" => () => ShowWithParityPivotAsync(OpenPivotDataSourceDialogAsync),
+            "dialog.PivotTableDialog" => ShowPivotTableCreateParityDialogAsync,
+            "dialog.PivotTableNameDialog" => () => ShowWithParityPivotAsync(OpenPivotNameDialogAsync),
+            "dialog.PivotValueFilterDialog" => () => ShowWithParityPivotTargetAsync(OpenPivotValueFilterDialogAsync),
+            "dialog.RotationDialog" => () => ShowWithSelectedParityShapeAsync(RotateSelectedDrawingObjectAsync),
+            "dialog.RowHeightDialog" => ShowRowHeightDialogAsync,
+            "dialog.ScreenTipDialog" => async () =>
+            {
+                await ShowHyperlinkSubPromptAsync(this, "Set Hyperlink ScreenTip", "ScreenTip text", "Quarterly sales");
+            },
+            "dialog.SpellCheckDialog" => ShowSpellCheckParityDialogAsync,
+            "dialog.TextEntryDialog" => async () =>
+            {
+                await ShowSingleInputDialogAsync("Enter Text", "Text", "FreeX", "OK", "ParityTextEntryBox");
+            },
+            "dialog.ThreadedCommentDialog" => ShowThreadedCommentParityDialogAsync,
+            "dialog.TopBottomRuleDialog" => () => ShowConditionalFormatNewRuleDialogAsync(CfRuleType.Top10),
+            "dialog.WorkbookThemeDialog" => ShowThemesGalleryAsync,
+            _ => throw new InvalidOperationException($"No supplemental production opener is registered for {catalogId}.")
+        };
+
+    private async Task ShowActivateSheetParityDialogAsync()
+    {
+        var auxiliaryWindow = new Window
+        {
+            Title = "Parity workbook window",
+            Width = 320,
+            Height = 200,
+            ShowInTaskbar = false,
+        };
+        auxiliaryWindow.Show();
+        try
+        {
+            await ShowSwitchWindowsDialogAsync();
+        }
+        finally
+        {
+            auxiliaryWindow.Close();
+        }
+    }
+
+    private async Task ShowWithParityChartTypeAsync(ChartType chartType, Func<Task> showDialogAsync)
+    {
+        var chart = EnsureParityChart();
+        if (chart is null)
+            return;
+
+        var previousType = chart.Type;
+        chart.Type = chartType;
+        try
+        {
+            await ShowWithSelectedParityChartAsync(showDialogAsync);
+        }
+        finally
+        {
+            chart.Type = previousType;
+        }
+    }
+
+    private async Task ShowCommentListParityDialogAsync()
+    {
+        var sheet = _session.ActiveSheet;
+        var address = new CellAddress(sheet.Id, 2, 2);
+        _session.ExecuteReviewCommand(new SetCommentCommand(sheet.Id, address, "Review the quarterly total."));
+        await ShowNotesListAsync();
+    }
+
+    private async Task ShowFunctionArgumentsParityDialogAsync()
+    {
+        var function = FreeX.App.Presentation.Dialogs.InsertFunctionCatalogPlanner.BuildCatalog()
+            .First(entry => string.Equals(entry.Name, "SUM", StringComparison.Ordinal));
+        await ShowFunctionArgumentsDialogAsync(function);
+    }
+
+    private async Task ShowMergeCellsWarningParityDialogAsync()
+    {
+        var sheetId = _session.ActiveSheet.Id;
+        var plan = new MergeCellContentPlan(
+            WouldLoseContent: true,
+            Entries:
+            [
+                new MergeCellContentEntry(new CellAddress(sheetId, 2, 2), "North", IsTopLeft: true),
+                new MergeCellContentEntry(new CellAddress(sheetId, 2, 3), "Widget", IsTopLeft: false),
+            ],
+            ConcatenatedText: "North Widget");
+        await ShowMergeCellsContentWarningDialogAsync(plan);
+    }
+
+    private async Task ShowWithSelectedParityPictureAsync(Func<Task> showDialogAsync)
+    {
+        var previousKind = _selectedDrawingObjectKind;
+        var previousId = _selectedDrawingObjectId;
+        var picture = EnsureParityPicture();
+
+        _selectedDrawingObjectKind = SelectionPaneObjectKind.Picture;
+        _selectedDrawingObjectId = picture.Id;
+        _ribbonContextSource.OnDrawingObjectSelected(SelectionPaneObjectKind.Picture);
+        RefreshShell(_statusText.Text ?? "Ready");
+
+        try
+        {
+            await showDialogAsync();
+        }
+        finally
+        {
+            RestoreParityDrawingSelection(previousKind, previousId);
+        }
+    }
+
+    private PictureModel EnsureParityPicture()
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.Pictures.FirstOrDefault(picture => picture.IsVisible) is { } existing)
+            return existing;
+
+        var picture = new PictureModel
+        {
+            Name = "Parity picture",
+            Anchor = new CellAddress(sheet.Id, 6, 5),
+            Kind = PictureKind.Image,
+            ImageBytes = [0x89, 0x50, 0x4E, 0x47],
+            ContentType = "image/png",
+            Width = 180,
+            Height = 110,
+            AltText = "Quarterly sales preview",
+        };
+        sheet.Pictures.Add(picture);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id));
+        RefreshShell(_statusText.Text ?? "Ready");
+        return picture;
+    }
+
+    private async Task ShowWithParityPivotAsync(Func<PivotTableModel, Task> showDialogAsync)
+    {
+        var previousSelection = _session.SelectedRange;
+        var pivot = EnsureParityPivot();
+        if (pivot is null)
+            return;
+
+        _session.SelectRange(new GridRange(pivot.TargetRange.Start, pivot.TargetRange.Start));
+        RefreshShell(_statusText.Text ?? "Ready");
+        try
+        {
+            await showDialogAsync(pivot);
+        }
+        finally
+        {
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
+
+    private async Task ShowWithParityPivotTargetAsync(
+        Func<PivotTableModel, PivotHeaderDropdownTargetModel, Task> showDialogAsync)
+    {
+        await ShowWithParityPivotAsync(async pivot =>
+        {
+            if (pivot.RowFields.Count == 0)
+                return;
+
+            var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+            var field = pivot.RowFields[0];
+            var target = new PivotHeaderDropdownTargetModel(
+                pivot.Name,
+                PivotFieldListPaneBuilder.FieldCaption(headers, field.SourceFieldIndex),
+                field.SourceFieldIndex,
+                PivotHeaderArea.Row,
+                IsActive: false);
+            await showDialogAsync(pivot, target);
+        });
+    }
+
+    private async Task ShowPivotSortOptionsParityDialogAsync()
+    {
+        await ShowWithParityPivotAsync(async pivot =>
+        {
+            if (pivot.RowFields.Count == 0)
+                return;
+
+            var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
+            var field = pivot.RowFields[0];
+            var target = new PivotHeaderDropdownTargetModel(
+                pivot.Name,
+                PivotFieldListPaneBuilder.FieldCaption(headers, field.SourceFieldIndex),
+                field.SourceFieldIndex,
+                PivotHeaderArea.Row,
+                IsActive: false);
+            await OpenPivotSortOptionsDialogAsync(pivot, headers, target);
+        });
+    }
+
+    private async Task ShowWithParityPivotChartAsync(Func<Task> showDialogAsync)
+    {
+        await ShowWithParityPivotAsync(async pivot =>
+        {
+            var sheet = _session.ActiveSheet;
+            if (!sheet.Charts.Any(chart => chart.IsPivotChart &&
+                string.Equals(chart.PivotTableName, pivot.Name, StringComparison.Ordinal)))
+            {
+                _session.ExecuteReviewCommand(new AddPivotChartCommand(sheet.Id, pivot.Name, ChartType.Column));
+                RefreshShell(_statusText.Text ?? "Ready");
+            }
+
+            await showDialogAsync();
+        });
+    }
+
+    private async Task ShowPivotTableCreateParityDialogAsync()
+    {
+        var sheet = _session.ActiveSheet;
+        SeedParityPivotSource(sheet);
+        await ShowWithParitySelectionAsync(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 8, 5),
+            ShowInsertPivotTableDialogAsync);
+    }
+
+    private async Task ShowSpellCheckParityDialogAsync()
+    {
+        var sheet = _session.ActiveSheet;
+        var address = new CellAddress(sheet.Id, 2, 2);
+        sheet.SetCell(address, Cell.FromValue(new TextValue("Quaterly reveneu")));
+        await ShowWithParitySelectionAsync(address, address, ShowSpellingDialogAsync);
+    }
+
+    private async Task ShowThreadedCommentParityDialogAsync()
+    {
+        var sheet = _session.ActiveSheet;
+        var address = new CellAddress(sheet.Id, 2, 2);
+        _session.ExecuteReviewCommand(new SetThreadedCommentCommand(
+            sheet.Id,
+            address,
+            "Please verify this total.",
+            author: "Reviewer"));
+        await ShowWithParitySelectionAsync(address, address, ShowThreadedCommentDialogAsync);
+    }
 
     private Task ShowPrintPreviewParityDialogAsync()
     {

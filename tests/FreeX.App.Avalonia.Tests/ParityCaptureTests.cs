@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Headless;
 using FluentAssertions;
+using FreeX.App.Presentation.Interactions;
 
 namespace FreeX.App.Avalonia.Tests;
 
@@ -80,6 +81,61 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
+    public void InteractionDialogRoutes_MapEveryAuthoritativeCatalogRow()
+    {
+        var catalog = InteractionSurfaceCatalog.Dialogs;
+        var routes = MainWindow.ParityInteractionDialogRoutes;
+
+        catalog.Should().HaveCount(120);
+        routes.Should().HaveCount(120);
+        routes.Select(route => route.CatalogId)
+            .Should().Equal(catalog.Select(row => row.Id),
+                "the parity route table should stay ordered with the authoritative interaction catalog");
+        routes.Select(route => route.CatalogId).Should().OnlyHaveUniqueItems();
+
+        routes.Should().OnlyContain(route =>
+            route.IsMissing
+                ? route.AvaloniaProductionSurface.Length == 0 && route.MissingReason.Length > 0
+                : route.AvaloniaProductionSurface.Length > 0 && route.MissingReason.Length == 0,
+            "every row must resolve to production UI or an explicit missing classification with a reason");
+
+        routes.Where(route => route.IsMissing).Select(route => route.CatalogId)
+            .Should().Equal(
+                "dialog.ChartStyleDialog",
+                "dialog.HeaderFooterPictureFormatDialog",
+                "dialog.UnhideWindowDialog");
+    }
+
+    [Fact]
+    public void InteractionDialogRoutes_KeepExplicitStableMappingsForDifferentlyNamedPortableSurfaces()
+    {
+        var routes = MainWindow.ParityInteractionDialogRoutes.ToDictionary(route => route.CatalogId);
+        var expectedMappings = new (string CatalogId, string SurfaceId, string ProductionSurface)[]
+        {
+            ("dialog.ActivateSheetDialog", "dialog.ActivateSheet", "ShowSwitchWindowsDialogAsync"),
+            ("dialog.ChartAreaLegendDialog", "dialog.FormatChartArea", "ShowFormatChartAreaDialog"),
+            ("dialog.CommentListWindow", "dialog.CommentList", "ShowNotesListAsync"),
+            ("dialog.ConfirmPasswordDialog", "dialog.ProtectSheet", "ShowProtectSheetDialogAsync (integrated confirmation field)"),
+            ("dialog.HeaderFooterDialog", "dialog.PageSetup.HeaderFooter", "ShowPageSetupDialogAsync (Header/Footer tab)"),
+            ("dialog.HyperlinkDialog", "dialog.InsertHyperlink", "ShowInsertHyperlinkInputDialogAsync"),
+            ("dialog.NameDefinitionDialog", "dialog.NameDefinition", "ShowDefineNameDialogAsync"),
+            ("dialog.NamedRangeDialog", "dialog.NamedRange", "ShowNameManagerDialogAsync"),
+            ("dialog.OutlineGroupDialog", "dialog.OutlineGroup", "ShowOutlineSettingsDialogAsync"),
+            ("dialog.PasswordProtectionDialog", "dialog.ProtectSheet", "ShowProtectSheetDialogAsync"),
+            ("dialog.ScreenTipDialog", "dialog.ScreenTip", "ShowHyperlinkSubPromptAsync (ScreenTip)"),
+            ("dialog.SheetNameDialog", "dialog.RenameSheet", "ShowRenameSheetDialogAsync"),
+            ("dialog.WorkbookThemeDialog", "dialog.WorkbookTheme", "ShowThemesGalleryAsync"),
+        };
+
+        foreach (var expected in expectedMappings)
+        {
+            routes[expected.CatalogId].SurfaceId.Should().Be(expected.SurfaceId);
+            routes[expected.CatalogId].AvaloniaProductionSurface.Should().Be(expected.ProductionSurface);
+            routes[expected.CatalogId].IsMissing.Should().BeFalse();
+        }
+    }
+
+    [Fact]
     public async Task CaptureParitySurfaces_ProducesGridAndDialogPngs()
     {
         var outputDirectory = Path.Combine(
@@ -91,6 +147,8 @@ public sealed class ParityCaptureTests
             await Session.Dispatch(async () =>
             {
                 var window = new MainWindow([]);
+                window.ParityLegacyDialogImageCount.Should().Be(93,
+                    "the original 50 single-dialog and 43 default/tab captures must remain intact");
                 window.Show();
                 window.Measure(new global::Avalonia.Size(1120, 720));
                 window.Arrange(new global::Avalonia.Rect(0, 0, 1120, 720));
@@ -177,6 +235,39 @@ public sealed class ParityCaptureTests
                 scenarioManager.Id.Should().Be("dialog.ScenarioManager");
                 scenarioManager.Captured.Should().BeTrue($"Scenario Manager should render headlessly (note: {scenarioManager.Note})");
                 AssertCapturedPng(outputDirectory, scenarioManager);
+
+                window.Close();
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task CaptureParitySurfaces_ReturnsExplicitMissingResult_ForMissingCatalogDialog()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-parity-capture-missing-dialog-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                window.Show();
+
+                var results = await window.CaptureParitySurfacesAsync(
+                    outputDirectory,
+                    targetSurfaceId: "dialog.ChartStyleDialog");
+
+                results.Should().ContainSingle();
+                results[0].Id.Should().Be("dialog.ChartStyle");
+                results[0].Captured.Should().BeFalse();
+                results[0].Note.Should().StartWith("Missing Avalonia production dialog:");
+                results[0].Note.Should().Contain("no chart-style dialog");
 
                 window.Close();
             }, CancellationToken.None);
