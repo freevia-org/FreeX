@@ -28,6 +28,7 @@ public sealed class ChartRenderPlannerTests
         scene.GeometryKind.Should().Be(ChartSceneGeometryKind.Line);
         scene.Frame.Plot.HasPositiveArea.Should().BeTrue();
         scene.Title!.Value.Text.Should().Be("Revenue");
+        scene.Title.Value.FontFamily.Should().Be("Arial");
         scene.LineSeries.Should().ContainSingle().Which.Markers.Should().HaveCount(3);
         scene.DataLabels.Should().HaveCount(3);
         scene.AxisTicks.ValueTicks.Should().NotBeEmpty();
@@ -95,6 +96,21 @@ public sealed class ChartRenderPlannerTests
         ChartRenderPlanner.UsesClassicOfficeChartStyle(new ChartShape()).Should().BeTrue();
         ChartRenderPlanner.UsesClassicOfficeChartStyle(new ChartShape { StyleId = 2 }).Should().BeFalse();
         ChartRenderPlanner.UsesClassicOfficeChartStyle(new ChartShape { StyleId = 102 }).Should().BeFalse();
+    }
+
+    [Fact]
+    public void BuildScenePlan_StyledChartTitleKeepsRendererDefaultTypeface()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            StyleId = 102,
+            Title = "Revenue"
+        };
+
+        var scene = ChartRenderPlanner.BuildScenePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        scene.Title!.Value.FontFamily.Should().BeNull();
     }
 
     [Fact]
@@ -496,6 +512,25 @@ public sealed class ChartRenderPlannerTests
 
         plan.Plot.Should().Be(new ChartPlanRect(148, 93, 938, 541));
         ChartRenderPlanner.ResolveTextFontSize(chart, 6.5).Should().Be(18.0);
+    }
+
+    [Theory]
+    [InlineData(ChartType.Scatter, 12.0)]
+    [InlineData(ChartType.Surface3D, 11.0)]
+    public void BuildFramePlan_ImportedChartTitlesUsePowerPointTitleBandOffsets(
+        ChartType chartType,
+        double titleOffset)
+    {
+        var chart = new ChartShape
+        {
+            ChartType = chartType,
+            Title = "Revenue",
+            TextStyle = new ChartTextStyle { FontSizePt = 18.0 }
+        };
+
+        var plan = ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300));
+
+        plan.TitleBounds.Should().Be(new ChartPlanRect(20, titleOffset, 360, 28));
     }
 
     [Fact]

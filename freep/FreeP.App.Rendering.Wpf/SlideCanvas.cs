@@ -740,7 +740,7 @@ public sealed class SlideCanvas : FrameworkElement
             new Rect(bounds.X, bounds.Y, bounds.Width, bounds.Height));
 
         if (scene.Title is { } title)
-            DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment));
+            DrawChartLabel(dc, title.Text, ToRect(title.Bounds), title.IsBold, title.FontSize, ToTextAlignment(title.Alignment), fontFamily: title.FontFamily);
 
         if (!scene.Frame.HasPlot)
             return;
