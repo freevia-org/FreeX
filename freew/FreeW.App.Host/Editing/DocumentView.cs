@@ -6239,7 +6239,7 @@ public sealed class DocumentView : RichTextBox
         // Mirrors the footnote/endnote marker convention: a plain run carrying a Tag that ReadInline drops
         // on commit. The marker text is regenerated on every Render, so even if the user edits over it the
         // model is unaffected (the outline definition lives in numbering.xml).
-        var marker = new WpfRun(markerText + '\t')
+        var marker = new WpfRun(markerText + ' ')
         {
             Tag = MultiLevelMarker.Instance
         };
