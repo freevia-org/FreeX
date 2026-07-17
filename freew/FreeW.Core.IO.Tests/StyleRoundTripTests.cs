@@ -32,6 +32,15 @@ public class StyleRoundTripTests
         return XDocument.Load(entry);
     }
 
+    private static XDocument DocumentXml(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        using var zip = new ZipArchive(new MemoryStream(stream.ToArray()), ZipArchiveMode.Read);
+        using var entry = zip.GetEntry("word/document.xml")!.Open();
+        return XDocument.Load(entry);
+    }
+
     private static XElement StyleElement(XDocument styles, string styleId) =>
         styles.Root!.Elements(W + "style").Single(e => (string?)e.Attribute(W + "styleId") == styleId);
 
@@ -164,5 +173,46 @@ public class StyleRoundTripTests
         normal.LineSpacing.Should().BeApproximately(2.0, 0.01);
         heading.SpaceAfterPt.Should().BeApproximately(8, 0.5);
         heading.LineSpacing.Should().BeApproximately(2.0, 0.01);
+    }
+
+    [Fact]
+    public void StyledParagraph_InheritsStyleSpacingInsteadOfWritingNeutralDirectSpacing()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Heading") { StyleId = "Heading1" });
+
+        var paragraph = DocumentXml(doc).Root!
+            .Element(W + "body")!
+            .Elements(W + "p")
+            .Single();
+
+        paragraph.Element(W + "pPr")!.Element(W + "spacing").Should().BeNull(
+            "the neutral model default must not override Heading1's 4pt style spacing");
+    }
+
+    [Fact]
+    public void ExplicitZeroParagraphSpacing_IsWrittenAsADirectOverride()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("Compact")
+        {
+            Formatting = ParagraphFormatting.Default with
+            {
+                SpaceAfterPt = 0,
+                SpaceAfterIsSet = true
+            }
+        });
+
+        var spacing = DocumentXml(doc).Root!
+            .Element(W + "body")!
+            .Elements(W + "p")
+            .Single()
+            .Element(W + "pPr")!
+            .Element(W + "spacing");
+
+        spacing.Should().NotBeNull();
+        spacing!.Attribute(W + "after")!.Value.Should().Be("0");
     }
 }

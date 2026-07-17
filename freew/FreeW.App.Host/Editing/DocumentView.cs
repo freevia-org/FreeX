@@ -8207,7 +8207,13 @@ public sealed class DocumentView : RichTextBox
             // Word keeps the caption/text run with a large inline object when the object would otherwise
             // cross a page boundary. Apply the same paragraph-level constraint to inline charts, SmartArt,
             // WordArt, and images while preserving the explicit model setting for ordinary paragraphs.
-            KeepTogether = paraFmt.KeepLinesTogether || paragraph.Runs.Any(run =>
+            // Word's default widow/orphan control keeps ordinary short paragraphs from leaving a
+            // single line behind at a page boundary. WPF only exposes the stronger KeepTogether
+            // switch, so apply it to short body paragraphs while allowing genuinely long content
+            // to keep flowing across pages.
+            KeepTogether = paraFmt.KeepLinesTogether
+                || (!inTableCell && paragraph.PlainText.Length <= 500)
+                || paragraph.Runs.Any(run =>
                 run.Chart is { IsFloating: false } ||
                 run.SmartArt is { IsFloating: false } ||
                 run.WordArt is { IsFloating: false } ||

@@ -1265,7 +1265,15 @@ public static class DocxWriter
         var preservedDrawingRelIds = PreservedPartRelIds(preservedParts)
             .ToDictionary(pair => pair.Part.PartName, pair => pair.RelId, StringComparer.Ordinal);
 
-        var drawings = new RunDrawings(imagesByRun, chartsByRun, embeddedByRun, smartArtsByRun, ids, groupedImages, preservedDrawingRelIds);
+        var drawings = new RunDrawings(
+            imagesByRun,
+            chartsByRun,
+            embeddedByRun,
+            smartArtsByRun,
+            ids,
+            groupedImages,
+            preservedDrawingRelIds,
+            document.DefaultParagraph);
 
         var body = new XElement(W + "body");
         for (var i = 0; i < document.Blocks.Count;)
@@ -1354,7 +1362,8 @@ public static class DocxWriter
         IReadOnlyDictionary<Run, SmartArtPart> SmartArts,
         IdAllocator Ids,
         IReadOnlyDictionary<InlineImage, ImagePart> GroupImages,
-        IReadOnlyDictionary<string, string>? PreservedDrawingRelIds = null)
+        IReadOnlyDictionary<string, string>? PreservedDrawingRelIds = null,
+        ParagraphFormatting? DocumentDefaultParagraph = null)
     {
         public static RunDrawings Empty() => new(
             new Dictionary<Run, ImagePart>(),
@@ -2315,7 +2324,13 @@ public static class DocxWriter
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null)
     {
         var p = new XElement(W + "p");
-        var pPr = BuildParagraphProperties(paragraph, partsBySection, preservedNumbering, restartOverrides, drawings.Ids);
+        var pPr = BuildParagraphProperties(
+            paragraph,
+            partsBySection,
+            preservedNumbering,
+            restartOverrides,
+            drawings.Ids,
+            drawings.DocumentDefaultParagraph);
         if (pPr is not null)
             p.Add(pPr);
 
@@ -2550,7 +2565,8 @@ public static class DocxWriter
         IReadOnlyDictionary<Section, IReadOnlyList<HeaderFooterPart>>? partsBySection = null,
         PreservedNumberingPlan? preservedNumbering = null,
         IReadOnlyDictionary<(ListKind Kind, int Level, int StartAt), int>? restartOverrides = null,
-        IdAllocator? ids = null)
+        IdAllocator? ids = null,
+        ParagraphFormatting? documentDefaultParagraph = null)
     {
         var pPr = new XElement(W + "pPr");
         if (!string.IsNullOrEmpty(paragraph.StyleId))
@@ -2660,18 +2676,24 @@ public static class DocxWriter
         if (f.Rtl)
             pPr.Add(new XElement(W + "bidi"));
         // w:spacing carries before/after AND line spacing — CT_PPrBase order: after bidi, before ind.
-        // Line spacing is emitted only when it differs from the model default (a multiple of 1.15), so
-        // paragraphs with inherited/default spacing stay byte-unchanged.
-        var hasLineSpacing = f.LineRule != LineSpacingRule.Multiple
-            || System.Math.Abs(f.LineSpacing - ParagraphFormatting.Default.LineSpacing) > 0.0001;
-        if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0 || hasLineSpacing)
+        // Only direct formatting is emitted: inherited document defaults must remain available for
+        // the paragraph style cascade in Word.
+        var inheritedSpacing = documentDefaultParagraph ?? ParagraphFormatting.Default;
+        var hasBeforeSpacing = f.SpaceBeforeIsSet
+            || System.Math.Abs(f.SpaceBeforePt - inheritedSpacing.SpaceBeforePt) > 0.0001;
+        var hasAfterSpacing = f.SpaceAfterIsSet
+            || System.Math.Abs(f.SpaceAfterPt - inheritedSpacing.SpaceAfterPt) > 0.0001;
+        var hasLineSpacing = f.LineSpacingIsSet
+            || f.LineRule != inheritedSpacing.LineRule
+            || System.Math.Abs(f.LineSpacing - inheritedSpacing.LineSpacing) > 0.0001
+            || System.Math.Abs(f.LineHeightPt - inheritedSpacing.LineHeightPt) > 0.0001;
+        if (hasBeforeSpacing || hasAfterSpacing || hasLineSpacing)
         {
             var spacingEl = new XElement(W + "spacing");
-            if (f.SpaceBeforePt > 0 || f.SpaceAfterPt > 0)
-            {
+            if (hasBeforeSpacing)
                 spacingEl.Add(new XAttribute(W + "before", PointsToDxa(f.SpaceBeforePt)));
+            if (hasAfterSpacing)
                 spacingEl.Add(new XAttribute(W + "after", PointsToDxa(f.SpaceAfterPt)));
-            }
             if (hasLineSpacing)
             {
                 var (line, rule) = f.LineRule switch

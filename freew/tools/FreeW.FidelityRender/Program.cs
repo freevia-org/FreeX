@@ -281,22 +281,11 @@ static void RenderDocumentComposite(
             .BuildTableLayoutPlan(table, page: doc.Page, firstPageLeadingContentHeightDip: 0)
             .Pagination.Pages.Count > 1);
     var bodyFootnoteReserveDip = hasMultiPageTable ? 0 : footnoteReserveDip;
-    // Word lets the last body line use the lower part of the nominal bottom margin while the
-    // footer remains in its own half-inch band. A small overlap keeps WPF's paragraph-bottom
-    // margin from moving a complete two-line paragraph to the next page.
-    const double FooterBodyOverlapDip = 12.0;
-    var hasFooterContent = doc.FinalSectionHeadersFooters.Footer is { IsEmpty: false }
-        || doc.FinalSectionHeadersFooters.EvenFooter is { IsEmpty: false }
-        || doc.FinalSectionHeadersFooters.FirstFooter is { IsEmpty: false }
-        || doc.Sections.Any(section =>
-            section.HeadersFooters.Footer is { IsEmpty: false }
-            || section.HeadersFooters.EvenFooter is { IsEmpty: false }
-            || section.HeadersFooters.FirstFooter is { IsEmpty: false });
     flow.PagePadding = new Thickness(
         marginLeft,
         marginTop,
         marginRight,
-        Math.Max(0, marginBottom + bodyFootnoteReserveDip - (hasFooterContent ? FooterBodyOverlapDip : 0)));
+        Math.Max(0, marginBottom + bodyFootnoteReserveDip));
 
     // Layer 2: call ApplyColumnLayout so multi-column sections render with the correct column count.
     // The old path hard-coded ColumnWidth=pageW (single column). This fixes that miss.

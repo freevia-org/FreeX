@@ -48,6 +48,17 @@ public sealed class PaginationEngineTests
         result.PageBreakYsDip.Should().BeEmpty();
     }
 
+    [StaFact]
+    public void ShortBodyParagraph_UsesKeepTogetherForWordWidowOrphanParity()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph("A short paragraph that must remain intact at a page boundary."));
+        var view = NewEditor(doc);
+
+        view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().Single().KeepTogether.Should().BeTrue();
+    }
+
     // ── Multi-page content ────────────────────────────────────────────────────────────────────────
 
     [StaFact]
