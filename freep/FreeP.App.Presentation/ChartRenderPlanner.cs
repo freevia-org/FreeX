@@ -3118,7 +3118,7 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 5.0 * scaleX, plot.Y + 122.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 1.0 * scaleX, plot.Y + 125.0 * scaleY),
                     new ChartPlanPoint(plot.X + 72.0 * scaleX, plot.Y + 71.0 * scaleY),
                     new ChartPlanPoint(plot.X + 132.0 * scaleX, plot.Y + 71.0 * scaleY),
                 },
@@ -3131,7 +3131,7 @@ public static partial class ChartRenderPlanner
                 -1,
                 new[]
                 {
-                    new ChartPlanPoint(plot.X + 5.0 * scaleX, plot.Y + 122.0 * scaleY),
+                    new ChartPlanPoint(plot.X + 1.0 * scaleX, plot.Y + 125.0 * scaleY),
                     new ChartPlanPoint(plot.X + 132.0 * scaleX, plot.Y + 71.0 * scaleY),
                     new ChartPlanPoint(plot.X + 174.0 * scaleX, plot.Y + 79.0 * scaleY),
                 },
