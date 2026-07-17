@@ -15465,7 +15465,7 @@ public sealed class DocumentView : Control
         WordArtWarp warp,
         Vector offset = default)
     {
-        var glyphs = BuildFittedWordArtGlyphs(text, format, rect);
+        var glyphs = BuildFittedWordArtGlyphs(text, format, rect, warp);
         var placements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
             warp,
             glyphs.Select(glyph => glyph.WidthIncludingTrailingWhitespace).ToList(),
@@ -15486,12 +15486,18 @@ public sealed class DocumentView : Control
         }
     }
 
-    private List<FormattedText> BuildFittedWordArtGlyphs(string text, RunFormatting format, Rect rect)
+    private List<FormattedText> BuildFittedWordArtGlyphs(
+        string text,
+        RunFormatting format,
+        Rect rect,
+        WordArtWarp warp)
     {
         var glyphs = text.Select(ch => Build(ch.ToString(), format)).ToList();
         var totalWidth = glyphs.Sum(glyph => glyph.WidthIncludingTrailingWhitespace);
-        var targetWidth = rect.Width * 0.80;
-        if (totalWidth > targetWidth && totalWidth > 0)
+        // Word expands the Wave1 path to the text-box insets, while its arch and straight paths retain
+        // their side margins. Applying a single fit factor made ArchUp labels too wide in comparison.
+        var targetWidth = rect.Width * (warp == WordArtWarp.Wave1 ? 0.94 : 0.80);
+        if (totalWidth > 0)
         {
             var scaledFormat = format with
             {
@@ -15596,6 +15602,20 @@ public sealed class DocumentView : Control
             context.FillRectangle(
                 EffectBrush(shadowColor, effects.ShadowOpacity * 0.45),
                 OffsetAndInflate(rect, offsetX, offsetY, spread));
+        }
+
+        if (effects.HasGlow)
+        {
+            var glowColor = TryParseAvaloniaColor(effects.GlowColorHex, out var parsed)
+                ? parsed
+                : Color.FromRgb(0x44, 0x72, 0xC4);
+            var radius = Math.Max(2.0, effects.GlowRadiusDip);
+            context.FillRectangle(
+                EffectBrush(glowColor, effects.GlowOpacity * 0.24),
+                OffsetAndInflate(rect, 0, 0, radius * 0.55));
+            context.FillRectangle(
+                EffectBrush(glowColor, effects.GlowOpacity * 0.36),
+                OffsetAndInflate(rect, 0, 0, radius * 0.25));
         }
 
     }

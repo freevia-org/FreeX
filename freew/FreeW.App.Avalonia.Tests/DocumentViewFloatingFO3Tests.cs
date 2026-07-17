@@ -575,6 +575,56 @@ public sealed class DocumentViewFloatingFO3Tests
     }
 
     [Fact]
+    public async Task Floating_glow_wordart_capture_has_blue_halo()
+    {
+        byte[]? pngBytes = null;
+        var ran = await OnUiThread(() =>
+        {
+            var doc = DocWithFloatingWordArt(
+                WordArtStyle.GlowBlue,
+                ImageWrapping.InFront,
+                hOffsetPt: 120,
+                vOffsetPt: 60,
+                text: "Glow WordArt");
+            var view = new DocumentView();
+            view.LoadDocument(doc);
+
+            var window = new Window { Width = 816, Height = 600, Content = view };
+            window.Show();
+            window.Measure(new Size(816, 600));
+            window.Arrange(new Rect(0, 0, 816, 600));
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Render);
+
+            var frame = window.CaptureRenderedFrame();
+            if (frame is not null)
+                pngBytes = WriteableBitmapToPng(frame);
+
+            window.Close();
+        });
+
+        if (!ran || pngBytes is null || pngBytes.Length == 0)
+            return;
+
+        using var bitmap = SKBitmap.Decode(pngBytes);
+        bitmap.Should().NotBeNull();
+
+        var blueHaloPixels = 0;
+        for (var y = 0; y < bitmap.Height; y++)
+        {
+            for (var x = 0; x < bitmap.Width; x++)
+            {
+                var pixel = bitmap.GetPixel(x, y);
+                if (pixel.Blue > pixel.Red + 12 && pixel.Green > pixel.Red + 4)
+                    blueHaloPixels++;
+            }
+        }
+
+        blueHaloPixels.Should().BeGreaterThan(100,
+            "GlowBlue WordArt must render its DrawingML blue glow around the floating text box");
+    }
+
+    [Fact]
     public void ArchUpGlyphPlacement_IsSymmetricAndCurved()
     {
         var placements = DrawingObjectVisualPlanner.BuildWordArtPlacementPlan(
