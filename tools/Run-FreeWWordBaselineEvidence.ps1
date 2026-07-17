@@ -1,7 +1,7 @@
 param(
     [string]$RunRoot = (Join-Path $PSScriptRoot "..\freew-fidelity-corpus\runs\visual-evidence"),
     [string]$Configuration = "Release",
-    [int]$MaxPagesPerDocument = 3,
+    [int]$MaxPagesPerDocument = 4,
     [string]$WordApplicationProgId = "Word.Application",
     [switch]$AllowMissingWord,
     [switch]$NoWord,

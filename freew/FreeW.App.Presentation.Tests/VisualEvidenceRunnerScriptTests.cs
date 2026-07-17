@@ -12,6 +12,7 @@ public sealed class VisualEvidenceRunnerScriptTests
             "Run-FreeWWordBaselineEvidence.ps1"));
 
         source.Should().Contain("FreeW.FidelityRender");
+        source.Should().Contain("[int]$MaxPagesPerDocument = 4");
         source.Should().Contain("$fidelityRenderArgs = @(");
         source.Should().Contain("if (-not $UseVisibleWordPublish)");
         source.Should().Contain("$fidelityRenderArgs += \"--software-fallback\"");
