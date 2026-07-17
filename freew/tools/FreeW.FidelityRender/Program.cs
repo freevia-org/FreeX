@@ -577,7 +577,7 @@ static void RenderDocumentComposite(
                 : Math.Max(0, thisMarginTop - hfH - 12);
             var footerTop = thisPageSettings.FooterDistancePt > 0
                 ? thisPixH - PageLayout.PointsToDip(thisPageSettings.FooterDistancePt) - hfH
-                : thisPixH - thisMarginBottom + 16;
+                : thisPixH - thisMarginBottom + 19;
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
             {
