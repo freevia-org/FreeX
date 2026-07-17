@@ -640,7 +640,7 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceGreenBandUpperBound = 0.75;
     private const double ImportedSurfaceReferencePlotWidth = 360.0;
     private const double ImportedSurfaceDepthWallX = 124.0;
-    private const double ImportedSurfaceFrontCategoryWidth = 295.2;
+    private const double ImportedSurfaceFrontCategoryWidth = 301.5;
     private const double ImportedSurfaceFrameFrontLeftX = 8.0;
     private const double ImportedSurfaceFrameFrontRightX = 312.0;
     private const double ImportedSurfaceBlankVertexNormalized = 0.24;
