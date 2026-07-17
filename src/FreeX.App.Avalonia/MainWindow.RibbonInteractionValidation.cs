@@ -1,8 +1,10 @@
+using Avalonia.Controls;
 using Free.Shared.Ribbon;
-using FreeX.App.Avalonia.Charts;
 using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
+using FreeX.Core.Commands;
+using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
 
@@ -11,6 +13,12 @@ public sealed partial class MainWindow
     private const string RibbonCommandBehaviorCategory = "ribbon-command-behavior";
     private const string RibbonPlacementBehaviorCategory = "ribbon-placement-behavior";
     private const string RibbonOrphanBehaviorCategory = "ribbon-orphan-command-behavior";
+    private const string RibbonValidationStatusSentinel = "__ribbon_validation_before__";
+    internal static int InteractiveValidationRibbonCommandCount => AvaloniaRibbonComposition
+        .EnumerateSurfaceRows(AvaloniaRibbonComposition.BuildDefinition())
+        .Select(row => row.CommandId)
+        .Distinct()
+        .Count();
 
     private sealed record RibbonCommandBehaviorEvidence(
         RibbonCommandId CommandId,
@@ -19,18 +27,35 @@ public sealed partial class MainWindow
         string Evidence,
         string Note);
 
+    private sealed record RibbonLifecycleSnapshot(
+        int DirtyGeneration,
+        string Status,
+        string WorkbookState,
+        string ShellState);
+
     /// <summary>
-    /// Appends behavior-aware ribbon evidence. Each runtime command is evaluated once and each visible
-    /// placement receives a reference to that result, preventing duplicate split-button/menu placements
-    /// from repeating mutations while keeping all rendered interactions accountable.
+    /// Executes each visible runtime command once in a reusable production window with a fresh session.
+    /// Placements refer to that command result, so duplicate split-button/menu placements do not repeat mutations.
     /// </summary>
-    internal void AddRibbonInteractionExecutionResults(List<InteractionValidationResult> results)
+    internal void AddRibbonInteractionExecutionResults(
+        List<InteractionValidationResult> results,
+        int commandStart = 0,
+        int commandCount = int.MaxValue)
     {
         ArgumentNullException.ThrowIfNull(results);
 
         var definition = AvaloniaRibbonComposition.BuildDefinition();
         var placements = AvaloniaRibbonComposition.EnumerateSurfaceRows(definition).ToArray();
-        var evidenceByCommand = BuildRibbonCommandBehaviorEvidence(placements);
+        var selectedCommandIds = placements
+            .Select(row => row.CommandId)
+            .Distinct()
+            .Skip(Math.Max(0, commandStart))
+            .Take(Math.Max(0, commandCount))
+            .ToHashSet();
+        var selectedPlacements = placements
+            .Where(row => selectedCommandIds.Contains(row.CommandId))
+            .ToArray();
+        var evidenceByCommand = BuildRibbonCommandBehaviorEvidence(selectedPlacements);
 
         foreach (var evidence in evidenceByCommand.Values.OrderBy(item => item.CommandId.Value, StringComparer.Ordinal))
         {
@@ -43,7 +68,7 @@ public sealed partial class MainWindow
                 Note: evidence.Note));
         }
 
-        foreach (var placement in placements)
+        foreach (var placement in selectedPlacements)
         {
             var evidence = evidenceByCommand[placement.CommandId];
             results.Add(new InteractionValidationResult(
@@ -55,7 +80,8 @@ public sealed partial class MainWindow
                 Note: $"Command evidence: ribbon-command-behavior/{EscapeResultId(placement.CommandId.Value)}. {evidence.Note}"));
         }
 
-        AddOrphanCommandResults(results);
+        if (commandStart == 0)
+            AddOrphanCommandResults(results);
     }
 
     private IReadOnlyDictionary<RibbonCommandId, RibbonCommandBehaviorEvidence> BuildRibbonCommandBehaviorEvidence(
@@ -66,237 +92,424 @@ public sealed partial class MainWindow
             .GroupBy(row => row.CommandId)
             .ToDictionary(group => group.Key, group => group.First());
         var results = new Dictionary<RibbonCommandId, RibbonCommandBehaviorEvidence>();
+        MainWindow? validationWindow = null;
 
-        foreach (var (commandId, firstPlacement) in firstPlacementByCommand)
+        try
         {
-            if (registry is null || !registry.TryGet(commandId, out var command) || command is null)
-            {
-                results[commandId] = Failure(
-                    commandId,
-                    "unregistered-command",
-                    "No production command is registered for this runtime ribbon id.");
-                continue;
-            }
+            validationWindow = new MainWindow([]);
+            validationWindow.Show();
+            var processed = 0;
 
-            if (command is EmptyRibbonCommand)
+            foreach (var (commandId, firstPlacement) in firstPlacementByCommand)
             {
-                results[commandId] = Failure(
-                    commandId,
-                    "empty-command-gap",
-                    "The production registry resolves this id to EmptyRibbonCommand; it was not reported as invoked.");
-                continue;
-            }
-
-            if (TryExecuteDisposableMutationProbe(commandId, out var mutationEvidence))
-            {
-                results[commandId] = mutationEvidence;
-                continue;
-            }
-
-            if (command is IRibbonStatefulCommand stateful)
-            {
-                var stateEvidence = ReadDisabledCommandState(commandId, command, stateful);
-                if (stateEvidence is not null)
+                if (registry is null || !registry.TryGet(commandId, out var command) || command is null)
                 {
-                    results[commandId] = stateEvidence;
+                    results[commandId] = Failure(
+                        commandId,
+                        "unregistered-command",
+                        "No production command is registered for this runtime ribbon id.");
                     continue;
                 }
-            }
 
-            results[commandId] = ExecuteOrContractCommand(commandId, command, firstPlacement);
+                if (command is EmptyRibbonCommand)
+                {
+                    results[commandId] = Failure(
+                        commandId,
+                        "empty-command-gap",
+                        "The production registry resolves this id to EmptyRibbonCommand.");
+                    continue;
+                }
+
+                results[commandId] = IsExternalBoundaryCommand(commandId.Value)
+                    ? Skipped(
+                        commandId,
+                        "native-external-unexercised",
+                        command,
+                        "The command crosses the OS, clipboard, network, process, print, or top-level window boundary. It remains uncredited until the physical X11 lane invokes and verifies that boundary.")
+                    : validationWindow.ExecuteProductionCommandInReusableWindow(
+                        commandId,
+                        firstPlacement,
+                        replaceSession: processed % 32 == 0);
+
+                processed++;
+                if (processed % 32 == 0)
+                    ForceRibbonValidationCleanup();
+            }
+        }
+        finally
+        {
+            if (validationWindow is not null)
+                TearDownRibbonValidationWindow(validationWindow);
         }
 
         return results;
     }
 
-    private static bool TryExecuteDisposableMutationProbe(
+    private RibbonCommandBehaviorEvidence ExecuteProductionCommandInReusableWindow(
         RibbonCommandId commandId,
-        out RibbonCommandBehaviorEvidence evidence)
+        AvaloniaRibbonComposition.SurfaceRow placement,
+        bool replaceSession)
     {
-        if (IsSharedFormatToggle(commandId.Value))
-        {
-            evidence = ExecuteDisposableFormatProbe(commandId);
-            return true;
-        }
-
-        if (InsertChartCommandFactory.ChartTypeForRibbonCommand(commandId.Value) is not null)
-        {
-            evidence = ExecuteDisposableChartProbe(commandId);
-            return true;
-        }
-
-        evidence = null!;
-        return false;
-    }
-
-    private static RibbonCommandBehaviorEvidence ExecuteDisposableFormatProbe(RibbonCommandId commandId)
-    {
+        var ownedBefore = new HashSet<Window>();
         try
         {
-            var session = CreateDisposableRibbonSession();
-            var registry = AvaloniaRibbonComposition.BuildRegistry(() => session, _ => { });
-            if (!registry.TryGet(commandId, out var command) || command is not WorkbookToggleFormatCommand toggle)
-                return Failure(commandId, "disposable-probe-route-mismatch", "The isolated registry did not resolve the shared format command.");
+            ResetRibbonValidationWindow(replaceSession);
 
-            var before = toggle.GetState().IsChecked;
-            toggle.Execute(RibbonCommandContext.Empty);
-            var after = toggle.GetState().IsChecked;
-            if (after == before || !session.IsDirty)
-                return Failure(commandId, "executed-mutation-not-observed", "Execution completed but did not toggle format state and dirty the disposable workbook.");
+            if (!TryPrepareRibbonContextFixture(placement.ActivationKey, out var fixtureEvidence))
+                return Failure(commandId, "context-fixture-failed", fixtureEvidence);
 
-            return Passed(
-                commandId,
-                "executed-mutation",
-                $"{command.GetType().Name}: checked {before} -> {after}; dirty generation {session.DirtyGeneration}",
-                "Executed against a fresh disposable WorkbookSession and verified the resulting format-state mutation.");
-        }
-        catch (Exception ex)
-        {
-            return Failure(commandId, "executed-mutation-threw", $"{ex.GetType().Name}: {ex.Message}");
-        }
-    }
+            var registry = _ribbonCommandRegistry;
+            if (registry is null || !registry.TryGet(commandId, out var command) || command is null)
+                return Failure(commandId, "validation-window-route-missing", "The reusable production window did not register this command.");
+            if (command is EmptyRibbonCommand)
+                return Failure(commandId, "validation-window-empty-command", "The reusable production window resolved this id to EmptyRibbonCommand.");
 
-    private static RibbonCommandBehaviorEvidence ExecuteDisposableChartProbe(RibbonCommandId commandId)
-    {
-        try
-        {
-            var session = CreateDisposableRibbonSession();
-            var registry = AvaloniaRibbonComposition.BuildRegistry(() => session, _ => { });
-            if (!registry.TryGet(commandId, out var command) || command is not InsertChartRibbonCommand)
-                return Failure(commandId, "disposable-probe-route-mismatch", "The isolated registry did not resolve the chart insertion command.");
+            if (command is IRibbonStatefulCommand stateful)
+            {
+                var state = stateful.GetState();
+                if (!state.IsEnabled)
+                {
+                    return Passed(
+                        commandId,
+                        "disabled-state-verified",
+                        $"{command.GetType().Name}: enabled=false, checked={state.IsChecked}, value={state.Value ?? "<null>"}; {fixtureEvidence}",
+                        "The reusable production window and required context fixture resolved the command as disabled, so the ribbon correctly prevents dispatch.");
+                }
+            }
 
-            var expectedType = InsertChartCommandFactory.ChartTypeForRibbonCommand(commandId.Value)!.Value;
-            var before = session.ActiveSheet.Charts.Count;
-            command.Execute(RibbonCommandContext.Empty);
-            var after = session.ActiveSheet.Charts.Count;
-            if (after != before + 1 || session.ActiveSheet.Charts[^1].Type != expectedType || !session.IsDirty)
-                return Failure(commandId, "executed-mutation-not-observed", "Execution did not add the expected chart to the disposable workbook.");
+            _statusText.Text = RibbonValidationStatusSentinel;
+            ownedBefore = OwnedWindows.ToHashSet();
+            var before = CaptureRibbonLifecycleSnapshot();
+            var context = command is ValueRibbonCommand
+                ? RibbonCommandContext.ForSelectedValue(GetDeterministicSelectedValue(commandId))
+                : RibbonCommandContext.Empty;
 
-            return Passed(
-                commandId,
-                "executed-mutation",
-                $"{command.GetType().Name}: charts {before} -> {after}; type {expectedType}",
-                "Executed against a fresh disposable WorkbookSession and verified the inserted chart type and collection mutation.");
-        }
-        catch (Exception ex)
-        {
-            return Failure(commandId, "executed-mutation-threw", $"{ex.GetType().Name}: {ex.Message}");
-        }
-    }
-
-    private static RibbonCommandBehaviorEvidence? ReadDisabledCommandState(
-        RibbonCommandId commandId,
-        IRibbonCommand command,
-        IRibbonStatefulCommand stateful)
-    {
-        try
-        {
-            var state = stateful.GetState();
-            return state.IsEnabled
-                ? null
-                : Passed(
-                    commandId,
-                    "disabled-route-contract",
-                    $"{command.GetType().Name}: enabled=false, checked={state.IsChecked}, value={state.Value ?? "<null>"}",
-                    "Resolved the concrete production command and verified the live disabled-state contract that prevents UI dispatch in this workbook/object context.");
-        }
-        catch (Exception ex)
-        {
-            return Failure(commandId, "state-read-threw", $"{ex.GetType().Name}: {ex.Message}");
-        }
-    }
-
-    private RibbonCommandBehaviorEvidence ExecuteOrContractCommand(
-        RibbonCommandId commandId,
-        IRibbonCommand command,
-        AvaloniaRibbonComposition.SurfaceRow placement)
-    {
-        var id = commandId.Value;
-        if (command is ValueRibbonCommand)
-        {
-            var selectedValue = GetDeterministicSelectedValue(commandId);
-            return ExecuteAgainstDisposableSession(
-                commandId,
-                command,
-                RibbonCommandContext.ForSelectedValue(selectedValue),
-                $"selected value '{selectedValue}'");
-        }
-
-        if (ContainsAny(id, NativeOrExternalTokens))
-        {
-            return RouteContract(
-                commandId,
-                "native-external-route-contract",
-                command,
-                "The concrete production command crosses an OS, clipboard, print, network, process, or window-lifecycle boundary. Its executable registry route is proven here; physical boundary behavior is owned by the X11 interaction lane.");
-        }
-
-        if (ContainsAny(id, DestructiveTokens))
-        {
-            return RouteContract(
-                commandId,
-                "destructive-route-contract",
-                command,
-                "The concrete production command can remove, overwrite, reorder, or hide workbook content. The route is executable, while mutation semantics remain covered by command/planner tests so this exhaustive sweep cannot damage the live workbook.");
-        }
-
-        if (ContainsAny(id, ModalTokens))
-        {
-            return RouteContract(
-                commandId,
-                "dialog-surface-route-contract",
-                command,
-                "The concrete production command opens a dialog, pane, gallery, or picker. Its executable route is proven here and the authoritative dialog interaction lane owns open, focus, cancel, and close evidence.");
-        }
-
-        if (placement.ActivationKey is not null)
-        {
-            return RouteContract(
-                commandId,
-                "contextual-route-contract",
-                command,
-                $"The concrete production command is bound to contextual activation '{placement.ActivationKey}'. Dispatch requires the matching selected workbook object; the route contract records that prerequisite without manufacturing invalid selection state.");
-        }
-
-        return SafeIsolatedCommandIds.Contains(id)
-            ? ExecuteAgainstDisposableSession(
-                commandId,
-                command,
-                RibbonCommandContext.Empty,
-                "empty command context")
-            : RouteContract(
-                commandId,
-                "workbook-action-route-contract",
-                command,
-                "The concrete production workbook action is registered and executable. It is not dispatched by this sweep because it has no deterministic postcondition or may schedule asynchronous UI work; its command/planner tests own semantic mutation evidence.");
-    }
-
-    private RibbonCommandBehaviorEvidence ExecuteAgainstDisposableSession(
-        RibbonCommandId commandId,
-        IRibbonCommand command,
-        RibbonCommandContext context,
-        string contextDescription)
-    {
-        var liveSession = _session;
-        var disposableSession = CreateDisposableRibbonSession();
-        try
-        {
-            _session = disposableSession;
-            var beforeGeneration = disposableSession.DirtyGeneration;
             command.Execute(context);
+
+            var newlyOwned = OwnedWindows
+                .Where(window => !ownedBefore.Contains(window))
+                .ToArray();
+            var after = CaptureRibbonLifecycleSnapshot();
+            var observations = DescribeLifecycleChanges(before, after, newlyOwned);
+            CloseOwnedWindows(newlyOwned);
+
+            if (observations.Count == 0)
+            {
+                return Skipped(
+                    commandId,
+                    "executed-unverified-postcondition",
+                    command,
+                    $"The production command was invoked with a fresh session but returned without an observable workbook, shell, status, or owned-window lifecycle change; {fixtureEvidence}");
+            }
+
             return Passed(
                 commandId,
-                "executed-isolated-route",
-                $"{command.GetType().Name}: {contextDescription}; dirty generation {beforeGeneration} -> {disposableSession.DirtyGeneration}",
-                "Executed the concrete production ribbon command against an isolated parity workbook; the live session was restored after dispatch.");
+                "executed-production-lifecycle",
+                $"{command.GetType().Name}: {string.Join("; ", observations)}; {fixtureEvidence}",
+                "Invoked the production command in the reusable shown validation MainWindow with a fresh isolated session, observed a lifecycle postcondition, and closed every newly owned surface.");
         }
         catch (Exception ex)
         {
-            return Failure(commandId, "isolated-route-threw", $"{ex.GetType().Name}: {ex.Message}");
+            return Failure(commandId, "production-execution-threw", $"{ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
-            _session = liveSession;
+            CloseOwnedWindows(OwnedWindows.Where(window => !ownedBefore.Contains(window)).ToArray());
+        }
+    }
+
+    private void ResetRibbonValidationWindow(bool replaceSession)
+    {
+        CloseOwnedWindows(OwnedWindows.ToArray());
+        _sheetGridHost.Content = null;
+        _sheetTabsHost.Content = null;
+        _activeCellBorder = null;
+        if (replaceSession || _session.Workbook.Sheets.Count == 0)
+            _session = CreateDisposableRibbonSession();
+        _selectedDrawingObjectKind = null;
+        _selectedDrawingObjectId = null;
+        _ribbonContextSource.OnSelectionCleared();
+        _ribbonContextSource.OnTableActive(false);
+        _ribbonContextSource.OnPivotActive(false);
+        HideBackstageOverlay();
+        _pivotFieldPaneHost.IsVisible = false;
+        _formulaBarExpanded = false;
+        _isFormulaBarHidden = false;
+        _formulaBarHost.IsVisible = true;
+        WindowState = global::Avalonia.Controls.WindowState.Normal;
+        _statusText.Text = "Ribbon validation fixture ready";
+    }
+
+    private static void TearDownRibbonValidationWindow(MainWindow validationWindow)
+    {
+        try
+        {
+            CloseOwnedWindows(validationWindow.OwnedWindows.ToArray());
+            validationWindow._session = CreateDisposableRibbonSession();
+            if (validationWindow.IsVisible)
+                validationWindow.Close();
+            validationWindow.Content = null;
+            ForceRibbonValidationCleanup();
+        }
+        catch
+        {
+            // Best-effort teardown of the isolated reusable owner.
+        }
+    }
+
+    private static void ForceRibbonValidationCleanup()
+    {
+        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: false);
+        GC.WaitForPendingFinalizers();
+    }
+
+    private bool TryPrepareRibbonContextFixture(string? activationKey, out string evidence)
+    {
+        switch (activationKey)
+        {
+            case null:
+                evidence = "fixture=worksheet";
+                return true;
+
+            case "chart.selected":
+                if (TryEnsureRibbonValidationChart() is not { } chart)
+                {
+                    evidence = "fixture=chart.failed";
+                    return false;
+                }
+                _selectedDrawingObjectKind = SelectionPaneObjectKind.Chart;
+                _selectedDrawingObjectId = chart.Id;
+                _ribbonContextSource.OnDrawingObjectSelected(SelectionPaneObjectKind.Chart);
+                evidence = $"fixture=chart:{chart.Id}";
+                return true;
+
+            case "picture.selected":
+                var picture = EnsureRibbonValidationPicture();
+                _selectedDrawingObjectKind = SelectionPaneObjectKind.Picture;
+                _selectedDrawingObjectId = picture.Id;
+                _ribbonContextSource.OnDrawingObjectSelected(SelectionPaneObjectKind.Picture);
+                evidence = $"fixture=picture:{picture.Id}";
+                return true;
+
+            case "shape.selected":
+                if (TryEnsureRibbonValidationShape() is not { } shape)
+                {
+                    evidence = "fixture=shape.failed";
+                    return false;
+                }
+                _selectedDrawingObjectKind = SelectionPaneObjectKind.Shape;
+                _selectedDrawingObjectId = shape.Id;
+                _ribbonContextSource.OnDrawingObjectSelected(SelectionPaneObjectKind.Shape);
+                evidence = $"fixture=shape:{shape.Id}";
+                return true;
+
+            case "table.active":
+                if (!TryEnsureRibbonValidationTable(out var table))
+                {
+                    evidence = "fixture=table.failed";
+                    return false;
+                }
+                _session.SelectRange(new GridRange(table.Range.Start, table.Range.Start));
+                _ribbonContextSource.OnTableActive(true);
+                evidence = $"fixture=table:{table.DisplayName}";
+                return true;
+
+            case "pivot.active":
+                if (TryEnsureRibbonValidationPivot() is not { } pivot)
+                {
+                    evidence = "fixture=pivot.failed";
+                    return false;
+                }
+                _session.SelectRange(new GridRange(pivot.TargetRange.Start, pivot.TargetRange.Start));
+                _ribbonContextSource.OnPivotActive(true);
+                evidence = $"fixture=pivot:{pivot.Name}";
+                return true;
+
+            default:
+                evidence = $"fixture=unsupported:{activationKey}";
+                return false;
+        }
+    }
+
+    private ChartModel? TryEnsureRibbonValidationChart()
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.Charts.FirstOrDefault(chart => chart.IsVisible) is { } existing)
+            return existing;
+
+        var command = new AddChartCommand(
+            sheet.Id,
+            new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 4)),
+            ChartType.Column,
+            title: "Ribbon validation chart",
+            left: 260,
+            top: 96,
+            width: 360,
+            height: 240);
+        var result = _session.ExecuteReviewCommand(command);
+        return result.Success
+            ? sheet.Charts.FirstOrDefault(chart => chart.Id == command.ChartId)
+            : null;
+    }
+
+    private PictureModel EnsureRibbonValidationPicture()
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.Pictures.FirstOrDefault(picture => picture.IsVisible) is { } existing)
+            return existing;
+
+        var picture = new PictureModel
+        {
+            Name = "Ribbon validation picture",
+            Anchor = new CellAddress(sheet.Id, 6, 5),
+            Kind = PictureKind.Image,
+            ImageBytes = [0x89, 0x50, 0x4E, 0x47],
+            ContentType = "image/png",
+            Width = 180,
+            Height = 110,
+        };
+        sheet.Pictures.Add(picture);
+        sheet.DrawingObjectZOrder.Add(new DrawingObjectZOrderEntry(SelectionPaneObjectKind.Picture, picture.Id));
+        return picture;
+    }
+
+    private DrawingShapeModel? TryEnsureRibbonValidationShape()
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.DrawingShapes.FirstOrDefault(shape => shape.IsVisible) is { } existing)
+            return existing;
+
+        var command = new AddDrawingShapeCommand(
+            sheet.Id,
+            new CellAddress(sheet.Id, 6, 2),
+            DrawingShapeKind.Rectangle,
+            width: 150,
+            height: 90,
+            fillColor: new CellColor(91, 155, 213),
+            outlineColor: new CellColor(47, 84, 150));
+        var result = _session.ExecuteReviewCommand(command);
+        return result.Success
+            ? sheet.DrawingShapes.FirstOrDefault(shape => shape.Id == command.ShapeId)
+            : null;
+    }
+
+    private PivotTableModel? TryEnsureRibbonValidationPivot()
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.PivotTables.FirstOrDefault() is { } existing)
+            return existing;
+
+        SeedParityPivotSource(sheet);
+        var sourceRange = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 8, 5));
+        var targetRange = new GridRange(
+            new CellAddress(sheet.Id, 2, 7),
+            new CellAddress(sheet.Id, 2, 7));
+        var cacheId = _session.Workbook.PivotCaches.Count == 0
+            ? 1
+            : _session.Workbook.PivotCaches.Max(cache => cache.CacheId) + 1;
+        var cache = new PivotCacheModel
+        {
+            CacheId = cacheId,
+            SourceType = PivotCacheSourceType.WorksheetRange,
+            SourceSheetName = sheet.Name,
+            SourceReference = sourceRange.ToString(),
+        };
+        for (var col = sourceRange.Start.Col; col <= sourceRange.End.Col; col++)
+            cache.Fields.Add(new PivotCacheFieldModel(ParityPivotHeader(sheet, sourceRange.Start.Row, col)));
+        _session.Workbook.PivotCaches.Add(cache);
+
+        var pivot = new PivotTableModel
+        {
+            Name = "RibbonValidationPivot",
+            CacheId = cacheId,
+            SourceRange = sourceRange,
+            TargetRange = targetRange,
+            LastRenderedRange = new GridRange(
+                targetRange.Start,
+                new CellAddress(sheet.Id, targetRange.Start.Row + 4, targetRange.Start.Col + 2)),
+        };
+        pivot.RowFields.Add(new PivotFieldModel(0));
+        pivot.DataFields.Add(new PivotDataFieldModel(4, "Sum of Revenue", "sum"));
+        sheet.PivotTables.Add(pivot);
+        return pivot;
+    }
+
+    private bool TryEnsureRibbonValidationTable(out StructuredTableModel table)
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.StructuredTables.FirstOrDefault() is { } existing)
+        {
+            table = existing;
+            return true;
+        }
+
+        var range = new GridRange(
+            new CellAddress(sheet.Id, 1, 1),
+            new CellAddress(sheet.Id, 4, 4));
+        var command = new CreateStructuredTableCommand(sheet.Id, range);
+        var result = _session.ExecuteReviewCommand(command);
+        table = sheet.StructuredTables.FirstOrDefault(item => item.Id == command.CreatedTableId)
+            ?? sheet.StructuredTables.FirstOrDefault()!;
+        return result.Success && table is not null;
+    }
+
+    private RibbonLifecycleSnapshot CaptureRibbonLifecycleSnapshot()
+    {
+        var workbook = _session.Workbook;
+        var sheets = workbook.Sheets.ToArray();
+        var workbookState = $"{workbook.Sheets.Count}|{_session.ActiveSheet.Id}|{_session.ActiveCell}|" +
+            $"{_session.SelectedRange}|{sheets.Sum(sheet => sheet.Charts.Count)}|" +
+            $"{sheets.Sum(sheet => sheet.Pictures.Count)}|{sheets.Sum(sheet => sheet.DrawingShapes.Count)}|" +
+            $"{sheets.Sum(sheet => sheet.StructuredTables.Count)}|{sheets.Sum(sheet => sheet.PivotTables.Count)}|" +
+            $"{sheets.Sum(sheet => sheet.TextBoxes.Count)}|{sheets.Sum(sheet => sheet.MergedRegions.Count)}";
+        var shellState = $"{_backstageOverlay.IsVisible}|{_pivotFieldPaneHost.IsVisible}|" +
+            $"{_formulaBarHost.IsVisible}|{_formulaBarExpanded}|{_session.IsShowingGridlines}|" +
+            $"{_session.IsShowingHeadings}|{_selectedDrawingObjectKind}|{_selectedDrawingObjectId}|" +
+            $"{IsVisible}|{WindowState}";
+        return new RibbonLifecycleSnapshot(
+            _session.DirtyGeneration,
+            _statusText.Text ?? string.Empty,
+            workbookState,
+            shellState);
+    }
+
+    private static List<string> DescribeLifecycleChanges(
+        RibbonLifecycleSnapshot before,
+        RibbonLifecycleSnapshot after,
+        IReadOnlyList<Window> newlyOwned)
+    {
+        var observations = new List<string>();
+        if (before.DirtyGeneration != after.DirtyGeneration)
+            observations.Add($"dirty-generation={before.DirtyGeneration}->{after.DirtyGeneration}");
+        if (!string.Equals(before.WorkbookState, after.WorkbookState, StringComparison.Ordinal))
+            observations.Add("workbook-state-changed");
+        if (!string.Equals(before.ShellState, after.ShellState, StringComparison.Ordinal))
+            observations.Add("shell-state-changed");
+        if (!string.Equals(before.Status, after.Status, StringComparison.Ordinal))
+            observations.Add($"status={after.Status}");
+        if (newlyOwned.Count > 0)
+        {
+            observations.Add("owned-surface=" + string.Join(',', newlyOwned.Select(window =>
+                string.IsNullOrWhiteSpace(window.Title) ? window.GetType().Name : window.Title)));
+        }
+        return observations;
+    }
+
+    private static void CloseOwnedWindows(IEnumerable<Window> windows)
+    {
+        foreach (var window in windows.Reverse())
+        {
+            try
+            {
+                CloseOwnedWindows(window.OwnedWindows.ToArray());
+                window.Close();
+            }
+            catch
+            {
+                // Closing is best-effort; the isolated owner is discarded immediately afterward.
+            }
         }
     }
 
@@ -313,14 +526,14 @@ public sealed partial class MainWindow
             results.Add(new InteractionValidationResult(
                 Id: $"ribbon-orphan-command-behavior/{EscapeResultId(orphanId)}",
                 Category: RibbonOrphanBehaviorCategory,
-                Status: resolved ? "passed" : "failed",
-                EvidenceLevel: resolved ? "registered-orphan-route" : "missing-orphan-route",
+                Status: "skipped",
+                EvidenceLevel: resolved ? "registered-orphan-unreachable" : "missing-orphan-route",
                 Evidence: resolved
                     ? $"{orphanId} | {command!.GetType().Name} | visible placements=0"
                     : $"{orphanId} | unresolved | visible placements=0",
                 Note: resolved
-                    ? "The historical Avalonia command has a concrete production registration but no control in the shared WPF/Avalonia ribbon definition; it is reported explicitly outside the 573 visible-command denominator."
-                    : "The documented orphan id did not resolve to a concrete production command."));
+                    ? "The historical Avalonia command is registered but has no visible control in the shared ribbon definition, so registration alone receives no interaction credit."
+                    : "The documented orphan id has neither a visible placement nor a concrete production command."));
         }
     }
 
@@ -342,13 +555,8 @@ public sealed partial class MainWindow
             viewportWidth: 800,
             includeObjects: true);
 
-    private static bool IsSharedFormatToggle(string commandId) =>
-        string.Equals(commandId, AvaloniaCommandIdAdapter.ToCanonical("home.bold"), StringComparison.Ordinal) ||
-        string.Equals(commandId, AvaloniaCommandIdAdapter.ToCanonical("home.italic"), StringComparison.Ordinal) ||
-        string.Equals(commandId, AvaloniaCommandIdAdapter.ToCanonical("home.underline"), StringComparison.Ordinal);
-
-    private static bool ContainsAny(string commandId, IReadOnlyList<string> tokens) =>
-        tokens.Any(token => commandId.Contains(token, StringComparison.OrdinalIgnoreCase));
+    private static bool IsExternalBoundaryCommand(string commandId) =>
+        ExternalBoundaryTokens.Any(token => commandId.Contains(token, StringComparison.OrdinalIgnoreCase));
 
     private static RibbonCommandBehaviorEvidence Passed(
         RibbonCommandId commandId,
@@ -357,56 +565,26 @@ public sealed partial class MainWindow
         string note) =>
         new(commandId, "passed", evidenceLevel, evidence, note);
 
+    private static RibbonCommandBehaviorEvidence Skipped(
+        RibbonCommandId commandId,
+        string evidenceLevel,
+        IRibbonCommand command,
+        string note) =>
+        new(commandId, "skipped", evidenceLevel, $"{commandId.Value} | {command.GetType().Name}", note);
+
     private static RibbonCommandBehaviorEvidence Failure(
         RibbonCommandId commandId,
         string evidenceLevel,
         string note) =>
         new(commandId, "failed", evidenceLevel, commandId.Value, note);
 
-    private static RibbonCommandBehaviorEvidence RouteContract(
-        RibbonCommandId commandId,
-        string evidenceLevel,
-        IRibbonCommand command,
-        string note) =>
-        new(commandId, "passed", evidenceLevel, $"{commandId.Value} | {command.GetType().Name} | executable registry route", note);
-
     private static string EscapeResultId(string value) => Uri.EscapeDataString(value);
 
-    private static readonly string[] NativeOrExternalTokens =
+    private static readonly string[] ExternalBoundaryTokens =
     [
-        "Open", "Save", "Print", "Export", "Share", "Get Data", "Refresh", "Picture", "Object",
-        "Online", "Feedback", "Update", "Legal", "Clipboard", "New Window", "Arrange All", "Switch Windows",
-        "Hide Window", "Side by Side", "Synchronous Scrolling", "Email", "Link", "Import", "Connection",
+        "Open", "Save", "Print", "Export", "Share", "Get Data", "Online", "Feedback", "Update",
+        "Clipboard", "Copy", "Cut", "Paste", "Email", "Import", "Connection", "Insert Picture",
+        "Pictures", "Insert Object", "New Window", "Arrange All", "Switch Windows", "Hide Window",
+        "Side by Side", "Synchronous Scrolling", "Close Window", "Exit", "Quit",
     ];
-
-    private static readonly string[] DestructiveTokens =
-    [
-        "Delete", "Clear", "Remove", "Erase", "Reset", "Cut", "Hide", "Unhide", "Unfreeze", "Ungroup",
-        "Unmerge", "Unprotect", "Break Link", "Convert", "Paste", "Replace", "Sort", "Filter",
-    ];
-
-    private static readonly string[] ModalTokens =
-    [
-        "Dialog", "Manager", "Options", "Properties", "Format Cells", "More Colors", "More Borders",
-        "More Accounting", "More Rules", "More Functions", "Customize", "Gallery", "Pane", "Statistics",
-        "Spelling", "Accessibility", "Thesaurus", "Translate", "Protect", "Allow Users", "Data Validation",
-        "Text to Columns", "Consolidate", "Quick Analysis", "PivotTable", "PivotChart", "Table", "Hyperlink",
-        "Equation", "Function", "Name", "Scenario", "Goal Seek", "What-If", "Data Table", "Zoom", "Find",
-        "Go To", "Row Height", "Column Width", "Rename", "Tab Color", "Insert Cells", "Delete Cells",
-        "Conditional Formatting", "Rule", "Comments", "Notes", "Watch Window", "Page Setup", "Theme",
-    ];
-
-    private static readonly IReadOnlySet<string> SafeIsolatedCommandIds = new HashSet<string>(StringComparer.Ordinal)
-    {
-        AvaloniaCommandIdAdapter.ToCanonical("home.alignLeft"),
-        AvaloniaCommandIdAdapter.ToCanonical("home.alignCenter"),
-        AvaloniaCommandIdAdapter.ToCanonical("home.alignRight"),
-        AvaloniaCommandIdAdapter.ToCanonical("home.wrapText"),
-        AvaloniaCommandIdAdapter.ToCanonical("home.currency"),
-        AvaloniaCommandIdAdapter.ToCanonical("home.percent"),
-        AvaloniaCommandIdAdapter.ToCanonical("home.comma"),
-        AvaloniaCommandIdAdapter.ToCanonical("view.gridlines"),
-        AvaloniaCommandIdAdapter.ToCanonical("view.headings"),
-        AvaloniaCommandIdAdapter.ToCanonical("view.formulaBar"),
-    };
 }

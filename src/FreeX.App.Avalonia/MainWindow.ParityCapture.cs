@@ -225,6 +225,19 @@ public sealed partial class MainWindow
         Opened("ZoomDialog", "dialog.Zoom", "ShowZoomDialogAsync"),
     ];
 
+    internal static IReadOnlyList<ParityInteractionDialogRoute> SupplementalInteractionDialogRoutes { get; } =
+    [
+        new("dialog.OpenWorkbookNativeDialog", "dialog.OpenWorkbook", "ShowWorkbookFileDialogParitySurfaceAsync (Open)", ""),
+        new("dialog.SaveAsWorkbookNativeDialog", "dialog.SaveAsWorkbook", "ShowWorkbookFileDialogParitySurfaceAsync (Save As)", ""),
+        new("dialog.ProtectWorkbookDialog", "dialog.ProtectWorkbook", "ShowProtectWorkbookDialogAsync", ""),
+        new("dialog.TableResizeDialog", "dialog.TableResize", "OpenTableResizeDialogAsync", ""),
+    ];
+
+    internal static IReadOnlyList<ParityInteractionDialogRoute> InteractiveValidationDialogRoutes { get; } =
+        ParityInteractionDialogRoutes.Concat(SupplementalInteractionDialogRoutes).ToArray();
+
+    internal static int InteractiveValidationDialogRouteCount => InteractiveValidationDialogRoutes.Count;
+
     private static new ParityInteractionDialogRoute Opened(
         string catalogName,
         string surfaceId,
@@ -259,13 +272,13 @@ public sealed partial class MainWindow
         var requestedSurfaceId = targetSurfaceId ?? "";
         var requestedCatalogRoute = captureAll
             ? null
-            : ParityInteractionDialogRoutes.FirstOrDefault(route =>
+            : InteractiveValidationDialogRoutes.FirstOrDefault(route =>
                 string.Equals(route.CatalogId, requestedSurfaceId, StringComparison.Ordinal));
         if (requestedCatalogRoute is not null)
             requestedSurfaceId = requestedCatalogRoute.SurfaceId;
         var interactionSurfaceIds = interactionDialogCatalogIds is null
             ? null
-            : ParityInteractionDialogRoutes
+            : InteractiveValidationDialogRoutes
                 .Where(route => interactionDialogCatalogIds.Contains(route.CatalogId) && !route.IsMissing)
                 .Select(route => route.SurfaceId)
                 .ToHashSet(StringComparer.Ordinal);
@@ -490,6 +503,7 @@ public sealed partial class MainWindow
         ("dialog.AllowEditRanges", () => ShowAllowEditRangesParityDialogAsync()),
         ("dialog.ProtectSheet", () => ShowProtectSheetDialogAsync()),
         ("dialog.ProtectWorkbook", () => ShowProtectWorkbookParityDialogAsync()),
+        ("dialog.TableResize", () => ShowTableResizeParityDialogAsync()),
         ("dialog.AccessibilityChecker", () => ShowAccessibilityCheckerParityDialogAsync()),
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
@@ -1121,6 +1135,36 @@ public sealed partial class MainWindow
 
     private Task ShowCreateTableParityDialogAsync() =>
         ShowCreateTableDialogAsync("Sheet1!$A$1:$D$5", "TableStyleMedium2");
+
+    private async Task ShowTableResizeParityDialogAsync()
+    {
+        var previousSelection = _session.SelectedRange;
+        var sheet = _session.ActiveSheet;
+        var anchor = new CellAddress(sheet.Id, 1, 1);
+        _session.SelectCell(anchor);
+        if (!TryGetActiveStructuredTable(out var table))
+        {
+            var range = new GridRange(anchor, new CellAddress(sheet.Id, 5, 4));
+            _session.ExecuteReviewCommand(
+                new CreateStructuredTableCommand(sheet.Id, range, "TableStyleMedium2", firstRowHasHeaders: true));
+            _session.SelectCell(anchor);
+            if (!TryGetActiveStructuredTable(out table))
+            {
+                _session.SelectRange(previousSelection);
+                return;
+            }
+        }
+
+        try
+        {
+            await OpenTableResizeDialogAsync(table);
+        }
+        finally
+        {
+            _session.SelectRange(previousSelection);
+            RefreshShell(_statusText.Text ?? "Ready");
+        }
+    }
 
     private async Task ShowAutoFilterParityDialogAsync()
     {

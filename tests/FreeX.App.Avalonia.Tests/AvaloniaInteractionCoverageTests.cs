@@ -73,6 +73,16 @@ public sealed class AvaloniaInteractionCoverageTests
     }
 
     [Fact]
+    public void LinuxRunner_DiscoversDialogCountAndDefaultsToOneDialogPerProcess()
+    {
+        var script = File.ReadAllText(RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+
+        Assert.DoesNotContain("$authoritativeDialogCount = 120", script, StringComparison.Ordinal);
+        Assert.Contains("$batchManifest.dialogCatalogCount", script, StringComparison.Ordinal);
+        Assert.Contains("[int]$DialogBatchSize = 1", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task LiveWindow_AllRibbonCommandsAreFunctionalOrExplicitlyDisabled()
     {
         await Session.Dispatch(() =>
@@ -94,5 +104,15 @@ public sealed class AvaloniaInteractionCoverageTests
                 "Live Avalonia ribbon commands still bound to EmptyRibbonCommand: " +
                 string.Join(", ", unresolved));
         }, CancellationToken.None);
+    }
+
+    private static string RepoFile(params string[] parts)
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "FreeX.slnx")))
+            directory = directory.Parent;
+        if (directory is null)
+            throw new DirectoryNotFoundException("Could not find repository root containing FreeX.slnx.");
+        return Path.Combine(new[] { directory.FullName }.Concat(parts).ToArray());
     }
 }

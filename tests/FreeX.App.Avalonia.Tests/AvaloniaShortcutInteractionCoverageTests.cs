@@ -1,11 +1,16 @@
 using Avalonia.Input;
+using Avalonia.Headless;
 using FluentAssertions;
 using FreeX.App.Presentation.InteractionValidation;
 
 namespace FreeX.App.Avalonia.Tests;
 
+[Collection("AvaloniaHeadless")]
 public sealed class AvaloniaShortcutInteractionCoverageTests
 {
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
+
     [Fact]
     public void AvaloniaHostRegistry_ExactlyMatchesStructuredScenarioChords()
     {
@@ -79,6 +84,34 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
         interactions.Should().Contain(item => Is(item.Interaction, "Backspace", ShortcutModifierKeys.Shift));
         interactions.Should().Contain(item =>
             item.Interaction.Steps.Any(step => step.Modifiers.HasFlag(ShortcutModifierKeys.Meta)));
+    }
+
+    [Fact]
+    public async Task ProductionDispatch_CreditsTopLevelKeytipButExposesNestedKeytipGap()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var interactions = InteractiveValidationInventory.KeyboardShortcuts
+                .Single(scenario => scenario.Id == "shortcut.ribbon.keytip-routing")
+                .Interactions;
+            var topLevel = interactions.Single(interaction => interaction.DisplayText == "Alt, then H");
+            var nested = interactions.Single(interaction => interaction.DisplayText == "Alt,H,B,S,D");
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var topLevelResult = await window.ExerciseShortcutInteractionAsync(topLevel);
+                var nestedResult = await window.ExerciseShortcutInteractionAsync(nested);
+
+                topLevelResult.Passed.Should().BeTrue(topLevelResult.Note);
+                nestedResult.Passed.Should().BeFalse("production currently handles only top-level ribbon keytips");
+                nestedResult.Note.Should().Contain("was not handled");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
     }
 
     private static bool Is(

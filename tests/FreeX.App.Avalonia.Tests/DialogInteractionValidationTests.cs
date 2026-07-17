@@ -20,14 +20,16 @@ public sealed class DialogInteractionValidationTests
             var window = new MainWindow([]);
             var results = window.BuildDialogInteractionContractResults();
 
-            results.Should().HaveCount(120);
+            results.Should().HaveCount(MainWindow.InteractiveValidationDialogRouteCount);
             results.Select(result => result.Id).Should().Equal(
-                InteractionSurfaceCatalog.Dialogs.Select(dialog => dialog.Id));
+                InteractionSurfaceCatalog.Dialogs.Select(dialog => dialog.Id)
+                    .Concat(MainWindow.SupplementalInteractionDialogRoutes.Select(route => route.CatalogId)));
             results.Select(result => result.Id).Should().OnlyHaveUniqueItems();
             results.Should().OnlyContain(result =>
                 result.Category == "dialog-contract" &&
                 result.Status == "failed" &&
-                result.EvidenceLevel == "catalogued-not-exercised");
+                (result.EvidenceLevel == "catalogued-not-exercised" ||
+                    result.EvidenceLevel == "production-dialog-not-exercised"));
 
             var expectedBatchIds = InteractionSurfaceCatalog.Dialogs
                 .Skip(20)
@@ -43,7 +45,21 @@ public sealed class DialogInteractionValidationTests
     }
 
     [Fact]
-    public async Task HeadlessKeyboardDevice_ExercisesTabEscapeAndDefaultEnter()
+    public void ProductionDialogInventory_IncludesNativeFileProtectionAndTableResizeSurfaces()
+    {
+        MainWindow.ParityInteractionDialogRoutes.Should().HaveCount(120);
+        MainWindow.SupplementalInteractionDialogRoutes.Select(route => route.SurfaceId).Should().Equal(
+            "dialog.OpenWorkbook",
+            "dialog.SaveAsWorkbook",
+            "dialog.ProtectWorkbook",
+            "dialog.TableResize");
+        MainWindow.InteractiveValidationDialogRouteCount.Should().Be(124);
+        MainWindow.InteractiveValidationDialogRoutes.Select(route => route.CatalogId)
+            .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public async Task RoutedKeyboardContract_ExercisesTabEscapeAndDefaultEnter()
     {
         await Session.Dispatch(() =>
         {
@@ -51,7 +67,6 @@ public sealed class DialogInteractionValidationTests
             Window? dialog = null;
             try
             {
-                MainWindow.DialogKeySenderOverride = SendHeadlessDialogKey;
                 owner = new Window { Width = 400, Height = 240 };
                 owner.Show();
 
@@ -92,26 +107,7 @@ public sealed class DialogInteractionValidationTests
                     dialog.Close();
                 if (owner?.IsVisible == true)
                     owner.Close();
-                MainWindow.DialogKeySenderOverride = null;
             }
         }, CancellationToken.None);
-    }
-
-    private static string? SendHeadlessDialogKey(
-        global::Avalonia.Controls.Window dialog,
-        Key key,
-        RawInputModifiers modifiers)
-    {
-        var physicalKey = key switch
-        {
-            Key.Tab => PhysicalKey.Tab,
-            Key.Enter => PhysicalKey.Enter,
-            Key.Escape => PhysicalKey.Escape,
-            _ => PhysicalKey.None,
-        };
-        dialog.KeyPress(key, modifiers, physicalKey, keySymbol: null);
-        if (dialog.IsVisible)
-            dialog.KeyRelease(key, modifiers, physicalKey, keySymbol: null);
-        return null;
     }
 }

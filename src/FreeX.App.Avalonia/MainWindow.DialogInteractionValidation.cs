@@ -3,10 +3,10 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using FreeX.App.Presentation.Interactions;
-using System.Reflection;
 
 namespace FreeX.App.Avalonia;
 
@@ -30,7 +30,11 @@ public sealed partial class MainWindow
     internal IReadOnlyDictionary<string, DialogInteractionContractEvidence> DialogInteractionContracts =>
         _dialogInteractionContracts;
 
-    private void ResetDialogInteractionContracts() => _dialogInteractionContracts.Clear();
+    private void ResetDialogInteractionContracts()
+    {
+        _dialogInteractionContracts.Clear();
+        ResetDialogRangeInteractionContracts();
+    }
 
     private IInputElement? PrepareOwnerFocusForDialogContract()
     {
@@ -61,8 +65,9 @@ public sealed partial class MainWindow
             : "failed:no-focus-inside-dialog";
 
         var tabStops = CountDialogTabStops(dialog);
-        var forward = await ExerciseTabAsync(dialog, reverse: false, tabStops);
-        var backward = await ExerciseTabAsync(dialog, reverse: true, tabStops);
+        var forward = await ExerciseTabCycleAsync(dialog, reverse: false, tabStops);
+        var backward = await ExerciseTabCycleAsync(dialog, reverse: true, tabStops);
+        await RecordDialogRangeInteractionContractsAsync(dialog);
 
         var defaultButton = FindDefaultButton(dialog);
         var defaultEnter = defaultButton is null
@@ -125,35 +130,49 @@ public sealed partial class MainWindow
                 HasFailure: true));
     }
 
-    private static async Task<string> ExerciseTabAsync(Window dialog, bool reverse, int tabStops)
+    private static async Task<string> ExerciseTabCycleAsync(Window dialog, bool reverse, int tabStops)
     {
-        var before = dialog.FocusManager?.GetFocusedElement();
-        if (!IsFocusInside(dialog, before))
+        var initial = dialog.FocusManager?.GetFocusedElement();
+        if (!IsFocusInside(dialog, initial))
             return "failed:no-starting-focus";
 
-        if (!TrySendRawDialogKey(
-                dialog,
-                Key.Tab,
-                reverse ? RawInputModifiers.Shift : RawInputModifiers.None,
-                out var inputError))
+        var visited = new List<IInputElement?> { initial };
+        var maximumSteps = Math.Max(2, tabStops + 2);
+        for (var step = 1; step <= maximumSteps; step++)
         {
-            return "failed:raw-input-unavailable:" + inputError;
+            if (!TrySendDialogKey(
+                    dialog,
+                    Key.Tab,
+                    reverse ? RawInputModifiers.Shift : RawInputModifiers.None,
+                    out var inputError))
+            {
+                return "failed:routed-input-unavailable:" + inputError;
+            }
+
+            await SettleDialogInteractionAsync();
+            var after = dialog.FocusManager?.GetFocusedElement();
+            if (!IsFocusInside(dialog, after))
+                return "failed:focus-left-dialog:step=" + step;
+
+            if (ReferenceEquals(initial, after))
+            {
+                var distinctStops = visited.Count;
+                if (distinctStops == 1 && tabStops > 1)
+                    return "failed:focus-did-not-move:" + DescribeInputElement(after);
+                return $"passed:full-cycle:steps={step},stops={distinctStops}";
+            }
+
+            if (!visited.Any(element => ReferenceEquals(element, after)))
+                visited.Add(after);
         }
-        await SettleDialogInteractionAsync();
-        var after = dialog.FocusManager?.GetFocusedElement();
-        if (!IsFocusInside(dialog, after))
-            return "failed:focus-left-dialog";
-        if (tabStops <= 1)
-            return "passed:single-tab-stop:" + DescribeInputElement(after);
-        return ReferenceEquals(before, after)
-            ? "failed:focus-did-not-move:" + DescribeInputElement(after)
-            : "passed:" + DescribeInputElement(before) + "->" + DescribeInputElement(after);
+
+        return $"failed:focus-cycle-did-not-wrap:steps={maximumSteps},stops={visited.Count}";
     }
 
     private static async Task<string> ExerciseEscapeAsync(Window dialog)
     {
-        if (!TrySendRawDialogKey(dialog, Key.Escape, RawInputModifiers.None, out var inputError))
-            return "failed:raw-input-unavailable:" + inputError;
+        if (!TrySendDialogKey(dialog, Key.Escape, RawInputModifiers.None, out var inputError))
+            return "failed:routed-input-unavailable:" + inputError;
         for (var attempt = 0; attempt < 4 && dialog.IsVisible; attempt++)
             await SettleDialogInteractionAsync();
         return dialog.IsVisible ? "failed:escape-did-not-close" : "passed:closed-by-escape";
@@ -178,8 +197,8 @@ public sealed partial class MainWindow
             if (defaultButton is null)
                 return "failed:default-button-missing-on-reopen";
             defaultButton.Click += (_, _) => clicked = true;
-            if (!TrySendRawDialogKey(dialog, Key.Enter, RawInputModifiers.None, out var inputError))
-                return "failed:raw-input-unavailable:" + inputError;
+            if (!TrySendDialogKey(dialog, Key.Enter, RawInputModifiers.None, out var inputError))
+                return "failed:routed-input-unavailable:" + inputError;
             await SettleDialogInteractionAsync();
             return clicked
                 ? "passed:invoked-nonmutating:" + DescribeButton(defaultButton)
@@ -195,7 +214,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private static bool TrySendRawDialogKey(
+    private static bool TrySendDialogKey(
         Window dialog,
         Key key,
         RawInputModifiers modifiers,
@@ -209,32 +228,7 @@ public sealed partial class MainWindow
 
         try
         {
-            // Avalonia 12 keeps raw-input construction behind PrivateApi in its reference assembly.
-            // Reflection here intentionally reaches the framework's own input manager so validation
-            // follows the same keyboard-device pipeline as X11/Win32 instead of calling Focus/Click.
-            var locatorType = typeof(AvaloniaObject).Assembly.GetType("Avalonia.AvaloniaLocator", throwOnError: true)!;
-            var current = locatorType
-                .GetProperty("Current", BindingFlags.Static | BindingFlags.NonPublic)!
-                .GetValue(null)!;
-            var getService = current.GetType().GetMethod(
-                "GetService",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                binder: null,
-                types: [typeof(Type)],
-                modifiers: null)!;
-            var inputManager = getService.Invoke(current, [typeof(IInputManager)])!;
-            var keyboard = getService.Invoke(current, [typeof(IKeyboardDevice)])!;
-            var rawKeyType = typeof(RawInputEventArgs).Assembly.GetType(
-                "Avalonia.Input.Raw.RawKeyEventArgs",
-                throwOnError: true)!;
-            var constructor = rawKeyType.GetConstructors(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                .Single(ctor => ctor.GetParameters().Length == 9);
-            var processInput = inputManager.GetType().GetMethod(
-                "ProcessInput",
-                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-                binder: null,
-                types: [typeof(RawInputEventArgs)],
-                modifiers: null)!;
+            var target = dialog.FocusManager?.GetFocusedElement() as InputElement ?? dialog;
             var physicalKey = key switch
             {
                 Key.Tab => PhysicalKey.Tab,
@@ -242,47 +236,36 @@ public sealed partial class MainWindow
                 Key.Escape => PhysicalKey.Escape,
                 _ => PhysicalKey.None,
             };
-            var timestamp = unchecked((ulong)Environment.TickCount64);
-            RawInputEventArgs CreateRawKeyEvent(RawKeyEventType eventType, ulong eventTimestamp) =>
-                (RawInputEventArgs)constructor.Invoke(
-                [
-                    keyboard,
-                    eventTimestamp,
-                    dialog,
-                    eventType,
-                    key,
-                    modifiers,
-                    physicalKey,
-                    null,
-                    KeyDeviceType.Keyboard,
-                ]);
+            var keyModifiers = KeyModifiers.None;
+            if ((modifiers & RawInputModifiers.Shift) != 0)
+                keyModifiers |= KeyModifiers.Shift;
+            if ((modifiers & RawInputModifiers.Control) != 0)
+                keyModifiers |= KeyModifiers.Control;
+            if ((modifiers & RawInputModifiers.Alt) != 0)
+                keyModifiers |= KeyModifiers.Alt;
+            if ((modifiers & RawInputModifiers.Meta) != 0)
+                keyModifiers |= KeyModifiers.Meta;
 
-            processInput.Invoke(inputManager, [CreateRawKeyEvent(RawKeyEventType.KeyDown, timestamp)]);
-            if (dialog.IsVisible)
+            KeyEventArgs CreateKeyEvent(RoutedEvent routedEvent) => new()
             {
-                try
-                {
-                    processInput.Invoke(
-                        inputManager,
-                        [CreateRawKeyEvent(RawKeyEventType.KeyUp, timestamp + 1)]);
-                }
-                catch when (!dialog.IsVisible)
-                {
-                    // Escape commonly closes the native window during KeyDown. A stale native
-                    // key-up target is then expected and must not turn a successful close into
-                    // an input failure.
-                }
-            }
+                RoutedEvent = routedEvent,
+                Key = key,
+                KeyModifiers = keyModifiers,
+                PhysicalKey = physicalKey,
+                KeyDeviceType = KeyDeviceType.Keyboard,
+                Source = target,
+            };
+
+            target.RaiseEvent(CreateKeyEvent(InputElement.KeyDownEvent));
+            if (dialog.IsVisible)
+                target.RaiseEvent(CreateKeyEvent(InputElement.KeyUpEvent));
 
             error = "";
             return true;
         }
         catch (Exception ex)
         {
-            Exception cause = ex is TargetInvocationException { InnerException: not null } invocation
-                ? invocation.InnerException!
-                : ex;
-            error = cause.GetType().Name + ":" + cause.Message;
+            error = ex.GetType().Name + ":" + ex.Message;
             return false;
         }
     }
@@ -294,7 +277,7 @@ public sealed partial class MainWindow
         Key key,
         RawInputModifiers modifiers,
         out string error) =>
-        TrySendRawDialogKey(dialog, key, modifiers, out error);
+        TrySendDialogKey(dialog, key, modifiers, out error);
 
     private static int CountDialogTabStops(Window dialog) =>
         dialog.GetVisualDescendants()
@@ -351,7 +334,7 @@ public sealed partial class MainWindow
     internal IReadOnlyList<InteractionValidationResult> BuildDialogInteractionContractResults(
         IReadOnlySet<string>? selectedDialogIds = null)
     {
-        var results = new List<InteractionValidationResult>(InteractionSurfaceCatalog.Dialogs.Count);
+        var results = new List<InteractionValidationResult>(InteractiveValidationDialogRouteCount);
         foreach (var dialog in InteractionSurfaceCatalog.Dialogs)
         {
             if (selectedDialogIds is not null && !selectedDialogIds.Contains(dialog.Id))
@@ -379,7 +362,7 @@ public sealed partial class MainWindow
                 Id: dialog.Id,
                 Category: "dialog-contract",
                 Status: failed ? "failed" : "passed",
-                EvidenceLevel: "raw-keyboard-focus-contract",
+                EvidenceLevel: "routed-keyboard-focus-contract",
                 Evidence:
                     $"modality={contract.ActualModality}; initial={contract.InitialFocus}; " +
                     $"tab={contract.TabForward}; shift-tab={contract.TabBackward}; " +
@@ -389,6 +372,40 @@ public sealed partial class MainWindow
                     ? $"Production opener: {route.AvaloniaProductionSurface}."
                     : $"Expected {expectedModality} from the authoritative catalog, observed {contract.ActualModality}; " +
                       $"production opener: {route.AvaloniaProductionSurface}."));
+        }
+
+        foreach (var route in SupplementalInteractionDialogRoutes)
+        {
+            if (selectedDialogIds is not null && !selectedDialogIds.Contains(route.CatalogId))
+                continue;
+
+            var contract = FindDialogInteractionContract(route.SurfaceId);
+            if (contract is null)
+            {
+                results.Add(new InteractionValidationResult(
+                    Id: route.CatalogId,
+                    Category: "dialog-contract",
+                    Status: "failed",
+                    EvidenceLevel: "production-dialog-not-exercised",
+                    Evidence: route.AvaloniaProductionSurface,
+                    Note: "The production-only dialog surface did not produce a keyboard/focus contract."));
+                continue;
+            }
+
+            var modalityMatches = string.Equals("modal", contract.ActualModality, StringComparison.Ordinal);
+            results.Add(new InteractionValidationResult(
+                Id: route.CatalogId,
+                Category: "dialog-contract",
+                Status: contract.HasFailure || !modalityMatches ? "failed" : "passed",
+                EvidenceLevel: "routed-keyboard-focus-contract",
+                Evidence:
+                    $"modality={contract.ActualModality}; initial={contract.InitialFocus}; " +
+                    $"tab={contract.TabForward}; shift-tab={contract.TabBackward}; " +
+                    $"escape={contract.EscapeCancel}; owner-focus={contract.OwnerFocusRestore}; " +
+                    $"enter={contract.DefaultEnter}",
+                Note: modalityMatches
+                    ? $"Supplemental production opener: {route.AvaloniaProductionSurface}."
+                    : $"Expected modal supplemental production dialog, observed {contract.ActualModality}."));
         }
 
         return results;

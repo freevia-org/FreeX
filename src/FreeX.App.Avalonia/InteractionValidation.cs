@@ -10,12 +10,18 @@ internal sealed record InteractionValidationOptions(
     string OutputDirectory,
     int DialogStart = 0,
     int DialogCount = int.MaxValue,
-    bool IncludeCoreResults = true)
+    bool IncludeCoreResults = true,
+    int RibbonCommandStart = 0,
+    int RibbonCommandCount = int.MaxValue,
+    bool RibbonOnly = false)
 {
     public const string Argument = "--interaction-validation";
     public const string DialogStartArgument = "--interaction-validation-dialog-start";
     public const string DialogCountArgument = "--interaction-validation-dialog-count";
     public const string DialogOnlyArgument = "--interaction-validation-dialog-only";
+    public const string RibbonStartArgument = "--interaction-validation-ribbon-start";
+    public const string RibbonCountArgument = "--interaction-validation-ribbon-count";
+    public const string RibbonOnlyArgument = "--interaction-validation-ribbon-only";
 
     public static bool TryParse(
         IReadOnlyList<string> args,
@@ -32,6 +38,9 @@ internal sealed record InteractionValidationOptions(
         var dialogStart = 0;
         var dialogCount = int.MaxValue;
         var includeCoreResults = true;
+        var ribbonCommandStart = 0;
+        var ribbonCommandCount = int.MaxValue;
+        var ribbonOnly = false;
         for (var index = 0; index < args.Count; index++)
         {
             if (string.Equals(args[index], DialogOnlyArgument, StringComparison.OrdinalIgnoreCase))
@@ -40,8 +49,16 @@ internal sealed record InteractionValidationOptions(
                 continue;
             }
 
+            if (string.Equals(args[index], RibbonOnlyArgument, StringComparison.OrdinalIgnoreCase))
+            {
+                ribbonOnly = true;
+                continue;
+            }
+
             if (string.Equals(args[index], DialogStartArgument, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(args[index], DialogCountArgument, StringComparison.OrdinalIgnoreCase))
+                string.Equals(args[index], DialogCountArgument, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(args[index], RibbonStartArgument, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(args[index], RibbonCountArgument, StringComparison.OrdinalIgnoreCase))
             {
                 var optionName = args[index];
                 if (index + 1 >= args.Count || !int.TryParse(args[++index], out var value) || value < 0)
@@ -53,8 +70,12 @@ internal sealed record InteractionValidationOptions(
 
                 if (string.Equals(optionName, DialogStartArgument, StringComparison.OrdinalIgnoreCase))
                     dialogStart = value;
-                else
+                else if (string.Equals(optionName, DialogCountArgument, StringComparison.OrdinalIgnoreCase))
                     dialogCount = value;
+                else if (string.Equals(optionName, RibbonStartArgument, StringComparison.OrdinalIgnoreCase))
+                    ribbonCommandStart = value;
+                else
+                    ribbonCommandCount = value;
                 continue;
             }
 
@@ -82,7 +103,14 @@ internal sealed record InteractionValidationOptions(
         }
 
         if (outputDirectory is not null)
-            options = new InteractionValidationOptions(outputDirectory, dialogStart, dialogCount, includeCoreResults);
+            options = new InteractionValidationOptions(
+                outputDirectory,
+                dialogStart,
+                dialogCount,
+                includeCoreResults,
+                ribbonCommandStart,
+                ribbonCommandCount,
+                ribbonOnly);
         startupArguments = filtered.ToArray();
         return true;
     }
@@ -101,6 +129,8 @@ internal sealed record InteractionValidationManifest(
     string Platform,
     string Shell,
     DateTimeOffset GeneratedUtc,
+    int DialogCatalogCount,
+    int RibbonCommandCatalogCount,
     IReadOnlyDictionary<string, int> Summary,
     IReadOnlyList<InteractionValidationResult> Results);
 
@@ -132,7 +162,10 @@ internal static class InteractionValidationCoordinator
                 options.OutputDirectory,
                 options.DialogStart,
                 options.DialogCount,
-                options.IncludeCoreResults);
+                options.IncludeCoreResults,
+                options.RibbonCommandStart,
+                options.RibbonCommandCount,
+                options.RibbonOnly);
             WriteManifest(options.OutputDirectory, results);
             exitCode = results.Any(result => string.Equals(result.Status, "failed", StringComparison.Ordinal)) ? 1 : 0;
             diagnostics?.RecordEvent("interaction_validation", new Dictionary<string, string?>
@@ -168,6 +201,8 @@ internal static class InteractionValidationCoordinator
             Platform: PlatformName(),
             Shell: "avalonia",
             GeneratedUtc: DateTimeOffset.UtcNow,
+            DialogCatalogCount: MainWindow.InteractiveValidationDialogRouteCount,
+            RibbonCommandCatalogCount: MainWindow.InteractiveValidationRibbonCommandCount,
             Summary: summary,
             Results: results);
         var json = JsonSerializer.Serialize(manifest, JsonOptions());

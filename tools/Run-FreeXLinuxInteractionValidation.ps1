@@ -17,7 +17,10 @@ param(
     [int]$TimeoutMinutes = 20,
 
     [ValidateRange(1, 20)]
-    [int]$DialogBatchSize = 10,
+    [int]$DialogBatchSize = 1,
+
+    [ValidateRange(1, 32)]
+    [int]$RibbonBatchSize = 8,
 
     [switch]$SkipImageBuild,
     [switch]$SkipPublish
@@ -29,7 +32,6 @@ $harness = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $currentSessionPath = Join-Path $repoRoot "artifacts/linux-interactive/freex/current-session.json"
 $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
-$authoritativeDialogCount = 120
 $reportStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
 $reportDirectory = Join-Path $repoRoot "artifacts/linux-interactive/freex/interaction-validation/$reportStamp"
 New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
@@ -67,12 +69,20 @@ try {
     # resources across repeated closes, so one 120-dialog process is not a reliable validation boundary.
     $manifest = $null
     $combinedResults = @()
-    for ($dialogStart = 0; $dialogStart -lt $authoritativeDialogCount; $dialogStart += $DialogBatchSize) {
-        $dialogCount = [Math]::Min($DialogBatchSize, $authoritativeDialogCount - $dialogStart)
+    $authoritativeDialogCount = $null
+    $authoritativeRibbonCount = $null
+    for ($dialogStart = 0; $null -eq $authoritativeDialogCount -or $dialogStart -lt $authoritativeDialogCount; $dialogStart += $DialogBatchSize) {
+        $dialogCount = if ($null -eq $authoritativeDialogCount) {
+            $DialogBatchSize
+        } else {
+            [Math]::Min($DialogBatchSize, $authoritativeDialogCount - $dialogStart)
+        }
         $appArguments = @(
             "--interaction-validation", "/work/validation",
             "--interaction-validation-dialog-start", [string]$dialogStart,
-            "--interaction-validation-dialog-count", [string]$dialogCount
+            "--interaction-validation-dialog-count", [string]$dialogCount,
+            "--interaction-validation-ribbon-start", "0",
+            "--interaction-validation-ribbon-count", [string]$RibbonBatchSize
         )
         if ($dialogStart -gt 0) {
             $appArguments += "--interaction-validation-dialog-only"
@@ -110,10 +120,102 @@ try {
         if ($batchManifest.error) {
             throw "Interaction validation batch $dialogStart failed before producing results: $($batchManifest.error)"
         }
+        if ($null -eq $authoritativeDialogCount) {
+            $authoritativeDialogCount = [int]$batchManifest.dialogCatalogCount
+            if ($authoritativeDialogCount -le 0) {
+                throw "Interaction validation reported an invalid dialog catalog count: $authoritativeDialogCount"
+            }
+            Write-Host "Authoritative dialog routes: $authoritativeDialogCount"
+        } elseif ([int]$batchManifest.dialogCatalogCount -ne $authoritativeDialogCount) {
+            throw "Dialog catalog count changed during validation: expected $authoritativeDialogCount, observed $($batchManifest.dialogCatalogCount)."
+        }
+        if ($null -eq $authoritativeRibbonCount) {
+            $authoritativeRibbonCount = [int]$batchManifest.ribbonCommandCatalogCount
+            if ($authoritativeRibbonCount -le 0) {
+                throw "Interaction validation reported an invalid ribbon command catalog count: $authoritativeRibbonCount"
+            }
+            Write-Host "Authoritative ribbon commands: $authoritativeRibbonCount"
+        } elseif ([int]$batchManifest.ribbonCommandCatalogCount -ne $authoritativeRibbonCount) {
+            throw "Ribbon command catalog count changed during validation: expected $authoritativeRibbonCount, observed $($batchManifest.ribbonCommandCatalogCount)."
+        }
         if ($null -eq $manifest) { $manifest = $batchManifest }
         $combinedResults += @($batchManifest.results)
         Copy-Item -LiteralPath $batchManifestPath -Destination (Join-Path $reportDirectory ("batch-{0:D3}.json" -f $dialogStart)) -Force
         & $harness -Action Stop -App FreeX -Port $Port
+    }
+
+    # Ribbon commands are isolated into bounded app processes. Production ribbon dispatch can rebuild
+    # substantial visual state, and Avalonia retains some subscriptions until process shutdown.
+    for ($ribbonStart = $RibbonBatchSize; $ribbonStart -lt $authoritativeRibbonCount; $ribbonStart += $RibbonBatchSize) {
+        $ribbonCount = [Math]::Min($RibbonBatchSize, $authoritativeRibbonCount - $ribbonStart)
+        $appArguments = @(
+            "--interaction-validation", "/work/validation",
+            "--interaction-validation-dialog-start", "0",
+            "--interaction-validation-dialog-count", "0",
+            "--interaction-validation-ribbon-start", [string]$ribbonStart,
+            "--interaction-validation-ribbon-count", [string]$ribbonCount,
+            "--interaction-validation-ribbon-only"
+        )
+        Write-Host "Running ribbon interaction batch $ribbonStart..$($ribbonStart + $ribbonCount - 1)..."
+        & $harness -Action Start -App FreeX -Port $Port -Replace -SkipImageBuild -SkipPublish -AppArgument $appArguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Linux ribbon interaction-validation batch starting at $ribbonStart failed to start."
+        }
+
+        $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+        $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
+        $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+        while ((Get-Date) -lt $deadline -and -not (Test-Path -LiteralPath $batchManifestPath -PathType Leaf)) {
+            Start-Sleep -Milliseconds 500
+        }
+        if (-not (Test-Path -LiteralPath $batchManifestPath -PathType Leaf)) {
+            throw "Ribbon interaction-validation batch $ribbonStart did not write a manifest within $TimeoutMinutes minute(s): $batchManifestPath"
+        }
+
+        $batchManifest = Get-Content -LiteralPath $batchManifestPath -Raw | ConvertFrom-Json
+        if ($batchManifest.error) {
+            throw "Ribbon interaction validation batch $ribbonStart failed before producing results: $($batchManifest.error)"
+        }
+        if ([int]$batchManifest.ribbonCommandCatalogCount -ne $authoritativeRibbonCount) {
+            throw "Ribbon command catalog count changed during validation: expected $authoritativeRibbonCount, observed $($batchManifest.ribbonCommandCatalogCount)."
+        }
+        $combinedResults += @($batchManifest.results)
+        Copy-Item -LiteralPath $batchManifestPath -Destination (Join-Path $reportDirectory ("ribbon-batch-{0:D3}.json" -f $ribbonStart)) -Force
+        & $harness -Action Stop -App FreeX -Port $Port
+    }
+
+    $rangeInventory = @($combinedResults | Where-Object category -eq "range-selection-inventory")
+    $rangeInteractionRows = @($combinedResults | Where-Object category -eq "range-selection")
+    $deduplicatedRangeRows = foreach ($group in @($rangeInteractionRows | Group-Object id)) {
+        $candidates = @($group.Group | Where-Object status -eq "failed" | Select-Object -First 1) +
+            @($group.Group | Where-Object status -ne "failed" | Select-Object -First 1)
+        $candidates | Select-Object -First 1
+    }
+    $observedRangeIds = @($deduplicatedRangeRows | Select-Object -ExpandProperty id -Unique)
+    $missingRangeRows = foreach ($inventoryRow in $rangeInventory) {
+        if ($observedRangeIds -contains [string]$inventoryRow.id) { continue }
+        [pscustomobject]@{
+            id = [string]$inventoryRow.id
+            category = "range-selection"
+            status = "failed"
+            evidenceLevel = "registered-not-exercised"
+            evidence = [string]$inventoryRow.evidence
+            note = "No production picker apply/cancel evidence was observed across the complete dialog run."
+        }
+    }
+    $combinedResults = @($combinedResults | Where-Object category -ne "range-selection") +
+        @($deduplicatedRangeRows) + @($missingRangeRows)
+
+    $dialogContractIds = @($combinedResults | Where-Object category -eq "dialog-contract" | Select-Object -ExpandProperty id -Unique)
+    if ($dialogContractIds.Count -ne $authoritativeDialogCount) {
+        $combinedResults += [pscustomobject]@{
+            id = "validation.dialog-catalog-completeness"
+            category = "validation-completeness"
+            status = "failed"
+            evidenceLevel = "catalog-count-mismatch"
+            evidence = "expected=$authoritativeDialogCount; observed=$($dialogContractIds.Count)"
+            note = "Every authoritative production dialog route must emit exactly one keyboard/focus contract row."
+        }
     }
 
     $manifest.results = @($combinedResults) + @($x11Manifest.results)

@@ -16,24 +16,31 @@ public sealed partial class MainWindow
         string outputDirectory,
         int dialogStart = 0,
         int dialogCount = int.MaxValue,
-        bool includeCoreResults = true)
+        bool includeCoreResults = true,
+        int ribbonCommandStart = 0,
+        int ribbonCommandCount = int.MaxValue,
+        bool ribbonOnly = false)
     {
         var results = new List<InteractionValidationResult>();
         if (includeCoreResults)
         {
-            AddRibbonBindingResults(results);
-            AddRibbonInteractionExecutionResults(results);
-            AddShortcutRoutingResults(results);
-            AddShortcutScenarioInventoryResults(results);
-            await AddContextMenuInteractionResultsAsync(results);
-            AddDialogRangeTargetResults(results);
-            await AddEditingInteractionResultsAsync(results);
+            if (!ribbonOnly)
+                AddRibbonBindingResults(results);
+            AddRibbonInteractionExecutionResults(results, ribbonCommandStart, ribbonCommandCount);
+            if (!ribbonOnly)
+            {
+                AddShortcutRoutingResults(results);
+                await AddShortcutScenarioInteractionResultsAsync(results);
+                await AddContextMenuInteractionResultsAsync(results);
+                AddDialogRangeTargetInventoryResults(results);
+                await AddPhysicalEditingInteractionResultsAsync(results);
+            }
         }
 
-        var selectedDialogIds = InteractionSurfaceCatalog.Dialogs
+        var selectedDialogIds = InteractiveValidationDialogRoutes
             .Skip(Math.Max(0, dialogStart))
             .Take(Math.Max(0, dialogCount))
-            .Select(dialog => dialog.Id)
+            .Select(route => route.CatalogId)
             .ToHashSet(StringComparer.Ordinal);
 
         var surfacesDirectory = Path.Combine(outputDirectory, "surfaces");
@@ -59,6 +66,7 @@ public sealed partial class MainWindow
         }
         AddDialogInventoryResults(results, capturedSurfaces, selectedDialogIds);
         results.AddRange(BuildDialogInteractionContractResults(selectedDialogIds));
+        results.AddRange(BuildObservedDialogRangeInteractionResults());
 
         return results;
     }
@@ -103,6 +111,25 @@ public sealed partial class MainWindow
                     : route?.MissingReason.Length > 0
                         ? route.MissingReason
                         : "The authoritative WPF dialog surface has no matching Avalonia interaction-validation opener."));
+        }
+
+        foreach (var route in SupplementalInteractionDialogRoutes)
+        {
+            if (selectedDialogIds is not null && !selectedDialogIds.Contains(route.CatalogId))
+                continue;
+
+            var capturedSurface = capturedDialogs.FirstOrDefault(surface =>
+                string.Equals(surface.Id, route.SurfaceId, StringComparison.Ordinal));
+            var captured = capturedSurface is not null;
+            results.Add(new InteractionValidationResult(
+                Id: route.CatalogId,
+                Category: "dialog-inventory",
+                Status: captured ? "passed" : "failed",
+                EvidenceLevel: captured ? "production-dialog-opened" : "production-dialog-not-exercised",
+                Evidence: route.AvaloniaProductionSurface,
+                Note: captured
+                    ? "Supplemental production dialog opened through its real Avalonia route."
+                    : "Supplemental production dialog did not open."));
         }
     }
 
@@ -152,39 +179,122 @@ public sealed partial class MainWindow
         }
     }
 
-    private static void AddShortcutScenarioInventoryResults(List<InteractionValidationResult> results)
+    private async Task AddShortcutScenarioInteractionResultsAsync(List<InteractionValidationResult> results)
     {
         foreach (var scenario in InteractiveValidationInventory.KeyboardShortcuts)
         for (var index = 0; index < scenario.Interactions.Count; index++)
         {
             var interaction = scenario.Interactions[index];
-            var catalogRouted = TryResolveSharedShortcutInteraction(interaction, out var route);
             var interactionId = $"{scenario.Id}:{index}";
-            var exactBehaviorProbed =
-                InteractiveValidationLegacyDataFilterInteractionIds.Contains(interactionId);
-            var behaviorProbed =
-                InteractiveValidationKeyboardShortcutScenarioIds.Contains(scenario.Id) ||
-                exactBehaviorProbed;
             var externalBoundary = scenario.IsNative || scenario.IsExternal;
+            if (externalBoundary || interaction.Kind == ShortcutInteractionKind.MouseWheel)
+            {
+                results.Add(new InteractionValidationResult(
+                    Id: interactionId,
+                    Category: "shortcut-scenario",
+                    Status: "skipped",
+                    EvidenceLevel: interaction.Kind == ShortcutInteractionKind.MouseWheel
+                        ? "physical-pointer-boundary"
+                        : "native-or-external-boundary",
+                    Evidence: $"{interaction.DisplayText} | {interaction.Context} | {interaction.Kind}",
+                    Note: interaction.Kind == ShortcutInteractionKind.MouseWheel
+                        ? "Requires a physical wheel-event probe; no keyboard-dispatch credit was assigned."
+                        : "Requires a cancel-only physical desktop probe; no managed interaction credit was assigned."));
+                continue;
+            }
+
+            var probe = await ExerciseShortcutInteractionAsync(interaction);
             results.Add(new InteractionValidationResult(
                 Id: interactionId,
                 Category: "shortcut-scenario",
-                Status: catalogRouted || behaviorProbed ? "passed" : "skipped",
-                EvidenceLevel: exactBehaviorProbed
-                    ? "host-gesture-behavior-tested"
-                    : behaviorProbed
-                    ? "planner-driven-behavior-tested"
-                    : catalogRouted ? "shared-catalog-routed"
-                    : externalBoundary ? "native-or-external-boundary" : "catalogued-awaiting-behavior-probe",
+                Status: probe.Passed ? "passed" : "failed",
+                EvidenceLevel: probe.Passed ? "production-key-event-dispatched" : "production-key-event-unhandled",
                 Evidence: $"{interaction.DisplayText} | {interaction.Context} | {interaction.Kind}",
-                Note: behaviorProbed
-                    ? scenario.ExpectedBehavior
-                    : catalogRouted
-                    ? $"Routes to {route}."
-                    : externalBoundary
-                        ? "Requires a cancel-only native/external probe."
-                        : scenario.ExpectedBehavior));
+                Note: $"{probe.Note} Expected: {scenario.ExpectedBehavior}"));
         }
+    }
+
+    internal async Task<(bool Passed, string Note)> ExerciseShortcutInteractionAsync(
+        ShortcutInteractionDescriptor interaction)
+    {
+        var mappedSteps = new List<(Key Key, KeyModifiers Modifiers)>();
+        if (interaction.Steps.Count == 0)
+            return (false, "The interaction contains no keyboard steps.");
+        foreach (var step in interaction.Steps)
+        {
+            if (!ShortcutInteractionValidationCatalog.TryMapAvaloniaGesture(step, out var key, out var modifiers))
+                return (false, $"Gesture key '{step.Key}' has no Avalonia mapping.");
+            mappedSteps.Add((key, modifiers));
+        }
+
+        try
+        {
+            ResetShortcutValidationState(interaction.Context);
+            for (var index = 0; index < mappedSteps.Count; index++)
+            {
+                var step = mappedSteps[index];
+                var args = new KeyEventArgs { Key = step.Key, KeyModifiers = step.Modifiers };
+                var ownedBefore = OwnedWindows.ToHashSet();
+                var dispatch = RaiseKeyDownForTest(args);
+                await SettleShortcutDispatchAsync(dispatch, ownedBefore);
+                if (!args.Handled)
+                {
+                    return (false,
+                        $"Step {index + 1}/{mappedSteps.Count} ({step.Modifiers}+{step.Key}) was not handled by the production window.");
+                }
+            }
+
+            return (true, $"All {mappedSteps.Count} key event(s) were handled through the production window.");
+        }
+        catch (Exception ex)
+        {
+            return (false, $"Production dispatch threw {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            CloseOwnedWindows(OwnedWindows.ToArray());
+            ResetShortcutValidationState(ShortcutInteractionContext.Worksheet);
+        }
+    }
+
+    private void ResetShortcutValidationState(ShortcutInteractionContext context)
+    {
+        CloseOwnedWindows(OwnedWindows.ToArray());
+        _session = CreateDisposableRibbonSession();
+        _legacyDataFilterSequenceState = LegacyDataFilterSequenceState.None;
+        SetRibbonKeyTipsVisible(false);
+        HideBackstageOverlay();
+        WindowState = global::Avalonia.Controls.WindowState.Normal;
+        _formulaBarExpanded = false;
+        _isFormulaBarHidden = false;
+        _formulaBarHost.IsVisible = true;
+        RefreshShell("Shortcut validation fixture ready");
+
+        if (context is ShortcutInteractionContext.FormulaBar or ShortcutInteractionContext.FormulaReferenceEditor)
+            _formulaBox.Focus();
+        else
+            _sheetGridHost.Focus();
+    }
+
+    private async Task SettleShortcutDispatchAsync(
+        Task dispatch,
+        IReadOnlySet<global::Avalonia.Controls.Window> ownedBefore)
+    {
+        for (var attempt = 0; !dispatch.IsCompleted && attempt < 80; attempt++)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                var newlyOwned = OwnedWindows
+                    .Where(window => !ownedBefore.Contains(window))
+                    .ToArray();
+                CloseOwnedWindows(newlyOwned);
+            }, DispatcherPriority.Background);
+            await Task.Delay(10);
+        }
+
+        if (!dispatch.IsCompleted)
+            throw new TimeoutException("Shortcut dispatch did not settle after closing newly opened owned windows.");
+        await dispatch;
     }
 
     private static bool TryResolveSharedShortcutInteraction(
@@ -250,19 +360,19 @@ public sealed partial class MainWindow
             Note: resolved && route == expectedRoute ? "" : $"Expected {expectedRoute}; resolved {route}."));
     }
 
-    private static void AddDialogRangeTargetResults(List<InteractionValidationResult> results)
+    private static void AddDialogRangeTargetInventoryResults(List<InteractionValidationResult> results)
     {
         foreach (var target in InteractiveValidationInventory.WorksheetRangeTargets)
         {
             var wired = InteractiveValidationRangeTargetIds.Contains(target.Id);
             results.Add(new InteractionValidationResult(
                 Id: target.Id,
-                Category: "dialog-range-pointing",
+                Category: "range-selection-inventory",
                 Status: wired ? "passed" : "failed",
-                EvidenceLevel: wired ? "shared-picker-session-bound" : "picker-session-missing",
+                EvidenceLevel: wired ? "registered-production-target" : "picker-session-missing",
                 Evidence: $"{target.Area} > {target.DisplayTarget}",
                 Note: wired
-                    ? "The shared session supports worksheet selection, mouse/Enter accept, Escape cancel, dialog restoration, and focus return."
+                    ? "Registration only; interactive apply/cancel evidence is emitted separately after the production dialog is exercised."
                     : target.ExpectedBehavior));
         }
     }
@@ -299,66 +409,4 @@ public sealed partial class MainWindow
         }
     }
 
-    private async Task AddEditingInteractionResultsAsync(List<InteractionValidationResult> results)
-    {
-        var sheet = _session.Workbook.AddSheet("InteractionValidation");
-        _session.SelectSheet(sheet.Id);
-
-        var inlineAddress = new CellAddress(sheet.Id, 2, 2);
-        sheet.SetCell(inlineAddress, new TextValue("before"));
-        _session.SelectCell(inlineAddress);
-        BeginInlineCellEdit(inlineAddress, "before", "before".Length);
-        var inlineEditorCreated = _inlineCellEditor is not null && _inlineCellEditAddress == inlineAddress;
-        if (_inlineCellEditor is not null)
-            _inlineCellEditor.Text = "after";
-        CommitInlineCellEdit(0, 0);
-        var inlineCommitted = sheet.GetValue(inlineAddress) is TextValue { Value: "after" };
-        results.Add(new InteractionValidationResult(
-            "cell-inline-edit",
-            "worksheet-editing",
-            inlineEditorCreated && inlineCommitted ? "passed" : "failed",
-            "invoked-with-mutation",
-            "WorksheetInlineCellEditor",
-            inlineCommitted ? "" : "Inline editor did not commit the expected value."));
-
-        var formulaAddress = new CellAddress(sheet.Id, 3, 2);
-        var pointTarget = new CellAddress(sheet.Id, 4, 4);
-        _session.SelectCell(formulaAddress);
-        BeginInlineCellEdit(formulaAddress, "=", 1);
-        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
-        var inlinePointInserted = TryInsertFormulaPointReference(pointTarget);
-        var inlinePointText = _inlineCellEditor?.Text ?? _inlineCellEditText ?? "";
-        CommitInlineCellEdit(0, 0);
-        var inlinePointCommitted = sheet.GetCell(formulaAddress)?.FormulaText is not null;
-        results.Add(new InteractionValidationResult(
-            "cell-inline-formula-point-mode",
-            "worksheet-editing",
-            inlinePointInserted && inlinePointText.Contains("D4", StringComparison.Ordinal) && inlinePointCommitted
-                ? "passed"
-                : "failed",
-            "invoked-with-reference-mutation",
-            inlinePointText,
-            "Inline formula edit must accept a pointed worksheet reference and commit it."));
-
-        var formulaBarAddress = new CellAddress(sheet.Id, 5, 2);
-        _session.SelectCell(formulaBarAddress);
-        _session.BeginFormulaEdit(formulaBarAddress);
-        _formulaBox.Text = "=";
-        _formulaBox.CaretIndex = 1;
-        _formulaBox.SelectionStart = 1;
-        _formulaBox.SelectionEnd = 1;
-        var formulaBarPointInserted = TryInsertFormulaPointReference(pointTarget);
-        var formulaBarText = _formulaBox.Text ?? "";
-        RaiseFormulaBoxKeyDownForTest(new KeyEventArgs { Key = Key.Enter });
-        var formulaBarCommitted = sheet.GetCell(formulaBarAddress)?.FormulaText is not null;
-        results.Add(new InteractionValidationResult(
-            "formula-bar-point-mode",
-            "worksheet-editing",
-            formulaBarPointInserted && formulaBarText.Contains("D4", StringComparison.Ordinal) && formulaBarCommitted
-                ? "passed"
-                : "failed",
-            "invoked-with-reference-mutation",
-            formulaBarText,
-            "Formula bar edit must accept a pointed worksheet reference and commit it."));
-    }
 }

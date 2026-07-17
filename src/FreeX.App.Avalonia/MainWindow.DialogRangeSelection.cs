@@ -20,6 +20,11 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private sealed record DialogRangeInteractionEvidence(
+        string TargetId,
+        bool Passed,
+        string Evidence);
+
     private static readonly DialogRangePickerRegistration[] DialogRangePickerRegistrations =
     [
         new("range.create-table.range", "CreateTableDialog", "CreateTableRangePicker", "CreateTableRangeBox", DialogRangeSelectionFormat.Range),
@@ -56,6 +61,7 @@ public sealed partial class MainWindow
     ];
 
     private static readonly ConditionalWeakTable<Button, DialogRangePickerRegistration> ConfiguredDialogRangePickers = new();
+    private static readonly ConditionalWeakTable<Window, object> ConfiguredDialogKeyboardContracts = new();
     private static readonly MethodInfo? SetPlatformWindowEnabledMethod = typeof(IWindowImpl).GetMethod(
         "SetEnabled",
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -66,6 +72,141 @@ public sealed partial class MainWindow
             .ToFrozenSet(StringComparer.Ordinal);
 
     private DialogRangePickerSession? _dialogRangePickerSession;
+    private readonly Dictionary<string, DialogRangeInteractionEvidence> _dialogRangeInteractionEvidence =
+        new(StringComparer.Ordinal);
+
+    private void ResetDialogRangeInteractionContracts() => _dialogRangeInteractionEvidence.Clear();
+
+    private async Task RecordDialogRangeInteractionContractsAsync(Window dialog)
+    {
+        var dialogAutomationId = AutomationProperties.GetAutomationId(dialog);
+        var registrations = DialogRangePickerRegistrations
+            .Where(registration =>
+                string.Equals(registration.DialogAutomationId, dialogAutomationId, StringComparison.Ordinal) &&
+                !_dialogRangeInteractionEvidence.ContainsKey(registration.TargetId))
+            .ToArray();
+        if (registrations.Length == 0)
+            return;
+
+        var controls = dialog.GetLogicalDescendants().OfType<Control>().ToArray();
+        foreach (var registration in registrations)
+        {
+            var picker = controls.OfType<Button>().FirstOrDefault(button =>
+                string.Equals(AutomationProperties.GetAutomationId(button), registration.PickerAutomationId, StringComparison.Ordinal));
+            var target = controls.OfType<TextBox>().FirstOrDefault(textBox =>
+                string.Equals(AutomationProperties.GetAutomationId(textBox), registration.TextBoxAutomationId, StringComparison.Ordinal));
+            if (picker is null || target is null)
+            {
+                RecordRangeInteractionEvidence(
+                    registration,
+                    passed: false,
+                    $"missing-controls:picker={picker is not null},target={target is not null},dialog={dialogAutomationId}");
+                continue;
+            }
+
+            var previousSelection = _session.SelectedRange;
+            try
+            {
+                var originalText = target.Text ?? string.Empty;
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent) { Source = picker });
+                if (_dialogRangePickerSession?.Registration.TargetId != registration.TargetId)
+                {
+                    RecordRangeInteractionEvidence(registration, passed: false, "picker-click-did-not-start-session");
+                    continue;
+                }
+
+                var sheet = _session.ActiveSheet;
+                var pointedRange = new GridRange(
+                    new CellAddress(sheet.Id, 2, 2),
+                    new CellAddress(sheet.Id, 3, 3));
+                _session.SelectRange(pointedRange);
+                RaiseDialogRangeValidationKey(Key.Enter);
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
+                var expected = FormatDialogRangeSelection(pointedRange, registration.Format);
+                if (_dialogRangePickerSession is not null || !string.Equals(target.Text, expected, StringComparison.Ordinal))
+                {
+                    RecordRangeInteractionEvidence(
+                        registration,
+                        passed: false,
+                        $"apply-failed:expected={expected},actual={target.Text},sessionActive={_dialogRangePickerSession is not null}");
+                    CancelDialogRangeSelection(restoreDialog: true, restoreOriginalText: true);
+                    continue;
+                }
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent) { Source = picker });
+                if (_dialogRangePickerSession?.Registration.TargetId != registration.TargetId)
+                {
+                    RecordRangeInteractionEvidence(registration, passed: false, "second-picker-click-did-not-start-session");
+                    continue;
+                }
+
+                _session.SelectRange(new GridRange(
+                    new CellAddress(sheet.Id, 4, 4),
+                    new CellAddress(sheet.Id, 5, 5)));
+                RaiseDialogRangeValidationKey(Key.Escape);
+                await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
+                var cancelRestored = _dialogRangePickerSession is null &&
+                    string.Equals(target.Text, expected, StringComparison.Ordinal);
+                RecordRangeInteractionEvidence(
+                    registration,
+                    cancelRestored,
+                    cancelRestored
+                        ? $"picker-click; enter-apply={expected}; escape-restore={expected}; original={originalText}"
+                        : $"cancel-failed:expected={expected},actual={target.Text},sessionActive={_dialogRangePickerSession is not null}");
+            }
+            catch (Exception ex)
+            {
+                CancelDialogRangeSelection(restoreDialog: true, restoreOriginalText: true);
+                RecordRangeInteractionEvidence(
+                    registration,
+                    passed: false,
+                    $"{ex.GetType().Name}:{ex.Message}");
+            }
+            finally
+            {
+                _session.SelectRange(previousSelection);
+            }
+        }
+    }
+
+    private void RaiseDialogRangeValidationKey(Key key)
+    {
+        var target = FocusManager?.GetFocusedElement() as InputElement ?? _sheetGridHost;
+        target.RaiseEvent(new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = key,
+            PhysicalKey = key == Key.Enter ? PhysicalKey.Enter : PhysicalKey.Escape,
+            KeyDeviceType = KeyDeviceType.Keyboard,
+            Source = target,
+        });
+    }
+
+    private void RecordRangeInteractionEvidence(
+        DialogRangePickerRegistration registration,
+        bool passed,
+        string evidence) =>
+        _dialogRangeInteractionEvidence[registration.TargetId] =
+            new DialogRangeInteractionEvidence(registration.TargetId, passed, evidence);
+
+    internal IReadOnlyList<InteractionValidationResult> BuildObservedDialogRangeInteractionResults()
+    {
+        var results = new List<InteractionValidationResult>(DialogRangePickerRegistrations.Length);
+        foreach (var registration in DialogRangePickerRegistrations)
+        {
+            if (!_dialogRangeInteractionEvidence.TryGetValue(registration.TargetId, out var evidence))
+                continue;
+            results.Add(new InteractionValidationResult(
+                Id: registration.TargetId,
+                Category: "range-selection",
+                Status: evidence.Passed ? "passed" : "failed",
+                EvidenceLevel: "production-picker-apply-cancel",
+                Evidence: evidence.Evidence,
+                Note: "Production dialog picker was clicked; worksheet pointing was applied with Enter and cancelled with Escape."));
+        }
+
+        return results;
+    }
 
     static MainWindow()
     {
@@ -77,7 +218,41 @@ public sealed partial class MainWindow
     private static void DialogRangePickerOwnerChanged(Window dialog, AvaloniaPropertyChangedEventArgs _)
     {
         if (dialog.Owner is MainWindow owner)
+        {
             owner.AttachInventoryDialogRangePickers(dialog);
+            owner.AttachDefaultDialogKeyboardContract(dialog);
+        }
+    }
+
+    private void AttachDefaultDialogKeyboardContract(Window dialog)
+    {
+        if (!ConfiguredDialogKeyboardContracts.TryAdd(dialog, new object()))
+            return;
+
+        dialog.Opened += (_, _) => Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (dialog.FocusManager?.GetFocusedElement() is Visual focused &&
+                    ReferenceEquals(TopLevel.GetTopLevel(focused), dialog))
+                {
+                    return;
+                }
+
+                dialog.GetLogicalDescendants()
+                    .OfType<Control>()
+                    .FirstOrDefault(control =>
+                        control.Focusable && control.IsVisible && control.IsEffectivelyEnabled)
+                    ?.Focus();
+            },
+            DispatcherPriority.Input);
+        dialog.Closed += (_, _) => Dispatcher.UIThread.Post(
+            () =>
+            {
+                var focused = FocusManager?.GetFocusedElement();
+                if (focused is not Visual visual || !ReferenceEquals(TopLevel.GetTopLevel(visual), this))
+                    _sheetGridHost.Focus();
+            },
+            DispatcherPriority.Input);
     }
 
     private void AttachInventoryDialogRangePickers(Window dialog)
