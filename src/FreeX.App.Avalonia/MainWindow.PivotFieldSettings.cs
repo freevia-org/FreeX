@@ -7,6 +7,7 @@ using Avalonia.Media;
 using FreeX.App.Presentation.PivotUI;
 using FreeX.Core.Commands;
 using FreeX.Core.Model;
+using Free.Shared.Shell.Avalonia;
 
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
 using AvaloniaVerticalAlignment = Avalonia.Layout.VerticalAlignment;
@@ -217,7 +218,7 @@ public sealed partial class MainWindow
             },
         };
         AutomationProperties.SetAutomationId(tabs, "PivotValueFieldSettingsTabs");
-        ApplyClassicTabChrome(tabs);
+        AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
 
         var buttonRow = new StackPanel
         {
