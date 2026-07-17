@@ -203,9 +203,11 @@ public sealed partial class MainWindow
             content.Children.Add(scroll);
         }
 
-        content.Children.Add(new TextBlock
+        content.Children.Add(new Label
         {
-            Text = existing is null ? UiText.Get("ThreadedComment_CommentLabel") : UiText.Get("ThreadedComment_EditCommentLabel"),
+            Content = existing is null ? UiText.Get("ThreadedComment_CommentLabel") : UiText.Get("ThreadedComment_EditCommentLabel"),
+            Target = rootBox,
+            Padding = new Thickness(0),
             Margin = new Thickness(0, 0, 0, 2),
         });
         content.Children.Add(rootBox);
@@ -215,7 +217,13 @@ public sealed partial class MainWindow
             if (existing.Replies.Count > 0)
                 BuildReplyEditor(content, existing, style, Accept);
 
-            content.Children.Add(new TextBlock { Text = UiText.Get("ThreadedComment_ReplyLabel"), Margin = new Thickness(0, 8, 0, 2) });
+            content.Children.Add(new Label
+            {
+                Content = UiText.Get("ThreadedComment_ReplyLabel"),
+                Target = replyBox,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 8, 0, 2),
+            });
             content.Children.Add(replyBox);
         }
 
@@ -349,9 +357,21 @@ public sealed partial class MainWindow
         };
 
         var panel = new StackPanel { Margin = new Thickness(0, 8, 0, 0) };
-        panel.Children.Add(new TextBlock { Text = UiText.Get("ThreadedComment_SelectReplyLabel"), Margin = new Thickness(0, 0, 0, 2) });
+        panel.Children.Add(new Label
+        {
+            Content = UiText.Get("ThreadedComment_SelectReplyLabel"),
+            Target = selector,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 0, 2),
+        });
         panel.Children.Add(selector);
-        panel.Children.Add(new TextBlock { Text = UiText.Get("ThreadedComment_SelectedReplyTextLabel"), Margin = new Thickness(0, 8, 0, 2) });
+        panel.Children.Add(new Label
+        {
+            Content = UiText.Get("ThreadedComment_SelectedReplyTextLabel"),
+            Target = selectedReplyBox,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 8, 0, 2),
+        });
         panel.Children.Add(selectedReplyBox);
         panel.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([updateButton, deleteButton], new Thickness(0, 8, 0, 0)));
         content.Children.Add(panel);

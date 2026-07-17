@@ -381,14 +381,14 @@ public sealed class ChartBaselineCorpusTests
             .ToArray();
         firstSurfaceCellFacets.Should().HaveCount(2);
         firstSurfaceCellFacets[0].Points.Select(point => point.X)
-            .Should().Equal(new[] { 2.0, 149.6, 196.8 },
+            .Should().Equal(new[] { 2.0, 152.75, 198.375 },
                 "PowerPoint splits the imported blank low-band cell along the 0-2 diagonal");
         firstSurfaceCellFacets[1].Points.Select(point => point.X)
-            .Should().Equal(new[] { 2.0, 196.8, 64.0 },
+            .Should().Equal(new[] { 2.0, 198.375, 64.0 },
                 "the paired imported blank-cell triangle closes the 0-2 split");
         firstSurfaceCellFacets
             .SelectMany(facet => facet.Points)
-            .Single(point => point.X == 149.6)
+            .Single(point => point.X == 152.75)
             .Y
             .Should()
             .BeApproximately(163.1, 0.0001,

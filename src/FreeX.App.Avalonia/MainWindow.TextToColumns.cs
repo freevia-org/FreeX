@@ -495,9 +495,25 @@ public sealed partial class MainWindow
             Spacing = 8,
             Children =
             {
-                new TextBlock { Text = UiText.Get("TextToColumns_DecimalSeparatorLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new Label
+                {
+                    Content = UiText.Get("TextToColumns_DecimalSeparatorLabel"),
+                    Target = decimalSeparatorBox,
+                    Padding = new Thickness(0),
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                },
                 decimalSeparatorBox,
-                new TextBlock { Text = UiText.Get("TextToColumns_ThousandsSeparatorLabel"), VerticalAlignment = AvaloniaVerticalAlignment.Center, FontSize = 12, FontFamily = FormulaBarFontFamily },
+                new Label
+                {
+                    Content = UiText.Get("TextToColumns_ThousandsSeparatorLabel"),
+                    Target = thousandsSeparatorBox,
+                    Padding = new Thickness(0),
+                    VerticalAlignment = AvaloniaVerticalAlignment.Center,
+                    FontSize = 12,
+                    FontFamily = FormulaBarFontFamily,
+                },
                 thousandsSeparatorBox,
             },
         };

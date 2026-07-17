@@ -3,6 +3,7 @@ using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Charts;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
+using FreeX.App.Presentation.DrawingUI;
 using FreeX.Core.Model;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Theme;
@@ -120,8 +121,8 @@ internal sealed record AvaloniaRibbonHostCallbacks
     /// <summary>Insert ▸ Picture — choose an image file and place it on the sheet.</summary>
     public Action? InsertPicture { get; init; }
 
-    /// <summary>Insert ▸ Shapes — insert the default drawing shape at the active cell.</summary>
-    public Action? InsertShape { get; init; }
+    /// <summary>Insert ▸ Shapes — insert the selected gallery shape at the active cell.</summary>
+    public Action<DrawingShapeKind>? InsertShape { get; init; }
 
     /// <summary>Insert ▸ Text Box — insert a text box at the active cell.</summary>
     public Action? InsertTextBox { get; init; }
@@ -292,10 +293,15 @@ internal static class AvaloniaRibbonComposition
                 Groups = tab.Groups.Select(group => group with
                 {
                     Controls = group.Controls.Select(control =>
-                        control is RibbonComboBox combo &&
-                        string.Equals(combo.CommandId.Value, numberFormatCommandId, StringComparison.Ordinal)
-                            ? combo with { Items = numberFormatLabels }
-                            : control).ToArray(),
+                    {
+                        if (control is RibbonComboBox combo &&
+                            string.Equals(combo.CommandId.Value, numberFormatCommandId, StringComparison.Ordinal))
+                            return combo with { Items = numberFormatLabels };
+
+                        return string.Equals(control.CommandId.Value, "Shapes", StringComparison.Ordinal)
+                            ? CreateShapeGallerySplitButton(control)
+                            : control;
+                    }).ToArray(),
                 }).ToArray(),
             }).ToArray(),
         };
@@ -384,7 +390,17 @@ internal static class AvaloniaRibbonComposition
         Bind("data.quickAnalysis", callbacks.QuickAnalysis);
         Bind("insert.pivotTable", callbacks.InsertPivotTable);
         Bind("insert.picture", callbacks.InsertPicture);
-        Bind("insert.shapes", callbacks.InsertShape);
+        if (callbacks.InsertShape is { } insertShape)
+        {
+            Bind("insert.shapes", () => insertShape(DrawingInsertionPlanner.DefaultShape));
+            foreach (var item in DrawingInsertionPlanner.ShapeItems)
+            {
+                var kind = item.Kind;
+                registry.Register(
+                    new RibbonCommandId(GetShapeCommandId(kind)),
+                    new ActionRibbonCommand(() => insertShape(kind)));
+            }
+        }
         Bind("insert.textBox", callbacks.InsertTextBox);
         Bind("home.formatPainter", callbacks.FormatPainter);
 
@@ -417,6 +433,26 @@ internal static class AvaloniaRibbonComposition
             foreach (var (id, action) in extra)
                 Bind(id, action);
     }
+
+    internal static string GetShapeCommandId(DrawingShapeKind kind) => $"insert.shape.{kind}";
+
+    private static RibbonControl CreateShapeGallerySplitButton(RibbonControl source) =>
+        new RibbonSplitButton(source.CommandId, source.Label, new RibbonMenu(
+            DrawingInsertionPlanner.ShapeGroups.Select(group => new RibbonMenuItem(
+                group.Label,
+                CommandId: null,
+                KeyTip: group.KeyTip,
+                Children: group.Items.Select(item => new RibbonMenuItem(
+                    item.Label,
+                    new RibbonCommandId(GetShapeCommandId(item.Kind)),
+                    item.KeyTip)).ToArray())).ToArray()))
+        {
+            KeyTip = source.KeyTip,
+            Icon = source.Icon,
+            PreferredLayout = source.PreferredLayout,
+            TooltipTitle = source.TooltipTitle,
+            TooltipDescription = source.TooltipDescription,
+        };
 
     /// <summary>
     /// Wires the Insert chart-type buttons and their chart-type menu items to

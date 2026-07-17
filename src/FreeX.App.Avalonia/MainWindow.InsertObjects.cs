@@ -155,7 +155,8 @@ public sealed partial class MainWindow
             return;
         }
 
-        ClearSelectedDrawingObject();
+        _selectedDrawingObjectKind = FreeX.Core.Model.SelectionPaneObjectKind.Shape;
+        _selectedDrawingObjectId = command.ShapeId;
         RefreshShell(FormatDrawingObjectResourceText(
             DrawingObjectActionPlanner.InsertShapeSuccess(kind, FormatCellReference(anchor))));
     }
