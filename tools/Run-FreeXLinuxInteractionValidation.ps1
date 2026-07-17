@@ -22,6 +22,9 @@ param(
     [ValidateRange(1, 32)]
     [int]$RibbonBatchSize = 8,
 
+    [ValidateRange(1, 100)]
+    [int]$ContextBatchSize = 25,
+
     [switch]$SkipImageBuild,
     [switch]$SkipPublish
 )
@@ -90,7 +93,8 @@ try {
     $combinedResults = @()
     $authoritativeDialogCount = $null
     $authoritativeRibbonCount = $null
-    $coreSections = @("ribbon-bindings", "shortcuts", "context-menus", "range-inventory", "editing")
+    $authoritativeContextCount = $null
+    $coreSections = @("ribbon-bindings", "shortcuts", "range-inventory", "editing")
     foreach ($coreSection in $coreSections) {
         $appArguments = @(
             "--interaction-validation", "/work/validation",
@@ -122,15 +126,49 @@ try {
         if ($null -eq $authoritativeDialogCount) {
             $authoritativeDialogCount = [int]$batchManifest.dialogCatalogCount
             $authoritativeRibbonCount = [int]$batchManifest.ribbonCommandCatalogCount
-            if ($authoritativeDialogCount -le 0 -or $authoritativeRibbonCount -le 0) {
+            $authoritativeContextCount = [int]$batchManifest.contextMenuDispatchCatalogCount
+            if ($authoritativeDialogCount -le 0 -or $authoritativeRibbonCount -le 0 -or $authoritativeContextCount -le 0) {
                 throw "Interaction validation reported invalid catalog counts."
             }
             Write-Host "Authoritative dialog routes: $authoritativeDialogCount"
             Write-Host "Authoritative ribbon commands: $authoritativeRibbonCount"
+            Write-Host "Authoritative context-menu dispatches: $authoritativeContextCount"
         }
         if ($null -eq $manifest) { $manifest = $batchManifest }
         $combinedResults += @($batchManifest.results)
         Copy-Item -LiteralPath $batchManifestPath -Destination (Join-Path $reportDirectory "core-$coreSection.json") -Force
+        & $harness -Action Stop -App FreeX -Port $Port
+    }
+
+    for ($contextStart = 0; $contextStart -lt $authoritativeContextCount; $contextStart += $ContextBatchSize) {
+        $contextCount = [Math]::Min($ContextBatchSize, $authoritativeContextCount - $contextStart)
+        $appArguments = @(
+            "--interaction-validation", "/work/validation",
+            "--interaction-validation-dialog-count", "0",
+            "--interaction-validation-ribbon-count", "0",
+            "--interaction-validation-core-section", "context-menus",
+            "--interaction-validation-context-start", [string]$contextStart,
+            "--interaction-validation-context-count", [string]$contextCount
+        )
+        Write-Host "Running context-menu dispatch batch $contextStart..$($contextStart + $contextCount - 1)..."
+        & $harness -Action Start -App FreeX -Port $Port -Replace -SkipImageBuild -SkipPublish -AppArgument $appArguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "Linux context-menu interaction batch starting at $contextStart failed to start."
+        }
+        $session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
+        $batchManifestPath = Join-Path ([string]$session.sessionDirectory) "validation/interaction-validation.json"
+        $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+        $batchManifest = Read-CompletedJsonManifest -Path $batchManifestPath -Deadline $deadline
+        if ($null -eq $batchManifest) {
+            $appLogPath = Join-Path ([string]$session.sessionDirectory) "logs/app.log"
+            $appLog = if (Test-Path -LiteralPath $appLogPath) { Get-Content -LiteralPath $appLogPath -Raw } else { "" }
+            throw "Context-menu interaction batch $contextStart did not write a complete manifest.`n$appLog"
+        }
+        if ([int]$batchManifest.contextMenuDispatchCatalogCount -ne $authoritativeContextCount) {
+            throw "Context-menu dispatch catalog count changed during validation."
+        }
+        $combinedResults += @($batchManifest.results)
+        Copy-Item -LiteralPath $batchManifestPath -Destination (Join-Path $reportDirectory ("context-batch-{0:D3}.json" -f $contextStart)) -Force
         & $harness -Action Stop -App FreeX -Port $Port
     }
 

@@ -20,7 +20,9 @@ public sealed partial class MainWindow
         int ribbonCommandStart = 0,
         int ribbonCommandCount = int.MaxValue,
         bool ribbonOnly = false,
-        string? coreSection = null)
+        string? coreSection = null,
+        int contextMenuDispatchStart = 0,
+        int contextMenuDispatchCount = int.MaxValue)
     {
         var results = new List<InteractionValidationResult>();
         if (includeCoreResults)
@@ -40,7 +42,10 @@ public sealed partial class MainWindow
                     await AddShortcutScenarioInteractionResultsAsync(results);
                 }
                 if (Includes("context-menus"))
-                    await AddContextMenuInteractionResultsAsync(results);
+                    await AddContextMenuInteractionResultsAsync(
+                        results,
+                        contextMenuDispatchStart,
+                        contextMenuDispatchCount);
                 if (Includes("range-inventory"))
                     AddDialogRangeTargetInventoryResults(results);
                 if (Includes("editing"))

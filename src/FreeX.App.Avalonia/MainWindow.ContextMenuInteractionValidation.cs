@@ -43,6 +43,10 @@ public sealed partial class MainWindow
     private const string WaterfallContextFamily = "context-menu.waterfall-point";
     private const string AutoFilterContextFamily = "context-menu.auto-filter-criteria";
     private const string NativeMenuContextFamily = "context-menu.native-application";
+    internal static int InteractiveValidationContextMenuDispatchCount => BuildContextMenuValidationInventory()
+        .Select(ContextMenuExecutionKey)
+        .Distinct(StringComparer.Ordinal)
+        .Count();
 
     internal static IReadOnlyList<ContextMenuValidationDescriptor> BuildContextMenuValidationInventory()
     {
@@ -61,14 +65,28 @@ public sealed partial class MainWindow
         return rows;
     }
 
-    private async Task AddContextMenuInteractionResultsAsync(List<InteractionValidationResult> results)
+    private async Task AddContextMenuInteractionResultsAsync(
+        List<InteractionValidationResult> results,
+        int dispatchStart = 0,
+        int dispatchCount = int.MaxValue)
     {
         var inventory = BuildContextMenuValidationInventory();
+        var allExecutionKeys = inventory
+            .Select(ContextMenuExecutionKey)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var selectedExecutionKeys = allExecutionKeys
+            .Skip(Math.Max(0, dispatchStart))
+            .Take(Math.Max(0, dispatchCount))
+            .ToHashSet(StringComparer.Ordinal);
+        var selectedInventory = inventory
+            .Where(row => selectedExecutionKeys.Contains(ContextMenuExecutionKey(row)))
+            .ToArray();
         var observed = new Dictionary<string, ContextMenuDispatchEvidence>(StringComparer.Ordinal);
 
-        foreach (var row in inventory)
+        foreach (var row in selectedInventory)
         {
-            var executionKey = $"{row.FamilyId}|{row.VariantId}|{row.ActionKey}|{row.IsEnabled}";
+            var executionKey = ContextMenuExecutionKey(row);
             if (!observed.TryGetValue(executionKey, out var evidence))
             {
                 evidence = row.IsEnabled
@@ -89,6 +107,9 @@ public sealed partial class MainWindow
                 $"{row.Label} | {evidence.Evidence}",
                 evidence.Note));
         }
+
+        if (selectedExecutionKeys.Count != allExecutionKeys.Length)
+            return;
 
         foreach (var family in InteractionSurfaceCatalog.ContextMenus)
         {
@@ -125,6 +146,9 @@ public sealed partial class MainWindow
         }
     }
 
+    private static string ContextMenuExecutionKey(ContextMenuValidationDescriptor row) =>
+        $"{row.FamilyId}|{row.VariantId}|{row.ActionKey}|{row.IsEnabled}";
+
     private static string AggregateContextMenuStatus(
         IReadOnlyList<ContextMenuValidationDescriptor> rows,
         IReadOnlyDictionary<string, ContextMenuDispatchEvidence> observed)
@@ -132,7 +156,7 @@ public sealed partial class MainWindow
         if (rows.Count == 0)
             return "failed";
         var statuses = rows.Where(row => row.IsEnabled)
-            .Select(row => observed[$"{row.FamilyId}|{row.VariantId}|{row.ActionKey}|{row.IsEnabled}"].Status)
+            .Select(row => observed[ContextMenuExecutionKey(row)].Status)
             .ToArray();
         if (statuses.Contains("failed", StringComparer.Ordinal))
             return "failed";
