@@ -5801,8 +5801,14 @@ public sealed class DocumentView : RichTextBox
         return root;
     }
 
-    private FrameworkElement BuildGroupPlannedChildVisual(object child, DrawingObjectVisualPlan plan) =>
-        plan.Kind switch
+    private FrameworkElement BuildGroupPlannedChildVisual(object child, DrawingObjectVisualPlan plan)
+    {
+        // The DOCX writer represents unsupported group children as solid gray wps:wsp rectangles.
+        // Keep those payload-free imported stubs visually faithful without changing authored rich children.
+        if (IsSerializedGroupPlaceholder(child))
+            return BuildSerializedGroupPlaceholder(child, plan.Rect);
+
+        return plan.Kind switch
         {
             DrawingObjectVisualKind.Shape or DrawingObjectVisualKind.WordArt =>
                 BuildDrawingObjectCoreVisual(plan),
@@ -5816,6 +5822,24 @@ public sealed class DocumentView : RichTextBox
                 child,
                 plan.Rect.WidthDip / PxPerPoint,
                 plan.Rect.HeightDip / PxPerPoint)
+        };
+    }
+
+    private static bool IsSerializedGroupPlaceholder(object child) => child switch
+    {
+        InlineImage { Bytes.Length: 0 } => true,
+        Chart { Categories.Count: 0, Series.Count: 0 } => true,
+        SmartArt { Nodes.Count: 0 } => true,
+        _ => false
+    };
+
+    private static FrameworkElement BuildSerializedGroupPlaceholder(object child, DocumentFloatRect rect) =>
+        new System.Windows.Controls.Border
+        {
+            Width = rect.WidthDip,
+            Height = rect.HeightDip,
+            Background = new SolidColorBrush(System.Windows.Media.Color.FromRgb(0xC0, 0xC0, 0xC0)),
+            Tag = child
         };
 
     private static FrameworkElement BuildGroupUnsupportedChildPlaceholder(object child, double widthPt, double heightPt)

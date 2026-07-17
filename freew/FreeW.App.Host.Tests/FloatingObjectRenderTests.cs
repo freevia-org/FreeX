@@ -464,6 +464,41 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingOverlay_RendersPayloadFreeGroupedChildrenAsSerializedPlaceholders()
+    {
+        var image = new InlineImage([], widthPt: 32, heightPt: 24);
+        var chart = new Chart { WidthPt = 104, HeightPt = 72 };
+        var smartArt = new SmartArt { WidthPt = 128, HeightPt = 46 };
+        var group = new FreeW.Core.Model.DrawingGroup { WidthPt = 190, HeightPt = 116 };
+        group.Children.Add(image);
+        group.ChildOffsets.Add((0, 0));
+        group.Children.Add(chart);
+        group.ChildOffsets.Add((44, 0));
+        group.Children.Add(smartArt);
+        group.ChildOffsets.Add((0, 66));
+
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromDrawingGroup(group));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var groupRoot = canvas.Children.OfType<Border>().Single(border => ReferenceEquals(border.Tag, group));
+        foreach (var child in new object[] { image, chart, smartArt })
+        {
+            var placeholder = LogicalDescendants<Border>(groupRoot)
+                .Single(border => ReferenceEquals(border.Tag, child));
+            placeholder.Background.Should().BeOfType<SolidColorBrush>().Which.Color.Should().Be(Color.FromRgb(0xC0, 0xC0, 0xC0));
+            placeholder.BorderBrush.Should().BeNull();
+            placeholder.Child.Should().BeNull();
+        }
+    }
+
+    [StaFact]
     public void FloatingOverlay_RendersChartFromSharedPlanWithActualGeometryTextAndStyle()
     {
         var chart = Chart.Create(
