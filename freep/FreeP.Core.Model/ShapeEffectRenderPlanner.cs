@@ -116,7 +116,7 @@ public static class ShapeEffectRenderPlanner
         if (!effects.HasGlow)
             return Array.Empty<ShapeGlowPass>();
 
-        int glowPasses = Math.Min(5, (int)Math.Ceiling(effects.GlowRadiusDip / 2));
+        int glowPasses = Math.Min(8, (int)Math.Ceiling(effects.GlowRadiusDip / 2));
         if (glowPasses <= 0)
             return Array.Empty<ShapeGlowPass>();
 

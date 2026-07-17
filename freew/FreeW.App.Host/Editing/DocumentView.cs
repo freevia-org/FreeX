@@ -4759,9 +4759,10 @@ public sealed class DocumentView : RichTextBox
             ? Colors.White
             : ParseColor(_model.Page.BackgroundColorHex!, Colors.White);
         var effectiveWatermark = _model.Page.EffectiveWatermark;
+        var (pageWidthDip, pageHeightDip) = PageLayout.PageSizeDip(_model.Page);
         Background = effectiveWatermark is null
             ? new SolidColorBrush(pageColor)
-            : BuildWatermarkBrush(effectiveWatermark, pageColor);
+            : BuildWatermarkBrush(effectiveWatermark, pageColor, pageWidthDip, pageHeightDip);
 
         if (PrintLayoutEnabled)
         {
@@ -6071,15 +6072,18 @@ public sealed class DocumentView : RichTextBox
     }
 
     /// <summary>
-    /// Builds a tiling brush that paints watermark text on a white page so it sits behind the document
-    /// content. Respects the full <see cref="WatermarkOptions"/> — font family, colour, opacity and
-    /// diagonal vs horizontal layout. Used by the editor background; the print/preview path draws the
-    /// same text per page so on-screen and printed output match.
+    /// Builds a brush for Word's fixed VML text-path watermark behind document content. Respects the
+    /// full <see cref="WatermarkOptions"/> — font family, colour, opacity and diagonal vs horizontal
+    /// layout. The print/preview path consumes the same shared shape plan per page.
     /// </summary>
     internal static Brush BuildWatermarkBrush(WatermarkOptions options) =>
         BuildWatermarkBrush(options, Colors.White);
 
-    internal static Brush BuildWatermarkBrush(WatermarkOptions options, Color pageColor)
+    internal static Brush BuildWatermarkBrush(
+        WatermarkOptions options,
+        Color pageColor,
+        double pageWidthDip = 816,
+        double pageHeightDip = 1056)
     {
         if (options.IsPicture)
             return BuildPictureWatermarkBrush(options, pageColor);
@@ -6088,36 +6092,52 @@ public sealed class DocumentView : RichTextBox
         var alpha = (byte)Math.Clamp((int)Math.Round(options.Opacity * 255), 0, 255);
         var foreground = new SolidColorBrush(Color.FromArgb(alpha, baseColor.R, baseColor.G, baseColor.B));
 
-        var label = new TextBlock
-        {
-            Text = options.Text,
-            FontSize = 48,
-            FontWeight = FontWeights.Bold,
-            FontFamily = new System.Windows.Media.FontFamily(options.FontFamily),
-            Foreground = foreground,
-            LayoutTransform = options.Layout == WatermarkLayout.Horizontal
-                ? null
-                : new RotateTransform(-45)
-        };
-        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        label.Arrange(new Rect(label.DesiredSize));
+        var width = Math.Max(1, pageWidthDip);
+        var height = Math.Max(1, pageHeightDip);
+        var plan = WatermarkVisualPlanner.BuildTextLayout(options, width, height);
+        if (plan is null)
+            return new SolidColorBrush(pageColor);
 
-        var visual = new VisualBrush(label)
-        {
-            Stretch = Stretch.None,
-            TileMode = TileMode.Tile,
-            ViewportUnits = BrushMappingMode.Absolute,
-            Viewport = new Rect(0, 0, Math.Max(240, label.DesiredSize.Width + 80),
-                                       Math.Max(240, label.DesiredSize.Height + 80)),
-            AlignmentX = AlignmentX.Center,
-            AlignmentY = AlignmentY.Center
-        };
+        var typeface = new Typeface(
+            new System.Windows.Media.FontFamily(options.FontFamily),
+            FontStyles.Normal,
+            FontWeights.Normal,
+            FontStretches.Normal);
+        var unitText = new FormattedText(
+            options.Text,
+            System.Globalization.CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            1,
+            foreground,
+            1);
+        var fontSize = Math.Clamp(plan.WidthDip / Math.Max(1, unitText.Width), 1, 130)
+            * WatermarkVisualPlanner.TextPathGlyphScale;
+        var text = new FormattedText(
+            options.Text,
+            System.Globalization.CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight,
+            typeface,
+            fontSize,
+            foreground,
+            1);
 
-        // Compose the watermark over the opaque page colour so the editing surface keeps the
-        // chosen page background behind the text.
-        var canvas = new Grid { Background = new SolidColorBrush(pageColor) };
-        canvas.Children.Add(new System.Windows.Shapes.Rectangle { Fill = visual });
-        return new VisualBrush(canvas) { Stretch = Stretch.Fill };
+        var drawing = new System.Windows.Media.DrawingGroup();
+        drawing.Children.Add(new GeometryDrawing(
+            new SolidColorBrush(pageColor),
+            null,
+            new RectangleGeometry(new Rect(0, 0, width, height))));
+        var geometry = text.BuildGeometry(new Point(plan.CenterXDip - text.Width / 2, plan.CenterYDip - text.Height / 2));
+        if (Math.Abs(plan.RotationDegrees) > 0.01)
+            geometry.Transform = new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip);
+        drawing.Children.Add(new GeometryDrawing(foreground, null, geometry));
+
+        return new DrawingBrush(drawing)
+        {
+            Viewbox = new Rect(0, 0, width, height),
+            ViewboxUnits = BrushMappingMode.Absolute,
+            Stretch = Stretch.Fill
+        };
     }
 
     private static Brush BuildPictureWatermarkBrush(WatermarkOptions options, Color pageColor)

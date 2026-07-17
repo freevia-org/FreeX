@@ -194,6 +194,19 @@ public class WatermarkOptionsRoundTripTests
     }
 
     [Fact]
+    public void WatermarkOptions_RoundTrip_PreservesHeaderTextWhenWatermarkSharesTheParagraph()
+    {
+        var doc = new TextDocument();
+        doc.FinalSectionHeadersFooters.Header = new HeaderFooter("Visible header");
+        doc.Page.WatermarkOptions = new WatermarkOptions("CONFIDENTIAL");
+
+        var loaded = RoundTrip(doc);
+
+        loaded.FinalSectionHeadersFooters.Header!.Paragraphs.Should().ContainSingle();
+        loaded.FinalSectionHeadersFooters.Header.Paragraphs[0].PlainText.Should().Be("Visible header");
+    }
+
+    [Fact]
     public void PictureWatermark_EmitsHeaderRelationshipAndMedia()
     {
         var doc = new TextDocument();
@@ -211,6 +224,26 @@ public class WatermarkOptionsRoundTripTests
         stream.Position = 0;
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
         zip.GetEntry("word/media/header1_watermark1.png").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void PictureWatermark_RoundTrip_DoesNotBecomeHeaderContent()
+    {
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = image,
+            ScalePct = 48,
+            Opacity = 0.38
+        };
+
+        var loaded = RoundTrip(doc);
+
+        loaded.Page.EffectiveWatermark!.ImageBytes.Should().Equal(image);
+        loaded.FinalSectionHeadersFooters.Header.Should().NotBeNull();
+        loaded.FinalSectionHeadersFooters.Header!.IsEmpty.Should().BeTrue();
     }
 
     // ── Legacy Watermark migration ────────────────────────────────────────

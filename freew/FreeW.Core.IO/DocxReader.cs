@@ -1153,16 +1153,23 @@ public static class DocxReader
         foreach (var p in root.Descendants(W + "p"))
         {
             // FreeW's page watermark is stored in a VML-only paragraph in the header. It is also
-            // represented by custom document properties, so keeping this empty layout paragraph in
-            // the model only consumes header height and can hide the real header text on render.
-            // Restrict the filter to FreeW's stable shape IDs so ordinary Word image/VML headers survive.
-            var isFreeWWatermarkParagraph = p.Descendants(V + "shape")
-                .Any(shape => shape.Attribute("id")?.Value is
-                    "PowerPlusWaterMarkObject" or "PowerPlusPictureWaterMarkObject");
-            if (isFreeWWatermarkParagraph)
+            // represented by custom document properties. Remove only the known watermark run: Word
+            // commonly appends it to a real header paragraph, so dropping the whole paragraph loses
+            // visible header text.
+            var preservedParagraph = new XElement(p);
+            var watermarkRuns = preservedParagraph.Descendants(W + "r")
+                .Where(run => run.Descendants(V + "shape")
+                    .Any(shape => shape.Attribute("id")?.Value is
+                        "PowerPlusWaterMarkObject" or "PowerPlusPictureWaterMarkObject")
+                    || run.Descendants(A + "blip")
+                        .Any(blip => blip.Attribute(R + "embed")?.Value == "rIdWatermarkImage"))
+                .ToList();
+            foreach (var run in watermarkRuns)
+                run.Remove();
+            if (!preservedParagraph.Descendants(W + "r").Any())
                 continue;
 
-            result.Paragraphs.Add(ReadParagraph(p, archive, partImageRelationships, hyperlinkRelationships, noNumbering));
+            result.Paragraphs.Add(ReadParagraph(preservedParagraph, archive, partImageRelationships, hyperlinkRelationships, noNumbering));
         }
         return result;
     }
