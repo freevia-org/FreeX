@@ -891,13 +891,19 @@ public sealed class SlideCanvas : FrameworkElement
             {
                 double centerY = swatch.Top + swatch.Height / 2.0;
                 dc.DrawLine(
-                    ToPen(new ChartStrokePlan(item.Fill.Color, item.Fill.Alpha, ChartRenderPlanner.ImportedLineSeriesStrokeThickness)),
+                    ToPen(new ChartStrokePlan(
+                        item.Fill.Color,
+                        item.Fill.Alpha,
+                        ChartRenderPlanner.ImportedLineSeriesStrokeThickness)),
                     new Point(swatch.Left, centerY),
                     new Point(swatch.Right, centerY));
-                dc.DrawRectangle(
-                    ToBrush(item.Fill),
-                    null,
-                    new Rect(swatch.Left + swatch.Width / 2.0 - 4.0, centerY - 4.0, 8.0, 8.0));
+                if (!item.IsLineOnly)
+                {
+                    dc.DrawRectangle(
+                        ToBrush(item.Fill),
+                        null,
+                        new Rect(swatch.Left + swatch.Width / 2.0 - 4.0, centerY - 4.0, 8.0, 8.0));
+                }
             }
             else
             {
@@ -1077,7 +1083,11 @@ public sealed class SlideCanvas : FrameworkElement
                     foreach (var interval in GetPieDepthArcIntervals(primitive))
                     {
                         dc.DrawGeometry(
-                            ToBrush(ShadeImportedThreeDPieSidewall(depthFill, interval.Start, interval.End)),
+                            ToBrush(ShadeImportedThreeDPieSidewall(
+                                depthFill,
+                                interval.Start,
+                                interval.End,
+                                primitive.PointIndex)),
                             null,
                             ToPieSliceDepthGeometry(primitive, interval.Start, interval.End));
                     }
@@ -1179,10 +1189,13 @@ public sealed class SlideCanvas : FrameworkElement
     private static ChartFillPlan ShadeImportedThreeDPieSidewall(
         ChartFillPlan fill,
         double startAngle,
-        double endAngle)
+        double endAngle,
+        int pointIndex)
     {
-        double midpoint = (startAngle + endAngle) / 2;
-        double factor = 0.35 + 0.4 * Math.Clamp(Math.Sin(midpoint), 0, 1);
+        double factor = ChartRenderPlanner.ResolveImportedThreeDPieSidewallFactor(
+            pointIndex,
+            startAngle,
+            endAngle);
         return new ChartFillPlan(
             new SrgbColor(
                 ScalePieSidewallChannel(fill.Color.R, factor),

@@ -109,7 +109,7 @@ internal sealed class CellBorderPanel : Panel
             end   = new Point(x, p2.Y);
         }
 
-        Children.Add(MakeLine(start, end, stroke, thickness, dashArray));
+        AddLineOrDouble(border.Style, start, end, stroke, thickness, dashArray);
     }
 
     private void AddDiagonal(CellBorder border, Point p1, Point p2)
@@ -117,6 +117,27 @@ internal sealed class CellBorderPanel : Panel
         var thickness = CellBorderGeometry.GetThickness(border.Style);
         var dashArray = CellBorderGeometry.GetDashArray(border.Style);
         var stroke    = ColorToBrush(border.Color);
+        AddLineOrDouble(border.Style, p1, p2, stroke, thickness, dashArray);
+    }
+
+    /// <summary>
+    /// Adds a single stroked <see cref="Line"/> for the edge, or — for
+    /// <see cref="BorderStyle.Double"/> — two thin parallel lines straddling it, matching Excel's
+    /// double-border rendering. Mirrors the WPF <c>DrawBorderEdge</c>/<c>DrawDoubleBorderLines</c>
+    /// pair (the WPF twin special-cases <c>BorderStyle.Double</c> the same way instead of drawing
+    /// one solid line).
+    /// </summary>
+    private void AddLineOrDouble(BorderStyle style, Point p1, Point p2, IBrush stroke, double thickness, double[]? dashArray)
+    {
+        if (style == BorderStyle.Double)
+        {
+            var (x1, y1, x2, y2, x3, y3, x4, y4) =
+                CellBorderGeometry.GetDoubleBorderLineOffsets(p1.X, p1.Y, p2.X, p2.Y);
+            Children.Add(MakeLine(new Point(x1, y1), new Point(x2, y2), stroke, thickness, null));
+            Children.Add(MakeLine(new Point(x3, y3), new Point(x4, y4), stroke, thickness, null));
+            return;
+        }
+
         Children.Add(MakeLine(p1, p2, stroke, thickness, dashArray));
     }
 

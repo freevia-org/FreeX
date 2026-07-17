@@ -511,6 +511,9 @@ public sealed partial class ViewportService : IViewportService
             : null;
         hasComment = commentDisplay is not null;
 
+        if (!IsRowHidden(sheet, row) && !sheet.IsColEffectivelyHidden(col))
+            ApplyHiddenNeighborBorderMigration(workbook, sheet, row, col, ref style, ref styleCache);
+
         cells.Add(new DisplayCell(
             row,
             col,
@@ -524,6 +527,163 @@ public sealed partial class ViewportService : IViewportService
             hasComment,
             cfDataBar,
             commentDisplay));
+    }
+
+    /// <summary>
+    /// Excel does not erase a border set on a hidden row/column: hiding zeroes the row's/column's
+    /// height/width, so the hidden cell's border visually fuses onto the boundary between whichever
+    /// visible neighbors it now sits directly between (the "collapsed seam"). This mutates
+    /// <paramref name="style"/> (cloning it first — it may be a shared cached instance) so that any
+    /// edge whose immediate neighbor is hidden gets the heaviest border found across the collapsed
+    /// run, matching GridView.Rendering's own "heaviest style wins" shared-edge precedence
+    /// (<c>ResolveBorderEdgeWinner</c>) so the seam resolves identically from either visible side.
+    /// A directly-adjacent-VISIBLE edge is left completely untouched — that case is already handled
+    /// correctly by the renderer's own neighbor lookup and must not be second-guessed here.
+    /// </summary>
+    private static void ApplyHiddenNeighborBorderMigration(
+        Workbook workbook, Sheet sheet, uint row, uint col, ref CellStyle style, ref ViewportStyleCache styleCache)
+    {
+        var migratedTop = MigrateHiddenRowBorder(workbook, sheet, row, col, -1, style.BorderTop, ref styleCache);
+        var migratedBottom = MigrateHiddenRowBorder(workbook, sheet, row, col, 1, style.BorderBottom, ref styleCache);
+        var migratedLeft = MigrateHiddenColBorder(workbook, sheet, row, col, -1, style.BorderLeft, ref styleCache);
+        var migratedRight = MigrateHiddenColBorder(workbook, sheet, row, col, 1, style.BorderRight, ref styleCache);
+
+        if (migratedTop == style.BorderTop && migratedBottom == style.BorderBottom &&
+            migratedLeft == style.BorderLeft && migratedRight == style.BorderRight)
+        {
+            return;
+        }
+
+        style = style.Clone();
+        style.BorderTop = migratedTop;
+        style.BorderBottom = migratedBottom;
+        style.BorderLeft = migratedLeft;
+        style.BorderRight = migratedRight;
+    }
+
+    /// <summary>
+    /// Walks from (row, col) across a run of hidden rows in the <paramref name="rowStep"/>
+    /// direction (-1 = up/toward BorderTop, +1 = down/toward BorderBottom) to the first visible
+    /// row, folding every border that touches the collapsed seam: this cell's own facing edge
+    /// (<paramref name="own"/>), both edges of every hidden row's cell in the run, and the far
+    /// visible neighbor's own facing edge. Returns <paramref name="own"/> unchanged when the
+    /// immediate neighbor row isn't hidden, so an ordinary adjacent-visible-cell edge is never
+    /// touched.
+    /// </summary>
+    private static CellBorder MigrateHiddenRowBorder(
+        Workbook workbook, Sheet sheet, uint row, uint col, int rowStep, CellBorder own, ref ViewportStyleCache styleCache)
+    {
+        var neighborRow = (long)row + rowStep;
+        if (neighborRow < 1 || neighborRow > CellAddress.MaxRow || !IsRowHidden(sheet, (uint)neighborRow))
+            return own;
+
+        var winner = own;
+        var r = (uint)neighborRow;
+        while (IsRowHidden(sheet, r))
+        {
+            if (GetRawCellStyleForBorderMigration(workbook, sheet, r, col, ref styleCache) is { } hiddenStyle)
+            {
+                winner = ResolveHeavierBorder(winner, hiddenStyle.BorderTop);
+                winner = ResolveHeavierBorder(winner, hiddenStyle.BorderBottom);
+            }
+
+            var next = (long)r + rowStep;
+            if (next < 1 || next > CellAddress.MaxRow)
+                return winner;
+            r = (uint)next;
+        }
+
+        // r is the far VISIBLE row this hidden run collapses onto; fold in its own facing edge too
+        // so both sides of the seam agree on the same final winner regardless of processing order.
+        if (GetRawCellStyleForBorderMigration(workbook, sheet, r, col, ref styleCache) is { } farStyle)
+        {
+            var farFacing = rowStep < 0 ? farStyle.BorderBottom : farStyle.BorderTop;
+            winner = ResolveHeavierBorder(winner, farFacing);
+        }
+
+        return winner;
+    }
+
+    /// <summary>Column counterpart of <see cref="MigrateHiddenRowBorder"/>.</summary>
+    private static CellBorder MigrateHiddenColBorder(
+        Workbook workbook, Sheet sheet, uint row, uint col, int colStep, CellBorder own, ref ViewportStyleCache styleCache)
+    {
+        var neighborCol = (long)col + colStep;
+        if (neighborCol < 1 || neighborCol > CellAddress.MaxCol || !sheet.IsColEffectivelyHidden((uint)neighborCol))
+            return own;
+
+        var winner = own;
+        var c = (uint)neighborCol;
+        while (sheet.IsColEffectivelyHidden(c))
+        {
+            if (GetRawCellStyleForBorderMigration(workbook, sheet, row, c, ref styleCache) is { } hiddenStyle)
+            {
+                winner = ResolveHeavierBorder(winner, hiddenStyle.BorderLeft);
+                winner = ResolveHeavierBorder(winner, hiddenStyle.BorderRight);
+            }
+
+            var next = (long)c + colStep;
+            if (next < 1 || next > CellAddress.MaxCol)
+                return winner;
+            c = (uint)next;
+        }
+
+        if (GetRawCellStyleForBorderMigration(workbook, sheet, row, c, ref styleCache) is { } farStyle)
+        {
+            var farFacing = colStep < 0 ? farStyle.BorderRight : farStyle.BorderLeft;
+            winner = ResolveHeavierBorder(winner, farFacing);
+        }
+
+        return winner;
+    }
+
+    /// <summary>
+    /// Reads the raw stored style for an arbitrary cell (regardless of hidden state or whether it
+    /// carries a value) for border-migration purposes: a real cell's style, else a style-only blank
+    /// run's style, else null (no border contribution).
+    /// </summary>
+    private static CellStyle? GetRawCellStyleForBorderMigration(
+        Workbook workbook, Sheet sheet, uint row, uint col, ref ViewportStyleCache styleCache)
+    {
+        var cell = sheet.GetCell(row, col);
+        if (cell is not null)
+            return styleCache.Get(workbook, cell.StyleId);
+
+        var styleOnlyId = sheet.GetStyleOnly(row, col);
+        return styleOnlyId.HasValue ? styleCache.Get(workbook, styleOnlyId.Value) : null;
+    }
+
+    // Ranked heaviest/most-prominent first, mirroring GridView.Rendering's BorderEdgePrecedence —
+    // kept as an independent copy here since Core.Calc cannot reference the App.UI renderer.
+    private static readonly BorderStyle[] BorderMigrationPrecedence =
+    {
+        BorderStyle.Double,
+        BorderStyle.Thick,
+        BorderStyle.Medium,
+        BorderStyle.MediumDashDotDot,
+        BorderStyle.MediumDashDot,
+        BorderStyle.MediumDashed,
+        BorderStyle.SlantDashDot,
+        BorderStyle.Thin,
+        BorderStyle.DashDotDot,
+        BorderStyle.DashDot,
+        BorderStyle.Dashed,
+        BorderStyle.Dotted,
+        BorderStyle.Hair,
+        BorderStyle.None,
+    };
+
+    private static int BorderMigrationPrecedenceRank(BorderStyle style)
+    {
+        var index = Array.IndexOf(BorderMigrationPrecedence, style);
+        return index < 0 ? BorderMigrationPrecedence.Length : index;
+    }
+
+    private static CellBorder ResolveHeavierBorder(CellBorder mine, CellBorder other)
+    {
+        if (mine.Style == BorderStyle.None) return other;
+        if (other.Style == BorderStyle.None) return mine;
+        return BorderMigrationPrecedenceRank(mine.Style) <= BorderMigrationPrecedenceRank(other.Style) ? mine : other;
     }
 
     private struct ViewportStyleCache
@@ -851,6 +1011,9 @@ public sealed partial class ViewportService : IViewportService
                 ? CreateCellCommentDisplay(sheet, new CellAddress(sheetId, row, col))
                 : null;
             hasComment = commentDisplay is not null;
+
+            if (!rowHidden && !colHidden)
+                ApplyHiddenNeighborBorderMigration(workbook, sheet, row, col, ref style, ref styleCache);
 
             cells.Add(new DisplayCell(
                 row,

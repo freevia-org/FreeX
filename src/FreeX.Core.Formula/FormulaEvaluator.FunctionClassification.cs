@@ -56,6 +56,7 @@ public sealed partial class FormulaEvaluator
         "INTERCEPT", "PEARSON", "RSQ", "SLOPE", "STEYX",
         "PERCENTILE", "PERCENTILE.INC", "PERCENTILE.EXC",
         "QUARTILE", "QUARTILE.INC", "QUARTILE.EXC",
+        "TRIMMEAN",
         "PERCENTRANK", "PERCENTRANK.INC", "PERCENTRANK.EXC",
         "PROB",
         "PERCENTOF",

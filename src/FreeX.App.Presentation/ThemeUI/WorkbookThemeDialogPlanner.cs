@@ -57,9 +57,18 @@ public static class WorkbookThemeDialogPlanner
         {
             try
             {
-                themedPalette = themedPalette.WithColor(
-                    slot,
-                    WorkbookThemeDialogColorCodec.ParseColor(ReadColorText(colorTextBySlot, slot)));
+                var parsedColor = WorkbookThemeDialogColorCodec.ParseColor(ReadColorText(colorTextBySlot, slot));
+
+                // Only patch the slots the user actually changed. WithColor always rewrites the
+                // slot's native XML as a fresh <a:srgbClr>, so calling it for every slot on every
+                // Save (even ones whose dialog text round-tripped straight back from the theme's
+                // existing baked RGB) would bake untouched "Automatic" sysClr slots (dk1/lt1) --
+                // and any lumMod/lumOff/tint transform on any slot -- into plain literal colors,
+                // which real Excel's own Customize Colors dialog never does.
+                if (parsedColor == theme.GetColor(slot))
+                    continue;
+
+                themedPalette = themedPalette.WithColor(slot, parsedColor);
             }
             catch (FormatException ex)
             {

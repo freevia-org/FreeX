@@ -126,7 +126,7 @@ public sealed class Lexer
             ')' => SingleChar(TokenType.CloseParen),
             '{' => SingleChar(TokenType.OpenBrace),
             '}' => SingleChar(TokenType.CloseBrace),
-            '[' => ReadStructuredReferenceSelector(),
+            '[' => ReadBracketToken(),
             ',' => SingleChar(TokenType.Comma),
             ';' => SingleChar(TokenType.Semicolon),
             ':' => SingleChar(TokenType.Colon),
@@ -243,6 +243,65 @@ public sealed class Lexer
         }
 
         throw new FormulaParseException($"Unterminated string starting at position {start}");
+    }
+
+    /// <summary>
+    /// Dispatches a leading '[' to either the unquoted on-disk external-workbook sheet-qualifier
+    /// form (<c>[n]SheetName!</c>, e.g. <c>[1]Sheet1!A1</c> -- the form real Excel writes whenever
+    /// the external sheet name needs no quoting of its own) or, when that shape isn't present, the
+    /// ordinary structured-table-reference selector (<c>Table1[Column1]</c>, <c>[@Column1]</c>,
+    /// <c>[#Totals]</c>, etc).
+    /// </summary>
+    private Token ReadBracketToken() =>
+        TryReadExternalSheetQualifier(out var externalToken) ? externalToken : ReadStructuredReferenceSelector();
+
+    /// <summary>
+    /// Recognizes the unquoted on-disk external-workbook sheet-qualifier form <c>[n]SheetName!</c>,
+    /// where <c>n</c> is the 1-based external-reference index (e.g. <c>[1]Sheet1!A1</c>). Excel's
+    /// quoted equivalent <c>'[1]Sheet1'!A1</c> already lexes to a single SheetQualifier token via
+    /// <see cref="ReadQuotedSheetQualifier"/> whose value is the bracketed "[1]Sheet1" string; this
+    /// produces the identical token shape/value for the unquoted form so
+    /// <see cref="ExternalSheetReferenceResolver"/> and the rest of the parser resolve both forms
+    /// the same way.
+    ///
+    /// Only matches when the bracket content is ALL DIGITS (the numeric external-reference index)
+    /// immediately closed by ']', immediately followed by an identifier-shaped sheet name, and then
+    /// '!' -- this can never collide with a structured-table-reference selector: a structured
+    /// reference selector's bracket content is a column name / '@'/'#' keyword, never immediately
+    /// followed (once the bracket closes) by a second, unbracketed identifier and '!'. Any other
+    /// shape (no digits, unterminated, no trailing sheet-name-then-'!') falls through unchanged to
+    /// <see cref="ReadStructuredReferenceSelector"/> without consuming any input, so
+    /// Table1[Column1], [@Column1], [#Totals], and every other structured-reference shape lex
+    /// exactly as before.
+    /// </summary>
+    private bool TryReadExternalSheetQualifier(out Token token)
+    {
+        token = null!;
+        var start = _pos;
+        var pos = start + 1; // skip '['
+
+        var digitsStart = pos;
+        while (pos < _text.Length && char.IsDigit(_text[pos]))
+            pos++;
+
+        if (pos == digitsStart || pos >= _text.Length || _text[pos] != ']')
+            return false;
+
+        pos++; // skip ']'
+
+        var sheetStart = pos;
+        while (pos < _text.Length && (char.IsLetterOrDigit(_text[pos]) || _text[pos] == '_' || _text[pos] == '.'))
+            pos++;
+
+        if (pos == sheetStart || pos >= _text.Length || _text[pos] != '!')
+            return false;
+
+        var value = _text[start..pos];
+        pos++; // skip '!'
+
+        token = new Token(TokenType.SheetQualifier, value, start);
+        _pos = pos;
+        return true;
     }
 
     private Token ReadStructuredReferenceSelector()

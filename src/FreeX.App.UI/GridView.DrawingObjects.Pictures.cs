@@ -315,7 +315,7 @@ public partial class GridView
         dc.DrawRectangle(
             brush,
             null,
-            new Rect(ActualRowHeaderWidth, EffectiveColHeaderHeight, Math.Max(0, ActualWidth - ActualRowHeaderWidth), Math.Max(0, ActualHeight - EffectiveColHeaderHeight)));
+            new Rect(ActualRowHeaderWidth, EffectiveColHeaderHeight, Math.Max(0, GetLogicalViewportWidth() - ActualRowHeaderWidth), Math.Max(0, GetLogicalViewportHeight() - EffectiveColHeaderHeight)));
     }
 
     /// <summary>

@@ -140,8 +140,8 @@ public partial class GridView
             var scrollRequest = CalculateAutofillEdgeScrollIntent(
                 pos.X,
                 pos.Y,
-                ActualWidth,
-                ActualHeight,
+                GetLogicalViewportWidth(),
+                GetLogicalViewportHeight(),
                 ActualRowHeaderWidth,
                 EffectiveColHeaderHeight);
             if (scrollRequest.HasAnyDirection)
@@ -325,7 +325,7 @@ public partial class GridView
 
         var splitScrollbarHit = Viewport is null
             ? null
-            : HitTestSplitPaneScrollbar(CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight), pos);
+            : HitTestSplitPaneScrollbar(CalculateSplitPaneScrollbarChrome(Viewport, GetLogicalViewportWidth(), GetLogicalViewportHeight()), pos);
         if (splitScrollbarHit?.Orientation == SplitPaneScrollbarOrientation.Horizontal)
         {
             Cursor = Cursors.SizeWE;
@@ -679,7 +679,7 @@ public partial class GridView
 
         if (Viewport is not null)
         {
-            var chrome = CalculateSplitPaneScrollbarChrome(Viewport, ActualWidth, ActualHeight);
+            var chrome = CalculateSplitPaneScrollbarChrome(Viewport, GetLogicalViewportWidth(), GetLogicalViewportHeight());
             if (HitTestSplitPaneScrollbar(chrome, pos) is { } scrollbarHit)
             {
                 var dragSource = scrollbarHit.Region == SplitPaneRegion.TopRight
@@ -708,7 +708,7 @@ public partial class GridView
             }
         }
 
-        if (Viewport is not null && HitTestSplitDividerHandle(Viewport, pos, ActualWidth, ActualHeight) is { } splitHandle &&
+        if (Viewport is not null && HitTestSplitDividerHandle(Viewport, pos, GetLogicalViewportWidth(), GetLogicalViewportHeight()) is { } splitHandle &&
             splitHandle != SplitDividerHandle.None)
         {
             _splitDividerDragHandle = splitHandle;
@@ -1191,8 +1191,8 @@ public partial class GridView
         var scrollRequest = CalculateAutofillEdgeScrollIntent(
             pos.X,
             pos.Y,
-            ActualWidth,
-            ActualHeight,
+            GetLogicalViewportWidth(),
+            GetLogicalViewportHeight(),
             ActualRowHeaderWidth,
             EffectiveColHeaderHeight);
         if (scrollRequest.HasAnyDirection)

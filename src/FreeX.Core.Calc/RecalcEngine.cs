@@ -828,7 +828,7 @@ public sealed class RecalcEngine
         // so such a formula must not depend on its own cell — otherwise a totals-style =SUBTOTAL(109,B4:B12)
         // placed inside B4:B12 is wrongly flagged circular. This exclusion is cell-specific, so these
         // formulas bypass the (cell-independent) dependency-plan cache.
-        var excludeSelf = IsSubtotalOrAggregateRoot(ast);
+        var excludeSelf = ContainsSelfExcludingSubtotalOrAggregate(ast);
 
         var cacheKey = new DependencyPlanCacheKey(ast, sheetId);
         if (!excludeSelf && _dependencyPlanCache.TryGetValue(cacheKey, out var cachedPlan))
@@ -859,10 +859,92 @@ public sealed class RecalcEngine
             AddDependencyPlanToCache(cacheKey, refs, containsVolatileFunction);
     }
 
-    private static bool IsSubtotalOrAggregateRoot(FormulaNode ast) =>
-        ast is FunctionCallNode func &&
-        (string.Equals(func.FunctionName, "SUBTOTAL", StringComparison.OrdinalIgnoreCase) ||
-         string.Equals(func.FunctionName, "AGGREGATE", StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// Does this formula contain a SUBTOTAL/AGGREGATE call — anywhere in the expression, not only
+    /// as the formula's literal root call (e.g. "=1+SUBTOTAL(9,B4:B12)" must be recognized too) —
+    /// whose own nested-ignore rule would exclude this formula's cell from a self-referencing
+    /// range? This mirrors BuiltInFunctions.Subtotal's ContainsFunctionCall text-scan, which
+    /// already applies the same "anywhere in the expression" rule when excluding OTHER cells
+    /// within an aggregated range; the self-exclusion check here must agree with it.
+    ///
+    /// SUBTOTAL always ignores nested SUBTOTAL/AGGREGATE cells (including itself), regardless of
+    /// its function_num (1-11 or the hidden-row-aware 101-111). AGGREGATE only does so for
+    /// options 0-3 ("...and ignore nested SUBTOTAL and AGGREGATE functions"); options 4-7
+    /// explicitly do NOT ignore nested cells, so a self-range AGGREGATE with options 4-7 is
+    /// genuinely circular, exactly like any other self-referencing formula. When the options
+    /// argument isn't a statically-resolvable literal, we conservatively keep the previous
+    /// always-exclude behavior rather than risk a false circular-reference warning.
+    /// </summary>
+    private static bool ContainsSelfExcludingSubtotalOrAggregate(FormulaNode ast)
+    {
+        switch (ast)
+        {
+            case FunctionCallNode func when string.Equals(func.FunctionName, "SUBTOTAL", StringComparison.OrdinalIgnoreCase):
+                return true;
+
+            case FunctionCallNode func when string.Equals(func.FunctionName, "AGGREGATE", StringComparison.OrdinalIgnoreCase):
+                return AggregateOptionsExcludeNestedSelf(func) || ContainsSelfExcludingCallInAny(func.Arguments);
+
+            case FunctionCallNode func:
+                return ContainsSelfExcludingCallInAny(func.Arguments);
+
+            case BinaryOpNode binary:
+                return ContainsSelfExcludingSubtotalOrAggregate(binary.Left) ||
+                       ContainsSelfExcludingSubtotalOrAggregate(binary.Right);
+
+            case UnaryOpNode unary:
+                return ContainsSelfExcludingSubtotalOrAggregate(unary.Operand);
+
+            case ArrayConstantNode array:
+                foreach (var row in array.Rows)
+                    if (ContainsSelfExcludingCallInAny(row))
+                        return true;
+                return false;
+
+            default:
+                return false;
+        }
+    }
+
+    private static bool ContainsSelfExcludingCallInAny(IReadOnlyList<FormulaNode> nodes)
+    {
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (ContainsSelfExcludingSubtotalOrAggregate(nodes[i]))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// True when this AGGREGATE call's own options argument (arg 1) statically resolves to 0-3
+    /// (ignore nested SUBTOTAL/AGGREGATE) or can't be statically resolved at all (non-literal —
+    /// keep the previous always-exclude behavior). False only when the options literal is
+    /// definitively 4-7 (ignore nothing/hidden-rows/errors, but NOT nested calls).
+    /// </summary>
+    private static bool AggregateOptionsExcludeNestedSelf(FunctionCallNode aggregateCall)
+    {
+        if (aggregateCall.Arguments.Count < 2)
+            return true;
+
+        return !TryGetLiteralIntegerValue(aggregateCall.Arguments[1], out var options) || options <= 3;
+    }
+
+    private static bool TryGetLiteralIntegerValue(FormulaNode node, out int value)
+    {
+        switch (node)
+        {
+            case NumberNode number:
+                value = (int)number.Value;
+                return true;
+            case UnaryOpNode { Operator: UnaryOperator.Negate } unary when TryGetLiteralIntegerValue(unary.Operand, out var inner):
+                value = -inner;
+                return true;
+            default:
+                value = 0;
+                return false;
+        }
+    }
 
     private void ApplyDependencyPlan(CellAddress formulaCell, FormulaDependencyPlan plan)
     {

@@ -48,10 +48,37 @@ internal static class XlsxWorksheetPageSetupMapper
 
         var primaryOccurrence = differentOddEvenPages ? XLHFOccurrence.OddPages : XLHFOccurrence.AllPages;
         AddHeaderFooterText(target, oddOrAllPages, primaryOccurrence);
-        if (differentFirstPage)
-            AddHeaderFooterText(target, firstPage, XLHFOccurrence.FirstPage);
-        if (differentOddEvenPages)
-            AddHeaderFooterText(target, evenPages, XLHFOccurrence.EvenPages);
+
+        // ClosedXML's XLHFOccurrence.AllPages is a universal fallback: once written, reading
+        // FirstPage/EvenPages (or OddPages) returns the AllPages text too, for any occurrence
+        // that has no text of its own yet. AddText() APPENDS to whatever GetText() currently
+        // resolves to for the target occurrence rather than replacing it -- so writing AllPages
+        // above, then adding FirstPage/EvenPages text below, would otherwise land as
+        // "<AllPages text><FirstPage/EvenPages text>" concatenated together. Re-clearing
+        // FirstPage/EvenPages here (only needed when the primary occurrence is the fallback-y
+        // AllPages -- OddPages does not bleed into them) removes that inherited fallback text so
+        // the AddHeaderFooterText calls below set FirstPage/EvenPages independently.
+        if (primaryOccurrence == XLHFOccurrence.AllPages)
+        {
+            foreach (var occurrence in new[] { XLHFOccurrence.FirstPage, XLHFOccurrence.EvenPages })
+            {
+                target.Left.Clear(occurrence);
+                target.Center.Clear(occurrence);
+                target.Right.Clear(occurrence);
+            }
+        }
+
+        // Excel preserves first/even header-footer text even while the "Different first
+        // page"/"Different odd and even pages" checkboxes are unchecked: the differentFirst/
+        // differentOddEven flags only deactivate rendering, they do not purge the stored text,
+        // so re-checking the box later restores it. Write firstPage/evenPages unconditionally
+        // (independent of the flags, which are set separately by the caller) so a round-trip
+        // save doesn't discard stale-but-still-present text; an explicit clear in the in-memory
+        // model (empty string) still results in no text being (re-)added, since
+        // AddHeaderFooterText is a no-op for empty values and the occurrence was already
+        // cleared above.
+        AddHeaderFooterText(target, firstPage, XLHFOccurrence.FirstPage);
+        AddHeaderFooterText(target, evenPages, XLHFOccurrence.EvenPages);
     }
 
     public static string GetHeaderFooterText(IXLHFItem item, params XLHFOccurrence[] occurrences)
