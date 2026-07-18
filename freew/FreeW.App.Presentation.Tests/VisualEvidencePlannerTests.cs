@@ -1187,7 +1187,7 @@ public sealed class VisualEvidencePlannerTests
             "RadicalDegree=1",
             "Superscript=2"]);
         equations.BaselineRoleCounts.Should().Contain([
-            "Normal=55",
+            "Normal=51",
             "Subscript=4",
             "Superscript=5"]);
         equations.ElementGeometrySignatures.Should().Contain(signature =>
@@ -1242,12 +1242,12 @@ public sealed class VisualEvidencePlannerTests
             && signature.Contains("operandGapEm=0.16", StringComparison.Ordinal));
         equations.SpacingGeometrySignatures.Should().Contain(signature =>
             signature.Contains("spacing=matrix", StringComparison.Ordinal)
-            && signature.Contains("rowGapEm=0.28", StringComparison.Ordinal)
-            && signature.Contains("columnGapEm=0.55", StringComparison.Ordinal)
+            && signature.Contains("rowGapEm=0.08", StringComparison.Ordinal)
+            && signature.Contains("columnGapEm=0.85", StringComparison.Ordinal)
             && signature.Contains("delimiterGapEm=0.12", StringComparison.Ordinal));
         equations.SpacingGeometrySignatures.Should().Contain(signature =>
             signature.Contains("spacing=equationarray", StringComparison.Ordinal)
-            && signature.Contains("rowGapEm=0.28", StringComparison.Ordinal)
+            && signature.Contains("rowGapEm=0.08", StringComparison.Ordinal)
             && signature.Contains("delimiterGapEm=0", StringComparison.Ordinal));
     }
 
