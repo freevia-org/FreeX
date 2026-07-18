@@ -984,6 +984,8 @@ public sealed class DocumentViewRoundTripTests
         tableSections[1].BreakPageBefore.Should().BeTrue();
         wpfTables[0].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
         wpfTables[1].RowGroups.SelectMany(group => group.Rows).Should().HaveCount(5);
+        wpfTables[1].RowGroups[0].Rows[1].Cells[0].Padding.Top.Should().Be(2,
+            "the no-cell-spacing pagination control must retain its original vertical padding");
 
         var renderedRows = wpfTables.SelectMany(table => table.RowGroups.SelectMany(group => group.Rows)).ToList();
         renderedRows.Should().HaveCount(modelTable.Rows.Count + repeatedPage.RepeatedHeaderRowIndexes.Count);
@@ -1073,6 +1075,11 @@ public sealed class DocumentViewRoundTripTests
             .Select(table => table.RowGroups.SelectMany(group => group.Rows).ToList())
             .ToList();
         pageRows.Select(rows => rows.Count).Should().Equal(3, 5, 3);
+        var expectedVerticalPadding = 2 + sourceTable.CellSpacingPt!.Value * (96.0 / 72.0);
+        tables[1].RowGroups[0].Rows[1].Cells[0].Padding.Top.Should()
+            .BeApproximately(expectedVerticalPadding, 0.01);
+        tables[0].RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
+            .BeApproximately(expectedVerticalPadding, 0.01);
         RenderedRowText(pageRows[0][0]).Should().Contain("Page area");
         RenderedRowText(pageRows[0][1]).Should().Contain("Segment 1");
         RenderedRowText(pageRows[0][2]).Should().Contain("Segment 2");
