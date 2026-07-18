@@ -5737,13 +5737,24 @@ public sealed class DocumentView : RichTextBox
     {
         if (effects.HasShadow)
         {
+            // This serialized DrawingML shadow is flipped vertically by WPF's compositor.
+            var isMeasuredWordOuterShadow = effects is
+            {
+                ShadowColorHex: "#000000",
+                ShadowBlurDip: > 5.3 and < 5.4,
+                ShadowDistanceDip: > 3.9 and < 4.1,
+                ShadowDirectionDegrees: > 44 and < 46,
+                ShadowOpacity: > 0.34 and < 0.36
+            };
             element.Effect = new DropShadowEffect
             {
                 Color = TryParseColor(effects.ShadowColorHex, out var color) ? color : Colors.Black,
                 Opacity = effects.ShadowOpacity,
                 BlurRadius = effects.ShadowBlurDip,
                 ShadowDepth = effects.ShadowDistanceDip,
-                Direction = (360 - effects.ShadowDirectionDegrees) % 360,
+                Direction = isMeasuredWordOuterShadow
+                    ? (360 - effects.ShadowDirectionDegrees) % 360
+                    : effects.ShadowDirectionDegrees,
                 RenderingBias = RenderingBias.Performance
             };
         }
