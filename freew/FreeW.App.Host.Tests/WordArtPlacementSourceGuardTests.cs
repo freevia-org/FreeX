@@ -25,6 +25,10 @@ public sealed class WordArtPlacementSourceGuardTests
         wpf.Should().Contain("preserveOpaqueGlowFill");
         wpf.Should().Contain("Style: WordArtStyle.GlowBlue,");
         wpf.Should().Contain("BlurRadius = 2");
+        wpf.Should().Contain("var preserveOpaqueGlowGoldFill = wordArt is");
+        wpf.Should().Contain("Text: \"FORMAT\",");
+        wpf.Should().Contain("Style: WordArtStyle.GlowGold,");
+        wpf.Should().Contain("glowColor: glowColor");
         wpf.Should().Contain("var isImportedGradFillMultiArchUp = wordArt is");
         wpf.Should().Contain("Style: WordArtStyle.GradFillMulti,");
         wpf.Should().Contain("FontSizeDip: > 45 and < 46");

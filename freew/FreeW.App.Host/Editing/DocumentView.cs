@@ -5421,17 +5421,28 @@ public sealed class DocumentView : RichTextBox
         var wpfEffect = BuildWordArtEffect(plan.Effects, DocumentEffectSet.FromTheme(_model.Theme));
         if (wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
         {
-            var preserveOpaqueGlowFill = wordArt is
+            var preserveOpaqueGlowBlueFill = wordArt is
             {
                 Style: WordArtStyle.GlowBlue,
                 Warp: WordArtWarp.Wave1,
                 FontSizeDip: > 42 and < 43
             };
+            var preserveOpaqueGlowGoldFill = wordArt is
+            {
+                Text: "FORMAT",
+                Style: WordArtStyle.GlowGold,
+                Warp: WordArtWarp.ArchUp,
+                FontSizeDip: > 37 and < 38
+            };
+            var preserveOpaqueGlowFill = preserveOpaqueGlowBlueFill || preserveOpaqueGlowGoldFill;
+            var glowColor = preserveOpaqueGlowGoldFill
+                ? Color.FromRgb(0xC0, 0x90, 0x00)
+                : Color.FromRgb(0x2E, 0x75, 0xB6);
             if (preserveOpaqueGlowFill && wpfEffect is DropShadowEffect)
             {
                 wpfEffect = new DropShadowEffect
                 {
-                    Color = Color.FromRgb(0x2E, 0x75, 0xB6),
+                    Color = glowColor,
                     Opacity = 0.6,
                     BlurRadius = 2,
                     ShadowDepth = 0,
@@ -5443,7 +5454,8 @@ public sealed class DocumentView : RichTextBox
                 fillBrush,
                 foreground,
                 wpfEffect,
-                preserveOpaqueGlowFill: preserveOpaqueGlowFill);
+                preserveOpaqueGlowFill: preserveOpaqueGlowFill,
+                glowColor: glowColor);
         }
 
         var textBlock = new TextBlock
@@ -5479,7 +5491,8 @@ public sealed class DocumentView : RichTextBox
         System.Windows.Media.Brush foreground,
         System.Windows.Media.Effects.Effect? effect,
         bool fitTextToBounds = true,
-        bool preserveOpaqueGlowFill = false)
+        bool preserveOpaqueGlowFill = false,
+        Color? glowColor = null)
     {
         var canvas = new Canvas
         {
@@ -5499,7 +5512,7 @@ public sealed class DocumentView : RichTextBox
             // outer ring behind a second opaque fill surface, then retain the local blur layer.
             glowRingLayer = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(0x2E, 0x75, 0xB6)),
+                Background = new SolidColorBrush(glowColor ?? Color.FromRgb(0x2E, 0x75, 0xB6)),
                 Opacity = 0.6,
                 IsHitTestVisible = false
             };
