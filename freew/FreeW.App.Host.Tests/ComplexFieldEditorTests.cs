@@ -112,4 +112,33 @@ public sealed class ComplexFieldEditorTests
 
         FieldRun(view)!.Text.Should().Be("Chapter Two");
     }
+
+    [StaFact]
+    public void BibliographyField_HidesStaleCacheWhenGeneratedRegionIsPresent_AndRetainsItOnCommit()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        doc.Blocks.Add(new Paragraph
+        {
+            Runs =
+            {
+                new Run("Bibliography field cache: "),
+                Run.ComplexFieldRun(" BIBLIOGRAPHY \\l 1033 ", "References")
+            }
+        });
+        doc.Blocks.Add(new Paragraph("References") { StyleId = Citations.HeadingStyleId });
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var rendered = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        string.Concat(rendered.Inlines.OfType<System.Windows.Documents.Run>().Select(run => run.Text))
+            .Should().Be("Bibliography field cache: ");
+
+        view.CommitToModel();
+
+        var field = FieldRun(view)!;
+        field.Text.Should().Be("References");
+        field.ComplexField!.Instruction.Should().Be(" BIBLIOGRAPHY \\l 1033 ");
+    }
 }

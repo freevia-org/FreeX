@@ -9746,6 +9746,15 @@ public sealed class DocumentView : RichTextBox
         var display = field.ShowCode
             ? "{" + field.Instruction.TrimEnd() + " }"
             : ResolveFieldText(ComplexFieldKindFor(field.Keyword), run.Text, document, _renderFileName);
+        // Word leaves a BIBLIOGRAPHY field's stale result hidden once the generated bibliography
+        // region owns the visible output. Keep the serialized cache for round-trip and F9, but do
+        // not duplicate it in the rendered document.
+        if (!field.ShowCode
+            && string.Equals(field.Keyword, "BIBLIOGRAPHY", StringComparison.Ordinal)
+            && document.Blocks.Any(Citations.IsBibliographyParagraph))
+        {
+            display = string.Empty;
+        }
         var fmt = run.Formatting ?? document.DefaultRun;
         var wpf = new WpfRun(display)
         {
