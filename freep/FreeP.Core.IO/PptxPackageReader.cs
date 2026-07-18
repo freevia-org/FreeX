@@ -3383,8 +3383,11 @@ public static class PptxPackageReader
         {
             shape.OffsetXEmu = ParseLong(xfrm.Element(A + "off")?.Attribute("x")?.Value);
             shape.OffsetYEmu = ParseLong(xfrm.Element(A + "off")?.Attribute("y")?.Value);
-            shape.ExtentCxEmu = ParseLong(xfrm.Element(A + "ext")?.Attribute("cx")?.Value);
-            shape.ExtentCyEmu = ParseLong(xfrm.Element(A + "ext")?.Attribute("cy")?.Value);
+            var ext = xfrm.Element(A + "ext");
+            shape.ExtentCxEmu = ParseLong(ext?.Attribute("cx")?.Value);
+            shape.ExtentCyEmu = ParseLong(ext?.Attribute("cy")?.Value);
+            shape.HasExplicitZeroExtentTransform = ext is not null &&
+                shape.ExtentCxEmu == 0 && shape.ExtentCyEmu == 0;
 
             if (long.TryParse(xfrm.Attribute("rot")?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var rotRaw))
                 shape.RotationDeg = rotRaw / 60000.0;

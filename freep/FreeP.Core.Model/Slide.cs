@@ -360,6 +360,13 @@ public sealed class SlideShape
     /// <summary>Shape height in EMU.</summary>
     public long ExtentCyEmu { get; set; }
 
+    /// <summary>
+    /// True when the source shape explicitly carried an <c>a:xfrm</c> with zero width and
+    /// height. On a slide placeholder, PowerPoint treats that as hidden rather than inheriting
+    /// the layout placeholder's visible geometry.
+    /// </summary>
+    public bool HasExplicitZeroExtentTransform { get; set; }
+
     /// <summary>Rotation in degrees, clockwise (from spPr/xfrm rot="..."; OOXML stores 1/60000 degree).</summary>
     public double RotationDeg { get; set; }
 

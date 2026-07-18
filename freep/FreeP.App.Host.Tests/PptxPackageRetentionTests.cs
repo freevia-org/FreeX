@@ -288,6 +288,18 @@ public sealed class PptxPackageRetentionTests
     }
 
     [Fact]
+    public void RenderCompareCommentsNotesCorpus_ExplicitZeroTitleTransform_IsRetainedAsHiddenPlaceholderSignal()
+    {
+        var loaded = PptxPackageReader.Read(Path.Combine(FindCorpusDirectory(), "21-comments-notes.pptx"));
+        var title = loaded.Slides[1].Shapes.Single(shape => shape.Name == "Title 1");
+
+        title.Placeholder!.Type.Should().Be(PlaceholderType.Title);
+        title.ExtentCxEmu.Should().Be(0);
+        title.ExtentCyEmu.Should().Be(0);
+        title.HasExplicitZeroExtentTransform.Should().BeTrue();
+    }
+
+    [Fact]
     public void RenderCompareChartLabelsCorpus_ChartDataSemanticEdit_RegeneratesOnlyEditedWorkbookAndPreservesNeighborFormulaRanges()
     {
         const string deckName = "19-chart-labels.pptx";

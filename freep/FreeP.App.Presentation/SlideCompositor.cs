@@ -189,6 +189,11 @@ public static class SlideCompositor
         int slideIndex = 0,
         IReadOnlyDictionary<string, string>? effectiveClrMap = null)
     {
+        // An explicit zero-sized slide placeholder is hidden in PowerPoint. Do not let normal
+        // placeholder inheritance turn its authored zero transform into visible layout geometry.
+        if (shape.HasExplicitZeroExtentTransform && shape.Placeholder is not null)
+            return;
+
         // Resolve anchor (placeholder inheritance).
         var anchor = PlaceholderResolver.ResolveAnchor(shape, slide, presentation);
         var boundsDip = AnchorToBounds(anchor);
