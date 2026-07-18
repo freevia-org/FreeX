@@ -1321,7 +1321,7 @@ public static class DocxWriter
                     new XAttribute("position", "#10800,bottomRight"),
                     new XAttribute("xrange", "6629,14971"))),
             new XElement(O + "lock",
-                new XAttribute("ext", "edit"),
+                new XAttribute(V + "ext", "edit"),
                 new XAttribute("text", "t"),
                 new XAttribute("shapetype", "t")));
 
@@ -5466,8 +5466,8 @@ public static class DocxWriter
 
     /// <summary>
     /// Builds a SmartArt QUICKSTYLE part (word/diagrams/quickStyleN.xml — dgm:styleDef).
-    /// Persists the FreeW <see cref="SmartArt.StyleId"/> as a <c>freewStyleId</c> extension attribute so
-    /// the reader can recover the exact catalog entry on round-trip.
+    /// Persists the FreeW <see cref="SmartArt.StyleId"/> in a schema-valid extension list so the reader can
+    /// recover the exact catalog entry on round-trip.
     /// </summary>
     private static readonly string[] SmartArtGalleryStyleLabels =
     [
@@ -5488,6 +5488,7 @@ public static class DocxWriter
 
     private static XDocument BuildDiagramQuickStyle(SmartArt smartArt)
     {
+        XNamespace freew = "http://schemas.freew.dev/smartart-gallery/2026";
         var labels = SmartArtGalleryStyleLabels;
         var usesFlatGallery = false;
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/quickstyle/";
@@ -5536,7 +5537,6 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute("uniqueId", uniqueId),
-            smartArt.StyleId is null ? null : new XAttribute("freewStyleId", smartArt.StyleId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
             usesFlatGallery
@@ -5546,17 +5546,24 @@ public static class DocxWriter
             new XElement(Dgm + "scene3d",
                 new XElement(A + "camera", new XAttribute("prst", "orthographicFront")),
                 new XElement(A + "lightRig", new XAttribute("rig", "threePt"), new XAttribute("dir", "t"))),
-            styleLabels);
+            styleLabels,
+            smartArt.StyleId is null
+                ? null
+                : new XElement(Dgm + "extLst",
+                    new XElement(A + "ext",
+                        new XAttribute("uri", "{FW-SmartArtGallery-2026}"),
+                        new XElement(freew + "style", new XAttribute("id", smartArt.StyleId)))));
         return new XDocument(elem);
     }
 
     /// <summary>
     /// Builds a SmartArt COLORS part (word/diagrams/colorsN.xml — dgm:colorsDef).
-    /// Persists the FreeW <see cref="SmartArt.ColorSchemeId"/> as a <c>freewColorId</c> extension attribute
-    /// so the reader can recover the exact catalog entry on round-trip.
+    /// Persists the FreeW <see cref="SmartArt.ColorSchemeId"/> in a schema-valid extension list so the reader
+    /// can recover the exact catalog entry on round-trip.
     /// </summary>
     private static XDocument BuildDiagramColors(SmartArt smartArt)
     {
+        XNamespace freew = "http://schemas.freew.dev/smartart-gallery/2026";
         const string BaseUrn = "urn:microsoft.com/office/officeart/2005/8/colors/";
         var colorId = smartArt.ColorSchemeId ?? "accent1_2";
         var uniqueId = BaseUrn + SmartArtColorGallerySuffix(smartArt);
@@ -5718,14 +5725,19 @@ public static class DocxWriter
             new XAttribute(XNamespace.Xmlns + "dgm", Dgm.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "a", A.NamespaceName),
             new XAttribute("uniqueId", uniqueId),
-            smartArt.ColorSchemeId is null ? null : new XAttribute("freewColorId", smartArt.ColorSchemeId),
             new XElement(Dgm + "title", new XAttribute("val", string.Empty)),
             new XElement(Dgm + "desc", new XAttribute("val", string.Empty)),
             usesFlatGallery
                 ? new XElement(Dgm + "catLst")
                 : new XElement(Dgm + "catLst",
                     new XElement(Dgm + "cat", new XAttribute("type", category), new XAttribute("pri", 11200))),
-            styleLabels);
+            styleLabels,
+            smartArt.ColorSchemeId is null
+                ? null
+                : new XElement(Dgm + "extLst",
+                    new XElement(A + "ext",
+                        new XAttribute("uri", "{FW-SmartArtGallery-2026}"),
+                        new XElement(freew + "colorScheme", new XAttribute("id", smartArt.ColorSchemeId)))));
         return new XDocument(elem);
     }
 

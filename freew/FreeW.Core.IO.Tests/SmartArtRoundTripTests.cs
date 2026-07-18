@@ -754,7 +754,10 @@ public class SmartArtRoundTripTests
 
         var quickStyle = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
         quickStyle.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/quickstyle/simple1");
-        quickStyle.Root.Attribute("freewStyleId")!.Value.Should().Be("intense1");
+        quickStyle.Root.Attribute("freewStyleId").Should().BeNull();
+        quickStyle.Root.Element(Dgm + "extLst")!.Element(A + "ext")!
+            .Element(XName.Get("style", "http://schemas.freew.dev/smartart-gallery/2026"))!
+            .Attribute("id")!.Value.Should().Be("intense1");
         var colors = EntryXml(bytes, "word/diagrams/colors1.xml");
         colors.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/colors/accent1_2");
         colors.Descendants(Dgm + "styleLbl").Single(label => label.Attribute("name")!.Value == "fgAcc0")
@@ -803,7 +806,10 @@ public class SmartArtRoundTripTests
 
         var colors = EntryXml(bytes, "word/diagrams/colors1.xml");
         colors.Root!.Attribute("uniqueId")!.Value.Should().EndWith("/accent1_2");
-        colors.Root.Attribute("freewColorId")!.Value.Should().Be("accent1");
+        colors.Root.Attribute("freewColorId").Should().BeNull();
+        colors.Root.Element(Dgm + "extLst")!.Element(A + "ext")!
+            .Element(XName.Get("colorScheme", "http://schemas.freew.dev/smartart-gallery/2026"))!
+            .Attribute("id")!.Value.Should().Be("accent1");
     }
 
     [Fact]
@@ -874,8 +880,10 @@ public class SmartArtRoundTripTests
 
         var colorsXml = EntryXml(bytes, "word/diagrams/colors1.xml");
         colorsXml.Root!.Attribute("freewColorId").Should().BeNull();
+        colorsXml.Root.Element(Dgm + "extLst").Should().BeNull();
 
         var qsXml = EntryXml(bytes, "word/diagrams/quickStyle1.xml");
         qsXml.Root!.Attribute("freewStyleId").Should().BeNull();
+        qsXml.Root.Element(Dgm + "extLst").Should().BeNull();
     }
 }
