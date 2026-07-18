@@ -580,7 +580,8 @@ static void RenderDocumentComposite(
         if (panel is not null && i < panel.PageBoxes.Count)
         {
             var box = panel.PageBoxes[i];
-            const double hfH = 36;
+            const double headerH = 42;
+            const double footerH = 36;
 
             var ownerHf = box.OwnerSectionHf ?? doc.FinalSectionHeadersFooters;
             // Word uses a 0.5-inch edge distance when w:pgMar omits header/footer.
@@ -592,7 +593,7 @@ static void RenderDocumentComposite(
                 ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
                 : DefaultHeaderFooterDistanceDip;
             var headerTop = headerDistance;
-            var footerTop = thisPixH - footerDistance - hfH + 7;
+            var footerTop = thisPixH - footerDistance - footerH + 7;
 
             if (box.HeaderSubEditor is not null && box.HeaderSlotName is { } hSlotName)
             {
@@ -600,7 +601,7 @@ static void RenderDocumentComposite(
                 var hfSlot = ResolveHfSlotByName(ownerHf, hSlotName);
                 if (hfSlot is not null && !hfSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, actualPageCount);
+                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, headerH, i + 1, box.PageNumberText, actualPageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -612,7 +613,7 @@ static void RenderDocumentComposite(
                                 AlignmentY = AlignmentY.Top
                             },
                                 null, new Rect(thisMarginLeft, headerTop,
-                                    thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
+                                    thisPageWDip - thisMarginLeft - thisMarginRight, headerH));
                         bmp.Render(hfVis);
                     }
                 }
@@ -623,7 +624,7 @@ static void RenderDocumentComposite(
                 var fSlot = ResolveHfSlotByName(ownerHf, fSlotName);
                 if (fSlot is not null && !fSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, hfH, i + 1, box.PageNumberText, actualPageCount);
+                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, footerH, i + 1, box.PageNumberText, actualPageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -635,7 +636,7 @@ static void RenderDocumentComposite(
                                 AlignmentY = AlignmentY.Top
                             },
                                 null, new Rect(thisMarginLeft, footerTop,
-                                    thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
+                                    thisPageWDip - thisMarginLeft - thisMarginRight, footerH));
                         bmp.Render(hfVis);
                     }
                 }
