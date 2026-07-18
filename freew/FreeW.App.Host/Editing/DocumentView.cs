@@ -5153,7 +5153,7 @@ public sealed class DocumentView : RichTextBox
         // DecodeImage returns ImageSource?; placeholder is always BitmapSource. Cast for pixel-adjust.
         var decodedBitmap = (DecodeImage(image) as BitmapSource) ?? BuildImagePlaceholder(image, widthPx, heightPx);
         // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency/recolor).
-        var source = (image.HasAdjustments || image.HasRecolor)
+        var source = (image.HasAdjustments || image.HasRecolor || image.HasArtisticEffect)
             ? ImageAdjustHelper.Apply(decodedBitmap, image)
             : (ImageSource)decodedBitmap;
 
@@ -10115,7 +10115,7 @@ public sealed class DocumentView : RichTextBox
         var decodedBitmap = (DecodeImage(image) as BitmapSource) ?? BuildImagePlaceholder(image, widthPx, heightPx);
         // Apply non-destructive pixel adjustments (brightness/contrast/saturation/transparency/recolor).
         // The alpha bake in ImageAdjustHelper covers static bitmap consumers; Opacity covers the live element.
-        var source = (image.HasAdjustments || image.HasRecolor)
+        var source = (image.HasAdjustments || image.HasRecolor || image.HasArtisticEffect)
             ? ImageAdjustHelper.Apply(decodedBitmap, image)
             : (ImageSource)decodedBitmap;
 

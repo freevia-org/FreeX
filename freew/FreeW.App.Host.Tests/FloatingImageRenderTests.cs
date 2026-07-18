@@ -4,6 +4,7 @@ using FreeW.App.Host.Editing;
 using FreeW.App.Presentation.DocumentView;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Media.Imaging;
 using WpfFloater = System.Windows.Documents.Floater;
 using WpfParagraph = System.Windows.Documents.Paragraph;
 
@@ -162,6 +163,22 @@ public sealed class FloatingImageRenderTests
         image.HorizontalAnchor.Should().Be(HorizontalAnchor.Margin);
         image.VerticalAnchor.Should().Be(VerticalAnchor.Page);
         image.ZOrderIndex.Should().Be(3);
+    }
+
+    [StaFact]
+    public void FloatingImage_ArtisticEffectRunsPixelPipelineWithoutOtherAdjustments()
+    {
+        var doc = DocWithFloating();
+        var image = ((Paragraph)doc.Blocks[0]).Runs[0].Image!;
+        image.ArtisticEffect = ImageArtisticEffect.GlowDiffused;
+
+        var canvas = new Canvas();
+        var view = new DocumentView();
+        view.SetFloatingCanvas(canvas);
+        view.LoadModel(doc);
+
+        var rendered = canvas.Children.OfType<Image>().Single();
+        rendered.Source.Should().BeOfType<WriteableBitmap>();
     }
 
     [StaFact]
