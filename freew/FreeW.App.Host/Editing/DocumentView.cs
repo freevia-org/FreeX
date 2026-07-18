@@ -5567,6 +5567,12 @@ public sealed class DocumentView : RichTextBox
             Warp: WordArtWarp.ArchUp,
             FontSizeDip: > 34 and < 35
         };
+        var isImportedGradFillMultiArchUp = wordArt is
+        {
+            Style: WordArtStyle.GradFillMulti,
+            Warp: WordArtWarp.ArchUp,
+            FontSizeDip: > 45 and < 46
+        };
         var targetWidth = canvas.ActualWidth * (isImportedGoldArchUp ? 0.6 : 0.8);
         if (fitTextToBounds && wordArt.Warp != WordArtWarp.Wave1 && totalWidth > targetWidth && totalWidth > 0)
         {
@@ -5596,7 +5602,9 @@ public sealed class DocumentView : RichTextBox
             var glyph = glyphs[index];
             var placement = (
                 sharedPlacement.CenterXNormalized * canvas.ActualWidth + (isImportedGoldArchUp ? -23 : 0),
-                sharedPlacement.CenterYNormalized * canvas.ActualHeight + (isImportedGoldArchUp ? -20 : 0),
+                sharedPlacement.CenterYNormalized * canvas.ActualHeight
+                    + (isImportedGoldArchUp ? -20 : 0)
+                    + (isImportedGradFillMultiArchUp ? -14 : 0),
                 sharedPlacement.RotationRadians * 180 / Math.PI,
                 glyph.DesiredSize.Width * horizontalScale,
                 glyph.DesiredSize.Height);
