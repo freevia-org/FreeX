@@ -294,7 +294,8 @@ public static class SlideCompositor
 
         bool hasBevel = fx.BevelTop is not null || fx.BevelBottom is not null;
         if (!fx.HasOuterShadow && !fx.HasGlow && !fx.HasSoftEdge
-            && !hasBevel && fx.ExtrusionHeightEmu == 0 && fx.ContourWidthEmu == 0 && fx.Scene3d is null)
+            && !hasBevel && fx.ExtrusionHeightEmu == 0 && fx.ContourWidthEmu == 0
+            && string.IsNullOrEmpty(fx.PrstMaterial) && fx.Scene3d is null)
             return null;
 
         return new ResolvedShapeEffects
@@ -329,6 +330,7 @@ public static class SlideCompositor
             } : null,
             ExtrusionDepthDip = fx.ExtrusionHeightEmu / EmuPerDip,
             ExtrusionColor    = fx.ExtrusionColor,
+            PrstMaterial      = fx.PrstMaterial,
             ContourWidthDip   = fx.ContourWidthEmu    / EmuPerDip,
             ContourColor      = fx.ContourColor,
             LightDirDeg       = ResolveLightDir(fx.Scene3d),

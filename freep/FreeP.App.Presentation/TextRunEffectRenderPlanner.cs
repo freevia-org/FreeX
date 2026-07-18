@@ -45,6 +45,9 @@ public abstract record TextRunEffectPass
         double RadiusDip,
         bool IsBlurPass) : TextRunEffectPass;
 
+    /// <summary>Metallic face sheen derived from the body-level 3-D material.</summary>
+    public sealed record MaterialHighlight(ResolvedFill FillBrush) : TextRunEffectPass;
+
     public sealed record Fill(ResolvedFill FillBrush) : TextRunEffectPass;
 
     public sealed record Outline(ResolvedOutline OutlinePen) : TextRunEffectPass;
@@ -100,11 +103,24 @@ public static class TextRunEffectRenderPlanner
 
         passes.Add(new TextRunEffectPass.Fill(fillBrush));
 
+        if (string.Equals(textLayout.Text3dEffects?.PrstMaterial, "metal", StringComparison.OrdinalIgnoreCase))
+            passes.Add(new TextRunEffectPass.MaterialHighlight(CreateMetalHighlightFill()));
+
         if (run.TextOutline is not null)
             passes.Add(new TextRunEffectPass.Outline(run.TextOutline));
 
         return new TextRunEffectRenderPlan(glyphBounds, warpYOffset, warpTransform, passes);
     }
+
+    private static ResolvedFill CreateMetalHighlightFill() => new ResolvedFill.Gradient(
+        new[]
+        {
+            new ResolvedFill.ResolvedGradientStop(0.0, new SrgbColor(0x8B, 0xB2, 0xD1), 72),
+            new ResolvedFill.ResolvedGradientStop(0.52, new SrgbColor(0x8B, 0xB2, 0xD1), 32),
+            new ResolvedFill.ResolvedGradientStop(1.0, new SrgbColor(0x8B, 0xB2, 0xD1), 0),
+        },
+        GradientKind.Linear,
+        90);
 
     public static double? ComputeWarpYOffset(
         ResolvedTextLayout textLayout,

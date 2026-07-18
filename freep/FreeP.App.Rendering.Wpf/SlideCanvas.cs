@@ -2670,6 +2670,13 @@ public sealed class SlideCanvas : FrameworkElement
                             dc.DrawGeometry(MakeFillBrushForText(fill.FillBrush, r2), null, geo);
                             break;
                         }
+                        case TextRunEffectPass.MaterialHighlight material:
+                        {
+                            var geoRect = geo.Bounds;
+                            var r2 = new Rect(geoRect.X, geoRect.Y, Math.Max(1, geoRect.Width), Math.Max(1, geoRect.Height));
+                            dc.DrawGeometry(MakeFillBrushForText(material.FillBrush, r2), null, geo);
+                            break;
+                        }
                         case TextRunEffectPass.Outline outline:
                             dc.DrawGeometry(null, MakePen(outline.OutlinePen), geo);
                             break;

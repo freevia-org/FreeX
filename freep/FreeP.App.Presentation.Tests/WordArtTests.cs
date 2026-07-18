@@ -631,6 +631,26 @@ public sealed class WordArtTests : IDisposable
     }
 
     [Fact]
+    public void TextRunEffectRenderPlanner_AddsMetalHighlightAfterFaceFill()
+    {
+        var plan = TextRunEffectRenderPlanner.Plan(
+            new ResolvedRun { Text = "Metal", Color = new SrgbColor(0xA0, 0x30, 0x70) },
+            new LayoutRect(10, 20, 80, 20),
+            horizontalProgress: 0.25,
+            new LayoutRect(0, 0, 200, 100),
+            new ResolvedTextLayout
+            {
+                Text3dEffects = new ResolvedShapeEffects { PrstMaterial = "metal" }
+            });
+
+        plan.Passes.Should().HaveCount(2);
+        plan.Passes[0].Should().BeOfType<TextRunEffectPass.Fill>();
+        var highlight = plan.Passes[1].Should().BeOfType<TextRunEffectPass.MaterialHighlight>().Subject;
+        highlight.FillBrush.Should().BeOfType<ResolvedFill.Gradient>();
+        ((ResolvedFill.Gradient)highlight.FillBrush).Stops.Last().Alpha.Should().Be(0);
+    }
+
+    [Fact]
     public void PptxReader_ReadsAndRoundTripsBodyLevelWordArt3d()
     {
         var path = FindWorkspaceFile("tools", "FreeP.RenderCompare", "corpus", "13-wordart.pptx");
@@ -680,6 +700,8 @@ public sealed class WordArtTests : IDisposable
         resolvedLayouts.Should().HaveCount(2);
         resolvedLayouts.Select(text => text!.Text3dEffects!.Scene3dCameraPreset)
             .Should().Contain("orthographicFront");
+        resolvedLayouts.Select(text => text!.Text3dEffects!.PrstMaterial)
+            .Should().Contain("metal");
     }
 
     [Fact]

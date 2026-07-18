@@ -2635,6 +2635,10 @@ public sealed class SlideCanvas : Control
                     case TextRunEffectPass.Fill fill:
                         dc.DrawGeometry(MakeFillBrushForText(fill.FillBrush), null, geo);
                         break;
+                    case TextRunEffectPass.MaterialHighlight:
+                        // The current metal calibration is WPF-local. Keep Avalonia's
+                        // established WordArt raster stable until it has its own evidence.
+                        break;
                     case TextRunEffectPass.Outline outline:
                         dc.DrawGeometry(null, MakePen(outline.OutlinePen), geo);
                         break;

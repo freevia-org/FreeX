@@ -450,6 +450,8 @@ public sealed class ResolvedShapeEffects
     public double ExtrusionDepthDip { get; init; }
     /// <summary>Extrusion face colour. Null means the renderer derives it from the fill.</summary>
     public SrgbColor? ExtrusionColor { get; init; }
+    /// <summary>DrawingML 3-D material preset, such as <c>metal</c>.</summary>
+    public string PrstMaterial { get; init; } = string.Empty;
     /// <summary>Contour width in DIP. 0 = none.</summary>
     public double ContourWidthDip { get; init; }
     /// <summary>Contour outline colour. Null = no override.</summary>
