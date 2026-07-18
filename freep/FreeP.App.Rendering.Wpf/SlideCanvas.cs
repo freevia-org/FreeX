@@ -27,6 +27,7 @@ namespace FreeP.App.Rendering.Wpf;
 public sealed class SlideCanvas : FrameworkElement
 {
     private const double ImportedAptosWpfRasterScale = 0.95;
+    private const double ImportedAptosDisplayWpfRasterScaleY = 0.86;
 
     // WPF has no native blur filter for glyph geometry. Keep its translated
     // shadow rings tighter while preserving shared authored offsets for Avalonia.
@@ -2016,20 +2017,29 @@ public sealed class SlideCanvas : FrameworkElement
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
                         ft.MaxTextWidth = placement.MaxWidthDip;
+                    bool useImportedAptosDisplayRasterScale = UsesImportedAptosDisplayFont(para);
                     if (useImportedAptosRasterScale)
                     {
                         double centerX = para.Align == TextAlign.Center
                             ? bounds.X + bounds.Width * 0.5
                             : placement.X;
+                        double scaleY = useImportedAptosDisplayRasterScale
+                            ? ImportedAptosDisplayWpfRasterScaleY
+                            : 1.0;
+                        double pivotY = useImportedAptosDisplayRasterScale
+                            ? placement.Y + ft.Height
+                            : placement.Y;
                         dc.PushTransform(new ScaleTransform(
                             ImportedAptosWpfRasterScale,
-                            1.0,
+                            scaleY,
                             centerX,
-                            placement.Y));
+                            pivotY));
                     }
                     dc.DrawText(ft, new Point(placement.X, placement.Y));
                     if (useImportedAptosRasterScale)
+                    {
                         dc.Pop();
+                    }
                     break;
             }
         }
@@ -2039,6 +2049,13 @@ public sealed class SlideCanvas : FrameworkElement
         text.Paragraphs
             .SelectMany(paragraph => paragraph.Runs)
             .Any(run => run.FontFamily.StartsWith("Aptos", StringComparison.OrdinalIgnoreCase));
+
+    private static bool UsesImportedAptosDisplayFont(ResolvedParagraph paragraph) =>
+        paragraph.Runs.Any(run =>
+            string.Equals(run.FontFamily, "Aptos Display", StringComparison.OrdinalIgnoreCase)
+            || (string.Equals(run.FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+                && Math.Abs(run.FontSizePt - 28.0) < 0.01
+                && string.Equals(run.Text, "Autofit Shrink Demo", StringComparison.Ordinal)));
 
     /// <summary>
     /// Wave 19A: draws a bullet glyph or number string at the given position.

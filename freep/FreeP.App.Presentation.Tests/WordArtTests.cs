@@ -825,6 +825,9 @@ public sealed class WordArtTests : IDisposable
             "the measured blur-ring calibration is WPF-compositor local");
         avalonia.Should().NotContain("TextShadowBlurSpreadScale",
             "Avalonia must retain the shared authored shadow offsets");
+        wpf.Should().Contain("ImportedAptosDisplayWpfRasterScaleY");
+        wpf.Should().Contain("Autofit Shrink Demo");
+        avalonia.Should().NotContain("ImportedAptosDisplayWpfRasterScaleY");
     }
 
     // ─── SlideCloner ─────────────────────────────────────────────────────────
