@@ -749,17 +749,20 @@ static void RenderDocumentComposite(
         if (doc.Comments.Count > 0 && thisPixW == 816 && thisPixH == 1056)
             bmp = RenderReviewMarkupCapture(bmp, doc);
 
+        // Word's capture script fits each page within a fixed evidence surface. Normalize only
+        // after every composite layer has been painted so document layout remains unmodified.
+        var evidenceBitmap = NormalizeWordBaselineRasterSurface(bmp);
         string outPath = BuildVisualEvidenceOutputPath(outDir, name, i + 1);
-        var byteLength = SavePng(bmp, outPath);
-        var stats = ComputeWpfPixelStats(bmp, "#FFFFFF");
+        var byteLength = SavePng(evidenceBitmap, outPath);
+        var stats = ComputeWpfPixelStats(evidenceBitmap, "#FFFFFF");
         var sectionOrdinal = FreeWVisualEvidencePlanner.ResolveSectionOrdinal(doc, thisPageSettings);
         var sectionRelativePageNumber = NextSectionRelativePageNumber(sectionPageCounters, sectionOrdinal);
         var row = FreeWVisualEvidencePlanner.BuildEvidenceRow(
             scenarioId: name,
             hostId: "wpf-fidelity-render",
             outputPath: outPath,
-            pixelWidth: thisPixW,
-            pixelHeight: thisPixH,
+            pixelWidth: evidenceBitmap.PixelWidth,
+            pixelHeight: evidenceBitmap.PixelHeight,
             byteLength: byteLength,
             pixelStats: stats,
             page: thisPageSettings,
@@ -781,10 +784,30 @@ static void RenderDocumentComposite(
             document: doc);
         FreeWVisualEvidencePlanner.EnsureTrusted(row);
         evidence.Add(row);
-        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({thisPixW}x{thisPixH}, {pageCount}/{actualPageCount} pages emitted, composite)");
+        Console.WriteLine($"ok    {Path.GetFileName(outPath)} ({evidenceBitmap.PixelWidth}x{evidenceBitmap.PixelHeight}, {pageCount}/{actualPageCount} pages emitted, composite)");
     }
 
     // Endnotes are composed within the final body page above.
+}
+
+static RenderTargetBitmap NormalizeWordBaselineRasterSurface(RenderTargetBitmap bitmap)
+{
+    var plan = WordBaselineRasterSurfacePlanner.Build(bitmap.PixelWidth, bitmap.PixelHeight);
+    if (plan.IsIdentity)
+        return bitmap;
+
+    var visual = new DrawingVisual();
+    using (var context = visual.RenderOpen())
+        context.DrawImage(bitmap, new Rect(0, 0, plan.PixelWidth, plan.PixelHeight));
+
+    var normalized = new RenderTargetBitmap(
+        plan.PixelWidth,
+        plan.PixelHeight,
+        96,
+        96,
+        PixelFormats.Pbgra32);
+    normalized.Render(visual);
+    return normalized;
 }
 
 static RenderTargetBitmap RenderReviewMarkupCapture(
