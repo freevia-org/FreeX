@@ -84,6 +84,36 @@ public class WatermarkOptionsRoundTripTests
         return DocxReader.Read(stream);
     }
 
+    private static TextDocument ReadWithVmlPictureImageData(TextDocument document)
+    {
+        using var stream = new MemoryStream();
+        DocxWriter.Write(document, stream);
+        stream.Position = 0;
+        using (var zip = new ZipArchive(stream, ZipArchiveMode.Update, leaveOpen: true))
+        {
+            zip.GetEntry("docProps/custom.xml")!.Delete();
+
+            var entry = zip.GetEntry("word/header1.xml")!;
+            XDocument xml;
+            using (var reader = entry.Open())
+                xml = XDocument.Load(reader);
+
+            var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+            var rel = XNamespace.Get("http://schemas.openxmlformats.org/officeDocument/2006/relationships");
+            var shape = xml.Descendants(vml + "shape")
+                .Single(shape => shape.Attribute("id")?.Value == "PowerPlusPictureWaterMarkObject");
+            shape.Element(vml + "fill")!.SetAttributeValue(rel + "id", null);
+            shape.Add(new XElement(vml + "imagedata", new XAttribute(rel + "id", "rIdWatermarkImage")));
+
+            entry.Delete();
+            var replacement = zip.CreateEntry("word/header1.xml", CompressionLevel.Optimal);
+            using var writer = new StreamWriter(replacement.Open());
+            xml.Save(writer);
+        }
+        stream.Position = 0;
+        return DocxReader.Read(stream);
+    }
+
     // ── WatermarkOptions full round-trip ──────────────────────────────────
 
     [Fact]
@@ -265,6 +295,28 @@ public class WatermarkOptionsRoundTripTests
         watermark.ImageBytes.Should().Equal(image);
         watermark.Layout.Should().Be(WatermarkLayout.Horizontal);
         watermark.Opacity.Should().BeApproximately(0.65, 0.001);
+    }
+
+    [Fact]
+    public void NativeVmlPictureWatermark_ImportsImageDataRelationshipWhenFillDoesNotOwnIt()
+    {
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = image,
+            Layout = WatermarkLayout.Diagonal,
+            Opacity = 0.4
+        };
+
+        var loaded = ReadWithVmlPictureImageData(doc);
+
+        var watermark = loaded.Page.WatermarkOptions;
+        watermark.Should().NotBeNull();
+        watermark!.ImageBytes.Should().Equal(image);
+        watermark.Layout.Should().Be(WatermarkLayout.Diagonal);
+        watermark.Opacity.Should().BeApproximately(0.4, 0.001);
     }
 
     [Fact]
