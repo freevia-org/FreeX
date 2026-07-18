@@ -684,6 +684,7 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceBlankVertexXOffset = 20.0;
     private const double ImportedSurfaceSouthFrontVertexXOffset = 7.0;
     private const double ImportedSurfaceSouthFrontVertexYOffset = -2.0;
+    private const double ImportedSurfaceDarkOrangeFacetLeftOffset = -13.0;
     private const double ImportedSurfaceMiddleNorthVertexYOffset = 20.0;
     private const double ImportedSurfaceRearNorthVertexYOffset = 14.0;
     private const double ImportedSurfaceLightBaseFactor = 1.02;
@@ -3685,6 +3686,26 @@ public static partial class ChartRenderPlanner
                 for (int renderIndex = 0; renderIndex < renderPointSets.Length; renderIndex++)
                 {
                     var renderPoints = renderPointSets[renderIndex];
+                    if (chart.ChartType == ChartType.Surface3D &&
+                        UsesImportedTextMetrics(chart) &&
+                        chart.VaryColors &&
+                        seriesIndex == 0 &&
+                        categoryIndex == 1 &&
+                        renderIndex == 0)
+                    {
+                        // The near dark-orange face owns a wider left edge in
+                        // PowerPoint than the shared logical vertex. Keep the
+                        // correction local to this render-only triangle so the
+                        // adjacent blank/blue facet retains its registration.
+                        renderPoints = renderPoints.ToArray();
+                        renderPoints[0] = renderPoints[0] with
+                        {
+                            Point = renderPoints[0].Point with
+                            {
+                                X = renderPoints[0].Point.X + ImportedSurfaceDarkOrangeFacetLeftOffset
+                            }
+                        };
+                    }
                     double averageValue = renderPoints.Average(point => point.Value);
                     double averageNormalized = renderPoints.Average(point => point.NormalizedValue);
                     var color = ResolveSurfaceFacetColor(

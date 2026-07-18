@@ -469,6 +469,11 @@ public sealed class ChartBaselineCorpusTests
         firstSurfaceCellFacets[1].Points.Select(point => point.X)
             .Should().Equal(new[] { 174.25, 199.875, 65.5 },
                 "the paired imported blank-cell triangle closes the 1-3 split");
+        var darkOrangeFacet = surfaceGeometry.RenderFacets
+            .Single(facet => facet.SeriesIndex == 0 && facet.CategoryIndex == 1 &&
+                facet.Fill.Color == new SrgbColor(0xB7, 0x60, 0x26));
+        darkOrangeFacet.Points[0].X.Should().BeApproximately(161.25, 0.0001,
+            "the imported dark-orange face owns its widened left edge without moving the shared blank vertex");
         firstSurfaceCellFacets[0].Points[1].Y
             .Should()
             .BeApproximately(158.1, 0.0001,
