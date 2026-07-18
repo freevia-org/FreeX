@@ -546,6 +546,25 @@ public sealed class ChartRenderPlannerTests
         ChartRenderPlanner.ResolveTitleFontSize(chart, 9.0).Should().Be(18.0);
     }
 
+    [Fact]
+    public void ImportedChartTitle_UsesRasterCalibrationAndAutomaticBandOffset()
+    {
+        var chart = new ChartShape
+        {
+            ChartType = ChartType.ColumnClustered,
+            Title = "Revenue",
+            HasAutomaticTitle = true,
+            TextStyle = new ChartTextStyle { FontSizePt = 18.0 }
+        };
+
+        ChartRenderPlanner.ResolveTitleFontSize(chart, 9.0)
+            .Should().Be(ChartRenderPlanner.ImportedChartTitleRasterFontSize);
+
+        ChartRenderPlanner.BuildFramePlan(chart, new ChartPlanRect(0, 0, 400, 300))
+            .TitleBounds!.Value.Y.Should()
+            .Be(ChartRenderPlanner.ImportedAutomaticTitleVerticalAdjustment + 12.0);
+    }
+
     [Theory]
     [InlineData(ChartType.Stock)]
     [InlineData(ChartType.Surface)]
