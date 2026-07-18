@@ -38,6 +38,9 @@ public sealed class SlideCanvas : FrameworkElement
     private const double ImportedTextShadowFitScaleY = 0.90;
     private const double ImportedTextShadowFitTranslateX = 1.0;
     private const double ImportedTextShadowFitTranslateY = 2.0;
+    // WPF centers a stroke on the contour; PowerPoint's shape soft edge is
+    // predominantly an inner feather, so keep the host's visible outer halo narrow.
+    private const double SoftEdgeOuterSpreadScale = 0.20;
 
     // ── Dependency properties ──────────────────────────────────────────────────
 
@@ -364,7 +367,7 @@ public sealed class SlideCanvas : FrameworkElement
             {
                 foreach (var pass in plan.SoftEdgePasses)
                 {
-                    var softEdgePen = new Pen(fillBrush, pass.StrokeWidthDip);
+                    var softEdgePen = new Pen(fillBrush, pass.StrokeWidthDip * SoftEdgeOuterSpreadScale);
                     dc.PushOpacity(pass.Alpha / 255.0);
                     dc.DrawGeometry(null, softEdgePen, softEdgeGeo);
                     dc.Pop();
