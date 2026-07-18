@@ -7479,6 +7479,11 @@ public sealed class DocumentView : RichTextBox
             wpf.Margin = ResolveTableBlockMargin(table, document);
             wpf.CellSpacing = 0;
         }
+        // WPF Table.CellSpacing grows both axes and breaks Word's fixed-width paginated tables.
+        // Preserve that width contract while reserving the authored vertical cell gap on each row.
+        var paginationVerticalCellSpacingDip = isPaginationSegment && table.CellSpacingPt is > 0
+            ? table.CellSpacingPt.Value * PxPerPoint
+            : 0;
         var columns = table.ColumnCount;
         for (var c = 0; c < columns; c++)
         {
@@ -7542,7 +7547,11 @@ public sealed class DocumentView : RichTextBox
                 var span = Math.Max(1, modelCell.GridSpan);
                 var wpfCell = new WpfTableCell
                 {
-                    Padding = new Thickness(4, 2, 4, 2)
+                    Padding = new Thickness(
+                        4,
+                        2 + paginationVerticalCellSpacingDip,
+                        4,
+                        2 + paginationVerticalCellSpacingDip)
                 };
                 if (span > 1)
                     wpfCell.ColumnSpan = span;
