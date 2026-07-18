@@ -58,7 +58,7 @@ public static class DocxReader
             document.Blocks.Add(new Paragraph());
 
         ReadHeaderFooter(documentXml, archive, document, hyperlinkRelationships);
-        ReadNativeVmlTextWatermark(archive, document);
+        ReadNativeVmlWatermark(archive, document);
         ReadFootnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadEndnotes(archive, document, imageRelationships, hyperlinkRelationships);
         ReadComments(archive, document, hyperlinkRelationships);
@@ -5083,12 +5083,13 @@ public static class DocxReader
     }
 
     /// <summary>
-    /// Recovers Word's native text watermark when a document was not produced by FreeW and therefore
-    /// has no FreeW watermark custom properties. Word serializes its canonical watermark in a header as
-    /// a VML text-path shape named <c>PowerPlusWaterMarkObject</c>. The visible VML payload is the
-    /// authority for this fallback; FreeW metadata, when present, remains authoritative.
+    /// Recovers Word's native VML watermark when a document was not produced by FreeW and therefore
+    /// has no FreeW watermark custom properties. Word serializes canonical text and picture watermarks
+    /// in a header as <c>PowerPlusWaterMarkObject</c> and <c>PowerPlusPictureWaterMarkObject</c>.
+    /// The visible VML payload is the authority for this fallback; FreeW metadata, when present,
+    /// remains authoritative.
     /// </summary>
-    private static void ReadNativeVmlTextWatermark(ZipArchive archive, TextDocument document)
+    private static void ReadNativeVmlWatermark(ZipArchive archive, TextDocument document)
     {
         if (document.Page.EffectiveWatermark is not null)
             return;
@@ -5098,25 +5099,56 @@ public static class DocxReader
                          && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
         {
             var root = LoadPart(archive, entry.FullName)?.Root;
-            var shape = root?.Descendants(V + "shape")
+            var textShape = root?.Descendants(V + "shape")
                 .FirstOrDefault(shape => shape.Attribute("id")?.Value == "PowerPlusWaterMarkObject"
                     && shape.Element(V + "textpath") is not null);
-            var textPath = shape?.Element(V + "textpath");
+            var textPath = textShape?.Element(V + "textpath");
             var text = textPath?.Attribute("string")?.Value;
-            if (string.IsNullOrWhiteSpace(text))
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                var fill = textShape!.Element(V + "fill");
+                var color = NormalizeVmlColor(fill?.Attribute("color")?.Value ?? textShape.Attribute("fillcolor")?.Value);
+                var rotation = ParseVmlStyleNumber(textShape.Attribute("style")?.Value, "rotation");
+                document.Page.WatermarkOptions = new WatermarkOptions(text)
+                {
+                    FontFamily = ParseVmlStyleValue(textPath!.Attribute("style")?.Value, "font-family") ?? "Calibri",
+                    FontColorHex = color ?? "#808080",
+                    Layout = rotation is { } value && Math.Abs(value) < 0.01
+                        ? WatermarkLayout.Horizontal
+                        : WatermarkLayout.Diagonal,
+                    Opacity = ParseVmlOpacity(fill?.Attribute("opacity")?.Value)
+                };
+                return;
+            }
+
+            var pictureShape = root?.Descendants(V + "shape")
+                .FirstOrDefault(shape => shape.Attribute("id")?.Value == "PowerPlusPictureWaterMarkObject");
+            if (pictureShape is null)
                 continue;
 
-            var fill = shape!.Element(V + "fill");
-            var color = NormalizeVmlColor(fill?.Attribute("color")?.Value ?? shape.Attribute("fillcolor")?.Value);
-            var rotation = ParseVmlStyleNumber(shape.Attribute("style")?.Value, "rotation");
-            document.Page.WatermarkOptions = new WatermarkOptions(text)
+            var pictureFill = pictureShape.Element(V + "fill");
+            var relationshipId = pictureFill?.Attribute(R + "id")?.Value
+                ?? pictureShape.Descendants(V + "imagedata")
+                    .Select(imageData => imageData.Attribute(R + "id")?.Value)
+                    .FirstOrDefault(id => !string.IsNullOrWhiteSpace(id));
+            if (string.IsNullOrWhiteSpace(relationshipId))
+                continue;
+
+            var imageRelationships = ReadPartImageRelationships(archive, entry.FullName);
+            if (!imageRelationships.TryGetValue(relationshipId, out var imagePath)
+                || LoadMedia(archive, imagePath) is not { } imageBytes)
             {
-                FontFamily = ParseVmlStyleValue(textPath!.Attribute("style")?.Value, "font-family") ?? "Calibri",
-                FontColorHex = color ?? "#808080",
-                Layout = rotation is { } value && Math.Abs(value) < 0.01
+                continue;
+            }
+
+            var pictureRotation = ParseVmlStyleNumber(pictureShape.Attribute("style")?.Value, "rotation");
+            document.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+            {
+                ImageBytes = imageBytes,
+                Layout = pictureRotation is { } pictureRotationValue && Math.Abs(pictureRotationValue) < 0.01
                     ? WatermarkLayout.Horizontal
                     : WatermarkLayout.Diagonal,
-                Opacity = ParseVmlOpacity(fill?.Attribute("opacity")?.Value)
+                Opacity = ParseVmlOpacity(pictureFill?.Attribute("opacity")?.Value)
             };
             return;
         }

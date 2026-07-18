@@ -245,6 +245,29 @@ public class WatermarkOptionsRoundTripTests
     }
 
     [Fact]
+    public void NativeVmlPictureWatermark_ImportsHeaderLocalImageWhenFreeWCustomPropertiesAreAbsent()
+    {
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = image,
+            Layout = WatermarkLayout.Horizontal,
+            Opacity = 0.65
+        };
+
+        var loaded = ReadWithoutWatermarkCustomProperties(doc);
+
+        var watermark = loaded.Page.WatermarkOptions;
+        watermark.Should().NotBeNull();
+        watermark!.IsPicture.Should().BeTrue();
+        watermark.ImageBytes.Should().Equal(image);
+        watermark.Layout.Should().Be(WatermarkLayout.Horizontal);
+        watermark.Opacity.Should().BeApproximately(0.65, 0.001);
+    }
+
+    [Fact]
     public void WatermarkOptions_DoesNotConsumeHeaderParagraph()
     {
         var doc = new TextDocument
