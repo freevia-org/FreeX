@@ -792,6 +792,18 @@ public sealed class TextLayoutPlannerTests
     }
 
     [Fact]
+    public void WpfImportedBulletBodyOriginCalibration_IsNarrowlyGuarded()
+    {
+        var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
+
+        wpf.Should().Contain("ImportedAptosBodyOriginOffsetY = 6.0");
+        wpf.Should().Contain("UsesImportedAptosBodyOrigin");
+        wpf.Should().Contain("text.Paragraphs.Count == 6");
+        wpf.Should().Contain("paragraph.BulletKind != BulletKind.None");
+        wpf.Should().Contain("text.AutoFitKind == TextAutoFitKind.Shape");
+    }
+
+    [Fact]
     public void WpfAndAvaloniaSlideCanvases_DoNotResolvePlaceholderTextInsetsLocally()
     {
         var wpf = ReadWorkspaceFile("freep", "FreeP.App.Rendering.Wpf", "SlideCanvas.cs");
