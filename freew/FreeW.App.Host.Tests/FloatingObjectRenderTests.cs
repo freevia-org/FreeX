@@ -392,6 +392,43 @@ public sealed class FloatingObjectRenderTests
     }
 
     [StaFact]
+    public void FloatingOverlay_UsesOuterOnlyGlowLayerForImportedFreeW30PointWave1Signature()
+    {
+        var wordArt = new WordArt("FreeW", WordArtStyle.GlowBlue, 30)
+        {
+            Warp = WordArtWarp.Wave1,
+            Placement = new FloatingPlacement
+            {
+                Wrapping = ImageWrapping.InFront,
+                HorizontalOffsetPt = 300,
+                VerticalOffsetPt = 30,
+                ZOrderIndex = 8
+            }
+        };
+        var doc = new TextDocument();
+        var para = new Paragraph();
+        para.Runs.Add(Run.FromWordArt(wordArt));
+        doc.Blocks.Add(para);
+
+        var view = new DocumentView();
+        var canvas = new Canvas();
+        view.LoadModel(doc);
+        view.SetFloatingCanvas(canvas);
+
+        var root = canvas.Children.OfType<Canvas>().Single();
+        root.Measure(new Size(124, 64));
+        root.Arrange(new Rect(0, 0, 124, 64));
+        root.UpdateLayout();
+
+        root.Effect.Should().BeNull();
+        root.Children.OfType<Border>().Should().HaveCount(3);
+        root.Children.OfType<Border>().Single(border => border.Effect is null && border.Opacity == 0.6)
+            .Background.Should().BeOfType<SolidColorBrush>()
+            .Which.Color.Should().Be(Color.FromRgb(0x2E, 0x75, 0xB6));
+        root.Children.OfType<TextBlock>().Should().HaveCount(wordArt.Text.Length);
+    }
+
+    [StaFact]
     public void InlineOverlay_RendersArchUpWordArtThroughWarpedVisualAdapter()
     {
         var wordArt = new WordArt("Inline warp", WordArtStyle.GlowBlue, 24)

@@ -5426,6 +5426,13 @@ public sealed class DocumentView : RichTextBox
                 Style: WordArtStyle.GlowBlue,
                 Warp: WordArtWarp.Wave1,
                 FontSizeDip: > 42 and < 43
+            }
+            || wordArt is
+            {
+                Text: "FreeW",
+                Style: WordArtStyle.GlowBlue,
+                Warp: WordArtWarp.Wave1,
+                FontSizeDip: > 39 and < 41
             };
             var preserveOpaqueGlowGoldFill = wordArt is
             {
