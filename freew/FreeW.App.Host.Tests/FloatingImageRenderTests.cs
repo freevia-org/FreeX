@@ -91,7 +91,9 @@ public sealed class FloatingImageRenderTests
         return doc;
     }
 
-    private static TextDocument DocWithPageAnchoredImageAboveLaterAnchor(out InlineImage image)
+    private static TextDocument DocWithPageAnchoredImageAboveLaterAnchor(
+        out InlineImage image,
+        double horizontalOffsetPt = 0)
     {
         var doc = new TextDocument();
         doc.Blocks.Clear();
@@ -104,7 +106,7 @@ public sealed class FloatingImageRenderTests
             Wrapping = ImageWrapping.Square,
             HorizontalAnchor = HorizontalAnchor.Margin,
             VerticalAnchor = VerticalAnchor.Page,
-            HorizontalOffsetPt = 0,
+            HorizontalOffsetPt = horizontalOffsetPt,
             VerticalOffsetPt = 0,
         };
         var anchorParagraph = new Paragraph();
@@ -210,7 +212,7 @@ public sealed class FloatingImageRenderTests
         var visualOnlyFigure = paragraphs[0].Inlines.OfType<Figure>().Should().ContainSingle()
             .Which;
         visualOnlyFigure.Tag.Should().BeNull("the copied wrap band must be visual-only");
-        visualOnlyFigure.Width.Value.Should().BeApproximately(79, 0.01);
+        visualOnlyFigure.Width.Value.Should().BeApproximately(96, 0.01);
         visualOnlyFigure.Height.Value.Should().BeApproximately(55, 0.01);
         visualOnlyFigure.HorizontalAnchor.Should().Be(FigureHorizontalAnchor.PageLeft);
         visualOnlyFigure.VerticalAnchor.Should().Be(FigureVerticalAnchor.PageTop);
@@ -221,6 +223,21 @@ public sealed class FloatingImageRenderTests
 
         view.CommitToModel();
         view.Model.Blocks.Should().HaveCount(2);
+        ((Paragraph)view.Model.Blocks[1]).Runs.Should().ContainSingle(run => ReferenceEquals(run.Image, image));
+    }
+
+    [StaFact]
+    public void PageAnchoredRightImageAboveLaterAnchor_UsesItsMeasuredReservationWidth()
+    {
+        var original = DocWithPageAnchoredImageAboveLaterAnchor(out var image, horizontalOffsetPt: 300);
+        var view = new DocumentView();
+        view.LoadModel(original);
+
+        var figure = view.Document.Blocks.OfType<WpfParagraph>().First().Inlines.OfType<Figure>()
+            .Should().ContainSingle().Which;
+        figure.Width.Value.Should().BeApproximately(96, 0.01);
+
+        view.CommitToModel();
         ((Paragraph)view.Model.Blocks[1]).Runs.Should().ContainSingle(run => ReferenceEquals(run.Image, image));
     }
 
