@@ -643,6 +643,8 @@ public static partial class ChartRenderPlanner
     public const byte RadarFillAlpha = 80;
     public const double RadarSeriesStrokeThickness = 1.5;
     public const double ImportedRadarSeriesStrokeThickness = 3.0;
+    public const double ImportedChartTitleRasterFontSize = 24.0;
+    public const double ImportedAutomaticTitleVerticalAdjustment = -4.0;
     public const double RadarMarkerRadius = 3.0;
     public const double ImportedRadarPlotBottomReduction = 40.0;
     public const double ImportedRadarRadiusFactor = 0.98;
@@ -813,7 +815,11 @@ public static partial class ChartRenderPlanner
 
     /// <summary>Resolves title text, for which Office's inherited 18pt default applies.</summary>
     public static double ResolveTitleFontSize(ChartShape chart, double fallback) =>
-        chart.TextStyle?.FontSizePt is > 0 ? chart.TextStyle.FontSizePt.Value : fallback;
+        chart.TextStyle?.FontSizePt is > 0
+            ? UsesImportedTextMetrics(chart) && !chart.TextStyle.IsImplicitDefault
+                ? ImportedChartTitleRasterFontSize
+                : chart.TextStyle.FontSizePt.Value
+            : fallback;
 
     private static double ResolveFrameMargin(ChartShape chart) =>
         UsesImportedTextMetrics(chart) ? 20.0 : Margin;
@@ -1275,7 +1281,10 @@ public static partial class ChartRenderPlanner
             UsesImportedTextMetrics(chart) &&
             chart.HasAutomaticTitle)
         {
-            titleBounds = automaticTitle with { Y = automaticTitle.Y - 10.0 };
+            titleBounds = automaticTitle with
+            {
+                Y = automaticTitle.Y + ImportedAutomaticTitleVerticalAdjustment
+            };
         }
         return new ChartFramePlan(
             bounds,
@@ -1303,8 +1312,8 @@ public static partial class ChartRenderPlanner
                 FontSize: ResolveTitleFontSize(chart, 9.0),
                 Alignment: ChartPlanTextAlignment.Center)
             {
-                // Classic Office chart titles use Arial while axis/legend roles
-                // retain their Calibri defaults.
+                // Classic Office chart titles use Arial; imported titles retain
+                // the renderer's calibrated default typeface.
                 FontFamily = UsesClassicOfficeChartStyle(chart) ? "Arial" : null,
                 TextColor = UsesImportedPieLegendDefaults(chart)
                     ? new SrgbColor(0x00, 0x00, 0x00)
