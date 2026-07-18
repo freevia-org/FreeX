@@ -451,14 +451,19 @@ public sealed record ParagraphFormatting
     /// single first/last line from being stranded alone on a page. Round-trips to docx as the
     /// <c>w:widowControl</c> toggle, mirroring <see cref="PageBreakBefore"/>.
     /// <para>
-    /// Defaults to <c>false</c>. Note: real Word enables widow control by default; FreeW intentionally
-    /// keeps it off by default so that existing documents/round-trips are unchanged (a paragraph with no
-    /// explicit <c>w:widowControl</c> reads back as false here, not Word's implicit on). The WPF
-    /// FlowDocument has no widow-control property, so this flag is carried through the model/docx only
-    /// (preserved across an editor edit/commit cycle via the paragraph's Tag).
+    /// A paragraph without an explicit token uses Word's default-on behavior when rendered. The model keeps
+    /// the serialized value separately through <see cref="WidowControlIsSet"/>, so an explicit off token
+    /// remains distinguishable from an omitted token during package round-trip.
     /// </para>
     /// </summary>
     public bool WidowControl { get; init; }
+
+    /// <summary>
+    /// True when the source paragraph explicitly carries <c>w:widowControl</c>, including an explicit off
+    /// value. This preserves Word's omitted/default-on distinction without changing the public boolean's
+    /// default value for newly created model paragraphs.
+    /// </summary>
+    public bool WidowControlIsSet { get; init; }
 
     /// <summary>
     /// When true, automatic hyphenation is suppressed for this paragraph (pPr/w:suppressAutoHyphens), even
