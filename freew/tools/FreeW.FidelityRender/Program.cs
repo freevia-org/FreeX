@@ -830,7 +830,7 @@ static RenderTargetBitmap RenderReviewMarkupCapture(
                 System.Globalization.CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight,
                 typeface,
-                7,
+                8,
                 Brushes.Black,
                 1)
             {
