@@ -567,8 +567,8 @@ public static partial class ChartRenderPlanner
     public const double ImportedComboLegendLineHeight = 38.0;
     public const double ImportedComboLegendLabelOffset = -7.0;
     public const double ImportedComboLegendVerticalOffset = 26.0;
-    public const double ImportedComboPlotLeftInset = 3.0;
-    public const double ImportedComboPlotRightReduction = 8.0;
+    public const double ImportedComboPlotLeftInset = 2.0;
+    public const double ImportedComboPlotRightReduction = 9.0;
     public const double ImportedComboPlotBottomReduction = 1.5;
     public const double ImportedComboPlotTopOffset = 1.0;
     public const double ImportedComboSecondaryLabelCompensation = 8.0;

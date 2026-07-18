@@ -1465,7 +1465,7 @@ public sealed class ChartRenderPlannerTests
             chart,
             new ChartPlanRect(0, 0, 960, 540));
 
-        frame.Plot.Should().Be(new ChartPlanRect(71, 21, 760, 465.5));
+        frame.Plot.Should().Be(new ChartPlanRect(70, 21, 759, 465.5));
         frame.Plot.Bottom.Should().Be(486.5);
     }
 
