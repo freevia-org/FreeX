@@ -112,6 +112,40 @@ public sealed class TableStyleGalleryTests
     }
 
     [StaFact]
+    public void LoadModel_UsesCompleteUniformExplicitTableBorderPayloadBeforeCatalogColor()
+    {
+        var doc = TableModel();
+        var table = doc.Blocks.OfType<Table>().First();
+        table.TableStyleId = "GridTable1Light";
+        table.Borders = new TableBorders
+        {
+            Top = new TableBorderEdge(BorderLineStyle.Single, "auto", 0.5),
+            Left = new TableBorderEdge(BorderLineStyle.Single, "auto", 0.5),
+            Bottom = new TableBorderEdge(BorderLineStyle.Single, "auto", 0.5),
+            Right = new TableBorderEdge(BorderLineStyle.Single, "auto", 0.5),
+            InsideHorizontal = new TableBorderEdge(BorderLineStyle.Single, "auto", 0.5),
+            InsideVertical = new TableBorderEdge(BorderLineStyle.Single, "auto", 0.5)
+        };
+        foreach (var cell in table.Rows[0].Cells)
+        {
+            cell.Borders = new CellBorders
+            {
+                Top = new CellBorderEdge(BorderLineStyle.Double, "#1F4E79", 1.25),
+                Bottom = new CellBorderEdge(BorderLineStyle.Thick, "#1F4E79", 1.25),
+                Left = new CellBorderEdge(BorderLineStyle.Single, "#1F4E79", 0.75),
+                Right = new CellBorderEdge(BorderLineStyle.Single, "#1F4E79", 0.75)
+            };
+        }
+
+        var editor = new DocumentView();
+        editor.LoadModel(doc);
+
+        var wpfTable = editor.Document.Blocks.OfType<WpfTable>().First();
+        ((SolidColorBrush)wpfTable.BorderBrush!).Color.Should().Be(Colors.Black,
+            "the complete explicit Word border payload owns generic table chrome ahead of the named style");
+    }
+
+    [StaFact]
     public void ApplyTableStyle_WithHeaderBand_RendersHeaderCellBold()
     {
         var editor = new DocumentView();

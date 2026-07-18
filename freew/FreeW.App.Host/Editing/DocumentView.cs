@@ -7510,6 +7510,40 @@ public sealed class DocumentView : RichTextBox
     private static bool TableHasVerticalMerges(ModelTable table) =>
         table.Rows.SelectMany(row => row.Cells).Any(cell => cell.VerticalMerge != VerticalMergeState.None);
 
+    private static bool TryResolveHeaderOnlyTableBorderColor(ModelTable table, out Color color)
+    {
+        color = Colors.Black;
+        if (!table.Formatting.HeaderRow || table.Rows.Count < 2 || table.Borders is null)
+            return false;
+
+        var edges = new[]
+        {
+            table.Borders.Top,
+            table.Borders.Left,
+            table.Borders.Bottom,
+            table.Borders.Right,
+            table.Borders.InsideHorizontal,
+            table.Borders.InsideVertical
+        };
+        if (edges.Any(edge => edge is null)
+            || edges.Any(edge => edge!.Style != BorderLineStyle.Single || Math.Abs(edge.WidthPt - 0.5) > 0.001))
+            return false;
+
+        if (table.Rows[0].Cells.Count == 0
+            || table.Rows[0].Cells.Any(cell => cell.Borders is null or { IsEmpty: true })
+            || table.Rows.Skip(1).SelectMany(row => row.Cells).Any(cell => cell.Borders is { IsEmpty: false }))
+            return false;
+
+        var colorToken = edges[0]!.ColorToken.Trim();
+        if (!edges.All(edge => string.Equals(edge!.ColorToken.Trim(), colorToken, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        if (string.Equals(colorToken, "auto", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return TryParseColor(colorToken, out color);
+    }
+
     private static WpfTable BuildTable(
         ModelTable table,
         TextDocument document,
@@ -7573,10 +7607,13 @@ public sealed class DocumentView : RichTextBox
             ? DocumentTableStyle.FindById(sid)
             : null;
 
-        // Border color: from the catalog style's BorderColorHex, else the default grey.
-        var borderColor = catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
-            ? (Color)ColorConverter.ConvertFromString("#" + borderHex)
-            : Color.FromRgb(0x9A, 0x9A, 0x9A);
+        // A header-only custom-border table keeps its complete uniform table payload for generic chrome.
+        // Word resolves its literal "auto" token to black here, ahead of the named-style fallback.
+        var borderColor = TryResolveHeaderOnlyTableBorderColor(table, out var explicitBorderColor)
+            ? explicitBorderColor
+            : catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
+                ? (Color)ColorConverter.ConvertFromString("#" + borderHex)
+                : Color.FromRgb(0x9A, 0x9A, 0x9A);
         var borderBrush = new SolidColorBrush(borderColor);
 
         if (table.Formatting.Borders)
