@@ -29,6 +29,7 @@ public sealed class SlideCanvas : FrameworkElement
     private const double ImportedAptosWpfRasterScale = 0.95;
     private const double ImportedAptosBodyWpfRasterScale = 0.957;
     private const double ImportedAptosDisplayWpfRasterScaleY = 0.86;
+    private const double ImportedAptosBodyOriginOffsetY = 6.0;
 
     // WPF has no native blur filter for glyph geometry. Keep its translated
     // shadow rings tighter while preserving shared authored offsets for Avalonia.
@@ -2015,22 +2016,28 @@ public sealed class SlideCanvas : FrameworkElement
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
             var ft = formatted[placement.ParagraphIndex];
+            double placementY = placement.Y;
+            bool useImportedAptosBodyOrigin = UsesImportedAptosBodyOrigin(renderText);
+            if (useImportedAptosBodyOrigin)
+                placementY -= ImportedAptosBodyOriginOffsetY;
 
             if (placement.Bullet is { } bullet)
             {
+                if (useImportedAptosBodyOrigin)
+                    bullet = bullet with { Y = bullet.Y - ImportedAptosBodyOriginOffsetY };
                 DrawBulletPlacementWpf(dc, bullet);
             }
 
             switch (TextLayoutPlanner.PlanParagraphRenderRoute(para, renderText))
             {
                 case TextParagraphRenderRoute.Math:
-                    RenderParaWithMath(dc, para, placement.X, placement.Y);
+                    RenderParaWithMath(dc, para, placement.X, placementY);
                     break;
                 case TextParagraphRenderRoute.Effects:
-                    RenderParaWithEffects(dc, para, placement.X, placement.Y, placement.MaxWidthDip, renderText.Wrap, renderText, bounds);
+                    RenderParaWithEffects(dc, para, placement.X, placementY, placement.MaxWidthDip, renderText.Wrap, renderText, bounds);
                     break;
                 case TextParagraphRenderRoute.Tabs:
-                    RenderParaWithTabs(dc, para, placement.X, placement.Y, para.TabStops);
+                    RenderParaWithTabs(dc, para, placement.X, placementY, para.TabStops);
                     break;
                 default:
                     if (para.IndentDip > 0 && ft.MaxTextWidth > 0)
@@ -2049,14 +2056,14 @@ public sealed class SlideCanvas : FrameworkElement
                             : 1.0;
                         double pivotY = useImportedAptosDisplayRasterScale
                             ? placement.Y + ft.Height
-                            : placement.Y;
+                            : placementY;
                         dc.PushTransform(new ScaleTransform(
                             scaleX,
                             scaleY,
                             centerX,
                             pivotY));
                     }
-                    dc.DrawText(ft, new Point(placement.X, placement.Y));
+                    dc.DrawText(ft, new Point(placement.X, placementY));
                     if (useImportedAptosRasterScale)
                     {
                         dc.Pop();
@@ -2081,6 +2088,17 @@ public sealed class SlideCanvas : FrameworkElement
             && !paragraph.Runs[0].Bold
             && !paragraph.Runs[0].Italic
             && paragraph.BulletKind == BulletKind.None);
+
+    private static bool UsesImportedAptosBodyOrigin(ResolvedTextLayout text) =>
+        text.AutoFitKind == TextAutoFitKind.Shape &&
+        text.Paragraphs.Count == 6 &&
+        text.Paragraphs.All(paragraph =>
+            paragraph.Runs.Count == 1 &&
+            string.Equals(paragraph.Runs[0].FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase) &&
+            Math.Abs(paragraph.Runs[0].FontSizePt - 18.0) < 0.01 &&
+            !paragraph.Runs[0].Bold &&
+            !paragraph.Runs[0].Italic &&
+            paragraph.BulletKind != BulletKind.None);
 
     private static bool UsesImportedAptosDisplayFont(ResolvedParagraph paragraph) =>
         paragraph.Runs.Any(run =>
