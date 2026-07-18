@@ -376,7 +376,12 @@ public sealed class FloatingObjectRenderTests
         root.UpdateLayout();
 
         root.Effect.Should().BeNull();
-        root.Children.OfType<Border>().Should().HaveCount(2);
+        root.Children.OfType<Border>().Should().HaveCount(3);
+        var glowRing = root.Children.OfType<Border>()
+            .Single(border => border.Effect is null && border.Opacity == 0.6);
+        ((SolidColorBrush)glowRing.Background).Color.Should().Be(Color.FromRgb(0x2E, 0x75, 0xB6));
+        glowRing.Width.Should().BeApproximately(484.16, 0.01);
+        glowRing.Height.Should().BeApproximately(76.2667, 0.01);
         root.Children.OfType<Border>().Single(border => border.Effect is not null)
             .Effect.Should().BeOfType<DropShadowEffect>();
         root.Children.OfType<TextBlock>().Should().HaveCount(wordArt.Text.Length);

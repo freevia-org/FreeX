@@ -5470,14 +5470,23 @@ public sealed class DocumentView : RichTextBox
             Effect = preserveOpaqueGlowFill ? null : effect
         };
 
+        Border? glowRingLayer = null;
         Border? glowLayer = null;
         Border? fillLayer = null;
         if (preserveOpaqueGlowFill && effect is not null)
         {
             // Word composites glow outward from the shape edge. A WPF DropShadowEffect blurs both
-            // directions, so keep the blurred copy behind a second opaque fill surface.
+            // directions and is clipped by this floating overlay route. Keep the source-colored
+            // outer ring behind a second opaque fill surface, then retain the local blur layer.
+            glowRingLayer = new Border
+            {
+                Background = new SolidColorBrush(Color.FromRgb(0x2E, 0x75, 0xB6)),
+                Opacity = 0.6,
+                IsHitTestVisible = false
+            };
             glowLayer = new Border { Background = fillBrush, Effect = effect, IsHitTestVisible = false };
             fillLayer = new Border { Background = fillBrush, IsHitTestVisible = false };
+            canvas.Children.Add(glowRingLayer);
             canvas.Children.Add(glowLayer);
             canvas.Children.Add(fillLayer);
         }
@@ -5487,8 +5496,13 @@ public sealed class DocumentView : RichTextBox
         // the element measurable while the object is being assembled.
         canvas.SizeChanged += (_, _) =>
         {
-            if (glowLayer is not null && fillLayer is not null)
+            if (glowRingLayer is not null && glowLayer is not null && fillLayer is not null)
             {
+                const double glowExtentDip = 4;
+                glowRingLayer.Width = canvas.ActualWidth + glowExtentDip * 2;
+                glowRingLayer.Height = canvas.ActualHeight + glowExtentDip * 2;
+                Canvas.SetLeft(glowRingLayer, -glowExtentDip);
+                Canvas.SetTop(glowRingLayer, -glowExtentDip);
                 glowLayer.Width = canvas.ActualWidth;
                 glowLayer.Height = canvas.ActualHeight;
                 fillLayer.Width = canvas.ActualWidth;
