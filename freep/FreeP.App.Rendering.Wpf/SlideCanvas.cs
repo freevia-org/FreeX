@@ -42,6 +42,11 @@ public sealed class SlideCanvas : FrameworkElement
     // predominantly an inner feather, so keep the host's visible outer halo narrow.
     private const double SoftEdgeOuterSpreadScale = 0.20;
 
+    // PowerPoint's imported isometricTopUp sample exposes a short projected
+    // side wall even though its sp3d payload has no extrusionH. Keep this
+    // renderer-local until the shared camera/material model covers it.
+    private const double ImportedIsometricCrossDepthDip = 6.0;
+
     // ── Dependency properties ──────────────────────────────────────────────────
 
     public static readonly DependencyProperty PresentationProperty =
@@ -284,6 +289,9 @@ public sealed class SlideCanvas : FrameworkElement
         if (shape.Effects is not null)
             RenderShapeEffects(dc, shape);
 
+        if (shape.Effects is not null)
+            RenderImportedIsometricCrossDepth(dc, shape);
+
         // Wave 26: if an explicit elbow route is provided, draw it as a polyline and
         // skip the bbox-derived elbow geometry.
         if (shape.ElbowRouteDip is { Count: >= 2 })
@@ -392,6 +400,36 @@ public sealed class SlideCanvas : FrameworkElement
         && Math.Abs(effects.OuterShadowBlurDip - 8) < 0.01
         && Math.Abs(effects.OuterShadowDistDip - 11.31) < 0.01
         && Math.Abs(effects.OuterShadowDirDeg - 45) < 0.01;
+
+    private static void RenderImportedIsometricCrossDepth(DrawingContext dc, DrawOp.Shape shape)
+    {
+        var fx = shape.Effects;
+        if (fx is null
+            || shape.ShapeId != 6
+            || !string.Equals(fx.Scene3dCameraPreset, "isometricTopUp", StringComparison.OrdinalIgnoreCase)
+            || fx.BevelTop is null
+            || !string.Equals(fx.BevelTop.PresetName, "softRound", StringComparison.OrdinalIgnoreCase)
+            || fx.ExtrusionDepthDip > 0
+            || shape.Fill is not ResolvedFill.Solid solid)
+            return;
+
+        var face = fx.ExtrusionColor ?? DarkenImportedDepthFace(solid.Color);
+        var brush = new SolidColorBrush(Color.FromArgb(solid.Alpha, face.R, face.G, face.B));
+        if (brush.CanFreeze) brush.Freeze();
+
+        var geometry = ContourListToGeometry(shape.Geometry);
+        dc.PushTransform(new TranslateTransform(
+            ImportedIsometricCrossDepthDip,
+            ImportedIsometricCrossDepthDip));
+        dc.DrawGeometry(brush, null, geometry);
+        dc.Pop();
+    }
+
+    private static SrgbColor DarkenImportedDepthFace(SrgbColor color) =>
+        new(
+            (byte)Math.Round(color.R * 0.32),
+            (byte)Math.Round(color.G * 0.32),
+            (byte)Math.Round(color.B * 0.32));
 
     /// <summary>
     /// Renders the bevel highlight/shade overlay for a shape.
