@@ -179,7 +179,8 @@ public sealed class FloatingObjectRenderTests
             {
                 HasShadow = true,
                 ShadowColorHex = "112233",
-                ShadowAlpha = 50000
+                ShadowAlpha = 50000,
+                ShadowDir = 2700000
             },
             Placement = new FloatingPlacement
             {
@@ -206,8 +207,9 @@ public sealed class FloatingObjectRenderTests
         ellipse.Stroke.Should().BeOfType<SolidColorBrush>()
             .Which.Color.Should().Be(Color.FromRgb(0x00, 0xAA, 0x11));
         ellipse.StrokeThickness.Should().BeApproximately(2 * 96.0 / 72.0, 0.01);
-        ellipse.Effect.Should().BeOfType<DropShadowEffect>()
-            .Which.Color.Should().Be(Color.FromRgb(0x11, 0x22, 0x33));
+        var effect = ellipse.Effect.Should().BeOfType<DropShadowEffect>().Subject;
+        effect.Color.Should().Be(Color.FromRgb(0x11, 0x22, 0x33));
+        effect.Direction.Should().Be(315);
     }
 
     [StaFact]

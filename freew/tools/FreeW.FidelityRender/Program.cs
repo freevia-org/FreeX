@@ -582,6 +582,7 @@ static void RenderDocumentComposite(
             var box = panel.PageBoxes[i];
             const double headerH = 42;
             const double footerH = 36;
+            var printableWidthDip = Math.Max(1, thisPageWDip - thisMarginLeft - thisMarginRight);
 
             var ownerHf = box.OwnerSectionHf ?? doc.FinalSectionHeadersFooters;
             // Word uses a 0.5-inch edge distance when w:pgMar omits header/footer.
@@ -601,7 +602,7 @@ static void RenderDocumentComposite(
                 var hfSlot = ResolveHfSlotByName(ownerHf, hSlotName);
                 if (hfSlot is not null && !hfSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(hfSlot, doc, thisPageWDip, headerH, i + 1, box.PageNumberText, actualPageCount);
+                    var hfPage = RenderHfSlot(hfSlot, doc, printableWidthDip, headerH, i + 1, box.PageNumberText, actualPageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -612,8 +613,7 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, headerTop,
-                                    thisPageWDip - thisMarginLeft - thisMarginRight, headerH));
+                                null, new Rect(thisMarginLeft, headerTop, printableWidthDip, headerH));
                         bmp.Render(hfVis);
                     }
                 }
@@ -624,7 +624,7 @@ static void RenderDocumentComposite(
                 var fSlot = ResolveHfSlotByName(ownerHf, fSlotName);
                 if (fSlot is not null && !fSlot.IsEmpty)
                 {
-                    var hfPage = RenderHfSlot(fSlot, doc, thisPageWDip, footerH, i + 1, box.PageNumberText, actualPageCount);
+                    var hfPage = RenderHfSlot(fSlot, doc, printableWidthDip, footerH, i + 1, box.PageNumberText, actualPageCount);
                     if (hfPage is not null)
                     {
                         var hfVis = new DrawingVisual();
@@ -635,8 +635,7 @@ static void RenderDocumentComposite(
                                 AlignmentX = AlignmentX.Left,
                                 AlignmentY = AlignmentY.Top
                             },
-                                null, new Rect(thisMarginLeft, footerTop,
-                                    thisPageWDip - thisMarginLeft - thisMarginRight, footerH));
+                                null, new Rect(thisMarginLeft, footerTop, printableWidthDip, footerH));
                         bmp.Render(hfVis);
                     }
                 }
@@ -683,6 +682,7 @@ static void RenderDocumentComposite(
                 thisPageSettings,
                 differentOddEvenHeaderFooterPages);
             const double hfH = 36;
+            var printableWidthDip = Math.Max(1, thisPageWDip - thisMarginLeft - thisMarginRight);
             const double DefaultHeaderFooterDistanceDip = 48;
             var footerDistance = thisPageSettings.FooterDistancePt > 0
                 ? PageLayout.PointsToDip(thisPageSettings.FooterDistancePt)
@@ -691,7 +691,7 @@ static void RenderDocumentComposite(
 
             if (slots.Footer is { IsEmpty: false } footerSlot)
             {
-                var hfPage = RenderHfSlot(footerSlot, doc, thisPageWDip, hfH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount);
+                var hfPage = RenderHfSlot(footerSlot, doc, printableWidthDip, hfH, i + 1, (i + 1).ToString(CultureInfo.InvariantCulture), actualPageCount);
                 if (hfPage is not null)
                 {
                     var hfVis = new DrawingVisual();
@@ -702,8 +702,7 @@ static void RenderDocumentComposite(
                             AlignmentX = AlignmentX.Left,
                             AlignmentY = AlignmentY.Top
                         },
-                            null, new Rect(thisMarginLeft, footerTop,
-                                thisPageWDip - thisMarginLeft - thisMarginRight, hfH));
+                            null, new Rect(thisMarginLeft, footerTop, printableWidthDip, hfH));
                     bmp.Render(hfVis);
                 }
             }

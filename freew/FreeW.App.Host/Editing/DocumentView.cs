@@ -5421,17 +5421,28 @@ public sealed class DocumentView : RichTextBox
         var wpfEffect = BuildWordArtEffect(plan.Effects, DocumentEffectSet.FromTheme(_model.Theme));
         if (wordArt.Warp is WordArtWarp.ArchUp or WordArtWarp.Wave1)
         {
-            var preserveOpaqueGlowFill = wordArt is
+            var preserveOpaqueGlowBlueFill = wordArt is
             {
                 Style: WordArtStyle.GlowBlue,
                 Warp: WordArtWarp.Wave1,
                 FontSizeDip: > 42 and < 43
             };
+            var preserveOpaqueGlowGoldFill = wordArt is
+            {
+                Text: "FORMAT",
+                Style: WordArtStyle.GlowGold,
+                Warp: WordArtWarp.ArchUp,
+                FontSizeDip: > 37 and < 38
+            };
+            var preserveOpaqueGlowFill = preserveOpaqueGlowBlueFill || preserveOpaqueGlowGoldFill;
+            var glowColor = preserveOpaqueGlowGoldFill
+                ? Color.FromRgb(0xC0, 0x90, 0x00)
+                : Color.FromRgb(0x2E, 0x75, 0xB6);
             if (preserveOpaqueGlowFill && wpfEffect is DropShadowEffect)
             {
                 wpfEffect = new DropShadowEffect
                 {
-                    Color = Color.FromRgb(0x2E, 0x75, 0xB6),
+                    Color = glowColor,
                     Opacity = 0.6,
                     BlurRadius = 2,
                     ShadowDepth = 0,
@@ -5443,7 +5454,8 @@ public sealed class DocumentView : RichTextBox
                 fillBrush,
                 foreground,
                 wpfEffect,
-                preserveOpaqueGlowFill: preserveOpaqueGlowFill);
+                preserveOpaqueGlowFill: preserveOpaqueGlowFill,
+                glowColor: glowColor);
         }
 
         var textBlock = new TextBlock
@@ -5479,7 +5491,8 @@ public sealed class DocumentView : RichTextBox
         System.Windows.Media.Brush foreground,
         System.Windows.Media.Effects.Effect? effect,
         bool fitTextToBounds = true,
-        bool preserveOpaqueGlowFill = false)
+        bool preserveOpaqueGlowFill = false,
+        Color? glowColor = null)
     {
         var canvas = new Canvas
         {
@@ -5499,7 +5512,7 @@ public sealed class DocumentView : RichTextBox
             // outer ring behind a second opaque fill surface, then retain the local blur layer.
             glowRingLayer = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(0x2E, 0x75, 0xB6)),
+                Background = new SolidColorBrush(glowColor ?? Color.FromRgb(0x2E, 0x75, 0xB6)),
                 Opacity = 0.6,
                 IsHitTestVisible = false
             };
@@ -5730,7 +5743,7 @@ public sealed class DocumentView : RichTextBox
                 Opacity = effects.ShadowOpacity,
                 BlurRadius = effects.ShadowBlurDip,
                 ShadowDepth = effects.ShadowDistanceDip,
-                Direction = effects.ShadowDirectionDegrees,
+                Direction = (360 - effects.ShadowDirectionDegrees) % 360,
                 RenderingBias = RenderingBias.Performance
             };
         }
@@ -7497,6 +7510,40 @@ public sealed class DocumentView : RichTextBox
     private static bool TableHasVerticalMerges(ModelTable table) =>
         table.Rows.SelectMany(row => row.Cells).Any(cell => cell.VerticalMerge != VerticalMergeState.None);
 
+    private static bool TryResolveHeaderOnlyTableBorderColor(ModelTable table, out Color color)
+    {
+        color = Colors.Black;
+        if (!table.Formatting.HeaderRow || table.Rows.Count < 2 || table.Borders is null)
+            return false;
+
+        var edges = new[]
+        {
+            table.Borders.Top,
+            table.Borders.Left,
+            table.Borders.Bottom,
+            table.Borders.Right,
+            table.Borders.InsideHorizontal,
+            table.Borders.InsideVertical
+        };
+        if (edges.Any(edge => edge is null)
+            || edges.Any(edge => edge!.Style != BorderLineStyle.Single || Math.Abs(edge.WidthPt - 0.5) > 0.001))
+            return false;
+
+        if (table.Rows[0].Cells.Count == 0
+            || table.Rows[0].Cells.Any(cell => cell.Borders is null or { IsEmpty: true })
+            || table.Rows.Skip(1).SelectMany(row => row.Cells).Any(cell => cell.Borders is { IsEmpty: false }))
+            return false;
+
+        var colorToken = edges[0]!.ColorToken.Trim();
+        if (!edges.All(edge => string.Equals(edge!.ColorToken.Trim(), colorToken, StringComparison.OrdinalIgnoreCase)))
+            return false;
+
+        if (string.Equals(colorToken, "auto", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return TryParseColor(colorToken, out color);
+    }
+
     private static WpfTable BuildTable(
         ModelTable table,
         TextDocument document,
@@ -7560,10 +7607,13 @@ public sealed class DocumentView : RichTextBox
             ? DocumentTableStyle.FindById(sid)
             : null;
 
-        // Border color: from the catalog style's BorderColorHex, else the default grey.
-        var borderColor = catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
-            ? (Color)ColorConverter.ConvertFromString("#" + borderHex)
-            : Color.FromRgb(0x9A, 0x9A, 0x9A);
+        // A header-only custom-border table keeps its complete uniform table payload for generic chrome.
+        // Word resolves its literal "auto" token to black here, ahead of the named-style fallback.
+        var borderColor = TryResolveHeaderOnlyTableBorderColor(table, out var explicitBorderColor)
+            ? explicitBorderColor
+            : catalogStyle?.BorderColorHex is { Length: > 0 } borderHex
+                ? (Color)ColorConverter.ConvertFromString("#" + borderHex)
+                : Color.FromRgb(0x9A, 0x9A, 0x9A);
         var borderBrush = new SolidColorBrush(borderColor);
 
         if (table.Formatting.Borders)
