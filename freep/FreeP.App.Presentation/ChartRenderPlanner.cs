@@ -680,6 +680,8 @@ public static partial class ChartRenderPlanner
     private const double ImportedSurfaceFrameFrontRightX = 312.0;
     private const double ImportedSurfaceBlankVertexNormalized = 0.24;
     private const double ImportedSurfaceBlankVertexXOffset = 20.0;
+    private const double ImportedSurfaceSouthFrontVertexXOffset = 7.0;
+    private const double ImportedSurfaceSouthFrontVertexYOffset = -2.0;
     private const double ImportedSurfaceMiddleNorthVertexYOffset = 20.0;
     private const double ImportedSurfaceRearNorthVertexYOffset = 14.0;
     private const double ImportedSurfaceLightBaseFactor = 1.02;
@@ -3385,6 +3387,12 @@ public static partial class ChartRenderPlanner
         if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
             seriesIndex == 0 && categoryIndex == 1)
             x += ImportedSurfaceBlankVertexXOffset;
+        if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
+            seriesIndex == 0 && categoryIndex == 2)
+        {
+            x += ImportedSurfaceSouthFrontVertexXOffset;
+            y += ImportedSurfaceSouthFrontVertexYOffset;
+        }
         // The imported 3x3 COM mesh registers its middle-row North vertex
         // below the shared projection; keep the correction fixture-scoped.
         if (usesImportedTextMetrics && seriesCount == 3 && categoryCount == 3 &&
