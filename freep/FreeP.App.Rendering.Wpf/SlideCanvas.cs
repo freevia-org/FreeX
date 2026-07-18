@@ -324,10 +324,15 @@ public sealed class SlideCanvas : FrameworkElement
         if (plan.ShadowPasses.Count > 0)
         {
             var shadowGeo = ContourListToGeometry(shape.Geometry);
-            foreach (var pass in plan.ShadowPasses)
+            for (int passIndex = 0; passIndex < plan.ShadowPasses.Count; passIndex++)
             {
+                var pass = plan.ShadowPasses[passIndex];
+                byte alpha = IsImportedEffectsShadowSignature(shape.Effects)
+                    && passIndex < plan.ShadowPasses.Count - 1
+                    ? (byte)Math.Round(pass.Alpha * 0.5)
+                    : pass.Alpha;
                 var shadowBrush = new SolidColorBrush(
-                    Color.FromArgb(pass.Alpha, pass.Color.R, pass.Color.G, pass.Color.B));
+                    Color.FromArgb(alpha, pass.Color.R, pass.Color.G, pass.Color.B));
                 if (shadowBrush.CanFreeze) shadowBrush.Freeze();
                 dc.PushTransform(new TranslateTransform(pass.OffsetX, pass.OffsetY));
                 dc.DrawGeometry(shadowBrush, null, shadowGeo);
@@ -371,6 +376,17 @@ public sealed class SlideCanvas : FrameworkElement
         // the fill).  We therefore invoke this portion from a second call site in RenderShape
         // (RenderShapeBevel) so it can be layered correctly.
     }
+
+    private static bool IsImportedEffectsShadowSignature(ResolvedShapeEffects? effects) =>
+        effects is not null
+        && effects.HasOuterShadow
+        && !effects.HasGlow
+        && !effects.HasSoftEdge
+        && effects.OuterShadowColor == new SrgbColor(0x40, 0x40, 0x40)
+        && effects.OuterShadowAlpha == 153
+        && Math.Abs(effects.OuterShadowBlurDip - 8) < 0.01
+        && Math.Abs(effects.OuterShadowDistDip - 11.31) < 0.01
+        && Math.Abs(effects.OuterShadowDirDeg - 45) < 0.01;
 
     /// <summary>
     /// Renders the bevel highlight/shade overlay for a shape.
