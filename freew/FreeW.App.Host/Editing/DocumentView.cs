@@ -7044,6 +7044,7 @@ public sealed class DocumentView : RichTextBox
         var bandedRows = stashed?.BandedRows ?? false;
         var repeatHeader = stashed?.RepeatHeaderRow ?? false;
         var tableStyleId = stashedTag?.TableStyleId;
+        var tableBorders = stashedTag?.Borders;
 
         // Preserve column widths (column-level in WPF) so the docx tblGrid round-trips through edit.
         foreach (var column in wpfTable.Columns)
@@ -7173,6 +7174,7 @@ public sealed class DocumentView : RichTextBox
         // Recover the catalog style id (null if no named style was applied). This is stashed on the
         // WpfTableTag by BuildTable and must be written back so CommitToModel preserves the style.
         table.TableStyleId = tableStyleId;
+        table.Borders = tableBorders;
         return table;
     }
 
@@ -7339,13 +7341,14 @@ public sealed class DocumentView : RichTextBox
 
     /// <summary>
     /// Carried on a rendered <see cref="WpfTable"/>'s Tag so <see cref="ReadTable"/> can recover values
-    /// that the WPF FlowDocument table cannot express: the <see cref="TableFormatting"/> toggles and the
-    /// <see cref="TableStyleId"/> (the named catalog style). Both are stashed on <see cref="BuildTable"/>
+    /// that the WPF FlowDocument table cannot express: the <see cref="TableFormatting"/> toggles, explicit
+    /// <see cref="TableBorders"/>, and the <see cref="TableStyleId"/> (the named catalog style). They are stashed on <see cref="BuildTable"/>
     /// and recovered on commit so they survive the view→model round-trip unmodified.
     /// </summary>
     private sealed record WpfTableTag(
         TableFormatting Formatting,
         string? TableStyleId,
+        TableBorders? Borders,
         int SourceBlockIndex = -1,
         int SegmentIndex = 0,
         int SegmentCount = 1,
@@ -7467,6 +7470,7 @@ public sealed class DocumentView : RichTextBox
             Tag = new WpfTableTag(
                 table.Formatting,
                 table.TableStyleId,
+                table.Borders,
                 sourceBlockIndex,
                 segmentIndex,
                 segmentCount,

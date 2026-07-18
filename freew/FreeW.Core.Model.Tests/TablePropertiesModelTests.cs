@@ -69,6 +69,7 @@ public class TablePropertiesModelTests
         var table = Table.Create(3, 2);
         table.Formatting = table.Formatting with { HeaderRow = true, BandedColumns = true };
         table.TableStyleId = "GridTable1Light";
+        table.Borders = new TableBorders { Top = new TableBorderEdge(BorderLineStyle.Double, "1F4E79", 1.5) };
         table.PreferredWidthPt = 360;
         table.Alignment = TableAlignment.Center;
         table.DefaultCellMargins = new TableCellMargins(1, 6, 1, 6);
@@ -84,6 +85,7 @@ public class TablePropertiesModelTests
         top.Rows.Should().HaveCount(1);
         bottom.Rows.Should().HaveCount(2);
         bottom.TableStyleId.Should().Be("GridTable1Light");
+        bottom.Borders.Should().Be(table.Borders);
         bottom.Formatting.BandedColumns.Should().BeTrue();
         bottom.PreferredWidthPt.Should().Be(360);
         bottom.Alignment.Should().Be(TableAlignment.Center);

@@ -31,6 +31,24 @@ public sealed class DocumentViewRoundTripTests
     private static Run FirstRun(TextDocument document, int blockIndex = 0) =>
         ((Paragraph)document.Blocks[blockIndex]).Runs[0];
 
+    [StaFact]
+    public void Table_ExplicitBorderPayload_SurvivesViewRoundTrip()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        var table = Table.Create(1, 1);
+        table.Borders = new TableBorders
+        {
+            Top = new TableBorderEdge(BorderLineStyle.Double, "1F4E79", 1.5),
+            InsideVertical = new TableBorderEdge(BorderLineStyle.Dotted, "auto", 0.5)
+        };
+        document.Blocks.Add(table);
+
+        var recovered = RoundTrip(document).Blocks.OfType<Table>().Single();
+
+        recovered.Borders.Should().Be(table.Borders);
+    }
+
     private static List<T> LogicalDescendants<T>(DependencyObject root) where T : DependencyObject
     {
         var result = new List<T>();
