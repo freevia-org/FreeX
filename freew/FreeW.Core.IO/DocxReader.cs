@@ -2670,6 +2670,7 @@ public static class DocxReader
         var catalogStyle = tblStyleId is not null ? DocumentTableStyle.FindById(tblStyleId) : null;
         if (catalogStyle is not null)
             table.TableStyleId = catalogStyle.WordStyleId;
+        table.Borders = ReadTableBorders(borders);
 
         // A catalog-styled table inherits borders from the catalog definition unless explicit tblBorders
         // override them. Merge into styleBorders so the Borders flag is set correctly.
@@ -2931,6 +2932,27 @@ public static class DocxReader
         // Borders are "on" unless every edge is explicitly "none"/"nil".
         var edges = tblBorders.Elements();
         return edges.Any(e => (e.Attribute(W + "val")?.Value ?? "single") is not ("none" or "nil"));
+    }
+
+    private static TableBorders? ReadTableBorders(XElement? tblBorders)
+    {
+        if (tblBorders is null) return null;
+        TableBorderEdge? ReadEdge(string name)
+        {
+            var el = tblBorders.Element(W + name);
+            if (el is null || el.Attribute(W + "val")?.Value is "none" or "nil") return null;
+            var widthPt = int.TryParse(el.Attribute(W + "sz")?.Value, out var sz) ? sz / 8.0 : 0.5;
+            return new TableBorderEdge(
+                BorderLineStyles.FromToken(el.Attribute(W + "val")?.Value),
+                el.Attribute(W + "color")?.Value ?? "auto",
+                widthPt);
+        }
+        var result = new TableBorders
+        {
+            Top = ReadEdge("top"), Left = ReadEdge("left"), Bottom = ReadEdge("bottom"), Right = ReadEdge("right"),
+            InsideHorizontal = ReadEdge("insideH"), InsideVertical = ReadEdge("insideV")
+        };
+        return result.IsEmpty ? null : result;
     }
 
     /// <summary>

@@ -1823,14 +1823,29 @@ public static class DocxWriter
 
         if (table.Formatting.Borders)
         {
-            XElement Border(string name) => new(W + name,
-                new XAttribute(W + "val", "single"),
-                new XAttribute(W + "sz", 4),
+            XElement Border(string name, TableBorderEdge? edge) => new(W + name,
+                new XAttribute(W + "val", BorderLineStyles.ToToken(edge?.Style ?? BorderLineStyle.Single)),
+                new XAttribute(W + "sz", (int)Math.Round((edge?.WidthPt ?? 0.5) * 8)),
                 new XAttribute(W + "space", 0),
-                new XAttribute(W + "color", "auto"));
-            tblPr.Add(new XElement(W + "tblBorders",
-                Border("top"), Border("left"), Border("bottom"), Border("right"),
-                Border("insideH"), Border("insideV")));
+                new XAttribute(W + "color", edge?.ColorToken ?? "auto"));
+            var borders = table.Borders;
+            var tableBorders = new XElement(W + "tblBorders");
+            if (borders is null)
+            {
+                tableBorders.Add(
+                    Border("top", null), Border("left", null), Border("bottom", null), Border("right", null),
+                    Border("insideH", null), Border("insideV", null));
+            }
+            else
+            {
+                if (borders.Top is { } top) tableBorders.Add(Border("top", top));
+                if (borders.Left is { } left) tableBorders.Add(Border("left", left));
+                if (borders.Bottom is { } bottom) tableBorders.Add(Border("bottom", bottom));
+                if (borders.Right is { } right) tableBorders.Add(Border("right", right));
+                if (borders.InsideHorizontal is { } insideHorizontal) tableBorders.Add(Border("insideH", insideHorizontal));
+                if (borders.InsideVertical is { } insideVertical) tableBorders.Add(Border("insideV", insideVertical));
+            }
+            tblPr.Add(tableBorders);
         }
         else
         {

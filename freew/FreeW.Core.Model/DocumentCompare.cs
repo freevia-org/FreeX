@@ -438,7 +438,8 @@ public static class DocumentCompare
         var clone = new Table
         {
             BlockContentControl = source.BlockContentControl,
-            Formatting = source.Formatting
+            Formatting = source.Formatting,
+            Borders = source.Borders
         };
         clone.ColumnWidthsPt.AddRange(source.ColumnWidthsPt);
         foreach (var row in source.Rows)
