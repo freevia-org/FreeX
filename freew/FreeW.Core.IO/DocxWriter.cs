@@ -1285,7 +1285,10 @@ public static class DocxWriter
         var shapeId = watermarkImage is null ? "PowerPlusWaterMarkObject" : "PowerPlusPictureWaterMarkObject";
         var shapeSize = watermarkImage is null
             ? "width:468pt;height:117pt"
-            : "width:468pt;height:281pt";
+            : options.NativeVmlPictureWidthPt is > 0 and var pictureWidthPt
+                && options.NativeVmlPictureHeightPt is > 0 and var pictureHeightPt
+                ? $"width:{FormatPt(pictureWidthPt)}pt;height:{FormatPt(pictureHeightPt)}pt"
+                : "width:468pt;height:281pt";
 
         var shapeType = new XElement(V + "shapetype",
             new XAttribute("id", "_x0000_t136"),

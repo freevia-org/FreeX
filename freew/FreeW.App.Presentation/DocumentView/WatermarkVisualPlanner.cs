@@ -83,8 +83,15 @@ public static class WatermarkVisualPlanner
         var aspect = sourceWidth / sourceHeight;
         double width;
         double height;
+        var hasNativeVmlSize = options.NativeVmlPictureWidthPt is > 0
+            && options.NativeVmlPictureHeightPt is > 0;
 
-        if (options.ScalePct > 0)
+        if (hasNativeVmlSize)
+        {
+            width = options.NativeVmlPictureWidthPt!.Value * 4d / 3d;
+            height = options.NativeVmlPictureHeightPt!.Value * 4d / 3d;
+        }
+        else if (options.ScalePct > 0)
         {
             var scale = Math.Clamp(options.ScalePct, 1, 500) / 100.0;
             if (aspect >= 1)
@@ -107,13 +114,13 @@ public static class WatermarkVisualPlanner
 
         var maxWidth = pageWidth * 0.95;
         var maxHeight = pageHeight * 0.95;
-        if (width > maxWidth)
+        if (!hasNativeVmlSize && width > maxWidth)
         {
             width = maxWidth;
             height = width / aspect;
         }
 
-        if (height > maxHeight)
+        if (!hasNativeVmlSize && height > maxHeight)
         {
             height = maxHeight;
             width = height * aspect;

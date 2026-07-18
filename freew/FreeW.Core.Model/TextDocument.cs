@@ -2361,6 +2361,19 @@ public sealed record WatermarkOptions(string Text)
     /// </summary>
     public int ScalePct { get; init; }
 
+    /// <summary>
+    /// Optional width recovered from Word's native VML picture-watermark shape. Together with
+    /// <see cref="NativeVmlPictureHeightPt"/>, this preserves the authored VML footprint instead
+    /// of falling back to FreeW's automatic picture sizing.
+    /// </summary>
+    public double? NativeVmlPictureWidthPt { get; init; }
+
+    /// <summary>
+    /// Optional height recovered from Word's native VML picture-watermark shape. Meaningful only
+    /// when <see cref="NativeVmlPictureWidthPt"/> is also present.
+    /// </summary>
+    public double? NativeVmlPictureHeightPt { get; init; }
+
     /// <summary>Whether this watermark is a picture watermark (<see cref="ImageBytes"/> is non-null).</summary>
     public bool IsPicture => ImageBytes is { Length: > 0 };
 

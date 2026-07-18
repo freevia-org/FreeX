@@ -293,6 +293,8 @@ public class WatermarkOptionsRoundTripTests
         watermark.Should().NotBeNull();
         watermark!.IsPicture.Should().BeTrue();
         watermark.ImageBytes.Should().Equal(image);
+        watermark.NativeVmlPictureWidthPt.Should().BeApproximately(468, 0.001);
+        watermark.NativeVmlPictureHeightPt.Should().BeApproximately(281, 0.001);
         watermark.Layout.Should().Be(WatermarkLayout.Horizontal);
         watermark.Opacity.Should().BeApproximately(0.65, 0.001);
     }
@@ -366,6 +368,33 @@ public class WatermarkOptionsRoundTripTests
         stream.Position = 0;
         using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
         zip.GetEntry("word/media/header1_watermark1.png").Should().NotBeNull();
+    }
+
+    [Fact]
+    public void PictureWatermark_NativeVmlSize_RoundTripsThroughTheHeaderPayload()
+    {
+        var image = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+        var doc = new TextDocument();
+        doc.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = image,
+            NativeVmlPictureWidthPt = 512.5,
+            NativeVmlPictureHeightPt = 240.25
+        };
+
+        var xml = ReadHeaderXml(doc);
+        var vml = XNamespace.Get("urn:schemas-microsoft-com:vml");
+        var shape = xml.Descendants(vml + "shape")
+            .Single(shape => shape.Attribute("id")?.Value == "PowerPlusPictureWaterMarkObject");
+
+        shape.Attribute("style")!.Value.Should().Contain("width:512.5pt;height:240.25pt");
+
+        var loaded = RoundTrip(doc).Page.WatermarkOptions;
+        loaded.Should().NotBeNull();
+        loaded!.ImageBytes.Should().Equal(image);
+        loaded.NativeVmlPictureWidthPt.Should().BeApproximately(512.5, 0.001);
+        loaded.NativeVmlPictureHeightPt.Should().BeApproximately(240.25, 0.001);
     }
 
     [Fact]

@@ -5091,6 +5091,12 @@ public static class DocxReader
     /// </summary>
     private static void ReadNativeVmlWatermark(ZipArchive archive, TextDocument document)
     {
+        if (document.Page.WatermarkOptions is { IsPicture: true } existingPictureWatermark)
+        {
+            ApplyNativeVmlPictureGeometry(archive, document, existingPictureWatermark);
+            return;
+        }
+
         if (document.Page.EffectiveWatermark is not null)
             return;
 
@@ -5142,13 +5148,46 @@ public static class DocxReader
             }
 
             var pictureRotation = ParseVmlStyleNumber(pictureShape.Attribute("style")?.Value, "rotation");
+            var (pictureWidthPt, pictureHeightPt) = ParseVmlShapeSize(pictureShape.Attribute("style")?.Value);
             document.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
             {
                 ImageBytes = imageBytes,
+                NativeVmlPictureWidthPt = pictureWidthPt > 0 ? pictureWidthPt : null,
+                NativeVmlPictureHeightPt = pictureHeightPt > 0 ? pictureHeightPt : null,
                 Layout = pictureRotation is { } pictureRotationValue && Math.Abs(pictureRotationValue) < 0.01
                     ? WatermarkLayout.Horizontal
                     : WatermarkLayout.Diagonal,
                 Opacity = ParseVmlOpacity(pictureFill?.Attribute("opacity")?.Value)
+            };
+            return;
+        }
+    }
+
+    // FreeW metadata remains authoritative for picture content and editing semantics. VML adds
+    // supplemental source geometry that is not represented by the legacy custom properties.
+    private static void ApplyNativeVmlPictureGeometry(
+        ZipArchive archive,
+        TextDocument document,
+        WatermarkOptions existingPictureWatermark)
+    {
+        foreach (var entry in archive.Entries
+                     .Where(entry => entry.FullName.StartsWith("word/header", StringComparison.OrdinalIgnoreCase)
+                         && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var pictureShape = LoadPart(archive, entry.FullName)?.Root?
+                .Descendants(V + "shape")
+                .FirstOrDefault(shape => shape.Attribute("id")?.Value == "PowerPlusPictureWaterMarkObject");
+            if (pictureShape is null)
+                continue;
+
+            var (widthPt, heightPt) = ParseVmlShapeSize(pictureShape.Attribute("style")?.Value);
+            if (widthPt <= 0 || heightPt <= 0)
+                continue;
+
+            document.Page.WatermarkOptions = existingPictureWatermark with
+            {
+                NativeVmlPictureWidthPt = widthPt,
+                NativeVmlPictureHeightPt = heightPt
             };
             return;
         }

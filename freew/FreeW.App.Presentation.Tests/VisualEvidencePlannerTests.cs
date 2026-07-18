@@ -2405,6 +2405,35 @@ public sealed class VisualEvidencePlannerTests
     }
 
     [Fact]
+    public void PictureWatermarkLayoutPlanner_UsesNativeVmlShapeSizeBeforeAutoFit()
+    {
+        var options = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = [1, 2, 3],
+            ScalePct = 40,
+            NativeVmlPictureWidthPt = 468,
+            NativeVmlPictureHeightPt = 281,
+            Layout = WatermarkLayout.Horizontal,
+            Opacity = 0.65
+        };
+
+        var plan = WatermarkVisualPlanner.BuildPictureLayout(
+            options,
+            pageWidthDip: 816,
+            pageHeightDip: 1056,
+            sourceWidthDip: 1,
+            sourceHeightDip: 1);
+
+        plan.Should().NotBeNull();
+        plan!.WidthDip.Should().BeApproximately(624, 0.001);
+        plan.HeightDip.Should().BeApproximately(374.667, 0.001);
+        plan.XDip.Should().BeApproximately(96, 0.001);
+        plan.YDip.Should().BeApproximately(340.667, 0.001);
+        plan.Opacity.Should().BeApproximately(0.65, 0.001);
+        plan.RotationDegrees.Should().Be(0);
+    }
+
+    [Fact]
     public void TextWatermarkLayoutPlanner_UsesWordsFixedVmlShape()
     {
         var plan = WatermarkVisualPlanner.BuildTextLayout(
