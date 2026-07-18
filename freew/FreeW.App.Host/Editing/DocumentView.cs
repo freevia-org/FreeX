@@ -5743,7 +5743,7 @@ public sealed class DocumentView : RichTextBox
                 Opacity = effects.ShadowOpacity,
                 BlurRadius = effects.ShadowBlurDip,
                 ShadowDepth = effects.ShadowDistanceDip,
-                Direction = effects.ShadowDirectionDegrees,
+                Direction = (360 - effects.ShadowDirectionDegrees) % 360,
                 RenderingBias = RenderingBias.Performance
             };
         }
