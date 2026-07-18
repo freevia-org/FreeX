@@ -190,6 +190,48 @@ public sealed class DocumentViewRoundTripTests
     }
 
     [StaFact]
+    public void SingleHeadingMultiLevelItem_RendersWithoutAListContainerAndRoundTrips()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Outline heading")
+        {
+            StyleId = "Heading1",
+            Formatting = ParagraphFormatting.Default with { ListKind = ListKind.MultiLevel }
+        });
+        document.Blocks.Add(new Paragraph("Following body paragraph."));
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        view.Document.Blocks.OfType<System.Windows.Documents.List>().Should().BeEmpty();
+        RoundTrip(document).Blocks.OfType<Paragraph>().First().Formatting.ListKind.Should().Be(ListKind.MultiLevel);
+    }
+
+    [StaFact]
+    public void OmittedWidowControl_UsesWordDefaultWhileExplicitOffDoesNot()
+    {
+        var document = TextDocument.CreateEmpty();
+        document.Blocks.Clear();
+        document.Blocks.Add(new Paragraph("Default widow behavior."));
+        document.Blocks.Add(new Paragraph("Explicit widow off.")
+        {
+            Formatting = ParagraphFormatting.Default with { WidowControl = false, WidowControlIsSet = true }
+        });
+
+        var view = new DocumentView();
+        view.LoadModel(document);
+
+        var paragraphs = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().ToList();
+        paragraphs[0].KeepTogether.Should().BeTrue();
+        paragraphs[1].KeepTogether.Should().BeFalse();
+
+        var roundTripped = RoundTrip(document).Blocks.OfType<Paragraph>().ToList();
+        roundTripped[0].Formatting.KeepLinesTogether.Should().BeFalse();
+        roundTripped[0].Formatting.WidowControlIsSet.Should().BeFalse();
+    }
+
+    [StaFact]
     public void Table_RoundTrips()
     {
         var doc = TextDocument.CreateEmpty();

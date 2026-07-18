@@ -2363,9 +2363,11 @@ public static class DocxWriter
         // and before widowControl in CT_PPr order. Size still lives on the leading run's rPr.
         if (paragraph.DropCap is { } dropCap)
             pPr.Add(BuildDropCapFrameProperties(dropCap));
-        // Widow/orphan control (w:widowControl); only emitted when enabled (FreeW defaults it off).
+        // Widow/orphan control: preserve explicit off independently from Word's omitted/default-on form.
         if (f.WidowControl)
             pPr.Add(new XElement(W + "widowControl"));
+        else if (f.WidowControlIsSet)
+            pPr.Add(new XElement(W + "widowControl", new XAttribute(W + "val", "0")));
         // numPr — list numbering (CT_PPrBase order: after widowControl, before suppressLineNumbers).
         if (f.ListKind != ListKind.None)
         {

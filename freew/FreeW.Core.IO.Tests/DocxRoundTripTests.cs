@@ -759,6 +759,21 @@ public class DocxRoundTripTests
     }
 
     [Fact]
+    public void ExplicitOffWidowControl_RoundTrips()
+    {
+        var doc = new TextDocument();
+        doc.Blocks.Add(new Paragraph("widow control off")
+        {
+            Formatting = ParagraphFormatting.Default with { WidowControl = false, WidowControlIsSet = true }
+        });
+
+        var result = RoundTrip(doc).Paragraphs.First().Formatting;
+
+        result.WidowControl.Should().BeFalse();
+        result.WidowControlIsSet.Should().BeTrue();
+    }
+
+    [Fact]
     public void PlainParagraph_HasNoFlowControl()
     {
         var doc = new TextDocument();
@@ -769,6 +784,7 @@ public class DocxRoundTripTests
         formatting.KeepWithNext.Should().BeFalse();
         formatting.KeepLinesTogether.Should().BeFalse();
         formatting.WidowControl.Should().BeFalse();
+        formatting.WidowControlIsSet.Should().BeFalse();
     }
 
     [Fact]

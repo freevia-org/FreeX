@@ -3055,7 +3055,7 @@ public sealed class DocumentView : RichTextBox
     public void ToggleWidowControl()
     {
         var enable = SelectedModelParagraphs().Any(p => !p.Formatting.WidowControl);
-        FormatSelectedModelParagraphs(f => f with { WidowControl = enable });
+        FormatSelectedModelParagraphs(f => f with { WidowControl = enable, WidowControlIsSet = true });
     }
 
     /// <summary>
@@ -4126,6 +4126,7 @@ public sealed class DocumentView : RichTextBox
             KeepWithNext       = keepWithNext,
             KeepLinesTogether  = keepLinesTogether,
             WidowControl       = widowControl,
+            WidowControlIsSet  = true,
             PageBreakBefore    = pageBreakBefore,
             SuppressAutoHyphens= suppressAutoHyphens,
         });
@@ -4486,6 +4487,25 @@ public sealed class DocumentView : RichTextBox
                         listParagraphs.Select(p => p.Paragraph.Formatting.ListLevel),
                         _model.MultiLevelList.NumberFormats)
                     : null;
+                if (kind == ListKind.MultiLevel
+                    && listParagraphs.Count == 1
+                    && string.Equals(listParagraphs[0].Paragraph.StyleId, "Heading1", StringComparison.OrdinalIgnoreCase))
+                {
+                    var listParagraph = listParagraphs[0];
+                    var wpfParagraph = BuildParagraph(
+                        listParagraph.Paragraph,
+                        _model,
+                        sourceBlockIndex: listParagraph.BlockIndex,
+                        leadingWrapReservations: leadingWrapReservations.TryGetValue(
+                            listParagraph.BlockIndex,
+                            out var listReservations)
+                            ? listReservations
+                            : null,
+                        suppressedFloatingWrapRuns: suppressedFloatingWrapRuns);
+                    PrependMultiLevelMarker(wpfParagraph, markers![0], _model);
+                    flow.Blocks.Add(wpfParagraph);
+                    continue;
+                }
                 for (var p = 0; p < listParagraphs.Count; p++)
                 {
                     var wpfParagraph = BuildParagraph(
@@ -6469,7 +6489,7 @@ public sealed class DocumentView : RichTextBox
     /// list level round-trip through an edit/commit cycle, which keeps the accumulated outline markers
     /// (1.1.1) stable after editing. Defaults to 0 (the non-list / top-level case).
     /// </para>
-    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null);
+    private sealed record ParagraphTag(IReadOnlyList<TabStop> TabStops, IReadOnlyList<string> BookmarkNames, bool PageBreakBefore = false, bool WidowControl = false, bool WidowControlIsSet = false, string? StyleId = null, int ListLevel = 0, ParagraphBorder? Border = null, ShadingPattern ShadingPattern = ShadingPattern.Clear, bool SuppressAutoHyphens = false, FreeW.Core.Model.Section? SectionBreak = null, DropCapLayoutIntent? DropCap = null, ListKind? ListKind = null, bool KeepLinesTogether = false);
 
     private sealed record RenderedTabStopSpan(
         ParagraphTabStopPlacementPlan Plan,
@@ -6688,7 +6708,12 @@ public sealed class DocumentView : RichTextBox
         var tag = wpfParagraph.Tag as ParagraphTag;
         var modelParagraph = new ModelParagraph
         {
-            Formatting = ReadParagraphFormatting(wpfParagraph, document),
+            Formatting = ReadParagraphFormatting(wpfParagraph, document) with
+            {
+                ListKind = tag?.ListKind ?? ListKind.None,
+                ListLevel = tag?.ListLevel ?? 0,
+                WidowControlIsSet = tag?.WidowControlIsSet ?? false
+            },
             // The bookmark names, style id, and section break (invisible markers with no FlowDocument slot)
             // are preserved across edits via the paragraph Tag (see ParagraphTag).
             StyleId = tag?.StyleId is { Length: > 0 } styleId ? styleId : null,
@@ -8057,10 +8082,12 @@ public sealed class DocumentView : RichTextBox
             // they survive an edit/commit cycle without a Tag. WidowControl has no FlowDocument slot and
             // is carried on the Tag instead (see below).
             KeepWithNext = paraFmt.KeepWithNext,
+            // WPF has no widow/orphan setting. KeepTogether is the closest behavior for Word's default-on
+            // widow control, especially for the common two-line paragraph at a page boundary.
             // Word keeps the caption/text run with a large inline object when the object would otherwise
             // cross a page boundary. Apply the same paragraph-level constraint to inline charts, SmartArt,
             // WordArt, and images while preserving the explicit model setting for ordinary paragraphs.
-            KeepTogether = paraFmt.KeepLinesTogether || paragraph.Runs.Any(run =>
+            KeepTogether = paraFmt.KeepLinesTogether || !paraFmt.WidowControlIsSet || paraFmt.WidowControl || paragraph.Runs.Any(run =>
                 run.Chart is { IsFloating: false } ||
                 run.SmartArt is { IsFloating: false } ||
                 run.WordArt is { IsFloating: false } ||
@@ -8100,11 +8127,9 @@ public sealed class DocumentView : RichTextBox
 
         // WPF's FlowDocument Paragraph has no tab-stop API, so the renderer emits planned inline spacer
         // elements for ordinary text tabs below. A bookmark name is an invisible marker with no FlowDocument
-        // representation, and page-break-before has no native slot. To avoid losing any of them on an
-        // edit/commit cycle, we carry them on the paragraph's Tag (a ParagraphTag) and read them back
-        // verbatim on commit; the round-trip is exact.
-        // WidowControl has no FlowDocument property either, so it joins the Tag alongside tab stops,
-        // bookmark names and page-break-before; carried verbatim and recovered on commit.
+        // representation, and page-break-before has no native slot. Keep the model metadata on every
+        // paragraph Tag so an edit/commit cycle cannot serialize renderer-only flow properties such as the
+        // widow-control approximation as authored keep-lines-together.
         // The list nesting depth is carried on the Tag too: the editor flattens a list run into one WPF
         // List, so depth has no structural slot and would otherwise reset to 0 on commit (see ParagraphTag).
         // The border's line style / per-edge flags and the shading pattern have no WPF Border equivalent,
@@ -8113,15 +8138,16 @@ public sealed class DocumentView : RichTextBox
         var borderNeedsTag = paraFmt.Border is { } b
             && (b.LineStyle != BorderLineStyle.Single || !b.Top || !b.Left || !b.Bottom || !b.Right);
         var shadingNeedsTag = paraFmt.ShadingColorHex is { Length: > 0 } && paraFmt.ShadingPattern != ShadingPattern.Clear;
-        if (paraFmt.TabStops.Count > 0 || paragraph.BookmarkNames.Count > 0 || paraFmt.PageBreakBefore || paraFmt.WidowControl || paragraph.StyleId is { Length: > 0 } || paraFmt.ListLevel > 0 || borderNeedsTag || shadingNeedsTag || paraFmt.SuppressAutoHyphens || paragraph.SectionBreak is not null || paragraph.DropCap is not null)
-            wpf.Tag = new ParagraphTag(
-                paraFmt.TabStops, [.. paragraph.BookmarkNames], paraFmt.PageBreakBefore, paraFmt.WidowControl,
-                paragraph.StyleId, paraFmt.ListLevel,
-                borderNeedsTag ? paraFmt.Border : null,
-                shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
-                paraFmt.SuppressAutoHyphens,
-                paragraph.SectionBreak,
-                paragraph.DropCap);
+        wpf.Tag = new ParagraphTag(
+            paraFmt.TabStops, [.. paragraph.BookmarkNames], paraFmt.PageBreakBefore, paraFmt.WidowControl, paraFmt.WidowControlIsSet,
+            paragraph.StyleId, paraFmt.ListLevel,
+            borderNeedsTag ? paraFmt.Border : null,
+            shadingNeedsTag ? paraFmt.ShadingPattern : ShadingPattern.Clear,
+            paraFmt.SuppressAutoHyphens,
+            paragraph.SectionBreak,
+            paragraph.DropCap,
+            paraFmt.ListKind != ListKind.None ? paraFmt.ListKind : null,
+            paraFmt.KeepLinesTogether);
 
         var runs = paragraph.Runs;
         var dropCapPlan = !inTableCell
@@ -14312,7 +14338,10 @@ public sealed class DocumentView : RichTextBox
         var pageBreakBefore = paragraph.Tag is ParagraphTag { PageBreakBefore: true };
         // WidowControl rides on the Tag (no FlowDocument property); KeepWithNext/KeepLinesTogether read
         // straight back off the WPF Paragraph's native properties set in BuildParagraph.
-        var widowControl = paragraph.Tag is ParagraphTag { WidowControl: true };
+        var tag = paragraph.Tag as ParagraphTag;
+        var widowControl = tag?.WidowControl ?? false;
+        var widowControlIsSet = tag?.WidowControlIsSet ?? false;
+        var keepLinesTogether = tag?.KeepLinesTogether ?? paragraph.KeepTogether;
         // SuppressAutoHyphens has no FlowDocument property either, so it rides on the Tag like WidowControl.
         var suppressAutoHyphens = paragraph.Tag is ParagraphTag { SuppressAutoHyphens: true };
         return ParagraphFormatting.Default with
@@ -14323,8 +14352,9 @@ public sealed class DocumentView : RichTextBox
             // BuildParagraph), so an RTL paragraph survives an edit/commit cycle.
             Rtl = paragraph.FlowDirection == System.Windows.FlowDirection.RightToLeft,
             KeepWithNext = paragraph.KeepWithNext,
-            KeepLinesTogether = paragraph.KeepTogether,
+            KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            WidowControlIsSet = widowControlIsSet,
             SpaceBeforePt = paragraph.Margin.Top / PxPerPoint,
             SpaceAfterPt = paragraph.Margin.Bottom / PxPerPoint,
             // An exact line height (BlockLineHeight, set for the Exact rule) reads back as an absolute

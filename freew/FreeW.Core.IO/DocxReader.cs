@@ -4494,11 +4494,12 @@ public static class DocxReader
 
         // w:pageBreakBefore is a toggle: present (and not val="false"/"0") means a page break is forced.
         var pageBreakBefore = ReadToggle(pPr, "pageBreakBefore");
-        // Flow control toggles read the same way as pageBreakBefore. widowControl is read literally:
-        // absent means false (FreeW does not apply Word's implicit default-on), keeping round-trips stable.
+        // Flow control toggles read the same way as pageBreakBefore. Preserve presence for widowControl:
+        // Word treats an absent token as enabled, while an explicit val="0" remains disabled.
         var keepWithNext = ReadToggle(pPr, "keepNext");
         var keepLinesTogether = ReadToggle(pPr, "keepLines");
         var widowControl = ReadToggle(pPr, "widowControl");
+        var widowControlIsSet = pPr.Element(W + "widowControl") is not null;
         // Suppress automatic hyphenation for this paragraph (w:suppressAutoHyphens), read as a toggle.
         var suppressAutoHyphens = ReadToggle(pPr, "suppressAutoHyphens");
         // Right-to-left paragraph direction (w:bidi), read as a toggle like the flow-control flags.
@@ -4552,6 +4553,7 @@ public static class DocxReader
             KeepWithNext = keepWithNext,
             KeepLinesTogether = keepLinesTogether,
             WidowControl = widowControl,
+            WidowControlIsSet = widowControlIsSet,
             SuppressAutoHyphens = suppressAutoHyphens,
             Rtl = rtl,
             LineRule = lineRule,
