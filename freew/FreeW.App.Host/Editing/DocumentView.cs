@@ -6244,7 +6244,7 @@ public sealed class DocumentView : RichTextBox
         double pageHeightDip = 1056)
     {
         if (options.IsPicture)
-            return BuildPictureWatermarkBrush(options, pageColor);
+            return BuildPictureWatermarkBrush(options, pageColor, pageWidthDip, pageHeightDip);
 
         var baseColor = ParseColor(options.FontColorHex, Color.FromRgb(0x80, 0x80, 0x80));
         var alpha = (byte)Math.Clamp((int)Math.Round(options.Opacity * 255), 0, 255);
@@ -6298,7 +6298,11 @@ public sealed class DocumentView : RichTextBox
         };
     }
 
-    private static Brush BuildPictureWatermarkBrush(WatermarkOptions options, Color pageColor)
+    private static Brush BuildPictureWatermarkBrush(
+        WatermarkOptions options,
+        Color pageColor,
+        double pageWidthDip,
+        double pageHeightDip)
     {
         var source = TryDecodeRaster(options.ImageBytes);
         if (source is null)
@@ -6306,12 +6310,21 @@ public sealed class DocumentView : RichTextBox
 
         var plan = WatermarkVisualPlanner.BuildPictureLayout(
             options,
-            pageWidthDip: 1,
-            pageHeightDip: 1,
+            pageWidthDip,
+            pageHeightDip,
             sourceWidthDip: source.PixelWidth,
             sourceHeightDip: source.PixelHeight);
         if (plan is null)
             return new SolidColorBrush(pageColor);
+
+        var width = Math.Max(1, pageWidthDip);
+        var height = Math.Max(1, pageHeightDip);
+        var normalizedX = plan.XDip / width;
+        var normalizedY = plan.YDip / height;
+        var normalizedWidth = plan.WidthDip / width;
+        var normalizedHeight = plan.HeightDip / height;
+        var normalizedCenterX = plan.CenterXDip / width;
+        var normalizedCenterY = plan.CenterYDip / height;
 
         var group = new System.Windows.Media.DrawingGroup();
         group.Children.Add(new GeometryDrawing(
@@ -6324,11 +6337,11 @@ public sealed class DocumentView : RichTextBox
             Opacity = plan.Opacity
         };
         if (Math.Abs(plan.RotationDegrees) > 0.01)
-            imageGroup.Transform = new RotateTransform(plan.RotationDegrees, plan.CenterXDip, plan.CenterYDip);
+            imageGroup.Transform = new RotateTransform(plan.RotationDegrees, normalizedCenterX, normalizedCenterY);
 
         imageGroup.Children.Add(new ImageDrawing(
             source,
-            new Rect(plan.XDip, plan.YDip, plan.WidthDip, plan.HeightDip)));
+            new Rect(normalizedX, normalizedY, normalizedWidth, normalizedHeight)));
         group.Children.Add(imageGroup);
 
         return new DrawingBrush(group)

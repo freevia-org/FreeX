@@ -4225,9 +4225,8 @@ public static class DocxReader
 
     /// <summary>
     /// Recovers the FreeW gallery preset ids (LayoutId / ColorSchemeId / StyleId) from the three diagram
-    /// parts (layout / colors / quickStyle). When a FreeW extension attribute (<c>freewLayoutId</c> /
-    /// <c>freewColorId</c> / <c>freewStyleId</c>) is present it is used directly for lossless round-trip;
-    /// otherwise the uniqueId suffix is used as a best-effort fallback.
+    /// parts (layout / colors / quickStyle). FreeW stores color and style IDs in a schema-valid extension list;
+    /// legacy root attributes remain readable. Otherwise the uniqueId suffix is used as a best-effort fallback.
     /// </summary>
     private static void ReadSmartArtGalleryIds(
         XElement? relIds,
@@ -4263,7 +4262,8 @@ public static class DocxReader
             var qsRoot = LoadPart(archive, qsPath)?.Root;
             if (qsRoot is not null)
             {
-                var freewId = qsRoot.Attribute("freewStyleId")?.Value;
+                var freewId = ReadFreeWSmartArtGalleryId(qsRoot, "style")
+                    ?? qsRoot.Attribute("freewStyleId")?.Value;
                 if (freewId is not null)
                     target.StyleId = freewId;
                 else
@@ -4283,7 +4283,8 @@ public static class DocxReader
             var csRoot = LoadPart(archive, csPath)?.Root;
             if (csRoot is not null)
             {
-                var freewId = csRoot.Attribute("freewColorId")?.Value;
+                var freewId = ReadFreeWSmartArtGalleryId(csRoot, "colorScheme")
+                    ?? csRoot.Attribute("freewColorId")?.Value;
                 if (freewId is not null)
                     target.ColorSchemeId = freewId;
                 else
@@ -4323,6 +4324,16 @@ public static class DocxReader
         return lastSlash >= 0 && lastSlash < uniqueId.Length - 1
             ? uniqueId[(lastSlash + 1)..]
             : null;
+    }
+
+    private static string? ReadFreeWSmartArtGalleryId(XElement root, string elementName)
+    {
+        XNamespace freew = "http://schemas.freew.dev/smartart-gallery/2026";
+        return root.Element(Dgm + "extLst")?
+            .Elements(A + "ext")
+            .Elements(freew + elementName)
+            .Select(element => element.Attribute("id")?.Value)
+            .FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
     }
 
     /// <summary>
@@ -5091,6 +5102,12 @@ public static class DocxReader
     /// </summary>
     private static void ReadNativeVmlWatermark(ZipArchive archive, TextDocument document)
     {
+        if (document.Page.WatermarkOptions is { IsPicture: true } existingPictureWatermark)
+        {
+            ApplyNativeVmlPictureGeometry(archive, document, existingPictureWatermark);
+            return;
+        }
+
         if (document.Page.EffectiveWatermark is not null)
             return;
 
@@ -5142,13 +5159,46 @@ public static class DocxReader
             }
 
             var pictureRotation = ParseVmlStyleNumber(pictureShape.Attribute("style")?.Value, "rotation");
+            var (pictureWidthPt, pictureHeightPt) = ParseVmlShapeSize(pictureShape.Attribute("style")?.Value);
             document.Page.WatermarkOptions = new WatermarkOptions(string.Empty)
             {
                 ImageBytes = imageBytes,
+                NativeVmlPictureWidthPt = pictureWidthPt > 0 ? pictureWidthPt : null,
+                NativeVmlPictureHeightPt = pictureHeightPt > 0 ? pictureHeightPt : null,
                 Layout = pictureRotation is { } pictureRotationValue && Math.Abs(pictureRotationValue) < 0.01
                     ? WatermarkLayout.Horizontal
                     : WatermarkLayout.Diagonal,
                 Opacity = ParseVmlOpacity(pictureFill?.Attribute("opacity")?.Value)
+            };
+            return;
+        }
+    }
+
+    // FreeW metadata remains authoritative for picture content and editing semantics. VML adds
+    // supplemental source geometry that is not represented by the legacy custom properties.
+    private static void ApplyNativeVmlPictureGeometry(
+        ZipArchive archive,
+        TextDocument document,
+        WatermarkOptions existingPictureWatermark)
+    {
+        foreach (var entry in archive.Entries
+                     .Where(entry => entry.FullName.StartsWith("word/header", StringComparison.OrdinalIgnoreCase)
+                         && entry.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase)))
+        {
+            var pictureShape = LoadPart(archive, entry.FullName)?.Root?
+                .Descendants(V + "shape")
+                .FirstOrDefault(shape => shape.Attribute("id")?.Value == "PowerPlusPictureWaterMarkObject");
+            if (pictureShape is null)
+                continue;
+
+            var (widthPt, heightPt) = ParseVmlShapeSize(pictureShape.Attribute("style")?.Value);
+            if (widthPt <= 0 || heightPt <= 0)
+                continue;
+
+            document.Page.WatermarkOptions = existingPictureWatermark with
+            {
+                NativeVmlPictureWidthPt = widthPt,
+                NativeVmlPictureHeightPt = heightPt
             };
             return;
         }

@@ -1187,7 +1187,7 @@ public sealed class VisualEvidencePlannerTests
             "RadicalDegree=1",
             "Superscript=2"]);
         equations.BaselineRoleCounts.Should().Contain([
-            "Normal=55",
+            "Normal=51",
             "Subscript=4",
             "Superscript=5"]);
         equations.ElementGeometrySignatures.Should().Contain(signature =>
@@ -1242,12 +1242,12 @@ public sealed class VisualEvidencePlannerTests
             && signature.Contains("operandGapEm=0.16", StringComparison.Ordinal));
         equations.SpacingGeometrySignatures.Should().Contain(signature =>
             signature.Contains("spacing=matrix", StringComparison.Ordinal)
-            && signature.Contains("rowGapEm=0.28", StringComparison.Ordinal)
-            && signature.Contains("columnGapEm=0.55", StringComparison.Ordinal)
+            && signature.Contains("rowGapEm=0.08", StringComparison.Ordinal)
+            && signature.Contains("columnGapEm=0.85", StringComparison.Ordinal)
             && signature.Contains("delimiterGapEm=0.12", StringComparison.Ordinal));
         equations.SpacingGeometrySignatures.Should().Contain(signature =>
             signature.Contains("spacing=equationarray", StringComparison.Ordinal)
-            && signature.Contains("rowGapEm=0.28", StringComparison.Ordinal)
+            && signature.Contains("rowGapEm=0.08", StringComparison.Ordinal)
             && signature.Contains("delimiterGapEm=0", StringComparison.Ordinal));
     }
 
@@ -2402,6 +2402,35 @@ public sealed class VisualEvidencePlannerTests
         plan.YDip.Should().BeApproximately(300, 0.001);
         plan.Opacity.Should().Be(1);
         plan.RotationDegrees.Should().Be(-45);
+    }
+
+    [Fact]
+    public void PictureWatermarkLayoutPlanner_UsesNativeVmlShapeSizeBeforeAutoFit()
+    {
+        var options = new WatermarkOptions(string.Empty)
+        {
+            ImageBytes = [1, 2, 3],
+            ScalePct = 40,
+            NativeVmlPictureWidthPt = 468,
+            NativeVmlPictureHeightPt = 281,
+            Layout = WatermarkLayout.Horizontal,
+            Opacity = 0.65
+        };
+
+        var plan = WatermarkVisualPlanner.BuildPictureLayout(
+            options,
+            pageWidthDip: 816,
+            pageHeightDip: 1056,
+            sourceWidthDip: 1,
+            sourceHeightDip: 1);
+
+        plan.Should().NotBeNull();
+        plan!.WidthDip.Should().BeApproximately(624, 0.001);
+        plan.HeightDip.Should().BeApproximately(374.667, 0.001);
+        plan.XDip.Should().BeApproximately(96, 0.001);
+        plan.YDip.Should().BeApproximately(340.667, 0.001);
+        plan.Opacity.Should().BeApproximately(0.65, 0.001);
+        plan.RotationDegrees.Should().Be(0);
     }
 
     [Fact]
