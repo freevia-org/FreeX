@@ -7541,6 +7541,12 @@ public sealed class DocumentView : RichTextBox
             var rowHeightPx = modelRow.HeightPt is { } heightPt && heightPt > 0
                 ? (double?)(heightPt * PxPerPoint)
                 : null;
+            if (rowHeightPx is { } authoredRowHeight && modelRow.HeightRule == TableRowHeightRule.Exact)
+            {
+                // FlowDocument adds table-cell chrome outside the BlockUI content host. Reserve
+                // that measured overhead so an exact Word row does not grow by the full amount.
+                rowHeightPx = Math.Max(0, authoredRowHeight - 2);
+            }
             // Track the running grid-column position so vertical-merge runs can be matched up by
             // column even when earlier cells span multiple grid columns.
             var gridColumn = 0;

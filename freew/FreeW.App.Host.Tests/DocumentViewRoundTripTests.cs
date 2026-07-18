@@ -932,6 +932,31 @@ public sealed class DocumentViewRoundTripTests
             "spacer MinHeight must equal HeightPt × PxPerPoint");
     }
 
+    [StaFact]
+    public void TableRow_ExactHeight_ReservesCellChromeOutsideTheContentHost()
+    {
+        const double heightPt = 60.0;
+        const double pxPerPt = 96.0 / 72.0;
+
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var table = Table.Create(1, 1);
+        table.Rows[0].HeightPt = heightPt;
+        table.Rows[0].HeightRule = TableRowHeightRule.Exact;
+        table.Rows[0].Cells[0].Paragraphs[0] = new Paragraph("Content");
+        doc.Blocks.Add(table);
+
+        var view = new DocumentView();
+        view.LoadModel(doc);
+
+        var wpfCell = view.Document.Blocks.OfType<System.Windows.Documents.Table>().Single()
+            .RowGroups.Single().Rows.Single().Cells.Single();
+        var host = wpfCell.Blocks.OfType<BlockUIContainer>().Single();
+        var grid = host.Child.Should().BeOfType<System.Windows.Controls.Grid>().Subject;
+        grid.MinHeight.Should().BeApproximately(heightPt * pxPerPt - 2, 0.01,
+            "exact row heights include the surrounding FlowDocument cell chrome");
+    }
+
     /// <summary>
     /// Cell vertical alignment fix: <see cref="TableCellVerticalAlignment"/> survives the
     /// Build→Commit round-trip (stashed in <c>TableCellTag</c> and recovered by <c>ReadTable</c>).
