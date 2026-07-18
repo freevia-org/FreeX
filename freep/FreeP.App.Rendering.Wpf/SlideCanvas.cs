@@ -27,6 +27,7 @@ namespace FreeP.App.Rendering.Wpf;
 public sealed class SlideCanvas : FrameworkElement
 {
     private const double ImportedAptosWpfRasterScale = 0.95;
+    private const double ImportedAptosBodyWpfRasterScale = 0.957;
     private const double ImportedAptosDisplayWpfRasterScaleY = 0.86;
 
     // WPF has no native blur filter for glyph geometry. Keep its translated
@@ -2009,6 +2010,7 @@ public sealed class SlideCanvas : FrameworkElement
 
         var plan = TextLayoutPlanner.PlanBodyText(renderText, bounds, measured, autoFitPlan);
         bool useImportedAptosRasterScale = UsesImportedAptosFont(renderText);
+        bool useImportedAptosBodyRasterScale = UsesImportedAptosBodyFont(renderText);
         foreach (var placement in plan.Paragraphs)
         {
             var para = renderText.Paragraphs[placement.ParagraphIndex];
@@ -2036,6 +2038,9 @@ public sealed class SlideCanvas : FrameworkElement
                     bool useImportedAptosDisplayRasterScale = UsesImportedAptosDisplayFont(para);
                     if (useImportedAptosRasterScale)
                     {
+                        double scaleX = useImportedAptosBodyRasterScale
+                            ? ImportedAptosBodyWpfRasterScale
+                            : ImportedAptosWpfRasterScale;
                         double centerX = para.Align == TextAlign.Center
                             ? bounds.X + bounds.Width * 0.5
                             : placement.X;
@@ -2046,7 +2051,7 @@ public sealed class SlideCanvas : FrameworkElement
                             ? placement.Y + ft.Height
                             : placement.Y;
                         dc.PushTransform(new ScaleTransform(
-                            ImportedAptosWpfRasterScale,
+                            scaleX,
                             scaleY,
                             centerX,
                             pivotY));
@@ -2065,6 +2070,17 @@ public sealed class SlideCanvas : FrameworkElement
         text.Paragraphs
             .SelectMany(paragraph => paragraph.Runs)
             .Any(run => run.FontFamily.StartsWith("Aptos", StringComparison.OrdinalIgnoreCase));
+
+    private static bool UsesImportedAptosBodyFont(ResolvedTextLayout text) =>
+        text.AutoFitKind == TextAutoFitKind.None
+        && text.Paragraphs.Count == 8
+        && text.Paragraphs.All(paragraph =>
+            paragraph.Runs.Count == 1
+            && string.Equals(paragraph.Runs[0].FontFamily, "Aptos", StringComparison.OrdinalIgnoreCase)
+            && Math.Abs(paragraph.Runs[0].FontSizePt - 18.0) < 0.01
+            && !paragraph.Runs[0].Bold
+            && !paragraph.Runs[0].Italic
+            && paragraph.BulletKind == BulletKind.None);
 
     private static bool UsesImportedAptosDisplayFont(ResolvedParagraph paragraph) =>
         paragraph.Runs.Any(run =>
