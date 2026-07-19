@@ -429,6 +429,7 @@ public sealed partial class MainWindow
         {
             UpdateCriteria();
         };
+        UpdateCriteria();
 
         var panel = new StackPanel { Spacing = 4 };
         panel.Children.Add(new TextBlock

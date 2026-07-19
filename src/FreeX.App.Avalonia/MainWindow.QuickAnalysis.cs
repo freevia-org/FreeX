@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -15,6 +16,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private Flyout? _quickAnalysisFlyout;
+
     /// <summary>
     /// Opens the Quick Analysis popup for the current multi-cell selection. The UI-free
     /// <see cref="QuickAnalysisShellRequestPlanner"/> plans selection support, grouped display items,
@@ -22,10 +25,10 @@ public sealed partial class MainWindow
     /// without a shell command (PivotTable, running/percent totals) stay visible but report that they are
     /// not yet available.
     /// </summary>
-    private async Task ShowQuickAnalysisDialogAsync()
+    private Task ShowQuickAnalysisDialogAsync()
     {
         if (!TryCommitPendingFormulaEdit())
-            return;
+            return Task.CompletedTask;
 
         var selection = _session.SelectedRange;
         var request = QuickAnalysisShellRequestPlanner.Build(
@@ -36,21 +39,17 @@ public sealed partial class MainWindow
         if (!openPlan.CanOpen || openPlan.Selection is not { } range)
         {
             ShowQuickAnalysisOpenIssue(openPlan);
-            return;
+            return Task.CompletedTask;
         }
 
         var shellPlan = openPlan.ShellPlan;
-        var dialog = new Window
+        _quickAnalysisFlyout?.Hide();
+        var flyout = new Flyout
         {
-            Title = UiText.Get("TableLoc_QaDialogTitle"),
-            Width = 500,
-            Height = 460,
-            MinWidth = 420,
-            MinHeight = 320,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ShowInTaskbar = false,
+            Placement = PlacementMode.BottomEdgeAlignedRight,
+            ShowMode = FlyoutShowMode.Standard,
         };
-        AutomationProperties.SetAutomationId(dialog, "QuickAnalysisDialog");
+        _quickAnalysisFlyout = flyout;
 
         var groupsPanel = new StackPanel { Spacing = 14 };
         foreach (var group in shellPlan.Groups)
@@ -65,47 +64,60 @@ public sealed partial class MainWindow
             var buttonRow = new WrapPanel { Orientation = Orientation.Horizontal };
             foreach (var item in group.Items)
             {
-                buttonRow.Children.Add(CreateQuickAnalysisItemButton(dialog, item));
+                buttonRow.Children.Add(CreateQuickAnalysisItemButton(flyout, item));
             }
 
             groupsPanel.Children.Add(buttonRow);
         }
 
-        var closeButton = new Button { Content = UiText.Get("TableLoc_Close"), IsCancel = true };
+        var closeButton = new Button { Content = UiText.Get("TableLoc_Close") };
         ApplyDialogButtonChrome(closeButton, 84);
         AutomationProperties.SetAutomationId(closeButton, "QuickAnalysisCloseButton");
-        closeButton.Click += (_, _) => dialog.Close();
+        closeButton.Click += (_, _) => flyout.Hide();
 
         var buttonBar = AvaloniaCompactDialogChrome.CreateActionRow([closeButton], new Thickness(0, 10, 0, 0));
         DockPanel.SetDock(buttonBar, Dock.Bottom);
 
-        dialog.Content = new DockPanel
+        var content = new Border
         {
-            Margin = new Thickness(16),
-            Children =
+            Width = 500,
+            MaxHeight = 460,
+            Padding = new Thickness(16),
+            Child = new DockPanel
             {
-                buttonBar,
-                new StackPanel
+                Children =
                 {
-                    Spacing = 10,
-                    Children =
+                    buttonBar,
+                    new StackPanel
                     {
-                        new TextBlock
+                        Spacing = 10,
+                        Children =
                         {
-                            Text = UiText.Format("TableLoc_QaSuggestionsFor", FormatRangeReference(range)),
-                            Foreground = HeaderForeground,
-                            TextWrapping = TextWrapping.Wrap,
+                            new TextBlock
+                            {
+                                Text = UiText.Format("TableLoc_QaSuggestionsFor", FormatRangeReference(range)),
+                                Foreground = HeaderForeground,
+                                TextWrapping = TextWrapping.Wrap,
+                            },
+                            new ScrollViewer { Content = groupsPanel },
                         },
-                        new ScrollViewer { Content = groupsPanel },
                     },
                 },
             },
         };
+        AutomationProperties.SetAutomationId(content, "QuickAnalysisFlyout");
+        flyout.Content = content;
+        flyout.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_quickAnalysisFlyout, flyout))
+                _quickAnalysisFlyout = null;
+        };
 
-        await dialog.ShowDialog(this);
+        flyout.ShowAt((Control?)_activeCellBorder ?? _sheetGridHost);
+        return Task.CompletedTask;
     }
 
-    private Button CreateQuickAnalysisItemButton(Window dialog, QuickAnalysisShellItemPlan item)
+    private Button CreateQuickAnalysisItemButton(Flyout flyout, QuickAnalysisShellItemPlan item)
     {
         var button = new Button
         {
@@ -118,7 +130,7 @@ public sealed partial class MainWindow
         ToolTip.SetTip(button, item.ToolTip);
         button.Click += (_, _) =>
         {
-            dialog.Close();
+            flyout.Hide();
             ApplyQuickAnalysisItem(item);
         };
         return button;

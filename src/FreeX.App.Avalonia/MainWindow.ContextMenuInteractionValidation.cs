@@ -65,6 +65,25 @@ public sealed partial class MainWindow
         return rows;
     }
 
+    internal async Task<InteractionValidationResult> RunContextMenuInteractionValidationForTestAsync(string id)
+    {
+        var row = BuildContextMenuValidationInventory().Single(candidate => candidate.Id == id);
+        var evidence = row.IsEnabled
+            ? await ExerciseContextMenuProductionRouteAsync(row)
+            : new ContextMenuDispatchEvidence(
+                "passed",
+                "explicitly-disabled",
+                row.ProductionRoute,
+                "The production menu rendered this command disabled; disabled commands are not invoked.");
+        return new InteractionValidationResult(
+            row.Id,
+            "context-menu-command",
+            evidence.Status,
+            evidence.EvidenceLevel,
+            $"{row.Label} | {evidence.Evidence}",
+            evidence.Note);
+    }
+
     private async Task AddContextMenuInteractionResultsAsync(
         List<InteractionValidationResult> results,
         int dispatchStart = 0,
@@ -209,7 +228,7 @@ public sealed partial class MainWindow
         PrepareWorksheetContextFixture(row.VariantId, action);
         var route = row.VariantId.Contains(".picture", StringComparison.Ordinal) ||
             row.VariantId.Contains(".shape", StringComparison.Ordinal) ||
-            row.VariantId.Contains(".textbox", StringComparison.Ordinal) ||
+            row.VariantId.Contains(".text-box", StringComparison.Ordinal) ||
             row.VariantId.Contains(".chart", StringComparison.Ordinal)
                 ? (Action)(() => DispatchDrawingObjectContextMenuCommand(new Free.Shared.Ribbon.RibbonCommandId(action.ToString())))
                 : () => DispatchWorksheetContextMenuCommand(new Free.Shared.Ribbon.RibbonCommandId(action.ToString()));
@@ -366,10 +385,12 @@ public sealed partial class MainWindow
         var snapshot = options.QuickAccessToolbarCommands.ToArray();
         try
         {
-            var commandId = QuickAccessToolbarCommandIds.Redo;
+            var commandId = action == QuickAccessToolbarMenuAction.Add
+                ? QuickAccessToolbarCommandIds.Bold
+                : QuickAccessToolbarCommandIds.Redo;
             options.QuickAccessToolbarCommands = action == QuickAccessToolbarMenuAction.Add
                 ? snapshot.Where(id => !string.Equals(id, commandId, StringComparison.OrdinalIgnoreCase)).ToList()
-                : snapshot.Append(commandId).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                : [QuickAccessToolbarCommandIds.Save, commandId];
             AppOptionsStore.Save(options);
             ApplyAvaloniaQuickAccessCustomization(new QuickAccessToolbarMenuCommand(
                 "",
@@ -398,7 +419,9 @@ public sealed partial class MainWindow
         var chart = new ChartModel
         {
             Type = ChartType.Waterfall,
-            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 4, 2)),
+            FirstRowIsHeader = true,
+            FirstColIsCategories = true,
+            DataRange = new GridRange(new CellAddress(sheet.Id, 1, 1), new CellAddress(sheet.Id, 5, 2)),
         };
         sheet.Charts.Add(chart);
         var pointIndex = row.VariantId.EndsWith("total-point", StringComparison.Ordinal) ? 3 : 0;
@@ -458,9 +481,26 @@ public sealed partial class MainWindow
         Action dispatch)
     {
         var preexisting = OwnedWindows.ToHashSet();
+        var preexistingQuickAnalysisFlyout = _quickAnalysisFlyout;
         var statusBefore = _statusText.Text;
         var canUndoBefore = _session.CanUndo;
         dispatch();
+
+        if (OpensQuickAnalysisFlyout(row))
+        {
+            var flyout = await WaitForQuickAnalysisFlyoutAsync(preexistingQuickAnalysisFlyout);
+            if (flyout is null)
+                return Failed(row, "The production route was expected to open the Quick Analysis flyout, but no flyout opened.");
+
+            flyout.Hide();
+            await Task.Delay(25);
+            return Passed(
+                row,
+                "production-flyout-opened-dismissed",
+                row.ProductionRoute,
+                "The Quick Analysis flyout opened for the supported multi-cell selection and was dismissed without applying an action.");
+        }
+
         Window? dialog;
         if (MayOpenOwnedContextDialog(row))
         {
@@ -508,6 +548,25 @@ public sealed partial class MainWindow
         return OwnedWindows.FirstOrDefault(window => !preexisting.Contains(window));
     }
 
+    private async Task<Flyout?> WaitForQuickAnalysisFlyoutAsync(Flyout? preexisting)
+    {
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(1);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            if (_quickAnalysisFlyout is { IsOpen: true } flyout && !ReferenceEquals(flyout, preexisting))
+                return flyout;
+            await Task.Delay(25);
+        }
+
+        return _quickAnalysisFlyout is { IsOpen: true } candidate && !ReferenceEquals(candidate, preexisting)
+            ? candidate
+            : null;
+    }
+
+    private static bool OpensQuickAnalysisFlyout(ContextMenuValidationDescriptor row) =>
+        row.FamilyId == WorksheetContextFamily &&
+        row.ActionKey == nameof(WorksheetContextMenuAction.QuickAnalysis);
+
     private static bool MayOpenOwnedContextDialog(ContextMenuValidationDescriptor row)
     {
         if (row.FamilyId == SheetTabContextFamily)
@@ -536,7 +595,6 @@ public sealed partial class MainWindow
             nameof(WorksheetContextMenuAction.DeleteRows) or
             nameof(WorksheetContextMenuAction.DeleteColumns) or
             nameof(WorksheetContextMenuAction.CustomSort) or
-            nameof(WorksheetContextMenuAction.QuickAnalysis) or
             nameof(WorksheetContextMenuAction.DefineName) or
             nameof(WorksheetContextMenuAction.CreateTable) or
             nameof(WorksheetContextMenuAction.FormatAsTable) or
@@ -577,6 +635,16 @@ public sealed partial class MainWindow
         sheet.SetCell(address, new TextValue("Context validation"));
         _session.SelectCell(address);
 
+        if (action == WorksheetContextMenuAction.QuickAnalysis)
+        {
+            var end = new CellAddress(sheet.Id, 3, 3);
+            sheet.SetCell(address, new NumberValue(10));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 3), new NumberValue(20));
+            sheet.SetCell(new CellAddress(sheet.Id, 3, 2), new NumberValue(30));
+            sheet.SetCell(end, new NumberValue(40));
+            _session.SelectRange(new GridRange(address, end));
+        }
+
         if (action is WorksheetContextMenuAction.EditComment or
             WorksheetContextMenuAction.ResolveComment or
             WorksheetContextMenuAction.UnresolveComment or
@@ -606,12 +674,26 @@ public sealed partial class MainWindow
             _selectedDrawingObjectKind = SelectionPaneObjectKind.Picture;
             _selectedDrawingObjectId = picture.Id;
         }
-        else if (variantId.Contains(".shape", StringComparison.Ordinal) ||
-                 variantId.Contains(".textbox", StringComparison.Ordinal))
+        else if (variantId.Contains(".shape", StringComparison.Ordinal))
         {
             var shape = EnsureParityShape();
             _selectedDrawingObjectKind = SelectionPaneObjectKind.Shape;
             _selectedDrawingObjectId = shape?.Id;
+        }
+        else if (variantId.Contains(".text-box", StringComparison.Ordinal))
+        {
+            var textBox = sheet.TextBoxes.FirstOrDefault(item => item.IsVisible);
+            if (textBox is null)
+            {
+                textBox = new TextBoxModel
+                {
+                    Anchor = address,
+                    Text = "Context validation text box",
+                };
+                sheet.TextBoxes.Add(textBox);
+            }
+            _selectedDrawingObjectKind = SelectionPaneObjectKind.TextBox;
+            _selectedDrawingObjectId = textBox.Id;
         }
         else if (variantId.Contains(".chart", StringComparison.Ordinal))
         {

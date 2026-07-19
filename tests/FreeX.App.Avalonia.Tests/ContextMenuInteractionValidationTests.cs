@@ -1,3 +1,4 @@
+using Avalonia.Headless;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.Interactions;
 using FreeX.App.Presentation.PivotUI;
@@ -7,8 +8,11 @@ using Xunit.Abstractions;
 
 namespace FreeX.App.Avalonia.Tests;
 
+[Collection("AvaloniaHeadless")]
 public sealed class ContextMenuInteractionValidationTests
 {
+    private static readonly HeadlessUnitTestSession Session =
+        HeadlessUnitTestSession.GetOrStartForAssembly(typeof(RibbonHeadlessApp).Assembly);
     private readonly ITestOutputHelper _output;
 
     public ContextMenuInteractionValidationTests(ITestOutputHelper output) => _output = output;
@@ -111,6 +115,53 @@ public sealed class ContextMenuInteractionValidationTests
         source.Should().NotContain("planned-enabled");
         source.Should().NotContain("planned-disabled");
         source.Should().NotContain("neutral-planner-backed");
+    }
+
+    [Fact]
+    public async Task ProductionDispatch_ObservesQuickAnalysisAndNonPivotFailureFixtures()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var inventory = MainWindow.BuildContextMenuValidationInventory();
+                var ids = inventory
+                    .Where(row =>
+                        row.ActionKey == nameof(WorksheetContextMenuAction.QuickAnalysis) ||
+                        row.VariantId == "context-menu.worksheet.target.text-box" ||
+                        row.FamilyId == "context-menu.quick-access-toolbar" &&
+                            row.ActionKey == nameof(QuickAccessToolbarMenuAction.Remove) ||
+                        row.VariantId == "variant.total-point" ||
+                        row.FamilyId == "context-menu.auto-filter-criteria" &&
+                            row.ActionKey.EndsWith(":=", StringComparison.Ordinal))
+                    .GroupBy(row => row.ActionKey, StringComparer.Ordinal)
+                    .Select(group => group.First().Id)
+                    .ToArray();
+
+                var results = new List<InteractionValidationResult>();
+                foreach (var id in ids)
+                    results.Add(await window.RunContextMenuInteractionValidationForTestAsync(id));
+
+                results.Should().HaveCount(13);
+                results.Should().OnlyContain(result => result.Status == "passed", because:
+                    string.Join(Environment.NewLine, results.Select(result =>
+                        $"{result.Id}: {result.EvidenceLevel} | {result.Note}")));
+
+                var unsupportedChartSize = inventory.Single(row =>
+                    row.VariantId == "context-menu.worksheet.target.chart" &&
+                    row.ActionKey == nameof(WorksheetContextMenuAction.ChartSizeAndProperties));
+                var unsupportedResult = await window.RunContextMenuInteractionValidationForTestAsync(
+                    unsupportedChartSize.Id);
+                unsupportedResult.Status.Should().Be("failed");
+                unsupportedResult.Note.Should().Contain("no dialog appeared");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
     }
 
     private static void AssertActionSet<TAction>(
