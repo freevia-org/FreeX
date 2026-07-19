@@ -51,6 +51,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowPlaybackPlanner.PlanTransition(");
         source.Should().Contain("PlaySplitTransition(");
         source.Should().Contain("PlayBlindsTransition(");
+        source.Should().Contain("SlideShowPlaybackPlanner.BlindsBandCount");
         source.Should().Contain("PlayRandomBarsTransition(");
         source.Should().Contain("PlayStripsTransition(");
         source.Should().Contain("PlayWheelTransition(");
