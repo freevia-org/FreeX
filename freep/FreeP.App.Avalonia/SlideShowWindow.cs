@@ -925,7 +925,9 @@ public sealed class SlideShowWindow : Window
                         || (a.Kind == AnimationKind.Exit
                             && (a.Preset == AnimationPreset.Appear
                                 || a.Preset == AnimationPreset.Fade
-                                || a.Preset == AnimationPreset.FlyIn))
+                                || a.Preset == AnimationPreset.FlyIn
+                                || a.Preset == AnimationPreset.Wipe
+                                || a.Preset == AnimationPreset.Split))
                         || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
                             && a.TriggerShapeId == null))
             .Select(a => a.ShapeId)
@@ -1326,30 +1328,35 @@ public sealed class SlideShowWindow : Window
         el.Opacity = 1;
         InvokeRevealAtStart(plan, onReveal);
 
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
         if (plan.WipeHorizontal)
         {
             // Clip from 0 width → full width.
-            var clipRect = new RectangleGeometry(new Rect(0, 0, 0, h));
+            var from = isExit ? new Rect(0, 0, w, h) : new Rect(0, 0, 0, h);
+            var to = isExit ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, h);
+            var clipRect = new RectangleGeometry(from);
             el.Clip = clipRect;
             DelayedAction(plan.DelayMs, () =>
                 AnimateRectClip(
                     el,
                     clipRect,
-                    new Rect(0, 0, 0, h),
-                    new Rect(0, 0, w, h),
+                    from,
+                    to,
                     plan.DurationMs,
                     onComplete: CompleteReveal(plan, onReveal)));
         }
         else
         {
-            var clipRect = new RectangleGeometry(new Rect(0, 0, w, 0));
+            var from = isExit ? new Rect(0, 0, w, h) : new Rect(0, 0, w, 0);
+            var to = isExit ? new Rect(0, 0, w, 0) : new Rect(0, 0, w, h);
+            var clipRect = new RectangleGeometry(from);
             el.Clip = clipRect;
             DelayedAction(plan.DelayMs, () =>
                 AnimateRectClip(
                     el,
                     clipRect,
-                    new Rect(0, 0, w, 0),
-                    new Rect(0, 0, w, h),
+                    from,
+                    to,
                     plan.DurationMs,
                     onComplete: CompleteReveal(plan, onReveal)));
         }
@@ -1364,15 +1371,16 @@ public sealed class SlideShowWindow : Window
 
         Rect from;
         Rect to;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
         if (plan.WipeHorizontal)
         {
-            from = new Rect(w / 2, 0, 0, h);
-            to = new Rect(0, 0, w, h);
+            from = isExit ? new Rect(0, 0, w, h) : new Rect(w / 2, 0, 0, h);
+            to = isExit ? new Rect(w / 2, 0, 0, h) : new Rect(0, 0, w, h);
         }
         else
         {
-            from = new Rect(0, h / 2, w, 0);
-            to = new Rect(0, 0, w, h);
+            from = isExit ? new Rect(0, 0, w, h) : new Rect(0, h / 2, w, 0);
+            to = isExit ? new Rect(0, h / 2, w, 0) : new Rect(0, 0, w, h);
         }
 
         var clipRect = new RectangleGeometry(from);
