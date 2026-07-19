@@ -487,10 +487,10 @@ public sealed partial class MainWindow
         _formulaBoxEditOriginalText = null;
         ClearFormulaRangeEntryState();
         ClearInlineCellEditorState();
+        ClearSelectionExtensionState();
         _keyboardSelectionMode = ExcelSelectionMode.Normal;
         _endMode = false;
-        _legacyDataFilterSequenceState = LegacyDataFilterSequenceState.None;
-        SetRibbonKeyTipsVisible(false);
+        ResetLegacyDataFilterSequence();
         HideBackstageOverlay();
         WindowState = global::Avalonia.Controls.WindowState.Normal;
         _formulaBarExpanded = false;
@@ -516,10 +516,44 @@ public sealed partial class MainWindow
         UpdateSaveButton();
         _refreshRibbonToggleStates?.Invoke();
 
-        if (context is ShortcutInteractionContext.FormulaBar or ShortcutInteractionContext.FormulaReferenceEditor)
-            _formulaBox.Focus();
-        else
-            _sheetGridHost.Focus();
+        PrepareShortcutValidationContext(context);
+    }
+
+    private void PrepareShortcutValidationContext(ShortcutInteractionContext context)
+    {
+        switch (context)
+        {
+            case ShortcutInteractionContext.CellEditor:
+            {
+                const string editText = "shortcut edit";
+                BeginInlineCellEdit(_session.ActiveCell, editText, editText.Length);
+                _inlineCellEditor?.Focus();
+                break;
+            }
+            case ShortcutInteractionContext.FormulaBar:
+                _formulaBox.Focus();
+                break;
+            case ShortcutInteractionContext.FormulaReferenceEditor:
+                BeginFormulaEdit(_session.ActiveCell, "=A1");
+                break;
+            case ShortcutInteractionContext.DataValidationListOrFilterHeader:
+            {
+                var address = _session.ActiveCell;
+                _session.ActiveSheet.DataValidations.Add(new DataValidation
+                {
+                    AppliesTo = new GridRange(address, address),
+                    Type = DvType.List,
+                    Formula1 = "One,Two",
+                    ShowDropdown = true,
+                });
+                RefreshShell("Shortcut validation fixture ready");
+                _sheetGridHost.Focus();
+                break;
+            }
+            default:
+                _sheetGridHost.Focus();
+                break;
+        }
     }
 
     private async Task SettleShortcutDispatchAsync(

@@ -124,8 +124,31 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
             {
                 var results = await window.RunShortcutInteractionValidationCoreForTestAsync();
 
-                results.Where(result => result.Category == "shortcut-scenario")
-                    .Should().HaveCount(InteractiveValidationInventory.KeyboardShortcuts.Sum(scenario => scenario.Interactions.Count));
+                var expectedStatuses = InteractiveValidationInventory.KeyboardShortcuts
+                    .SelectMany(scenario => scenario.Interactions.Select((interaction, index) => new
+                    {
+                        Id = $"{scenario.Id}:{index}",
+                        Status = scenario.IsNative || scenario.IsExternal || interaction.Kind == ShortcutInteractionKind.MouseWheel
+                            ? "skipped"
+                            : "passed",
+                    }))
+                    .ToDictionary(row => row.Id, row => row.Status, StringComparer.Ordinal);
+                expectedStatuses.Should().HaveCount(276);
+
+                var scenarioResults = results
+                    .Where(result => result.Category == "shortcut-scenario")
+                    .ToArray();
+                scenarioResults.Should().HaveCount(276);
+                scenarioResults.Select(result => result.Id)
+                    .Should().BeEquivalentTo(expectedStatuses.Keys);
+
+                var mismatches = scenarioResults
+                    .Where(result => !string.Equals(result.Status, expectedStatuses[result.Id], StringComparison.Ordinal))
+                    .ToArray();
+                mismatches.Should().BeEmpty(
+                    "every managed shortcut must pass and only explicit native/external/wheel boundaries may skip; mismatches: {0}",
+                    string.Join(Environment.NewLine, mismatches.Select(result =>
+                        $"{result.Id}: expected={expectedStatuses[result.Id]}, actual={result.Status}, note={result.Note}")));
                 window.OwnedWindows.Should().BeEmpty();
             }
             finally
