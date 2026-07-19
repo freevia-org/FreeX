@@ -1964,7 +1964,7 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Bounce:
-                FlyInEffect(element, plan, onReveal);
+                BounceEffect(element, plan, onReveal);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Float:
@@ -2150,6 +2150,130 @@ public sealed class SlideShowWindow : Window
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal));
         });
+    }
+
+    private void BounceEffect(Control element,
+        SlideShowShapeAnimationPlaybackPlan plan,
+        Action? onReveal = null)
+    {
+        InvokeRevealAtStart(plan, onReveal);
+
+        double width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        double height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        double directionX = plan.OffsetXFactor * width;
+        double directionY = plan.OffsetYFactor * height;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        double startX = isExit ? 0 : directionX;
+        double startY = isExit ? 0 : directionY;
+        double endX = isExit ? directionX : 0;
+        double endY = isExit ? directionY : 0;
+        double overshootX = isExit ? endX + directionX * 0.08 : -directionX * 0.08;
+        double overshootY = isExit ? endY + directionY * 0.08 : -directionY * 0.08;
+        double reboundX = isExit ? endX - directionX * 0.04 : directionX * 0.04;
+        double reboundY = isExit ? endY - directionY * 0.04 : directionY * 0.04;
+
+        var translate = new TranslateTransform(startX, startY);
+        element.RenderTransform = translate;
+        DelayedAction(plan.DelayMs, () =>
+        {
+            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
+            AnimateBounceTranslate(
+                translate,
+                startX,
+                startY,
+                endX,
+                endY,
+                overshootX,
+                overshootY,
+                reboundX,
+                reboundY,
+                plan.DurationMs,
+                CompleteReveal(plan, onReveal));
+        });
+    }
+
+    private void AnimateBounceTranslate(
+        TranslateTransform translate,
+        double startX,
+        double startY,
+        double endX,
+        double endY,
+        double overshootX,
+        double overshootY,
+        double reboundX,
+        double reboundY,
+        int durationMs,
+        Action? onComplete)
+    {
+        if (durationMs <= 0)
+        {
+            translate.X = endX;
+            translate.Y = endY;
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var (x, y) = InterpolateBouncePoint(
+                t,
+                startX,
+                startY,
+                endX,
+                endY,
+                overshootX,
+                overshootY,
+                reboundX,
+                reboundY);
+            translate.X = x;
+            translate.Y = y;
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                translate.X = endX;
+                translate.Y = endY;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
+    private static (double X, double Y) InterpolateBouncePoint(
+        double t,
+        double startX,
+        double startY,
+        double endX,
+        double endY,
+        double overshootX,
+        double overshootY,
+        double reboundX,
+        double reboundY)
+    {
+        var local = t switch
+        {
+            <= 0.55 => t / 0.55,
+            <= 0.72 => (t - 0.55) / 0.17,
+            <= 0.86 => (t - 0.72) / 0.14,
+            _ => (t - 0.86) / 0.14
+        };
+        var eased = EaseInOut(Math.Clamp(local, 0, 1));
+        return t <= 0.55
+            ? (startX + (endX - startX) * eased, startY + (endY - startY) * eased)
+            : t <= 0.72
+                ? (endX + (overshootX - endX) * eased, endY + (overshootY - endY) * eased)
+                : t <= 0.86
+                    ? (overshootX + (reboundX - overshootX) * eased, overshootY + (reboundY - overshootY) * eased)
+                    : (reboundX + (endX - reboundX) * eased, reboundY + (endY - reboundY) * eased);
     }
 
     private void PeekEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
