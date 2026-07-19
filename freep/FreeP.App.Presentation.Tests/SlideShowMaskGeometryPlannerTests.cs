@@ -52,6 +52,20 @@ public sealed class SlideShowMaskGeometryPlannerTests
     }
 
     [Fact]
+    public void BuildRandomBarsTransitionRects_CompletesInStableRandomOrder()
+    {
+        var rects = SlideShowMaskGeometryPlanner.BuildRandomBarsTransitionRects(
+            width: 80,
+            height: 40,
+            bandCount: 8,
+            progress: 1,
+            horizontal: true);
+
+        rects.Should().HaveCount(8);
+        rects.Should().OnlyContain(rect => rect.Width == 80 && rect.Height > 0);
+    }
+
+    [Fact]
     public void BuildRandomBars_UsesStableNonSequentialOrderAndCompleteBands()
     {
         var first = SlideShowMaskGeometryPlanner.BuildRandomBars(960, 540, 8, horizontal: true);
