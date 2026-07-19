@@ -39,6 +39,50 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanTransition_SplitUsesDedicatedActionAndPreservesGeometry()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Split,
+            Direction = TransitionDirection.Vertical,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Split);
+        plan.DurationMs.Should().Be(420);
+        plan.SplitHorizontal.Should().BeFalse();
+        plan.SplitOut.Should().BeTrue();
+    }
+
+    [Fact]
+    public void PlanTransition_BlindsUsesDedicatedAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Blinds,
+            Direction = TransitionDirection.Vertical,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Blinds);
+        plan.BlindsHorizontal.Should().BeFalse();
+    }
+
+    [Fact]
+    public void PlanTransition_RandomBarsUsesDedicatedAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.RandomBar,
+            Direction = TransitionDirection.Vertical,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.RandomBars);
+        plan.RandomBarsHorizontal.Should().BeFalse();
+    }
+
+    [Fact]
     public void PlanAnimationStep_UsesControllerEntryStartDelays()
     {
         var slide = new Slide();

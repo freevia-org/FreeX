@@ -95,6 +95,30 @@ public class TransitionAnimationTests
     }
 
     [Fact]
+    public void RoundTrip_SplitTransition_PreservesAxisAndInOutDirection()
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind = TransitionKind.Split,
+            SplitOrientation = TransitionDirection.Vertical,
+            Direction = TransitionDirection.Out,
+            DurationMs = 600,
+        };
+
+        using var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(TransitionKind.Split, t!.Kind);
+        Assert.Equal(TransitionDirection.Vertical, t.SplitOrientation);
+        Assert.Equal(TransitionDirection.Out, t.Direction);
+    }
+
+    [Fact]
     public void RoundTrip_Animations_OrderedAndTyped()
     {
         var pres = Presentation.CreateEmpty();

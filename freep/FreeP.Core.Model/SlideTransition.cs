@@ -16,6 +16,12 @@ public sealed class SlideTransition
     public TransitionDirection? Direction { get; set; }
 
     /// <summary>
+    /// Axis used by the split transition. PowerPoint stores this separately
+    /// from the in/out direction as the <c>orient</c> attribute.
+    /// </summary>
+    public TransitionDirection? SplitOrientation { get; set; }
+
+    /// <summary>
     /// Duration of the transition animation in milliseconds.
     /// Corresponds to <c>spd</c> (slow≈1500/med≈750/fast≈500) or a <c>dur</c> attribute in newer schemas.
     /// Default 500 ms maps to <c>fast</c>.

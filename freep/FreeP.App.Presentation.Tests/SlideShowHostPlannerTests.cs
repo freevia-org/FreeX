@@ -140,6 +140,9 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Fade, SlideShowTransitionPlaybackKind.Fade)]
     [InlineData(TransitionKind.Dissolve, SlideShowTransitionPlaybackKind.Fade)]
     [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Fade)]
+    [InlineData(TransitionKind.Split, SlideShowTransitionPlaybackKind.Split)]
+    [InlineData(TransitionKind.Blinds, SlideShowTransitionPlaybackKind.Blinds)]
+    [InlineData(TransitionKind.RandomBar, SlideShowTransitionPlaybackKind.RandomBars)]
     [InlineData(TransitionKind.Push, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Cover, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Wipe, SlideShowTransitionPlaybackKind.PushLike)]
@@ -183,6 +186,61 @@ public sealed class SlideShowHostPlannerTests
 
         plan.IncomingOffsetX.Should().Be(expectedX);
         plan.IncomingOffsetY.Should().Be(expectedY);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Horizontal, true, true)]
+    [InlineData(TransitionDirection.Vertical, false, true)]
+    [InlineData(TransitionDirection.In, true, false)]
+    [InlineData(TransitionDirection.Out, true, true)]
+    public void PlanTransition_ResolvesSplitAxisAndDirection(
+        TransitionDirection direction,
+        bool expectedHorizontal,
+        bool expectedOut)
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Split,
+            Direction = direction
+        });
+
+        plan.PlaybackKind.Should().Be(SlideShowTransitionPlaybackKind.Split);
+        plan.SplitHorizontal.Should().Be(expectedHorizontal);
+        plan.SplitOut.Should().Be(expectedOut);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Horizontal, true)]
+    [InlineData(TransitionDirection.Vertical, false)]
+    public void PlanTransition_ResolvesBlindsAxis(
+        TransitionDirection direction,
+        bool expectedHorizontal)
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Blinds,
+            Direction = direction
+        });
+
+        plan.PlaybackKind.Should().Be(SlideShowTransitionPlaybackKind.Blinds);
+        plan.BlindsHorizontal.Should().Be(expectedHorizontal);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Horizontal, true)]
+    [InlineData(TransitionDirection.Vertical, false)]
+    public void PlanTransition_ResolvesRandomBarsAxis(
+        TransitionDirection direction,
+        bool expectedHorizontal)
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.RandomBar,
+            Direction = direction
+        });
+
+        plan.PlaybackKind.Should().Be(SlideShowTransitionPlaybackKind.RandomBars);
+        plan.RandomBarsHorizontal.Should().Be(expectedHorizontal);
     }
 
     [Fact]

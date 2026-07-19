@@ -6,6 +6,10 @@ public sealed record SlideShowMaskRect(double X, double Y, double Width, double 
 
 public sealed record SlideShowMaskRectPair(SlideShowMaskRect Closed, SlideShowMaskRect Open);
 
+public sealed record SlideShowMaskRandomBarPlan(
+    SlideShowMaskRectPair Geometry,
+    int Order);
+
 public sealed record SlideShowMaskEllipse(
     SlideShowMaskPoint Center,
     double RadiusX,
@@ -36,6 +40,50 @@ public sealed record SlideShowMaskSweepPlan(
 /// </summary>
 public static class SlideShowMaskGeometryPlanner
 {
+    /// <summary>
+    /// Returns the stable bar order used by both slideshow hosts. PowerPoint's
+    /// Random Bars effect chooses a non-sequential order; keeping the
+    /// permutation in the shared planner prevents WPF and Avalonia from
+    /// diverging while retaining deterministic playback evidence.
+    /// </summary>
+    public static IReadOnlyList<int> BuildRandomBarsOrder(int bandCount)
+    {
+        var count = Math.Max(1, bandCount);
+        var order = Enumerable.Range(0, count).ToArray();
+        uint state = 0x9E3779B9u;
+        for (var i = order.Length - 1; i > 0; i--)
+        {
+            state = state * 1664525u + 1013904223u;
+            var swapIndex = (int)(state % (uint)(i + 1));
+            (order[i], order[swapIndex]) = (order[swapIndex], order[i]);
+        }
+
+        return order;
+    }
+
+    public static IReadOnlyList<SlideShowMaskRandomBarPlan> BuildRandomBars(
+        double width,
+        double height,
+        int bandCount,
+        bool horizontal)
+    {
+        var count = Math.Max(1, bandCount);
+        var order = BuildRandomBarsOrder(count);
+        var rank = new int[count];
+        for (var position = 0; position < order.Count; position++)
+            rank[order[position]] = position;
+
+        var bars = new SlideShowMaskRandomBarPlan[count];
+        for (var index = 0; index < count; index++)
+        {
+            bars[index] = new(
+                BuildBlindsBand(width, height, count, index, horizontal),
+                rank[index]);
+        }
+
+        return bars;
+    }
+
     public static SlideShowMaskRectPair BuildBlindsBand(
         double width,
         double height,
@@ -57,6 +105,100 @@ public static class SlideShowMaskGeometryPlanner
         return new(
             new SlideShowMaskRect(x, 0, 0, height),
             new SlideShowMaskRect(x, 0, Math.Max(0, nextX - x), height));
+    }
+
+    /// <summary>Builds the open portion of each band at a normalized progress.</summary>
+    public static IReadOnlyList<SlideShowMaskRect> BuildBlindsTransitionRects(
+        double width,
+        double height,
+        int bandCount,
+        double progress,
+        bool horizontal)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        var count = Math.Max(1, bandCount);
+        var rects = new SlideShowMaskRect[count];
+        for (var index = 0; index < count; index++)
+        {
+            var band = BuildBlindsBand(width, height, count, index, horizontal);
+            rects[index] = new(
+                band.Closed.X + (band.Open.X - band.Closed.X) * progress,
+                band.Closed.Y + (band.Open.Y - band.Closed.Y) * progress,
+                band.Closed.Width + (band.Open.Width - band.Closed.Width) * progress,
+                band.Closed.Height + (band.Open.Height - band.Closed.Height) * progress);
+        }
+        return rects;
+    }
+
+    /// <summary>
+    /// Builds randomized bars at a shared normalized timeline. Each bar uses
+    /// its deterministic shuffled order, so both hosts reveal the same bands.
+    /// </summary>
+    public static IReadOnlyList<SlideShowMaskRect> BuildRandomBarsTransitionRects(
+        double width,
+        double height,
+        int bandCount,
+        double progress,
+        bool horizontal)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        var bars = BuildRandomBars(width, height, bandCount, horizontal);
+        var count = Math.Max(1, bars.Count);
+        var rects = new SlideShowMaskRect[count];
+        for (var index = 0; index < bars.Count; index++)
+        {
+            var bar = bars[index];
+            var localProgress = Math.Clamp(progress * (count + 1) - bar.Order, 0, 1);
+            var closed = bar.Geometry.Closed;
+            var open = bar.Geometry.Open;
+            rects[index] = new(
+                closed.X + (open.X - closed.X) * localProgress,
+                closed.Y + (open.Y - closed.Y) * localProgress,
+                closed.Width + (open.Width - closed.Width) * localProgress,
+                closed.Height + (open.Height - closed.Height) * localProgress);
+        }
+        return rects;
+    }
+
+    /// <summary>
+    /// Returns the two panels used by a slide split transition. For an
+    /// outgoing split the panels open from the center; for an incoming split
+    /// they open inward from the two outside edges.
+    /// </summary>
+    public static IReadOnlyList<SlideShowMaskRect> BuildSplitRects(
+        double width,
+        double height,
+        double progress,
+        bool horizontal,
+        bool fromCenter)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (horizontal)
+        {
+            var half = width / 2;
+            var extent = half * progress;
+            return fromCenter
+                ? [
+                    new SlideShowMaskRect(half - extent, 0, extent, height),
+                    new SlideShowMaskRect(half, 0, extent, height)
+                ]
+                : [
+                    new SlideShowMaskRect(0, 0, extent, height),
+                    new SlideShowMaskRect(width - extent, 0, extent, height)
+                ];
+        }
+
+        var halfHeight = height / 2;
+        var verticalExtent = halfHeight * progress;
+        return fromCenter
+            ? [
+                new SlideShowMaskRect(0, halfHeight - verticalExtent, width, verticalExtent),
+                new SlideShowMaskRect(0, halfHeight, width, verticalExtent)
+            ]
+            : [
+                new SlideShowMaskRect(0, 0, width, verticalExtent),
+                new SlideShowMaskRect(0, height - verticalExtent, width, verticalExtent)
+            ];
     }
 
     public static SlideShowMaskRectPair BuildCheckerboardCell(

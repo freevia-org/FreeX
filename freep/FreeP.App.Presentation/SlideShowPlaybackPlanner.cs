@@ -6,6 +6,9 @@ public enum SlideShowTransitionPlaybackActionKind
 {
     ShowInstant,
     Fade,
+    Split,
+    Blinds,
+    RandomBars,
     Push
 }
 
@@ -14,7 +17,11 @@ public sealed record SlideShowTransitionPlaybackPlan(
     int DurationMs,
     double IncomingOffsetX,
     double IncomingOffsetY,
-    SlideShowTransitionPlaybackKind SourceKind);
+    SlideShowTransitionPlaybackKind SourceKind,
+    bool SplitHorizontal,
+    bool SplitOut,
+    bool BlindsHorizontal,
+    bool RandomBarsHorizontal);
 
 public enum SlideShowShapeAnimationEffectKind
 {
@@ -123,6 +130,7 @@ public static class SlideShowPlaybackPlanner
     public const int MinFallbackAnimationDurationMs = 100;
     public const int MotionPathFrameCount = 30;
     public const int BlindsBandCount = 8;
+    public const int RandomBarsBandCount = 8;
     public const int CheckerboardRowCount = 4;
     public const int CheckerboardColumnCount = 6;
     public const int WheelSpokeCount = 4;
@@ -136,6 +144,9 @@ public static class SlideShowPlaybackPlanner
         var actionKind = transitionPlan.PlaybackKind switch
         {
             SlideShowTransitionPlaybackKind.Cut => SlideShowTransitionPlaybackActionKind.ShowInstant,
+            SlideShowTransitionPlaybackKind.Split => SlideShowTransitionPlaybackActionKind.Split,
+            SlideShowTransitionPlaybackKind.Blinds => SlideShowTransitionPlaybackActionKind.Blinds,
+            SlideShowTransitionPlaybackKind.RandomBars => SlideShowTransitionPlaybackActionKind.RandomBars,
             SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Push,
             _ => SlideShowTransitionPlaybackActionKind.Fade
         };
@@ -145,7 +156,11 @@ public static class SlideShowPlaybackPlanner
             Math.Max(MinTransitionDurationMs, transition.DurationMs),
             transitionPlan.IncomingOffsetX,
             transitionPlan.IncomingOffsetY,
-            transitionPlan.PlaybackKind);
+            transitionPlan.PlaybackKind,
+            transitionPlan.SplitHorizontal,
+            transitionPlan.SplitOut,
+            transitionPlan.BlindsHorizontal,
+            transitionPlan.RandomBarsHorizontal);
     }
 
     public static IReadOnlyList<SlideShowShapeAnimationPlaybackPlan> PlanAnimationStep(AnimationStep step)

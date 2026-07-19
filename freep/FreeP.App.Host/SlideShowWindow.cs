@@ -742,6 +742,7 @@ public sealed class SlideShowWindow : Window
         _transitionBackImage.Visibility = Visibility.Collapsed;
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
+        _slideCanvas.Clip = null;
         _slideCanvas.RenderTransform = Transform.Identity;
         _slideCanvas.Refresh();
     }
@@ -784,6 +785,18 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Fade:
                 PlayFadeTransition(slide, plan.DurationMs);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Split:
+                PlaySplitTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Blinds:
+                PlayBlindsTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.RandomBars:
+                PlayRandomBarsTransition(slide, plan);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Push:
@@ -925,6 +938,168 @@ public sealed class SlideShowWindow : Window
     ///     and places it as an Image in _animOverlay, hidden.
     ///  2. Updates _slideCanvas so entrance-animated shapes show when revealed.
     /// </summary>
+    private void PlaySplitTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildSplitGeometry(w, h, 0, plan.SplitHorizontal, plan.SplitOut);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 24;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildSplitGeometry(w, h, progress, plan.SplitHorizontal, plan.SplitOut),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildSplitGeometry(
+        double width, double height, double progress, bool horizontal, bool fromCenter)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildSplitRects(
+                     width, height, progress, horizontal, fromCenter))
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        return geometry;
+    }
+
+    private void PlayBlindsTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildBlindsTransitionGeometry(w, h, 0, plan.BlindsHorizontal);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 24;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildBlindsTransitionGeometry(w, h, progress, plan.BlindsHorizontal),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildBlindsTransitionGeometry(
+        double width, double height, double progress, bool horizontal)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildBlindsTransitionRects(
+                     width, height, SlideShowPlaybackPlanner.BlindsBandCount, progress, horizontal))
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        return geometry;
+    }
+
+    private void PlayRandomBarsTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildRandomBarsTransitionGeometry(w, h, 0, plan.RandomBarsHorizontal);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildRandomBarsTransitionGeometry(w, h, progress, plan.RandomBarsHorizontal),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildRandomBarsTransitionGeometry(
+        double width, double height, double progress, bool horizontal)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildRandomBarsTransitionRects(
+                     width, height, SlideShowPlaybackPlanner.RandomBarsBandCount, progress, horizontal))
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        return geometry;
+    }
+
     private void PrepareAnimationOverlay(Slide slide)
     {
         // Clear previous overlay.
@@ -1460,27 +1635,37 @@ public sealed class SlideShowWindow : Window
         double w = el.Width  > 0 ? el.Width  : 960;
         double h = el.Height > 0 ? el.Height : 540;
 
-        var clip = new RectangleGeometry();
-        el.Clip = clip;
+        var bars = new GeometryGroup();
+        el.Clip = bars;
         var isExit = plan.Animation.Kind == AnimationKind.Exit;
         el.Opacity = isExit ? plan.FromOpacity : 0;
 
-        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
-        var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
-        var full = new Rect(0, 0, w, h);
-        var from = isExit ? full : closed;
-        var to = isExit ? closed : full;
+        var randomBars = SlideShowMaskGeometryPlanner.BuildRandomBars(
+            w,
+            h,
+            SlideShowPlaybackPlanner.RandomBarsBandCount,
+            plan.WipeHorizontal);
+        var barStaggerMs = plan.DurationMs / Math.Max(1, randomBars.Count + 1);
 
-        clip.Rect = from;
-        var clipAnim = new RectAnimation(from, to, dur)
+        foreach (var randomBar in randomBars)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(clipAnim, el);
-        Storyboard.SetTargetProperty(clipAnim, new PropertyPath("Clip.Rect"));
-        sb.Children.Add(clipAnim);
+            var closed = ToRect(randomBar.Geometry.Closed);
+            var open = ToRect(randomBar.Geometry.Open);
+            var from = isExit ? open : closed;
+            var to = isExit ? closed : open;
+            var bar = new RectangleGeometry(from);
+            bars.Children.Add(bar);
+            var barDurationMs = Math.Max(1, plan.DurationMs - randomBar.Order * barStaggerMs);
+            var barAnimation = new RectAnimation(from, to, new Duration(TimeSpan.FromMilliseconds(barDurationMs)))
+            {
+                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs + randomBar.Order * barStaggerMs),
+                EasingFunction = ease
+            };
+            Storyboard.SetTarget(barAnimation, bar);
+            Storyboard.SetTargetProperty(barAnimation, new PropertyPath(RectangleGeometry.RectProperty));
+            sb.Children.Add(barAnimation);
+        }
 
         var opacityAnim = new DoubleAnimationUsingKeyFrames
         {

@@ -6,6 +6,9 @@ public enum SlideShowTransitionPlaybackKind
 {
     Cut,
     Fade,
+    Split,
+    Blinds,
+    RandomBars,
     PushLike,
     FadeFallback
 }
@@ -13,7 +16,11 @@ public enum SlideShowTransitionPlaybackKind
 public sealed record SlideShowTransitionPlan(
     SlideShowTransitionPlaybackKind PlaybackKind,
     double IncomingOffsetX,
-    double IncomingOffsetY);
+    double IncomingOffsetY,
+    bool SplitHorizontal,
+    bool SplitOut,
+    bool BlindsHorizontal,
+    bool RandomBarsHorizontal);
 
 public static class SlideShowTransitionPlanner
 {
@@ -25,7 +32,11 @@ public static class SlideShowTransitionPlanner
         return new SlideShowTransitionPlan(
             PlanPlaybackKind(transition.Kind),
             x,
-            y);
+            y,
+            ResolveSplitHorizontal(transition),
+            ResolveSplitOut(transition),
+            ResolveBlindsHorizontal(transition),
+            ResolveRandomBarsHorizontal(transition));
     }
 
     public static SlideShowTransitionPlaybackKind PlanPlaybackKind(TransitionKind kind) =>
@@ -37,6 +48,12 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Fade or
             TransitionKind.Dissolve or
             TransitionKind.Flash => SlideShowTransitionPlaybackKind.Fade,
+
+            TransitionKind.Split => SlideShowTransitionPlaybackKind.Split,
+
+            TransitionKind.Blinds => SlideShowTransitionPlaybackKind.Blinds,
+
+            TransitionKind.RandomBar => SlideShowTransitionPlaybackKind.RandomBars,
 
             TransitionKind.Push or
             TransitionKind.Cover or
@@ -52,6 +69,20 @@ public static class SlideShowTransitionPlanner
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback
         };
+
+    private static bool ResolveSplitHorizontal(SlideTransition transition) =>
+        transition.SplitOrientation == TransitionDirection.Horizontal
+        || (transition.SplitOrientation is null
+            && transition.Direction != TransitionDirection.Vertical);
+
+    private static bool ResolveSplitOut(SlideTransition transition) =>
+        transition.Direction != TransitionDirection.In;
+
+    private static bool ResolveBlindsHorizontal(SlideTransition transition) =>
+        transition.Direction != TransitionDirection.Vertical;
+
+    private static bool ResolveRandomBarsHorizontal(SlideTransition transition) =>
+        transition.Direction != TransitionDirection.Vertical;
 
     public static (double X, double Y) ResolveIncomingOffset(TransitionDirection? direction) =>
         direction switch
