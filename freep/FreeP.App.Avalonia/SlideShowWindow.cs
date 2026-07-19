@@ -43,8 +43,8 @@ namespace FreeP.App.Avalonia;
 /// A snapshot of the outgoing slide is captured into a <see cref="RenderTargetBitmap"/>,
 /// displayed in the back layer. The front layer (new slide) is animated in according to
 /// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover
-/// (directional translate), Wipe/Reveal (incoming edge clip), and Uncover (outgoing clip).
-/// Others fall back to Fade.
+/// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
+/// and Push (bidirectional displacement). Others fall back to Fade.
 ///
 /// Media
 /// ─────
@@ -708,6 +708,9 @@ public sealed class SlideShowWindow : Window
     private void ShowSlideInstant(Slide slide)
     {
         _transitionBackImage.IsVisible = false;
+        _transitionBackImage.Clip = null;
+        _transitionBackImage.RenderTransform = null;
+        _transitionBackImage.ZIndex = 0;
         _slideCanvas.Slide   = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.Clip = null;
@@ -748,6 +751,7 @@ public sealed class SlideShowWindow : Window
         var plan = SlideShowPlaybackPlanner.PlanTransition(t);
         _transitionBackImage.IsVisible = false;
         _transitionBackImage.Clip = null;
+        _transitionBackImage.RenderTransform = null;
         _transitionBackImage.ZIndex = 0;
         switch (plan.ActionKind)
         {
@@ -799,6 +803,10 @@ public sealed class SlideShowWindow : Window
                 PlayUncoverTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Cover:
+                PlayCoverTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -832,7 +840,7 @@ public sealed class SlideShowWindow : Window
         });
     }
 
-    private void PlayPushTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayCoverTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
     {
         var snapshot = CaptureCurrentSlide();
         var dx = plan.IncomingOffsetX;
@@ -859,6 +867,40 @@ public sealed class SlideShowWindow : Window
                 _slideCanvas.RenderTransform = null;
                 _transitionBackImage.IsVisible = false;
             });
+    }
+
+    private void PlayPushTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var dx = plan.IncomingOffsetX;
+        var dy = plan.IncomingOffsetY;
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.RenderTransform = new TranslateTransform(dx * w, dy * h);
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.RenderTransform = new TranslateTransform(0, 0);
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateTranslate(_slideCanvas, dx * w, dy * h, 0, 0, plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.RenderTransform = null;
+                _transitionBackImage.RenderTransform = null;
+                _transitionBackImage.IsVisible = false;
+            });
+
+        if (snapshot is not null)
+        {
+            AnimateTranslate(_transitionBackImage, 0, 0, dx * w, dy * h, plan.DurationMs);
+        }
     }
 
     // ── Animation helpers (Avalonia dispatcher-based) ─────────────────────────────

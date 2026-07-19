@@ -59,6 +59,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayBoxTransition(");
         source.Should().Contain("PlayRevealTransition(");
         source.Should().Contain("PlayUncoverTransition(");
+        source.Should().Contain("PlayCoverTransition(");
+        source.Should().Contain("outgoingTranslate.BeginAnimation(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildSplitRects(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildBlindsTransitionRects(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildRandomBarsTransitionRects(");

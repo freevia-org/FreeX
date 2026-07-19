@@ -24,9 +24,20 @@ public sealed class SlideShowPlaybackPlannerTests
         });
 
         push.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Push);
+        push.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Push);
         push.DurationMs.Should().Be(325);
         push.IncomingOffsetX.Should().Be(-1);
         push.IncomingOffsetY.Should().Be(0);
+
+        var cover = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Cover,
+            Direction = TransitionDirection.Right,
+            DurationMs = 325
+        });
+
+        cover.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Cover);
+        cover.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Cover);
 
         var fallback = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {

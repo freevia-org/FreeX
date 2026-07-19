@@ -43,8 +43,8 @@ namespace FreeP.App.Host;
 /// A snapshot of the outgoing slide is captured into a <see cref="RenderTargetBitmap"/>,
 /// displayed in the back layer. The front layer (new slide) is animated in according to
 /// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover
-/// (directional translate), Wipe/Reveal (incoming edge clip), and Uncover (outgoing clip).
-/// Others fall back to Fade.
+/// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
+/// and Push (bidirectional displacement). Others fall back to Fade.
 /// </summary>
 public sealed class SlideShowWindow : Window
 {
@@ -741,6 +741,9 @@ public sealed class SlideShowWindow : Window
     private void ShowSlideInstant(Slide slide)
     {
         _transitionBackImage.Visibility = Visibility.Collapsed;
+        _transitionBackImage.Clip = null;
+        _transitionBackImage.RenderTransform = Transform.Identity;
+        Grid.SetZIndex(_transitionBackImage, 0);
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.Clip = null;
@@ -780,6 +783,7 @@ public sealed class SlideShowWindow : Window
         var plan = SlideShowPlaybackPlanner.PlanTransition(t);
         _transitionBackImage.Visibility = Visibility.Collapsed;
         _transitionBackImage.Clip = null;
+        _transitionBackImage.RenderTransform = Transform.Identity;
         Grid.SetZIndex(_transitionBackImage, 0);
         switch (plan.ActionKind)
         {
@@ -805,6 +809,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Uncover:
                 PlayUncoverTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Cover:
+                PlayCoverTransition(slide, plan);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Split:
@@ -922,7 +930,7 @@ public sealed class SlideShowWindow : Window
         _slideCanvas.BeginAnimation(OpacityProperty, anim);
     }
 
-    private void PlayPushTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayCoverTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
     {
         var snapshot = CaptureCurrentSlide();
 
@@ -960,6 +968,65 @@ public sealed class SlideShowWindow : Window
 
         incomingTranslate.BeginAnimation(TranslateTransform.XProperty, animX);
         incomingTranslate.BeginAnimation(TranslateTransform.YProperty, animY);
+    }
+
+    private void PlayPushTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var dx = plan.IncomingOffsetX;
+        var dy = plan.IncomingOffsetY;
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        var incomingTranslate = new TranslateTransform(dx * w, dy * h);
+        _slideCanvas.RenderTransform = incomingTranslate;
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.Refresh();
+
+        TranslateTransform? outgoingTranslate = null;
+        if (snapshot is not null)
+        {
+            outgoingTranslate = new TranslateTransform(0, 0);
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.RenderTransform = outgoingTranslate;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var incomingX = new DoubleAnimation(dx * w, 0, duration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        var incomingY = new DoubleAnimation(dy * h, 0, duration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        incomingX.Completed += (_, _) =>
+        {
+            _slideCanvas.RenderTransform = Transform.Identity;
+            _transitionBackImage.RenderTransform = Transform.Identity;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+
+        incomingTranslate.BeginAnimation(TranslateTransform.XProperty, incomingX);
+        incomingTranslate.BeginAnimation(TranslateTransform.YProperty, incomingY);
+
+        if (outgoingTranslate is not null)
+        {
+            outgoingTranslate.BeginAnimation(
+                TranslateTransform.XProperty,
+                new DoubleAnimation(0, dx * w, duration)
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+                });
+            outgoingTranslate.BeginAnimation(
+                TranslateTransform.YProperty,
+                new DoubleAnimation(0, dy * h, duration)
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+                });
+        }
     }
 
     private void PlayDissolveTransition(Slide slide, int durationMs)

@@ -10,6 +10,7 @@ public enum SlideShowTransitionPlaybackActionKind
     Box,
     Reveal,
     Uncover,
+    Cover,
     Split,
     Blinds,
     RandomBars,
@@ -164,13 +165,15 @@ public static class SlideShowPlaybackPlanner
             SlideShowTransitionPlaybackKind.Box => SlideShowTransitionPlaybackActionKind.Box,
             SlideShowTransitionPlaybackKind.Reveal => SlideShowTransitionPlaybackActionKind.Reveal,
             SlideShowTransitionPlaybackKind.Uncover => SlideShowTransitionPlaybackActionKind.Uncover,
+            SlideShowTransitionPlaybackKind.Cover => SlideShowTransitionPlaybackActionKind.Cover,
+            SlideShowTransitionPlaybackKind.Push => SlideShowTransitionPlaybackActionKind.Push,
             SlideShowTransitionPlaybackKind.Split => SlideShowTransitionPlaybackActionKind.Split,
             SlideShowTransitionPlaybackKind.Blinds => SlideShowTransitionPlaybackActionKind.Blinds,
             SlideShowTransitionPlaybackKind.RandomBars => SlideShowTransitionPlaybackActionKind.RandomBars,
             SlideShowTransitionPlaybackKind.Strips => SlideShowTransitionPlaybackActionKind.Strips,
             SlideShowTransitionPlaybackKind.Wheel => SlideShowTransitionPlaybackActionKind.Wheel,
             SlideShowTransitionPlaybackKind.Zoom => SlideShowTransitionPlaybackActionKind.Zoom,
-            SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Push,
+            SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Cover,
             _ => SlideShowTransitionPlaybackActionKind.Fade
         };
 
