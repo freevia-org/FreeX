@@ -88,6 +88,26 @@ public sealed class AvaloniaInteractionCoverageTests
     }
 
     [Fact]
+    public void LinuxRunner_ValidatesResumeProvenanceAndBatchIdentity()
+    {
+        var script = File.ReadAllText(RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+
+        Assert.Contains("$runnerSchemaVersion = 2", script, StringComparison.Ordinal);
+        Assert.Contains("Ensure-ReportProvenance", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-ProvenanceMatchesCurrent", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-ManifestCatalog", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-ManifestIdentity", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-ManifestResultShape", script, StringComparison.Ordinal);
+        Assert.Contains("validationSelectionIds", script, StringComparison.Ordinal);
+        Assert.Contains("runnerBatchIdentity", script, StringComparison.Ordinal);
+        Assert.Contains("Save-ValidatedManifest", script, StringComparison.Ordinal);
+        Assert.Contains("Merge-ContextMenuAggregateResults", script, StringComparison.Ordinal);
+        Assert.Contains("bounded-batch-aggregate-incomplete", script, StringComparison.Ordinal);
+        Assert.Contains("payloadFingerprint", script, StringComparison.Ordinal);
+        Assert.Contains("appImageId", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void LinuxPhysicalProbe_IsGeometryCalibratedClipboardBackedAndSchemaVersioned()
     {
         var probe = File.ReadAllText(RepoFile("tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));

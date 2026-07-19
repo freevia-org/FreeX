@@ -48,6 +48,26 @@ public sealed partial class MainWindow
         .Distinct(StringComparer.Ordinal)
         .Count();
 
+    internal static IReadOnlyList<string> InteractiveValidationContextMenuDispatchIds =>
+        BuildContextMenuValidationInventory()
+            .Select(ContextMenuExecutionKey)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+
+    internal static IReadOnlyList<string> InteractiveValidationContextMenuFamilyIds =>
+        InteractionSurfaceCatalog.ContextMenus
+            .Select(family => family.Id)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+
+    internal static IReadOnlyList<string> InteractiveValidationContextMenuVariantIds =>
+        InteractionSurfaceCatalog.ContextMenus
+            .SelectMany(family => family.Variants.Select(variant => variant.Id))
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(id => id, StringComparer.Ordinal)
+            .ToArray();
+
     internal static IReadOnlyList<ContextMenuValidationDescriptor> BuildContextMenuValidationInventory()
     {
         var rows = new List<ContextMenuValidationDescriptor>();
@@ -127,42 +147,81 @@ public sealed partial class MainWindow
                 evidence.Note));
         }
 
-        if (selectedExecutionKeys.Count != allExecutionKeys.Length)
-            return;
-
         foreach (var family in InteractionSurfaceCatalog.ContextMenus)
         {
             var familyRows = inventory.Where(row => row.FamilyId == family.Id).ToArray();
-            var familyStatus = AggregateContextMenuStatus(familyRows, observed);
-            results.Add(new InteractionValidationResult(
+            AddContextMenuAggregateResult(
+                results,
                 family.Id,
                 "context-menu-family",
-                familyStatus,
-                "executable-command-inventory",
                 $"{familyRows.Length} command/variant rows",
-                familyStatus == "passed"
-                    ? "Every enabled managed command was dispatched through its Avalonia production route; native boundaries remain explicit skipped command rows."
-                    : familyStatus == "skipped"
-                        ? "The family is a native-menu boundary; managed validation resolved the real menu objects without claiming activation."
-                        : "One or more enabled command variants did not complete a production dispatch probe."));
+                familyRows,
+                selectedExecutionKeys,
+                observed);
 
             foreach (var variant in family.Variants)
             {
                 var variantRows = familyRows.Where(row => row.VariantId == variant.Id).ToArray();
-                var variantStatus = AggregateContextMenuStatus(variantRows, observed);
-                results.Add(new InteractionValidationResult(
+                AddContextMenuAggregateResult(
+                    results,
                     variant.Id,
                     "context-menu-variant",
-                    variantStatus,
-                    "executable-command-inventory",
                     $"{variantRows.Length} command rows",
-                    variantStatus == "passed"
-                        ? family.Source.CatalogOrPlanner
-                        : variantStatus == "skipped"
-                            ? "Native platform activation remains a physical-probe boundary."
-                            : "Production dispatch evidence is incomplete for this variant."));
+                    variantRows,
+                    selectedExecutionKeys,
+                    observed,
+                    family.Source.CatalogOrPlanner);
             }
         }
+    }
+
+    private static void AddContextMenuAggregateResult(
+        List<InteractionValidationResult> results,
+        string id,
+        string category,
+        string rowDescription,
+        IReadOnlyList<ContextMenuValidationDescriptor> rows,
+        IReadOnlySet<string> selectedExecutionKeys,
+        IReadOnlyDictionary<string, ContextMenuDispatchEvidence> observed,
+        string? completeNote = null)
+    {
+        var executionKeys = rows
+            .Select(ContextMenuExecutionKey)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var selectedKeys = executionKeys
+            .Where(selectedExecutionKeys.Contains)
+            .ToHashSet(StringComparer.Ordinal);
+        var selectedRows = rows
+            .Where(row => selectedKeys.Contains(ContextMenuExecutionKey(row)))
+            .ToArray();
+        var batchStatus = AggregateContextMenuStatus(selectedRows, observed);
+        var observedStatuses = selectedKeys
+            .Where(observed.ContainsKey)
+            .Select(key => observed[key].Status)
+            .ToArray();
+        var status = batchStatus == "failed"
+            ? "failed"
+            : selectedKeys.Count == executionKeys.Length
+                ? batchStatus
+                : "skipped";
+        var evidenceLevel = selectedKeys.Count == executionKeys.Length
+            ? "executable-command-inventory"
+            : "bounded-batch-aggregate";
+        var note = selectedKeys.Count == executionKeys.Length
+            ? completeNote ?? "Every execution key in this aggregate was dispatched through its Avalonia production route."
+            : "This bounded batch covers only part of the aggregate; the runner must merge every batch before crediting it.";
+
+        results.Add(new InteractionValidationResult(
+            id,
+            category,
+            status,
+            evidenceLevel,
+            $"{rowDescription}; coverage={selectedKeys.Count}/{executionKeys.Length}; " +
+            $"batch-status={batchStatus}; observed-passed={observedStatuses.Count(value => value == "passed")}; " +
+            $"observed-failed={observedStatuses.Count(value => value == "failed")}; " +
+            $"observed-skipped={observedStatuses.Count(value => value == "skipped")}",
+            note));
     }
 
     private static string ContextMenuExecutionKey(ContextMenuValidationDescriptor row) =>

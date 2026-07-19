@@ -2,6 +2,8 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
+using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation.Interactions;
 using FreeX.App.Services;
 
 namespace FreeX.App.Avalonia;
@@ -162,6 +164,21 @@ internal sealed record InteractionValidationManifest(
     int DialogCatalogCount,
     int RibbonCommandCatalogCount,
     int ContextMenuDispatchCatalogCount,
+    string ValidationSection,
+    bool IncludeCoreResults,
+    bool RibbonOnly,
+    int DialogStart,
+    int DialogCount,
+    int RibbonCommandStart,
+    int RibbonCommandCount,
+    int ContextMenuDispatchStart,
+    int ContextMenuDispatchCount,
+    IReadOnlyList<string> DialogCatalogIds,
+    IReadOnlyList<string> RibbonCommandCatalogIds,
+    IReadOnlyList<string> ContextMenuDispatchCatalogIds,
+    IReadOnlyList<string> ContextMenuFamilyCatalogIds,
+    IReadOnlyList<string> ContextMenuVariantCatalogIds,
+    IReadOnlyList<string> ValidationSelectionIds,
     IReadOnlyDictionary<string, int> Summary,
     IReadOnlyList<InteractionValidationResult> Results);
 
@@ -200,7 +217,7 @@ internal static class InteractionValidationCoordinator
                 options.CoreSection,
                 options.ContextMenuDispatchStart,
                 options.ContextMenuDispatchCount);
-            WriteManifest(options.OutputDirectory, results);
+            WriteManifest(options.OutputDirectory, options, results);
             exitCode = results.Any(result => string.Equals(result.Status, "failed", StringComparison.Ordinal)) ? 1 : 0;
             diagnostics?.RecordEvent("interaction_validation", new Dictionary<string, string?>
             {
@@ -224,20 +241,71 @@ internal static class InteractionValidationCoordinator
         }
     }
 
-    private static void WriteManifest(string outputDirectory, IReadOnlyList<InteractionValidationResult> results)
+    private static void WriteManifest(
+        string outputDirectory,
+        InteractionValidationOptions options,
+        IReadOnlyList<InteractionValidationResult> results)
     {
         var summary = results
             .GroupBy(result => result.Status, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.Count(), StringComparer.Ordinal);
         summary["total"] = results.Count;
+        var ribbonCommandCatalogIds = AvaloniaRibbonComposition
+            .EnumerateSurfaceRows(AvaloniaRibbonComposition.BuildDefinition())
+            .Select(row => row.CommandId.Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var contextMenuInventory = MainWindow.BuildContextMenuValidationInventory();
+        var contextMenuDispatchCatalogIds = contextMenuInventory
+            .Select(row => $"{row.FamilyId}|{row.VariantId}|{row.ActionKey}|{row.IsEnabled}")
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        var dialogCatalogIds = MainWindow.InteractiveValidationDialogRoutes
+            .Select(route => route.CatalogId)
+            .ToArray();
+        var validationSelectionIds = options.CoreSection == "context-menus"
+            ? contextMenuDispatchCatalogIds
+                .Skip(Math.Max(0, options.ContextMenuDispatchStart))
+                .Take(Math.Max(0, options.ContextMenuDispatchCount))
+                .ToArray()
+            : options.RibbonOnly
+                ? ribbonCommandCatalogIds
+                    .Skip(Math.Max(0, options.RibbonCommandStart))
+                    .Take(Math.Max(0, options.RibbonCommandCount))
+                    .ToArray()
+            : options.CoreSection == "ribbon-bindings"
+                ? ribbonCommandCatalogIds
+            : !options.IncludeCoreResults
+                ? dialogCatalogIds
+                    .Skip(Math.Max(0, options.DialogStart))
+                    .Take(Math.Max(0, options.DialogCount))
+                    .ToArray()
+            : [];
         var manifest = new InteractionValidationManifest(
-            SchemaVersion: 1,
+            SchemaVersion: 2,
             Platform: PlatformName(),
             Shell: "avalonia",
             GeneratedUtc: DateTimeOffset.UtcNow,
             DialogCatalogCount: MainWindow.InteractiveValidationDialogRouteCount,
             RibbonCommandCatalogCount: MainWindow.InteractiveValidationRibbonCommandCount,
             ContextMenuDispatchCatalogCount: MainWindow.InteractiveValidationContextMenuDispatchCount,
+            ValidationSection: options.RibbonOnly
+                ? "ribbon-only"
+                : options.CoreSection ?? (options.IncludeCoreResults ? "full" : "dialogs"),
+            IncludeCoreResults: options.IncludeCoreResults,
+            RibbonOnly: options.RibbonOnly,
+            DialogStart: options.DialogStart,
+            DialogCount: options.DialogCount,
+            RibbonCommandStart: options.RibbonCommandStart,
+            RibbonCommandCount: options.RibbonCommandCount,
+            ContextMenuDispatchStart: options.ContextMenuDispatchStart,
+            ContextMenuDispatchCount: options.ContextMenuDispatchCount,
+            DialogCatalogIds: dialogCatalogIds,
+            RibbonCommandCatalogIds: ribbonCommandCatalogIds,
+            ContextMenuDispatchCatalogIds: contextMenuDispatchCatalogIds,
+            ContextMenuFamilyCatalogIds: MainWindow.InteractiveValidationContextMenuFamilyIds,
+            ContextMenuVariantCatalogIds: MainWindow.InteractiveValidationContextMenuVariantIds,
+            ValidationSelectionIds: validationSelectionIds,
             Summary: summary,
             Results: results);
         var json = JsonSerializer.Serialize(manifest, JsonOptions());
@@ -249,7 +317,7 @@ internal static class InteractionValidationCoordinator
         Directory.CreateDirectory(outputDirectory);
         var failure = new
         {
-            schemaVersion = 1,
+            schemaVersion = 2,
             platform = PlatformName(),
             shell = "avalonia",
             error = $"{ex.GetType().Name}: {ex.Message}",

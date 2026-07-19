@@ -44,6 +44,8 @@ $harness = Join-Path $PSScriptRoot "Run-LinuxInteractiveDocker.ps1"
 $currentSessionPath = Join-Path $repoRoot "artifacts/linux-interactive/freex/current-session.json"
 $containerName = "freex-linux-interactive-freex-$Port"
 $x11ProbeScript = Join-Path $PSScriptRoot "LinuxInteractiveDocker/run-freex-input-probes.sh"
+$runnerSchemaVersion = 2
+$resumeRequested = -not [string]::IsNullOrWhiteSpace($ResumeReportDirectory)
 $reportStamp = (Get-Date).ToUniversalTime().ToString("yyyyMMddTHHmmssZ")
 $reportDirectory = if ([string]::IsNullOrWhiteSpace($ResumeReportDirectory)) {
     Join-Path $repoRoot "artifacts/linux-interactive/freex/interaction-validation/$reportStamp"
@@ -54,6 +56,117 @@ $reportDirectory = if ([string]::IsNullOrWhiteSpace($ResumeReportDirectory)) {
     (Resolve-Path -LiteralPath $ResumeReportDirectory).Path
 }
 New-Item -ItemType Directory -Path $reportDirectory -Force | Out-Null
+$provenancePath = Join-Path $reportDirectory "resume-provenance.json"
+$workspaceHasher = [Security.Cryptography.SHA256]::Create()
+try {
+    $normalizedRepoRoot = [IO.Path]::GetFullPath($repoRoot).TrimEnd(
+        [IO.Path]::DirectorySeparatorChar,
+        [IO.Path]::AltDirectorySeparatorChar).ToLowerInvariant()
+    $workspaceHashBytes = $workspaceHasher.ComputeHash([Text.Encoding]::UTF8.GetBytes($normalizedRepoRoot))
+    $workspaceKey = -join ($workspaceHashBytes[0..5] | ForEach-Object { $_.ToString("x2") })
+} finally {
+    $workspaceHasher.Dispose()
+}
+$appImageReference = "freex-linux-interactive-app-freex-$workspaceKey" + ":current"
+$publishDirectory = Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/freex/publish/linux-x64"
+
+function Get-SourceCommit {
+    $commit = (& git -C $repoRoot rev-parse HEAD 2>$null | Select-Object -First 1)
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$commit)) {
+        throw "Could not resolve the current source commit for interaction validation provenance."
+    }
+    ([string]$commit).Trim()
+}
+
+function Get-DirectoryFingerprint {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Container)) {
+        throw "Published payload directory does not exist: $Path"
+    }
+    $files = @(Get-ChildItem -LiteralPath $Path -File -Recurse | Sort-Object FullName)
+    if ($files.Count -eq 0) {
+        throw "Published payload directory is empty: $Path"
+    }
+    $lines = foreach ($file in $files) {
+        $relative = $file.FullName.Substring($Path.Length).TrimStart(
+            [IO.Path]::DirectorySeparatorChar,
+            [IO.Path]::AltDirectorySeparatorChar).Replace('', '/')
+        $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+        "$relative|$hash"
+    }
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($lines -join [Environment]::NewLine))
+    $digest = [Security.Cryptography.SHA256]::HashData($bytes)
+    [pscustomobject]@{
+        fingerprint = ([Convert]::ToHexString($digest)).ToLowerInvariant()
+        fileCount = $files.Count
+    }
+}
+
+function Get-AppImageId {
+    $imageId = @(& docker image inspect $appImageReference --format '{{.Id}}' 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $imageId.Count -ne 1 -or
+        [string]::IsNullOrWhiteSpace([string]$imageId[0])) {
+        throw "Could not inspect the owned FreeX app image '$appImageReference' for provenance."
+    }
+    ([string]$imageId[0]).Trim()
+}
+
+function Get-CurrentProvenance {
+    $payload = Get-DirectoryFingerprint -Path $publishDirectory
+    [pscustomobject]@{
+        runnerSchemaVersion = $runnerSchemaVersion
+        app = "FreeX"
+        platform = "linux"
+        shell = "avalonia"
+        sourceCommit = Get-SourceCommit
+        payloadFingerprint = $payload.fingerprint
+        payloadFileCount = [int]$payload.fileCount
+        appImageReference = $appImageReference
+        appImageId = Get-AppImageId
+    }
+}
+
+function Assert-ProvenanceMatchesCurrent {
+    param([Parameter(Mandatory = $true)]$Expected)
+
+    if ([int]$Expected.runnerSchemaVersion -ne $runnerSchemaVersion) {
+        throw "Report provenance schema mismatch: expected $runnerSchemaVersion, observed $($Expected.runnerSchemaVersion)."
+    }
+    $actual = Get-CurrentProvenance
+    foreach ($property in @(
+        "app", "platform", "shell", "sourceCommit", "payloadFingerprint",
+        "payloadFileCount", "appImageReference", "appImageId")) {
+        if ([string]$Expected.$property -ne [string]$actual.$property) {
+            throw "Report provenance mismatch for '$property': expected '$($Expected.$property)', observed '$($actual.$property)'."
+        }
+    }
+}
+
+function Ensure-ReportProvenance {
+    if ($null -eq $script:reportProvenance) {
+        $script:reportProvenance = Get-CurrentProvenance
+        $script:reportProvenance | ConvertTo-Json -Depth 8 |
+            Set-Content -LiteralPath $provenancePath -Encoding utf8
+        return
+    }
+    Assert-ProvenanceMatchesCurrent -Expected $script:reportProvenance
+}
+
+if (-not $resumeRequested -and $SkipPublish) {
+    throw "-SkipPublish requires -ResumeReportDirectory with an existing provenance record."
+}
+if ($resumeRequested) {
+    if (-not (Test-Path -LiteralPath $provenancePath -PathType Leaf)) {
+        throw "Resume report is missing provenance metadata: $provenancePath"
+    }
+    try {
+        $script:reportProvenance = Get-Content -LiteralPath $provenancePath -Raw | ConvertFrom-Json
+    } catch {
+        throw "Resume report provenance is not valid JSON: $provenancePath"
+    }
+    Assert-ProvenanceMatchesCurrent -Expected $script:reportProvenance
+}
 
 function Read-CompletedJsonManifest {
     param(
@@ -72,6 +185,375 @@ function Read-CompletedJsonManifest {
         Start-Sleep -Milliseconds 500
     }
     return $null
+}
+
+$script:catalogReference = $null
+
+function Get-ManifestProperty {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $property = $Manifest.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        throw "Interaction manifest is missing required property '$Name'."
+    }
+    $property.Value
+}
+
+function Get-ManifestStringArray {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$Name
+    )
+
+    $value = Get-ManifestProperty -Manifest $Manifest -Name $Name
+    if ($null -eq $value) {
+        throw "Interaction manifest property '$Name' must be an array."
+    }
+    @($value | ForEach-Object { [string]$_ })
+}
+
+function Assert-ManifestCatalog {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    if ([int](Get-ManifestProperty $Manifest "schemaVersion") -ne 2 -or
+        [string](Get-ManifestProperty $Manifest "platform") -ne "linux" -or
+        [string](Get-ManifestProperty $Manifest "shell") -ne "avalonia") {
+        throw "Interaction manifest schema/platform/shell mismatch; expected schema 2, linux, avalonia."
+    }
+
+    $catalog = [ordered]@{
+        DialogCatalogIds = Get-ManifestStringArray $Manifest "dialogCatalogIds"
+        RibbonCommandCatalogIds = Get-ManifestStringArray $Manifest "ribbonCommandCatalogIds"
+        ContextMenuDispatchCatalogIds = Get-ManifestStringArray $Manifest "contextMenuDispatchCatalogIds"
+        ContextMenuFamilyCatalogIds = Get-ManifestStringArray $Manifest "contextMenuFamilyCatalogIds"
+        ContextMenuVariantCatalogIds = Get-ManifestStringArray $Manifest "contextMenuVariantCatalogIds"
+    }
+    $counts = [ordered]@{
+        DialogCatalogIds = [int](Get-ManifestProperty $Manifest "dialogCatalogCount")
+        RibbonCommandCatalogIds = [int](Get-ManifestProperty $Manifest "ribbonCommandCatalogCount")
+        ContextMenuDispatchCatalogIds = [int](Get-ManifestProperty $Manifest "contextMenuDispatchCatalogCount")
+        ContextMenuFamilyCatalogIds = $catalog.ContextMenuFamilyCatalogIds.Count
+        ContextMenuVariantCatalogIds = $catalog.ContextMenuVariantCatalogIds.Count
+    }
+    foreach ($name in $catalog.Keys) {
+        $values = @($catalog[$name])
+        if ($values.Count -ne $counts[$name]) {
+            throw "Interaction manifest catalog '$name' count mismatch: declared $($counts[$name]), observed $($values.Count)."
+        }
+        $duplicates = @($values | Group-Object | Where-Object Count -gt 1)
+        if ($duplicates.Count -gt 0) {
+            throw "Interaction manifest catalog '$name' contains duplicate IDs: $($duplicates.Name -join ', ')."
+        }
+    }
+
+    $snapshot = [pscustomobject]$catalog
+    if ($null -eq $script:catalogReference) {
+        $script:catalogReference = $snapshot
+    } else {
+        foreach ($name in $catalog.Keys) {
+            $actual = @($snapshot.$name)
+            $expected = @($script:catalogReference.$name)
+            if ($actual.Count -ne $expected.Count -or
+                (($actual -join "`n") -ne ($expected -join "`n"))) {
+                throw "Interaction manifest catalog '$name' changed between batches."
+            }
+        }
+    }
+    $snapshot
+}
+
+function Get-ExpectedManifestSelectionIds {
+    param(
+        [Parameter(Mandatory = $true)][string]$Section,
+        [Parameter(Mandatory = $true)][int]$DialogStart,
+        [Parameter(Mandatory = $true)][int]$DialogCount,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandStart,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandCount,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchStart,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchCount
+    )
+
+    $catalog = $script:catalogReference
+    switch ($Section) {
+        "dialogs" { return @($catalog.DialogCatalogIds | Select-Object -Skip $DialogStart -First $DialogCount) }
+        "ribbon-only" { return @($catalog.RibbonCommandCatalogIds | Select-Object -Skip $RibbonCommandStart -First $RibbonCommandCount) }
+        "context-menus" { return @($catalog.ContextMenuDispatchCatalogIds | Select-Object -Skip $ContextMenuDispatchStart -First $ContextMenuDispatchCount) }
+        "ribbon-bindings" { return @($catalog.RibbonCommandCatalogIds) }
+        default { return @() }
+    }
+}
+
+function Assert-ManifestIdentity {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$Section,
+        [Parameter(Mandatory = $true)][bool]$IncludeCoreResults,
+        [Parameter(Mandatory = $true)][bool]$RibbonOnly,
+        [Parameter(Mandatory = $true)][int]$DialogStart,
+        [Parameter(Mandatory = $true)][int]$DialogCount,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandStart,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandCount,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchStart,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchCount
+    )
+
+    Assert-ManifestCatalog $Manifest | Out-Null
+    $identity = [ordered]@{
+        validationSection = $Section
+        includeCoreResults = $IncludeCoreResults
+        ribbonOnly = $RibbonOnly
+        dialogStart = $DialogStart
+        dialogCount = $DialogCount
+        ribbonCommandStart = $RibbonCommandStart
+        ribbonCommandCount = $RibbonCommandCount
+        contextMenuDispatchStart = $ContextMenuDispatchStart
+        contextMenuDispatchCount = $ContextMenuDispatchCount
+    }
+    foreach ($name in $identity.Keys) {
+        $observed = Get-ManifestProperty $Manifest $name
+        if ([string]$observed -ne [string]$identity[$name]) {
+            throw "Interaction manifest batch identity mismatch for '$name': expected '$($identity[$name])', observed '$observed'."
+        }
+    }
+    $expectedSelection = @(Get-ExpectedManifestSelectionIds -Section $Section -DialogStart $DialogStart -DialogCount $DialogCount -RibbonCommandStart $RibbonCommandStart -RibbonCommandCount $RibbonCommandCount -ContextMenuDispatchStart $ContextMenuDispatchStart -ContextMenuDispatchCount $ContextMenuDispatchCount)
+    $observedSelection = @(Get-ManifestStringArray $Manifest "validationSelectionIds")
+    if ($observedSelection.Count -ne $expectedSelection.Count -or
+        (($observedSelection -join "`n") -ne ($expectedSelection -join "`n"))) {
+        throw "Interaction manifest batch selection IDs mismatch for '$Section'."
+    }
+}
+
+function Assert-ManifestResultShape {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$Section,
+        [Parameter(Mandatory = $true)][int]$DialogStart,
+        [Parameter(Mandatory = $true)][int]$DialogCount,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandStart,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandCount,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchStart,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchCount
+    )
+
+    $results = @((Get-ManifestProperty $Manifest "results"))
+    $duplicateResultKeys = @($results | ForEach-Object { "$($_.category)|$($_.id)" } | Group-Object | Where-Object Count -gt 1)
+    if ($duplicateResultKeys.Count -gt 0) {
+        throw "Interaction manifest contains duplicate result IDs: $($duplicateResultKeys.Name -join ', ')."
+    }
+    $selected = @(Get-ExpectedManifestSelectionIds -Section $Section -DialogStart $DialogStart -DialogCount $DialogCount -RibbonCommandStart $RibbonCommandStart -RibbonCommandCount $RibbonCommandCount -ContextMenuDispatchStart $ContextMenuDispatchStart -ContextMenuDispatchCount $ContextMenuDispatchCount)
+    switch ($Section) {
+        "dialogs" {
+            foreach ($category in @("dialog-inventory", "dialog-contract")) {
+                $ids = @($results | Where-Object category -eq $category | ForEach-Object id | Sort-Object)
+                $expected = @($selected | Sort-Object)
+                if (($ids -join "`n") -ne ($expected -join "`n")) {
+                    throw "Dialog batch '$Section' has unexpected $category IDs."
+                }
+            }
+        }
+        "ribbon-only" {
+            $expected = @($selected | ForEach-Object { "ribbon-command-behavior/$([Uri]::EscapeDataString($_))" } | Sort-Object)
+            $actual = @($results | Where-Object category -eq "ribbon-command-behavior" | ForEach-Object id | Sort-Object)
+            if (($actual -join "`n") -ne ($expected -join "`n")) {
+                throw "Ribbon batch has unexpected command behavior IDs."
+            }
+        }
+        "context-menus" {
+            $families = @($results | Where-Object category -eq "context-menu-family" | ForEach-Object id | Sort-Object)
+            $variants = @($results | Where-Object category -eq "context-menu-variant" | ForEach-Object id | Sort-Object)
+            if (($families -join "`n") -ne (@($script:catalogReference.ContextMenuFamilyCatalogIds | Sort-Object) -join "`n") -or
+                ($variants -join "`n") -ne (@($script:catalogReference.ContextMenuVariantCatalogIds | Sort-Object) -join "`n")) {
+                throw "Context-menu batch is missing authoritative family or variant aggregate rows."
+            }
+            $commandCount = @($results | Where-Object category -eq "context-menu-command").Count
+            if (($selected.Count -eq 0 -and $commandCount -ne 0) -or ($selected.Count -gt 0 -and $commandCount -eq 0)) {
+                throw "Context-menu batch command result count does not match its selection range."
+            }
+        }
+        "ribbon-bindings" {
+            if (@($results | Where-Object category -eq "ribbon-command").Count -ne 616 -or
+                @($results | Where-Object category -eq "ribbon-collapsed-group").Count -ne 73) {
+                throw "Ribbon binding section result counts are not authoritative."
+            }
+        }
+        "shortcuts" {
+            if (@($results | Where-Object category -eq "keyboard-shortcut").Count -ne 79 -or
+                @($results | Where-Object category -eq "shortcut-scenario").Count -ne 276) {
+                throw "Shortcut section result counts are not authoritative."
+            }
+        }
+        "range-inventory" {
+            if (@($results | Where-Object category -eq "range-selection-inventory").Count -ne 31) {
+                throw "Range inventory section result count is not authoritative."
+            }
+        }
+        "editing" {
+            $expected = @("cell-inline-edit", "cell-inline-formula-edit-point-mode", "formula-bar-edit-point-mode")
+            $actual = @($results | Where-Object category -eq "worksheet-editing" | ForEach-Object id | Sort-Object)
+            if (($actual -join "`n") -ne (@($expected | Sort-Object) -join "`n")) {
+                throw "Editing section result IDs are not authoritative."
+            }
+        }
+    }
+}
+
+function Set-RunnerManifestMetadata {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$Section,
+        [Parameter(Mandatory = $true)][int]$DialogStart,
+        [Parameter(Mandatory = $true)][int]$DialogCount,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandStart,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandCount,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchStart,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchCount
+    )
+
+    $identity = "$Section|dialog=$DialogStart+$DialogCount|ribbon=$RibbonCommandStart+$RibbonCommandCount|context=$ContextMenuDispatchStart+$ContextMenuDispatchCount"
+    foreach ($property in @{
+        runnerSchemaVersion = $runnerSchemaVersion
+        sourceCommit = $script:reportProvenance.sourceCommit
+        payloadFingerprint = $script:reportProvenance.payloadFingerprint
+        payloadFileCount = [int]$script:reportProvenance.payloadFileCount
+        appImageReference = $script:reportProvenance.appImageReference
+        appImageId = $script:reportProvenance.appImageId
+        runnerBatchIdentity = $identity
+    }.GetEnumerator()) {
+        $Manifest | Add-Member -NotePropertyName $property.Key -NotePropertyValue $property.Value -Force
+    }
+    $Manifest
+}
+
+function Validate-InteractionManifest {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$Section,
+        [Parameter(Mandatory = $true)][bool]$IncludeCoreResults,
+        [Parameter(Mandatory = $true)][bool]$RibbonOnly,
+        [Parameter(Mandatory = $true)][int]$DialogStart,
+        [Parameter(Mandatory = $true)][int]$DialogCount,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandStart,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandCount,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchStart,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchCount,
+        [Parameter(Mandatory = $true)][bool]$RequireRunnerMetadata
+    )
+
+    if ($Manifest.error) {
+        throw "Interaction manifest contains an application failure: $($Manifest.error)"
+    }
+    Assert-ManifestIdentity $Manifest $Section $IncludeCoreResults $RibbonOnly $DialogStart $DialogCount $RibbonCommandStart $RibbonCommandCount $ContextMenuDispatchStart $ContextMenuDispatchCount
+    Assert-ManifestResultShape $Manifest $Section $DialogStart $DialogCount $RibbonCommandStart $RibbonCommandCount $ContextMenuDispatchStart $ContextMenuDispatchCount
+    $identity = "$Section|dialog=$DialogStart+$DialogCount|ribbon=$RibbonCommandStart+$RibbonCommandCount|context=$ContextMenuDispatchStart+$ContextMenuDispatchCount"
+    if ($RequireRunnerMetadata) {
+        foreach ($property in @("runnerSchemaVersion", "sourceCommit", "payloadFingerprint", "payloadFileCount", "appImageReference", "appImageId", "runnerBatchIdentity")) {
+            if ($null -eq $Manifest.PSObject.Properties[$property]) {
+                throw "Resumed interaction manifest is missing runner provenance '$property'."
+            }
+        }
+        foreach ($property in @("sourceCommit", "payloadFingerprint", "payloadFileCount", "appImageReference", "appImageId")) {
+            if ([string]$Manifest.$property -ne [string]$script:reportProvenance.$property) {
+                throw "Resumed interaction manifest provenance mismatch for '$property'."
+            }
+        }
+        if ([int]$Manifest.runnerSchemaVersion -ne $runnerSchemaVersion -or
+            [string]$Manifest.runnerBatchIdentity -ne $identity) {
+            throw "Resumed interaction manifest runner schema or batch identity mismatch."
+        }
+    }
+    $Manifest
+}
+
+function Save-ValidatedManifest {
+    param(
+        [Parameter(Mandatory = $true)]$Manifest,
+        [Parameter(Mandatory = $true)][string]$Destination,
+        [Parameter(Mandatory = $true)][string]$Section,
+        [Parameter(Mandatory = $true)][bool]$IncludeCoreResults,
+        [Parameter(Mandatory = $true)][bool]$RibbonOnly,
+        [Parameter(Mandatory = $true)][int]$DialogStart,
+        [Parameter(Mandatory = $true)][int]$DialogCount,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandStart,
+        [Parameter(Mandatory = $true)][int]$RibbonCommandCount,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchStart,
+        [Parameter(Mandatory = $true)][int]$ContextMenuDispatchCount,
+        [Parameter(Mandatory = $true)][bool]$RequireRunnerMetadata = $false
+    )
+
+    Validate-InteractionManifest $Manifest $Section $IncludeCoreResults $RibbonOnly $DialogStart $DialogCount $RibbonCommandStart $RibbonCommandCount $ContextMenuDispatchStart $ContextMenuDispatchCount $RequireRunnerMetadata | Out-Null
+    Set-RunnerManifestMetadata $Manifest $Section $DialogStart $DialogCount $RibbonCommandStart $RibbonCommandCount $ContextMenuDispatchStart $ContextMenuDispatchCount | Out-Null
+    $Manifest | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Destination -Encoding utf8
+    $Manifest
+}
+
+function Merge-ContextMenuAggregateResults {
+    param([Parameter(Mandatory = $true)][object[]]$Results)
+
+    $aggregateCategories = @("context-menu-family", "context-menu-variant")
+    $aggregateRows = @($Results | Where-Object { $_.category -in $aggregateCategories })
+    foreach ($category in $aggregateCategories) {
+        $expectedIds = if ($category -eq "context-menu-family") {
+            @($script:catalogReference.ContextMenuFamilyCatalogIds)
+        } else {
+            @($script:catalogReference.ContextMenuVariantCatalogIds)
+        }
+        $observedIds = @($aggregateRows | Where-Object category -eq $category | ForEach-Object id | Sort-Object -Unique)
+        if (($observedIds -join "`n") -ne (@($expectedIds | Sort-Object) -join "`n")) {
+            throw "Context-menu aggregate coverage is missing authoritative $category IDs."
+        }
+    }
+
+    $merged = foreach ($group in @($aggregateRows | Group-Object category, id)) {
+        $rows = @($group.Group)
+        $selectedTotal = 0
+        $expectedTotal = $null
+        $passed = 0
+        $failed = 0
+        $skipped = 0
+        $batchFailed = $false
+        foreach ($row in $rows) {
+            $match = [regex]::Match([string]$row.evidence, 'coverage=(\d+)/(\d+); batch-status=([^;]+); observed-passed=(\d+); observed-failed=(\d+); observed-skipped=(\d+)')
+            if (-not $match.Success) {
+                throw "Context-menu aggregate '$($group.Name)' has malformed coverage evidence."
+            }
+            $selected = [int]$match.Groups[1].Value
+            $total = [int]$match.Groups[2].Value
+            if ($null -eq $expectedTotal) { $expectedTotal = $total }
+            if ($total -ne $expectedTotal -or $selected -gt $total) {
+                throw "Context-menu aggregate '$($group.Name)' has inconsistent coverage totals."
+            }
+            $selectedTotal += $selected
+            $passed += [int]$match.Groups[4].Value
+            $failed += [int]$match.Groups[5].Value
+            $skipped += [int]$match.Groups[6].Value
+            $batchFailed = $batchFailed -or $match.Groups[3].Value -eq "failed" -or [string]$row.status -eq "failed"
+        }
+        $status = if ($batchFailed -or $failed -gt 0) {
+            "failed"
+        } elseif ($selectedTotal -lt $expectedTotal) {
+            "skipped"
+        } elseif ($passed -gt 0) {
+            "passed"
+        } else {
+            "skipped"
+        }
+        [pscustomobject]@{
+            id = [string]$rows[0].id
+            category = [string]$rows[0].category
+            status = $status
+            evidenceLevel = if ($selectedTotal -eq $expectedTotal) { "executable-command-inventory" } else { "bounded-batch-aggregate-incomplete" }
+            evidence = "coverage=$selectedTotal/$expectedTotal; batches=$($rows.Count); observed-passed=$passed; observed-failed=$failed; observed-skipped=$skipped"
+            note = if ($selectedTotal -eq $expectedTotal) {
+                "Every authoritative execution key in this aggregate was dispatched across the merged bounded batches."
+            } else {
+                "Only $selectedTotal of $expectedTotal execution keys were merged; this aggregate is not credited until all batches are present."
+            }
+        }
+    }
+    @($Results | Where-Object { $_.category -notin $aggregateCategories }) + @($merged)
 }
 
 $desktopStartArguments = @{
@@ -100,6 +582,7 @@ try {
             if ($LASTEXITCODE -ne 0) {
                 throw "Linux interaction-validation payload failed to publish."
             }
+            Ensure-ReportProvenance
             & $harness -Action Stop -App FreeX -Port $Port
         }
     } else {
@@ -108,6 +591,7 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "Linux X11 input-validation harness failed to start."
         }
+        Ensure-ReportProvenance
 
         $x11Session = Get-Content -LiteralPath $currentSessionPath -Raw | ConvertFrom-Json
         & docker cp $x11ProbeScript "${containerName}:/tmp/run-freex-input-probes.sh"
@@ -200,6 +684,7 @@ try {
                 $authoritativeRibbonCount = [int]$batchManifest.ribbonCommandCatalogCount
                 $authoritativeContextCount = [int]$batchManifest.contextMenuDispatchCatalogCount
             }
+            Save-ValidatedManifest $batchManifest $existingCorePath $coreSection $true $false 0 0 0 0 0 [int]::MaxValue $true | Out-Null
             if ($null -eq $manifest) { $manifest = $batchManifest }
             $combinedResults += @($batchManifest.results)
             Write-Host "Reusing core interaction section '$coreSection'."
@@ -246,7 +731,7 @@ try {
         }
         if ($null -eq $manifest) { $manifest = $batchManifest }
         $combinedResults += @($batchManifest.results)
-        Copy-Item -LiteralPath $batchManifestPath -Destination (Join-Path $reportDirectory "core-$coreSection.json") -Force
+        Save-ValidatedManifest $batchManifest (Join-Path $reportDirectory "core-$coreSection.json") $coreSection $true $false 0 0 0 0 0 [int]::MaxValue | Out-Null
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
@@ -261,6 +746,7 @@ try {
             if ([int]$batchManifest.contextMenuDispatchCatalogCount -ne $authoritativeContextCount) {
                 throw "Existing context-menu dispatch catalog count changed during validation."
             }
+            Save-ValidatedManifest $batchManifest $existingContextPath "context-menus" $true $false 0 [int]::MaxValue 0 0 $contextStart $contextCount $true | Out-Null
             $combinedResults += @($batchManifest.results)
             Write-Host "Reusing context-menu dispatch batch $contextStart..$($contextStart + $contextCount - 1)."
             continue
@@ -269,6 +755,8 @@ try {
         $appArguments = @(
             "--interaction-validation", "/work/validation",
             "--interaction-validation-dialog-count", "0",
+            "--interaction-validation-dialog-start", "0",
+            "--interaction-validation-ribbon-start", "0",
             "--interaction-validation-ribbon-count", "0",
             "--interaction-validation-core-section", "context-menus",
             "--interaction-validation-context-start", [string]$contextStart,
@@ -292,7 +780,7 @@ try {
             throw "Context-menu dispatch catalog count changed during validation."
         }
         $combinedResults += @($batchManifest.results)
-        Copy-Item -LiteralPath $batchManifestPath -Destination (Join-Path $reportDirectory ("context-batch-{0:D3}.json" -f $contextStart)) -Force
+        Save-ValidatedManifest $batchManifest (Join-Path $reportDirectory ("context-batch-{0:D3}.json" -f $contextStart)) "context-menus" $true $false 0 [int]::MaxValue 0 0 $contextStart $contextCount | Out-Null
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
@@ -314,6 +802,7 @@ try {
             if ([int]$batchManifest.ribbonCommandCatalogCount -ne $authoritativeRibbonCount) {
                 throw "Existing dialog batch ribbon catalog count changed during validation."
             }
+            Save-ValidatedManifest $batchManifest $existingDialogPath "dialogs" $false $false $dialogStart $dialogCount 0 0 0 0 $true | Out-Null
             if ($null -eq $manifest) { $manifest = $batchManifest }
             $combinedResults += @($batchManifest.results)
             Write-Host "Reusing dialog interaction batch $dialogStart..$($dialogStart + $dialogCount - 1)."
@@ -324,6 +813,10 @@ try {
             "--interaction-validation", "/work/validation",
             "--interaction-validation-dialog-start", [string]$dialogStart,
             "--interaction-validation-dialog-count", [string]$dialogCount,
+            "--interaction-validation-ribbon-start", "0",
+            "--interaction-validation-ribbon-count", "0",
+            "--interaction-validation-context-start", "0",
+            "--interaction-validation-context-count", "0",
             "--interaction-validation-dialog-only"
         )
 
@@ -375,7 +868,7 @@ try {
         }
         if ($null -eq $manifest) { $manifest = $batchManifest }
         $combinedResults += @($batchManifest.results)
-        Copy-Item -LiteralPath $batchManifestPath -Destination (Join-Path $reportDirectory ("batch-{0:D3}.json" -f $dialogStart)) -Force
+        Save-ValidatedManifest $batchManifest (Join-Path $reportDirectory ("batch-{0:D3}.json" -f $dialogStart)) "dialogs" $false $false $dialogStart $dialogCount 0 0 0 0 | Out-Null
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
@@ -392,6 +885,7 @@ try {
             if ([int]$batchManifest.ribbonCommandCatalogCount -ne $authoritativeRibbonCount) {
                 throw "Existing ribbon command catalog count changed during validation."
             }
+            Save-ValidatedManifest $batchManifest $existingRibbonPath "ribbon-only" $true $true 0 0 $ribbonStart $ribbonCount 0 [int]::MaxValue $true | Out-Null
             $combinedResults += @($batchManifest.results)
             Write-Host "Reusing ribbon interaction batch $ribbonStart..$($ribbonStart + $ribbonCount - 1)."
             continue
@@ -426,9 +920,11 @@ try {
             throw "Ribbon command catalog count changed during validation: expected $authoritativeRibbonCount, observed $($batchManifest.ribbonCommandCatalogCount)."
         }
         $combinedResults += @($batchManifest.results)
-        Copy-Item -LiteralPath $batchManifestPath -Destination (Join-Path $reportDirectory ("ribbon-batch-{0:D3}.json" -f $ribbonStart)) -Force
+        Save-ValidatedManifest $batchManifest (Join-Path $reportDirectory ("ribbon-batch-{0:D3}.json" -f $ribbonStart)) "ribbon-only" $true $true 0 0 $ribbonStart $ribbonCount 0 [int]::MaxValue | Out-Null
         & $harness -Action Stop -App FreeX -Port $Port
     }
+
+    $combinedResults = @(Merge-ContextMenuAggregateResults -Results $combinedResults)
 
     $rangeInventory = @($combinedResults | Where-Object category -eq "range-selection-inventory")
     $rangeInteractionRows = @($combinedResults | Where-Object category -eq "range-selection")

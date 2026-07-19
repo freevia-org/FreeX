@@ -57,6 +57,51 @@ public sealed class ContextMenuInteractionValidationTests
     }
 
     [Fact]
+    public async Task BoundedValidation_EmitsHonestFamilyAndVariantAggregates()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            var outputDirectory = Path.Combine(
+                Path.GetTempPath(),
+                "freex-context-validation-" + Guid.NewGuid().ToString("N"));
+            window.Show();
+            try
+            {
+                var results = await window.RunInteractionValidationAsync(
+                    outputDirectory,
+                    dialogStart: 0,
+                    dialogCount: 0,
+                    includeCoreResults: true,
+                    ribbonCommandStart: 0,
+                    ribbonCommandCount: 0,
+                    ribbonOnly: false,
+                    coreSection: "context-menus",
+                    contextMenuDispatchStart: 0,
+                    contextMenuDispatchCount: 1);
+
+                var familyResults = results.Where(result => result.Category == "context-menu-family").ToArray();
+                var variantResults = results.Where(result => result.Category == "context-menu-variant").ToArray();
+                familyResults.Should().HaveCount(InteractionSurfaceCatalog.ContextMenus.Count);
+                variantResults.Should().HaveCount(
+                    InteractionSurfaceCatalog.ContextMenus.Sum(family => family.Variants.Count));
+                familyResults.Concat(variantResults).Should().OnlyContain(result =>
+                    result.Evidence.Contains("coverage=", StringComparison.Ordinal) &&
+                    result.Evidence.Contains("batch-status=", StringComparison.Ordinal));
+                familyResults.Concat(variantResults).Should().Contain(result =>
+                    result.Status == "skipped" &&
+                    result.EvidenceLevel == "bounded-batch-aggregate");
+            }
+            finally
+            {
+                window.Close();
+                if (Directory.Exists(outputDirectory))
+                    Directory.Delete(outputDirectory, recursive: true);
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public void Inventory_CoversEveryPlannerActionIncludingWorksheetShowNotes()
     {
         var inventory = MainWindow.BuildContextMenuValidationInventory();
