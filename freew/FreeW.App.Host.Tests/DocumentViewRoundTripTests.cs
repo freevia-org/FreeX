@@ -1107,10 +1107,14 @@ public sealed class DocumentViewRoundTripTests
     public void CenteredFixedWidthFlowTable_LeavesTheWpfBlockMarginUntouched()
     {
         var doc = FreeWVisualEvidenceDocumentFactory.BuildComplexTableLayoutDocument();
+        var sourceTable = doc.Blocks.OfType<Table>().Single();
         var view = new DocumentView();
         view.LoadModel(doc);
 
-        double.IsNaN(RenderedTables(view.Document).First().Margin.Left).Should().BeTrue();
+        var rendered = RenderedTables(view.Document).First();
+        double.IsNaN(rendered.Margin.Left).Should().BeTrue();
+        rendered.RowGroups[0].Rows[0].Cells[0].Padding.Top.Should()
+            .BeApproximately(2 + sourceTable.CellSpacingPt!.Value * (96.0 / 72.0), 0.01);
     }
 
     [StaFact]
