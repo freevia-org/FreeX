@@ -2,8 +2,10 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.TextToColumns;
@@ -374,6 +376,22 @@ public sealed partial class MainWindow
         StackPanel? step2Content = null;
         StackPanel? step3Content = null;
 
+        // Match the WPF wizard's keyboard entry point on every step. The generic owned-dialog
+        // policy is intentionally a fallback; this wizard changes its visible focus scope as the
+        // user moves between steps, so the production route owns the exact target.
+        void FocusCurrentWizardStepTarget()
+        {
+            Control target = currentStep switch
+            {
+                1 => fixedWidthButton.IsChecked == true ? fixedWidthButton : delimitedButton,
+                2 when fixedWidthButton.IsChecked == true => breaksBox,
+                2 => tabBox,
+                _ => formatColumnBox,
+            };
+
+            target.Focus();
+        }
+
         void ApplyWizardStep()
         {
             warningText.IsVisible = false;
@@ -473,6 +491,7 @@ public sealed partial class MainWindow
             {
                 currentStep--;
                 SyncWizardNavigation();
+                FocusCurrentWizardStepTarget();
             }
         };
         nextButton.Click += (_, _) =>
@@ -481,6 +500,7 @@ public sealed partial class MainWindow
             {
                 currentStep++;
                 SyncWizardNavigation();
+                FocusCurrentWizardStepTarget();
             }
         };
 
@@ -684,6 +704,24 @@ public sealed partial class MainWindow
             },
         };
         AttachDialogRangePicker(dialog, destinationPicker, destinationBox, "range.text-to-columns.destination");
+
+        // WPF's TextToColumnsDialog is a keyboard-first wizard: the first choice is focused when
+        // the window opens, every step is tab-cyclic, and Escape is always Cancel. Keep these
+        // lifecycle guarantees on the production dialog itself instead of relying on capture code.
+        KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
+        dialog.Opened += (_, _) =>
+        {
+            dialog.UpdateLayout();
+            Dispatcher.UIThread.Post(FocusCurrentWizardStepTarget, DispatcherPriority.Input);
+        };
+        dialog.KeyDown += (_, args) =>
+        {
+            if (args.Key != Key.Escape || args.KeyModifiers != KeyModifiers.None)
+                return;
+
+            dialog.Close();
+            args.Handled = true;
+        };
 
         SyncWizardNavigation();
         UpdateModeVisibility();
