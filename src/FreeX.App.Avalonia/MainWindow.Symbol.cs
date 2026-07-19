@@ -281,6 +281,7 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close();
 
         var root = new DockPanel { Margin = new Thickness(12) };
+        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
         root.Children.Add(contentGrid);

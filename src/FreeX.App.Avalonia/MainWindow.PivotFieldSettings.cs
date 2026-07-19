@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -246,7 +247,13 @@ public sealed partial class MainWindow
         bodyGrid.Children.Add(buttonRow);
 
         var content = new Grid { Margin = new Thickness(14), Children = { bodyGrid } };
+        KeyboardNavigation.SetTabNavigation(content, KeyboardNavigationMode.Cycle);
         dialog.Content = content;
+        dialog.Opened += (_, _) =>
+        {
+            nameBox.Focus();
+            nameBox.SelectAll();
+        };
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)

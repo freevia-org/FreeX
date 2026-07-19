@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 
@@ -332,7 +333,13 @@ public sealed partial class MainWindow
         DockPanel.SetDock(bottomGrid, Dock.Bottom);
         content.Children.Add(bottomGrid);
         content.Children.Add(tabs);
+        KeyboardNavigation.SetTabNavigation(content, KeyboardNavigationMode.Cycle);
         dialog.Content = content;
+        dialog.Opened += (_, _) =>
+        {
+            searchBox.Focus();
+            searchBox.SelectAll();
+        };
 
         var result = await dialog.ShowDialog<int>(this);
         switch (result)

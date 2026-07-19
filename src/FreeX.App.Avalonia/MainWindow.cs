@@ -11643,6 +11643,7 @@ public sealed partial class MainWindow : Window
         };
 
         var root = new DockPanel { Margin = new Thickness(12) };
+        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         DockPanel.SetDock(statusLabel, Dock.Bottom);
         DockPanel.SetDock(tabs, Dock.Top);
@@ -14422,6 +14423,7 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button
         {
             Content = UiText.Get("Common_Cancel"),
+            IsCancel = true,
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -14931,7 +14933,7 @@ public sealed partial class MainWindow : Window
             },
         };
 
-        dialog.Content = new StackPanel
+        var root = new StackPanel
         {
             Margin = new Thickness(16),
             Spacing = 10,
@@ -14942,12 +14944,20 @@ public sealed partial class MainWindow : Window
                 buttonRow,
             },
         };
+        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        dialog.Content = root;
         dialog.Opened += (_, _) =>
         {
-            if (tabStrip.SelectedIndex == 2)
-                fontNameBox.Focus();
-            else
-                numberFormatBox.Focus();
+            Control target = tabStrip.SelectedIndex switch
+            {
+                1 => horizontalAlignmentBox,
+                2 => fontNameBox,
+                3 => borderStyleBox,
+                4 => fillColorBox,
+                5 => lockedBox,
+                _ => numberCategoryList,
+            };
+            target.Focus();
         };
         if (launchSmokeProbe is not null)
         {
@@ -19876,6 +19886,7 @@ public sealed partial class MainWindow : Window
         var cancelButton = new Button
         {
             Content = UiText.Get("Common_Cancel"),
+            IsCancel = true,
             MinWidth = 84,
             Padding = new Thickness(10, 4),
         };
@@ -20112,7 +20123,7 @@ public sealed partial class MainWindow : Window
             },
         };
 
-        dialog.Content = new StackPanel
+        var root = new StackPanel
         {
             Margin = new Thickness(16),
             Spacing = 10,
@@ -20124,6 +20135,8 @@ public sealed partial class MainWindow : Window
                 buttonRow,
             },
         };
+        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        dialog.Content = root;
         dialog.Opened += (_, _) => typeBox.Focus();
         if (launchSmokeProbe is not null)
         {
@@ -25507,6 +25520,7 @@ public sealed partial class MainWindow : Window
         {
             Margin = new Thickness(16),
         };
+        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
         DockPanel.SetDock(intro, Dock.Top);
         DockPanel.SetDock(buttonRow, Dock.Bottom);
         root.Children.Add(intro);
@@ -25534,7 +25548,7 @@ public sealed partial class MainWindow : Window
             Text = document.Text,
             IsReadOnly = true,
             AcceptsReturn = true,
-            AcceptsTab = true,
+            AcceptsTab = false,
             TextWrapping = TextWrapping.Wrap,
             FontFamily = new FontFamily("Consolas"),
             FontSize = 12,

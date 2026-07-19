@@ -626,7 +626,12 @@ public sealed partial class MainWindow
 
         var okButton = new Button { Content = UiText.Get("Common_Ok"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
         ApplyPageLayoutButtonChrome(okButton, PageSetupDialogPlanner.FooterButtonMinWidth, isDefault: true);
-        var cancelButton = new Button { Content = UiText.Get("Common_Cancel"), MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth };
+        var cancelButton = new Button
+        {
+            Content = UiText.Get("Common_Cancel"),
+            IsCancel = true,
+            MinWidth = PageSetupDialogPlanner.FooterButtonMinWidth,
+        };
         ApplyPageLayoutButtonChrome(cancelButton, PageSetupDialogPlanner.FooterButtonMinWidth);
         AutomationProperties.SetAutomationId(okButton, PageSetupDialogPlanner.OkButtonAutomationId);
         AutomationProperties.SetAutomationId(cancelButton, PageSetupDialogPlanner.CancelButtonAutomationId);
@@ -972,11 +977,13 @@ public sealed partial class MainWindow
 
         DockPanel.SetDock(buttonRow, AvaloniaDock.Bottom);
         DockPanel.SetDock(validationText, AvaloniaDock.Bottom);
-        dialog.Content = new DockPanel
+        var root = new DockPanel
         {
             Margin = new Thickness(8),
             Children = { buttonRow, validationText, tabs },
         };
+        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        dialog.Content = root;
         AttachDialogRangePicker(dialog, printAreaPicker, printAreaBox, "range.page-setup.print-area");
         AttachDialogRangePicker(dialog, repeatRowsPicker, repeatRowsBox, "range.page-setup.rows-to-repeat");
         AttachDialogRangePicker(dialog, repeatColumnsPicker, repeatColumnsBox, "range.page-setup.columns-to-repeat");
