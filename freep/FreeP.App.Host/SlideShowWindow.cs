@@ -934,6 +934,7 @@ public sealed class SlideShowWindow : Window
         _animOverlay.Children.Clear();
         _animElements.Clear();
         _revealedShapes.Clear();
+        _slideCanvas.SuppressedShapeIds.Clear();
 
         // Only hide shapes whose ONLY animations are non-trigger (main-sequence) entrances/motions.
         // A shape whose sole animation is an interactive trigger should be visible at slide entry;
@@ -947,6 +948,8 @@ public sealed class SlideShowWindow : Window
 
         var animatedShapeIds = slide.Animations
             .Where(a => a.Kind == AnimationKind.Emphasis
+                        || (a.Kind == AnimationKind.Exit
+                            && (a.Preset == AnimationPreset.Appear || a.Preset == AnimationPreset.Fade))
                         || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
                             && a.TriggerShapeId == null))
             .Select(a => a.ShapeId)
@@ -1047,10 +1050,17 @@ public sealed class SlideShowWindow : Window
             var anim = plan.Animation;
             if (!_animElements.TryGetValue(anim.ShapeId, out var element))
             {
-                // No overlay element (shape has no entrance overlay or is emphasis/exit):
-                // handle emphasis / exit on the live canvas best-effort.
+                // Unsupported exit presets and shapes without a renderable overlay retain
+                // the coarse fallback rather than guessing a direction or clip geometry.
                 PlayFallbackAnimation(SlideShowPlaybackPlanner.PlanFallbackAnimation(anim, plan.DelayMs));
                 continue;
+            }
+
+            if (anim.Kind == AnimationKind.Exit)
+            {
+                element.Opacity = 1;
+                _slideCanvas.SuppressedShapeIds.Add(anim.ShapeId);
+                _slideCanvas.Refresh();
             }
 
             PlayShapeAnimation(element, plan);
@@ -1075,7 +1085,10 @@ public sealed class SlideShowWindow : Window
         switch (plan.EffectKind)
         {
             case SlideShowShapeAnimationEffectKind.Appear:
-                AppearEffect(sb, element, plan.DelayMs);
+                if (plan.Animation.Kind == AnimationKind.Exit)
+                    DisappearEffect(sb, element, plan.DelayMs);
+                else
+                    AppearEffect(sb, element, plan.DelayMs);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Fade:
@@ -2170,6 +2183,17 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTarget(anim, el);
         Storyboard.SetTargetProperty(anim,
             new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
+        sb.Children.Add(anim);
+    }
+
+    private static void DisappearEffect(Storyboard sb, FrameworkElement el, int delayMs)
+    {
+        var anim = new DoubleAnimation(1, 0, new Duration(TimeSpan.Zero))
+        {
+            BeginTime = TimeSpan.FromMilliseconds(delayMs)
+        };
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
         sb.Children.Add(anim);
     }
 

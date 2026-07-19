@@ -922,6 +922,8 @@ public sealed class SlideShowWindow : Window
 
         var animatedShapeIds = slide.Animations
             .Where(a => a.Kind == AnimationKind.Emphasis
+                        || (a.Kind == AnimationKind.Exit
+                            && (a.Preset == AnimationPreset.Appear || a.Preset == AnimationPreset.Fade))
                         || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
                             && a.TriggerShapeId == null))
             .Select(a => a.ShapeId)
@@ -1032,7 +1034,7 @@ public sealed class SlideShowWindow : Window
             }
 
             var shapeId = anim.ShapeId;
-            PlayShapeAnimation(element, plan, onReveal: () =>
+            PlayShapeAnimation(element, plan, onReveal: anim.Kind == AnimationKind.Exit ? null : () =>
             {
                 // DA1: once the entrance animation finishes (or fires), hand off painting to
                 // the base canvas.  The overlay element stays in the tree at full opacity but
@@ -1068,7 +1070,10 @@ public sealed class SlideShowWindow : Window
         switch (plan.EffectKind)
         {
             case SlideShowShapeAnimationEffectKind.Appear:
-                AppearEffect(element, plan.DelayMs, CompleteReveal(plan, onReveal));
+                if (plan.Animation.Kind == AnimationKind.Exit)
+                    DisappearEffect(element, plan.DelayMs);
+                else
+                    AppearEffect(element, plan.DelayMs, CompleteReveal(plan, onReveal));
                 break;
 
             case SlideShowShapeAnimationEffectKind.Fade:
@@ -2117,6 +2122,11 @@ public sealed class SlideShowWindow : Window
             }
         };
         timer.Start();
+    }
+
+    private void DisappearEffect(Control el, int delayMs)
+    {
+        DelayedAction(delayMs, () => el.Opacity = 0);
     }
 
     private void AnimateRotate(RotateTransform rotate, double from, double to, int durationMs)
