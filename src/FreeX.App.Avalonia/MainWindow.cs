@@ -11526,7 +11526,7 @@ public sealed partial class MainWindow : Window
         void FocusSearchBox()
         {
             var target = OnReplaceTab() ? replaceFindBox : findBox;
-            target.Focus();
+            FocusDialogControl(target);
             target.SelectAll();
         }
 

@@ -134,7 +134,11 @@ public sealed class DialogTabCycleFocusGraphTests
                     tabs.SelectedIndex = index;
                     dialog.UpdateLayout();
                     Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
-                    var initial = FindByAutomationId<Control>(dialog, initialAutomationId, required: index == 0)
+                    var initialAutomationIdForTab = InitialAutomationIdForTab(openerName, index, initialAutomationId);
+                    var initial = ResolveInitialTarget(
+                            initialAutomationIdForTab is null
+                                ? null
+                                : FindByAutomationId<Control>(dialog, initialAutomationIdForTab))
                         ?? FindFirstFocusableVisibleDescendant((tabs.SelectedItem as TabItem)?.Content as Control)
                         ?? throw new InvalidOperationException($"No focus target for {openerName} tab {index}.");
                     AssertFullCycle(dialog, initial);
@@ -233,6 +237,39 @@ public sealed class DialogTabCycleFocusGraphTests
             ? null
             : root.GetVisualDescendants().OfType<Control>().Prepend(root).FirstOrDefault(control =>
                 control.Focusable && KeyboardNavigation.GetIsTabStop(control) && control.IsVisible && control.IsEffectivelyEnabled);
+
+    private static Control? ResolveInitialTarget(Control? target)
+    {
+        if (target is not ListBox listBox)
+            return target;
+
+        return listBox.GetVisualDescendants()
+            .OfType<ListBoxItem>()
+            .FirstOrDefault(item => Equals(item.Content, listBox.SelectedItem))
+            ?? listBox.GetVisualDescendants().OfType<ListBoxItem>().FirstOrDefault();
+    }
+
+    private static string? InitialAutomationIdForTab(string openerName, int tabIndex, string firstTabAutomationId) =>
+        openerName switch
+        {
+            "ShowFormatCellsInputDialogAsync" => tabIndex switch
+            {
+                0 => firstTabAutomationId,
+                1 => "FormatCellsHorizontalAlignmentBox",
+                2 => "FormatCellsFontNameBox",
+                3 => "FormatCellsBorderStyleBox",
+                4 => "FormatCellsFillColorBox",
+                5 => "FormatCellsLockedBox",
+                _ => throw new ArgumentOutOfRangeException(nameof(tabIndex)),
+            },
+            "ShowFindReplaceTabbedDialogAsync" => tabIndex switch
+            {
+                0 => firstTabAutomationId,
+                1 => "FindReplaceReplaceFindBox",
+                _ => throw new ArgumentOutOfRangeException(nameof(tabIndex)),
+            },
+            _ => null,
+        };
 
     private static T? FindByAutomationId<T>(Window dialog, string automationId, bool required = true)
         where T : Control
