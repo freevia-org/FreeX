@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
@@ -63,6 +64,8 @@ public sealed class MainWindow : Window
     private readonly ReviewingPane _reviewingPane;
     private readonly ReviewBalloonsPane _reviewBalloonsPane;
     private readonly RevealFormattingPane _revealPane;
+    private Control? _ribbonControl;
+    private bool _ribbonKeyTipsVisible;
     private Border? _findBar;
     private FindReplaceDialog? _findReplaceDialog;
     private ScrollViewer? _scroller;
@@ -193,6 +196,12 @@ public sealed class MainWindow : Window
         };
         LoadDocumentAsSaved(LoadStartupDocument(startupArguments), path: null);
         KeyDown += MainWindow_KeyDown;
+        AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, _) => SetRibbonKeyTipsVisible(false),
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
+        Deactivated += (_, _) => SetRibbonKeyTipsVisible(false);
 
         // Start autosave once the window is shown; offer recovery on first open.
         Opened += async (_, _) =>
@@ -229,6 +238,9 @@ public sealed class MainWindow : Window
     internal ReviewingPane ReviewingPane => _reviewingPane;
 
     internal ReviewBalloonsPane ReviewBalloonsPane => _reviewBalloonsPane;
+    internal bool RibbonKeyTipsVisibleForTest => _ribbonKeyTipsVisible;
+    internal Control? RibbonControlForTest => _ribbonControl;
+    internal void RaiseKeyDownForTest(KeyEventArgs args) => MainWindow_KeyDown(this, args);
 
     /// <summary>
     /// Exposes the reveal-formatting pane for tests that need to inspect its state headlessly.
@@ -1238,7 +1250,7 @@ public sealed class MainWindow : Window
             new TableRibbonContextSource(_editor),
             new HeaderFooterRibbonContextSource(_editor),
             new FloatingRibbonContextSource(_editor));
-        var ribbon = AvaloniaRibbonRenderer.BuildRibbon(
+        _ribbonControl = AvaloniaRibbonRenderer.BuildRibbon(
             FreeWRibbon.BuildDefinition(),
             registry,
             contextSource: contextSource,
@@ -1250,7 +1262,7 @@ public sealed class MainWindow : Window
             Background = Brushes.White,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xDD, 0xDD, 0xDD)),
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = ribbon,
+            Child = _ribbonControl,
         };
     }
 
@@ -1454,29 +1466,141 @@ public sealed class MainWindow : Window
 
     private void MainWindow_KeyDown(object? sender, KeyEventArgs e)
     {
+        if (TryHandleRibbonKeyTips(e))
+            return;
+
+        if (TryMapKeyboardKey(e.Key, out var key) &&
+            FreeWKeyboardShortcutCatalog.TryDispatch(
+                key,
+                ToKeyboardModifiers(e.KeyModifiers),
+                ExecuteKeyboardCommand))
+        {
+            e.Handled = true;
+            return;
+        }
+
         var ctrl = (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
         if (!ctrl)
             return;
 
         switch (e.Key)
         {
-            case Key.F: ToggleFindBar(show: true); e.Handled = true; break;
-            case Key.H: OpenFindReplaceDialog(); e.Handled = true; break;
-            case Key.N: NewDocument(); e.Handled = true; break;
-            case Key.O: _ = OpenAsync(); e.Handled = true; break;
-            case Key.S: _ = SaveAsync(); e.Handled = true; break;
             case Key.P when (e.KeyModifiers & KeyModifiers.Shift) != 0: _ = ExportPdfAsync(); e.Handled = true; break;
             case Key.OemPlus or Key.Add: ApplyZoom(_zoomScale + 0.1); e.Handled = true; break;
             case Key.OemMinus or Key.Subtract: ApplyZoom(_zoomScale - 0.1); e.Handled = true; break;
             case Key.D0 or Key.NumPad0: ApplyZoom(1.0); e.Handled = true; break;
         }
+    }
 
-        // Shift+F1 (no Ctrl required) = Reveal Formatting — matches Word's shortcut.
-        if (e.Key == Key.F1 && (e.KeyModifiers & KeyModifiers.Shift) != 0)
+    private bool TryHandleRibbonKeyTips(KeyEventArgs args)
+    {
+        if (args.Key is Key.LeftAlt or Key.RightAlt)
         {
-            ToggleRevealFormatting();
-            e.Handled = true;
+            SetRibbonKeyTipsVisible(!_ribbonKeyTipsVisible);
+            args.Handled = true;
+            return true;
         }
+
+        if (!_ribbonKeyTipsVisible)
+            return false;
+
+        if (args.Key == Key.Escape)
+        {
+            SetRibbonKeyTipsVisible(false);
+            args.Handled = true;
+            return true;
+        }
+
+        var token = ToRibbonKeyTipToken(args.Key);
+        if (token is null || _ribbonControl is null)
+            return false;
+
+        if (!AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, token))
+            return false;
+
+        SetRibbonKeyTipsVisible(false);
+        args.Handled = true;
+        return true;
+    }
+
+    private void SetRibbonKeyTipsVisible(bool visible)
+    {
+        _ribbonKeyTipsVisible = visible;
+        if (_ribbonControl is not null)
+            AvaloniaRibbonRenderer.SetTopLevelKeyTipsVisible(_ribbonControl, visible);
+    }
+
+    private static string? ToRibbonKeyTipToken(Key key)
+    {
+        var name = key.ToString();
+        if (name.Length == 1 && char.IsAsciiLetterOrDigit(name[0]))
+            return name.ToUpperInvariant();
+        if (name.Length == 2 && name[0] == 'D' && char.IsAsciiDigit(name[1]))
+            return name[1].ToString();
+        return null;
+    }
+
+    private void ExecuteKeyboardCommand(FreeWKeyboardCommand command)
+    {
+        switch (command)
+        {
+            case FreeWKeyboardCommand.NewDocument: NewDocument(); break;
+            case FreeWKeyboardCommand.OpenDocument: _ = OpenAsync(); break;
+            case FreeWKeyboardCommand.SaveDocument: _ = SaveAsync(); break;
+            case FreeWKeyboardCommand.SaveDocumentAs: _ = SaveAsAsync(); break;
+            case FreeWKeyboardCommand.PrintDocument: _ = OpenPrintPreviewAsync(); break;
+            case FreeWKeyboardCommand.Find:
+            case FreeWKeyboardCommand.Replace: OpenFindReplaceDialog(); break;
+            case FreeWKeyboardCommand.Cut: _ = CutAsync(); break;
+            case FreeWKeyboardCommand.Copy: _ = CopyAsync(); break;
+            case FreeWKeyboardCommand.Paste: _ = PasteAsync(); break;
+            case FreeWKeyboardCommand.PasteTextOnly: _ = PastePlainTextAsync(); break;
+            case FreeWKeyboardCommand.SelectAll: _editor.SelectAll(); break;
+            case FreeWKeyboardCommand.Undo: _editor.Undo(); break;
+            case FreeWKeyboardCommand.Redo: _editor.Redo(); break;
+            case FreeWKeyboardCommand.RevealFormatting: ToggleRevealFormatting(); break;
+            case FreeWKeyboardCommand.Thesaurus: _ = OpenThesaurusAsync(); break;
+            case FreeWKeyboardCommand.ToggleFieldCodes: _editor.ToggleFieldCodes(); break;
+            case FreeWKeyboardCommand.UpdateFields: _editor.UpdateFields(); break;
+            default: throw new ArgumentOutOfRangeException(nameof(command), command, null);
+        }
+    }
+
+    private static FreeWKeyboardModifiers ToKeyboardModifiers(KeyModifiers modifiers)
+    {
+        var result = FreeWKeyboardModifiers.None;
+        if ((modifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+            result |= FreeWKeyboardModifiers.Control;
+        if ((modifiers & KeyModifiers.Shift) != 0)
+            result |= FreeWKeyboardModifiers.Shift;
+        if ((modifiers & KeyModifiers.Alt) != 0)
+            result |= FreeWKeyboardModifiers.Alt;
+        return result;
+    }
+
+    private static bool TryMapKeyboardKey(Key key, out FreeWKeyboardKey mapped)
+    {
+        mapped = key switch
+        {
+            Key.A => FreeWKeyboardKey.A,
+            Key.C => FreeWKeyboardKey.C,
+            Key.F => FreeWKeyboardKey.F,
+            Key.H => FreeWKeyboardKey.H,
+            Key.N => FreeWKeyboardKey.N,
+            Key.O => FreeWKeyboardKey.O,
+            Key.P => FreeWKeyboardKey.P,
+            Key.S => FreeWKeyboardKey.S,
+            Key.V => FreeWKeyboardKey.V,
+            Key.X => FreeWKeyboardKey.X,
+            Key.Y => FreeWKeyboardKey.Y,
+            Key.Z => FreeWKeyboardKey.Z,
+            Key.F1 => FreeWKeyboardKey.F1,
+            Key.F7 => FreeWKeyboardKey.F7,
+            Key.F9 => FreeWKeyboardKey.F9,
+            _ => default,
+        };
+        return key is Key.A or Key.C or Key.F or Key.H or Key.N or Key.O or Key.P or Key.S
+            or Key.V or Key.X or Key.Y or Key.Z or Key.F1 or Key.F7 or Key.F9;
     }
 
     // ── Closing gate ─────────────────────────────────────────────────────────
