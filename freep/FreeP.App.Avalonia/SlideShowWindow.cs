@@ -1960,7 +1960,7 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowShapeAnimationEffectKind.Swivel:
                 InvokeRevealAtStart(plan, onReveal);
-                SpinEffect(element, plan);
+                SwivelEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Bounce:
@@ -3447,6 +3447,59 @@ public sealed class SlideShowWindow : Window
                 (plan.RotationDegrees, 1.0)
             },
             value => rotate.Angle = value));
+    }
+
+    private void SwivelEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        el.RenderTransformOrigin = RelativePoint.Center;
+        var transform = new MatrixTransform(Matrix.Identity);
+        el.RenderTransform = transform;
+
+        DelayedAction(plan.DelayMs, () => AnimateSwivel(
+            transform, plan.RotationDegrees, plan.DurationMs));
+    }
+
+    private void AnimateSwivel(MatrixTransform transform, double rotationDegrees, int durationMs)
+    {
+        if (durationMs <= 0)
+        {
+            ApplySwivelTransform(transform, rotationDegrees, 1);
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = Math.Min(1.0, (double)frame / steps);
+            ApplySwivelTransform(
+                transform,
+                rotationDegrees * progress,
+                SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(progress));
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                ApplySwivelTransform(transform, rotationDegrees, 1);
+            }
+        };
+        timer.Start();
+    }
+
+    private static void ApplySwivelTransform(
+        MatrixTransform transform,
+        double rotationDegrees,
+        double horizontalScale)
+    {
+        transform.Matrix = Matrix.CreateScale(horizontalScale, 1)
+            * Matrix.CreateRotation(rotationDegrees * Math.PI / 180);
     }
 
     private void TeeterEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
