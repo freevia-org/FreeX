@@ -197,9 +197,13 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("EmphasisPulseEffect(element, plan);");
         source.Should().Contain("AnimationKind.Emphasis");
         source.Should().Contain("a.Kind == AnimationKind.Exit");
-        source.Should().Contain("a.Preset == AnimationPreset.Appear || a.Preset == AnimationPreset.Fade");
+        source.Should().Contain("a.Preset == AnimationPreset.Appear");
+        source.Should().Contain("a.Preset == AnimationPreset.Fade");
+        source.Should().Contain("a.Preset == AnimationPreset.FlyIn");
         source.Should().Contain("onReveal: anim.Kind == AnimationKind.Exit ? null : () =>");
         source.Should().Contain("DisappearEffect(element, plan.DelayMs);");
+        source.Should().Contain("var isExit = plan.Animation.Kind == AnimationKind.Exit;");
+        source.Should().Contain("AnimateTranslate(el, isExit ? 0 : dx, isExit ? 0 : dy,");
         source.Should().Contain("_entranceShapeIds.Contains(shapeId) ? 0 : 1");
         source.Should().Contain("MotionPathEffect(element, plan, onReveal);");
         source.Should().Contain("AnimateOpacity(_slideCanvas, plan.FromOpacity, plan.FlashOpacity, plan.DurationMs / 2");

@@ -180,9 +180,13 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("EmphasisPulseEffect(sb, element, plan);");
         source.Should().Contain("AnimationKind.Emphasis");
         source.Should().Contain("a.Kind == AnimationKind.Exit");
-        source.Should().Contain("a.Preset == AnimationPreset.Appear || a.Preset == AnimationPreset.Fade");
+        source.Should().Contain("a.Preset == AnimationPreset.Appear");
+        source.Should().Contain("a.Preset == AnimationPreset.Fade");
+        source.Should().Contain("a.Preset == AnimationPreset.FlyIn");
         source.Should().Contain("_slideCanvas.SuppressedShapeIds.Add(anim.ShapeId);");
         source.Should().Contain("DisappearEffect(sb, element, plan.DelayMs);");
+        source.Should().Contain("var isExit = plan.Animation.Kind == AnimationKind.Exit;");
+        source.Should().Contain("isExit ? 0 : dx, isExit ? dx : 0");
         source.Should().Contain("_entranceShapeIds.Contains(shapeId) ? 0 : 1");
         source.Should().Contain("MotionPathEffect(sb, element, plan);");
         source.Should().Contain("Storyboard.SetTarget(flashAnim, _slideCanvas);");
