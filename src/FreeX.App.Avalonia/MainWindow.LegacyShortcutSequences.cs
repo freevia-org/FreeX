@@ -1,6 +1,10 @@
+using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 
 using Free.Shared.Ribbon.Avalonia;
+using FreeX.App.Avalonia.Ribbon;
+using Free.Shared.Ribbon;
 
 namespace FreeX.App.Avalonia;
 
@@ -14,9 +18,11 @@ public sealed partial class MainWindow
     }
 
     private LegacyDataFilterSequenceState _legacyDataFilterSequenceState;
+    private string _ribbonKeyTipInput = "";
 
     internal LegacyDataFilterSequenceState LegacyDataFilterSequenceStateForTest =>
         _legacyDataFilterSequenceState;
+    internal string RibbonKeyTipInputForTest => _ribbonKeyTipInput;
 
     internal static IReadOnlySet<string> InteractiveValidationLegacyDataFilterInteractionIds { get; } =
         new HashSet<string>(StringComparer.Ordinal)
@@ -32,13 +38,16 @@ public sealed partial class MainWindow
     /// </summary>
     private bool TryHandleLegacyDataFilterSequence(KeyEventArgs args)
     {
+        if (TryHandleCataloguedRibbonKeyTipSequence(args))
+            return true;
+
         var sequenceActive = _legacyDataFilterSequenceState != LegacyDataFilterSequenceState.None;
         var startsSequence = IsLegacyDataFilterSequenceStart(args);
 
         if (!CanHandleLegacyDataFilterSequence(args))
         {
             ResetLegacyDataFilterSequence();
-            return sequenceActive || startsSequence;
+            return sequenceActive;
         }
 
         if (!sequenceActive)
@@ -110,6 +119,133 @@ public sealed partial class MainWindow
     private void ResetLegacyDataFilterSequence()
     {
         _legacyDataFilterSequenceState = LegacyDataFilterSequenceState.None;
+        ResetRibbonKeyTipSequence();
+    }
+
+    private bool TryHandleCataloguedRibbonKeyTipSequence(KeyEventArgs args)
+    {
+        var sequenceActive = _ribbonKeyTipInput.Length > 0;
+        if (sequenceActive &&
+            (args.Key is Key.LeftAlt or Key.RightAlt ||
+             args.Key == Key.F10 && args.KeyModifiers == KeyModifiers.None))
+        {
+            ResetRibbonKeyTipSequence();
+            // Let the existing top-level handler reopen its badges. This also makes a fresh Alt
+            // naturally recover from any abandoned nested path.
+            return false;
+        }
+
+        var directAltToken = args.KeyModifiers == KeyModifiers.Alt
+            ? ToRibbonKeyTipToken(args.Key)
+            : null;
+        var visibleContinuation = _ribbonKeyTipsVisible && args.KeyModifiers == KeyModifiers.None;
+        if (!sequenceActive && directAltToken is null && !visibleContinuation)
+            return false;
+
+        if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
+        {
+            ResetRibbonKeyTipSequence();
+            args.Handled = true;
+            return true;
+        }
+
+        if (sequenceActive && args.KeyModifiers != KeyModifiers.None)
+        {
+            ResetRibbonKeyTipSequence();
+            return false;
+        }
+
+        var token = directAltToken ?? ToRibbonKeyTipToken(args.Key);
+        if (token is null)
+        {
+            if (!sequenceActive)
+                return false;
+
+            ResetRibbonKeyTipSequence();
+            args.Handled = true;
+            return true;
+        }
+
+        var nextInput = sequenceActive ? _ribbonKeyTipInput + token : token;
+        var match = AvaloniaRibbonKeyTipRoutes.Match(nextInput);
+        if (!match.IsMatch)
+        {
+            // Alt+D and Alt, D belong to the legacy Data > Filter compatibility sequence below.
+            if (!sequenceActive && token == "D")
+                return false;
+
+            var consume = sequenceActive || visibleContinuation;
+            ResetRibbonKeyTipSequence();
+            args.Handled = consume;
+            return consume;
+        }
+
+        _ribbonKeyTipInput = nextInput;
+        SetRibbonKeyTipsVisible(false);
+        args.Handled = true;
+
+        if (match.ExactRoute is { } route)
+            ExecuteRibbonKeyTipRoute(route);
+
+        if (!match.HasLongerRoute)
+            ResetRibbonKeyTipSequence();
+        return true;
+    }
+
+    private void ExecuteRibbonKeyTipRoute(AvaloniaRibbonKeyTipRoute route)
+    {
+        switch (route.Kind)
+        {
+            case AvaloniaRibbonKeyTipRouteKind.RibbonTab:
+                if (_ribbonControl is not null && route.TabKeyTip is { } keyTip)
+                    AvaloniaRibbonRenderer.TryActivateTopLevelKeyTip(_ribbonControl, keyTip);
+                break;
+            case AvaloniaRibbonKeyTipRouteKind.Backstage:
+                ShowBackstageOverlay();
+                break;
+            case AvaloniaRibbonKeyTipRouteKind.BackstagePane:
+                if (route.BackstagePane is { } pane)
+                    NavigateBackstageOverlay(pane);
+                break;
+            case AvaloniaRibbonKeyTipRouteKind.BackstageCommand:
+                if (route.BackstageCommand is { } command)
+                {
+                    HideBackstageOverlay();
+                    _ = ExecuteBackstageCommandWorkflowAsync(command);
+                }
+                break;
+            case AvaloniaRibbonKeyTipRouteKind.QuickAccessToolbar:
+                ExecuteQuickAccessKeyTip(route.QuickAccessIndex);
+                break;
+            case AvaloniaRibbonKeyTipRouteKind.RibbonCommand:
+                if (route.CommandId is { } commandId &&
+                    _ribbonCommandRegistry?.TryGet(commandId, out var ribbonCommand) == true &&
+                    ribbonCommand is not null)
+                {
+                    ribbonCommand.Execute(RibbonCommandContext.Empty);
+                }
+                break;
+            case AvaloniaRibbonKeyTipRouteKind.Scope:
+                break;
+        }
+    }
+
+    private void ExecuteQuickAccessKeyTip(int index)
+    {
+        var buttons = _avaloniaQuickAccessToolbar.Children
+            .OfType<Button>()
+            .Where(button => button.Tag is string tag && !tag.EndsWith(".History", StringComparison.Ordinal))
+            .ToArray();
+        if (index < 0 || index >= buttons.Length || !buttons[index].IsEnabled)
+            return;
+
+        var button = buttons[index];
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, button));
+    }
+
+    private void ResetRibbonKeyTipSequence()
+    {
+        _ribbonKeyTipInput = "";
         SetRibbonKeyTipsVisible(false);
     }
 }

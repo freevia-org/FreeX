@@ -65,6 +65,14 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
         yield return Route(Key.OemCloseBrackets, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.SelectAllDependents);
         yield return Route(Key.Back, KeyModifiers.None, MainWindow.AvaloniaHostShortcut.ClearSelectionAndEdit);
         yield return Route(Key.Back, KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.ClearSelectionAndEdit);
+        yield return Route(Key.F4, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.CloseWorkbook);
+        yield return Route(Key.D8, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.SelectCurrentRegion);
+        yield return Route(Key.F8, KeyModifiers.None, MainWindow.AvaloniaHostShortcut.ToggleExtendSelection);
+        yield return Route(Key.F8, KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.ToggleAddSelection);
+        yield return Route(Key.OemPlus, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.InsertCells);
+        yield return Route(Key.OemPlus, KeyModifiers.Control | KeyModifiers.Shift, MainWindow.AvaloniaHostShortcut.InsertCells);
+        yield return Route(Key.OemMinus, KeyModifiers.Control, MainWindow.AvaloniaHostShortcut.DeleteCells);
+        yield return Route(Key.Down, KeyModifiers.Alt, MainWindow.AvaloniaHostShortcut.OpenActiveDropdown);
     }
 
     [Theory]
@@ -296,6 +304,39 @@ public sealed class AvaloniaMainWindowKeyboardParityTests
                 window.Session.ActiveCell.Should().Be(corner);
                 window.Session.SelectedRanges.Should().Contain(range);
             }
+        });
+    }
+
+    [Fact]
+    public async Task F8SelectionModes_UseIndependentStickyStatesForNavigationAndEscapeResets()
+    {
+        await Run(async (window, sheet) =>
+        {
+            window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
+            var origin = new CellAddress(sheet.Id, 2, 2);
+            window.Session.SelectCell(origin);
+
+            await Press(window, Key.F8, KeyModifiers.None);
+            window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Extend);
+            await Press(window, Key.Right, KeyModifiers.None);
+            window.Session.SelectedRange.Should().Be(new GridRange(
+                origin,
+                new CellAddress(sheet.Id, 2, 3)));
+            await Press(window, Key.F8, KeyModifiers.None);
+            window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
+
+            window.Session.SelectCell(origin);
+            await Press(window, Key.F8, KeyModifiers.Shift);
+            window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Add);
+            await Press(window, Key.Down, KeyModifiers.None);
+            window.Session.SelectedRanges.Should().BeEquivalentTo([
+                new GridRange(origin, origin),
+                new GridRange(
+                    new CellAddress(sheet.Id, 3, 2),
+                    new CellAddress(sheet.Id, 3, 2)),
+            ]);
+            await Press(window, Key.Escape, KeyModifiers.None);
+            window.KeyboardSelectionModeForTest.Should().Be(FreeX.App.Presentation.ExcelSelectionMode.Normal);
         });
     }
 

@@ -22,7 +22,7 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
             .Select(item => (item.Id, item.DisplayText, Chord: item.Chord!.Value))
             .ToArray();
 
-        MainWindow.AvaloniaHostShortcutRules.Should().HaveCount(48);
+        MainWindow.AvaloniaHostShortcutRules.Should().HaveCount(56);
         MainWindow.AvaloniaHostShortcutRules
             .GroupBy(rule => $"{rule.Modifiers}:{rule.Key}", StringComparer.Ordinal)
             .Should().OnlyContain(group => group.Count() == 1);
@@ -87,7 +87,7 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
     }
 
     [Fact]
-    public async Task ProductionDispatch_CreditsTopLevelKeytipButExposesNestedKeytipGap()
+    public async Task ProductionDispatch_CreditsTopLevelAndNestedKeytips()
     {
         await Session.Dispatch(async () =>
         {
@@ -104,14 +104,30 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
                 var nestedResult = await window.ExerciseShortcutInteractionAsync(nested);
 
                 topLevelResult.Passed.Should().BeTrue(topLevelResult.Note);
-                nestedResult.Passed.Should().BeFalse("production currently handles only top-level ribbon keytips");
-                nestedResult.Note.Should().Contain("was not handled");
+                nestedResult.Passed.Should().BeTrue(nestedResult.Note);
             }
             finally
             {
                 window.Close();
             }
         }, CancellationToken.None);
+    }
+
+    [Theory]
+    [InlineData("ArrowUp", Key.Up)]
+    [InlineData("ArrowDown", Key.Down)]
+    [InlineData("Grave", Key.Oem3)]
+    [InlineData("Plus", Key.OemPlus)]
+    [InlineData("Menu", Key.Apps)]
+    public void ValidationGestureAliases_MapToProductionAvaloniaKeys(string source, Key expected)
+    {
+        ShortcutInteractionValidationCatalog.TryMapAvaloniaGesture(
+                new ShortcutGestureStep(source),
+                out var key,
+                out var modifiers)
+            .Should().BeTrue();
+        key.Should().Be(expected);
+        modifiers.Should().Be(KeyModifiers.None);
     }
 
     private static bool Is(
@@ -126,6 +142,11 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
         var keyName = step.Key switch
         {
             "Backspace" => nameof(Key.Back),
+            "ArrowUp" => nameof(Key.Up),
+            "ArrowDown" => nameof(Key.Down),
+            "Grave" => nameof(Key.Oem3),
+            "Plus" => nameof(Key.OemPlus),
+            "Menu" => nameof(Key.Apps),
             "Semicolon" => nameof(Key.OemSemicolon),
             "0" => nameof(Key.D0),
             "1" => nameof(Key.D1),

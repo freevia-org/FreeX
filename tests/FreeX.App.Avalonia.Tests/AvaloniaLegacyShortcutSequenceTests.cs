@@ -135,6 +135,43 @@ public sealed class AvaloniaLegacyShortcutSequenceTests
         });
     }
 
+    [Fact]
+    public async Task NestedRibbonKeytips_PersistPastTabSelectionAndResetAfterCommand()
+    {
+        await Run(async (window, _) =>
+        {
+            await PressHandled(window, Key.H, KeyModifiers.Alt);
+            window.RibbonKeyTipInputForTest.Should().Be("H");
+
+            await PressHandled(window, Key.B);
+            window.RibbonKeyTipInputForTest.Should().Be("HB");
+            await PressHandled(window, Key.S);
+            window.RibbonKeyTipInputForTest.Should().Be("HBS");
+            await PressHandled(window, Key.D);
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+        });
+    }
+
+    [Fact]
+    public async Task FreshAltAndInvalidContinuation_ResetOnlyRibbonKeytipState()
+    {
+        await Run(async (window, _) =>
+        {
+            await PressHandled(window, Key.H, KeyModifiers.Alt);
+            window.RibbonKeyTipInputForTest.Should().Be("H");
+
+            await PressHandled(window, Key.LeftAlt);
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+            window.RibbonKeyTipsVisibleForTest.Should().BeTrue();
+
+            await PressHandled(window, Key.X);
+            window.RibbonKeyTipInputForTest.Should().BeEmpty();
+            window.RibbonKeyTipsVisibleForTest.Should().BeFalse();
+            window.LegacyDataFilterSequenceStateForTest.Should().Be(
+                MainWindow.LegacyDataFilterSequenceState.None);
+        });
+    }
+
     private static async Task Run(Func<MainWindow, Sheet, Task> test)
     {
         await Session.Dispatch(async () =>

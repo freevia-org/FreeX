@@ -4,12 +4,224 @@ using FreeX.App.Avalonia.Charts;
 using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
 using FreeX.App.Presentation.DrawingUI;
+using FreeX.App.Presentation.Backstage;
 using FreeX.Core.Model;
 using Free.Shared.Ribbon.Avalonia;
 using Free.Shared.Theme;
 using FreeX.Ribbon.Definitions;
 
 namespace FreeX.App.Avalonia.Ribbon;
+
+internal enum AvaloniaRibbonKeyTipRouteKind
+{
+    RibbonTab,
+    Backstage,
+    BackstagePane,
+    BackstageCommand,
+    QuickAccessToolbar,
+    RibbonCommand,
+    Scope,
+}
+
+internal sealed record AvaloniaRibbonKeyTipRoute(
+    string Input,
+    string RouteName,
+    AvaloniaRibbonKeyTipRouteKind Kind,
+    string? TabKeyTip = null,
+    RibbonCommandId? CommandId = null,
+    FreeXBackstagePaneId? BackstagePane = null,
+    FreeXBackstageCommandId? BackstageCommand = null,
+    int QuickAccessIndex = -1);
+
+internal readonly record struct AvaloniaRibbonKeyTipMatch(
+    AvaloniaRibbonKeyTipRoute? ExactRoute,
+    bool HasLongerRoute)
+{
+    public bool IsMatch => ExactRoute is not null || HasLongerRoute;
+}
+
+/// <summary>
+/// Runtime keytip paths derived from the same ribbon and Backstage definitions used to render the shell.
+/// Input is character-by-character (for example H, B, S, D), while definition keytips may span more
+/// than one character. Keeping the flattened path here lets the window retain one state machine across
+/// tabs, split-button menus, nested menu scopes, contextual tabs, and the Quick Access Toolbar.
+/// </summary>
+internal static class AvaloniaRibbonKeyTipRoutes
+{
+    private static readonly IReadOnlyDictionary<string, string> ContextualTabInputs =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["PivotTableAnalyzeTab"] = "JA",
+            ["PivotTableDesignTab"] = "JD",
+            ["ChartDesignTab"] = "JC",
+            ["ChartFormatTab"] = "JF",
+            ["ShapeFormatTab"] = "JS",
+            ["PictureFormatTab"] = "JP",
+        };
+
+    private static readonly Lazy<IReadOnlyList<AvaloniaRibbonKeyTipRoute>> Routes =
+        new(BuildRoutes);
+
+    internal static AvaloniaRibbonKeyTipMatch Match(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+            return default;
+
+        var normalized = input.Trim().ToUpperInvariant();
+        AvaloniaRibbonKeyTipRoute? exact = null;
+        var hasLonger = false;
+        foreach (var route in Routes.Value)
+        {
+            if (string.Equals(route.Input, normalized, StringComparison.OrdinalIgnoreCase))
+                exact ??= route;
+            else if (route.Input.Length > normalized.Length &&
+                     route.Input.StartsWith(normalized, StringComparison.OrdinalIgnoreCase))
+                hasLonger = true;
+        }
+
+        return new AvaloniaRibbonKeyTipMatch(exact, hasLonger);
+    }
+
+    internal static bool TryResolveExact(string input, out AvaloniaRibbonKeyTipRoute route)
+    {
+        route = Match(input).ExactRoute!;
+        return route is not null;
+    }
+
+    private static IReadOnlyList<AvaloniaRibbonKeyTipRoute> BuildRoutes()
+    {
+        var routes = new Dictionary<string, AvaloniaRibbonKeyTipRoute>(StringComparer.OrdinalIgnoreCase);
+
+        void Add(AvaloniaRibbonKeyTipRoute route) => routes.TryAdd(route.Input, route);
+
+        Add(new("F", "backstage", AvaloniaRibbonKeyTipRouteKind.Backstage));
+        foreach (var entry in FreeXBackstageNavigationPlanner.Build())
+        {
+            if (string.IsNullOrWhiteSpace(entry.KeyTip))
+                continue;
+
+            var input = "F" + Normalize(entry.KeyTip);
+            if (entry.Pane is { } pane)
+            {
+                Add(new(
+                    input,
+                    $"backstage:{entry.KeyTip}",
+                    AvaloniaRibbonKeyTipRouteKind.BackstagePane,
+                    BackstagePane: pane));
+            }
+            else if (entry.Command is { } command)
+            {
+                Add(new(
+                    input,
+                    $"backstage:{entry.KeyTip}",
+                    AvaloniaRibbonKeyTipRouteKind.BackstageCommand,
+                    BackstageCommand: command));
+            }
+        }
+
+        // These legacy File-surface aliases remain catalogued by the Windows host. They keep the
+        // Backstage open when that older destination is not represented by the current rail.
+        foreach (var keyTip in new[] { "R", "D", "Z" })
+            Add(new("F" + keyTip, $"backstage:{keyTip}", AvaloniaRibbonKeyTipRouteKind.Scope));
+
+        for (var index = 0; index < 3; index++)
+        {
+            var keyTip = (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            Add(new(
+                keyTip,
+                $"qat:{keyTip}",
+                AvaloniaRibbonKeyTipRouteKind.QuickAccessToolbar,
+                QuickAccessIndex: index));
+        }
+
+        var definition = AvaloniaRibbonComposition.BuildDefinition();
+        foreach (var tab in definition.Tabs)
+        {
+            var tabInput = tab.IsContextual
+                ? ContextualTabInputs.GetValueOrDefault(tab.Id)
+                : string.IsNullOrWhiteSpace(tab.KeyTip) ? null : Normalize(tab.KeyTip);
+            if (string.IsNullOrWhiteSpace(tabInput))
+                continue;
+
+            Add(new(
+                tabInput,
+                $"tab:{tab.Id}",
+                AvaloniaRibbonKeyTipRouteKind.RibbonTab,
+                TabKeyTip: tab.IsContextual ? tabInput : tab.KeyTip));
+
+            foreach (var control in tab.Groups.SelectMany(group => group.Controls))
+            {
+                if (string.IsNullOrWhiteSpace(control.KeyTip))
+                    continue;
+
+                var controlInput = tabInput + Normalize(control.KeyTip);
+                var menu = control switch
+                {
+                    RibbonSplitButton split => split.Menu,
+                    RibbonDropdown dropdown => dropdown.Menu,
+                    _ => null,
+                };
+                Add(new(
+                    controlInput,
+                    menu is null ? $"command:{control.CommandId.Value}" : $"scope:{control.CommandId.Value}",
+                    menu is null ? AvaloniaRibbonKeyTipRouteKind.RibbonCommand : AvaloniaRibbonKeyTipRouteKind.Scope,
+                    CommandId: menu is null ? control.CommandId : (RibbonCommandId?)null));
+
+                if (menu is not null)
+                    AddMenuRoutes(routes, controlInput, menu.Items);
+            }
+        }
+
+        // The Insert Charts collapsed group is a valid terminal keytip scope even though it is not
+        // represented as a command in the declarative control list.
+        Add(new("NCH", "group:InsertChartsGroup", AvaloniaRibbonKeyTipRouteKind.Scope));
+        Add(new(
+            "NSHR",
+            "dynamic-menu:shape.rectangle",
+            AvaloniaRibbonKeyTipRouteKind.RibbonCommand,
+            CommandId: new RibbonCommandId(AvaloniaRibbonComposition.GetShapeCommandId(DrawingShapeKind.Rectangle))));
+        return routes.Values.OrderBy(route => route.Input, StringComparer.Ordinal).ToArray();
+    }
+
+    private static void AddMenuRoutes(
+        IDictionary<string, AvaloniaRibbonKeyTipRoute> routes,
+        string parentInput,
+        IReadOnlyList<RibbonMenuItem> items)
+    {
+        foreach (var item in items)
+        {
+            if (string.IsNullOrWhiteSpace(item.KeyTip))
+                continue;
+
+            var input = parentInput + Normalize(item.KeyTip);
+            if (item.Children.Count > 0)
+            {
+                routes.TryAdd(input, new(
+                    input,
+                    $"scope:{item.Header}",
+                    AvaloniaRibbonKeyTipRouteKind.Scope));
+                AddMenuRoutes(routes, input, item.Children);
+            }
+            else if (item.CommandId is { } commandId)
+            {
+                routes.TryAdd(input, new(
+                    input,
+                    $"menu:{commandId.Value}",
+                    AvaloniaRibbonKeyTipRouteKind.RibbonCommand,
+                    CommandId: commandId));
+            }
+            else
+            {
+                routes.TryAdd(input, new(
+                    input,
+                    $"scope:{item.Header}",
+                    AvaloniaRibbonKeyTipRouteKind.Scope));
+            }
+        }
+    }
+
+    private static string Normalize(string value) => value.Trim().ToUpperInvariant();
+}
 
 /// <summary>
 /// Builds the FreeX Avalonia ribbon from the SAME canonical, single-source ribbon definition the WPF app
