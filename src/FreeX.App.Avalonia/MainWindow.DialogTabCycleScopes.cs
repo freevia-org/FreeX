@@ -22,7 +22,7 @@ public sealed partial class MainWindow
 
     private static void HandleDialogTabCycle(Window dialog, Control root, KeyEventArgs args)
     {
-        if (args.Handled)
+        if (args.Handled && args.Key != Key.Tab)
             return;
 
         if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
