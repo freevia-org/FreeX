@@ -923,8 +923,7 @@ public sealed class SlideShowWindow : Window
         var animatedShapeIds = slide.Animations
             .Where(a => a.Kind == AnimationKind.Emphasis
                         || a.Kind == AnimationKind.Exit
-                        || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
-                            && a.TriggerShapeId == null))
+                        || (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion))
             .Select(a => a.ShapeId)
             .Distinct()
             .ToList();
