@@ -742,6 +742,7 @@ public sealed class SlideShowWindow : Window
         _transitionBackImage.Visibility = Visibility.Collapsed;
         _slideCanvas.Slide = slide;
         _slideCanvas.Opacity = 1;
+        _slideCanvas.Clip = null;
         _slideCanvas.RenderTransform = Transform.Identity;
         _slideCanvas.Refresh();
     }
@@ -784,6 +785,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Fade:
                 PlayFadeTransition(slide, plan.DurationMs);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Split:
+                PlaySplitTransition(slide, plan);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Push:
@@ -925,6 +930,60 @@ public sealed class SlideShowWindow : Window
     ///     and places it as an Image in _animOverlay, hidden.
     ///  2. Updates _slideCanvas so entrance-animated shapes show when revealed.
     /// </summary>
+    private void PlaySplitTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildSplitGeometry(w, h, 0, plan.SplitHorizontal, plan.SplitOut);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 24;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildSplitGeometry(w, h, progress, plan.SplitHorizontal, plan.SplitOut),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildSplitGeometry(
+        double width, double height, double progress, bool horizontal, bool fromCenter)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildSplitRects(
+                     width, height, progress, horizontal, fromCenter))
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        return geometry;
+    }
+
     private void PrepareAnimationOverlay(Slide slide)
     {
         // Clear previous overlay.

@@ -107,6 +107,47 @@ public static class SlideShowMaskGeometryPlanner
             new SlideShowMaskRect(x, 0, Math.Max(0, nextX - x), height));
     }
 
+    /// <summary>
+    /// Returns the two panels used by a slide split transition. For an
+    /// outgoing split the panels open from the center; for an incoming split
+    /// they open inward from the two outside edges.
+    /// </summary>
+    public static IReadOnlyList<SlideShowMaskRect> BuildSplitRects(
+        double width,
+        double height,
+        double progress,
+        bool horizontal,
+        bool fromCenter)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (horizontal)
+        {
+            var half = width / 2;
+            var extent = half * progress;
+            return fromCenter
+                ? [
+                    new SlideShowMaskRect(half - extent, 0, extent, height),
+                    new SlideShowMaskRect(half, 0, extent, height)
+                ]
+                : [
+                    new SlideShowMaskRect(0, 0, extent, height),
+                    new SlideShowMaskRect(width - extent, 0, extent, height)
+                ];
+        }
+
+        var halfHeight = height / 2;
+        var verticalExtent = halfHeight * progress;
+        return fromCenter
+            ? [
+                new SlideShowMaskRect(0, halfHeight - verticalExtent, width, verticalExtent),
+                new SlideShowMaskRect(0, halfHeight, width, verticalExtent)
+            ]
+            : [
+                new SlideShowMaskRect(0, 0, width, verticalExtent),
+                new SlideShowMaskRect(0, height - verticalExtent, width, verticalExtent)
+            ];
+    }
+
     public static SlideShowMaskRectPair BuildCheckerboardCell(
         double width,
         double height,

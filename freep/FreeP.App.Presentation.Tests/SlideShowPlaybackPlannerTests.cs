@@ -39,6 +39,22 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanTransition_SplitUsesDedicatedActionAndPreservesGeometry()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Split,
+            Direction = TransitionDirection.Vertical,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Split);
+        plan.DurationMs.Should().Be(420);
+        plan.SplitHorizontal.Should().BeFalse();
+        plan.SplitOut.Should().BeTrue();
+    }
+
+    [Fact]
     public void PlanAnimationStep_UsesControllerEntryStartDelays()
     {
         var slide = new Slide();

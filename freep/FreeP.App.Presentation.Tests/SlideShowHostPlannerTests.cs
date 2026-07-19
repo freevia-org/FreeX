@@ -140,6 +140,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Fade, SlideShowTransitionPlaybackKind.Fade)]
     [InlineData(TransitionKind.Dissolve, SlideShowTransitionPlaybackKind.Fade)]
     [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Fade)]
+    [InlineData(TransitionKind.Split, SlideShowTransitionPlaybackKind.Split)]
     [InlineData(TransitionKind.Push, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Cover, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Wipe, SlideShowTransitionPlaybackKind.PushLike)]
@@ -183,6 +184,27 @@ public sealed class SlideShowHostPlannerTests
 
         plan.IncomingOffsetX.Should().Be(expectedX);
         plan.IncomingOffsetY.Should().Be(expectedY);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Horizontal, true, true)]
+    [InlineData(TransitionDirection.Vertical, false, true)]
+    [InlineData(TransitionDirection.In, true, false)]
+    [InlineData(TransitionDirection.Out, true, true)]
+    public void PlanTransition_ResolvesSplitAxisAndDirection(
+        TransitionDirection direction,
+        bool expectedHorizontal,
+        bool expectedOut)
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Split,
+            Direction = direction
+        });
+
+        plan.PlaybackKind.Should().Be(SlideShowTransitionPlaybackKind.Split);
+        plan.SplitHorizontal.Should().Be(expectedHorizontal);
+        plan.SplitOut.Should().Be(expectedOut);
     }
 
     [Fact]

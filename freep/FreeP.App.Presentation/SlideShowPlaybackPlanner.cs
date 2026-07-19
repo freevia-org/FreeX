@@ -6,6 +6,7 @@ public enum SlideShowTransitionPlaybackActionKind
 {
     ShowInstant,
     Fade,
+    Split,
     Push
 }
 
@@ -14,7 +15,9 @@ public sealed record SlideShowTransitionPlaybackPlan(
     int DurationMs,
     double IncomingOffsetX,
     double IncomingOffsetY,
-    SlideShowTransitionPlaybackKind SourceKind);
+    SlideShowTransitionPlaybackKind SourceKind,
+    bool SplitHorizontal,
+    bool SplitOut);
 
 public enum SlideShowShapeAnimationEffectKind
 {
@@ -137,6 +140,7 @@ public static class SlideShowPlaybackPlanner
         var actionKind = transitionPlan.PlaybackKind switch
         {
             SlideShowTransitionPlaybackKind.Cut => SlideShowTransitionPlaybackActionKind.ShowInstant,
+            SlideShowTransitionPlaybackKind.Split => SlideShowTransitionPlaybackActionKind.Split,
             SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Push,
             _ => SlideShowTransitionPlaybackActionKind.Fade
         };
@@ -146,7 +150,9 @@ public static class SlideShowPlaybackPlanner
             Math.Max(MinTransitionDurationMs, transition.DurationMs),
             transitionPlan.IncomingOffsetX,
             transitionPlan.IncomingOffsetY,
-            transitionPlan.PlaybackKind);
+            transitionPlan.PlaybackKind,
+            transitionPlan.SplitHorizontal,
+            transitionPlan.SplitOut);
     }
 
     public static IReadOnlyList<SlideShowShapeAnimationPlaybackPlan> PlanAnimationStep(AnimationStep step)
