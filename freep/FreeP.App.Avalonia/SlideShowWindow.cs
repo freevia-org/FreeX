@@ -1945,7 +1945,7 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Flash:
-                FadeEffect(element, plan, onReveal);
+                FlashEffect(element, plan, onReveal);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spiral:
@@ -2070,6 +2070,28 @@ public sealed class SlideShowWindow : Window
                 plan.ToOpacity,
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal)));
+    }
+
+    private void FlashEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan,
+        Action? onReveal = null)
+    {
+        InvokeRevealAtStart(plan, onReveal);
+
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var firstOpacity = isExit ? plan.FromOpacity : 0;
+        var firstDuration = Math.Max(1, (int)(plan.DurationMs * 0.2));
+        var secondDuration = Math.Max(1, (int)(plan.DurationMs * 0.35));
+        var finalDuration = Math.Max(1, plan.DurationMs - firstDuration - secondDuration);
+
+        DelayedAction(plan.DelayMs, () =>
+            AnimateOpacity(el, firstOpacity, 0.7, firstDuration, onComplete: () =>
+                AnimateOpacity(el, 0.7, 0.35, secondDuration, onComplete: () =>
+                    AnimateOpacity(
+                        el,
+                        0.35,
+                        plan.ToOpacity,
+                        finalDuration,
+                        onComplete: CompleteReveal(plan, onReveal)))));
     }
 
     private void FlyInEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)
