@@ -1196,7 +1196,7 @@ public sealed partial class MainWindow
         }
     }
 
-    private async Task ShowAutoFilterParityWindowAsync(AutoFilterMenuPlan menuPlan)
+    private Task ShowAutoFilterParityWindowAsync(AutoFilterMenuPlan menuPlan)
     {
         var dialog = new Window
         {
@@ -1207,11 +1207,21 @@ public sealed partial class MainWindow
             MaxHeight = 560,
             Background = Brushes.White,
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            WindowDecorations = global::Avalonia.Controls.WindowDecorations.None,
+            CanResize = false,
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "AutoFilterParityDialog");
         dialog.Content = CreateAutoFilterParityContent(AutoFilterMenuPlanner.Build(menuPlan));
-        await dialog.ShowDialog(this);
+        ShowOwnedModelessWindow(
+            dialog,
+            () => dialog.GetVisualDescendants()
+                .OfType<Control>()
+                .FirstOrDefault(control =>
+                    control.Focusable && control.IsVisible && control.IsEffectivelyEnabled)
+                ?.Focus(),
+            closeOnDeactivate: true);
+        return Task.CompletedTask;
     }
 
     private Control CreateAutoFilterParityContent(AutoFilterMenuModel model)

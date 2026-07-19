@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -22,6 +23,9 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private Window? _commentListWindow;
+    private Action<IReadOnlyList<SheetNoteEntry>>? _refreshCommentListWindow;
+
     private static AvaloniaCompactDialogChromeStyle SheetOptionsDialogChromeStyle => new(FormulaBarFontFamily);
 
     // Page Layout ▸ Sheet Options ▸ Gridlines / Headings, and Review ▸ Show Notes.
@@ -181,23 +185,31 @@ public sealed partial class MainWindow
     /// Notes are enumerated from Sheet.Comments / Sheet.CommentAuthors and threaded comments
     /// from Sheet.ThreadedComments (FreeX.Core.Model).
     /// </summary>
-    private async Task ShowNotesListAsync()
+    private Task ShowNotesListAsync()
     {
         if (_isOpening || _isSaving)
-            return;
+            return Task.CompletedTask;
 
         if (!TryCommitPendingFormulaEdit())
-            return;
+            return Task.CompletedTask;
 
         ClearSelectedDrawingObject();
 
         var sheet = _session.ActiveSheet;
         var notes = CollectSheetNotes(sheet);
 
+        if (_commentListWindow is { IsVisible: true } existing)
+        {
+            _refreshCommentListWindow?.Invoke(notes);
+            if (existing.WindowState == WindowState.Minimized)
+                existing.WindowState = WindowState.Normal;
+            existing.Activate();
+            return Task.CompletedTask;
+        }
+
         var listBox = new ListBox { MinHeight = 240, MinWidth = 420 };
         ApplySheetOptionListBoxStyle(listBox);
         AutomationProperties.SetAutomationId(listBox, "ShowNotesList");
-        listBox.ItemsSource = notes.Select(FormatNoteRow).ToList();
 
         var emptyText = new TextBlock
         {
@@ -231,20 +243,45 @@ public sealed partial class MainWindow
         };
         AutomationProperties.SetAutomationId(dialog, "ShowNotesDialog");
 
+        IReadOnlyList<SheetNoteEntry> currentNotes = notes;
+
+        void RefreshList(IReadOnlyList<SheetNoteEntry> refreshedNotes)
+        {
+            var selectedAddress = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentNotes.Count
+                ? currentNotes[listBox.SelectedIndex].Address
+                : (CellAddress?)null;
+            currentNotes = refreshedNotes;
+            listBox.ItemsSource = currentNotes.Select(FormatNoteRow).ToList();
+            listBox.SelectedIndex = selectedAddress is { } address
+                ? currentNotes.ToList().FindIndex(note => note.Address.Equals(address))
+                : -1;
+            if (listBox.SelectedIndex < 0 && currentNotes.Count > 0)
+                listBox.SelectedIndex = 0;
+            emptyText.IsVisible = currentNotes.Count == 0;
+            goToButton.IsEnabled = listBox.SelectedIndex >= 0;
+        }
+
         void GoToSelected()
         {
             var index = listBox.SelectedIndex;
-            if (index < 0 || index >= notes.Count)
+            if (index < 0 || index >= currentNotes.Count)
                 return;
 
-            _session.SelectCell(notes[index].Address);
-            RefreshShell(UiText.Format("ShellLoc_SelectedCell", FormatCellReference(notes[index].Address)));
-            dialog.Close();
+            _session.SelectCell(currentNotes[index].Address);
+            RefreshShell(UiText.Format("ShellLoc_SelectedCell", FormatCellReference(currentNotes[index].Address)));
         }
 
         listBox.SelectionChanged += (_, _) =>
-            goToButton.IsEnabled = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < notes.Count;
+            goToButton.IsEnabled = listBox.SelectedIndex >= 0 && listBox.SelectedIndex < currentNotes.Count;
         listBox.DoubleTapped += (_, _) => GoToSelected();
+        listBox.KeyDown += (_, args) =>
+        {
+            if (args.Key != Key.Enter)
+                return;
+
+            GoToSelected();
+            args.Handled = true;
+        };
         goToButton.Click += (_, _) => GoToSelected();
         closeButton.Click += (_, _) => dialog.Close();
 
@@ -258,7 +295,21 @@ public sealed partial class MainWindow
             Children = { bottomRow, emptyText, listBox },
         };
 
-        await dialog.ShowDialog(this);
+        RefreshList(notes);
+        _commentListWindow = dialog;
+        _refreshCommentListWindow = RefreshList;
+        ShowOwnedModelessWindow(
+            dialog,
+            () => listBox.Focus(),
+            () =>
+            {
+                if (!ReferenceEquals(_commentListWindow, dialog))
+                    return;
+
+                _commentListWindow = null;
+                _refreshCommentListWindow = null;
+            });
+        return Task.CompletedTask;
     }
 
     private static List<SheetNoteEntry> CollectSheetNotes(Sheet sheet)

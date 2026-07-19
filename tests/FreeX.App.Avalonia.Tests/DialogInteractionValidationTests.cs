@@ -1,4 +1,6 @@
+using System.Reflection;
 using System.Threading;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
@@ -60,6 +62,126 @@ public sealed class DialogInteractionValidationTests
         MainWindow.InteractiveValidationDialogRouteCount.Should().Be(124);
         MainWindow.InteractiveValidationDialogRoutes.Select(route => route.CatalogId)
             .Should().OnlyHaveUniqueItems();
+    }
+
+    [Fact]
+    public async Task AuditedWpfModelessDialogs_KeepOwnerInteractiveAndReturnFromProductionOpeners()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-modeless-dialog-contract-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                try
+                {
+                    window.Show();
+                    var selectedIds = new HashSet<string>(StringComparer.Ordinal)
+                    {
+                        "dialog.AutoFilterDialog",
+                        "dialog.CommentListWindow",
+                        "dialog.ErrorCheckingDialog",
+                        "dialog.FindReplaceDialog",
+                        "dialog.WatchWindowDialog",
+                    };
+
+                    await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        interactionOnly: true,
+                        interactionDialogCatalogIds: selectedIds);
+
+                    var contracts = window.DialogInteractionContracts.Values
+                        .Where(contract => contract.ActualModality == "modeless")
+                        .ToList();
+                    contracts.Should().HaveCount(5);
+                    contracts.Should().OnlyContain(contract =>
+                        contract.Ownership == "passed:owned-by-main-window" &&
+                        contract.OpenerLifecycle == "passed:modeless-opener-completed-while-open" &&
+                        contract.OwnerInteractivity == "passed:modeless-owner-enabled");
+
+                    window.BuildDialogInteractionContractResults(selectedIds)
+                        .Should().OnlyContain(result => result.Status == "passed",
+                            string.Join(Environment.NewLine, window.DialogInteractionContracts.Values.Select(contract =>
+                                $"{contract.SurfaceId}: {contract.ActualModality}; {contract.OpenerLifecycle}; " +
+                                $"{contract.InitialFocus}; {contract.EscapeCancel}")));
+                }
+                finally
+                {
+                    if (window.IsVisible)
+                        window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(outputDirectory))
+                    Directory.Delete(outputDirectory, recursive: true);
+            }
+            catch
+            {
+                // Test cleanup must not hide the interaction contract result.
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ReusableWpfModelessDialogs_RefreshSwitchModeAndReactivateExistingWindows()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var owner = new MainWindow([]);
+            try
+            {
+                owner.Show();
+
+                await InvokePrivateTaskAsync(owner, "ShowFindDialogAsync");
+                var findReplace = FindOwnedWindow(owner, "FindReplaceDialog");
+                await InvokePrivateTaskAsync(owner, "ShowReplaceDialogAsync");
+                FindOwnedWindow(owner, "FindReplaceDialog").Should().BeSameAs(findReplace);
+                findReplace.GetVisualDescendants().OfType<TabControl>().Single().SelectedIndex.Should().Be(1);
+                findReplace.GetVisualDescendants().OfType<Button>().Single(button =>
+                        AutomationProperties.GetAutomationId(button) == "FindReplaceReplacementChooseFormatFromCellButton")
+                    .IsVisible.Should().BeTrue();
+                findReplace.Close();
+
+                await InvokePrivateTaskAsync(owner, "ShowWatchWindowDialogAsync");
+                var watch = FindOwnedWindow(owner, "WatchWindowDialog");
+                await InvokePrivateTaskAsync(owner, "ShowWatchWindowDialogAsync");
+                FindOwnedWindow(owner, "WatchWindowDialog").Should().BeSameAs(watch);
+                watch.Close();
+
+                await InvokePrivateTaskAsync(owner, "ShowErrorCheckingParityDialogAsync");
+                await InvokePrivateTaskAsync(owner, "ShowErrorCheckingParityDialogAsync");
+                var errorCheckingWindows = owner.OwnedWindows
+                    .Where(window => AutomationProperties.GetAutomationId(window) == "ErrorCheckingDialog")
+                    .ToList();
+                errorCheckingWindows.Should().HaveCount(2, "WPF creates a fresh modeless error-checking window per command");
+                errorCheckingWindows.ForEach(window => window.Close());
+
+                await InvokePrivateTaskAsync(owner, "ShowNotesListAsync");
+                var comments = FindOwnedWindow(owner, "ShowNotesDialog");
+                await InvokePrivateTaskAsync(owner, "ShowNotesListAsync");
+                FindOwnedWindow(owner, "ShowNotesDialog").Should().BeSameAs(comments);
+
+                owner.Close();
+                comments.IsVisible.Should().BeFalse("owned modeless windows must follow the owner lifetime");
+            }
+            finally
+            {
+                foreach (var owned in owner.OwnedWindows.ToArray())
+                {
+                    if (owned.IsVisible)
+                        owned.Close();
+                }
+                if (owner.IsVisible)
+                    owner.Close();
+            }
+        }, CancellationToken.None);
     }
 
     [Fact]
@@ -238,5 +360,19 @@ public sealed class DialogInteractionValidationTests
 
             button.IsDefault.Should().BeTrue();
         }, CancellationToken.None);
+    }
+
+    private static Window FindOwnedWindow(MainWindow owner, string automationId) =>
+        owner.OwnedWindows.Single(window =>
+            string.Equals(AutomationProperties.GetAutomationId(window), automationId, StringComparison.Ordinal));
+
+    private static Task InvokePrivateTaskAsync(MainWindow owner, string methodName)
+    {
+        var method = typeof(MainWindow).GetMethod(
+            methodName,
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"Missing production dialog opener {methodName}.");
+        return method.Invoke(owner, null) as Task
+            ?? throw new InvalidOperationException($"Production dialog opener {methodName} did not return Task.");
     }
 }

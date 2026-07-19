@@ -22,6 +22,8 @@ namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
+    private Flyout? _autoFilterFlyout;
+
     private static AvaloniaCompactDialogChromeStyle AutoFilterDialogChromeStyle => new(FormulaBarFontFamily);
 
     // AutoFilter button visuals — match WPF GridView.Rendering.AutoFilter.cs constants.
@@ -144,6 +146,8 @@ public sealed partial class MainWindow
     /// </summary>
     private void OpenAutoFilterFlyout(Control anchor, CellAddress headerCell)
     {
+        CloseAutoFilterFlyout();
+
         var sheet = _session.ActiveSheet;
         if (AutoFilterHeaderButtonPlanner.TryGetAutoFilterRange(sheet) is not { } range)
             return;
@@ -366,8 +370,23 @@ public sealed partial class MainWindow
             }
         };
         flyout.Content = new Border { Padding = new Thickness(8), Child = panel };
+        _autoFilterFlyout = flyout;
+        flyout.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_autoFilterFlyout, flyout))
+                _autoFilterFlyout = null;
+        };
         flyout.ShowAt(anchor);
         (initialFocusTarget ?? searchBox).Focus();
+    }
+
+    private void CloseAutoFilterFlyout()
+    {
+        if (_autoFilterFlyout is not { } flyout)
+            return;
+
+        _autoFilterFlyout = null;
+        flyout.Hide();
     }
 
     private Control CreateAutoFilterCriteriaPanel(AutoFilterMenuModel model, TextBox criteriaBox)

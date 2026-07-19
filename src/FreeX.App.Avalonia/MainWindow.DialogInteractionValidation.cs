@@ -16,6 +16,9 @@ namespace FreeX.App.Avalonia;
 internal sealed record DialogInteractionContractEvidence(
     string SurfaceId,
     string ActualModality,
+    string Ownership,
+    string OpenerLifecycle,
+    string OwnerInteractivity,
     string InitialFocus,
     string TabForward,
     string TabBackward,
@@ -185,7 +188,25 @@ public sealed partial class MainWindow
             return;
 
         await SettleDialogInteractionAsync();
-        var actualModality = openerTask.IsCompleted ? "modeless" : "modal";
+        var actualModality = dialog.IsDialog ? "modal" : "modeless";
+        if (!dialog.IsDialog && !openerTask.IsCompleted)
+            await Task.WhenAny(openerTask, Task.Delay(250));
+
+        var ownership = ReferenceEquals(dialog.Owner, this)
+            ? "passed:owned-by-main-window"
+            : "failed:not-owned-by-main-window";
+        var openerLifecycle = dialog.IsDialog
+            ? openerTask.IsCompleted
+                ? "failed:modal-opener-completed-while-open"
+                : "passed:modal-opener-blocked-while-open"
+            : openerTask.IsCompleted
+                ? "passed:modeless-opener-completed-while-open"
+                : "failed:modeless-opener-still-blocked-while-open";
+        var ownerInteractivity = dialog.IsDialog
+            ? "classified:modal-owner-input-blocked"
+            : IsEffectivelyEnabled
+                ? "passed:modeless-owner-enabled"
+                : "failed:modeless-owner-disabled";
         var initial = dialog.FocusManager?.GetFocusedElement();
         var initialFocus = IsFocusInside(dialog, initial)
             ? "passed:" + DescribeInputElement(initial)
@@ -227,11 +248,15 @@ public sealed partial class MainWindow
             defaultEnter = await ExerciseSafeDefaultEnterAsync(surfaceId, opener);
         }
 
-        var hasFailure = IsFailed(initialFocus) || IsFailed(forward) || IsFailed(backward) ||
+        var hasFailure = IsFailed(ownership) || IsFailed(openerLifecycle) || IsFailed(ownerInteractivity) ||
+            IsFailed(initialFocus) || IsFailed(forward) || IsFailed(backward) ||
             IsFailed(escape) || IsFailed(ownerRestore) || IsFailed(defaultEnter);
         _dialogInteractionContracts[surfaceId] = new DialogInteractionContractEvidence(
             surfaceId,
             actualModality,
+            ownership,
+            openerLifecycle,
+            ownerInteractivity,
             initialFocus,
             forward,
             backward,
@@ -248,6 +273,9 @@ public sealed partial class MainWindow
             new DialogInteractionContractEvidence(
                 surfaceId,
                 "unavailable",
+                "failed:not-opened",
+                "failed:not-opened",
+                "failed:not-opened",
                 "failed:not-opened",
                 "failed:not-opened",
                 "failed:not-opened",
@@ -518,7 +546,9 @@ public sealed partial class MainWindow
                 Status: failed ? "failed" : "passed",
                 EvidenceLevel: "routed-keyboard-focus-contract",
                 Evidence:
-                    $"modality={contract.ActualModality}; initial={contract.InitialFocus}; " +
+                    $"modality={contract.ActualModality}; ownership={contract.Ownership}; " +
+                    $"opener={contract.OpenerLifecycle}; owner={contract.OwnerInteractivity}; " +
+                    $"initial={contract.InitialFocus}; " +
                     $"tab={contract.TabForward}; shift-tab={contract.TabBackward}; " +
                     $"escape={contract.EscapeCancel}; owner-focus={contract.OwnerFocusRestore}; " +
                     $"enter={contract.DefaultEnter}",
@@ -553,7 +583,9 @@ public sealed partial class MainWindow
                 Status: contract.HasFailure || !modalityMatches ? "failed" : "passed",
                 EvidenceLevel: "routed-keyboard-focus-contract",
                 Evidence:
-                    $"modality={contract.ActualModality}; initial={contract.InitialFocus}; " +
+                    $"modality={contract.ActualModality}; ownership={contract.Ownership}; " +
+                    $"opener={contract.OpenerLifecycle}; owner={contract.OwnerInteractivity}; " +
+                    $"initial={contract.InitialFocus}; " +
                     $"tab={contract.TabForward}; shift-tab={contract.TabBackward}; " +
                     $"escape={contract.EscapeCancel}; owner-focus={contract.OwnerFocusRestore}; " +
                     $"enter={contract.DefaultEnter}",

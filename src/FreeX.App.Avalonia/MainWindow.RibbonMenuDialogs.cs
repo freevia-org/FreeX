@@ -28,6 +28,9 @@ namespace FreeX.App.Avalonia;
 /// </summary>
 public sealed partial class MainWindow
 {
+    private Window? _watchWindowDialog;
+    private Action? _refreshWatchWindow;
+
     private static AvaloniaCompactDialogChromeStyle RibbonMenuDialogChromeStyle => new(FormulaBarFontFamily);
 
     private static void ApplyRibbonMenuButtonChrome(Button button, double minWidth, bool isDefault = false)
@@ -108,10 +111,19 @@ public sealed partial class MainWindow
     }
 
     // ── Formulas ▸ Formula Auditing ▸ Watch Window ───────────────────────────────
-    private async Task ShowWatchWindowDialogAsync()
+    private Task ShowWatchWindowDialogAsync()
     {
         if (_isOpening || _isSaving || !TryCommitPendingFormulaEdit())
-            return;
+            return Task.CompletedTask;
+
+        if (_watchWindowDialog is { IsVisible: true } existing)
+        {
+            _refreshWatchWindow?.Invoke();
+            if (existing.WindowState == WindowState.Minimized)
+                existing.WindowState = WindowState.Normal;
+            existing.Activate();
+            return Task.CompletedTask;
+        }
 
         var dialog = new Window
         {
@@ -166,25 +178,22 @@ public sealed partial class MainWindow
             if (selected.Count > 0)
                 foreach (var row in rows.Where(r => selected.Contains(r.Address)))
                     list.SelectedItems!.Add(row);
+            if (list.SelectedIndex < 0 && rows.Count > 0)
+                list.SelectedIndex = 0;
         }
 
-        // Delete the rows picked in the list (WPF DeleteSelectedWatch); fall back to the worksheet
-        // selection when nothing in the list is selected, preserving the Delete-Watch-by-range behavior.
+        // Delete the rows picked in the list, matching WPF WatchWindowDialog.DeleteSelectedWatch.
         void DeleteSelectedWatches()
         {
             var addresses = list.SelectedItems!
                 .OfType<WatchWindowGridRow>()
                 .Select(r => r.Address)
                 .ToList();
-            if (addresses.Count > 0)
-            {
-                foreach (var address in addresses)
-                    WatchWindowService.RemoveWatch(_session.Workbook, address);
-            }
-            else
-            {
-                WatchWindowService.RemoveWatches(_session.Workbook, _session.SelectedRange);
-            }
+            if (addresses.Count == 0)
+                return;
+
+            foreach (var address in addresses)
+                WatchWindowService.RemoveWatch(_session.Workbook, address);
 
             RefreshList();
         }
@@ -220,7 +229,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(addButton, "WatchWindowAddButton");
         addButton.Click += async (_, _) =>
         {
-            if (await ShowAddWatchDialogAsync(FormatRangeReference(_session.SelectedRange)))
+            if (await ShowAddWatchDialogAsync(FormatRangeReference(_session.SelectedRange), dialog))
             {
                 WatchWindowService.AddWatches(_session.Workbook, _session.SelectedRange);
                 RefreshList();
@@ -231,10 +240,13 @@ public sealed partial class MainWindow
         {
             Content = UiText.Get("RibbonWire_WatchWindowDelete"),
             MinWidth = 110,
+            IsEnabled = (list.SelectedItems?.Count ?? 0) > 0,
         };
         ApplyRibbonMenuButtonChrome(deleteButton, 110);
         AutomationProperties.SetAutomationId(deleteButton, "WatchWindowDeleteButton");
         deleteButton.Click += (_, _) => DeleteSelectedWatches();
+        list.SelectionChanged += (_, _) =>
+            deleteButton.IsEnabled = (list.SelectedItems?.Count ?? 0) > 0;
 
         var refreshButton = new Button
         {
@@ -281,7 +293,20 @@ public sealed partial class MainWindow
             },
         };
 
-        await dialog.ShowDialog(this);
+        _watchWindowDialog = dialog;
+        _refreshWatchWindow = RefreshList;
+        ShowOwnedModelessWindow(
+            dialog,
+            () => list.Focus(),
+            () =>
+            {
+                if (!ReferenceEquals(_watchWindowDialog, dialog))
+                    return;
+
+                _watchWindowDialog = null;
+                _refreshWatchWindow = null;
+            });
+        return Task.CompletedTask;
     }
 
     // Watch Window grid columns mirror the WPF dialog (Book | Sheet | Name | Cell | Value | Formula).
@@ -360,7 +385,7 @@ public sealed partial class MainWindow
         string Formula,
         CellAddress Address);
 
-    private async Task<bool> ShowAddWatchDialogAsync(string selectedRangeText)
+    private async Task<bool> ShowAddWatchDialogAsync(string selectedRangeText, Window? owner = null)
     {
         var dialog = new Window
         {
@@ -451,7 +476,7 @@ public sealed partial class MainWindow
             rangeBox.SelectAll();
         };
 
-        await dialog.ShowDialog(this);
+        await dialog.ShowDialog(owner ?? this);
         return result;
     }
 }

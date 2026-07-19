@@ -37,7 +37,7 @@ public sealed partial class MainWindow
     private Task ShowErrorCheckingParityDialogAsync() =>
         ShowErrorCheckingDialogAsync(CreateErrorCheckingParityIssues(_session.ActiveSheet.Id));
 
-    private async Task ShowErrorCheckingDialogAsync(IReadOnlyList<FormulaErrorIssue> sourceIssues)
+    private Task ShowErrorCheckingDialogAsync(IReadOnlyList<FormulaErrorIssue> sourceIssues)
     {
         var issues = sourceIssues.ToList();
         var selectedIndex = issues.Count > 0 ? 0 : -1;
@@ -60,7 +60,7 @@ public sealed partial class MainWindow
             FontFamily = FormulaBarFontFamily,
             Margin = new Thickness(0, 0, 0, 8),
         };
-        var rowsPanel = new StackPanel();
+        var rowsPanel = new StackPanel { Focusable = true };
         AutomationProperties.SetAutomationId(rowsPanel, ErrorCheckingDialogPlanner.IssuesAutomationId);
         AutomationProperties.SetName(rowsPanel, UiText.Get(ErrorCheckingDialogPlanner.IssuesAutomationNameKey));
 
@@ -176,16 +176,34 @@ public sealed partial class MainWindow
         root.Children.Add(listPanel);
         dialog.Content = root;
 
+        rowsPanel.KeyDown += (_, args) =>
+        {
+            switch (args.Key)
+            {
+                case Key.Up:
+                    MoveSelection(-1);
+                    args.Handled = true;
+                    break;
+                case Key.Down:
+                    MoveSelection(1);
+                    args.Handled = true;
+                    break;
+                case Key.Enter:
+                    NavigateSelected();
+                    args.Handled = true;
+                    break;
+            }
+        };
+
         RefreshHeader();
         RenderRows();
         UpdateCommandStates();
-        dialog.Opened += (_, _) =>
+        ShowOwnedModelessWindow(dialog, () =>
         {
             NavigateSelected();
             rowsPanel.Focus();
-        };
-
-        await dialog.ShowDialog(this);
+        });
+        return Task.CompletedTask;
 
         Label CreateErrorCheckingLabel()
         {

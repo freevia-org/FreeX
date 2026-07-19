@@ -2518,7 +2518,7 @@ public sealed class AvaloniaShellSourceTests
         parityCaptureSource.Should().Contain("ShowWatchWindowDialogAsync");
         parityCaptureSource.Should().Contain("private Task ShowAddWatchParityDialogAsync()");
         parityCaptureSource.Should().Contain("ShowAddWatchDialogAsync(\"Sheet1!$B$2\")");
-        ribbonMenuDialogSource.Should().Contain("await ShowAddWatchDialogAsync(FormatRangeReference(_session.SelectedRange))");
+        ribbonMenuDialogSource.Should().Contain("await ShowAddWatchDialogAsync(FormatRangeReference(_session.SelectedRange), dialog)");
         ribbonMenuDialogSource.Should().Contain("WatchWindowService.AddWatches(_session.Workbook, _session.SelectedRange)");
         ribbonMenuDialogSource.Should().Contain("Width = WatchWindowDialogPlanner.Width");
         ribbonMenuDialogSource.Should().Contain("Height = WatchWindowDialogPlanner.Height");
@@ -2786,6 +2786,8 @@ public sealed class AvaloniaShellSourceTests
         avaloniaSource.Should().Contain("Control? initialFocusTarget = null;");
         avaloniaSource.Should().Contain("item.FocusRole == AutoFilterMenuEntryFocusRole.Command");
         avaloniaSource.Should().Contain("(initialFocusTarget ?? searchBox).Focus();");
+        avaloniaSource.Should().Contain("private Flyout? _autoFilterFlyout;");
+        avaloniaSource.Should().Contain("CloseAutoFilterFlyout();");
         avaloniaSource.Should().NotContain("flyout.ShowAt(anchor);\r\n        searchBox.Focus();");
     }
 
@@ -5073,7 +5075,7 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)");
         source.Should().Contain("private void NavigateToFindAllMatch(WorkbookFindAllMatch match)");
         source.Should().Contain("FindOptions? options = null,");
-        source.Should().Contain("private async Task ShowReplaceDialogAsync()");
+        source.Should().Contain("private Task ShowReplaceDialogAsync()");
         source.Should().Contain("private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)");
         source.Should().Contain("private async Task ShowGoToDialogAsync()");
         source.Should().Contain("private async Task ShowGoToSpecialDialogAsync()");
@@ -5108,7 +5110,6 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var clearReplaceFormatButton = CreateFindReplaceFormatButton(\"ReplaceWithClearFormatButton\", \"Clear Format\");");
         source.Should().Contain("var findFormatRow = CreateFindReplaceFormatRow(\"Find format\", chooseFindFormatButton, clearFindFormatButton);");
         source.Should().Contain("var replaceFormatRow = CreateFindReplaceFormatRow(\"Replace format\", chooseReplaceFormatButton, clearReplaceFormatButton);");
-        source.Should().Contain("replacement.ReplacementFormat");
         source.Should().Contain("\"GoToReferenceBox\"");
         source.Should().Contain("\"GoToSpecialKindBox\"");
         source.Should().Contain("\"GoToSpecialNumbersBox\"");
@@ -5133,16 +5134,16 @@ public sealed class AvaloniaShellSourceTests
         source.Should().Contain("var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);");
         // The Find command now opens the tabbed Find & Replace dialog (parity with the WPF FindReplaceDialog),
         // which renders Find All matches inline rather than in a separate results window.
-        source.Should().Contain("private async Task ShowFindReplaceTabbedDialogAsync()");
+        source.Should().Contain("private Task ShowFindReplaceTabbedDialogAsync(bool replaceMode = false)");
+        source.Should().Contain("return ShowFindReplaceTabbedDialogAsync(replaceMode: true);");
+        source.Should().Contain("ShowOwnedModelessWindow(");
+        source.Should().Contain("_findReplaceDialog = dialog;");
         source.Should().Contain("resultsList.ItemsSource = result.Matches;");
         source.Should().Contain("var result = _session.GoToCell(match.Address);");
-        source.Should().Contain("replacement.Action == ReplaceDialogAction.ReplaceAll");
-        source.Should().Contain("replacement.Options,");
-        source.Should().Contain("replacement.MatchCase,");
-        source.Should().Contain("replacement.MatchEntireCell");
-        source.Should().Contain("replacement.ReplacementFormat)");
         source.Should().Contain("_session.ReplaceNextValue(");
         source.Should().Contain("_session.ReplaceAllValues(");
+        source.Should().Contain("CreateFindOptions(options, findFormat)");
+        source.Should().Contain("MatchEntire(), replacementFormat)");
         source.Should().Contain("var result = _session.GoToReference(reference);");
         source.Should().Contain("var result = _session.GoToSpecial(kind, options);");
         source.Should().Contain("result.SelectedRanges.Count == 1");

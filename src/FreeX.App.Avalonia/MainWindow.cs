@@ -10289,6 +10289,7 @@ public sealed partial class MainWindow : Window
         if (!_session.SelectSheetFromTab(sheetId, selectRange, toggle))
             return;
 
+        CloseAutoFilterFlyout();
         ClearSelectedDrawingObject();
         RefreshShell(UiText.Format("MainLoc_SelectedX", _session.ActiveSheet.Name));
     }
@@ -11150,7 +11151,7 @@ public sealed partial class MainWindow : Window
         if (!TryCommitPendingFormulaEdit())
             return;
 
-        await ShowFindReplaceTabbedDialogAsync();
+        await ShowFindReplaceTabbedDialogAsync(replaceMode: false);
     }
 
     /// <summary>
@@ -11162,8 +11163,17 @@ public sealed partial class MainWindow : Window
     /// through <see cref="WorkbookSession.FindNext"/>/<c>FindAll</c>; replace actions through
     /// <see cref="WorkbookSession.ReplaceNextValue"/>/<c>ReplaceAllValues</c>.
     /// </summary>
-    private async Task ShowFindReplaceTabbedDialogAsync()
+    private Task ShowFindReplaceTabbedDialogAsync(bool replaceMode = false)
     {
+        if (_findReplaceDialog is { IsVisible: true } existing)
+        {
+            _switchFindReplaceMode?.Invoke(replaceMode);
+            if (existing.WindowState == WindowState.Minimized)
+                existing.WindowState = WindowState.Normal;
+            existing.Activate();
+            return Task.CompletedTask;
+        }
+
         var dialog = new Window
         {
             Title = UiText.Get("FindReplace_FindAndReplace"),
@@ -11250,13 +11260,48 @@ public sealed partial class MainWindow : Window
         var tabs = new TabControl
         {
             Items = { findTabItem, replaceTabItem },
-            SelectedIndex = 0,
+            SelectedIndex = replaceMode ? 1 : 0,
         };
         AutomationProperties.SetAutomationId(tabs, "FindReplaceTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
 
         // ── Shared options ──────────────────────────────────────────────────────
         var optionsControls = CreateFindOptionsControls("FindReplace", defaultLookInIndex: 0);
+        StyleDiff? findFormat = null;
+        StyleDiff? replacementFormat = null;
+        var chooseFindFormatButton = CreateFindReplaceFormatButton("FindReplaceFindChooseFormatFromCellButton", "Choose From Cell");
+        var clearFindFormatButton = CreateFindReplaceFormatButton("FindReplaceFindClearFormatButton", "Clear Format");
+        var chooseReplacementFormatButton = CreateFindReplaceFormatButton("FindReplaceReplacementChooseFormatFromCellButton", "Choose From Cell");
+        var clearReplacementFormatButton = CreateFindReplaceFormatButton("FindReplaceReplacementClearFormatButton", "Clear Format");
+        UpdateFindReplaceFormatState(findFormat, chooseFindFormatButton, clearFindFormatButton);
+        UpdateFindReplaceFormatState(replacementFormat, chooseReplacementFormatButton, clearReplacementFormatButton);
+        chooseFindFormatButton.Click += (_, _) =>
+        {
+            findFormat = _session.CreateFormatDiffFromActiveCell();
+            UpdateFindReplaceFormatState(findFormat, chooseFindFormatButton, clearFindFormatButton);
+        };
+        clearFindFormatButton.Click += (_, _) =>
+        {
+            findFormat = null;
+            UpdateFindReplaceFormatState(findFormat, chooseFindFormatButton, clearFindFormatButton);
+        };
+        chooseReplacementFormatButton.Click += (_, _) =>
+        {
+            replacementFormat = _session.CreateFormatDiffFromActiveCell();
+            UpdateFindReplaceFormatState(replacementFormat, chooseReplacementFormatButton, clearReplacementFormatButton);
+        };
+        clearReplacementFormatButton.Click += (_, _) =>
+        {
+            replacementFormat = null;
+            UpdateFindReplaceFormatState(replacementFormat, chooseReplacementFormatButton, clearReplacementFormatButton);
+        };
+        var findFormatRow = CreateFindReplaceFormatRow("Find format", chooseFindFormatButton, clearFindFormatButton);
+        var replacementFormatRow = CreateFindReplaceFormatRow("Replace format", chooseReplacementFormatButton, clearReplacementFormatButton);
+        var formatPanel = new StackPanel
+        {
+            Spacing = 4,
+            Children = { findFormatRow, replacementFormatRow },
+        };
 
         // ── Results list ────────────────────────────────────────────────────────
         var resultsList = new ListBox { MinHeight = 120 };
@@ -11301,18 +11346,31 @@ public sealed partial class MainWindow : Window
         bool OnReplaceTab() => tabs.SelectedItem == replaceTabItem;
         string CurrentFindText() => (OnReplaceTab() ? replaceFindBox.Text : findBox.Text) ?? "";
 
+        void FocusSearchBox()
+        {
+            var target = OnReplaceTab() ? replaceFindBox : findBox;
+            target.Focus();
+            target.SelectAll();
+        }
+
         void UpdateButtonVisibility()
         {
-            var replaceMode = OnReplaceTab();
-            replaceButton.IsVisible = replaceMode;
-            replaceAllButton.IsVisible = replaceMode;
+            var isReplaceMode = OnReplaceTab();
+            replaceButton.IsVisible = isReplaceMode;
+            replaceAllButton.IsVisible = isReplaceMode;
+            replacementFormatRow.IsVisible = isReplaceMode;
         }
-        tabs.SelectionChanged += (_, _) => UpdateButtonVisibility();
+        tabs.SelectionChanged += (_, _) =>
+        {
+            UpdateButtonVisibility();
+            if (dialog.IsVisible)
+                Dispatcher.UIThread.Post(FocusSearchBox, DispatcherPriority.Input);
+        };
         UpdateButtonVisibility();
 
         var options = optionsControls;
 
-        FindOptions BuildOptions() => CreateFindOptions(options);
+        FindOptions BuildOptions() => CreateFindOptions(options, findFormat);
         bool MatchCase() => options.MatchCaseBox.IsChecked == true;
         bool MatchEntire() => options.MatchEntireCellBox.IsChecked == true;
 
@@ -11349,7 +11407,7 @@ public sealed partial class MainWindow : Window
         void DoReplace()
         {
             if (!TryCommitPendingFormulaEdit()) return;
-            var r = _session.ReplaceNextValue(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), null);
+            var r = _session.ReplaceNextValue(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), replacementFormat);
             if (!r.Success)
             {
                 statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed");
@@ -11364,7 +11422,7 @@ public sealed partial class MainWindow : Window
         void DoReplaceAll()
         {
             if (!TryCommitPendingFormulaEdit()) return;
-            var r = _session.ReplaceAllValues(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), null);
+            var r = _session.ReplaceAllValues(CurrentFindText(), replaceWithBox.Text ?? "", BuildOptions(), MatchCase(), MatchEntire(), replacementFormat);
             if (!r.Success)
             {
                 statusLabel.Text = r.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed");
@@ -11412,26 +11470,40 @@ public sealed partial class MainWindow : Window
         DockPanel.SetDock(statusLabel, Dock.Bottom);
         DockPanel.SetDock(tabs, Dock.Top);
         DockPanel.SetDock(options.Panel, Dock.Top);
+        DockPanel.SetDock(formatPanel, Dock.Top);
 
         tabs.Margin = new Thickness(0, 0, 0, 10);
         options.Panel.Margin = new Thickness(0, 0, 0, 10);
+        formatPanel.Margin = new Thickness(0, 0, 0, 10);
         statusLabel.Margin = new Thickness(0, 8, 0, 8);
         buttonRow.Margin = new Thickness(0, 8, 0, 0);
 
         root.Children.Add(tabs);
         root.Children.Add(options.Panel);
+        root.Children.Add(formatPanel);
         root.Children.Add(buttonRow);
         root.Children.Add(statusLabel);
         root.Children.Add(resultsBorder); // fills remaining space
 
         dialog.Content = root;
-        dialog.Opened += (_, _) =>
+        _findReplaceDialog = dialog;
+        _switchFindReplaceMode = requestedReplaceMode =>
         {
-            findBox.Focus();
-            findBox.SelectAll();
+            tabs.SelectedIndex = requestedReplaceMode ? 1 : 0;
+            Dispatcher.UIThread.Post(FocusSearchBox, DispatcherPriority.Input);
         };
+        ShowOwnedModelessWindow(
+            dialog,
+            FocusSearchBox,
+            () =>
+            {
+                if (!ReferenceEquals(_findReplaceDialog, dialog))
+                    return;
 
-        await dialog.ShowDialog(this);
+                _findReplaceDialog = null;
+                _switchFindReplaceMode = null;
+            });
+        return Task.CompletedTask;
     }
 
     private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)
@@ -11613,47 +11685,12 @@ public sealed partial class MainWindow : Window
         RefreshShell(UiText.Format("MainLoc_FoundSheetCell", match.Sheet, match.Cell));
     }
 
-    private async Task ShowReplaceDialogAsync()
+    private Task ShowReplaceDialogAsync()
     {
         if (!TryCommitPendingFormulaEdit())
-            return;
+            return Task.CompletedTask;
 
-        var replacement = await ShowReplaceInputDialogAsync();
-        if (replacement is null)
-            return;
-
-        var result = replacement.Action == ReplaceDialogAction.ReplaceAll
-            ? _session.ReplaceAllValues(
-                replacement.FindText,
-                replacement.ReplaceText,
-                replacement.Options,
-                replacement.MatchCase,
-                replacement.MatchEntireCell,
-                replacement.ReplacementFormat)
-            : _session.ReplaceNextValue(
-                replacement.FindText,
-                replacement.ReplaceText,
-                replacement.Options,
-                replacement.MatchCase,
-                replacement.MatchEntireCell,
-                replacement.ReplacementFormat);
-        if (!result.Success)
-        {
-            ShowEditIssue(result.ErrorMessage ?? UiText.Get("MainLoc_ReplaceFailed"));
-            return;
-        }
-
-        if (replacement.Action == ReplaceDialogAction.ReplaceAll)
-        {
-            RefreshShell(result.ReplacedCount == 0
-                ? result.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch")
-                : UiText.Format("MainLoc_ReplacedCells", result.ReplacedCount));
-            return;
-        }
-
-        RefreshShell(result.ReplacedCount == 0
-            ? result.MatchCount == 0 ? UiText.Get("MainLoc_NoMatchesFound") : UiText.Get("MainLoc_NoReplaceableMatch")
-            : UiText.Format("MainLoc_ReplacedRangeOfCount", FormatRangeReference(result.ReplacedRange!.Value), result.MatchIndex, result.MatchCount));
+        return ShowFindReplaceTabbedDialogAsync(replaceMode: true);
     }
 
     private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)
@@ -23688,6 +23725,8 @@ public sealed partial class MainWindow : Window
         if (_formulaBox.IsFocused)
             return;
 
+        CloseAutoFilterFlyout();
+
         var vertical = e.Delta.Y;
         var horizontal = e.Delta.X;
 
@@ -23741,6 +23780,8 @@ public sealed partial class MainWindow : Window
     {
         if (_isUpdatingWorksheetScrollBars)
             return;
+
+        CloseAutoFilterFlyout();
 
         var (topRow, leftCol) = WorkbookViewportScrollPlanner.CalculateViewportOrigin(
             _session.ActiveSheet,
