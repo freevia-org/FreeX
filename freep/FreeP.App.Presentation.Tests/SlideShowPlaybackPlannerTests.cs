@@ -55,6 +55,20 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanTransition_BlindsUsesDedicatedAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Blinds,
+            Direction = TransitionDirection.Vertical,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Blinds);
+        plan.BlindsHorizontal.Should().BeFalse();
+    }
+
+    [Fact]
     public void PlanAnimationStep_UsesControllerEntryStartDelays()
     {
         var slide = new Slide();

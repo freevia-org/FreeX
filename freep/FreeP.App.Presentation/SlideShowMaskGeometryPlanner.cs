@@ -107,6 +107,29 @@ public static class SlideShowMaskGeometryPlanner
             new SlideShowMaskRect(x, 0, Math.Max(0, nextX - x), height));
     }
 
+    /// <summary>Builds the open portion of each band at a normalized progress.</summary>
+    public static IReadOnlyList<SlideShowMaskRect> BuildBlindsTransitionRects(
+        double width,
+        double height,
+        int bandCount,
+        double progress,
+        bool horizontal)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        var count = Math.Max(1, bandCount);
+        var rects = new SlideShowMaskRect[count];
+        for (var index = 0; index < count; index++)
+        {
+            var band = BuildBlindsBand(width, height, count, index, horizontal);
+            rects[index] = new(
+                band.Closed.X + (band.Open.X - band.Closed.X) * progress,
+                band.Closed.Y + (band.Open.Y - band.Closed.Y) * progress,
+                band.Closed.Width + (band.Open.Width - band.Closed.Width) * progress,
+                band.Closed.Height + (band.Open.Height - band.Closed.Height) * progress);
+        }
+        return rects;
+    }
+
     /// <summary>
     /// Returns the two panels used by a slide split transition. For an
     /// outgoing split the panels open from the center; for an incoming split
