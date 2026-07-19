@@ -72,6 +72,28 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.BoxExpandsFromCenter.Should().Be(expandsFromCenter);
     }
 
+    [Theory]
+    [InlineData(TransitionDirection.Right, -1, 0)]
+    [InlineData(TransitionDirection.Left, 1, 0)]
+    [InlineData(TransitionDirection.Down, 0, -1)]
+    [InlineData(TransitionDirection.Up, 0, 1)]
+    public void PlanTransition_RevealUsesDirectionalClipAction(
+        TransitionDirection direction,
+        double expectedOffsetX,
+        double expectedOffsetY)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Reveal,
+            Direction = direction
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Reveal);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Reveal);
+        plan.IncomingOffsetX.Should().Be(expectedOffsetX);
+        plan.IncomingOffsetY.Should().Be(expectedOffsetY);
+    }
+
     [Fact]
     public void PlanTransition_SplitUsesDedicatedActionAndPreservesGeometry()
     {

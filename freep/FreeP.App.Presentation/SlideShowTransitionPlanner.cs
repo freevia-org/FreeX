@@ -8,6 +8,7 @@ public enum SlideShowTransitionPlaybackKind
     Fade,
     Dissolve,
     Box,
+    Reveal,
     Split,
     Blinds,
     RandomBars,
@@ -67,6 +68,8 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Box => SlideShowTransitionPlaybackKind.Box,
 
+            TransitionKind.Reveal => SlideShowTransitionPlaybackKind.Reveal,
+
             TransitionKind.Split => SlideShowTransitionPlaybackKind.Split,
 
             TransitionKind.Blinds => SlideShowTransitionPlaybackKind.Blinds,
@@ -87,7 +90,6 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Gallery or
             TransitionKind.Conveyor or
             TransitionKind.Pan or
-            TransitionKind.Reveal or
             TransitionKind.Comb or
             TransitionKind.Doors or
             TransitionKind.Window => SlideShowTransitionPlaybackKind.PushLike,

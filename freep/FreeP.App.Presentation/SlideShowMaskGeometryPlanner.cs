@@ -220,6 +220,25 @@ public static class SlideShowMaskGeometryPlanner
             height * scale);
     }
 
+    /// <summary>Builds the edge clip used by a directional slide Reveal transition.</summary>
+    public static SlideShowMaskRect BuildRevealTransitionRect(
+        double width,
+        double height,
+        double progress,
+        double incomingOffsetX,
+        double incomingOffsetY)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (Math.Abs(incomingOffsetX) >= Math.Abs(incomingOffsetY))
+        {
+            var x = incomingOffsetX < 0 ? width * (1 - progress) : 0;
+            return new(x, 0, width * progress, height);
+        }
+
+        var y = incomingOffsetY < 0 ? height * (1 - progress) : 0;
+        return new(0, y, width, height * progress);
+    }
+
     /// <summary>
     /// Returns the two panels used by a slide split transition. For an
     /// outgoing split the panels open from the center; for an incoming split
