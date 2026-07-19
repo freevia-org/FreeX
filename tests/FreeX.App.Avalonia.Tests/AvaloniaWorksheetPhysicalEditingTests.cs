@@ -165,6 +165,8 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 ClickCell(window, "Cell_B2");
                 await DrainInputAsync();
 
+                FindByAutomationId<TextBox>(window, "WorksheetInlineCellEditor").Should().BeSameAs(editor);
+                editor.IsFocused.Should().BeTrue();
                 window.InlineCellEditorTextForTest.Should().Be("=B2");
                 window.Session.FormulaEditAddress.Should().Be(formulaAddress);
 

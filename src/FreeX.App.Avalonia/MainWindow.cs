@@ -467,6 +467,8 @@ public sealed partial class MainWindow : Window
     private int? _formulaReferenceStart;
     private int? _formulaReferenceLength;
     private readonly TextBlock _formulaReferenceTextOverlay = new();
+    private Canvas? _formulaReferenceGridOverlay;
+    private readonly List<Control> _formulaReferenceGridHighlightVisuals = [];
     private readonly Border _formulaBarHost = new();
     private readonly Button _formulaExpandButton = new();
     private readonly Button _openButton = new();
@@ -4333,6 +4335,8 @@ public sealed partial class MainWindow : Window
     private Control BuildSheetGrid()
     {
         _sheetGridBuildCount++;
+        _formulaReferenceGridOverlay = null;
+        _formulaReferenceGridHighlightVisuals.Clear();
         _activeDataValidationDropdown = null;
         _activeCellBorder = null;
         _activeSelectionOutlineVisual = null;
@@ -4866,6 +4870,7 @@ public sealed partial class MainWindow : Window
             ClipToBounds = true,
             IsHitTestVisible = true,
         };
+        _formulaReferenceGridOverlay = overlay;
 
         // Charts live on the sheet (not projected into viewport.DrawingObjects), so paint them first —
         // before the drawing-object early-out — so a chart renders even when no other objects exist.
@@ -8030,6 +8035,7 @@ public sealed partial class MainWindow : Window
             ClearFormulaReferenceEntrySpan();
             UpdateFormulaRangeEntryStateAfterTextChanged(_inlineCellEditText);
             RefreshFormulaReferenceHighlights();
+            RefreshFormulaReferenceGridHighlights();
         };
         editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
 
@@ -8435,28 +8441,14 @@ public sealed partial class MainWindow : Window
         _formulaReferenceStart = edit.ReferenceStart;
         _formulaReferenceLength = edit.ReferenceLength;
         RefreshFormulaReferenceHighlights();
+        RefreshFormulaReferenceGridHighlights();
         ApplyFormulaEditStatusBarPlan(FormulaEditInteractionPlanner.BuildEditStatusBarPlan(pointMode: true));
         if (ReferenceEquals(editor, _formulaBox))
-        {
-            _sheetGridHost.Content = BuildSheetGrid();
             _formulaBox.Focus();
-        }
         else
-        {
-            Dispatcher.UIThread.Post(RefreshInlineFormulaRangeEntryVisuals, DispatcherPriority.Input);
-        }
+            editor.Focus();
 
         return true;
-    }
-
-    private void RefreshInlineFormulaRangeEntryVisuals()
-    {
-        if (_inlineCellEditAddress is null || !IsFormulaRangeEntryActive(_inlineCellEditText))
-            return;
-
-        _sheetGridHost.Content = BuildSheetGrid();
-        RefreshFormulaReferenceHighlights();
-        _inlineCellEditor?.Focus();
     }
 
     private void SynchronizeFormulaEditors(TextBox source)
@@ -8849,7 +8841,8 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        RefreshShell("Ready");
+        RefreshFormulaReferenceHighlights();
+        RefreshFormulaReferenceGridHighlights();
     }
 
     private IReadOnlyList<FormulaReferenceHighlight> GetFormulaReferenceHighlights(string text) =>
@@ -8930,7 +8923,24 @@ public sealed partial class MainWindow : Window
             Canvas.SetLeft(border, left);
             Canvas.SetTop(border, top);
             overlay.Children.Add(border);
+            _formulaReferenceGridHighlightVisuals.Add(border);
         }
+    }
+
+    private void RefreshFormulaReferenceGridHighlights()
+    {
+        if (_formulaReferenceGridOverlay is not { } overlay)
+            return;
+
+        foreach (var visual in _formulaReferenceGridHighlightVisuals)
+            overlay.Children.Remove(visual);
+
+        _formulaReferenceGridHighlightVisuals.Clear();
+        AddFormulaReferenceHighlightOverlay(
+            overlay,
+            _session.Viewport,
+            _session.ActiveSheet.ShowHeadings,
+            GetActiveZoomFactor());
     }
 
     private void ApplyFormulaReferenceTextOverlay(

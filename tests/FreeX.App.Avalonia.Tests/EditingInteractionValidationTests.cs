@@ -24,8 +24,19 @@ public sealed class EditingInteractionValidationTests
                     "cell-inline-edit",
                     "cell-inline-formula-edit-point-mode",
                     "formula-bar-edit-point-mode");
-                results.Should().OnlyContain(result => result.Status == "passed", because:
-                    string.Join(Environment.NewLine, results.Select(result => $"{result.Id}: {result.Evidence}")));
+                foreach (var expectedId in new[]
+                         {
+                             "cell-inline-edit",
+                             "cell-inline-formula-edit-point-mode",
+                             "formula-bar-edit-point-mode",
+                         })
+                {
+                    results.Should().ContainSingle(
+                        result => result.Id == expectedId && result.Status == "passed",
+                        because: string.Join(
+                            Environment.NewLine,
+                            results.Select(result => $"{result.Id}: {result.Status}; {result.Evidence}")));
+                }
             }
             finally
             {
