@@ -10,6 +10,8 @@ public enum SlideShowTransitionPlaybackKind
     Box,
     Reveal,
     Uncover,
+    Cover,
+    Push,
     Split,
     Blinds,
     RandomBars,
@@ -75,6 +77,10 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Uncover => SlideShowTransitionPlaybackKind.Uncover,
 
+            TransitionKind.Cover => SlideShowTransitionPlaybackKind.Cover,
+
+            TransitionKind.Push => SlideShowTransitionPlaybackKind.Push,
+
             TransitionKind.Doors => SlideShowTransitionPlaybackKind.Split,
 
             TransitionKind.Split => SlideShowTransitionPlaybackKind.Split,
@@ -90,8 +96,6 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Zoom => SlideShowTransitionPlaybackKind.Zoom,
 
-            TransitionKind.Push or
-            TransitionKind.Cover or
             TransitionKind.Gallery or
             TransitionKind.Conveyor or
             TransitionKind.Pan or
