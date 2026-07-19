@@ -745,6 +745,24 @@
   <data name="Ribbon_Command_AnimationExitFlyOut_KeyTip" xml:space="preserve">
     <value>X</value>
   </data>
+  <data name="Ribbon_Command_AnimationExitWipe_Label" xml:space="preserve">
+    <value>Wipe Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitWipe_KeyTip" xml:space="preserve">
+    <value>W</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitSplit_Label" xml:space="preserve">
+    <value>Split Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitSplit_KeyTip" xml:space="preserve">
+    <value>S</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitZoomOut_Label" xml:space="preserve">
+    <value>Zoom Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitZoomOut_KeyTip" xml:space="preserve">
+    <value>Z</value>
+  </data>
   <data name="Ribbon_Command_AnimationNone_Label" xml:space="preserve">
     <value>No Animation</value>
   </data>
