@@ -70,6 +70,8 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Reveal => SlideShowTransitionPlaybackKind.Reveal,
 
+            TransitionKind.Doors => SlideShowTransitionPlaybackKind.Split,
+
             TransitionKind.Split => SlideShowTransitionPlaybackKind.Split,
 
             TransitionKind.Blinds => SlideShowTransitionPlaybackKind.Blinds,
@@ -91,19 +93,20 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Conveyor or
             TransitionKind.Pan or
             TransitionKind.Comb or
-            TransitionKind.Doors or
             TransitionKind.Window => SlideShowTransitionPlaybackKind.PushLike,
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback
         };
 
     private static bool ResolveSplitHorizontal(SlideTransition transition) =>
-        transition.SplitOrientation == TransitionDirection.Horizontal
+        transition.Kind == TransitionKind.Doors
+        || transition.SplitOrientation == TransitionDirection.Horizontal
         || (transition.SplitOrientation is null
             && transition.Direction != TransitionDirection.Vertical);
 
     private static bool ResolveSplitOut(SlideTransition transition) =>
-        transition.Direction != TransitionDirection.In;
+        transition.Kind == TransitionKind.Doors
+        || transition.Direction != TransitionDirection.In;
 
     private static bool ResolveBlindsHorizontal(SlideTransition transition) =>
         transition.Direction != TransitionDirection.Vertical;
