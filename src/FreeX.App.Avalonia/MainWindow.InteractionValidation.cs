@@ -486,7 +486,8 @@ public sealed partial class MainWindow
         Task dispatch,
         IReadOnlySet<global::Avalonia.Controls.Window> ownedBefore)
     {
-        for (var attempt = 0; !dispatch.IsCompleted && attempt < 80; attempt++)
+        var deadline = DateTimeOffset.UtcNow.AddSeconds(5);
+        while (!dispatch.IsCompleted && DateTimeOffset.UtcNow < deadline)
         {
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
@@ -499,7 +500,7 @@ public sealed partial class MainWindow
         }
 
         if (!dispatch.IsCompleted)
-            throw new TimeoutException("Shortcut dispatch did not settle after closing newly opened owned windows.");
+            throw new TimeoutException("Shortcut dispatch did not settle within five seconds after closing newly opened owned windows.");
         await dispatch;
     }
 
