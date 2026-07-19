@@ -920,7 +920,15 @@ public sealed class SlideShowWindow : Window
             .Distinct()
             .ToList();
 
-        if (_entranceShapeIds.Count == 0) return;
+        var animatedShapeIds = slide.Animations
+            .Where(a => a.Kind == AnimationKind.Emphasis
+                        || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
+                            && a.TriggerShapeId == null))
+            .Select(a => a.ShapeId)
+            .Distinct()
+            .ToList();
+
+        if (animatedShapeIds.Count == 0) return;
 
         double w = _slideCanvas.Bounds.Width  > 0 ? _slideCanvas.Bounds.Width  : 960;
         double h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
@@ -928,7 +936,7 @@ public sealed class SlideShowWindow : Window
         _animOverlay.Width  = w;
         _animOverlay.Height = h;
 
-        foreach (var shapeId in _entranceShapeIds)
+        foreach (var shapeId in animatedShapeIds)
         {
             var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
             if (shape is null) continue;
@@ -942,7 +950,7 @@ public sealed class SlideShowWindow : Window
                 Width            = w,
                 Height           = h,
                 Stretch          = Stretch.None,
-                Opacity          = 0,
+                Opacity          = _entranceShapeIds.Contains(shapeId) ? 0 : 1,
                 IsHitTestVisible = false,
             };
 
@@ -1178,6 +1186,31 @@ public sealed class SlideShowWindow : Window
             case SlideShowShapeAnimationEffectKind.Spin:
                 InvokeRevealAtStart(plan, onReveal);
                 SpinEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Teeter:
+                InvokeRevealAtStart(plan, onReveal);
+                TeeterEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Blink:
+                InvokeRevealAtStart(plan, onReveal);
+                BlinkEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Wave:
+                InvokeRevealAtStart(plan, onReveal);
+                WaveEffect(element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ColorPulse:
+            case SlideShowShapeAnimationEffectKind.ChangeColor:
+            case SlideShowShapeAnimationEffectKind.GrowWithColor:
+            case SlideShowShapeAnimationEffectKind.Shimmer:
+            case SlideShowShapeAnimationEffectKind.Bold:
+            case SlideShowShapeAnimationEffectKind.Underline:
+                InvokeRevealAtStart(plan, onReveal);
+                EmphasisPulseEffect(element, plan);
                 break;
 
             default:
@@ -1970,6 +2003,120 @@ public sealed class SlideShowWindow : Window
 
         DelayedAction(plan.DelayMs, () =>
             AnimateRotate(rotate, 0, plan.RotationDegrees, plan.DurationMs));
+    }
+
+    private void TeeterEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        el.RenderTransformOrigin = RelativePoint.Center;
+        var rotate = new RotateTransform(0);
+        el.RenderTransform = rotate;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (-10.0, 0.2), (10.0, 0.4), (-10.0, 0.6), (0.0, 1.0) },
+            value => rotate.Angle = value));
+    }
+
+    private void BlinkEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (1.0, 0.0), (0.15, 0.25), (1.0, 0.5), (0.15, 0.75), (1.0, 1.0) },
+            value => el.Opacity = value));
+    }
+
+    private void WaveEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        el.RenderTransformOrigin = RelativePoint.Center;
+        var translate = new TranslateTransform();
+        el.RenderTransform = translate;
+        var amplitude = (_slideDipW > 0 ? _slideDipW : 960) * 0.00625;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (-amplitude, 0.2), (amplitude, 0.4), (-amplitude, 0.6), (0.0, 1.0) },
+            value => translate.X = value));
+    }
+
+    private void EmphasisPulseEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[] { (1.0, 0.0), (0.65, 0.5), (1.0, 1.0) },
+            value => el.Opacity = value));
+
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.GrowWithColor)
+        {
+            el.RenderTransformOrigin = RelativePoint.Center;
+            var scale = new ScaleTransform(1, 1);
+            el.RenderTransform = scale;
+            DelayedAction(plan.DelayMs, () =>
+            {
+                AnimateScale(el, scale, 1, plan.PeakScale, plan.DurationMs / 2);
+                DelayedAction(plan.DurationMs / 2, () =>
+                    AnimateScale(el, scale, plan.PeakScale, 1, plan.DurationMs / 2));
+            });
+        }
+    }
+
+    private void AnimateKeyframes(
+        int durationMs,
+        IReadOnlyList<(double Value, double Progress)> keyframes,
+        Action<double> apply)
+    {
+        if (keyframes.Count == 0)
+        {
+            return;
+        }
+
+        if (durationMs <= 0)
+        {
+            apply(keyframes[^1].Value);
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var progress = Math.Min(1.0, (double)frame / steps);
+            var value = keyframes[0].Value;
+            for (var i = 1; i < keyframes.Count; i++)
+            {
+                if (progress > keyframes[i].Progress)
+                {
+                    continue;
+                }
+
+                var previous = keyframes[i - 1];
+                var current = keyframes[i];
+                var local = (progress - previous.Progress) / Math.Max(0.0001, current.Progress - previous.Progress);
+                value = previous.Value + (current.Value - previous.Value) * EaseInOut(local);
+                break;
+            }
+
+            if (progress >= keyframes[^1].Progress)
+            {
+                value = keyframes[^1].Value;
+            }
+
+            apply(value);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                apply(keyframes[^1].Value);
+            }
+        };
+        timer.Start();
     }
 
     private void AnimateRotate(RotateTransform rotate, double from, double to, int durationMs)

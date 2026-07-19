@@ -165,6 +165,21 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("GrowShrinkEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spin:");
         source.Should().Contain("SpinEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Teeter:");
+        source.Should().Contain("TeeterEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Blink:");
+        source.Should().Contain("BlinkEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Wave:");
+        source.Should().Contain("WaveEffect(sb, element, plan);");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.ColorPulse:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.ChangeColor:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.GrowWithColor:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Shimmer:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Bold:");
+        source.Should().Contain("case SlideShowShapeAnimationEffectKind.Underline:");
+        source.Should().Contain("EmphasisPulseEffect(sb, element, plan);");
+        source.Should().Contain("AnimationKind.Emphasis");
+        source.Should().Contain("_entranceShapeIds.Contains(shapeId) ? 0 : 1");
         source.Should().Contain("MotionPathEffect(sb, element, plan);");
         source.Should().Contain("Storyboard.SetTarget(flashAnim, _slideCanvas);");
     }

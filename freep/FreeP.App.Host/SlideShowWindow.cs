@@ -945,8 +945,16 @@ public sealed class SlideShowWindow : Window
             .Distinct()
             .ToList();
 
-        // If no entrance animations, nothing special to prepare.
-        if (_entranceShapeIds.Count == 0) return;
+        var animatedShapeIds = slide.Animations
+            .Where(a => a.Kind == AnimationKind.Emphasis
+                        || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
+                            && a.TriggerShapeId == null))
+            .Select(a => a.ShapeId)
+            .Distinct()
+            .ToList();
+
+        // Emphasis overlays stay visible over the base canvas; entrance/motion overlays start hidden.
+        if (animatedShapeIds.Count == 0) return;
 
         // Render the whole slide to get per-shape bitmaps via a temporary canvas.
         // We create one overlay Image per entrance-animated shape.
@@ -958,7 +966,7 @@ public sealed class SlideShowWindow : Window
         _animOverlay.Width  = w;
         _animOverlay.Height = h;
 
-        foreach (var shapeId in _entranceShapeIds)
+        foreach (var shapeId in animatedShapeIds)
         {
             var shape = slide.Shapes.FirstOrDefault(s => s.Id == shapeId);
             if (shape is null) continue;
@@ -973,7 +981,7 @@ public sealed class SlideShowWindow : Window
                 Width  = w,
                 Height = h,
                 Stretch = Stretch.None,
-                Opacity = 0,
+                Opacity = _entranceShapeIds.Contains(shapeId) ? 0 : 1,
                 IsHitTestVisible = false,
                 Tag = shapeId,
             };
@@ -1180,6 +1188,27 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowShapeAnimationEffectKind.Spin:
                 SpinEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Teeter:
+                TeeterEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Blink:
+                BlinkEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.Wave:
+                WaveEffect(sb, element, plan);
+                break;
+
+            case SlideShowShapeAnimationEffectKind.ColorPulse:
+            case SlideShowShapeAnimationEffectKind.ChangeColor:
+            case SlideShowShapeAnimationEffectKind.GrowWithColor:
+            case SlideShowShapeAnimationEffectKind.Shimmer:
+            case SlideShowShapeAnimationEffectKind.Bold:
+            case SlideShowShapeAnimationEffectKind.Underline:
+                EmphasisPulseEffect(sb, element, plan);
                 break;
 
             default:
@@ -2142,6 +2171,99 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTargetProperty(anim,
             new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
         sb.Children.Add(anim);
+    }
+
+    private static void TeeterEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        var rotate = new RotateTransform(0, el.Width / 2, el.Height / 2);
+        el.RenderTransform = rotate;
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-10, KeyTime.FromPercent(0.2)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(10, KeyTime.FromPercent(0.4)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-10, KeyTime.FromPercent(0.6)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim,
+            new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
+        sb.Children.Add(anim);
+    }
+
+    private static void BlinkEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.15, KeyTime.FromPercent(0.25)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(0.5)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(0.15, KeyTime.FromPercent(0.75)));
+        anim.KeyFrames.Add(new DiscreteDoubleKeyFrame(1, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
+        sb.Children.Add(anim);
+    }
+
+    private static void WaveEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        var translate = new TranslateTransform();
+        el.RenderTransform = translate;
+        var amplitude = (el.Width > 0 ? el.Width : 960) * 0.00625;
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-amplitude, KeyTime.FromPercent(0.2)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(amplitude, KeyTime.FromPercent(0.4)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(-amplitude, KeyTime.FromPercent(0.6)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim,
+            new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.X)"));
+        sb.Children.Add(anim);
+    }
+
+    private static void EmphasisPulseEffect(Storyboard sb, FrameworkElement el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        var anim = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(0.65, KeyTime.FromPercent(0.5)));
+        anim.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(anim, el);
+        Storyboard.SetTargetProperty(anim, new PropertyPath(OpacityProperty));
+        sb.Children.Add(anim);
+
+        if (plan.EffectKind == SlideShowShapeAnimationEffectKind.GrowWithColor)
+        {
+            var scale = new ScaleTransform(1, 1, el.Width / 2, el.Height / 2);
+            el.RenderTransform = scale;
+            var scaleX = new DoubleAnimationUsingKeyFrames
+            {
+                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+            };
+            scaleX.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(0)));
+            scaleX.KeyFrames.Add(new LinearDoubleKeyFrame(plan.PeakScale, KeyTime.FromPercent(0.5)));
+            scaleX.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromPercent(1)));
+            var scaleY = scaleX.Clone();
+            Storyboard.SetTarget(scaleX, el);
+            Storyboard.SetTarget(scaleY, el);
+            Storyboard.SetTargetProperty(scaleX,
+                new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleX)"));
+            Storyboard.SetTargetProperty(scaleY,
+                new PropertyPath("(UIElement.RenderTransform).(ScaleTransform.ScaleY)"));
+            sb.Children.Add(scaleX);
+            sb.Children.Add(scaleY);
+        }
     }
 
     /// <summary>

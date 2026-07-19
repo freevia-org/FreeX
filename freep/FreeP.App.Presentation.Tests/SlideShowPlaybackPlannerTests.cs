@@ -687,6 +687,83 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanShapeAnimation_PreservesImportedEmphasisPresetFamilies()
+    {
+        var expected = new Dictionary<AnimationPreset, SlideShowShapeAnimationEffectKind>
+        {
+            [AnimationPreset.Teeter] = SlideShowShapeAnimationEffectKind.Teeter,
+            [AnimationPreset.Blink] = SlideShowShapeAnimationEffectKind.Blink,
+            [AnimationPreset.ColorPulse] = SlideShowShapeAnimationEffectKind.ColorPulse,
+            [AnimationPreset.ChangeColor] = SlideShowShapeAnimationEffectKind.ChangeColor,
+            [AnimationPreset.GrowWithColor] = SlideShowShapeAnimationEffectKind.GrowWithColor,
+            [AnimationPreset.Wave] = SlideShowShapeAnimationEffectKind.Wave,
+            [AnimationPreset.Shimmer] = SlideShowShapeAnimationEffectKind.Shimmer,
+            [AnimationPreset.Bold] = SlideShowShapeAnimationEffectKind.Bold,
+            [AnimationPreset.Underline] = SlideShowShapeAnimationEffectKind.Underline
+        };
+
+        foreach (var (preset, effectKind) in expected)
+        {
+            var plan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+                new ShapeAnimation
+                {
+                    ShapeId = 70,
+                    Kind = AnimationKind.Emphasis,
+                    Preset = preset,
+                    DurationMs = 600
+                },
+                startDelayMs: 25);
+
+            plan.EffectKind.Should().Be(effectKind);
+            plan.RevealTiming.Should().Be(SlideShowAnimationRevealTiming.AtStart);
+        }
+    }
+
+    [Fact]
+    public void PlanFrame_ProjectsImportedEmphasisTracks()
+    {
+        var blinkPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 71,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Blink,
+                DurationMs = 400
+            },
+            startDelayMs: 0);
+        var blinkFrame = SlideShowPlaybackFramePlanner.PlanFrame(blinkPlan, 100, 960, 540);
+        blinkFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Opacity);
+        blinkFrame.Opacity.Should().BeApproximately(0.15, 0.0001);
+
+        var teeterPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 72,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.Teeter,
+                DurationMs = 400
+            },
+            startDelayMs: 0);
+        var teeterFrame = SlideShowPlaybackFramePlanner.PlanFrame(teeterPlan, 150, 960, 540);
+        teeterFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Rotate);
+        teeterFrame.RotationDegrees.Should().BeApproximately(-10, 0.0001);
+
+        var colorPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 73,
+                Kind = AnimationKind.Emphasis,
+                Preset = AnimationPreset.GrowWithColor,
+                DurationMs = 400
+            },
+            startDelayMs: 0);
+        var colorFrame = SlideShowPlaybackFramePlanner.PlanFrame(colorPlan, 100, 960, 540);
+        colorFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Emphasis);
+        colorFrame.Scale.Should().BeGreaterThan(1);
+        colorFrame.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.GrowWithColor);
+    }
+
+    [Fact]
     public void PlanFallbackAnimation_OnlyPlansEmphasisFlash()
     {
         var flash = SlideShowPlaybackPlanner.PlanFallbackAnimation(
