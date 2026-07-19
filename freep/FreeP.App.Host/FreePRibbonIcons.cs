@@ -80,6 +80,7 @@ internal static class FreePRibbonIcons
             ["freep.transition.cover"]    = RibbonCommandIconKind.Page,
             ["freep.transition.uncover"]  = RibbonCommandIconKind.Expand,
             ["freep.transition.blinds"]   = RibbonCommandIconKind.View,
+            ["freep.transition.comb"]     = RibbonCommandIconKind.Grid,
             ["freep.transition.dissolve"] = RibbonCommandIconKind.Color,
             ["freep.transition.zoom"]     = RibbonCommandIconKind.Zoom,
             ["freep.transition.wheel"]    = RibbonCommandIconKind.Rotate,

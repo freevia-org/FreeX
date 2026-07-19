@@ -20,6 +20,7 @@ public sealed class PresentationTransitionCommandPlannerTests
     [InlineData("freep.transition.cover", TransitionKind.Cover)]
     [InlineData("freep.transition.uncover", TransitionKind.Uncover)]
     [InlineData("freep.transition.blinds", TransitionKind.Blinds)]
+    [InlineData("freep.transition.comb", TransitionKind.Comb)]
     [InlineData("freep.transition.dissolve", TransitionKind.Dissolve)]
     [InlineData("freep.transition.zoom", TransitionKind.Zoom)]
     [InlineData("freep.transition.wheel", TransitionKind.Wheel)]

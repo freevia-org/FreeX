@@ -477,6 +477,7 @@ public class RibbonTransitionsAnimationsTests
     [InlineData("freep.transition.cover")]
     [InlineData("freep.transition.uncover")]
     [InlineData("freep.transition.blinds")]
+    [InlineData("freep.transition.comb")]
     [InlineData("freep.transition.dissolve")]
     [InlineData("freep.transition.zoom")]
     [InlineData("freep.transition.wheel")]
