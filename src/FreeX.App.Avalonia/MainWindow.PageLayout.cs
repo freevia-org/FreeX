@@ -982,7 +982,7 @@ public sealed partial class MainWindow
             Margin = new Thickness(8),
             Children = { buttonRow, validationText, tabs },
         };
-        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        ConfigureDialogTabCycle(dialog, root);
         dialog.Content = root;
         AttachDialogRangePicker(dialog, printAreaPicker, printAreaBox, "range.page-setup.print-area");
         AttachDialogRangePicker(dialog, repeatRowsPicker, repeatRowsBox, "range.page-setup.rows-to-repeat");

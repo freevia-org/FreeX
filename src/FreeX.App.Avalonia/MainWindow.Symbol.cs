@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -150,7 +151,10 @@ public sealed partial class MainWindow
             ItemWidth = 31,
             ItemHeight = 31,
             Margin = new Thickness(3),
+            Focusable = true,
         };
+        KeyboardNavigation.SetIsTabStop(symbolGrid, true);
+        AutomationProperties.SetAutomationId(symbolGrid, "SymbolPickerSymbolsList");
 
         var symbolListHost = new Border
         {
@@ -246,6 +250,7 @@ public sealed partial class MainWindow
                 new TabItem { Header = "Special Characters", Content = specialPanel },
             },
         };
+        AutomationProperties.SetAutomationId(tabs, "SymbolPickerTabs");
         AvaloniaCompactDialogChrome.ApplyClassicTabChrome(tabs);
 
         var details = CreateSymbolDetailsPanel(preview, selectedName, selectedSubset, selectedCode, symbol => ApplySelection(symbol));
@@ -281,7 +286,7 @@ public sealed partial class MainWindow
         cancel.Click += (_, _) => dialog.Close();
 
         var root = new DockPanel { Margin = new Thickness(12) };
-        KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        ConfigureDialogTabCycle(dialog, root);
         DockPanel.SetDock(buttons, Dock.Bottom);
         root.Children.Add(buttons);
         root.Children.Add(contentGrid);
@@ -362,6 +367,7 @@ public sealed partial class MainWindow
             select(entry);
             close();
         };
+        KeyboardNavigation.SetIsTabStop(button, false);
         return button;
     }
 
@@ -433,6 +439,7 @@ public sealed partial class MainWindow
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 HorizontalContentAlignment = HorizontalAlignment.Left,
             };
+            KeyboardNavigation.SetIsTabStop(button, false);
             button.Click += (_, _) => select(special);
             button.DoubleTapped += (_, _) =>
             {
@@ -444,6 +451,7 @@ public sealed partial class MainWindow
 
         return new Border
         {
+            Focusable = true,
             BorderBrush = Brush(205, 205, 205),
             BorderThickness = new Thickness(1),
             Background = Brushes.White,
