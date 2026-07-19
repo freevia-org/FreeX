@@ -1360,6 +1360,10 @@ public sealed partial class MainWindow
             },
         };
 
+        // Match the WPF manager's Loaded focus target: the scope selector is the first keyboard
+        // target, so Tab and Shift+Tab both start from the same predictable control.
+        dialog.Opened += (_, _) => scopeBox.Focus();
+
         if (launchSmokeProbe is not null)
         {
             dialog.Opened += (_, _) =>
