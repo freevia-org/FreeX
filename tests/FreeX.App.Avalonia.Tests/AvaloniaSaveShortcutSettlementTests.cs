@@ -307,7 +307,7 @@ public sealed class AvaloniaSaveShortcutSettlementTests
                 var printDispatch = window.RaiseKeyDownForTest(printArgs);
                 var preview = await WaitForOwnedWindowAsync(
                     window,
-                    candidate => AutomationProperties.GetAutomationId(candidate) == "PrintDialog");
+                    candidate => AutomationProperties.GetAutomationId(candidate) == "PrintPreviewWindow");
                 preview.Should().NotBeNull(
                     "Ctrl+Shift+physical-F12 must wait for a canceled Open gate to settle, then open Print Preview");
                 preview!.Close();
