@@ -42,8 +42,9 @@ namespace FreeP.App.Host;
 /// ────────────────────
 /// A snapshot of the outgoing slide is captured into a <see cref="RenderTargetBitmap"/>,
 /// displayed in the back layer. The front layer (new slide) is animated in according to
-/// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover/Wipe/Uncover
-/// (directional translate + optional clip). Others fall back to Fade.
+/// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover
+/// (directional translate), Wipe/Reveal (incoming edge clip), and Uncover (outgoing clip).
+/// Others fall back to Fade.
 /// </summary>
 public sealed class SlideShowWindow : Window
 {
@@ -777,6 +778,9 @@ public sealed class SlideShowWindow : Window
         PlayTransitionSound(t);
 
         var plan = SlideShowPlaybackPlanner.PlanTransition(t);
+        _transitionBackImage.Visibility = Visibility.Collapsed;
+        _transitionBackImage.Clip = null;
+        Grid.SetZIndex(_transitionBackImage, 0);
         switch (plan.ActionKind)
         {
             case SlideShowTransitionPlaybackActionKind.ShowInstant:
@@ -797,6 +801,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Reveal:
                 PlayRevealTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Uncover:
+                PlayUncoverTransition(slide, plan);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Split:
@@ -1120,6 +1128,62 @@ public sealed class SlideShowWindow : Window
         double incomingOffsetX,
         double incomingOffsetY) =>
         new RectangleGeometry(ToRect(SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(
+            width, height, progress, incomingOffsetX, incomingOffsetY)));
+
+    private void PlayUncoverTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = null;
+        _slideCanvas.Refresh();
+
+        if (snapshot is null)
+            return;
+
+        _transitionBackImage.Source = snapshot;
+        _transitionBackImage.Visibility = Visibility.Visible;
+        Grid.SetZIndex(_transitionBackImage, 2);
+        _transitionBackImage.Clip = BuildUncoverTransitionGeometry(w, h, 0, plan.IncomingOffsetX, plan.IncomingOffsetY);
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 24;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildUncoverTransitionGeometry(w, h, progress, plan.IncomingOffsetX, plan.IncomingOffsetY),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _transitionBackImage.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+            Grid.SetZIndex(_transitionBackImage, 0);
+        };
+        Storyboard.SetTarget(animation, _transitionBackImage);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildUncoverTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        double incomingOffsetX,
+        double incomingOffsetY) =>
+        new RectangleGeometry(ToRect(SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(
             width, height, progress, incomingOffsetX, incomingOffsetY)));
 
     // ── Shape animation overlay ───────────────────────────────────────────────────

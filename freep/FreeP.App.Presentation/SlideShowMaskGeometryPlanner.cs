@@ -240,6 +240,29 @@ public static class SlideShowMaskGeometryPlanner
     }
 
     /// <summary>
+    /// Builds the shrinking outgoing-slide clip used by an Uncover transition.
+    /// The incoming slide is already underneath the outgoing snapshot; the
+    /// snapshot contracts toward the configured travel edge until it disappears.
+    /// </summary>
+    public static SlideShowMaskRect BuildUncoverTransitionRect(
+        double width,
+        double height,
+        double progress,
+        double incomingOffsetX,
+        double incomingOffsetY)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        if (Math.Abs(incomingOffsetX) >= Math.Abs(incomingOffsetY))
+        {
+            var x = incomingOffsetX > 0 ? width * progress : 0;
+            return new(x, 0, width * (1 - progress), height);
+        }
+
+        var y = incomingOffsetY > 0 ? height * progress : 0;
+        return new(0, y, width, height * (1 - progress));
+    }
+
+    /// <summary>
     /// Returns the two panels used by a slide split transition. For an
     /// outgoing split the panels open from the center; for an incoming split
     /// they open inward from the two outside edges.
