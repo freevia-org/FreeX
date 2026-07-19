@@ -9,6 +9,7 @@ public enum SlideShowTransitionPlaybackActionKind
     Split,
     Blinds,
     RandomBars,
+    Strips,
     Push
 }
 
@@ -21,7 +22,8 @@ public sealed record SlideShowTransitionPlaybackPlan(
     bool SplitHorizontal,
     bool SplitOut,
     bool BlindsHorizontal,
-    bool RandomBarsHorizontal);
+    bool RandomBarsHorizontal,
+    bool StripsSlopeDown);
 
 public enum SlideShowShapeAnimationEffectKind
 {
@@ -147,6 +149,7 @@ public static class SlideShowPlaybackPlanner
             SlideShowTransitionPlaybackKind.Split => SlideShowTransitionPlaybackActionKind.Split,
             SlideShowTransitionPlaybackKind.Blinds => SlideShowTransitionPlaybackActionKind.Blinds,
             SlideShowTransitionPlaybackKind.RandomBars => SlideShowTransitionPlaybackActionKind.RandomBars,
+            SlideShowTransitionPlaybackKind.Strips => SlideShowTransitionPlaybackActionKind.Strips,
             SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Push,
             _ => SlideShowTransitionPlaybackActionKind.Fade
         };
@@ -160,7 +163,8 @@ public static class SlideShowPlaybackPlanner
             transitionPlan.SplitHorizontal,
             transitionPlan.SplitOut,
             transitionPlan.BlindsHorizontal,
-            transitionPlan.RandomBarsHorizontal);
+            transitionPlan.RandomBarsHorizontal,
+            transitionPlan.StripsSlopeDown);
     }
 
     public static IReadOnlyList<SlideShowShapeAnimationPlaybackPlan> PlanAnimationStep(AnimationStep step)
