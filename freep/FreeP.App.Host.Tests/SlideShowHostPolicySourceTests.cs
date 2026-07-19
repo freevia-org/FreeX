@@ -54,6 +54,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayRandomBarsTransition(");
         source.Should().Contain("PlayStripsTransition(");
         source.Should().Contain("PlayWheelTransition(");
+        source.Should().Contain("PlayZoomTransition(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildSplitRects(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildBlindsTransitionRects(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildRandomBarsTransitionRects(");
@@ -63,6 +64,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("BuildWheelTransitionGeometry(");
         source.Should().Contain("plan.WheelSpokeCount");
         source.Should().Contain("plan.WheelReverse");
+        source.Should().Contain("plan.ZoomIn");
+        source.Should().Contain("SlideShowPlaybackPlanner.ZoomInStartScale");
+        source.Should().Contain("SlideShowPlaybackPlanner.ZoomOutStartScale");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanAnimationStep(");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackAnimation(");
         source.Should().Contain("SlideShowPlaybackFramePlanner.PlanFrame(");
