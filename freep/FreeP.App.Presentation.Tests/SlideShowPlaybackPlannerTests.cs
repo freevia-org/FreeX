@@ -24,9 +24,20 @@ public sealed class SlideShowPlaybackPlannerTests
         });
 
         push.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Push);
+        push.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Push);
         push.DurationMs.Should().Be(325);
         push.IncomingOffsetX.Should().Be(-1);
         push.IncomingOffsetY.Should().Be(0);
+
+        var cover = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Cover,
+            Direction = TransitionDirection.Right,
+            DurationMs = 325
+        });
+
+        cover.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Cover);
+        cover.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Cover);
 
         var fallback = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
         {
@@ -36,6 +47,111 @@ public sealed class SlideShowPlaybackPlannerTests
 
         fallback.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Fade);
         fallback.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.FadeFallback);
+    }
+
+    [Fact]
+    public void PlanTransition_DissolveUsesDedicatedAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Dissolve,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Dissolve);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Dissolve);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.In, true)]
+    [InlineData(TransitionDirection.Out, false)]
+    [InlineData(null, true)]
+    public void PlanTransition_BoxUsesDedicatedActionAndDirection(
+        TransitionDirection? direction,
+        bool expandsFromCenter)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Box,
+            Direction = direction,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Box);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Box);
+        plan.BoxExpandsFromCenter.Should().Be(expandsFromCenter);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Right, -1, 0)]
+    [InlineData(TransitionDirection.Left, 1, 0)]
+    [InlineData(TransitionDirection.Down, 0, -1)]
+    [InlineData(TransitionDirection.Up, 0, 1)]
+    public void PlanTransition_RevealUsesDirectionalClipAction(
+        TransitionDirection direction,
+        double expectedOffsetX,
+        double expectedOffsetY)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Reveal,
+            Direction = direction
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Reveal);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Reveal);
+        plan.IncomingOffsetX.Should().Be(expectedOffsetX);
+        plan.IncomingOffsetY.Should().Be(expectedOffsetY);
+    }
+
+    [Fact]
+    public void PlanTransition_WipeUsesDirectionalRevealClipAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Wipe,
+            Direction = TransitionDirection.Left,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Reveal);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Reveal);
+        plan.IncomingOffsetX.Should().Be(1);
+        plan.IncomingOffsetY.Should().Be(0);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
+    public void PlanTransition_UncoverUsesOutgoingClipAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Uncover,
+            Direction = TransitionDirection.Right,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Uncover);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Uncover);
+        plan.IncomingOffsetX.Should().Be(-1);
+        plan.IncomingOffsetY.Should().Be(0);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
+    public void PlanTransition_DoorsUsesVerticalCenterOpening()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Doors,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Split);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Split);
+        plan.SplitHorizontal.Should().BeTrue();
+        plan.SplitOut.Should().BeTrue();
     }
 
     [Fact]

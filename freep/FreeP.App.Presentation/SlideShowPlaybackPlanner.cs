@@ -6,6 +6,11 @@ public enum SlideShowTransitionPlaybackActionKind
 {
     ShowInstant,
     Fade,
+    Dissolve,
+    Box,
+    Reveal,
+    Uncover,
+    Cover,
     Split,
     Blinds,
     RandomBars,
@@ -28,7 +33,8 @@ public sealed record SlideShowTransitionPlaybackPlan(
     bool StripsSlopeDown,
     int WheelSpokeCount,
     bool WheelReverse,
-    bool ZoomIn);
+    bool ZoomIn,
+    bool BoxExpandsFromCenter);
 
 public enum SlideShowShapeAnimationEffectKind
 {
@@ -142,6 +148,8 @@ public static class SlideShowPlaybackPlanner
     public const int CheckerboardColumnCount = 6;
     public const int WheelSpokeCount = 4;
     public const int StripsBandCount = 6;
+    public const int DissolveRowCount = 12;
+    public const int DissolveColumnCount = 16;
     public const double ZoomInStartScale = 0.65;
     public const double ZoomOutStartScale = 1.35;
 
@@ -153,13 +161,19 @@ public static class SlideShowPlaybackPlanner
         var actionKind = transitionPlan.PlaybackKind switch
         {
             SlideShowTransitionPlaybackKind.Cut => SlideShowTransitionPlaybackActionKind.ShowInstant,
+            SlideShowTransitionPlaybackKind.Dissolve => SlideShowTransitionPlaybackActionKind.Dissolve,
+            SlideShowTransitionPlaybackKind.Box => SlideShowTransitionPlaybackActionKind.Box,
+            SlideShowTransitionPlaybackKind.Reveal => SlideShowTransitionPlaybackActionKind.Reveal,
+            SlideShowTransitionPlaybackKind.Uncover => SlideShowTransitionPlaybackActionKind.Uncover,
+            SlideShowTransitionPlaybackKind.Cover => SlideShowTransitionPlaybackActionKind.Cover,
+            SlideShowTransitionPlaybackKind.Push => SlideShowTransitionPlaybackActionKind.Push,
             SlideShowTransitionPlaybackKind.Split => SlideShowTransitionPlaybackActionKind.Split,
             SlideShowTransitionPlaybackKind.Blinds => SlideShowTransitionPlaybackActionKind.Blinds,
             SlideShowTransitionPlaybackKind.RandomBars => SlideShowTransitionPlaybackActionKind.RandomBars,
             SlideShowTransitionPlaybackKind.Strips => SlideShowTransitionPlaybackActionKind.Strips,
             SlideShowTransitionPlaybackKind.Wheel => SlideShowTransitionPlaybackActionKind.Wheel,
             SlideShowTransitionPlaybackKind.Zoom => SlideShowTransitionPlaybackActionKind.Zoom,
-            SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Push,
+            SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Cover,
             _ => SlideShowTransitionPlaybackActionKind.Fade
         };
 
@@ -176,7 +190,8 @@ public static class SlideShowPlaybackPlanner
             transitionPlan.StripsSlopeDown,
             transitionPlan.WheelSpokeCount,
             transitionPlan.WheelReverse,
-            transitionPlan.ZoomIn);
+            transitionPlan.ZoomIn,
+            transitionPlan.BoxExpandsFromCenter);
     }
 
     public static IReadOnlyList<SlideShowShapeAnimationPlaybackPlan> PlanAnimationStep(AnimationStep step)

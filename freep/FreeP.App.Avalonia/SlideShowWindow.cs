@@ -42,8 +42,9 @@ namespace FreeP.App.Avalonia;
 /// ────────────────────
 /// A snapshot of the outgoing slide is captured into a <see cref="RenderTargetBitmap"/>,
 /// displayed in the back layer. The front layer (new slide) is animated in according to
-/// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover/Wipe/Uncover
-/// (directional translate), others fall back to Fade.
+/// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover
+/// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
+/// and Push (bidirectional displacement). Others fall back to Fade.
 ///
 /// Media
 /// ─────
@@ -707,6 +708,9 @@ public sealed class SlideShowWindow : Window
     private void ShowSlideInstant(Slide slide)
     {
         _transitionBackImage.IsVisible = false;
+        _transitionBackImage.Clip = null;
+        _transitionBackImage.RenderTransform = null;
+        _transitionBackImage.ZIndex = 0;
         _slideCanvas.Slide   = slide;
         _slideCanvas.Opacity = 1;
         _slideCanvas.Clip = null;
@@ -745,6 +749,10 @@ public sealed class SlideShowWindow : Window
         // (The sound bytes are preserved on the model and will re-emit on save.)
 
         var plan = SlideShowPlaybackPlanner.PlanTransition(t);
+        _transitionBackImage.IsVisible = false;
+        _transitionBackImage.Clip = null;
+        _transitionBackImage.RenderTransform = null;
+        _transitionBackImage.ZIndex = 0;
         switch (plan.ActionKind)
         {
             case SlideShowTransitionPlaybackActionKind.ShowInstant:
@@ -777,6 +785,26 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Zoom:
                 PlayZoomTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Dissolve:
+                PlayDissolveTransition(slide, plan.DurationMs);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Box:
+                PlayBoxTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Reveal:
+                PlayRevealTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Uncover:
+                PlayUncoverTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Cover:
+                PlayCoverTransition(slide, plan);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Push:
@@ -812,7 +840,7 @@ public sealed class SlideShowWindow : Window
         });
     }
 
-    private void PlayPushTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    private void PlayCoverTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
     {
         var snapshot = CaptureCurrentSlide();
         var dx = plan.IncomingOffsetX;
@@ -839,6 +867,40 @@ public sealed class SlideShowWindow : Window
                 _slideCanvas.RenderTransform = null;
                 _transitionBackImage.IsVisible = false;
             });
+    }
+
+    private void PlayPushTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var dx = plan.IncomingOffsetX;
+        var dy = plan.IncomingOffsetY;
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.RenderTransform = new TranslateTransform(dx * w, dy * h);
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.RenderTransform = new TranslateTransform(0, 0);
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateTranslate(_slideCanvas, dx * w, dy * h, 0, 0, plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.RenderTransform = null;
+                _transitionBackImage.RenderTransform = null;
+                _transitionBackImage.IsVisible = false;
+            });
+
+        if (snapshot is not null)
+        {
+            AnimateTranslate(_transitionBackImage, 0, 0, dx * w, dy * h, plan.DurationMs);
+        }
     }
 
     // ── Animation helpers (Avalonia dispatcher-based) ─────────────────────────────
@@ -872,6 +934,221 @@ public sealed class SlideShowWindow : Window
                 _slideCanvas.Clip = null;
                 _transitionBackImage.IsVisible = false;
             });
+    }
+
+    private void PlayDissolveTransition(Slide slide, int durationMs)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = BuildDissolveTransitionGeometry(w, h, 0);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateDissolveTransitionClip(
+            _slideCanvas,
+            w,
+            h,
+            durationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private static Geometry BuildDissolveTransitionGeometry(
+        double width,
+        double height,
+        double progress)
+    {
+        var geometry = new GeometryGroup();
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(
+                     width,
+                     height,
+                     SlideShowPlaybackPlanner.DissolveRowCount,
+                     SlideShowPlaybackPlanner.DissolveColumnCount,
+                     progress))
+        {
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        }
+
+        return geometry;
+    }
+
+    private void PlayBoxTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        var clipRect = BuildBoxTransitionGeometry(w, h, 0, plan.BoxExpandsFromCenter);
+        _slideCanvas.Clip = clipRect;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateRectClip(
+            _slideCanvas,
+            clipRect,
+            ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(w, h, 0, plan.BoxExpandsFromCenter)),
+            ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(w, h, 1, plan.BoxExpandsFromCenter)),
+            plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private static RectangleGeometry BuildBoxTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        bool expandsFromCenter) =>
+        new(ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(
+            width, height, progress, expandsFromCenter)));
+
+    private void PlayRevealTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        var clipRect = BuildRevealTransitionGeometry(w, h, 0, plan.IncomingOffsetX, plan.IncomingOffsetY);
+        _slideCanvas.Clip = clipRect;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateRectClip(
+            _slideCanvas,
+            clipRect,
+            ToRect(SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(
+                w, h, 0, plan.IncomingOffsetX, plan.IncomingOffsetY)),
+            ToRect(SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(
+                w, h, 1, plan.IncomingOffsetX, plan.IncomingOffsetY)),
+            plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private static RectangleGeometry BuildRevealTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        double incomingOffsetX,
+        double incomingOffsetY) =>
+        new(ToRect(SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(
+            width, height, progress, incomingOffsetX, incomingOffsetY)));
+
+    private void PlayUncoverTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = null;
+        _slideCanvas.Refresh();
+
+        if (snapshot is null)
+            return;
+
+        _transitionBackImage.Source = snapshot;
+        _transitionBackImage.IsVisible = true;
+        _transitionBackImage.ZIndex = 2;
+        var clipRect = BuildUncoverTransitionGeometry(w, h, 0, plan.IncomingOffsetX, plan.IncomingOffsetY);
+        _transitionBackImage.Clip = clipRect;
+
+        AnimateRectClip(
+            _transitionBackImage,
+            clipRect,
+            ToRect(SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(
+                w, h, 0, plan.IncomingOffsetX, plan.IncomingOffsetY)),
+            ToRect(SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(
+                w, h, 1, plan.IncomingOffsetX, plan.IncomingOffsetY)),
+            plan.DurationMs,
+            onComplete: () =>
+            {
+                _transitionBackImage.Clip = null;
+                _transitionBackImage.IsVisible = false;
+                _transitionBackImage.ZIndex = 0;
+            });
+    }
+
+    private static RectangleGeometry BuildUncoverTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        double incomingOffsetX,
+        double incomingOffsetY) =>
+        new(ToRect(SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(
+            width, height, progress, incomingOffsetX, incomingOffsetY)));
+
+    private void AnimateDissolveTransitionClip(
+        Control target,
+        double width,
+        double height,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            target.Clip = BuildDissolveTransitionGeometry(width, height, 1);
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            target.Clip = BuildDissolveTransitionGeometry(width, height, EaseInOut(t));
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                target.Clip = BuildDissolveTransitionGeometry(width, height, 1);
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
     }
 
     private static Geometry BuildSplitGeometry(

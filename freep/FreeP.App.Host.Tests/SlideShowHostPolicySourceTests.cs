@@ -55,6 +55,12 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayStripsTransition(");
         source.Should().Contain("PlayWheelTransition(");
         source.Should().Contain("PlayZoomTransition(");
+        source.Should().Contain("PlayDissolveTransition(");
+        source.Should().Contain("PlayBoxTransition(");
+        source.Should().Contain("PlayRevealTransition(");
+        source.Should().Contain("PlayUncoverTransition(");
+        source.Should().Contain("PlayCoverTransition(");
+        source.Should().Contain("outgoingTranslate.BeginAnimation(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildSplitRects(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildBlindsTransitionRects(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildRandomBarsTransitionRects(");
@@ -67,6 +73,12 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("plan.ZoomIn");
         source.Should().Contain("SlideShowPlaybackPlanner.ZoomInStartScale");
         source.Should().Contain("SlideShowPlaybackPlanner.ZoomOutStartScale");
+        source.Should().Contain("BuildDissolveTransitionGeometry(");
+        source.Should().Contain("BuildBoxTransitionGeometry(");
+        source.Should().Contain("BuildRevealTransitionGeometry(");
+        source.Should().Contain("BuildUncoverTransitionGeometry(");
+        source.Should().Contain("SlideShowPlaybackPlanner.DissolveRowCount");
+        source.Should().Contain("SlideShowPlaybackPlanner.DissolveColumnCount");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanAnimationStep(");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackAnimation(");
         source.Should().Contain("SlideShowPlaybackFramePlanner.PlanFrame(");
