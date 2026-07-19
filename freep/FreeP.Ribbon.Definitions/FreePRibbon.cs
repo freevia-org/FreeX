@@ -263,6 +263,10 @@ public static class FreePRibbon
             group.Medium("freep.transition.uncover", FreePRibbonText.TransitionUncoverCommand.Label, RibbonCommandIconKind.Expand, FreePRibbonText.TransitionUncoverCommand.KeyTip);
             group.Medium("freep.transition.blinds", FreePRibbonText.TransitionBlindsCommand.Label, RibbonCommandIconKind.View, FreePRibbonText.TransitionBlindsCommand.KeyTip);
             group.Medium("freep.transition.comb", FreePRibbonText.TransitionCombCommand.Label, RibbonCommandIconKind.Grid, FreePRibbonText.TransitionCombCommand.KeyTip);
+            group.Medium("freep.transition.gallery", FreePRibbonText.TransitionGalleryCommand.Label, RibbonCommandIconKind.Grid, FreePRibbonText.TransitionGalleryCommand.KeyTip);
+            group.Medium("freep.transition.conveyor", FreePRibbonText.TransitionConveyorCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.TransitionConveyorCommand.KeyTip);
+            group.Medium("freep.transition.pan", FreePRibbonText.TransitionPanCommand.Label, RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.TransitionPanCommand.KeyTip);
+            group.Medium("freep.transition.window", FreePRibbonText.TransitionWindowCommand.Label, RibbonCommandIconKind.Window, FreePRibbonText.TransitionWindowCommand.KeyTip);
             group.Medium("freep.transition.dissolve", FreePRibbonText.TransitionDissolveCommand.Label, RibbonCommandIconKind.Color, FreePRibbonText.TransitionDissolveCommand.KeyTip);
             group.Medium("freep.transition.zoom", FreePRibbonText.TransitionZoomCommand.Label, RibbonCommandIconKind.Zoom, FreePRibbonText.TransitionZoomCommand.KeyTip);
             group.Medium("freep.transition.wheel", FreePRibbonText.TransitionWheelCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.TransitionWheelCommand.KeyTip);
