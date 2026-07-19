@@ -446,7 +446,9 @@ public sealed partial class MainWindow
         var legendGroup = MakeAreaDescriptorGroup(legendSection, legendStack);
 
         // Dialog title matches the WPF ChartAreaLegendDialog ("Format Chart Area").
-        var dialog = NewChartDialog(UiText.Get("ChartAreaLegend_Title"), "FormatChartAreaDialog");
+        // WPF ChartAreaLegendDialog focuses the chart-area fill editor on load. Use the matching
+        // Avalonia color control explicitly so nested scroll content does not lose the initial focus.
+        var dialog = NewChartDialog(UiText.Get("ChartAreaLegend_Title"), "FormatChartAreaDialog", chartAreaButton);
         // Shared explicit size so the headless parity capture (which reads dialog.Bounds verbatim) matches
         // the WPF chart-area dialog contract.
         dialog.SizeToContent = SizeToContent.Manual;

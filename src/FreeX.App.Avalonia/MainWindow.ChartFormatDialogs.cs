@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Threading;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation;
@@ -417,7 +418,10 @@ public sealed partial class MainWindow
             color => state = state with { LineColor = color },
             lineColorButton);
 
-        var dialog = NewChartDialog($"Format {commandLabel}", "ChartAxisFormatDialog");
+        // WPF ChartAxisFormatDialog selects the minimum editor when the dialog is loaded. Keep the
+        // equivalent Avalonia target explicit because this dialog's controls are nested in scrollable
+        // group boxes and are not reliably discovered by generic first-control focus.
+        var dialog = NewChartDialog($"Format {commandLabel}", "ChartAxisFormatDialog", minimumBox);
         dialog.SizeToContent = SizeToContent.Manual;
         dialog.Width = 432;
         dialog.Height = 720;
@@ -1327,7 +1331,7 @@ public sealed partial class MainWindow
         return radioButton;
     }
 
-    private static Window NewChartDialog(string title, string automationId)
+    private static Window NewChartDialog(string title, string automationId, Control? initialFocus = null)
     {
         var dialog = new Window
         {
@@ -1339,6 +1343,20 @@ public sealed partial class MainWindow
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, automationId);
+        if (initialFocus is not null)
+        {
+            dialog.Opened += (_, _) => Dispatcher.UIThread.Post(
+                () =>
+                {
+                    if (!dialog.IsVisible || !initialFocus.IsVisible || !initialFocus.IsEffectivelyEnabled)
+                        return;
+
+                    initialFocus.Focus();
+                    if (initialFocus is TextBox textBox)
+                        textBox.SelectAll();
+                },
+                DispatcherPriority.Background);
+        }
         return dialog;
     }
 
