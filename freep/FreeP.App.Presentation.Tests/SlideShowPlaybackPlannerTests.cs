@@ -82,6 +82,27 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.RandomBarsHorizontal.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(TransitionDirection.LeftDown, true)]
+    [InlineData(TransitionDirection.RightUp, true)]
+    [InlineData(TransitionDirection.LeftUp, false)]
+    [InlineData(TransitionDirection.RightDown, false)]
+    public void PlanTransition_StripsUsesDedicatedActionAndDirectionSlope(
+        TransitionDirection direction,
+        bool expectedSlopeDown)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Strips,
+            Direction = direction,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Strips);
+        plan.DurationMs.Should().Be(420);
+        plan.StripsSlopeDown.Should().Be(expectedSlopeDown);
+    }
+
     [Fact]
     public void PlanAnimationStep_UsesControllerEntryStartDelays()
     {

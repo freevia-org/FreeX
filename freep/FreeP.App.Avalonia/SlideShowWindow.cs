@@ -767,6 +767,10 @@ public sealed class SlideShowWindow : Window
                 PlayRandomBarsTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Strips:
+                PlayStripsTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -944,6 +948,76 @@ public sealed class SlideShowWindow : Window
                      width, height, SlideShowPlaybackPlanner.RandomBarsBandCount, progress, horizontal))
             geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
         return geometry;
+    }
+
+    private void PlayStripsTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = BuildStripsTransitionGeometry(w, h, 0, plan.StripsSlopeDown);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateStripsTransitionClip(
+            _slideCanvas, w, h, plan.StripsSlopeDown, plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private static Geometry BuildStripsTransitionGeometry(
+        double width, double height, double progress, bool slopeDown) =>
+        BuildStripsGeometry(
+            width, height, progress, SlideShowPlaybackPlanner.StripsBandCount, slopeDown);
+
+    private void AnimateStripsTransitionClip(
+        Control target,
+        double width,
+        double height,
+        bool slopeDown,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            target.Clip = BuildStripsTransitionGeometry(width, height, 1, slopeDown);
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            target.Clip = BuildStripsTransitionGeometry(width, height, EaseInOut(t), slopeDown);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                target.Clip = BuildStripsTransitionGeometry(width, height, 1, slopeDown);
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
     }
 
     private void AnimateRandomBarsTransitionClip(

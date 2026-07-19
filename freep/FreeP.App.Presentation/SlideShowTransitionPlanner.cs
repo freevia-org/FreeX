@@ -9,6 +9,7 @@ public enum SlideShowTransitionPlaybackKind
     Split,
     Blinds,
     RandomBars,
+    Strips,
     PushLike,
     FadeFallback
 }
@@ -20,7 +21,8 @@ public sealed record SlideShowTransitionPlan(
     bool SplitHorizontal,
     bool SplitOut,
     bool BlindsHorizontal,
-    bool RandomBarsHorizontal);
+    bool RandomBarsHorizontal,
+    bool StripsSlopeDown);
 
 public static class SlideShowTransitionPlanner
 {
@@ -36,7 +38,8 @@ public static class SlideShowTransitionPlanner
             ResolveSplitHorizontal(transition),
             ResolveSplitOut(transition),
             ResolveBlindsHorizontal(transition),
-            ResolveRandomBarsHorizontal(transition));
+            ResolveRandomBarsHorizontal(transition),
+            ResolveStripsSlopeDown(transition));
     }
 
     public static SlideShowTransitionPlaybackKind PlanPlaybackKind(TransitionKind kind) =>
@@ -54,6 +57,8 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Blinds => SlideShowTransitionPlaybackKind.Blinds,
 
             TransitionKind.RandomBar => SlideShowTransitionPlaybackKind.RandomBars,
+
+            TransitionKind.Strips => SlideShowTransitionPlaybackKind.Strips,
 
             TransitionKind.Push or
             TransitionKind.Cover or
@@ -83,6 +88,9 @@ public static class SlideShowTransitionPlanner
 
     private static bool ResolveRandomBarsHorizontal(SlideTransition transition) =>
         transition.Direction != TransitionDirection.Vertical;
+
+    private static bool ResolveStripsSlopeDown(SlideTransition transition) =>
+        transition.Direction is TransitionDirection.LeftDown or TransitionDirection.RightUp;
 
     public static (double X, double Y) ResolveIncomingOffset(TransitionDirection? direction) =>
         direction switch
