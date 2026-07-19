@@ -3,10 +3,14 @@ using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Free.Shared.Shell.Avalonia;
 using FreeX.Core.Model;
 using AvaloniaHorizontalAlignment = Avalonia.Layout.HorizontalAlignment;
@@ -275,6 +279,7 @@ public sealed partial class MainWindow
         {
             Height = 110,
         };
+        AutomationProperties.SetAutomationId(suggestionList, "SpellCheckSuggestionsList");
         AvaloniaCompactDialogChrome.ApplyListBox(suggestionList, SpellingDialogChromeStyle);
         foreach (var suggestion in suggestions)
             suggestionList.Items.Add(suggestion);
@@ -287,6 +292,7 @@ public sealed partial class MainWindow
         {
             Text = suggestions.Count > 0 ? suggestions[0] : word,
         };
+        AutomationProperties.SetAutomationId(replacementBox, "SpellCheckReplacementBox");
         AvaloniaCompactDialogChrome.ApplyTextBox(replacementBox, SpellingDialogChromeStyle);
         layout.Children.Add(new TextBlock { Text = UiText.Get("ShellLoc_SpellingChangeTo") });
         layout.Children.Add(replacementBox);
@@ -314,6 +320,24 @@ public sealed partial class MainWindow
         changeAllButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.ChangeAll, replacementBox.Text); dialog.Close(); };
         closeButton.Click += (_, _) => { decision = new SpellingDecision(SpellingAction.Close, null); dialog.Close(); };
 
+        // Match the WPF dialog's keyboard contract: the suggestion list is the initial target when
+        // suggestions exist, otherwise the replacement editor receives focus. Keep the full content
+        // scope cyclic and route Escape through the cancel button even when a text control owns focus.
+        KeyboardNavigation.SetTabNavigation(layout, KeyboardNavigationMode.Cycle);
+        dialog.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, args) =>
+            {
+                if (args.Handled || args.Key != Key.Escape || args.KeyModifiers != KeyModifiers.None)
+                    return;
+
+                closeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, closeButton));
+                if (dialog.IsVisible)
+                    dialog.Close();
+                args.Handled = true;
+            },
+            RoutingStrategies.Tunnel);
+
         var buttonRowTop = AvaloniaCompactDialogChrome.CreateActionRow(
             [ignoreButton, ignoreAllButton, changeButton],
             new Thickness(0, 10, 0, 0));
@@ -330,6 +354,19 @@ public sealed partial class MainWindow
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             Content = layout,
         };
+
+        dialog.Opened += (_, _) => Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (!dialog.IsVisible)
+                    return;
+
+                if (suggestions.Count > 0)
+                    suggestionList.Focus();
+                else
+                    replacementBox.Focus();
+            },
+            DispatcherPriority.Input);
 
         await dialog.ShowDialog(this);
         return decision;
