@@ -1316,12 +1316,19 @@ public sealed class SlideShowWindow : Window
 
         double dx = plan.OffsetXFactor * w;
         double dy = plan.OffsetYFactor * h;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var fromX = isExit ? 0 : dx;
+        var fromY = isExit ? 0 : dy;
+        var toX = isExit ? dx : 0;
+        var toY = isExit ? dy : 0;
+        translate.X = fromX;
+        translate.Y = fromY;
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
-        var animX = new DoubleAnimation(dx, 0, dur)
+        var animX = new DoubleAnimation(fromX, toX, dur)
             { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
-        var animY = new DoubleAnimation(dy, 0, dur)
+        var animY = new DoubleAnimation(fromY, toY, dur)
             { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
 
         Storyboard.SetTarget(animX, el);
