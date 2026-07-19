@@ -58,6 +58,13 @@ public sealed class SlideTransition
     public string? MorphOption { get; set; }
 
     /// <summary>
+    /// Optional PowerPoint wheel spoke count. The classic <c>p:wheel</c>
+    /// transition stores this as the <c>spokes</c> attribute; when omitted,
+    /// the slideshow uses PowerPoint's default spoke count.
+    /// </summary>
+    public int? WheelSpokeCount { get; set; }
+
+    /// <summary>
     /// Transition sound (p:sndAc / p:stSnd). Null if no sound is attached.
     /// </summary>
     public TransitionSound? Sound { get; set; }

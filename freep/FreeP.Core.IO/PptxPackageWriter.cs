@@ -1781,6 +1781,11 @@ public static class PptxPackageWriter
             {
                 attrs.Add(new XAttribute("dir", dirAttr));
             }
+            if (transition.Kind is TransitionKind.Wheel or TransitionKind.WheelReverse &&
+                transition.WheelSpokeCount is > 0)
+            {
+                attrs.Add(new XAttribute("spokes", transition.WheelSpokeCount.Value));
+            }
             return new XElement(P + effectName,
                 attrs.Where(x => x is not null).Cast<object>().ToArray());
         }
@@ -1791,6 +1796,11 @@ public static class PptxPackageWriter
             if (!isP14Kind || effectName is null) return null;
             var attrs = new List<object?>();
             if (dirAttr is not null) attrs.Add(new XAttribute("dir", dirAttr));
+            if (transition.Kind is TransitionKind.Wheel or TransitionKind.WheelReverse &&
+                transition.WheelSpokeCount is > 0)
+            {
+                attrs.Add(new XAttribute("spokes", transition.WheelSpokeCount.Value));
+            }
             return new XElement(P14 + effectName,
                 attrs.Where(x => x is not null).Cast<object>().ToArray());
         }

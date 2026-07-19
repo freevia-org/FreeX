@@ -771,6 +771,10 @@ public sealed class SlideShowWindow : Window
                 PlayStripsTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Wheel:
+                PlayWheelTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -981,6 +985,82 @@ public sealed class SlideShowWindow : Window
         double width, double height, double progress, bool slopeDown) =>
         BuildStripsGeometry(
             width, height, progress, SlideShowPlaybackPlanner.StripsBandCount, slopeDown);
+
+    private void PlayWheelTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = BuildWheelTransitionGeometry(
+            w, h, 0, plan.WheelSpokeCount, plan.WheelReverse);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateWheelTransitionClip(
+            _slideCanvas, w, h, plan.WheelSpokeCount, plan.WheelReverse, plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private static Geometry BuildWheelTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        int spokeCount,
+        bool reverse) =>
+        BuildWheelGeometry(width, height, progress, spokeCount, reverse);
+
+    private void AnimateWheelTransitionClip(
+        Control target,
+        double width,
+        double height,
+        int spokeCount,
+        bool reverse,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            target.Clip = BuildWheelTransitionGeometry(width, height, 1, spokeCount, reverse);
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            target.Clip = BuildWheelTransitionGeometry(
+                width, height, EaseInOut(t), spokeCount, reverse);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                target.Clip = BuildWheelTransitionGeometry(width, height, 1, spokeCount, reverse);
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
 
     private void AnimateStripsTransitionClip(
         Control target,
@@ -2231,9 +2311,15 @@ public sealed class SlideShowWindow : Window
         return geometry;
     }
 
-    private static Geometry BuildWheelGeometry(double width, double height, double progress, int spokeCount)
+    private static Geometry BuildWheelGeometry(
+        double width,
+        double height,
+        double progress,
+        int spokeCount,
+        bool reverse = false)
     {
-        var wheelPlan = SlideShowMaskGeometryPlanner.BuildWheel(width, height, progress, spokeCount);
+        var wheelPlan = SlideShowMaskGeometryPlanner.BuildWheel(
+            width, height, progress, spokeCount, clockwise: !reverse);
         if (wheelPlan.IsFullyOpen)
             return new RectangleGeometry(new Rect(0, 0, width, height));
 
@@ -2270,7 +2356,12 @@ public sealed class SlideShowWindow : Window
         {
             ctx.BeginFigure(center, isFilled: true);
             ctx.LineTo(ToPoint(arc.Start));
-            ctx.ArcTo(ToPoint(arc.End), new Size(arc.Radius, arc.Radius), 0, arc.IsLargeArc, SweepDirection.Clockwise);
+            ctx.ArcTo(
+                ToPoint(arc.End),
+                new Size(arc.Radius, arc.Radius),
+                0,
+                arc.IsLargeArc,
+                arc.IsClockwise ? SweepDirection.Clockwise : SweepDirection.CounterClockwise);
             ctx.EndFigure(isClosed: true);
         }
 

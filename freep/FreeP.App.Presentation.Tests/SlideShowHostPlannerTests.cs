@@ -143,6 +143,8 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Split, SlideShowTransitionPlaybackKind.Split)]
     [InlineData(TransitionKind.Blinds, SlideShowTransitionPlaybackKind.Blinds)]
     [InlineData(TransitionKind.RandomBar, SlideShowTransitionPlaybackKind.RandomBars)]
+    [InlineData(TransitionKind.Wheel, SlideShowTransitionPlaybackKind.Wheel)]
+    [InlineData(TransitionKind.WheelReverse, SlideShowTransitionPlaybackKind.Wheel)]
     [InlineData(TransitionKind.Push, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Cover, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Wipe, SlideShowTransitionPlaybackKind.PushLike)]

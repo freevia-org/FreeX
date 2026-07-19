@@ -4405,6 +4405,9 @@ public static class PptxPackageReader
             if (t.Kind == TransitionKind.Morph)
                 t.MorphOption = effectEl.Attribute("option")?.Value;
 
+            if (t.Kind is TransitionKind.Wheel or TransitionKind.WheelReverse)
+                t.WheelSpokeCount = ReadPositiveInt(effectEl.Attribute("spokes")?.Value);
+
             // For unrecognized (Other) transitions, capture the entire p:transition element verbatim
             // so the writer can re-emit it byte-faithfully — ensuring NO transition is silently dropped.
             // EB2: also captures transitions with p14:/p159: effect children that fall through to Other.

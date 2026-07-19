@@ -164,6 +164,30 @@ public class TransitionCompletenessTests
         Assert.Equal("byWord", t.MorphOption);
     }
 
+    [Theory]
+    [InlineData(TransitionKind.Wheel)]
+    [InlineData(TransitionKind.WheelReverse)]
+    public void RoundTrip_Wheel_SpokeCount_Preserved(TransitionKind kind)
+    {
+        var pres = Presentation.CreateEmpty();
+        pres.Slides[0].Transition = new SlideTransition
+        {
+            Kind = kind,
+            WheelSpokeCount = 8,
+            DurationMs = 700,
+        };
+
+        var ms = new MemoryStream();
+        PptxPackageWriter.Write(pres, ms);
+        ms.Position = 0;
+        var loaded = PptxPackageReader.Read(ms);
+
+        var t = loaded.Slides[0].Transition;
+        Assert.NotNull(t);
+        Assert.Equal(kind, t!.Kind);
+        Assert.Equal(8, t.WheelSpokeCount);
+    }
+
     // ── Round-trip: Other / Unknown → RawXml preservation ───────────────────────
 
     [Fact]
@@ -301,6 +325,21 @@ public class TransitionCompletenessTests
 
         Assert.Equal(TransitionKind.Morph, clone.Transition?.Kind);
         Assert.Equal("byChar", clone.Transition?.MorphOption);
+    }
+
+    [Fact]
+    public void Cloner_PreservesWheelSpokeCount()
+    {
+        var slide = Presentation.CreateEmpty().Slides[0];
+        slide.Transition = new SlideTransition
+        {
+            Kind = TransitionKind.Wheel,
+            WheelSpokeCount = 6,
+        };
+
+        var clone = SlideCloner.CloneSlide(slide);
+
+        Assert.Equal(6, clone.Transition?.WheelSpokeCount);
     }
 
     [Fact]
