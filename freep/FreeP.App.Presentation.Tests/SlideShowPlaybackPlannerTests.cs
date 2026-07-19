@@ -95,6 +95,23 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanTransition_WipeUsesDirectionalRevealClipAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Wipe,
+            Direction = TransitionDirection.Left,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Reveal);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Reveal);
+        plan.IncomingOffsetX.Should().Be(1);
+        plan.IncomingOffsetY.Should().Be(0);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
     public void PlanTransition_DoorsUsesVerticalCenterOpening()
     {
         var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition

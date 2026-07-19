@@ -70,6 +70,8 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Reveal => SlideShowTransitionPlaybackKind.Reveal,
 
+            TransitionKind.Wipe => SlideShowTransitionPlaybackKind.Reveal,
+
             TransitionKind.Doors => SlideShowTransitionPlaybackKind.Split,
 
             TransitionKind.Split => SlideShowTransitionPlaybackKind.Split,
@@ -87,7 +89,6 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Push or
             TransitionKind.Cover or
-            TransitionKind.Wipe or
             TransitionKind.Uncover or
             TransitionKind.Gallery or
             TransitionKind.Conveyor or
