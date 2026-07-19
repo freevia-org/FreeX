@@ -845,6 +845,29 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceGeometryPlan_NonCanonicalImportedSurfaceUsesElevationPalette()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.VaryColors = true;
+        chart.Series[0].Values[0] = 2;
+        chart.Series[0].Values[1] = 12;
+        chart.Series[0].Values[2] = 22;
+        chart.Series[1].Values[0] = 32;
+        chart.Series[1].Values[1] = 42;
+        chart.Series[1].Values[2] = 52;
+
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        plan.Facets.Select(facet => facet.Fill.Color).Distinct()
+            .Should().HaveCountGreaterThan(1,
+                "non-canonical imported surfaces should retain PowerPoint's elevation color bands");
+        plan.Facets.Should().OnlyContain(facet => facet.Fill.Alpha == 255);
+    }
+
+    [Fact]
     public void UsesProjectedSurfaceFrame_OnlyForSurface3D()
     {
         ChartRenderPlanner.UsesProjectedSurfaceFrame(new ChartShape { ChartType = ChartType.Surface3D })
