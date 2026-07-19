@@ -948,12 +948,7 @@ public sealed class SlideShowWindow : Window
 
         var animatedShapeIds = slide.Animations
             .Where(a => a.Kind == AnimationKind.Emphasis
-                        || (a.Kind == AnimationKind.Exit
-                            && (a.Preset == AnimationPreset.Appear
-                                || a.Preset == AnimationPreset.Fade
-                                || a.Preset == AnimationPreset.FlyIn
-                                || a.Preset == AnimationPreset.Wipe
-                                || a.Preset == AnimationPreset.Split))
+                        || a.Kind == AnimationKind.Exit
                         || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
                             && a.TriggerShapeId == null))
             .Select(a => a.ShapeId)
