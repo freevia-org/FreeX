@@ -483,7 +483,7 @@ public static class SlideShowPlaybackFramePlanner
             SlideShowAnimationClipKind.Blinds => plan.BlindsBandCount,
             SlideShowAnimationClipKind.Checkerboard => plan.CheckerboardRowCount * plan.CheckerboardColumnCount,
             SlideShowAnimationClipKind.Strips => plan.GeometricMaskStripCount,
-            SlideShowAnimationClipKind.RandomBars => SlideShowPlaybackPlanner.StripsBandCount,
+            SlideShowAnimationClipKind.RandomBars => SlideShowPlaybackPlanner.RandomBarsBandCount,
             _ => 0
         };
 

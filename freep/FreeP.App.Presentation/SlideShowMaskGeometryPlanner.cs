@@ -6,6 +6,10 @@ public sealed record SlideShowMaskRect(double X, double Y, double Width, double 
 
 public sealed record SlideShowMaskRectPair(SlideShowMaskRect Closed, SlideShowMaskRect Open);
 
+public sealed record SlideShowMaskRandomBarPlan(
+    SlideShowMaskRectPair Geometry,
+    int Order);
+
 public sealed record SlideShowMaskEllipse(
     SlideShowMaskPoint Center,
     double RadiusX,
@@ -36,6 +40,50 @@ public sealed record SlideShowMaskSweepPlan(
 /// </summary>
 public static class SlideShowMaskGeometryPlanner
 {
+    /// <summary>
+    /// Returns the stable bar order used by both slideshow hosts. PowerPoint's
+    /// Random Bars effect chooses a non-sequential order; keeping the
+    /// permutation in the shared planner prevents WPF and Avalonia from
+    /// diverging while retaining deterministic playback evidence.
+    /// </summary>
+    public static IReadOnlyList<int> BuildRandomBarsOrder(int bandCount)
+    {
+        var count = Math.Max(1, bandCount);
+        var order = Enumerable.Range(0, count).ToArray();
+        uint state = 0x9E3779B9u;
+        for (var i = order.Length - 1; i > 0; i--)
+        {
+            state = state * 1664525u + 1013904223u;
+            var swapIndex = (int)(state % (uint)(i + 1));
+            (order[i], order[swapIndex]) = (order[swapIndex], order[i]);
+        }
+
+        return order;
+    }
+
+    public static IReadOnlyList<SlideShowMaskRandomBarPlan> BuildRandomBars(
+        double width,
+        double height,
+        int bandCount,
+        bool horizontal)
+    {
+        var count = Math.Max(1, bandCount);
+        var order = BuildRandomBarsOrder(count);
+        var rank = new int[count];
+        for (var position = 0; position < order.Count; position++)
+            rank[order[position]] = position;
+
+        var bars = new SlideShowMaskRandomBarPlan[count];
+        for (var index = 0; index < count; index++)
+        {
+            bars[index] = new(
+                BuildBlindsBand(width, height, count, index, horizontal),
+                rank[index]);
+        }
+
+        return bars;
+    }
+
     public static SlideShowMaskRectPair BuildBlindsBand(
         double width,
         double height,
