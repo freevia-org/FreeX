@@ -949,7 +949,9 @@ public sealed class SlideShowWindow : Window
         var animatedShapeIds = slide.Animations
             .Where(a => a.Kind == AnimationKind.Emphasis
                         || (a.Kind == AnimationKind.Exit
-                            && (a.Preset == AnimationPreset.Appear || a.Preset == AnimationPreset.Fade))
+                            && (a.Preset == AnimationPreset.Appear
+                                || a.Preset == AnimationPreset.Fade
+                                || a.Preset == AnimationPreset.FlyIn))
                         || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
                             && a.TriggerShapeId == null))
             .Select(a => a.ShapeId)
@@ -1276,9 +1278,10 @@ public sealed class SlideShowWindow : Window
         var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
-        var animX = new DoubleAnimation(dx, 0, dur)
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var animX = new DoubleAnimation(isExit ? 0 : dx, isExit ? dx : 0, dur)
             { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
-        var animY = new DoubleAnimation(dy, 0, dur)
+        var animY = new DoubleAnimation(isExit ? 0 : dy, isExit ? dy : 0, dur)
             { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs), EasingFunction = ease };
         var animOp = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, dur)
             { BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs) };

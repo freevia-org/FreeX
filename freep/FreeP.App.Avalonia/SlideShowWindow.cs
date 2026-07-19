@@ -923,7 +923,9 @@ public sealed class SlideShowWindow : Window
         var animatedShapeIds = slide.Animations
             .Where(a => a.Kind == AnimationKind.Emphasis
                         || (a.Kind == AnimationKind.Exit
-                            && (a.Preset == AnimationPreset.Appear || a.Preset == AnimationPreset.Fade))
+                            && (a.Preset == AnimationPreset.Appear
+                                || a.Preset == AnimationPreset.Fade
+                                || a.Preset == AnimationPreset.FlyIn))
                         || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
                             && a.TriggerShapeId == null))
             .Select(a => a.ShapeId)
@@ -1272,12 +1274,14 @@ public sealed class SlideShowWindow : Window
         double dx = plan.OffsetXFactor * w;
         double dy = plan.OffsetYFactor * h;
 
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
         el.Opacity = plan.FromOpacity;
-        el.RenderTransform = new TranslateTransform(dx, dy);
+        el.RenderTransform = new TranslateTransform(isExit ? 0 : dx, isExit ? 0 : dy);
 
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateTranslate(el, dx, dy, 0, 0, plan.DurationMs);
+            AnimateTranslate(el, isExit ? 0 : dx, isExit ? 0 : dy,
+                isExit ? dx : 0, isExit ? dy : 0, plan.DurationMs);
             // Reveal in base canvas when the fade-in completes.
             AnimateOpacity(
                 el,
