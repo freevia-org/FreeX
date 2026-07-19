@@ -1,9 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
-using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 
 namespace FreeX.App.Avalonia;
 
@@ -19,7 +16,10 @@ public sealed partial class MainWindow
         Control initialFocus,
         bool selectAllText = false)
     {
-        KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
+        var root = dialog.Content as Control ?? dialog;
+        ConfigureDialogTabCycle(dialog, root);
+
+        EventHandler? layoutUpdated = null;
 
         void FocusInitialControl()
         {
@@ -30,62 +30,32 @@ public sealed partial class MainWindow
                 return;
             }
 
-            initialFocus.Focus();
-            if (selectAllText && initialFocus is TextBox textBox)
+            if (!ReferenceEquals(dialog.FocusManager?.GetFocusedElement(), initialFocus) &&
+                !FocusDialogControl(initialFocus))
+            {
+                return;
+            }
+
+            if (selectAllText && initialFocus is TextBox textBox && textBox.IsFocused)
                 textBox.SelectAll();
+
+            if (layoutUpdated is not null)
+                dialog.LayoutUpdated -= layoutUpdated;
         }
 
+        layoutUpdated = (_, _) => FocusInitialControl();
         dialog.Opened += (_, _) =>
         {
             FocusInitialControl();
             Dispatcher.UIThread.Post(FocusInitialControl, DispatcherPriority.Input);
+            Dispatcher.UIThread.Post(FocusInitialControl, DispatcherPriority.Background);
         };
-        dialog.AddHandler(
-            InputElement.KeyDownEvent,
-            (_, args) =>
-            {
-                if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
-                {
-                    var cancel = dialog.GetVisualDescendants()
-                        .OfType<Button>()
-                        .FirstOrDefault(button =>
-                            button.IsCancel && button.IsVisible && button.IsEffectivelyEnabled);
-                    cancel?.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, cancel));
-                    if (dialog.IsVisible)
-                        dialog.Close();
-                    args.Handled = true;
-                    return;
-                }
-
-                if (args.Key != Key.Tab ||
-                    (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Shift))
-                {
-                    return;
-                }
-
-                var stops = dialog.GetVisualDescendants()
-                    .OfType<Control>()
-                    .Where(control =>
-                        control.Focusable && control.IsVisible && control.IsEffectivelyEnabled)
-                    .ToList();
-                if (stops.Count == 0)
-                    return;
-
-                var focused = dialog.FocusManager?.GetFocusedElement();
-                var currentIndex = stops.FindIndex(control => ReferenceEquals(control, focused));
-                if (currentIndex < 0)
-                {
-                    FocusInitialControl();
-                    args.Handled = true;
-                    return;
-                }
-
-                var delta = args.KeyModifiers == KeyModifiers.Shift ? -1 : 1;
-                var nextIndex = (currentIndex + delta + stops.Count) % stops.Count;
-                stops[nextIndex].Focus();
-                args.Handled = true;
-            },
-            RoutingStrategies.Tunnel,
-            handledEventsToo: true);
+        dialog.Activated += (_, _) => Dispatcher.UIThread.Post(FocusInitialControl, DispatcherPriority.Input);
+        dialog.LayoutUpdated += layoutUpdated;
+        dialog.Closed += (_, _) =>
+        {
+            if (layoutUpdated is not null)
+                dialog.LayoutUpdated -= layoutUpdated;
+        };
     }
 }
