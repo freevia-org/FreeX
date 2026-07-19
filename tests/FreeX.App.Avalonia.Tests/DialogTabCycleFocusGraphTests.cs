@@ -31,11 +31,17 @@ public sealed class DialogTabCycleFocusGraphTests
 
     [Fact]
     public async Task PageSetup_AllTabsCycleForwardAndReverse_AndEscapeCloses() =>
-        await AssertTabbedDialogAsync("ShowPageSetupDialogAsync", "PageSetupTabs", 4, "PageSetupOrientationBox");
+        await AssertPageSetupGraphAsync(
+            "ShowPageSetupDialogAsync",
+            initialTabIndex: 0,
+            initialAutomationId: "PageSetupOrientationBox");
 
     [Fact]
     public async Task HeaderFooterRoute_UsesPageSetupScope_AndEscapeCloses() =>
-        await AssertTabbedDialogAsync("ShowHeaderFooterDialogAsync", "PageSetupTabs", 4, "PageSetupHeaderPresetBox");
+        await AssertPageSetupGraphAsync(
+            "ShowHeaderFooterDialogAsync",
+            initialTabIndex: 2,
+            initialAutomationId: "PageSetupHeaderPresetBox");
 
     [Fact]
     public async Task LegalNotices_CyclesInBothDirections_EscapeAndEnterClose()
@@ -132,6 +138,49 @@ public sealed class DialogTabCycleFocusGraphTests
                         ?? FindFirstFocusableVisibleDescendant((tabs.SelectedItem as TabItem)?.Content as Control)
                         ?? throw new InvalidOperationException($"No focus target for {openerName} tab {index}.");
                     AssertFullCycle(dialog, initial);
+                }
+
+                Send(dialog, Key.Escape);
+                dialog.IsVisible.Should().BeFalse($"Escape must close {openerName}");
+            }
+            finally
+            {
+                if (dialog.IsVisible)
+                    dialog.Close();
+                await AwaitClosedAsync(opener);
+                owner.Close();
+            }
+
+            return 0;
+        }, CancellationToken.None);
+    }
+
+    private static async Task AssertPageSetupGraphAsync(
+        string openerName,
+        int initialTabIndex,
+        string initialAutomationId)
+    {
+        await Session.Dispatch(async () =>
+        {
+            var owner = new MainWindow([]);
+            owner.Show();
+            var opener = InvokeOpener(owner, openerName);
+            var dialog = await WaitForOwnedDialogAsync(owner);
+            try
+            {
+                var tabs = FindByAutomationId<TabControl>(dialog, "PageSetupTabs")!;
+                tabs.ItemCount.Should().Be(4);
+                for (var index = 0; index < tabs.ItemCount; index++)
+                {
+                    tabs.SelectedIndex = index;
+                    dialog.UpdateLayout();
+                    Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+
+                    var initial = index == initialTabIndex
+                        ? FindByAutomationId<Control>(dialog, initialAutomationId)
+                        : FindFirstFocusableVisibleDescendant((tabs.SelectedItem as TabItem)?.Content as Control);
+                    initial.Should().NotBeNull($"No focus target for {openerName} tab {index}.");
+                    AssertFullCycle(dialog, initial!);
                 }
 
                 Send(dialog, Key.Escape);
