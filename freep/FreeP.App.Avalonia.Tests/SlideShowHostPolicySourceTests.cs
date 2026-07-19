@@ -32,6 +32,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_session.ClearInkStrokes(");
         source.Should().Contain("_session.UndoLastInkStroke(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildBlindsBand(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildRandomBars(");
+        source.Should().Contain("SlideShowPlaybackPlanner.RandomBarsBandCount");
+        source.Should().Contain("AnimateRandomBarsClip(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildCheckerboardCell(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildCircle(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildDiamondPoint(");
@@ -203,8 +206,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("onReveal: anim.Kind == AnimationKind.Exit ? null : () =>");
         source.Should().Contain("DisappearEffect(element, plan.DelayMs);");
         source.Should().Contain("var isExit = plan.Animation.Kind == AnimationKind.Exit;");
-        source.Should().Contain("var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);");
-        source.Should().Contain("var from = isExit ? full : closed;");
+        source.Should().Contain("var randomBars = SlideShowMaskGeometryPlanner.BuildRandomBars(");
+        source.Should().Contain("var closed = ToRect(randomBar.Geometry.Closed);");
+        source.Should().Contain("var from = isExit ? open : closed;");
         source.Should().Contain("el.Opacity = isExit ? plan.FromOpacity : 0;");
         source.Should().Contain("AnimateTranslate(el, isExit ? 0 : dx, isExit ? 0 : dy,");
         source.Should().Contain("var fromX = isExit ? 0 : dx;");

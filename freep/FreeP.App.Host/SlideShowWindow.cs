@@ -1460,27 +1460,37 @@ public sealed class SlideShowWindow : Window
         double w = el.Width  > 0 ? el.Width  : 960;
         double h = el.Height > 0 ? el.Height : 540;
 
-        var clip = new RectangleGeometry();
-        el.Clip = clip;
+        var bars = new GeometryGroup();
+        el.Clip = bars;
         var isExit = plan.Animation.Kind == AnimationKind.Exit;
         el.Opacity = isExit ? plan.FromOpacity : 0;
 
-        var dur = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
         var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
-        var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
-        var full = new Rect(0, 0, w, h);
-        var from = isExit ? full : closed;
-        var to = isExit ? closed : full;
+        var randomBars = SlideShowMaskGeometryPlanner.BuildRandomBars(
+            w,
+            h,
+            SlideShowPlaybackPlanner.RandomBarsBandCount,
+            plan.WipeHorizontal);
+        var barStaggerMs = plan.DurationMs / Math.Max(1, randomBars.Count + 1);
 
-        clip.Rect = from;
-        var clipAnim = new RectAnimation(from, to, dur)
+        foreach (var randomBar in randomBars)
         {
-            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
-            EasingFunction = ease
-        };
-        Storyboard.SetTarget(clipAnim, el);
-        Storyboard.SetTargetProperty(clipAnim, new PropertyPath("Clip.Rect"));
-        sb.Children.Add(clipAnim);
+            var closed = ToRect(randomBar.Geometry.Closed);
+            var open = ToRect(randomBar.Geometry.Open);
+            var from = isExit ? open : closed;
+            var to = isExit ? closed : open;
+            var bar = new RectangleGeometry(from);
+            bars.Children.Add(bar);
+            var barDurationMs = Math.Max(1, plan.DurationMs - randomBar.Order * barStaggerMs);
+            var barAnimation = new RectAnimation(from, to, new Duration(TimeSpan.FromMilliseconds(barDurationMs)))
+            {
+                BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs + randomBar.Order * barStaggerMs),
+                EasingFunction = ease
+            };
+            Storyboard.SetTarget(barAnimation, bar);
+            Storyboard.SetTargetProperty(barAnimation, new PropertyPath(RectangleGeometry.RectProperty));
+            sb.Children.Add(barAnimation);
+        }
 
         var opacityAnim = new DoubleAnimationUsingKeyFrames
         {

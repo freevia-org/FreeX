@@ -123,6 +123,7 @@ public static class SlideShowPlaybackPlanner
     public const int MinFallbackAnimationDurationMs = 100;
     public const int MotionPathFrameCount = 30;
     public const int BlindsBandCount = 8;
+    public const int RandomBarsBandCount = 8;
     public const int CheckerboardRowCount = 4;
     public const int CheckerboardColumnCount = 6;
     public const int WheelSpokeCount = 4;

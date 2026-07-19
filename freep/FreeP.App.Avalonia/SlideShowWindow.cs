@@ -1400,21 +1400,38 @@ public sealed class SlideShowWindow : Window
         double h = el.Height > 0 ? el.Height : 540;
 
         var isExit = plan.Animation.Kind == AnimationKind.Exit;
-        var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
-        var full = new Rect(0, 0, w, h);
-        var from = isExit ? full : closed;
-        var to = isExit ? closed : full;
-        var clipRect = new RectangleGeometry(from);
-        el.Clip = clipRect;
+        var bars = new GeometryGroup();
+        var animatedBars = new List<(RectangleGeometry Geometry, Rect From, Rect To, int DelayMs, int DurationMs)>();
+        var randomBars = SlideShowMaskGeometryPlanner.BuildRandomBars(
+            w,
+            h,
+            SlideShowPlaybackPlanner.RandomBarsBandCount,
+            plan.WipeHorizontal);
+        var barStaggerMs = plan.DurationMs / Math.Max(1, randomBars.Count + 1);
+
+        foreach (var randomBar in randomBars)
+        {
+            var closed = ToRect(randomBar.Geometry.Closed);
+            var open = ToRect(randomBar.Geometry.Open);
+            var from = isExit ? open : closed;
+            var to = isExit ? closed : open;
+            var bar = new RectangleGeometry(from);
+            bars.Children.Add(bar);
+            animatedBars.Add((
+                bar,
+                from,
+                to,
+                randomBar.Order * barStaggerMs,
+                Math.Max(1, plan.DurationMs - randomBar.Order * barStaggerMs)));
+        }
+
+        el.Clip = bars;
         el.Opacity = isExit ? plan.FromOpacity : 0;
 
         DelayedAction(plan.DelayMs, () =>
         {
-            AnimateRectClip(
-                el,
-                clipRect,
-                from,
-                to,
+            AnimateRandomBarsClip(
+                animatedBars,
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal));
             el.Opacity = isExit ? 0.7 : 0.15;
@@ -1422,6 +1439,52 @@ public sealed class SlideShowWindow : Window
             DelayedAction(plan.DurationMs / 2, () => el.Opacity = isExit ? 0.15 : 0.75);
             DelayedAction(plan.DurationMs, () => el.Opacity = plan.ToOpacity);
         });
+    }
+
+    private void AnimateRandomBarsClip(
+        IReadOnlyList<(RectangleGeometry Geometry, Rect From, Rect To, int DelayMs, int DurationMs)> bars,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            foreach (var (geometry, _, to, _, _) in bars)
+                geometry.Rect = to;
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var elapsedMs = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            elapsedMs = Math.Min(durationMs, elapsedMs + frameMs);
+            foreach (var (geometry, from, to, delayMs, barDurationMs) in bars)
+            {
+                var localElapsed = Math.Max(0, elapsedMs - delayMs);
+                var t = Math.Min(1.0, (double)localElapsed / barDurationMs);
+                var eased = EaseInOut(t);
+                geometry.Rect = new Rect(
+                    from.X + (to.X - from.X) * eased,
+                    from.Y + (to.Y - from.Y) * eased,
+                    from.Width + (to.Width - from.Width) * eased,
+                    from.Height + (to.Height - from.Height) * eased);
+            }
+
+            if (elapsedMs >= durationMs)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                foreach (var (geometry, _, to, _, _) in bars)
+                    geometry.Rect = to;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
     }
 
     private void BlindsEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan, Action? onReveal = null)

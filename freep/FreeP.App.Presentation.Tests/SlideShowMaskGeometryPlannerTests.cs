@@ -5,6 +5,20 @@ namespace FreeP.App.Compositor.Tests;
 public sealed class SlideShowMaskGeometryPlannerTests
 {
     [Fact]
+    public void BuildRandomBars_UsesStableNonSequentialOrderAndCompleteBands()
+    {
+        var first = SlideShowMaskGeometryPlanner.BuildRandomBars(960, 540, 8, horizontal: true);
+        var second = SlideShowMaskGeometryPlanner.BuildRandomBars(960, 540, 8, horizontal: true);
+
+        first.Select(bar => bar.Order).Should().Equal(second.Select(bar => bar.Order));
+        first.Select(bar => bar.Order).Should().Equal(6, 0, 4, 1, 7, 3, 5, 2);
+        first.Select(bar => bar.Geometry.Open.Height).Should().OnlyContain(height => height > 0);
+        first.Select(bar => bar.Geometry.Open.Width).Should().OnlyContain(width => width > 0);
+        first.Select(bar => bar.Geometry.Closed.Height).Should().OnlyContain(height => height == 0);
+        first.Select(bar => bar.Geometry.Closed.Width).Should().OnlyContain(width => width == 960);
+    }
+
+    [Fact]
     public void BuildBlindsBandAndCheckerboardCell_PreserveNativeCoordinates()
     {
         var blinds = SlideShowMaskGeometryPlanner.BuildBlindsBand(960, 540, 3, 1, horizontal: true);
