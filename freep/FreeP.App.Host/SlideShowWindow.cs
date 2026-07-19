@@ -868,6 +868,10 @@ public sealed class SlideShowWindow : Window
                 PlayZoomTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Pan:
+                PlayPanTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -1668,6 +1672,69 @@ public sealed class SlideShowWindow : Window
 
         transform.BeginAnimation(ScaleTransform.ScaleXProperty, animationX);
         transform.BeginAnimation(ScaleTransform.ScaleYProperty, animationY);
+    }
+
+    private void PlayPanTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var dx = plan.IncomingOffsetX * w;
+        var dy = plan.IncomingOffsetY * h;
+
+        var scale = new ScaleTransform(
+            SlideShowPlaybackPlanner.PanStartScale,
+            SlideShowPlaybackPlanner.PanStartScale,
+            w / 2,
+            h / 2);
+        var translate = new TranslateTransform(dx, dy);
+        var transform = new TransformGroup();
+        transform.Children.Add(scale);
+        transform.Children.Add(translate);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = transform;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var scaleX = new DoubleAnimation(
+            SlideShowPlaybackPlanner.PanStartScale, 1, duration) { EasingFunction = ease };
+        var scaleY = scaleX.Clone();
+        var translateX = new DoubleAnimation(dx, 0, duration) { EasingFunction = ease };
+        var translateY = new DoubleAnimation(dy, 0, duration) { EasingFunction = ease };
+        scaleX.Completed += (_, _) =>
+        {
+            _slideCanvas.RenderTransform = Transform.Identity;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+
+        Storyboard.SetTarget(scaleX, _slideCanvas);
+        Storyboard.SetTarget(scaleY, _slideCanvas);
+        Storyboard.SetTarget(translateX, _slideCanvas);
+        Storyboard.SetTarget(translateY, _slideCanvas);
+        Storyboard.SetTargetProperty(scaleX,
+            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"));
+        Storyboard.SetTargetProperty(scaleY,
+            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"));
+        Storyboard.SetTargetProperty(translateX,
+            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.X)"));
+        Storyboard.SetTargetProperty(translateY,
+            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)"));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(scaleX);
+        storyboard.Children.Add(scaleY);
+        storyboard.Children.Add(translateX);
+        storyboard.Children.Add(translateY);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
     }
 
     private void PrepareAnimationOverlay(Slide slide)

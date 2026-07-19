@@ -813,6 +813,10 @@ public sealed class SlideShowWindow : Window
                 PlayZoomTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Pan:
+                PlayPanTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Dissolve:
                 PlayDissolveTransition(slide, plan.DurationMs);
                 return;
@@ -1479,6 +1483,84 @@ public sealed class SlideShowWindow : Window
                 timer.Stop();
                 _activeTimers.Remove(timer);
                 transform.ScaleX = transform.ScaleY = 1;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
+    private void PlayPanTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var dx = plan.IncomingOffsetX * w;
+        var dy = plan.IncomingOffsetY * h;
+        var transform = new MatrixTransform(Matrix.CreateScale(
+            SlideShowPlaybackPlanner.PanStartScale,
+            SlideShowPlaybackPlanner.PanStartScale));
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransformOrigin = RelativePoint.Center;
+        _slideCanvas.RenderTransform = transform;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimatePanTransition(
+            transform,
+            dx,
+            dy,
+            plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.RenderTransform = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private void AnimatePanTransition(
+        MatrixTransform transform,
+        double startX,
+        double startY,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            transform.Matrix = Matrix.CreateScale(1, 1);
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var eased = EaseInOut(t);
+            var scale = SlideShowPlaybackPlanner.PanStartScale
+                + (1 - SlideShowPlaybackPlanner.PanStartScale) * eased;
+            var x = startX * (1 - eased);
+            var y = startY * (1 - eased);
+            transform.Matrix = Matrix.CreateScale(scale, scale)
+                * Matrix.CreateTranslation(x, y);
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                transform.Matrix = Matrix.CreateScale(1, 1);
                 onComplete?.Invoke();
             }
         };
