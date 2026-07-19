@@ -1916,11 +1916,11 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spiral:
-                SpinEffect(sb, element, plan);
+                SpiralEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Swivel:
-                SpinEffect(sb, element, plan);
+                SwivelEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Bounce:
@@ -3319,6 +3319,90 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTargetProperty(anim,
             new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
         sb.Children.Add(anim);
+    }
+
+    private static void SpiralEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+
+        double cx = el.Width / 2;
+        double cy = el.Height / 2;
+        var rotate = new RotateTransform(0, cx, cy);
+        el.RenderTransform = rotate;
+        var animation = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromPercent(0)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            plan.RotationDegrees * 0.82,
+            KeyTime.FromPercent(0.7),
+            new KeySpline(0.15, 0, 0.35, 1)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            plan.RotationDegrees,
+            KeyTime.FromPercent(1),
+            new KeySpline(0.25, 0, 0.2, 1)));
+        Storyboard.SetTarget(animation, el);
+        Storyboard.SetTargetProperty(animation,
+            new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
+        sb.Children.Add(animation);
+    }
+
+    private static void SwivelEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+
+        double cx = el.Width / 2;
+        double cy = el.Height / 2;
+        var scale = new ScaleTransform(1, 1, cx, cy);
+        var rotate = new RotateTransform(0, cx, cy);
+        var transform = new TransformGroup();
+        transform.Children.Add(scale);
+        transform.Children.Add(rotate);
+        el.RenderTransform = transform;
+
+        var rotation = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromPercent(0)));
+        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
+            plan.RotationDegrees * 0.25, KeyTime.FromPercent(0.25)));
+        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
+            plan.RotationDegrees * 0.5, KeyTime.FromPercent(0.5)));
+        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
+            plan.RotationDegrees * 0.75, KeyTime.FromPercent(0.75)));
+        rotation.KeyFrames.Add(new LinearDoubleKeyFrame(
+            plan.RotationDegrees, KeyTime.FromPercent(1)));
+
+        var horizontalScale = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
+            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0), KeyTime.FromPercent(0)));
+        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
+            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0.25), KeyTime.FromPercent(0.25)));
+        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
+            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0.5), KeyTime.FromPercent(0.5)));
+        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
+            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(0.75), KeyTime.FromPercent(0.75)));
+        horizontalScale.KeyFrames.Add(new LinearDoubleKeyFrame(
+            SlideShowPlaybackFramePlanner.ResolveSwivelHorizontalScale(1), KeyTime.FromPercent(1)));
+
+        Storyboard.SetTarget(rotation, el);
+        Storyboard.SetTarget(horizontalScale, el);
+        Storyboard.SetTargetProperty(rotation,
+            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(RotateTransform.Angle)"));
+        Storyboard.SetTargetProperty(horizontalScale,
+            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"));
+        sb.Children.Add(rotation);
+        sb.Children.Add(horizontalScale);
     }
 
     private static void FlashEffect(Storyboard sb, FrameworkElement el,
