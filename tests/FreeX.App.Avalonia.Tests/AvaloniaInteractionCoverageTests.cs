@@ -128,6 +128,11 @@ public sealed class AvaloniaInteractionCoverageTests
             probe,
             StringComparison.Ordinal);
         Assert.DoesNotContain("--window \"$dialog_id\" Escape", probe, StringComparison.Ordinal);
+        Assert.Contains("FREEX_X11_DIALOG_SETTLE_SECONDS", probe, StringComparison.Ordinal);
+        Assert.Contains("harmless readiness sentinel", probe, StringComparison.Ordinal);
+        Assert.True(
+            probe.IndexOf("probe_cancelable_window \"print-preview-ctrl-shift-f12-cancel\"", StringComparison.Ordinal) <
+            probe.IndexOf("probe_cancelable_window \"native-save-as-f12-cancel\"", StringComparison.Ordinal));
         Assert.Contains("Physical X11 manifest", readme, StringComparison.Ordinal);
         Assert.Contains("unique `x11-input` rows", readme, StringComparison.Ordinal);
     }

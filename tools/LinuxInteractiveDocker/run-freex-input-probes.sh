@@ -7,6 +7,7 @@ output="${1:-/work/x11-validation}"
 input_delay_ms="${FREEX_X11_INPUT_DELAY_MS:-160}"
 type_delay_ms="${FREEX_X11_TYPE_DELAY_MS:-90}"
 settle_seconds="${FREEX_X11_SETTLE_SECONDS:-0.35}"
+dialog_settle_seconds="${FREEX_X11_DIALOG_SETTLE_SECONDS:-3.0}"
 selection_color="${FREEX_X11_SELECTION_COLOR:-#217346}"
 document_path="${FREEX_X11_DOCUMENT_PATH:-/documents/linux-interactive-demo.csv}"
 
@@ -377,6 +378,13 @@ probe_cancelable_window() {
             done
         fi
         if $closed; then
+            # A native GTK picker and Avalonia ShowDialog can remove their X11 window before the
+            # owner's modal loop has unwound. The owner already reports focused at that point, but
+            # consumes its first key while restoring input. Send a harmless readiness sentinel,
+            # then wait for the bounded settlement boundary before the next independent shortcut.
+            focus_app
+            xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$window_id" Escape 2>/dev/null || true
+            sleep "$dialog_settle_seconds"
             record "$id" "passed" "$screenshot_name"
         else
             record "$id" "failed" "$screenshot_name" "$keys opened a window, but targeted Escape did not close it."
@@ -658,10 +666,12 @@ else
     record "dialog-format-cells-keyboard" "failed" "dialog-format-cells-open.png" "Ctrl+1 did not open Format Cells."
 fi
 
-# Open and print boundaries are cancel-only: prove their production shortcuts reach visible windows.
+# Native file and print boundaries are cancel-only. Probe Print Preview first so each shortcut is
+# independent of GTK's picker modal loop rather than treating one picker's unwind as another
+# command's precondition.
+probe_cancelable_window "print-preview-ctrl-shift-f12-cancel" "ctrl+shift+F12" "print-preview.png"
 probe_cancelable_window "native-save-as-f12-cancel" "F12" "native-save-as.png"
 probe_cancelable_window "native-open-ctrl-f12-cancel" "ctrl+F12" "native-open.png"
-probe_cancelable_window "print-preview-ctrl-shift-f12-cancel" "ctrl+shift+F12" "print-preview.png"
 
 write_manifest
 if (( $(printf '%s\n' "${results[@]}" | grep -c '"status":"failed"' || true) > 0 )); then
