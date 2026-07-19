@@ -18,8 +18,16 @@ public sealed partial class MainWindow
             InputElement.KeyDownEvent,
             (_, args) =>
             {
-                if (args.KeyModifiers == KeyModifiers.None &&
-                    (args.Key == Key.Escape || args.Key == Key.Enter))
+                if (args.KeyModifiers == KeyModifiers.None && args.Key == Key.Enter)
+                {
+                    args.Handled = true;
+                    closeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, closeButton));
+                    if (dialog.IsVisible)
+                        dialog.Close();
+                    return;
+                }
+
+                if (args.KeyModifiers == KeyModifiers.None && args.Key == Key.Escape)
                 {
                     args.Handled = true;
                     dialog.Close();

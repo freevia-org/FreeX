@@ -27,6 +27,8 @@ public sealed class LegalNoticesKeyboardLifecycleTests
             {
                 owner.Show();
                 (enterDialog, var textBox, var closeButton) = CreateDialog(owner);
+                var closeClickCount = 0;
+                closeButton.Click += (_, _) => closeClickCount++;
 
                 textBox.Focus().Should().BeTrue();
                 Send(enterDialog, Key.Tab);
@@ -34,6 +36,7 @@ public sealed class LegalNoticesKeyboardLifecycleTests
                 Send(enterDialog, Key.Tab, RawInputModifiers.Shift);
                 enterDialog.FocusManager?.GetFocusedElement().Should().BeSameAs(textBox);
                 Send(enterDialog, Key.Enter);
+                closeClickCount.Should().Be(1, "Enter must invoke the actual default Close button");
                 enterDialog.IsVisible.Should().BeFalse("Enter must invoke the WPF default Close behavior");
 
                 (escapeDialog, _, _) = CreateDialog(owner);

@@ -2,28 +2,38 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 
 namespace FreeX.App.Avalonia;
 
 public sealed partial class MainWindow
 {
-    private static void ConfigurePageSetupTabCycle(Window dialog, Control root)
+    private static void ConfigurePageSetupTabCycle(
+        Window dialog,
+        Control root,
+        Button cancelButton)
     {
         KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
         dialog.AddHandler(
             InputElement.KeyDownEvent,
-            (_, args) => HandlePageSetupTabCycle(dialog, root, args),
+            (_, args) => HandlePageSetupTabCycle(dialog, root, cancelButton, args),
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
     }
 
-    private static void HandlePageSetupTabCycle(Window dialog, Control root, KeyEventArgs args)
+    private static void HandlePageSetupTabCycle(
+        Window dialog,
+        Control root,
+        Button cancelButton,
+        KeyEventArgs args)
     {
         if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
         {
-            dialog.Close();
             args.Handled = true;
+            Dispatcher.UIThread.Post(
+                () => InvokePageSetupCancel(dialog, cancelButton),
+                DispatcherPriority.Input);
             return;
         }
 
@@ -45,6 +55,16 @@ public sealed partial class MainWindow
 
         tabStops[nextIndex].Focus();
         args.Handled = true;
+    }
+
+    private static void InvokePageSetupCancel(Window dialog, Button cancelButton)
+    {
+        if (!dialog.IsVisible)
+            return;
+
+        cancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, cancelButton));
+        if (dialog.IsVisible)
+            dialog.Close();
     }
 
     private static Control[] GetPageSetupTabStops(Control root)
