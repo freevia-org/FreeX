@@ -791,6 +791,10 @@ public sealed class SlideShowWindow : Window
                 PlayDissolveTransition(slide, plan.DurationMs);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Box:
+                PlayBoxTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Split:
                 PlaySplitTransition(slide, plan);
                 return;
@@ -1008,6 +1012,58 @@ public sealed class SlideShowWindow : Window
 
         return geometry;
     }
+
+    private void PlayBoxTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildBoxTransitionGeometry(w, h, 0, plan.BoxExpandsFromCenter);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 24;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildBoxTransitionGeometry(w, h, progress, plan.BoxExpandsFromCenter),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildBoxTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        bool expandsFromCenter) =>
+        new RectangleGeometry(ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(
+            width, height, progress, expandsFromCenter)));
 
     // ── Shape animation overlay ───────────────────────────────────────────────────
 

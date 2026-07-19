@@ -204,6 +204,22 @@ public static class SlideShowMaskGeometryPlanner
         return rects;
     }
 
+    /// <summary>Builds the centered rectangular reveal used by a slide Box transition.</summary>
+    public static SlideShowMaskRect BuildBoxTransitionRect(
+        double width,
+        double height,
+        double progress,
+        bool expandsFromCenter)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        var scale = expandsFromCenter ? progress : 1 - progress;
+        return new(
+            width * (1 - scale) / 2,
+            height * (1 - scale) / 2,
+            width * scale,
+            height * scale);
+    }
+
     /// <summary>
     /// Returns the two panels used by a slide split transition. For an
     /// outgoing split the panels open from the center; for an incoming split

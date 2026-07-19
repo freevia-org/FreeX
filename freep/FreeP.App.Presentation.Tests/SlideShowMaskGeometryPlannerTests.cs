@@ -159,4 +159,18 @@ public sealed class SlideShowMaskGeometryPlannerTests
         full.Should().Equal(
             SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(960, 540, 3, 4, 1));
     }
+
+    [Fact]
+    public void BuildBoxTransitionRect_ExpandsAndContractsAroundCenter()
+    {
+        var expandedStart = SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(960, 540, 0, true);
+        var expandedHalf = SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(960, 540, 0.5, true);
+        var expandedEnd = SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(960, 540, 1, true);
+        var contractedHalf = SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(960, 540, 0.5, false);
+
+        expandedStart.Should().Be(new SlideShowMaskRect(480, 270, 0, 0));
+        expandedHalf.Should().Be(new SlideShowMaskRect(240, 135, 480, 270));
+        expandedEnd.Should().Be(new SlideShowMaskRect(0, 0, 960, 540));
+        contractedHalf.Should().Be(expandedHalf);
+    }
 }

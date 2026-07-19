@@ -7,6 +7,7 @@ public enum SlideShowTransitionPlaybackActionKind
     ShowInstant,
     Fade,
     Dissolve,
+    Box,
     Split,
     Blinds,
     RandomBars,
@@ -29,7 +30,8 @@ public sealed record SlideShowTransitionPlaybackPlan(
     bool StripsSlopeDown,
     int WheelSpokeCount,
     bool WheelReverse,
-    bool ZoomIn);
+    bool ZoomIn,
+    bool BoxExpandsFromCenter);
 
 public enum SlideShowShapeAnimationEffectKind
 {
@@ -157,6 +159,7 @@ public static class SlideShowPlaybackPlanner
         {
             SlideShowTransitionPlaybackKind.Cut => SlideShowTransitionPlaybackActionKind.ShowInstant,
             SlideShowTransitionPlaybackKind.Dissolve => SlideShowTransitionPlaybackActionKind.Dissolve,
+            SlideShowTransitionPlaybackKind.Box => SlideShowTransitionPlaybackActionKind.Box,
             SlideShowTransitionPlaybackKind.Split => SlideShowTransitionPlaybackActionKind.Split,
             SlideShowTransitionPlaybackKind.Blinds => SlideShowTransitionPlaybackActionKind.Blinds,
             SlideShowTransitionPlaybackKind.RandomBars => SlideShowTransitionPlaybackActionKind.RandomBars,
@@ -180,7 +183,8 @@ public static class SlideShowPlaybackPlanner
             transitionPlan.StripsSlopeDown,
             transitionPlan.WheelSpokeCount,
             transitionPlan.WheelReverse,
-            transitionPlan.ZoomIn);
+            transitionPlan.ZoomIn,
+            transitionPlan.BoxExpandsFromCenter);
     }
 
     public static IReadOnlyList<SlideShowShapeAnimationPlaybackPlan> PlanAnimationStep(AnimationStep step)
