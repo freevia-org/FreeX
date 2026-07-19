@@ -297,6 +297,8 @@ public sealed class LocTests
             "Ribbon_Command_TransitionUncover_KeyTip",
             "Ribbon_Command_TransitionBlinds_Label",
             "Ribbon_Command_TransitionBlinds_KeyTip",
+            "Ribbon_Command_TransitionComb_Label",
+            "Ribbon_Command_TransitionComb_KeyTip",
             "Ribbon_Command_TransitionDissolve_Label",
             "Ribbon_Command_TransitionDissolve_KeyTip",
             "Ribbon_Command_TransitionZoom_Label",

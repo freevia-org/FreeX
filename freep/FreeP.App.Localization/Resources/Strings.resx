@@ -616,6 +616,12 @@
   <data name="Ribbon_Command_TransitionBlinds_KeyTip" xml:space="preserve">
     <value>B</value>
   </data>
+  <data name="Ribbon_Command_TransitionComb_Label" xml:space="preserve">
+    <value>Comb</value>
+  </data>
+  <data name="Ribbon_Command_TransitionComb_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
   <data name="Ribbon_Command_TransitionDissolve_Label" xml:space="preserve">
     <value>Dissolve</value>
   </data>

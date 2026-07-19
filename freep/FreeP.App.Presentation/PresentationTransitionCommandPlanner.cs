@@ -61,6 +61,10 @@ public static class PresentationTransitionCommandPlanner
                 PresentationTransitionCommandIntentKind.SetKind,
                 TransitionKind.Blinds),
             new PresentationTransitionCommandPlan(
+                "freep.transition.comb",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Comb),
+            new PresentationTransitionCommandPlan(
                 "freep.transition.dissolve",
                 PresentationTransitionCommandIntentKind.SetKind,
                 TransitionKind.Dissolve),

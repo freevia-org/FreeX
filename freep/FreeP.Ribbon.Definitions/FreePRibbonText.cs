@@ -177,6 +177,7 @@ internal static class FreePRibbonText
     public static RibbonText TransitionCoverCommand { get; } = new("Ribbon_Command_TransitionCover_Label", "Ribbon_Command_TransitionCover_KeyTip");
     public static RibbonText TransitionUncoverCommand { get; } = new("Ribbon_Command_TransitionUncover_Label", "Ribbon_Command_TransitionUncover_KeyTip");
     public static RibbonText TransitionBlindsCommand { get; } = new("Ribbon_Command_TransitionBlinds_Label", "Ribbon_Command_TransitionBlinds_KeyTip");
+    public static RibbonText TransitionCombCommand { get; } = new("Ribbon_Command_TransitionComb_Label", "Ribbon_Command_TransitionComb_KeyTip");
     public static RibbonText TransitionDissolveCommand { get; } = new("Ribbon_Command_TransitionDissolve_Label", "Ribbon_Command_TransitionDissolve_KeyTip");
     public static RibbonText TransitionZoomCommand { get; } = new("Ribbon_Command_TransitionZoom_Label", "Ribbon_Command_TransitionZoom_KeyTip");
     public static RibbonText TransitionWheelCommand { get; } = new("Ribbon_Command_TransitionWheel_Label", "Ribbon_Command_TransitionWheel_KeyTip");
