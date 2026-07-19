@@ -45,6 +45,26 @@ public static class PresentationTransitionCommandPlanner
                 PresentationTransitionCommandIntentKind.SetKind,
                 TransitionKind.Split),
             new PresentationTransitionCommandPlan(
+                "freep.transition.box",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Box),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.doors",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Doors),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.reveal",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Reveal),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.flash",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Flash),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.morph",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Morph),
+            new PresentationTransitionCommandPlan(
                 "freep.transition.cut",
                 PresentationTransitionCommandIntentKind.SetKind,
                 TransitionKind.Cut),
@@ -64,6 +84,18 @@ public static class PresentationTransitionCommandPlanner
                 "freep.transition.comb",
                 PresentationTransitionCommandIntentKind.SetKind,
                 TransitionKind.Comb),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.random-bars",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.RandomBar),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.strips",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.Strips),
+            new PresentationTransitionCommandPlan(
+                "freep.transition.wheel-reverse",
+                PresentationTransitionCommandIntentKind.SetKind,
+                TransitionKind.WheelReverse),
             new PresentationTransitionCommandPlan(
                 "freep.transition.gallery",
                 PresentationTransitionCommandIntentKind.SetKind,
