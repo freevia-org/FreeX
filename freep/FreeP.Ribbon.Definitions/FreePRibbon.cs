@@ -302,6 +302,7 @@ public static class FreePRibbon
             group.Medium("freep.anim.entrance.wipe", FreePRibbonText.AnimationEntranceWipeCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.AnimationEntranceWipeCommand.KeyTip);
             group.Medium("freep.anim.entrance.zoom", FreePRibbonText.AnimationEntranceZoomCommand.Label, RibbonCommandIconKind.Zoom, FreePRibbonText.AnimationEntranceZoomCommand.KeyTip);
             group.Medium("freep.anim.entrance.split", FreePRibbonText.AnimationEntranceSplitCommand.Label, RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.AnimationEntranceSplitCommand.KeyTip);
+            group.Medium("freep.anim.entrance.blinds", FreePRibbonText.AnimationEntranceBlindsCommand.Label, RibbonCommandIconKind.Grid, FreePRibbonText.AnimationEntranceBlindsCommand.KeyTip, dropdown: true, menu: BuildAdvancedEntranceAnimationMenu);
             if (profile.IncludeAnimationSeparators) group.Separator();
             group.Medium("freep.anim.emphasis.pulse", FreePRibbonText.AnimationEmphasisPulseCommand.Label, RibbonCommandIconKind.Flash, FreePRibbonText.AnimationEmphasisPulseCommand.KeyTip);
             group.Medium("freep.anim.emphasis.spin", FreePRibbonText.AnimationEmphasisSpinCommand.Label, RibbonCommandIconKind.Rotate, FreePRibbonText.AnimationEmphasisSpinCommand.KeyTip);
@@ -313,6 +314,7 @@ public static class FreePRibbon
             group.Medium("freep.anim.exit.wipe", FreePRibbonText.AnimationExitWipeCommand.Label, RibbonCommandIconKind.ArrowRight, FreePRibbonText.AnimationExitWipeCommand.KeyTip);
             group.Medium("freep.anim.exit.split", FreePRibbonText.AnimationExitSplitCommand.Label, RibbonCommandIconKind.ArrowLeftRight, FreePRibbonText.AnimationExitSplitCommand.KeyTip);
             group.Medium("freep.anim.exit.zoom-out", FreePRibbonText.AnimationExitZoomOutCommand.Label, RibbonCommandIconKind.Zoom, FreePRibbonText.AnimationExitZoomOutCommand.KeyTip);
+            group.Medium("freep.anim.exit.blinds", FreePRibbonText.AnimationExitBlindsCommand.Label, RibbonCommandIconKind.Grid, FreePRibbonText.AnimationExitBlindsCommand.KeyTip, dropdown: true, menu: BuildAdvancedExitAnimationMenu);
             if (profile.IncludeAnimationSeparators) group.Separator();
             group.Medium("freep.anim.none", FreePRibbonText.AnimationNoneCommand.Label, RibbonCommandIconKind.Clear, FreePRibbonText.AnimationNoneCommand.KeyTip);
         });
@@ -398,4 +400,30 @@ public static class FreePRibbon
         {
             IsEnabled = item.IsEnabled
         }).ToArray());
+
+    private static void BuildAdvancedEntranceAnimationMenu(RibbonMenuBuilder menu)
+    {
+        menu.Item("freep.anim.entrance.checkerboard", FreePRibbonText.AnimationEntranceCheckerboardCommand.Label, FreePRibbonText.AnimationEntranceCheckerboardCommand.KeyTip);
+        menu.Item("freep.anim.entrance.box", FreePRibbonText.AnimationEntranceBoxCommand.Label, FreePRibbonText.AnimationEntranceBoxCommand.KeyTip);
+        menu.Item("freep.anim.entrance.circle", FreePRibbonText.AnimationEntranceCircleCommand.Label, FreePRibbonText.AnimationEntranceCircleCommand.KeyTip);
+        menu.Item("freep.anim.entrance.diamond", FreePRibbonText.AnimationEntranceDiamondCommand.Label, FreePRibbonText.AnimationEntranceDiamondCommand.KeyTip);
+        menu.Item("freep.anim.entrance.plus", FreePRibbonText.AnimationEntrancePlusCommand.Label, FreePRibbonText.AnimationEntrancePlusCommand.KeyTip);
+        menu.Item("freep.anim.entrance.strips", FreePRibbonText.AnimationEntranceStripsCommand.Label, FreePRibbonText.AnimationEntranceStripsCommand.KeyTip);
+        menu.Item("freep.anim.entrance.wedge", FreePRibbonText.AnimationEntranceWedgeCommand.Label, FreePRibbonText.AnimationEntranceWedgeCommand.KeyTip);
+        menu.Item("freep.anim.entrance.wheel", FreePRibbonText.AnimationEntranceWheelCommand.Label, FreePRibbonText.AnimationEntranceWheelCommand.KeyTip);
+        menu.Item("freep.anim.entrance.random-bars", FreePRibbonText.AnimationEntranceRandomBarsCommand.Label, FreePRibbonText.AnimationEntranceRandomBarsCommand.KeyTip);
+    }
+
+    private static void BuildAdvancedExitAnimationMenu(RibbonMenuBuilder menu)
+    {
+        menu.Item("freep.anim.exit.checkerboard", FreePRibbonText.AnimationExitCheckerboardCommand.Label, FreePRibbonText.AnimationExitCheckerboardCommand.KeyTip);
+        menu.Item("freep.anim.exit.box", FreePRibbonText.AnimationExitBoxCommand.Label, FreePRibbonText.AnimationExitBoxCommand.KeyTip);
+        menu.Item("freep.anim.exit.circle", FreePRibbonText.AnimationExitCircleCommand.Label, FreePRibbonText.AnimationExitCircleCommand.KeyTip);
+        menu.Item("freep.anim.exit.diamond", FreePRibbonText.AnimationExitDiamondCommand.Label, FreePRibbonText.AnimationExitDiamondCommand.KeyTip);
+        menu.Item("freep.anim.exit.plus", FreePRibbonText.AnimationExitPlusCommand.Label, FreePRibbonText.AnimationExitPlusCommand.KeyTip);
+        menu.Item("freep.anim.exit.strips", FreePRibbonText.AnimationExitStripsCommand.Label, FreePRibbonText.AnimationExitStripsCommand.KeyTip);
+        menu.Item("freep.anim.exit.wedge", FreePRibbonText.AnimationExitWedgeCommand.Label, FreePRibbonText.AnimationExitWedgeCommand.KeyTip);
+        menu.Item("freep.anim.exit.wheel", FreePRibbonText.AnimationExitWheelCommand.Label, FreePRibbonText.AnimationExitWheelCommand.KeyTip);
+        menu.Item("freep.anim.exit.random-bars", FreePRibbonText.AnimationExitRandomBarsCommand.Label, FreePRibbonText.AnimationExitRandomBarsCommand.KeyTip);
+    }
 }

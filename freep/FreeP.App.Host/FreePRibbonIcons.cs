@@ -102,6 +102,7 @@ internal static class FreePRibbonIcons
             ["freep.anim.entrance.wipe"]   = RibbonCommandIconKind.ArrowRight,
             ["freep.anim.entrance.zoom"]   = RibbonCommandIconKind.Zoom,
             ["freep.anim.entrance.split"]  = RibbonCommandIconKind.ArrowLeftRight,
+            ["freep.anim.entrance.blinds"] = RibbonCommandIconKind.Grid,
 
             // Wave 4C: Animation emphasis effects
             ["freep.anim.emphasis.pulse"]       = RibbonCommandIconKind.Flash,
@@ -115,6 +116,7 @@ internal static class FreePRibbonIcons
             ["freep.anim.exit.wipe"]       = RibbonCommandIconKind.ArrowRight,
             ["freep.anim.exit.split"]      = RibbonCommandIconKind.ArrowLeftRight,
             ["freep.anim.exit.zoom-out"]   = RibbonCommandIconKind.Zoom,
+            ["freep.anim.exit.blinds"]     = RibbonCommandIconKind.Grid,
 
             // Wave 4C: Animation none / timing / pane
             ["freep.anim.none"]         = RibbonCommandIconKind.Clear,

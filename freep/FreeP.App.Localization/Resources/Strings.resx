@@ -709,6 +709,66 @@
   <data name="Ribbon_Command_AnimationEntranceSplit_KeyTip" xml:space="preserve">
     <value>S</value>
   </data>
+  <data name="Ribbon_Command_AnimationEntranceBlinds_Label" xml:space="preserve">
+    <value>Blinds In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceBlinds_KeyTip" xml:space="preserve">
+    <value>BI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceCheckerboard_Label" xml:space="preserve">
+    <value>Checkerboard In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceCheckerboard_KeyTip" xml:space="preserve">
+    <value>CI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceBox_Label" xml:space="preserve">
+    <value>Box In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceBox_KeyTip" xml:space="preserve">
+    <value>BXI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceCircle_Label" xml:space="preserve">
+    <value>Circle In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceCircle_KeyTip" xml:space="preserve">
+    <value>CIR</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceDiamond_Label" xml:space="preserve">
+    <value>Diamond In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceDiamond_KeyTip" xml:space="preserve">
+    <value>DI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntrancePlus_Label" xml:space="preserve">
+    <value>Plus In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntrancePlus_KeyTip" xml:space="preserve">
+    <value>PI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceStrips_Label" xml:space="preserve">
+    <value>Strips In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceStrips_KeyTip" xml:space="preserve">
+    <value>STI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceWedge_Label" xml:space="preserve">
+    <value>Wedge In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceWedge_KeyTip" xml:space="preserve">
+    <value>WEI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceWheel_Label" xml:space="preserve">
+    <value>Wheel In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceWheel_KeyTip" xml:space="preserve">
+    <value>WHI</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceRandomBars_Label" xml:space="preserve">
+    <value>Random Bars In</value>
+  </data>
+  <data name="Ribbon_Command_AnimationEntranceRandomBars_KeyTip" xml:space="preserve">
+    <value>RBI</value>
+  </data>
   <data name="Ribbon_Command_AnimationEmphasisPulse_Label" xml:space="preserve">
     <value>Pulse</value>
   </data>
@@ -762,6 +822,66 @@
   </data>
   <data name="Ribbon_Command_AnimationExitZoomOut_KeyTip" xml:space="preserve">
     <value>Z</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitBlinds_Label" xml:space="preserve">
+    <value>Blinds Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitBlinds_KeyTip" xml:space="preserve">
+    <value>BO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitCheckerboard_Label" xml:space="preserve">
+    <value>Checkerboard Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitCheckerboard_KeyTip" xml:space="preserve">
+    <value>CO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitBox_Label" xml:space="preserve">
+    <value>Box Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitBox_KeyTip" xml:space="preserve">
+    <value>BXO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitCircle_Label" xml:space="preserve">
+    <value>Circle Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitCircle_KeyTip" xml:space="preserve">
+    <value>CRO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitDiamond_Label" xml:space="preserve">
+    <value>Diamond Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitDiamond_KeyTip" xml:space="preserve">
+    <value>DO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitPlus_Label" xml:space="preserve">
+    <value>Plus Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitPlus_KeyTip" xml:space="preserve">
+    <value>PO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitStrips_Label" xml:space="preserve">
+    <value>Strips Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitStrips_KeyTip" xml:space="preserve">
+    <value>STO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitWedge_Label" xml:space="preserve">
+    <value>Wedge Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitWedge_KeyTip" xml:space="preserve">
+    <value>WEO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitWheel_Label" xml:space="preserve">
+    <value>Wheel Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitWheel_KeyTip" xml:space="preserve">
+    <value>WHO</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitRandomBars_Label" xml:space="preserve">
+    <value>Random Bars Out</value>
+  </data>
+  <data name="Ribbon_Command_AnimationExitRandomBars_KeyTip" xml:space="preserve">
+    <value>RBO</value>
   </data>
   <data name="Ribbon_Command_AnimationNone_Label" xml:space="preserve">
     <value>No Animation</value>
