@@ -184,6 +184,26 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.BlindsHorizontal.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(TransitionDirection.Horizontal, true)]
+    [InlineData(TransitionDirection.Vertical, false)]
+    public void PlanTransition_CombUsesSharedBlindsActionAndAxis(
+        TransitionDirection direction,
+        bool expectedHorizontal)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Comb,
+            Direction = direction,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Blinds);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Blinds);
+        plan.BlindsHorizontal.Should().Be(expectedHorizontal);
+        plan.DurationMs.Should().Be(420);
+    }
+
     [Fact]
     public void PlanTransition_RandomBarsUsesDedicatedAction()
     {
