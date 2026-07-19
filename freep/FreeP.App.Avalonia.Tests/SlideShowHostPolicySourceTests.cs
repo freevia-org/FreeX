@@ -199,6 +199,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("AnimationKind.Emphasis");
         source.Should().Contain("a.Kind == AnimationKind.Exit");
         source.Should().Contain("|| a.Kind == AnimationKind.Exit");
+        source.Should().Contain("|| (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)");
         source.Should().Contain("onReveal: anim.Kind == AnimationKind.Exit ? null : () =>");
         source.Should().Contain("DisappearEffect(element, plan.DelayMs);");
         source.Should().Contain("var isExit = plan.Animation.Kind == AnimationKind.Exit;");

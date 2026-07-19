@@ -181,7 +181,11 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("AnimationKind.Emphasis");
         source.Should().Contain("a.Kind == AnimationKind.Exit");
         source.Should().Contain("|| a.Kind == AnimationKind.Exit");
+        source.Should().Contain("|| (a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)");
         source.Should().Contain("_slideCanvas.SuppressedShapeIds.Add(anim.ShapeId);");
+        source.Should().Contain("_slideCanvas.SuppressedShapeIds.Add(shapeId);");
+        source.Should().Contain("AttachEntranceCompletion(sb, plan);");
+        source.Should().Contain("RevealShape(plan.Animation.ShapeId)");
         source.Should().Contain("DisappearEffect(sb, element, plan.DelayMs);");
         source.Should().Contain("var isExit = plan.Animation.Kind == AnimationKind.Exit;");
         source.Should().Contain("var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);");
