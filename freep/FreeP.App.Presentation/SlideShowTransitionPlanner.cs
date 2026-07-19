@@ -19,6 +19,7 @@ public enum SlideShowTransitionPlaybackKind
     Strips,
     Wheel,
     Zoom,
+    Pan,
     PushLike,
     FadeFallback
 }
@@ -110,9 +111,10 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Zoom => SlideShowTransitionPlaybackKind.Zoom,
 
+            TransitionKind.Pan => SlideShowTransitionPlaybackKind.Pan,
+
             TransitionKind.Gallery or
             TransitionKind.Conveyor or
-            TransitionKind.Pan or
             TransitionKind.Window => SlideShowTransitionPlaybackKind.PushLike,
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback

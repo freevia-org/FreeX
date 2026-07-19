@@ -94,6 +94,23 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.DurationMs.Should().Be(420);
     }
 
+    [Fact]
+    public void PlanTransition_PanUsesDedicatedActionAndDirection()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Pan,
+            Direction = TransitionDirection.Right,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Pan);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Pan);
+        plan.IncomingOffsetX.Should().Be(-1);
+        plan.IncomingOffsetY.Should().Be(0);
+        SlideShowPlaybackPlanner.PanStartScale.Should().BeApproximately(1.12, 0.0001);
+    }
+
     [Theory]
     [InlineData(TransitionDirection.In, true)]
     [InlineData(TransitionDirection.Out, false)]
