@@ -701,14 +701,27 @@ internal static class XlsxSlicerTimelineStateRewriter
 
             // Find a model slicer bound to this cache (by <slicer cache="..">). If none of the slicers that
             // reference this cache is present in the model, leave the part alone.
+            //
+            // R49-io-slicer-timeline-3-2: Excel's "linked slicers" (the same slicer widget copied to
+            // another sheet) share one slicerCache, so MULTIPLE slicer names can map to this cacheName
+            // here. Only one of their SlicerModel instances is the one a SetSlicerSelectionCommand
+            // actually mutated -- its SelectionCaptured flag is the only signal distinguishing "the user's
+            // live edit" from a linked sibling's stale post-load snapshot. Prefer a captured model over
+            // whichever match is enumerated first, so the user's change isn't silently reverted by an
+            // untouched linked sibling; fall back to the first match when none has captured a change
+            // (idempotent re-save of an untouched shared cache -- matches the previous behaviour exactly).
             SlicerModel? model = null;
             foreach (var pair in cacheNamesBySlicerName)
             {
                 if (string.Equals(pair.Value, cacheName, StringComparison.OrdinalIgnoreCase) &&
                     slicersByName.TryGetValue(pair.Key, out var candidate))
                 {
-                    model = candidate;
-                    break;
+                    model ??= candidate;
+                    if (candidate.SelectionCaptured)
+                    {
+                        model = candidate;
+                        break;
+                    }
                 }
             }
 
@@ -1084,7 +1097,13 @@ internal static class XlsxSlicerTimelineStateRewriter
         // The timeline definition part carries level/selectionLevel/scrollPosition on <timeline>; the
         // timeline cache carries selectedStartDate/selectedEndDate. Patch both, matched by control name and
         // cache name respectively (mirroring the reader's associations).
-        var cacheNamesByTimelineName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        //
+        // R49-io-slicer-timeline-3-3: keyed by TIMELINE name (mirroring RewriteSlicerSelections'
+        // cacheNamesBySlicerName), not by cache name -- Excel's "linked timelines" (the same timeline
+        // widget copied to another sheet) share one timelineCache, so MULTIPLE timeline names can map to
+        // the same cache here and every one of them must stay reachable below, not just the first one
+        // encountered.
+        var cacheNameByTimelineName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var timelineEntry in archive.Entries
                      .Where(entry => XlsxPackagePath.IsXmlEntryInDirectory(entry, "xl/timelines/"))
@@ -1101,7 +1120,7 @@ internal static class XlsxSlicerTimelineStateRewriter
 
                 var cacheName = timelineElement.Attribute("cache")?.Value;
                 if (!string.IsNullOrEmpty(cacheName))
-                    cacheNamesByTimelineName.TryAdd(cacheName, name);
+                    cacheNameByTimelineName.TryAdd(name, cacheName);
 
                 changed |= RewriteTimelineDefinition(timelineElement, model);
             }
@@ -1121,16 +1140,82 @@ internal static class XlsxSlicerTimelineStateRewriter
                 continue;
 
             var cacheName = root.Attribute("name")?.Value;
-            if (string.IsNullOrEmpty(cacheName) ||
-                !cacheNamesByTimelineName.TryGetValue(cacheName, out var timelineName) ||
-                !timelinesByName.TryGetValue(timelineName, out var model))
-            {
+            if (string.IsNullOrEmpty(cacheName))
                 continue;
+
+            // Prefer whichever linked timeline's model actually carries a pending selection change over
+            // the shared cache's current persisted state, so a user's date-range edit on one widget isn't
+            // silently reverted by an untouched linked sibling that happens to be enumerated first; fall
+            // back to the first match when none differs (idempotent re-save of an untouched shared cache
+            // -- matches the previous behaviour exactly).
+            TimelineModel? model = null;
+            foreach (var pair in cacheNameByTimelineName)
+            {
+                if (string.Equals(pair.Value, cacheName, StringComparison.OrdinalIgnoreCase) &&
+                    timelinesByName.TryGetValue(pair.Key, out var candidate))
+                {
+                    model ??= candidate;
+                    if (TimelineCacheSelectionDiffers(root, candidate))
+                    {
+                        model = candidate;
+                        break;
+                    }
+                }
             }
+
+            if (model is null)
+                continue;
 
             if (RewriteTimelineCacheSelection(root, model))
                 XlsxPackageXmlEditor.ReplaceXml(archive, cachePath, cacheXml);
         }
+    }
+
+    /// <summary>
+    /// Non-mutating counterpart to <see cref="RewriteTimelineCacheSelection"/>: reports whether applying
+    /// <paramref name="model"/>'s selected date range to <paramref name="cacheRoot"/> would actually change
+    /// anything, using the exact same comparisons (root <c>selectedStartDate</c>/<c>selectedEndDate</c> and,
+    /// when present, the native <c>&lt;state&gt;&lt;selection&gt;</c> form) without touching the XML. Used
+    /// to pick, among several <see cref="TimelineModel"/> instances that share one timelineCache (linked
+    /// timelines), the one whose selection actually differs from what is currently persisted -- i.e. the
+    /// one carrying the user's live edit -- rather than an untouched linked sibling (R49-io-slicer-timeline-3-3).
+    /// </summary>
+    private static bool TimelineCacheSelectionDiffers(XElement cacheRoot, TimelineModel model)
+    {
+        var selectedStart = string.IsNullOrWhiteSpace(model.SelectedStartDate) ? null : model.SelectedStartDate;
+        var selectedEnd = string.IsNullOrWhiteSpace(model.SelectedEndDate) ? null : model.SelectedEndDate;
+
+        if (!AttributeMatches(cacheRoot, "selectedStartDate", selectedStart) ||
+            !AttributeMatches(cacheRoot, "selectedEndDate", selectedEnd))
+        {
+            return true;
+        }
+
+        var selection = cacheRoot
+            .Descendants()
+            .FirstOrDefault(element => string.Equals(element.Name.LocalName, "selection", StringComparison.OrdinalIgnoreCase));
+        if (selection is null)
+            return false;
+
+        if (selectedStart is null && selectedEnd is null)
+            return true; // RewriteTimelineCacheSelection would remove this <selection> element.
+
+        return !AttributeMatches(selection, "startDate", NormalizeSelectedDate(model.SelectedStartDate)) ||
+               !AttributeMatches(selection, "endDate", NormalizeSelectedDate(model.SelectedEndDate));
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="SetOptionalAttribute"/>'s change test without mutating: true when
+    /// <paramref name="element"/>'s <paramref name="attributeName"/> already equals <paramref name="value"/>
+    /// (both null/absent counts as equal).
+    /// </summary>
+    private static bool AttributeMatches(XElement element, string attributeName, string? value)
+    {
+        var attribute = element.Attribute(attributeName);
+        if (value is null)
+            return attribute is null;
+
+        return attribute is not null && string.Equals(attribute.Value, value, StringComparison.Ordinal);
     }
 
     /// <summary>

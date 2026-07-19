@@ -299,7 +299,25 @@ public sealed class RecalcEngine
             }
             catch (FormulaParseException)
             {
-                cell.CachedAst = null;
+                // Distinguish a genuine PARSE-time failure (the Lexer/Parser itself threw, so
+                // cell.CachedAst never got (re)assigned above and is still null) from an EVAL-time
+                // throw against an already-successfully-parsed AST — e.g. SheetEvalContext.GetCellValue
+                // throwing because an external-workbook reference isn't cached yet (see
+                // FormulaEvaluator.Contexts.cs). Only the former should wipe the cached AST and
+                // dependency edges: a formula like "=A1+[1]Sheet1!C1" parses fine since r48's Lexer
+                // fix (RegisterFormulaDependencies above already registered the local A1 edge) even
+                // though evaluating the uncached external C1 reference throws — clearing the AST and
+                // dependencies here would silently drop that just-registered local edge, so a later
+                // edit to A1 would no longer mark this cell dirty.
+                if (cell.CachedAst is not null)
+                {
+                    // Parsed fine; the throw came from evaluation (an uncached external-workbook
+                    // reference). Preserve the cached AST, the dependency edges just registered for
+                    // it, and the cell's last-known value/spill instead of treating this like an
+                    // unparseable formula.
+                    continue;
+                }
+
                 ClearFormulaDependencies(addr);
 
                 // Excel keeps an external-workbook reference's last-known cached value until the
@@ -828,10 +846,18 @@ public sealed class RecalcEngine
         // so such a formula must not depend on its own cell — otherwise a totals-style =SUBTOTAL(109,B4:B12)
         // placed inside B4:B12 is wrongly flagged circular. This exclusion is cell-specific, so these
         // formulas bypass the (cell-independent) dependency-plan cache.
-        var excludeSelf = ContainsSelfExcludingSubtotalOrAggregate(ast);
+        //
+        // The bypass check (containsSelfExcludingCall) only asks "could self-exclusion ever apply to
+        // this formula" and stays formula-wide/cache-key-shaped. Whether formulaCell should ACTUALLY be
+        // excluded is a separate, narrower question answered below by IsCellExcludedBySelfExcludingCall:
+        // formulaCell must fall inside one of THAT SPECIFIC SUBTOTAL/AGGREGATE call's own range
+        // argument(s) — a self-reference term that is independent of the call's range (e.g.
+        // "=B10+SUBTOTAL(9,B1:B9)" at B10) is genuinely circular and must not be excluded just because
+        // the formula happens to contain a SUBTOTAL/AGGREGATE call somewhere else in the expression.
+        var containsSelfExcludingCall = ContainsSelfExcludingSubtotalOrAggregate(ast);
 
         var cacheKey = new DependencyPlanCacheKey(ast, sheetId);
-        if (!excludeSelf && _dependencyPlanCache.TryGetValue(cacheKey, out var cachedPlan))
+        if (!containsSelfExcludingCall && _dependencyPlanCache.TryGetValue(cacheKey, out var cachedPlan))
         {
             ApplyDependencyPlan(formulaCell, cachedPlan);
             return;
@@ -848,14 +874,17 @@ public sealed class RecalcEngine
             ref cacheableForDependencyPlan,
             namedFormulaStack: null);
 
-        if (excludeSelf)
+        if (containsSelfExcludingCall &&
+            IsCellExcludedBySelfExcludingCall(ast, sheetId, formulaCell, workbook))
+        {
             refs.ExcludeCell(formulaCell);
+        }
 
         _graph.SetDependencies(formulaCell, refs.Cells, refs.Ranges);
 
         SetVolatileTracking(formulaCell, containsVolatileFunction);
 
-        if (cacheableForDependencyPlan && !excludeSelf)
+        if (cacheableForDependencyPlan && !containsSelfExcludingCall)
             AddDependencyPlanToCache(cacheKey, refs, containsVolatileFunction);
     }
 
@@ -912,6 +941,146 @@ public sealed class RecalcEngine
         {
             if (ContainsSelfExcludingSubtotalOrAggregate(nodes[i]))
                 return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Is <paramref name="formulaCell"/> actually excluded by a SUBTOTAL/AGGREGATE call somewhere in
+    /// this formula? This is narrower than <see cref="ContainsSelfExcludingSubtotalOrAggregate"/>: it
+    /// is not enough for the formula to merely CONTAIN a self-excluding call anywhere — the self-cell
+    /// must fall inside THAT SPECIFIC call's own range argument(s) (SUBTOTAL's arguments after
+    /// function_num; AGGREGATE's arguments after function_num/options). A self-reference term that is
+    /// independent of the call's range — e.g. "=B10+SUBTOTAL(9,B1:B9)" at B10, where the bare "B10"
+    /// term has nothing to do with SUBTOTAL's nested-ignore rule — is genuinely circular and must not
+    /// be excluded just because a SUBTOTAL/AGGREGATE call happens to appear elsewhere in the formula.
+    /// </summary>
+    private static bool IsCellExcludedBySelfExcludingCall(
+        FormulaNode ast,
+        SheetId defaultSheetId,
+        CellAddress formulaCell,
+        FreeX.Core.Model.Workbook? workbook)
+    {
+        switch (ast)
+        {
+            case FunctionCallNode func when string.Equals(func.FunctionName, "SUBTOTAL", StringComparison.OrdinalIgnoreCase):
+                return RangeArgumentsContainCell(func.Arguments, 1, defaultSheetId, formulaCell, workbook) ||
+                       AnyArgumentExcludesCell(func.Arguments, defaultSheetId, formulaCell, workbook);
+
+            case FunctionCallNode func when string.Equals(func.FunctionName, "AGGREGATE", StringComparison.OrdinalIgnoreCase):
+                return (AggregateOptionsExcludeNestedSelf(func) &&
+                        RangeArgumentsContainCell(func.Arguments, 2, defaultSheetId, formulaCell, workbook)) ||
+                       AnyArgumentExcludesCell(func.Arguments, defaultSheetId, formulaCell, workbook);
+
+            case FunctionCallNode func:
+                return AnyArgumentExcludesCell(func.Arguments, defaultSheetId, formulaCell, workbook);
+
+            case BinaryOpNode binary:
+                return IsCellExcludedBySelfExcludingCall(binary.Left, defaultSheetId, formulaCell, workbook) ||
+                       IsCellExcludedBySelfExcludingCall(binary.Right, defaultSheetId, formulaCell, workbook);
+
+            case UnaryOpNode unary:
+                return IsCellExcludedBySelfExcludingCall(unary.Operand, defaultSheetId, formulaCell, workbook);
+
+            case ArrayConstantNode array:
+                foreach (var row in array.Rows)
+                    if (AnyArgumentExcludesCell(row, defaultSheetId, formulaCell, workbook))
+                        return true;
+                return false;
+
+            default:
+                return false;
+        }
+    }
+
+    private static bool AnyArgumentExcludesCell(
+        IReadOnlyList<FormulaNode> nodes,
+        SheetId defaultSheetId,
+        CellAddress formulaCell,
+        FreeX.Core.Model.Workbook? workbook)
+    {
+        for (var i = 0; i < nodes.Count; i++)
+        {
+            if (IsCellExcludedBySelfExcludingCall(nodes[i], defaultSheetId, formulaCell, workbook))
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Does formulaCell fall inside one of this SUBTOTAL/AGGREGATE call's own range arguments,
+    /// starting at <paramref name="startIndex"/> (1 for SUBTOTAL's args-after-function_num; 2 for
+    /// AGGREGATE's args-after-function_num/options)? Mirrors the reference-resolution rules
+    /// <see cref="CollectReferences"/> applies to the same node shapes, but only for THESE specific
+    /// arguments rather than the whole formula.
+    /// </summary>
+    private static bool RangeArgumentsContainCell(
+        IReadOnlyList<FormulaNode> arguments,
+        int startIndex,
+        SheetId defaultSheetId,
+        CellAddress formulaCell,
+        FreeX.Core.Model.Workbook? workbook)
+    {
+        for (var i = startIndex; i < arguments.Count; i++)
+        {
+            switch (arguments[i])
+            {
+                case CellRefNode cellRef when cellRef.SheetName is not null:
+                {
+                    var targetSheet = workbook?.GetSheet(cellRef.SheetName);
+                    if (targetSheet is not null &&
+                        formulaCell.Equals(new CellAddress(targetSheet.Id, cellRef.Row, cellRef.ColumnNumber)))
+                        return true;
+                    break;
+                }
+                case CellRefNode cellRef:
+                    if (formulaCell.Equals(new CellAddress(defaultSheetId, cellRef.Row, cellRef.ColumnNumber)))
+                        return true;
+                    break;
+
+                case RangeRefNode range when range.SheetName is not null:
+                {
+                    var targetSheet = workbook?.GetSheet(range.SheetName);
+                    if (targetSheet is not null && CreateGridRange(targetSheet.Id, range).Contains(formulaCell))
+                        return true;
+                    break;
+                }
+                case RangeRefNode range:
+                    if (CreateGridRange(defaultSheetId, range).Contains(formulaCell))
+                        return true;
+                    break;
+
+                case FullColumnRangeRefNode range when range.SheetName is not null:
+                {
+                    var targetSheet = workbook?.GetSheet(range.SheetName);
+                    if (targetSheet is not null && CreateGridRange(targetSheet.Id, range).Contains(formulaCell))
+                        return true;
+                    break;
+                }
+                case FullColumnRangeRefNode range:
+                    if (CreateGridRange(defaultSheetId, range).Contains(formulaCell))
+                        return true;
+                    break;
+
+                case FullRowRangeRefNode range when range.SheetName is not null:
+                {
+                    var targetSheet = workbook?.GetSheet(range.SheetName);
+                    if (targetSheet is not null && CreateGridRange(targetSheet.Id, range).Contains(formulaCell))
+                        return true;
+                    break;
+                }
+                case FullRowRangeRefNode range:
+                    if (CreateGridRange(defaultSheetId, range).Contains(formulaCell))
+                        return true;
+                    break;
+
+                case NamedRangeNode named:
+                    if (workbook is not null &&
+                        workbook.TryGetNamedRange(named.Name, defaultSheetId, out var namedRange) &&
+                        namedRange.Contains(formulaCell))
+                        return true;
+                    break;
+            }
         }
         return false;
     }

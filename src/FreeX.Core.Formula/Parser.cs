@@ -883,16 +883,17 @@ public sealed class Parser
         // isn't itself a valid cell address (see Lexer.ReadIdentifierOrRef), so without this branch
         // every such formula previously threw here and surfaced as #VALUE! at every call site
         // (plain cell formulas, conditional-format rules, data-validation formulas, dependency
-        // collection). NamedRangeNode has no sheet-qualifier slot (it is resolved purely by name,
-        // honouring the formula's own current-sheet scope precedence — see
-        // FormulaEvaluator.References.cs EvaluateNamedRange/IsSheetScopedName), so a name that is
-        // itself scope-limited to a *different* sheet than the one it's being qualified with here
-        // still won't resolve via that sheet's local scope; that remains a further limitation
-        // needing a sheet-aware AST/evaluator extension. Dropping the qualifier and resolving the
-        // bare name is otherwise the exact match for the ordinary case (workbook-global names, or a
-        // qualifier that merely echoes the formula's own sheet).
+        // collection). The sheet qualifier is now carried on NamedRangeNode.SheetQualifier so a
+        // name that is itself scope-limited to a *different* sheet than the one it's being
+        // qualified with here can, in principle, resolve via that sheet's local scope; wiring the
+        // evaluator's scope-resolution (FormulaEvaluator.References.cs EvaluateNamedRange /
+        // ResolveNamedRangeNodeAsReference / IsSheetScopedName) to actually consult this field is a
+        // residual follow-up — it still resolves purely against the formula's own current-sheet
+        // scope, honouring the formula's own current-sheet scope precedence. Passing the qualifier
+        // through here is otherwise the exact match for the ordinary case (workbook-global names,
+        // or a qualifier that merely echoes the formula's own sheet).
         if (Current.Type == TokenType.NamedRange)
-            return new NamedRangeNode(Advance().Value);
+            return new NamedRangeNode(Advance().Value, sheetName);
 
         if (Current.Type != TokenType.CellRef)
             throw new FormulaParseException(

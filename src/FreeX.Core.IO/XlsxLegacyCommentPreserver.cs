@@ -1478,27 +1478,43 @@ internal static class XlsxLegacyCommentPreserver
         XDocument commentsXml,
         XNamespace workbookNs)
     {
-        return commentsXml.Root?
-            .Element(workbookNs + "commentList")?
-            .Elements(workbookNs + "comment")
-            .Where(comment => !string.IsNullOrWhiteSpace(comment.Attribute("ref")?.Value))
-            .ToDictionary(
-                comment => comment.Attribute("ref")!.Value,
-                comment => ExtractCommentPlainText(comment.Element(workbookNs + "text"), workbookNs),
-                StringComparer.OrdinalIgnoreCase) ?? [];
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var comment in commentsXml.Root?
+                     .Element(workbookNs + "commentList")?
+                     .Elements(workbookNs + "comment") ?? [])
+        {
+            var reference = comment.Attribute("ref")?.Value;
+            if (string.IsNullOrWhiteSpace(reference))
+                continue;
+
+            // The comments part is expected to have at most one <comment> per ref, but tolerate
+            // duplicates (e.g. from third-party tools or a prior lossy repair/merge) rather than
+            // throwing: real Excel simply displays the last one it reads, so the last duplicate
+            // wins here too.
+            result[reference] = ExtractCommentPlainText(comment.Element(workbookNs + "text"), workbookNs);
+        }
+
+        return result;
     }
 
     private static Dictionary<string, XElement> ReadLegacyCommentElementsByReference(
         XDocument commentsXml,
         XNamespace workbookNs)
     {
-        return commentsXml.Root?
-            .Element(workbookNs + "commentList")?
-            .Elements(workbookNs + "comment")
-            .Where(comment => !string.IsNullOrWhiteSpace(comment.Attribute("ref")?.Value))
-            .ToDictionary(
-                comment => comment.Attribute("ref")!.Value,
-                comment => comment,
-                StringComparer.OrdinalIgnoreCase) ?? [];
+        var result = new Dictionary<string, XElement>(StringComparer.OrdinalIgnoreCase);
+        foreach (var comment in commentsXml.Root?
+                     .Element(workbookNs + "commentList")?
+                     .Elements(workbookNs + "comment") ?? [])
+        {
+            var reference = comment.Attribute("ref")?.Value;
+            if (string.IsNullOrWhiteSpace(reference))
+                continue;
+
+            // Same duplicate-ref tolerance as ReadLegacyCommentPlainTextByReference above: keep
+            // the last matching <comment> element instead of throwing on a duplicate key.
+            result[reference] = comment;
+        }
+
+        return result;
     }
 }

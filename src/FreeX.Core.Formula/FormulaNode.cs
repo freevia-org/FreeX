@@ -85,7 +85,16 @@ public sealed record FunctionCallNode(string FunctionName, IReadOnlyList<Formula
 /// <summary>
 /// A named range reference (e.g. MyData). Resolved to a GridRange at evaluation time.
 /// </summary>
-public sealed record NamedRangeNode(string Name) : FormulaNode;
+/// <param name="SheetQualifier">
+/// The sheet name the reference was explicitly qualified with (e.g. the "Sheet2" in
+/// "Sheet2!MyName"), or <c>null</c> when the name was written unqualified. Trailing/optional
+/// so every existing positional construction (<c>new NamedRangeNode(name)</c>) keeps compiling
+/// unchanged. NOTE: as of this change the evaluator (FormulaEvaluator.References.cs -
+/// EvaluateNamedRange / ResolveNamedRangeNodeAsReference / IsSheetScopedName) does not yet
+/// consult this field — it still resolves purely against the formula's own current-sheet scope.
+/// Threading it into name-scope resolution is a residual follow-up in that file.
+/// </param>
+public sealed record NamedRangeNode(string Name, string? SheetQualifier = null) : FormulaNode;
 
 /// <summary>A table structured reference to one data-body column (e.g. Sales[Amount]).</summary>
 public sealed record StructuredReferenceNode(string TableName, string ColumnName) : FormulaNode;

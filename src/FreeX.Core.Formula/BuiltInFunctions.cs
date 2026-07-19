@@ -615,11 +615,20 @@ public static partial class BuiltInFunctions
 
     private static readonly HashSet<string> VolatileFunctions = ["NOW", "TODAY", "RAND", "RANDBETWEEN", "RANDARRAY", "INDIRECT", "OFFSET", "CELL", "INFO"];
     private static readonly string[] SpecialFunctionNames = ["LET", "LAMBDA", "SINGLE"];
-    private static readonly IReadOnlyCollection<string> FunctionNames =
-        Array.AsReadOnly(Functions.Keys.Concat(SpecialFunctionNames).ToArray());
+
+    // Lazily computed (rather than an eager field initializer) so that any functions
+    // registered by a static constructor on another partial declaration of this class
+    // (e.g. BESSELI/J/K/Y in BuiltInFunctions.Engineering.cs) are guaranteed to already
+    // be present in `Functions` by the time this is first read. All static field
+    // initializers across every partial file run before any explicit static
+    // constructor body executes, so an eager initializer here would snapshot
+    // `Functions.Keys` too early and miss those registrations; a lazy read happens
+    // only after the type is fully initialized.
+    private static IReadOnlyCollection<string>? _functionNames;
 
     /// <summary>Recognized built-in and special-form function names.</summary>
-    public static IReadOnlyCollection<string> Names => FunctionNames;
+    public static IReadOnlyCollection<string> Names =>
+        _functionNames ??= Array.AsReadOnly(Functions.Keys.Concat(SpecialFunctionNames).ToArray());
 
     /// <summary>True if the function recalculates on every pass regardless of input changes.</summary>
     public static bool IsVolatile(string name) => VolatileFunctions.Contains(name);

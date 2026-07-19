@@ -281,7 +281,9 @@ public static partial class BuiltInFunctions
 
         if (text.Length == 0) return new NumberValue(0);
 
-        if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+        // AllowTrailingSign lets NUMBERVALUE accept the trailing-minus accounting convention
+        // (e.g. "1234-" meaning -1234), the same as VALUE()'s ExcelTextNumberParser already does.
+        if (!double.TryParse(text, NumberStyles.Float | NumberStyles.AllowTrailingSign, CultureInfo.InvariantCulture, out var v))
             return ErrorValue.Value;
 
         for (int i = 0; i < pctCount; i++) v /= 100.0;

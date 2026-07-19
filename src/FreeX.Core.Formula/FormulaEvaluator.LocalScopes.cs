@@ -25,6 +25,10 @@ public sealed partial class FormulaEvaluator
                 _                => null
             };
             if (name is not { } localName || !IsValidLocalFunctionName(localName)) return ErrorValue.Value;
+            // Excel rejects a LET that defines the same binding name twice within the same
+            // call ("You can't define the same name twice in a LET function"); a nested LET's
+            // own binding of the same name is a separate call/dictionary and is unaffected.
+            if (bindings.ContainsKey(localName)) return ErrorValue.Value;
             var value = EvaluateArrayOperand(node.Arguments[i * 2 + 1], scoped);
             if (value is ErrorValue error) return error;
             bindings[localName] = value;

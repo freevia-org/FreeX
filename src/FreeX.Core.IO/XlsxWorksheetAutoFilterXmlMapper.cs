@@ -54,6 +54,24 @@ internal static class XlsxWorksheetAutoFilterXmlMapper
         }
     }
 
+    /// <summary>
+    /// Returns the effective AutoFilter range reference -- the exact "ref" text <see cref="ToAutoFilterXml"/>
+    /// would emit into the worksheet's own &lt;autoFilter ref=...&gt; element for this model -- or null
+    /// when no &lt;autoFilter&gt; element would be written at all (e.g. no reference and no usable native
+    /// XML). Used by <see cref="XlsxNamedRangeMapper"/> (R49-io-defined-name-scope-3-2) to keep the
+    /// built-in <c>_xlnm._FilterDatabase</c> sheet-scoped defined name's refersTo range in sync with the
+    /// live autoFilter range, without duplicating the native-vs-modeled reference resolution this mapper
+    /// already performs.
+    /// </summary>
+    internal static string? GetEffectiveReference(WorksheetAutoFilterModel? autoFilter)
+    {
+        if (autoFilter is null)
+            return null;
+
+        XNamespace worksheetNs = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+        return ToAutoFilterXml(autoFilter, worksheetNs)?.Attribute("ref")?.Value;
+    }
+
     private static XElement? ToAutoFilterXml(WorksheetAutoFilterModel? autoFilter, XNamespace worksheetNs)
     {
         if (autoFilter is null)

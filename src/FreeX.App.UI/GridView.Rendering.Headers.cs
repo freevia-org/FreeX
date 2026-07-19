@@ -12,6 +12,9 @@ public partial class GridView
     private const int HeaderTextDrawingCacheLimit = 4096;
     private static readonly ConcurrentDictionary<uint, string> ColumnHeaderCache = new();
     private static readonly ConcurrentDictionary<uint, string> RowHeaderCache = new();
+    // Stronger tint applied to the active cell's own row/column header within a
+    // multi-cell selection, so the active cell stays visually locatable (matches Excel).
+    private static readonly Brush ActiveHeaderHighlightBrush = MakeBrush(151, 181, 135);
     private readonly Dictionary<HeaderTextDrawingKey, DrawingGroup> _headerTextDrawingCache = new();
     private DrawingGroup? _headerBaseLayerCache;
     private HeaderBaseLayerCacheKey _headerBaseLayerCacheKey;
@@ -48,7 +51,8 @@ public partial class GridView
         double VisibleBottom,
         bool UseR1C1ReferenceStyle,
         string CultureName,
-        double PixelsPerDip);
+        double PixelsPerDip,
+        CellAddress? ActiveCell);
 
     private readonly record struct HeaderSelectionInterval(uint Start, uint End);
 
@@ -249,7 +253,8 @@ public partial class GridView
             visibleBottom,
             UseR1C1ReferenceStyle,
             CultureInfo.CurrentCulture.Name,
-            pixelsPerDip);
+            pixelsPerDip,
+            ActiveCell ?? selRange?.Start);
 
     private bool ShouldBuildSelectedHeaderLayerCache(SelectedHeaderLayerCacheKey key) =>
         _hasLastSelectedHeaderLayerRenderKey && _lastSelectedHeaderLayerRenderKey == key;
@@ -381,17 +386,24 @@ public partial class GridView
         var rowIntervals = BuildRowHeaderSelectionIntervals(selectedRanges, selRange);
         var columnIntervalIndex = 0;
         var rowIntervalIndex = 0;
+        var activeCell = ActiveCell ?? selRange?.Start;
 
         foreach (var col in viewport.ColMetrics)
         {
             if (IsHeaderSelected(col.Col, columnIntervals, ref columnIntervalIndex))
-                DrawColumnHeader(dc, col, rowHeaderWidth, columnOutlineHeight, HeaderHighlightBrush, pixelsPerDip);
+            {
+                var brush = activeCell is { } active && active.Col == col.Col ? ActiveHeaderHighlightBrush : HeaderHighlightBrush;
+                DrawColumnHeader(dc, col, rowHeaderWidth, columnOutlineHeight, brush, pixelsPerDip);
+            }
         }
 
         foreach (var row in viewport.RowMetrics)
         {
             if (IsHeaderSelected(row.Row, rowIntervals, ref rowIntervalIndex))
-                DrawRowHeader(dc, row, rowHeaderWidth, rowOutlineWidth, columnHeaderHeight, visibleBottom, HeaderHighlightBrush, pixelsPerDip);
+            {
+                var brush = activeCell is { } active && active.Row == row.Row ? ActiveHeaderHighlightBrush : HeaderHighlightBrush;
+                DrawRowHeader(dc, row, rowHeaderWidth, rowOutlineWidth, columnHeaderHeight, visibleBottom, brush, pixelsPerDip);
+            }
         }
     }
 

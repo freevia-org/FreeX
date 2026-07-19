@@ -56,6 +56,53 @@ public sealed partial class GridViewSplitPaneLayoutTests
             .Should().Be(new CellAddress(sheetId, 20, 10));
     }
 
+    // R49-render-header-frozen-corner-3-1: once a column outline group exists, the render path
+    // (GridView.Rendering.Headers.cs / GridView.CalculateColumnHeaderHeight) draws the column
+    // header -- and therefore row 1's real top -- at ColHeaderHeight PLUS the outline gutter
+    // height, not at the bare ColHeaderHeight constant. Before the fix, HitTestViewportCell bucketed
+    // clicks against the bare constant, so every row landed 1-gutter-height too high once columns
+    // were grouped, and clicks inside the still-visible gutter strip fell through to row 1 instead
+    // of hitting nothing.
+    [Fact]
+    public void HitTestViewportCell_WithColumnOutlineGutter_AccountsForGutterHeightNotBareConstant()
+    {
+        var sheetId = SheetId.New();
+        var viewport = new ViewportModel(
+            [],
+            [new RowMetric(1, 20, 0), new RowMetric(2, 20, 20)],
+            [new ColMetric(1, 64, 0)],
+            ColumnOutlineGroups: [new OutlineGroupRange(1, 1, 3, 0, false)]);
+
+        var effectiveHeaderHeight = GridView.CalculateColumnHeaderHeight(viewport);
+        var gutterHeight = effectiveHeaderHeight - GridView.ColHeaderHeight;
+        gutterHeight.Should().BeGreaterThan(0, "a level-1 column outline group must add a non-zero gutter");
+
+        // A click inside the still-visible outline-gutter strip (below the bare 18px header but
+        // above the true effective header) must hit nothing -- there is no cell there, only chrome
+        // -- rather than falling through to row 1 as it did when hit-testing used the bare constant.
+        GridView.HitTestViewportCell(
+                viewport,
+                sheetId,
+                new Point(GridView.RowHeaderWidth + 5, GridView.ColHeaderHeight + gutterHeight / 2))
+            .Should().BeNull();
+
+        // A click just below the true effective header height must land on row 1 (TopOffset 0) --
+        // matching what the render path actually draws at that offset.
+        GridView.HitTestViewportCell(
+                viewport,
+                sheetId,
+                new Point(GridView.RowHeaderWidth + 5, effectiveHeaderHeight + 5))
+            .Should().Be(new CellAddress(sheetId, 1, 1));
+
+        // And row 2 (TopOffset 20) must still land correctly, anchored off the effective header
+        // height rather than 26px (the gutter height in this scenario) too early.
+        GridView.HitTestViewportCell(
+                viewport,
+                sheetId,
+                new Point(GridView.RowHeaderWidth + 5, effectiveHeaderHeight + 20 + 5))
+            .Should().Be(new CellAddress(sheetId, 2, 1));
+    }
+
     [Fact]
     public void HitTestViewportCell_StopsMetricScansOnceSortedEdgesPassPointer()
     {
@@ -74,22 +121,41 @@ public sealed partial class GridViewSplitPaneLayoutTests
     [Fact]
     public void HitTestViewportCell_ReusesRowHeaderWidthWithinHitTest()
     {
+        // r49 outline-gutter fix: hit-testing used to test/bucket against the bare ColHeaderHeight
+        // constant, which ignores the column-outline gutter the render path adds above the header
+        // row once columns are grouped — misaligning every click by the gutter's height. The fix
+        // computes an effective column-header height (CalculateColumnHeaderHeight(viewport), the
+        // same helper the render path already uses) once up front, alongside rowHeaderWidth, and
+        // reuses it everywhere ColHeaderHeight used to appear directly. This test's intent is
+        // unchanged from before the fix — the hit-test must compute rowHeaderWidth/colHeaderHeight
+        // once and reuse them rather than recomputing (or falling back to the stale constant)
+        // inside the split-pane branch — only the pinned substrings below were updated to match.
         var source = AppUiSourceTestSupport.ReadAppUiSources("GridView.SplitPanes.cs");
         var hitTestViewportCell = source[
             source.IndexOf("public static CellAddress? HitTestViewportCell", StringComparison.Ordinal)..
             source.IndexOf("public static SplitPaneRegion HitTestSplitPaneRegion", StringComparison.Ordinal)];
 
         hitTestViewportCell.Should().Contain("var rowHeaderWidth = CalculateRowHeaderWidth(viewport);");
-        hitTestViewportCell.Should().Contain("if (pos.X < rowHeaderWidth || pos.Y < ColHeaderHeight)");
+        hitTestViewportCell.Should().Contain("var colHeaderHeight = CalculateColumnHeaderHeight(viewport);");
+        hitTestViewportCell.Should().Contain("if (pos.X < rowHeaderWidth || pos.Y < colHeaderHeight)");
         hitTestViewportCell.Should().Contain(": rowHeaderWidth;");
-        hitTestViewportCell.Should().Contain("ColHeaderHeight, rowHeaderWidth)");
+        hitTestViewportCell.Should().Contain(": colHeaderHeight;");
+        hitTestViewportCell.Should().Contain("colHeaderHeight, rowHeaderWidth)");
+        hitTestViewportCell.Should().NotContain("pos.Y < ColHeaderHeight");
         hitTestViewportCell.IndexOf("var rowHeaderWidth = CalculateRowHeaderWidth(viewport);", StringComparison.Ordinal)
+            .Should()
+            .BeLessThan(hitTestViewportCell.IndexOf("if (viewport.SplitPanes is { } splitPanes)", StringComparison.Ordinal));
+        hitTestViewportCell.IndexOf("var colHeaderHeight = CalculateColumnHeaderHeight(viewport);", StringComparison.Ordinal)
             .Should()
             .BeLessThan(hitTestViewportCell.IndexOf("if (viewport.SplitPanes is { } splitPanes)", StringComparison.Ordinal));
         hitTestViewportCell[
             hitTestViewportCell.IndexOf("if (viewport.SplitPanes is { } splitPanes)", StringComparison.Ordinal)..]
             .Should()
             .NotContain("CalculateRowHeaderWidth(viewport)");
+        hitTestViewportCell[
+            hitTestViewportCell.IndexOf("if (viewport.SplitPanes is { } splitPanes)", StringComparison.Ordinal)..]
+            .Should()
+            .NotContain("CalculateColumnHeaderHeight(viewport)");
     }
 
     [Fact]

@@ -52,6 +52,75 @@ public partial class MainWindow
         RefreshStatusBar();
     }
 
+    // Ctrl+clicking a second column header must ADD col as a disjoint area (Excel's "Report
+    // Connections"-style multi-area header selection), not wipe the existing selection down to
+    // just this column the way a plain click does (R49-render-multiarea-selection-3-2).
+    //
+    // This intentionally does NOT reuse AddOrMoveAdditionalSelection/CreateAdditionalSelectionRanges
+    // (the cell-area Ctrl+click machinery a few hundred lines below): that helper infers "extend the
+    // area currently being drawn" vs "start a genuinely new one" purely by checking whether
+    // SheetGrid.SelectedRange still equals the accumulated list's last entry -- but every call ends
+    // by setting SheetGrid.SelectedRange to exactly that same last entry, so on the NEXT call the two
+    // are always equal and it always takes the "extend" branch, never the "append a new area" one.
+    // A header Ctrl+click never has an analogous "extend the same click" continuation through this
+    // method (header drag-continuation is handled separately by ExtendHeaderSelection, invoked from
+    // SheetGrid_MouseMove's _dragHeaderSelectionTarget branch, never from here), so it can safely
+    // just always append.
+    private void AddAdditionalColumnSelection(uint col)
+    {
+        var range = CreateWholeColumnRange(_currentSheetId, col);
+        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+            return;
+
+        ClearSelectionTransientOverlays();
+        var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, range);
+        _selectionAnchor = range.Start;
+        _selectionCursor = range.End;
+        SetSelectedRangesIfChanged(ranges);
+        SheetGrid.SelectedRange = range;
+        var colName = FormatColumnReference(col);
+        CellAddressBox.Text = $"{colName}:{colName}";
+        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
+        SheetGrid.Focus();
+        RefreshToolbarAfterSelectionChange();
+        RefreshStatusBar();
+    }
+
+    // Row-header counterpart of AddAdditionalColumnSelection (R49-render-multiarea-selection-3-2).
+    private void AddAdditionalRowSelection(uint row)
+    {
+        var range = CreateWholeRowRange(_currentSheetId, row);
+        if (TryApplyFormulaRangeSelection(range, range.Start, range.End))
+            return;
+
+        ClearSelectionTransientOverlays();
+        var ranges = AppendAdditionalSelectionRange(SheetGrid.SelectedRanges, SheetGrid.SelectedRange, range);
+        _selectionAnchor = range.Start;
+        _selectionCursor = range.End;
+        SetSelectedRangesIfChanged(ranges);
+        SheetGrid.SelectedRange = range;
+        CellAddressBox.Text = $"{row}:{row}";
+        var cell = _workbook.GetSheet(_currentSheetId)?.GetCell(_selectionAnchor.Value);
+        SetFormulaBarSelectionText(FormatFormulaBarText(cell, _selectionAnchor.Value));
+        SheetGrid.Focus();
+        RefreshToolbarAfterSelectionChange();
+        RefreshStatusBar();
+    }
+
+    // Appends newRange as a fresh disjoint area, seeding the list from currentActive (the
+    // still-single selection at the time of this first Ctrl+click) when nothing has accumulated yet.
+    private static IReadOnlyList<GridRange> AppendAdditionalSelectionRange(
+        IReadOnlyList<GridRange>? selectedRanges, GridRange? currentActive, GridRange newRange)
+    {
+        var ranges = new List<GridRange>(
+            selectedRanges is { Count: > 0 } existing
+                ? existing
+                : currentActive is { } active ? [active] : []);
+        ranges.Add(newRange);
+        return ranges;
+    }
+
     private void SelectAll()
     {
         var range = CreateWholeGridRange(_currentSheetId);
@@ -92,7 +161,14 @@ public partial class MainWindow
             return;
 
         var pos = e.GetPosition(SheetGrid);
-        const double colHeaderH = FreeX.App.UI.GridView.ColHeaderHeight;
+        // Must be the EFFECTIVE header height (includes the column-outline gutter when columns are
+        // grouped), matching what DrawColumnHeader/DrawRowHeader actually render at
+        // (GridView.CalculateColumnHeaderHeight) -- the bare ColHeaderHeight constant used here
+        // previously made the select-all corner and every column header unclickable across the
+        // gutter's height once any column outline group existed (R49-render-header-frozen-
+        // corner-3-2; GridHeaderContextMenuHitPlanner's right-click path a few hundred lines below
+        // already uses SheetGrid.EffectiveColHeaderHeight correctly).
+        double colHeaderH = SheetGrid.EffectiveColHeaderHeight;
         double rowHeaderW = SheetGrid.ActualRowHeaderWidth;
 
         var viewport = SheetGrid.Viewport;
@@ -147,6 +223,15 @@ public partial class MainWindow
                             RefreshStatusBar();
                             BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Column, anchorCol);
                         }
+                        else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+                        {
+                            // Ctrl+click a column header adds it as a disjoint area, matching
+                            // Excel's multi-area column selection (R49-render-multiarea-
+                            // selection-3-2) instead of wiping the existing selection like a plain
+                            // click.
+                            AddAdditionalColumnSelection(cm.Col);
+                            BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Column, cm.Col);
+                        }
                         else
                         {
                             SelectColumn(cm.Col);
@@ -193,6 +278,13 @@ public partial class MainWindow
                         RefreshToolbarAfterSelectionChange();
                         RefreshStatusBar();
                         BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Row, anchorRow);
+                    }
+                    else if ((Keyboard.Modifiers & ModifierKeys.Control) != 0)
+                    {
+                        // Row-header counterpart of the column-header Ctrl+click fix above
+                        // (R49-render-multiarea-selection-3-2).
+                        AddAdditionalRowSelection(rm.Row);
+                        BeginHeaderSelectionDrag(GridHeaderContextMenuTarget.Row, rm.Row);
                     }
                     else
                     {

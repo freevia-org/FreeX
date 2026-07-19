@@ -18,6 +18,20 @@ internal static class XlsxNamedRangeMapper
         "Consolidate_Area"
     };
 
+    /// <summary>
+    /// The canonical OOXML built-in defined-name identifier for a sheet's AutoFilter database range
+    /// (ECMA-376 built-in names use the "_xlnm." prefix; see <c>ST_DefinedNames</c>). Unlike the
+    /// other Excel-reserved names above (Print_Area, etc., which FreeX never models and always
+    /// treats as pure passthrough), this one IS actively managed: FreeX derives it from each sheet's
+    /// live AutoFilter range on every save (see <see cref="CreateDefinedNameEntries"/>) so it never
+    /// goes stale relative to the worksheet's own &lt;autoFilter ref=...&gt; element written by
+    /// <see cref="XlsxWorksheetAutoFilterXmlMapper"/> (R49-io-defined-name-scope-3-2).
+    /// </summary>
+    private const string FilterDatabaseDefinedName = "_xlnm._FilterDatabase";
+
+    private static bool IsFilterDatabaseDefinedName(string? name) =>
+        string.Equals(name?.Trim(), FilterDatabaseDefinedName, StringComparison.OrdinalIgnoreCase);
+
     public static void Load(XLWorkbook xlWorkbook, Workbook workbook, List<string>? warnings = null)
     {
         // Load workbook-scoped defined names.
@@ -406,14 +420,17 @@ internal static class XlsxNamedRangeMapper
             // Remove any on-disk defined name that is no longer present in the live model (e.g. the
             // user deleted it via the Name Manager). Reserved/Excel-internal names (Print_Area, etc.)
             // and unrecognized entries with a malformed name are left untouched since CreateDefinedNameEntries
-            // never yields them and they are not owned by the model round-trip.
+            // never yields them and they are not owned by the model round-trip. _xlnm._FilterDatabase is
+            // the one exception (R49-io-defined-name-scope-3-2): CreateDefinedNameEntries DOES emit it
+            // whenever the owning sheet still has an AutoFilter, so its absence from liveKeys genuinely
+            // means the AutoFilter was cleared and the stale name must be removed like any other name.
             foreach (var (key, existing) in existingByKey)
             {
                 if (liveKeys.Contains(key))
                     continue;
 
                 var existingName = existing.Attribute("name")?.Value;
-                if (IsExcelReservedDefinedName(existingName))
+                if (IsExcelReservedDefinedName(existingName) && !IsFilterDatabaseDefinedName(existingName))
                     continue;
 
                 existing.Remove();
@@ -495,6 +512,53 @@ internal static class XlsxNamedRangeMapper
 
             yield return new DefinedNameEntry(key.Name, localSheetId, FormatDefinedNameFormulaForXml(formulaText), false, null);
         }
+
+        // R49-io-defined-name-scope-3-2: emit/keep-in-sync the built-in _xlnm._FilterDatabase
+        // sheet-scoped name for every sheet that currently has an AutoFilter, so it always matches
+        // the live <autoFilter ref=...> range that XlsxWorksheetAutoFilterXmlMapper writes into that
+        // sheet's own worksheet XML (rather than being a stale/absent passthrough). A sheet with no
+        // AutoFilter yields nothing here, so the add/update/remove reconciliation in SaveToPackage
+        // drops any stale _xlnm._FilterDatabase left over from a cleared AutoFilter.
+        for (var localSheetId = 0; localSheetId < workbook.Sheets.Count; localSheetId++)
+        {
+            var sheet = workbook.Sheets[localSheetId];
+            var autoFilterReference = XlsxWorksheetAutoFilterXmlMapper.GetEffectiveReference(sheet.AutoFilter);
+            if (string.IsNullOrWhiteSpace(autoFilterReference) ||
+                !TryFormatAutoFilterRangeAddress(workbook, sheet, autoFilterReference, out var filterDatabaseAddress))
+            {
+                continue;
+            }
+
+            yield return new DefinedNameEntry(FilterDatabaseDefinedName, localSheetId, filterDatabaseAddress, Hidden: true, Comment: null);
+        }
+    }
+
+    /// <summary>
+    /// Formats a sheet's live AutoFilter range reference (e.g. "A1:C10", as read straight off the
+    /// worksheet's own &lt;autoFilter ref=...&gt; attribute) as an absolute, sheet-qualified defined-name
+    /// refersTo address (e.g. "Sheet1!$A$1:$C$10"), for the _xlnm._FilterDatabase entry in
+    /// <see cref="CreateDefinedNameEntries"/>. Returns false (and leaves the sheet's _FilterDatabase
+    /// name unmanaged for this save) for a reference this parser cannot understand, rather than
+    /// throwing and aborting the whole defined-names save.
+    /// </summary>
+    private static bool TryFormatAutoFilterRangeAddress(
+        Workbook workbook,
+        Sheet sheet,
+        string autoFilterReference,
+        out string address)
+    {
+        address = "";
+        GridRange range;
+        try
+        {
+            range = GridRange.ParseCellOrRange(autoFilterReference, sheet.Id);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        return TryFormatRangeAddress(workbook, range, xlWorkbook: null, out address);
     }
 
     // Mirrors XlsxWorkbookSchemaNormalizer.WorkbookChildOrder's CT_Workbook child sequence so a

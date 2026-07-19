@@ -948,13 +948,25 @@ public partial class MainWindow
         }
 
         var text = FormulaBar.Text;
+        // Ctrl+Enter fills EVERY selected area of a Ctrl+click multi-area selection with the same
+        // entry, not just the active area (R49-render-multiarea-selection-3-3). GetCurrentSelectionRanges
+        // resolves SheetGrid.SelectedRanges (falling back to just `range` for the ordinary
+        // single-area case), matching the same helper Clear/Format commands already use for this
+        // scenario.
+        var areas = GetCurrentSelectionRanges(range);
         var edits = new List<(CellAddress Address, Cell NewCell)>();
-        foreach (var address in range.AllCells())
+        var seenAddresses = new HashSet<CellAddress>();
+        foreach (var area in areas)
         {
-            if (!TryCreateCellFromEntryText(address, text, out var newCell))
-                return false;
+            foreach (var address in area.AllCells())
+            {
+                if (!seenAddresses.Add(address))
+                    continue;
+                if (!TryCreateCellFromEntryText(address, text, out var newCell))
+                    return false;
 
-            edits.Add((address, newCell));
+                edits.Add((address, newCell));
+            }
         }
 
         if (edits.Count == 0)
