@@ -114,6 +114,40 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
     }
 
     [Theory]
+    [InlineData("shortcut.file.save", 0, "persisted a non-empty workbook")]
+    [InlineData("shortcut.file.save", 1, "persisted a non-empty workbook")]
+    [InlineData("shortcut.data.filter-toggle-reapply", 2, "applied AutoFilter")]
+    public async Task AuditedShortcutResiduals_RequireSemanticProductionOutcomes(
+        string scenarioId,
+        int interactionIndex,
+        string expectedOutcome)
+    {
+        await Session.Dispatch(async () =>
+        {
+            var interaction = InteractiveValidationInventory.KeyboardShortcuts
+                .Single(scenario => scenario.Id == scenarioId)
+                .Interactions[interactionIndex];
+            var window = new MainWindow([]);
+            try
+            {
+                var result = await window.ExerciseShortcutInteractionAsync(
+                    interaction,
+                    interactionId: $"{scenarioId}:{interactionIndex}");
+
+                result.Passed.Should().BeTrue(result.Note);
+                result.Note.Should().Contain(expectedOutcome);
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
+    [Theory]
     [InlineData("ArrowUp", Key.Up)]
     [InlineData("ArrowDown", Key.Down)]
     [InlineData("Grave", Key.Oem3)]

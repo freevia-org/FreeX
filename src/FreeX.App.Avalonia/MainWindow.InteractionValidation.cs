@@ -5,7 +5,9 @@ using FreeX.App.Avalonia.Ribbon;
 using FreeX.App.Presentation.InteractionValidation;
 using FreeX.App.Presentation.Interactions;
 using FreeX.App.Presentation.Shell;
+using FreeX.App.Services;
 using FreeX.App.Services.Ribbon;
+using FreeX.Core.Commands;
 using FreeX.Core.Model;
 
 namespace FreeX.App.Avalonia;
@@ -222,12 +224,15 @@ public sealed partial class MainWindow
 
             var probe = await ExerciseShortcutInteractionAsync(
                 interaction,
-                replaceSession: interactionOrdinal % 32 == 0);
+                replaceSession: interactionOrdinal % 32 == 0,
+                interactionId);
             results.Add(new InteractionValidationResult(
                 Id: interactionId,
                 Category: "shortcut-scenario",
                 Status: probe.Passed ? "passed" : "failed",
-                EvidenceLevel: probe.Passed ? "production-key-event-dispatched" : "production-key-event-unhandled",
+                EvidenceLevel: probe.Passed
+                    ? GetShortcutInteractionEvidenceLevel(interactionId)
+                    : "production-key-event-unhandled-or-unsettled",
                 Evidence: $"{interaction.DisplayText} | {interaction.Context} | {interaction.Kind}",
                 Note: $"{probe.Note} Expected: {scenario.ExpectedBehavior}"));
             interactionOrdinal++;
@@ -238,7 +243,8 @@ public sealed partial class MainWindow
 
     internal async Task<(bool Passed, string Note)> ExerciseShortcutInteractionAsync(
         ShortcutInteractionDescriptor interaction,
-        bool replaceSession = true)
+        bool replaceSession = true,
+        string? interactionId = null)
     {
         var mappedSteps = new List<(Key Key, KeyModifiers Modifiers)>();
         if (interaction.Steps.Count == 0)
@@ -250,9 +256,16 @@ public sealed partial class MainWindow
             mappedSteps.Add((key, modifiers));
         }
 
+        ShortcutSemanticProbe? semanticProbe = null;
         try
         {
-            ResetShortcutValidationState(interaction.Context, replaceSession);
+            var requiresFreshSemanticFixture =
+                IsSaveShortcutInteraction(interactionId, interaction) ||
+                IsLegacyDataFilterInteraction(interactionId, interaction);
+            ResetShortcutValidationState(
+                interaction.Context,
+                replaceSession || requiresFreshSemanticFixture);
+            semanticProbe = PrepareShortcutSemanticProbe(interactionId, interaction);
             for (var index = 0; index < mappedSteps.Count; index++)
             {
                 var step = mappedSteps[index];
@@ -267,7 +280,13 @@ public sealed partial class MainWindow
                 }
             }
 
-            return (true, $"All {mappedSteps.Count} key event(s) were handled through the production window.");
+            var semanticResult = semanticProbe!.Verify();
+            if (!semanticResult.Passed)
+                return semanticResult;
+
+            return (true,
+                $"All {mappedSteps.Count} key event(s) were handled through the production window. " +
+                semanticResult.Note);
         }
         catch (Exception ex)
         {
@@ -276,7 +295,168 @@ public sealed partial class MainWindow
         finally
         {
             CloseOwnedWindows(OwnedWindows.ToArray());
+            semanticProbe?.Dispose();
             ResetShortcutValidationState(ShortcutInteractionContext.Worksheet, replaceSession: false);
+        }
+    }
+
+    private ShortcutSemanticProbe PrepareShortcutSemanticProbe(
+        string? interactionId,
+        ShortcutInteractionDescriptor interaction)
+    {
+        if (IsSaveShortcutInteraction(interactionId, interaction))
+        {
+            var path = Path.Combine(
+                Path.GetTempPath(),
+                $"freex-shortcut-save-{Guid.NewGuid():N}{NativeWorkbookExtension}");
+            var address = _session.ActiveCell;
+            var edit = _session.ExecuteReviewCommand(
+                EditCellsCommand.ForValue(address.Sheet, address, new TextValue("shortcut-save-settlement")),
+                address);
+            if (!edit.Success)
+                throw new InvalidOperationException(edit.ErrorMessage ?? "Could not dirty the save validation workbook.");
+
+            var previousPicker = _workbookSaveAsPickerOverride;
+            _workbookSaveAsPickerOverride = _ =>
+                Task.FromResult<WorkbookSaveAsPickerSelection?>(
+                    CreateTransientWorkbookSaveAsSelection(path));
+            return ShortcutSemanticProbe.ForSave(this, path, previousPicker);
+        }
+
+        if (IsLegacyDataFilterInteraction(interactionId, interaction))
+        {
+            var sheet = _session.ActiveSheet;
+            var range = new GridRange(
+                new CellAddress(sheet.Id, 1, 1),
+                new CellAddress(sheet.Id, 3, 1));
+            sheet.SetCell(range.Start, new TextValue("Status"));
+            sheet.SetCell(new CellAddress(sheet.Id, 2, 1), new TextValue("Keep"));
+            sheet.SetCell(range.End, new TextValue("Drop"));
+            _session.SelectRange(range);
+            return ShortcutSemanticProbe.ForLegacyFilter(this);
+        }
+
+        return ShortcutSemanticProbe.None(this);
+    }
+
+    private static string GetShortcutInteractionEvidenceLevel(string interactionId) =>
+        interactionId.StartsWith("shortcut.file.save:", StringComparison.Ordinal)
+            ? "production-save-file-settled"
+            : string.Equals(
+                interactionId,
+                "shortcut.data.filter-toggle-reapply:2",
+                StringComparison.Ordinal)
+                ? "production-filter-state-transition"
+                : "production-key-event-dispatched";
+
+    private static bool IsSaveShortcutInteraction(
+        string? interactionId,
+        ShortcutInteractionDescriptor interaction) =>
+        interactionId?.StartsWith("shortcut.file.save:", StringComparison.Ordinal) == true ||
+        TryResolveSharedShortcutInteraction(interaction, out var route) &&
+        route == WorkbookShortcutRoute.SaveWorkbook;
+
+    private static bool IsLegacyDataFilterInteraction(
+        string? interactionId,
+        ShortcutInteractionDescriptor interaction) =>
+        string.Equals(
+            interactionId,
+            "shortcut.data.filter-toggle-reapply:2",
+            StringComparison.Ordinal) ||
+        interaction.Steps.Count == 3 &&
+        interaction.Steps[0] == new ShortcutGestureStep("D", ShortcutModifierKeys.Alt) &&
+        interaction.Steps[1] == new ShortcutGestureStep("F") &&
+        interaction.Steps[2] == new ShortcutGestureStep("F");
+
+    private sealed class ShortcutSemanticProbe : IDisposable
+    {
+        private readonly MainWindow _window;
+        private readonly string? _savePath;
+        private readonly bool _verifyLegacyFilter;
+        private readonly Func<WorkbookSaveAsCommandPickerPlan, Task<WorkbookSaveAsPickerSelection?>>?
+            _previousSaveAsPicker;
+
+        private ShortcutSemanticProbe(
+            MainWindow window,
+            string? savePath = null,
+            bool verifyLegacyFilter = false,
+            Func<WorkbookSaveAsCommandPickerPlan, Task<WorkbookSaveAsPickerSelection?>>?
+                previousSaveAsPicker = null)
+        {
+            _window = window;
+            _savePath = savePath;
+            _verifyLegacyFilter = verifyLegacyFilter;
+            _previousSaveAsPicker = previousSaveAsPicker;
+        }
+
+        internal static ShortcutSemanticProbe None(MainWindow window) => new(window);
+
+        internal static ShortcutSemanticProbe ForSave(
+            MainWindow window,
+            string path,
+            Func<WorkbookSaveAsCommandPickerPlan, Task<WorkbookSaveAsPickerSelection?>>?
+                previousSaveAsPicker) =>
+            new(window, savePath: path, previousSaveAsPicker: previousSaveAsPicker);
+
+        internal static ShortcutSemanticProbe ForLegacyFilter(MainWindow window) =>
+            new(window, verifyLegacyFilter: true);
+
+        internal (bool Passed, string Note) Verify()
+        {
+            if (_savePath is not null)
+            {
+                if (_window._session.IsDirty)
+                    return (false, "The save route returned before the workbook reached a clean save point.");
+                if (!PathsEqual(_window._session.CurrentFilePath, _savePath))
+                    return (false, "The save route did not settle the Save As selection into the session file context.");
+                if (!File.Exists(_savePath) || new FileInfo(_savePath).Length == 0)
+                    return (false, "The save route did not persist a non-empty workbook file.");
+
+                return (true, "The Save As selection settled, persisted a non-empty workbook, and marked the session clean.");
+            }
+
+            if (_verifyLegacyFilter)
+            {
+                if (_window._legacyDataFilterSequenceState != LegacyDataFilterSequenceState.None)
+                    return (false, "The legacy Data sequence remained pending after the second F.");
+                if (_window._session.ActiveSheet.AutoFilter is null)
+                    return (false, "Alt+D,F,F was consumed without applying AutoFilter.");
+
+                return (true, "The second F completed the legacy sequence and applied AutoFilter.");
+            }
+
+            return (true, "No additional semantic settlement was required.");
+        }
+
+        public void Dispose()
+        {
+            if (_savePath is null)
+                return;
+
+            _window._workbookSaveAsPickerOverride = _previousSaveAsPicker;
+            try
+            {
+                File.Delete(_savePath);
+            }
+            catch (IOException)
+            {
+                // The validation report remains authoritative; cleanup is best-effort only.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // The validation report remains authoritative; cleanup is best-effort only.
+            }
+        }
+
+        private static bool PathsEqual(string? left, string right)
+        {
+            if (string.IsNullOrWhiteSpace(left))
+                return false;
+
+            var comparison = OperatingSystem.IsWindows()
+                ? StringComparison.OrdinalIgnoreCase
+                : StringComparison.Ordinal;
+            return string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), comparison);
         }
     }
 

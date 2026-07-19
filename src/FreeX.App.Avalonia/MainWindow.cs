@@ -23145,7 +23145,10 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> TryHandleWorkbookShortcutRouteAsync(KeyEventArgs e)
     {
-        if (!TryGetWorkbookShortcutRoute(e.Key, e.KeyModifiers, out var route))
+        if (!TryGetWorkbookShortcutRoute(
+                GetEffectiveWorkbookShortcutKey(e),
+                e.KeyModifiers,
+                out var route))
             return false;
 
         switch (route)
@@ -24228,7 +24231,7 @@ public sealed partial class MainWindow : Window
                 return false;
 
             var savePlan = WorkbookFileCommandPlanner.PlanSaveAsPicker(
-                StorageProvider.CanSave,
+                CanShowWorkbookSaveAsPicker,
                 _session.SaveFormats,
                 _session.Workbook.Name,
                 _session.DisplayName,
@@ -24239,13 +24242,7 @@ public sealed partial class MainWindow : Window
                 return false;
             }
 
-            var pickedStorageFile = await AvaloniaFilePickerService.PickSaveFileWithLocalPathAsync(
-                StorageProvider,
-                AvaloniaFilePickerSaveRequest.FromSavePlan(
-                    "Save Workbook",
-                    savePlan.Picker,
-                    showOverwritePrompt: true,
-                    suggestFirstFileType: true));
+            var pickedStorageFile = await PickWorkbookSaveAsFileAsync(savePlan);
 
             if (pickedStorageFile is null)
                 return false;

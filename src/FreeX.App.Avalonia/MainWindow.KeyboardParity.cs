@@ -197,6 +197,18 @@ public sealed partial class MainWindow
         if (!IsTextEditingEventSource(args) && await TryHandleWorkbookShortcutRouteAsync(args))
             return true;
 
+        // WPF keeps plain F12 as a local Save As command, separate from the shared Shift+F12
+        // Save route. X11 may report Shift+F12 as the logical F24 key, so use the physical-key
+        // normalization here as well as in the shared route dispatcher.
+        if (!IsTextEditingEventSource(args) &&
+            GetEffectiveWorkbookShortcutKey(args) == Key.F12 &&
+            args.KeyModifiers == KeyModifiers.None)
+        {
+            args.Handled = true;
+            await SaveWorkbookAsAsync();
+            return true;
+        }
+
         if (!TryResolveAvaloniaHostShortcut(args.Key, args.KeyModifiers, out var shortcut))
             return false;
 
@@ -356,6 +368,14 @@ public sealed partial class MainWindow
 
         return true;
     }
+
+    internal static Key GetEffectiveWorkbookShortcutKeyForTest(
+        Key key,
+        PhysicalKey physicalKey) =>
+        physicalKey == PhysicalKey.F12 ? Key.F12 : key;
+
+    private static Key GetEffectiveWorkbookShortcutKey(KeyEventArgs args) =>
+        GetEffectiveWorkbookShortcutKeyForTest(args.Key, args.PhysicalKey);
 
     private bool TryHandleFocusedEditorShortcut(KeyEventArgs args)
     {
