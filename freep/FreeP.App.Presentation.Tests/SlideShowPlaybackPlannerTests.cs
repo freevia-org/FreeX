@@ -103,6 +103,27 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Theory]
+    [InlineData(null, true)]
+    [InlineData(TransitionDirection.In, true)]
+    [InlineData(TransitionDirection.Out, false)]
+    public void PlanTransition_ZoomUsesDedicatedActionAndDirection(
+        TransitionDirection? direction,
+        bool expectedZoomIn)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Zoom,
+            Direction = direction,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Zoom);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Zoom);
+        plan.ZoomIn.Should().Be(expectedZoomIn);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Theory]
     [InlineData(TransitionDirection.LeftDown, true)]
     [InlineData(TransitionDirection.RightUp, true)]
     [InlineData(TransitionDirection.LeftUp, false)]

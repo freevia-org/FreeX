@@ -775,6 +775,10 @@ public sealed class SlideShowWindow : Window
                 PlayWheelTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Zoom:
+                PlayZoomTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -1056,6 +1060,75 @@ public sealed class SlideShowWindow : Window
                 timer.Stop();
                 _activeTimers.Remove(timer);
                 target.Clip = BuildWheelTransitionGeometry(width, height, 1, spokeCount, reverse);
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
+    private void PlayZoomTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var startScale = plan.ZoomIn
+            ? SlideShowPlaybackPlanner.ZoomInStartScale
+            : SlideShowPlaybackPlanner.ZoomOutStartScale;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransformOrigin = RelativePoint.Center;
+        var transform = new ScaleTransform(startScale, startScale);
+        _slideCanvas.RenderTransform = transform;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateZoomTransition(
+            transform, startScale, plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.RenderTransform = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private void AnimateZoomTransition(
+        ScaleTransform transform,
+        double startScale,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            transform.ScaleX = transform.ScaleY = 1;
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var eased = EaseInOut(t);
+            var value = startScale + (1 - startScale) * eased;
+            transform.ScaleX = transform.ScaleY = value;
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                transform.ScaleX = transform.ScaleY = 1;
                 onComplete?.Invoke();
             }
         };

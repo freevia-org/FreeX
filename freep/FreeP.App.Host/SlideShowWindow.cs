@@ -807,6 +807,10 @@ public sealed class SlideShowWindow : Window
                 PlayWheelTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Zoom:
+                PlayZoomTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -1232,6 +1236,46 @@ public sealed class SlideShowWindow : Window
         int spokeCount,
         bool reverse) =>
         BuildWheelGeometry(width, height, progress, spokeCount, reverse);
+
+    private void PlayZoomTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var startScale = plan.ZoomIn
+            ? SlideShowPlaybackPlanner.ZoomInStartScale
+            : SlideShowPlaybackPlanner.ZoomOutStartScale;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        var transform = new ScaleTransform(startScale, startScale, w / 2, h / 2);
+        _slideCanvas.RenderTransform = transform;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var animationX = new DoubleAnimation(startScale, 1, duration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        var animationY = new DoubleAnimation(startScale, 1, duration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        animationX.Completed += (_, _) =>
+        {
+            _slideCanvas.RenderTransform = Transform.Identity;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+
+        transform.BeginAnimation(ScaleTransform.ScaleXProperty, animationX);
+        transform.BeginAnimation(ScaleTransform.ScaleYProperty, animationY);
+    }
 
     private void PrepareAnimationOverlay(Slide slide)
     {

@@ -11,6 +11,7 @@ public enum SlideShowTransitionPlaybackKind
     RandomBars,
     Strips,
     Wheel,
+    Zoom,
     PushLike,
     FadeFallback
 }
@@ -25,7 +26,8 @@ public sealed record SlideShowTransitionPlan(
     bool RandomBarsHorizontal,
     bool StripsSlopeDown,
     int WheelSpokeCount,
-    bool WheelReverse);
+    bool WheelReverse,
+    bool ZoomIn);
 
 public static class SlideShowTransitionPlanner
 {
@@ -44,7 +46,8 @@ public static class SlideShowTransitionPlanner
             ResolveRandomBarsHorizontal(transition),
             ResolveStripsSlopeDown(transition),
             ResolveWheelSpokeCount(transition),
-            transition.Kind == TransitionKind.WheelReverse);
+            transition.Kind == TransitionKind.WheelReverse,
+            transition.Direction != TransitionDirection.Out);
     }
 
     public static SlideShowTransitionPlaybackKind PlanPlaybackKind(TransitionKind kind) =>
@@ -67,6 +70,8 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Wheel or
             TransitionKind.WheelReverse => SlideShowTransitionPlaybackKind.Wheel,
+
+            TransitionKind.Zoom => SlideShowTransitionPlaybackKind.Zoom,
 
             TransitionKind.Push or
             TransitionKind.Cover or
