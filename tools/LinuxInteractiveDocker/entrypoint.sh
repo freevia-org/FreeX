@@ -67,12 +67,54 @@ declare -a app_arguments=()
 if [[ -n "$app_arguments_b64" ]]; then
     mapfile -t app_arguments < <(printf '%s' "$app_arguments_b64" | base64 -d)
 fi
+interaction_validation=false
+for argument in "${app_arguments[@]}"; do
+    if [[ "$argument" == "--interaction-validation" ]]; then
+        interaction_validation=true
+        break
+    fi
+done
 if [[ -n "$app_document" ]]; then
     app_arguments+=("$app_document")
 fi
 "./$app_executable" "${app_arguments[@]}" > /work/logs/app.log 2>&1 &
 app_pid=$!
 child_pids+=("$app_pid")
+
+# Interaction validation is intentionally headless and can finish before X11 observes a window.
+# Publish readiness immediately so the host can wait on the mounted manifest, then retain the
+# desktop container until the orchestrator has collected the result and stops this owned session.
+if [[ "$interaction_validation" == true ]]; then
+    cat > /work/ready.json <<JSON
+{
+  "status": "ready",
+  "appExecutable": "$app_executable",
+  "windowId": "",
+  "windowTitle": "$app_window_title interaction validation",
+  "display": ":99",
+  "screen": "${screen_width}x${screen_height}",
+  "dpi": $screen_dpi,
+  "initialScreenshot": ""
+}
+JSON
+
+    set +e
+    wait "$app_pid"
+    app_exit=$?
+    set -e
+    if [[ $app_exit -ne 0 && ! -s /work/validation/interaction-validation.json ]]; then
+        cat > /work/failure.json <<JSON
+{
+  "status": "failed",
+  "reason": "$app_executable interaction validation exited with code $app_exit before writing a manifest.",
+  "appExecutable": "$app_executable"
+}
+JSON
+    fi
+    while true; do
+        sleep 3600
+    done
+fi
 
 window_id=""
 for _ in $(seq 1 60); do

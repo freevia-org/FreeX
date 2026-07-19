@@ -90,6 +90,9 @@ public sealed class LinuxAppReadinessPreflightTests
         entrypoint.Should().Contain("xdotool search --onlyvisible");
         entrypoint.Should().Contain("/work/ready.json");
         entrypoint.Should().Contain("scrot /work/screenshots/initial.png");
+        entrypoint.Should().Contain("--interaction-validation");
+        entrypoint.Should().Contain("interaction validation exited with code");
+        entrypoint.Should().Contain("/work/validation/interaction-validation.json");
 
         refreshAfterVnc.Should().Contain("remove,maximized_vert,maximized_horz");
         refreshAfterVnc.Should().Contain("add,maximized_vert,maximized_horz");
