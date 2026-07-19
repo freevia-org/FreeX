@@ -112,6 +112,23 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanTransition_UncoverUsesOutgoingClipAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Uncover,
+            Direction = TransitionDirection.Right,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Uncover);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Uncover);
+        plan.IncomingOffsetX.Should().Be(-1);
+        plan.IncomingOffsetY.Should().Be(0);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
     public void PlanTransition_DoorsUsesVerticalCenterOpening()
     {
         var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition

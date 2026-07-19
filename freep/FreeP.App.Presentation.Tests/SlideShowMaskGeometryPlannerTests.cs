@@ -186,4 +186,17 @@ public sealed class SlideShowMaskGeometryPlannerTests
         SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(960, 540, 1, 0, 1)
             .Should().Be(new SlideShowMaskRect(0, 0, 960, 540));
     }
+
+    [Fact]
+    public void BuildUncoverTransitionRect_ShrinksOutgoingSlideTowardTravelEdge()
+    {
+        SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(960, 540, 0.5, -1, 0)
+            .Should().Be(new SlideShowMaskRect(0, 0, 480, 540));
+        SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(960, 540, 0.5, 1, 0)
+            .Should().Be(new SlideShowMaskRect(480, 0, 480, 540));
+        SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(960, 540, 0.5, 0, -1)
+            .Should().Be(new SlideShowMaskRect(0, 0, 960, 270));
+        SlideShowMaskGeometryPlanner.BuildUncoverTransitionRect(960, 540, 1, 0, 1)
+            .Should().Be(new SlideShowMaskRect(0, 540, 960, 0));
+    }
 }
