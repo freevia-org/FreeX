@@ -1,4 +1,6 @@
 using Avalonia.Headless;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using FreeX.App.Presentation.Filtering;
 using FreeX.App.Presentation.Interactions;
 using FreeX.App.Presentation.PivotUI;
@@ -156,6 +158,62 @@ public sealed class ContextMenuInteractionValidationTests
                 chartSizeResult.Status.Should().Be("passed");
                 chartSizeResult.EvidenceLevel.Should().Be("production-dialog-opened-cancelled");
                 chartSizeResult.Evidence.Should().Contain("DispatchDrawingObjectContextMenuCommand");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ProductionDispatch_SmallPivotBatch_KeepsVisualTreeBounded()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var rows = MainWindow.BuildContextMenuValidationInventory()
+                    .Where(row =>
+                        row.IsEnabled &&
+                        row.FamilyId == "context-menu.pivot-field" &&
+                        row.ActionKey is nameof(PivotFieldContextMenuAction.SortAscending) or
+                            nameof(PivotFieldContextMenuAction.SortDescending) or
+                            nameof(PivotFieldContextMenuAction.ClearFilter))
+                    .GroupBy(row => row.ActionKey, StringComparer.Ordinal)
+                    .Select(group => group.First())
+                    .ToArray();
+
+                rows.Should().HaveCount(3);
+                var gridBuildsBefore = window.SheetGridBuildCountForTest;
+                var paneBuildsBefore = window.PivotFieldPaneBuildCountForTest;
+                var visualCounts = new List<int>();
+                long managedBytesAfterWarmup = 0;
+                for (var index = 0; index < rows.Length; index++)
+                {
+                    var row = rows[index];
+                    var result = await window.RunContextMenuInteractionValidationForTestAsync(row.Id);
+                    result.Status.Should().Be("passed", $"{row.Id}: {result.EvidenceLevel} | {result.Note}");
+
+                    await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+                    visualCounts.Add(window.GetVisualDescendants().Count());
+                    if (index == 0)
+                        managedBytesAfterWarmup = GC.GetTotalMemory(forceFullCollection: true);
+                }
+
+                var finalManagedBytes = GC.GetTotalMemory(forceFullCollection: true);
+
+                visualCounts.Should().OnlyContain(count => count < 10_000);
+                (visualCounts.Max() - visualCounts.Min()).Should().BeLessThan(500,
+                    "replacing the pivot grid/pane must not retain prior attached visual trees");
+                (window.SheetGridBuildCountForTest - gridBuildsBefore).Should().BeLessThan(24,
+                    "three production pivot routes and their validation undo must not start a layout/refresh feedback loop");
+                (window.PivotFieldPaneBuildCountForTest - paneBuildsBefore).Should().BeLessThan(12,
+                    "an attached pivot search box must not rebuild its replacement pane on unchanged TextChanged notifications");
+                (finalManagedBytes - managedBytesAfterWarmup).Should().BeLessThan(64L * 1024 * 1024,
+                    "the production pivot batch must not retain replacement pane/context-menu trees");
             }
             finally
             {

@@ -43,6 +43,9 @@ public sealed partial class MainWindow
     // or its layout actually changes (cheap guard against rebuilding on every selection move).
     private string? _pivotPaneSignature;
     private string _pivotPaneSearchText = string.Empty;
+    private int _pivotFieldPaneBuildCount;
+
+    internal int PivotFieldPaneBuildCountForTest => _pivotFieldPaneBuildCount;
 
     // The field currently being dragged within the pane (pointer-capture gesture), or null when idle.
     private PivotPaneDragItem? _pivotPaneDragItem;
@@ -117,6 +120,7 @@ public sealed partial class MainWindow
 
     private Control BuildPivotFieldPaneBody(PivotTableModel pivot, IReadOnlyList<string> headers)
     {
+        _pivotFieldPaneBuildCount++;
         _pivotDropZones.Clear();
         var model = PivotFieldListPaneBuilder.Build(pivot, headers);
 
@@ -143,7 +147,14 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(searchBox, UiText.Get("PivotLoc_SearchFields"));
         searchBox.TextChanged += (_, _) =>
         {
-            _pivotPaneSearchText = searchBox.Text ?? string.Empty;
+            var searchText = searchBox.Text ?? string.Empty;
+            // Avalonia can raise TextChanged when a newly-created TextBox is attached and its
+            // template initializes, even though Text was assigned before this handler. Rebuilding
+            // for that unchanged notification creates another TextBox and an unbounded pane loop.
+            if (string.Equals(searchText, _pivotPaneSearchText, StringComparison.Ordinal))
+                return;
+
+            _pivotPaneSearchText = searchText;
             _pivotFieldPaneHost.Child = BuildPivotFieldPaneBody(pivot, headers);
         };
         DockPanel.SetDock(searchBox, Dock.Top);

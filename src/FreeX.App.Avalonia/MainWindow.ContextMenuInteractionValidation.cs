@@ -185,16 +185,6 @@ public sealed partial class MainWindow
     private async Task<ContextMenuDispatchEvidence> ExerciseContextMenuProductionRouteAsync(
         ContextMenuValidationDescriptor row)
     {
-        if (OperatingSystem.IsLinux() && row.FamilyId is
-            PivotFieldContextFamily or PivotHeaderContextFamily or PivotChartContextFamily)
-        {
-            return new ContextMenuDispatchEvidence(
-                "failed",
-                "linux-x11-pivot-dispatch-resource-boundary",
-                row.ProductionRoute,
-                "A bounded Linux X11 production attempt exceeded 6 GB before completing; the route remains uncredited and is still exercised by the headless managed lane.");
-        }
-
         try
         {
             return row.FamilyId switch

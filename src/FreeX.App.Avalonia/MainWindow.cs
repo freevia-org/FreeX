@@ -417,6 +417,7 @@ public sealed partial class MainWindow : Window
     private readonly IPlatformPrinter _platformPrinter;
     private readonly RecentFilesStore _recentFiles = RecentFilesStore.Load();
     private readonly ContentControl _sheetGridHost = new();
+    private int _sheetGridBuildCount;
     // The active cell's Border from the most recent BuildSheetGrid pass. Cells are plain Borders
     // rebuilt on every RefreshShell (see CreateInteractiveCellBorder), so this is refreshed each
     // pass and used to move REAL keyboard focus onto the active cell (see MoveFocusToActiveCellBorder)
@@ -738,6 +739,8 @@ public sealed partial class MainWindow : Window
     /// used by production code paths.
     /// </summary>
     internal Control RebuildSheetGridForTest() => BuildSheetGrid();
+
+    internal int SheetGridBuildCountForTest => _sheetGridBuildCount;
 
     /// <summary>
     /// Test-only accessor for the persistent worksheet grid host (survives RefreshShell/
@@ -4326,6 +4329,7 @@ public sealed partial class MainWindow : Window
 
     private Control BuildSheetGrid()
     {
+        _sheetGridBuildCount++;
         _activeDataValidationDropdown = null;
         _activeCellBorder = null;
         _activeSelectionOutlineVisual = null;
