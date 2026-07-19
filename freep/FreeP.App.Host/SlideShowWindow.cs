@@ -45,7 +45,8 @@ namespace FreeP.App.Host;
 /// displayed in the back layer. The front layer (new slide) is animated in according to
 /// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover
 /// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
-/// and Push (bidirectional displacement), and Flash (white-flash). Others fall back to Fade.
+/// Push (bidirectional displacement), Pan (scaled directional exchange), Gallery
+/// (two-surface gallery exchange), and Flash (white-flash). Others fall back to Fade.
 /// </summary>
 public sealed class SlideShowWindow : Window
 {
@@ -870,6 +871,10 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowTransitionPlaybackActionKind.Pan:
                 PlayPanTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Gallery:
+                PlayGalleryTransition(slide, plan);
                 return;
 
             case SlideShowTransitionPlaybackActionKind.Push:
@@ -1733,6 +1738,108 @@ public sealed class SlideShowWindow : Window
         storyboard.Children.Add(scaleY);
         storyboard.Children.Add(translateX);
         storyboard.Children.Add(translateY);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private void PlayGalleryTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var travelX = plan.IncomingOffsetX * w * SlideShowPlaybackPlanner.GalleryTravelFactor;
+        var travelY = plan.IncomingOffsetY * h * SlideShowPlaybackPlanner.GalleryTravelFactor;
+
+        var incomingScale = new ScaleTransform(
+            SlideShowPlaybackPlanner.GalleryStartScale,
+            SlideShowPlaybackPlanner.GalleryStartScale,
+            w / 2,
+            h / 2);
+        var incomingTranslate = new TranslateTransform(travelX, travelY);
+        var incomingTransform = new TransformGroup();
+        incomingTransform.Children.Add(incomingScale);
+        incomingTransform.Children.Add(incomingTranslate);
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = incomingTransform;
+        Grid.SetZIndex(_slideCanvas, 1);
+        _slideCanvas.Refresh();
+
+        TransformGroup? outgoingTransform = null;
+        if (snapshot is not null)
+        {
+            var outgoingScale = new ScaleTransform(1, 1, w / 2, h / 2);
+            var outgoingTranslate = new TranslateTransform(0, 0);
+            outgoingTransform = new TransformGroup();
+            outgoingTransform.Children.Add(outgoingScale);
+            outgoingTransform.Children.Add(outgoingTranslate);
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.RenderTransform = outgoingTransform;
+            _transitionBackImage.Visibility = Visibility.Visible;
+            Grid.SetZIndex(_transitionBackImage, 0);
+        }
+
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var ease = new CubicEase { EasingMode = EasingMode.EaseInOut };
+        var incomingScaleX = new DoubleAnimation(
+            SlideShowPlaybackPlanner.GalleryStartScale, 1, duration) { EasingFunction = ease };
+        var incomingScaleY = incomingScaleX.Clone();
+        var incomingX = new DoubleAnimation(travelX, 0, duration) { EasingFunction = ease };
+        var incomingY = new DoubleAnimation(travelY, 0, duration) { EasingFunction = ease };
+
+        var storyboard = new Storyboard();
+        Storyboard.SetTarget(incomingScaleX, _slideCanvas);
+        Storyboard.SetTarget(incomingScaleY, _slideCanvas);
+        Storyboard.SetTarget(incomingX, _slideCanvas);
+        Storyboard.SetTarget(incomingY, _slideCanvas);
+        Storyboard.SetTargetProperty(incomingScaleX,
+            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"));
+        Storyboard.SetTargetProperty(incomingScaleY,
+            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"));
+        Storyboard.SetTargetProperty(incomingX,
+            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.X)"));
+        Storyboard.SetTargetProperty(incomingY,
+            new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)"));
+        storyboard.Children.Add(incomingScaleX);
+        storyboard.Children.Add(incomingScaleY);
+        storyboard.Children.Add(incomingX);
+        storyboard.Children.Add(incomingY);
+
+        if (outgoingTransform is not null)
+        {
+            var outgoingScaleX = new DoubleAnimation(
+                1, SlideShowPlaybackPlanner.GalleryOutgoingEndScale, duration) { EasingFunction = ease };
+            var outgoingScaleY = outgoingScaleX.Clone();
+            var outgoingX = new DoubleAnimation(0, travelX, duration) { EasingFunction = ease };
+            var outgoingY = new DoubleAnimation(0, travelY, duration) { EasingFunction = ease };
+            Storyboard.SetTarget(outgoingScaleX, _transitionBackImage);
+            Storyboard.SetTarget(outgoingScaleY, _transitionBackImage);
+            Storyboard.SetTarget(outgoingX, _transitionBackImage);
+            Storyboard.SetTarget(outgoingY, _transitionBackImage);
+            Storyboard.SetTargetProperty(outgoingScaleX,
+                new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleX)"));
+            Storyboard.SetTargetProperty(outgoingScaleY,
+                new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[0].(ScaleTransform.ScaleY)"));
+            Storyboard.SetTargetProperty(outgoingX,
+                new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.X)"));
+            Storyboard.SetTargetProperty(outgoingY,
+                new PropertyPath("(UIElement.RenderTransform).(TransformGroup.Children)[1].(TranslateTransform.Y)"));
+            storyboard.Children.Add(outgoingScaleX);
+            storyboard.Children.Add(outgoingScaleY);
+            storyboard.Children.Add(outgoingX);
+            storyboard.Children.Add(outgoingY);
+        }
+
+        incomingScaleX.Completed += (_, _) =>
+        {
+            _slideCanvas.RenderTransform = Transform.Identity;
+            _transitionBackImage.RenderTransform = Transform.Identity;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+            Grid.SetZIndex(_slideCanvas, 0);
+            Grid.SetZIndex(_transitionBackImage, 0);
+        };
+
         _pendingStoryboards.Add(storyboard);
         storyboard.Begin(this, true);
     }

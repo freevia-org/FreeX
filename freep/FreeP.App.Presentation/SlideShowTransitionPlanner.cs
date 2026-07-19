@@ -20,6 +20,7 @@ public enum SlideShowTransitionPlaybackKind
     Wheel,
     Zoom,
     Pan,
+    Gallery,
     PushLike,
     FadeFallback
 }
@@ -113,7 +114,11 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Pan => SlideShowTransitionPlaybackKind.Pan,
 
-            TransitionKind.Gallery or
+            // Gallery is a two-surface exchange: unlike Cover, the outgoing
+            // slide participates in the motion and the incoming slide starts
+            // as a centered, reduced panel.
+            TransitionKind.Gallery => SlideShowTransitionPlaybackKind.Gallery,
+
             TransitionKind.Conveyor or
             TransitionKind.Window => SlideShowTransitionPlaybackKind.PushLike,
 

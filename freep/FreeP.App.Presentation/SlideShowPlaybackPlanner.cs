@@ -19,6 +19,7 @@ public enum SlideShowTransitionPlaybackActionKind
     Wheel,
     Zoom,
     Pan,
+    Gallery,
     Push
 }
 
@@ -155,6 +156,9 @@ public static class SlideShowPlaybackPlanner
     public const double ZoomInStartScale = 0.65;
     public const double ZoomOutStartScale = 1.35;
     public const double PanStartScale = 1.12;
+    public const double GalleryStartScale = 0.78;
+    public const double GalleryOutgoingEndScale = 0.88;
+    public const double GalleryTravelFactor = 0.55;
 
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
@@ -178,6 +182,7 @@ public static class SlideShowPlaybackPlanner
             SlideShowTransitionPlaybackKind.Wheel => SlideShowTransitionPlaybackActionKind.Wheel,
             SlideShowTransitionPlaybackKind.Zoom => SlideShowTransitionPlaybackActionKind.Zoom,
             SlideShowTransitionPlaybackKind.Pan => SlideShowTransitionPlaybackActionKind.Pan,
+            SlideShowTransitionPlaybackKind.Gallery => SlideShowTransitionPlaybackActionKind.Gallery,
             SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Cover,
             _ => SlideShowTransitionPlaybackActionKind.Fade
         };

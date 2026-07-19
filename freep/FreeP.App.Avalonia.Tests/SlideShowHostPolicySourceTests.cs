@@ -56,6 +56,10 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("PlayWheelTransition(");
         source.Should().Contain("PlayZoomTransition(");
         source.Should().Contain("PlayPanTransition(");
+        source.Should().Contain("PlayGalleryTransition(");
+        source.Should().Contain("AnimateGalleryTransition(");
+        source.Should().Contain("SlideShowPlaybackPlanner.GalleryStartScale");
+        source.Should().Contain("SlideShowPlaybackPlanner.GalleryOutgoingEndScale");
         source.Should().Contain("PlayDissolveTransition(");
         source.Should().Contain("PlayFlashTransition(");
         source.Should().Contain("PlayBoxTransition(");

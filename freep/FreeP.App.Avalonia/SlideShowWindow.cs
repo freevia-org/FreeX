@@ -45,7 +45,8 @@ namespace FreeP.App.Avalonia;
 /// displayed in the back layer. The front layer (new slide) is animated in according to
 /// the transition kind. Supported: Fade (cross-fade), Cut/None (instant), Push/Cover
 /// (directional translate), Wipe/Reveal (incoming edge clip), Uncover (outgoing clip),
-/// and Push (bidirectional displacement), and Flash (white-flash). Others fall back to Fade.
+/// Push (bidirectional displacement), Pan (scaled directional exchange), Gallery
+/// (two-surface gallery exchange), and Flash (white-flash). Others fall back to Fade.
 ///
 /// Media
 /// ─────
@@ -817,6 +818,10 @@ public sealed class SlideShowWindow : Window
                 PlayPanTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Gallery:
+                PlayGalleryTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Dissolve:
                 PlayDissolveTransition(slide, plan.DurationMs);
                 return;
@@ -1522,6 +1527,104 @@ public sealed class SlideShowWindow : Window
                 _slideCanvas.RenderTransform = null;
                 _transitionBackImage.IsVisible = false;
             });
+    }
+
+    private void PlayGalleryTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        var travelX = plan.IncomingOffsetX * w * SlideShowPlaybackPlanner.GalleryTravelFactor;
+        var travelY = plan.IncomingOffsetY * h * SlideShowPlaybackPlanner.GalleryTravelFactor;
+        var incomingTransform = new MatrixTransform(Matrix.CreateScale(
+            SlideShowPlaybackPlanner.GalleryStartScale,
+            SlideShowPlaybackPlanner.GalleryStartScale));
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransformOrigin = RelativePoint.Center;
+        _slideCanvas.RenderTransform = incomingTransform;
+        _slideCanvas.ZIndex = 1;
+        _slideCanvas.Refresh();
+
+        MatrixTransform? outgoingTransform = null;
+        if (snapshot is not null)
+        {
+            outgoingTransform = new MatrixTransform(Matrix.Identity);
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.RenderTransformOrigin = RelativePoint.Center;
+            _transitionBackImage.RenderTransform = outgoingTransform;
+            _transitionBackImage.IsVisible = true;
+            _transitionBackImage.ZIndex = 0;
+        }
+
+        AnimateGalleryTransition(
+            incomingTransform,
+            outgoingTransform,
+            travelX,
+            travelY,
+            plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.RenderTransform = null;
+                _slideCanvas.ZIndex = 0;
+                _transitionBackImage.RenderTransform = null;
+                _transitionBackImage.IsVisible = false;
+                _transitionBackImage.ZIndex = 0;
+            });
+    }
+
+    private void AnimateGalleryTransition(
+        MatrixTransform incoming,
+        MatrixTransform? outgoing,
+        double travelX,
+        double travelY,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            incoming.Matrix = Matrix.Identity;
+            if (outgoing is not null) outgoing.Matrix = Matrix.Identity;
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var eased = EaseInOut(t);
+            var incomingScale = SlideShowPlaybackPlanner.GalleryStartScale
+                + (1 - SlideShowPlaybackPlanner.GalleryStartScale) * eased;
+            incoming.Matrix = Matrix.CreateScale(incomingScale, incomingScale)
+                * Matrix.CreateTranslation(travelX * (1 - eased), travelY * (1 - eased));
+
+            if (outgoing is not null)
+            {
+                var outgoingScale = 1
+                    + (SlideShowPlaybackPlanner.GalleryOutgoingEndScale - 1) * eased;
+                outgoing.Matrix = Matrix.CreateScale(outgoingScale, outgoingScale)
+                    * Matrix.CreateTranslation(travelX * eased, travelY * eased);
+            }
+
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                incoming.Matrix = Matrix.Identity;
+                if (outgoing is not null) outgoing.Matrix = Matrix.Identity;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
     }
 
     private void AnimatePanTransition(

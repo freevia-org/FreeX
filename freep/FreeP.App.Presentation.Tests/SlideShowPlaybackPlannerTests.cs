@@ -111,6 +111,25 @@ public sealed class SlideShowPlaybackPlannerTests
         SlideShowPlaybackPlanner.PanStartScale.Should().BeApproximately(1.12, 0.0001);
     }
 
+    [Fact]
+    public void PlanTransition_GalleryUsesTwoSurfaceActionAndDirection()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Gallery,
+            Direction = TransitionDirection.Left,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Gallery);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Gallery);
+        plan.IncomingOffsetX.Should().Be(1);
+        plan.IncomingOffsetY.Should().Be(0);
+        SlideShowPlaybackPlanner.GalleryStartScale.Should().BeApproximately(0.78, 0.0001);
+        SlideShowPlaybackPlanner.GalleryOutgoingEndScale.Should().BeApproximately(0.88, 0.0001);
+        SlideShowPlaybackPlanner.GalleryTravelFactor.Should().BeApproximately(0.55, 0.0001);
+    }
+
     [Theory]
     [InlineData(TransitionDirection.In, true)]
     [InlineData(TransitionDirection.Out, false)]

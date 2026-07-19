@@ -154,7 +154,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Push, SlideShowTransitionPlaybackKind.Push)]
     [InlineData(TransitionKind.Fly, SlideShowTransitionPlaybackKind.Push)]
     [InlineData(TransitionKind.Cover, SlideShowTransitionPlaybackKind.Cover)]
-    [InlineData(TransitionKind.Gallery, SlideShowTransitionPlaybackKind.PushLike)]
+    [InlineData(TransitionKind.Gallery, SlideShowTransitionPlaybackKind.Gallery)]
     [InlineData(TransitionKind.Conveyor, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Pan, SlideShowTransitionPlaybackKind.Pan)]
     [InlineData(TransitionKind.Doors, SlideShowTransitionPlaybackKind.Split)]
