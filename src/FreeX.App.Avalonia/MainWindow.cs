@@ -7999,6 +7999,17 @@ public sealed partial class MainWindow : Window
         };
         AutomationProperties.SetAutomationId(editor, "WorksheetInlineCellEditor");
         editor.TextInput += (_, args) => InlineCellEditor_TextInput(address, editor, args);
+        editor.PropertyChanged += (_, args) =>
+        {
+            if (!Equals(_inlineCellEditAddress, address) || !ReferenceEquals(_inlineCellEditor, editor) ||
+                (args.Property != TextBox.SelectionStartProperty && args.Property != TextBox.SelectionEndProperty))
+            {
+                return;
+            }
+
+            _inlineCellEditSelectionStart = editor.SelectionStart;
+            _inlineCellEditSelectionEnd = editor.SelectionEnd;
+        };
         editor.TextChanged += (_, _) =>
         {
             if (!Equals(_inlineCellEditAddress, address))
@@ -8082,10 +8093,14 @@ public sealed partial class MainWindow : Window
         }
 
         var text = inlineEditor.Text ?? "";
-        var rawSelectionStart = _pendingInlineCellCaretIndex ?? Math.Min(
+        // TextInput packets can arrive back-to-back on X11 before Avalonia publishes the newly
+        // assigned SelectionStart/CaretIndex values. The inline-edit session owns its most recent
+        // selection so that consecutive packets preserve their arrival order; normal pointer and
+        // keyboard selection changes keep that state synchronized through PropertyChanged above.
+        var rawSelectionStart = _pendingInlineCellCaretIndex ?? _inlineCellEditSelectionStart ?? Math.Min(
             inlineEditor.SelectionStart,
             inlineEditor.SelectionEnd);
-        var rawSelectionEnd = _pendingInlineCellCaretIndex ?? Math.Max(
+        var rawSelectionEnd = _pendingInlineCellCaretIndex ?? _inlineCellEditSelectionEnd ?? Math.Max(
             inlineEditor.SelectionStart,
             inlineEditor.SelectionEnd);
         var selectionStart = Math.Clamp(
@@ -8387,8 +8402,7 @@ public sealed partial class MainWindow : Window
             return false;
 
         var text = editor.Text ?? "";
-        var selectionStart = Math.Clamp(Math.Min(editor.SelectionStart, editor.SelectionEnd), 0, text.Length);
-        var selectionLength = Math.Clamp(Math.Abs(editor.SelectionEnd - editor.SelectionStart), 0, text.Length - selectionStart);
+        var (selectionStart, selectionLength) = GetFormulaEditorSelection(editor, text.Length);
         if (!FormulaRangeEntryPlanner.TryApplyRangeSelection(
                 text,
                 selectionStart,
@@ -8407,6 +8421,7 @@ public sealed partial class MainWindow : Window
         try
         {
             ApplyTextBoxEdit(editor, edit.TextEdit);
+            SetInlineCellEditorSelection(editor, edit.TextEdit);
             SynchronizeFormulaEditors(editor);
         }
         finally
@@ -8462,6 +8477,35 @@ public sealed partial class MainWindow : Window
             inlineEditor.SelectionStart = source.SelectionStart;
             inlineEditor.SelectionEnd = source.SelectionEnd;
         }
+    }
+
+    private (int Start, int Length) GetFormulaEditorSelection(TextBox editor, int textLength)
+    {
+        var usesInlineSessionSelection = ReferenceEquals(editor, _inlineCellEditor) &&
+            _inlineCellEditAddress is not null;
+        var rawStart = usesInlineSessionSelection
+            ? _pendingInlineCellCaretIndex ?? _inlineCellEditSelectionStart ?? editor.SelectionStart
+            : editor.SelectionStart;
+        var rawEnd = usesInlineSessionSelection
+            ? _pendingInlineCellCaretIndex ?? _inlineCellEditSelectionEnd ?? editor.SelectionEnd
+            : editor.SelectionEnd;
+        var start = Math.Clamp(Math.Min(rawStart, rawEnd), 0, textLength);
+        var end = Math.Clamp(Math.Max(rawStart, rawEnd), start, textLength);
+        return (start, end - start);
+    }
+
+    private void SetInlineCellEditorSelection(TextBox editor, ExcelTextEdit edit)
+    {
+        if (!ReferenceEquals(editor, _inlineCellEditor) || _inlineCellEditAddress is null)
+            return;
+
+        var start = Math.Clamp(edit.SelectionStart, 0, edit.Text.Length);
+        _inlineCellEditSelectionStart = start;
+        _inlineCellEditSelectionEnd = Math.Clamp(
+            start + Math.Max(0, edit.SelectionLength),
+            start,
+            edit.Text.Length);
+        _pendingInlineCellCaretIndex = null;
     }
 
     private static int CalculateInlineCellCaretIndex(
@@ -23800,15 +23844,14 @@ public sealed partial class MainWindow : Window
 
     private void MainWindow_TextInput(object? sender, TextInputEventArgs e)
     {
-        if (_formulaBox.IsFocused ||
-            _inlineCellEditor?.IsFocused == true ||
-            e.Source is TextBox or TextPresenter ||
+        if (e.Source is TextBox or TextPresenter ||
             string.IsNullOrEmpty(e.Text))
             return;
 
         // X11 can source the first post-F2 TextInput from the worksheet while Avalonia is handing
-        // focus to the attached editor. Apply that packet through the same inline-editor boundary
-        // as text sourced by the TextBox, rather than starting a second formula-bar edit.
+        // focus to the attached editor. The packet can arrive after the editor claims focus, so
+        // ownership is determined by the event source rather than the current focus state. Text
+        // sourced by the TextBox itself is already handled by its local boundary above.
         if (_inlineCellEditAddress is not null && _inlineCellEditor is { } inlineEditor)
         {
             if (TryApplyInlineCellTextInput(inlineEditor, e.Text))
@@ -23820,6 +23863,9 @@ public sealed partial class MainWindow : Window
 
             return;
         }
+
+        if (_formulaBox.IsFocused)
+            return;
 
         foreach (var character in e.Text)
         {

@@ -32,8 +32,7 @@ public sealed partial class MainWindow
         if (_inlineCellEditor is { } inlineEditor)
         {
             inlineEditor.SelectAll();
-            RaiseEditingValidationTextInput(inlineEditor, "after");
-            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
+            await RaiseEditingValidationTextInputAsync(inlineEditor, "after");
             inlineEditorStable = ReferenceEquals(_inlineCellEditor, inlineEditor);
             if (_inlineCellEditor is { } currentInlineEditor)
                 await RaiseEditingValidationKeyAsync(currentInlineEditor, Key.Enter);
@@ -61,8 +60,7 @@ public sealed partial class MainWindow
         if (_inlineCellEditor is { } formulaEditor)
         {
             formulaEditor.SelectAll();
-            RaiseEditingValidationTextInput(formulaEditor, "=");
-            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
+            await RaiseEditingValidationTextInputAsync(formulaEditor, "=");
             inlinePointEditorStable = ReferenceEquals(_inlineCellEditor, formulaEditor);
             inlinePointModeStarted = _formulaRangeEntryMode;
             await RaiseEditingValidationKeyAsync(_inlineCellEditor ?? formulaEditor, Key.F2);
@@ -91,9 +89,9 @@ public sealed partial class MainWindow
         _session.SelectCell(formulaBarAddress);
         RefreshShell("Ready");
         _formulaBox.Focus();
-        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
+        await SettleEditingInputAsync();
         _formulaBox.SelectAll();
-        RaiseEditingValidationTextInput(_formulaBox, "=");
+        await RaiseEditingValidationTextInputAsync(_formulaBox, "=");
         var formulaBarPointModeStarted = _formulaRangeEntryMode;
         await RaiseEditingValidationKeyAsync(_formulaBox, Key.F2);
         var formulaBarEditMode = !_formulaRangeEntryMode;
@@ -118,7 +116,7 @@ public sealed partial class MainWindow
     private InputElement ResolveWorksheetValidationKeyTarget() =>
         (InputElement?)_activeCellBorder ?? _sheetGridHost;
 
-    private static void RaiseEditingValidationTextInput(InputElement target, string text)
+    private async Task RaiseEditingValidationTextInputAsync(InputElement target, string text)
     {
         target.RaiseEvent(new TextInputEventArgs
         {
@@ -126,6 +124,7 @@ public sealed partial class MainWindow
             Text = text,
             Source = target,
         });
+        await SettleEditingInputAsync();
     }
 
     private static async Task RaiseEditingValidationKeyAsync(
@@ -153,6 +152,12 @@ public sealed partial class MainWindow
         target.RaiseEvent(Create(InputElement.KeyDownEvent));
         if (target.IsAttachedToVisualTree())
             target.RaiseEvent(Create(InputElement.KeyUpEvent));
-        await Task.Delay(75);
+        await SettleEditingInputAsync();
+    }
+
+    private static async Task SettleEditingInputAsync()
+    {
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
+        await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Render);
     }
 }

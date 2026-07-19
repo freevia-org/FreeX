@@ -44,7 +44,6 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 var rawTarget = window.ActiveCellBorderForTest!;
                 foreach (var character in "11InlineCommit")
                 {
-                    rawTarget.Focus().Should().BeTrue();
                     RaiseRawTextInput(rawTarget, character.ToString());
                     await DrainInputAsync();
 
@@ -58,6 +57,43 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
 
                 sheet.GetValue(address).Should().Be(new TextValue("X11InlineCommit"));
                 window.InlineCellEditorTextForTest.Should().BeNull();
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task WorksheetSourcedTextInput_AfterInlineEditorClaimsFocus_UsesTheInlineCaretBoundary()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = CreateShownWindow(out var sheet);
+            try
+            {
+                var address = window.Session.ActiveCell;
+                window.ActiveCellBorderForTest!.Focus().Should().BeTrue();
+                Press(window, Key.F2, PhysicalKey.F2);
+                await DrainInputAsync();
+
+                var editor = FindByAutomationId<TextBox>(window, "WorksheetInlineCellEditor");
+                editor.IsFocused.Should().BeTrue();
+                RaiseRawTextInput(editor, "X");
+                await DrainInputAsync();
+
+                // X11 can report this packet from the worksheet after the editor has focused.
+                // The packet must retain the inline editor's caret ownership and append.
+                RaiseRawTextInput(window.ActiveCellBorderForTest!, "Y");
+                await DrainInputAsync();
+
+                editor.Text.Should().Be("XY");
+                editor.CaretIndex.Should().Be(2);
+
+                Press(window, Key.Enter, PhysicalKey.Enter);
+                await DrainInputAsync();
+                sheet.GetValue(address).Should().Be(new TextValue("XY"));
             }
             finally
             {
