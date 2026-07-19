@@ -123,6 +123,52 @@ try {
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
+    $requiredPhysicalProbeIds = @(
+        "inline-edit-f2-escape",
+        "inline-edit-f2-enter-commit",
+        "save-ctrl-s-persist",
+        "save-shift-f12-persist",
+        "inline-point-mode-click",
+        "formula-bar-point-mode-click",
+        "keytips-alt",
+        "keytips-f10",
+        "worksheet-context-shift-f10",
+        "worksheet-context-right-click",
+        "dialog-format-cells-keyboard",
+        "native-save-as-f12-cancel",
+        "native-open-ctrl-f12-cancel",
+        "print-preview-ctrl-shift-f12-cancel"
+    )
+    $physicalProbeResults = @($x11Manifest.results)
+    $physicalProbeIds = @($physicalProbeResults | ForEach-Object { [string]$_.id })
+    $missingPhysicalProbeIds = @($requiredPhysicalProbeIds | Where-Object { $_ -notin $physicalProbeIds })
+    $duplicatePhysicalProbeIds = @($physicalProbeIds | Group-Object | Where-Object Count -gt 1 | ForEach-Object Name)
+    $invalidPhysicalRows = @($physicalProbeResults | Where-Object {
+        [string]$_.category -ne "x11-input" -or
+        [string]$_.evidenceLevel -ne "physical-x11-input" -or
+        [string]$_.status -notin @("passed", "failed") -or
+        [string]::IsNullOrWhiteSpace([string]$_.evidence)
+    })
+    $reportedPhysicalPassed = @($physicalProbeResults | Where-Object status -eq "passed").Count
+    $reportedPhysicalFailed = @($physicalProbeResults | Where-Object status -eq "failed").Count
+    $physicalSchemaValid =
+        [int]$x11Manifest.schemaVersion -eq 2 -and
+        [string]$x11Manifest.platform -eq "linux" -and
+        [string]$x11Manifest.shell -eq "avalonia" -and
+        $physicalProbeResults.Count -eq [int]$x11Manifest.summary.total -and
+        $reportedPhysicalPassed -eq [int]$x11Manifest.summary.passed -and
+        $reportedPhysicalFailed -eq [int]$x11Manifest.summary.failed -and
+        [int]$x11Manifest.calibration.window.width -gt 0 -and
+        [int]$x11Manifest.calibration.window.height -gt 0 -and
+        [int]$x11Manifest.calibration.grid.cellWidth -gt 0 -and
+        [int]$x11Manifest.calibration.grid.cellHeight -gt 0 -and
+        $missingPhysicalProbeIds.Count -eq 0 -and
+        $duplicatePhysicalProbeIds.Count -eq 0 -and
+        $invalidPhysicalRows.Count -eq 0
+    if (-not $physicalSchemaValid) {
+        throw "Physical X11 manifest does not satisfy schema v2 (missing='$($missingPhysicalProbeIds -join ',')'; duplicate='$($duplicatePhysicalProbeIds -join ',')'; invalidRows=$($invalidPhysicalRows.Count))."
+    }
+
     if ([string]$x11Manifest.calibration.status -ne "passed") {
         $reason = [string]$x11Manifest.calibration.reason
         throw "Physical X11 evidence is not authoritative because geometry calibration did not pass: $reason"

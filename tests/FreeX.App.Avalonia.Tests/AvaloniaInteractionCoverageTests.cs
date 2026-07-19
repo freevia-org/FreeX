@@ -83,6 +83,51 @@ public sealed class AvaloniaInteractionCoverageTests
     }
 
     [Fact]
+    public void LinuxPhysicalProbe_IsGeometryCalibratedClipboardBackedAndSchemaVersioned()
+    {
+        var probe = File.ReadAllText(RepoFile("tools", "LinuxInteractiveDocker", "run-freex-input-probes.sh"));
+        var runner = File.ReadAllText(RepoFile("tools", "Run-FreeXLinuxInteractionValidation.ps1"));
+        var readme = File.ReadAllText(RepoFile("tools", "LinuxInteractiveDocker", "README.md"));
+
+        Assert.Contains("schemaVersion\":2", probe, StringComparison.Ordinal);
+        Assert.Contains("calibrate_geometry()", probe, StringComparison.Ordinal);
+        Assert.Contains("selection_box()", probe, StringComparison.Ordinal);
+        Assert.Contains("cellWidth", probe, StringComparison.Ordinal);
+        Assert.Contains("xclip -selection clipboard -in >/dev/null 2>&1", probe, StringComparison.Ordinal);
+        Assert.Contains("X11 clipboard formula='=B2'", probe, StringComparison.Ordinal);
+
+        string[] requiredPhysicalRows =
+        [
+            "inline-edit-f2-escape",
+            "inline-edit-f2-enter-commit",
+            "save-ctrl-s-persist",
+            "save-shift-f12-persist",
+            "inline-point-mode-click",
+            "formula-bar-point-mode-click",
+            "keytips-alt",
+            "keytips-f10",
+            "worksheet-context-shift-f10",
+            "worksheet-context-right-click",
+            "dialog-format-cells-keyboard",
+            "native-save-as-f12-cancel",
+            "native-open-ctrl-f12-cancel",
+            "print-preview-ctrl-shift-f12-cancel",
+        ];
+        foreach (var id in requiredPhysicalRows)
+        {
+            Assert.Contains($"\"{id}\"", probe, StringComparison.Ordinal);
+            Assert.Contains($"\"{id}\"", runner, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("$physicalSchemaValid", runner, StringComparison.Ordinal);
+        Assert.Contains("Physical X11 manifest does not satisfy schema v2", runner, StringComparison.Ordinal);
+        Assert.Contains("geometry calibration did not pass", runner, StringComparison.Ordinal);
+        Assert.Contains("xdotool getactivewindow", probe, StringComparison.Ordinal);
+        Assert.Contains("Physical X11 manifest", readme, StringComparison.Ordinal);
+        Assert.Contains("unique `x11-input` rows", readme, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task LiveWindow_AllRibbonCommandsAreFunctionalOrExplicitlyDisabled()
     {
         await Session.Dispatch(() =>

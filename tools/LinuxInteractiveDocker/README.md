@@ -101,6 +101,34 @@ structural routing but do not claim that a command's full workflow was executed.
 Failed and skipped rows remain visible so an inventory gap cannot silently look
 like parity.
 
+Do not use `-SkipImageBuild` for the first run after changing the desktop image.
+The physical probes require `xclip`; the runner verifies the schema and rejects
+clipboard-free or uncalibrated evidence instead of merging it into the report.
+
+### Physical X11 manifest
+
+`x11-validation/x11-input-results.json` uses schema version 2. Its top-level
+contract is:
+
+- `schemaVersion`, `platform`, and `shell`: `2`, `linux`, and `avalonia`.
+- `calibration`: status/reason, selection color, window bounds, calibrated A1
+  origin, cell pitch, and the three calibration screenshots.
+- `summary`: exact passed, failed, and total counts for the physical rows.
+- `results`: unique `x11-input` rows with `physical-x11-input` evidence, a
+  `passed` or `failed` status, and one or more retained evidence files.
+
+Calibration is derived from visible Ctrl+Home, A1-to-B1, and A1-to-A2 selection
+transitions. The aggregator accepts the physical stream only when calibration
+passes, geometry is positive, counts match, row IDs are unique, and all required
+physical probes are present. Those probes cover F2 cancel and commit, Ctrl+S,
+Shift+F12 Save, F12 Save As cancel, inline and formula-bar point mode, standalone
+Alt and F10 keytips, Shift+F10 and right-click worksheet context menus, Format
+Cells keyboard traversal, Ctrl+F12 Open cancel, and Ctrl+Shift+F12 Print Preview
+cancel. Cell value/formula and save assertions use the X11 clipboard and the
+harness-owned CSV only; empty-cell cancellation uses exact calibrated cell-pixel
+restoration because copying an empty grid cell does not guarantee a new X11
+clipboard owner.
+
 ## Environment Boundaries
 
 This is an X11 software-rendering session using Xvfb, Openbox, and the XRender

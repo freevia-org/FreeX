@@ -118,7 +118,9 @@ clipboard_text() {
 
 copy_cell_display() {
     local column_offset="$1" row_offset="$2" address="$3"
-    printf 'clipboard-sentinel' | xclip -selection clipboard -in
+    # xclip forks a clipboard owner. Redirect its descriptors so a caller using command
+    # substitution does not wait forever for the inherited output pipe to close.
+    printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
     select_cell "$column_offset" "$row_offset" "$address" || return 1
     send_key ctrl+c
     clipboard_text
@@ -126,7 +128,7 @@ copy_cell_display() {
 
 copy_cell_formula() {
     local column_offset="$1" row_offset="$2" address="$3"
-    printf 'clipboard-sentinel' | xclip -selection clipboard -in
+    printf 'clipboard-sentinel' | xclip -selection clipboard -in >/dev/null 2>&1
     select_cell "$column_offset" "$row_offset" "$address" || return 1
     send_key F2
     send_key ctrl+a
@@ -345,7 +347,7 @@ visible_window_count() {
 
 probe_cancelable_window() {
     local id="$1" keys="$2" screenshot_name="$3"
-    local before after opened=false
+    local before after dialog_id opened=false closed=false
     before="$(visible_window_count)"
     send_key "$keys"
     for _ in $(seq 1 8); do
@@ -358,8 +360,24 @@ probe_cancelable_window() {
     done
     capture "$screenshot_name"
     if $opened; then
-        send_key Escape
-        record "$id" "passed" "$screenshot_name"
+        dialog_id="$(xdotool getactivewindow 2>/dev/null || true)"
+        if [[ -n "$dialog_id" && "$dialog_id" != "$window_id" ]]; then
+            xdotool key --clearmodifiers --delay "$input_delay_ms" --window "$dialog_id" Escape 2>/dev/null || true
+            for _ in $(seq 1 8); do
+                after="$(visible_window_count)"
+                if (( after <= before )); then
+                    closed=true
+                    break
+                fi
+                sleep 0.2
+            done
+        fi
+        if $closed; then
+            record "$id" "passed" "$screenshot_name"
+        else
+            record "$id" "failed" "$screenshot_name" "$keys opened a window, but targeted Escape did not close it."
+            dismiss_overlays
+        fi
     else
         record "$id" "failed" "$screenshot_name" "$keys did not open a cancelable window."
         dismiss_overlays
@@ -398,13 +416,11 @@ if select_cell 6 6 G7; then
     select_cell 0 0 A1 || true
     capture "inline-edit-cancelled.png"
     crop_cell "$output/inline-edit-cancelled.png" "$output/inline-edit-cancelled-cell.png" 6 6
-    cancelled_value="$(copy_cell_display 6 6 G7 || printf 'selection-failed')"
-    send_key Escape
     if region_changed "$output/inline-edit-cancel-before-cell.png" "$output/inline-edit-open-cell.png" 8 &&
-       [[ -z "$cancelled_value" ]]; then
-        record "inline-edit-f2-escape" "passed" "selection-G7.png; inline-edit-open.png; X11 clipboard confirms G7 remained blank"
+       regions_match "$output/inline-edit-cancel-before-cell.png" "$output/inline-edit-cancelled-cell.png" 2; then
+        record "inline-edit-f2-escape" "passed" "selection-G7.png; inline-edit-open.png; calibrated G7 cell interior restored exactly"
     else
-        record "inline-edit-f2-escape" "failed" "selection-G7.png; inline-edit-open.png; inline-edit-cancelled-cell.png" "F2/Escape did not visibly enter and leave calibrated G7 blank (clipboard='${cancelled_value}')."
+        record "inline-edit-f2-escape" "failed" "selection-G7.png; inline-edit-open.png; inline-edit-cancelled-cell.png" "F2/Escape did not visibly enter and restore calibrated G7 exactly."
     fi
 else
     record "inline-edit-f2-escape" "failed" "selection-G7.png" "Could not physically select calibrated cell G7."
@@ -419,7 +435,7 @@ if select_cell 6 7 G8; then
     type_text "X11InlineCommit"
     capture "inline-edit-commit-editing.png"
     send_key Return
-    committed_value="$(copy_cell_display 6 7 G8 || printf 'selection-failed')"
+    committed_value="$(copy_cell_formula 6 7 G8 || printf 'selection-failed')"
     send_key Escape
     select_cell 0 0 A1 || true
     capture "inline-edit-commit-after.png"
@@ -434,11 +450,10 @@ else
     record "inline-edit-f2-enter-commit" "failed" "selection-G8.png" "Could not physically select calibrated cell G8."
 fi
 
-# Shift+F12 is Save, not Save As. Verify delivery by persisting the committed G8 mutation to the
-# harness-owned CSV and observing its content hash change; no external filesystem is touched.
+# Ctrl+S saves the committed G8 mutation to the harness-owned CSV.
 saved=false
 if [[ -n "$initial_document_hash" ]]; then
-    send_key shift+F12
+    send_key ctrl+s
     for _ in $(seq 1 20); do
         current_document_hash="$(sha256sum "$document_path" | awk '{print $1}')"
         if [[ "$current_document_hash" != "$initial_document_hash" ]]; then
@@ -448,11 +463,47 @@ if [[ -n "$initial_document_hash" ]]; then
         sleep 0.25
     done
 fi
-capture "save-shift-f12-after.png"
+capture "save-ctrl-s-after.png"
 if $saved; then
-    record "save-shift-f12-persist" "passed" "save-shift-f12-after.png; $(basename "$document_path") content hash changed"
+    record "save-ctrl-s-persist" "passed" "save-ctrl-s-after.png; $(basename "$document_path") content hash changed"
 else
-    record "save-shift-f12-persist" "failed" "save-shift-f12-after.png" "Shift+F12 did not persist the calibrated G8 edit to the harness-owned document."
+    record "save-ctrl-s-persist" "failed" "save-ctrl-s-after.png" "Ctrl+S did not persist the calibrated G8 edit to the harness-owned document."
+fi
+dismiss_overlays
+
+# Shift+F12 is Save, not Save As. Make a second mutation so its delivery is independently
+# observable as another content-hash transition on the same harness-owned document.
+shift_f12_before_hash=""
+shift_f12_committed=false
+if select_cell 6 10 G11; then
+    send_key F2
+    type_text "Z"
+    send_key Return
+    shift_f12_value="$(copy_cell_formula 6 10 G11 || printf 'selection-failed')"
+    send_key Escape
+    if [[ "$shift_f12_value" == "Z" && -f "$document_path" ]]; then
+        shift_f12_committed=true
+        shift_f12_before_hash="$(sha256sum "$document_path" | awk '{print $1}')"
+    fi
+fi
+
+shift_f12_saved=false
+if $shift_f12_committed && [[ -n "$shift_f12_before_hash" ]]; then
+    send_key shift+F12
+    for _ in $(seq 1 20); do
+        current_document_hash="$(sha256sum "$document_path" | awk '{print $1}')"
+        if [[ "$current_document_hash" != "$shift_f12_before_hash" ]]; then
+            shift_f12_saved=true
+            break
+        fi
+        sleep 0.25
+    done
+fi
+capture "save-shift-f12-after.png"
+if $shift_f12_saved; then
+    record "save-shift-f12-persist" "passed" "selection-G11.png; save-shift-f12-after.png; $(basename "$document_path") content hash changed"
+else
+    record "save-shift-f12-persist" "failed" "selection-G11.png; save-shift-f12-after.png" "Shift+F12 did not persist an independently verified G11 edit to the harness-owned document."
 fi
 dismiss_overlays
 
@@ -604,6 +655,7 @@ else
 fi
 
 # Open and print boundaries are cancel-only: prove their production shortcuts reach visible windows.
+probe_cancelable_window "native-save-as-f12-cancel" "F12" "native-save-as.png"
 probe_cancelable_window "native-open-ctrl-f12-cancel" "ctrl+F12" "native-open.png"
 probe_cancelable_window "print-preview-ctrl-shift-f12-cancel" "ctrl+shift+F12" "print-preview.png"
 

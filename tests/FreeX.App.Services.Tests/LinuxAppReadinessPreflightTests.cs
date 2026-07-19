@@ -78,6 +78,7 @@ public sealed class LinuxAppReadinessPreflightTests
         dockerfile.Should().Contain("novnc");
         dockerfile.Should().Contain("openbox");
         dockerfile.Should().Contain("picom");
+        dockerfile.Should().Contain("xclip");
         dockerfile.Should().Contain("x11vnc");
         dockerfile.Should().Contain("xvfb");
 
