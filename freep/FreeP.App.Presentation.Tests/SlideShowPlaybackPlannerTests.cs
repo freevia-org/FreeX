@@ -1021,6 +1021,22 @@ public sealed class SlideShowPlaybackPlannerTests
         teeterFrame.TrackKind.Should().Be(SlideShowAnimationVisualTrackKind.Rotate);
         teeterFrame.RotationDegrees.Should().BeApproximately(-10, 0.0001);
 
+        var swivelPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
+            new ShapeAnimation
+            {
+                ShapeId = 74,
+                Kind = AnimationKind.Entrance,
+                Preset = AnimationPreset.Swivel,
+                DurationMs = 400
+            },
+            startDelayMs: 0);
+        var swivelEdgeFrame = SlideShowPlaybackFramePlanner.PlanFrame(swivelPlan, 100, 960, 540);
+        swivelEdgeFrame.EffectKind.Should().Be(SlideShowShapeAnimationEffectKind.Swivel);
+        swivelEdgeFrame.RotationDegrees.Should().BeApproximately(90, 0.0001);
+        swivelEdgeFrame.HorizontalScale.Should().BeApproximately(0.04, 0.0001);
+        var swivelFaceFrame = SlideShowPlaybackFramePlanner.PlanFrame(swivelPlan, 200, 960, 540);
+        swivelFaceFrame.HorizontalScale.Should().BeApproximately(1, 0.0001);
+
         var colorPlan = SlideShowPlaybackPlanner.PlanShapeAnimation(
             new ShapeAnimation
             {

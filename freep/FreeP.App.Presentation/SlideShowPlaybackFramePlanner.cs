@@ -52,7 +52,12 @@ public sealed record SlideShowShapeAnimationVisualFramePlan(
     bool ClipHorizontal,
     int ClipBandCount,
     int ClipSpokeCount,
-    string EvidenceSummary);
+    string EvidenceSummary)
+{
+    // Swivel is a 3-D vertical-axis effect.  Hosts expose the depth cue as a
+    // horizontal 2-D projection while retaining the shared rotation track.
+    public double HorizontalScale { get; init; } = 1;
+}
 
 public sealed record SlideShowAnimationStepVisualCheckpointPlan(
     string Checkpoint,
@@ -219,6 +224,7 @@ public static class SlideShowPlaybackFramePlanner
         var opacity = ResolveOpacity(plan, progress, isBeforeStart);
         var scale = ResolveScale(plan, progress);
         var rotation = ResolveRotation(plan, progress);
+        var horizontalScale = ResolveHorizontalScale(plan, progress);
         var (translateXFactor, translateYFactor) = ResolveTranslateFactors(plan, progress);
         var clipKind = ResolveClipKind(plan);
         var clipProgress = ResolveClipProgress(plan, progress, clipKind);
@@ -246,7 +252,11 @@ public static class SlideShowPlaybackFramePlanner
             ResolveClipHorizontal(plan, clipKind),
             ResolveClipBandCount(plan, clipKind),
             ResolveClipSpokeCount(plan, clipKind),
-            BuildEvidenceSummary(plan, trackKind, progress, opacity, scale, rotation, translateXFactor, translateYFactor, clipKind, clipProgress));
+            BuildEvidenceSummary(plan, trackKind, progress, opacity, scale, horizontalScale,
+                rotation, translateXFactor, translateYFactor, clipKind, clipProgress))
+        {
+            HorizontalScale = horizontalScale
+        };
     }
 
     private static double ResolveOpacity(SlideShowShapeAnimationPlaybackPlan plan, double progress, bool isBeforeStart)
@@ -314,6 +324,26 @@ public static class SlideShowPlaybackFramePlanner
             or SlideShowShapeAnimationEffectKind.Swivel
             ? plan.RotationDegrees * progress
             : 0;
+
+    private static double ResolveHorizontalScale(
+        SlideShowShapeAnimationPlaybackPlan plan,
+        double progress) =>
+        plan.EffectKind == SlideShowShapeAnimationEffectKind.Swivel
+            ? ResolveSwivelHorizontalScale(progress)
+            : 1;
+
+    public static double ResolveSwivelHorizontalScale(double progress)
+    {
+        const double edgeOnScale = 0.04;
+        progress = Math.Clamp(progress, 0, 1);
+        return progress switch
+        {
+            <= 0.25 => Lerp(1, edgeOnScale, progress / 0.25),
+            <= 0.5 => Lerp(edgeOnScale, 1, (progress - 0.25) / 0.25),
+            <= 0.75 => Lerp(1, edgeOnScale, (progress - 0.5) / 0.25),
+            _ => Lerp(edgeOnScale, 1, (progress - 0.75) / 0.25)
+        };
+    }
 
     private static (double X, double Y) ResolveTranslateFactors(
         SlideShowShapeAnimationPlaybackPlan plan,
@@ -501,6 +531,7 @@ public static class SlideShowPlaybackFramePlanner
         double progress,
         double opacity,
         double scale,
+        double horizontalScale,
         double rotation,
         double translateX,
         double translateY,
@@ -508,13 +539,14 @@ public static class SlideShowPlaybackFramePlanner
         double clipProgress) =>
         string.Format(
             CultureInfo.InvariantCulture,
-            "{0} {1}: shape {2}; progress {3:0.###}; opacity {4:0.###}; scale {5:0.###}; rotation {6:0.###}; translate ({7:0.###},{8:0.###}); clip {9} {10:0.###}",
+            "{0} {1}: shape {2}; progress {3:0.###}; opacity {4:0.###}; scale {5:0.###}; horizontal-scale {6:0.###}; rotation {7:0.###}; translate ({8:0.###},{9:0.###}); clip {10} {11:0.###}",
             plan.EffectKind,
             trackKind,
             plan.Animation.ShapeId,
             progress,
             opacity,
             scale,
+            horizontalScale,
             rotation,
             translateX,
             translateY,
