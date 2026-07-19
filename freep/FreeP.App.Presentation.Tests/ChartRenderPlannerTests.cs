@@ -813,6 +813,38 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceGeometryPlan_RightAngleAxesSuppressesPerspectiveLift()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.View3D = new Chart3DView
+        {
+            RotationX = 30,
+            RotationY = 40,
+            Perspective = 80,
+            HeightPercent = 100,
+            DepthPercent = 100,
+            RightAngleAxes = false
+        };
+
+        var perspective = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        chart.View3D.RightAngleAxes = true;
+        var rightAngle = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        var perspectivePoint = perspective.Points.Single(point =>
+            point.SeriesIndex == 1 && point.CategoryIndex == 1);
+        var rightAnglePoint = rightAngle.Points.Single(point =>
+            point.SeriesIndex == 1 && point.CategoryIndex == 1);
+        rightAnglePoint.Point.Y.Should().BeGreaterThan(
+            perspectivePoint.Point.Y,
+            "right-angle axes remove the authored perspective lift while retaining the camera orientation");
+    }
+
+    [Fact]
     public void UsesProjectedSurfaceFrame_OnlyForSurface3D()
     {
         ChartRenderPlanner.UsesProjectedSurfaceFrame(new ChartShape { ChartType = ChartType.Surface3D })
