@@ -1916,7 +1916,7 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spiral:
-                SpinEffect(sb, element, plan);
+                SpiralEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Swivel:
@@ -3319,6 +3319,35 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTargetProperty(anim,
             new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
         sb.Children.Add(anim);
+    }
+
+    private static void SpiralEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+
+        double cx = el.Width / 2;
+        double cy = el.Height / 2;
+        var rotate = new RotateTransform(0, cx, cy);
+        el.RenderTransform = rotate;
+        var animation = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(0, KeyTime.FromPercent(0)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            plan.RotationDegrees * 0.82,
+            KeyTime.FromPercent(0.7),
+            new KeySpline(0.15, 0, 0.35, 1)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            plan.RotationDegrees,
+            KeyTime.FromPercent(1),
+            new KeySpline(0.25, 0, 0.2, 1)));
+        Storyboard.SetTarget(animation, el);
+        Storyboard.SetTargetProperty(animation,
+            new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
+        sb.Children.Add(animation);
     }
 
     private static void FlashEffect(Storyboard sb, FrameworkElement el,

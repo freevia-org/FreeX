@@ -184,6 +184,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Flash:");
         source.Should().Contain("FlashEffect(element, plan, onReveal);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Spiral:");
+        source.Should().Contain("SpiralEffect(element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Swivel:");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Bounce:");
         source.Should().Contain("BounceEffect(element, plan, onReveal);");

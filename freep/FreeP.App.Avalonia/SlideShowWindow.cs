@@ -1955,7 +1955,7 @@ public sealed class SlideShowWindow : Window
 
             case SlideShowShapeAnimationEffectKind.Spiral:
                 InvokeRevealAtStart(plan, onReveal);
-                SpinEffect(element, plan);
+                SpiralEffect(element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Swivel:
@@ -3430,6 +3430,23 @@ public sealed class SlideShowWindow : Window
 
         DelayedAction(plan.DelayMs, () =>
             AnimateRotate(rotate, 0, plan.RotationDegrees, plan.DurationMs));
+    }
+
+    private void SpiralEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        el.Opacity = 1;
+        el.RenderTransformOrigin = RelativePoint.Center;
+        var rotate = new RotateTransform(0);
+        el.RenderTransform = rotate;
+        DelayedAction(plan.DelayMs, () => AnimateKeyframes(
+            plan.DurationMs,
+            new[]
+            {
+                (0.0, 0.0),
+                (plan.RotationDegrees * 0.82, 0.7),
+                (plan.RotationDegrees, 1.0)
+            },
+            value => rotate.Angle = value));
     }
 
     private void TeeterEffect(Control el, SlideShowShapeAnimationPlaybackPlan plan)
