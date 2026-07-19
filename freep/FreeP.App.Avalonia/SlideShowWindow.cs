@@ -787,6 +787,10 @@ public sealed class SlideShowWindow : Window
                 PlayBoxTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Reveal:
+                PlayRevealTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -970,6 +974,49 @@ public sealed class SlideShowWindow : Window
         bool expandsFromCenter) =>
         new(ToRect(SlideShowMaskGeometryPlanner.BuildBoxTransitionRect(
             width, height, progress, expandsFromCenter)));
+
+    private void PlayRevealTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        var clipRect = BuildRevealTransitionGeometry(w, h, 0, plan.IncomingOffsetX, plan.IncomingOffsetY);
+        _slideCanvas.Clip = clipRect;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateRectClip(
+            _slideCanvas,
+            clipRect,
+            ToRect(SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(
+                w, h, 0, plan.IncomingOffsetX, plan.IncomingOffsetY)),
+            ToRect(SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(
+                w, h, 1, plan.IncomingOffsetX, plan.IncomingOffsetY)),
+            plan.DurationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private static RectangleGeometry BuildRevealTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        double incomingOffsetX,
+        double incomingOffsetY) =>
+        new(ToRect(SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(
+            width, height, progress, incomingOffsetX, incomingOffsetY)));
 
     private void AnimateDissolveTransitionClip(
         Control target,

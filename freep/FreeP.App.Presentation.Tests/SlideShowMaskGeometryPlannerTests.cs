@@ -173,4 +173,17 @@ public sealed class SlideShowMaskGeometryPlannerTests
         expandedEnd.Should().Be(new SlideShowMaskRect(0, 0, 960, 540));
         contractedHalf.Should().Be(expandedHalf);
     }
+
+    [Fact]
+    public void BuildRevealTransitionRect_UsesIncomingEdgeAndFillsAtCompletion()
+    {
+        SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(960, 540, 0.5, -1, 0)
+            .Should().Be(new SlideShowMaskRect(480, 0, 480, 540));
+        SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(960, 540, 0.5, 1, 0)
+            .Should().Be(new SlideShowMaskRect(0, 0, 480, 540));
+        SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(960, 540, 0.5, 0, -1)
+            .Should().Be(new SlideShowMaskRect(0, 270, 960, 270));
+        SlideShowMaskGeometryPlanner.BuildRevealTransitionRect(960, 540, 1, 0, 1)
+            .Should().Be(new SlideShowMaskRect(0, 0, 960, 540));
+    }
 }
