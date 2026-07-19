@@ -9,6 +9,9 @@ public enum SlideShowTransitionPlaybackActionKind
     Split,
     Blinds,
     RandomBars,
+    Strips,
+    Wheel,
+    Zoom,
     Push
 }
 
@@ -21,7 +24,11 @@ public sealed record SlideShowTransitionPlaybackPlan(
     bool SplitHorizontal,
     bool SplitOut,
     bool BlindsHorizontal,
-    bool RandomBarsHorizontal);
+    bool RandomBarsHorizontal,
+    bool StripsSlopeDown,
+    int WheelSpokeCount,
+    bool WheelReverse,
+    bool ZoomIn);
 
 public enum SlideShowShapeAnimationEffectKind
 {
@@ -135,6 +142,8 @@ public static class SlideShowPlaybackPlanner
     public const int CheckerboardColumnCount = 6;
     public const int WheelSpokeCount = 4;
     public const int StripsBandCount = 6;
+    public const double ZoomInStartScale = 0.65;
+    public const double ZoomOutStartScale = 1.35;
 
     public static SlideShowTransitionPlaybackPlan PlanTransition(SlideTransition transition)
     {
@@ -147,6 +156,9 @@ public static class SlideShowPlaybackPlanner
             SlideShowTransitionPlaybackKind.Split => SlideShowTransitionPlaybackActionKind.Split,
             SlideShowTransitionPlaybackKind.Blinds => SlideShowTransitionPlaybackActionKind.Blinds,
             SlideShowTransitionPlaybackKind.RandomBars => SlideShowTransitionPlaybackActionKind.RandomBars,
+            SlideShowTransitionPlaybackKind.Strips => SlideShowTransitionPlaybackActionKind.Strips,
+            SlideShowTransitionPlaybackKind.Wheel => SlideShowTransitionPlaybackActionKind.Wheel,
+            SlideShowTransitionPlaybackKind.Zoom => SlideShowTransitionPlaybackActionKind.Zoom,
             SlideShowTransitionPlaybackKind.PushLike => SlideShowTransitionPlaybackActionKind.Push,
             _ => SlideShowTransitionPlaybackActionKind.Fade
         };
@@ -160,7 +172,11 @@ public static class SlideShowPlaybackPlanner
             transitionPlan.SplitHorizontal,
             transitionPlan.SplitOut,
             transitionPlan.BlindsHorizontal,
-            transitionPlan.RandomBarsHorizontal);
+            transitionPlan.RandomBarsHorizontal,
+            transitionPlan.StripsSlopeDown,
+            transitionPlan.WheelSpokeCount,
+            transitionPlan.WheelReverse,
+            transitionPlan.ZoomIn);
     }
 
     public static IReadOnlyList<SlideShowShapeAnimationPlaybackPlan> PlanAnimationStep(AnimationStep step)

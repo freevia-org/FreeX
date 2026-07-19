@@ -799,6 +799,18 @@ public sealed class SlideShowWindow : Window
                 PlayRandomBarsTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Strips:
+                PlayStripsTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Wheel:
+                PlayWheelTransition(slide, plan);
+                return;
+
+            case SlideShowTransitionPlaybackActionKind.Zoom:
+                PlayZoomTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -1098,6 +1110,171 @@ public sealed class SlideShowWindow : Window
                      width, height, SlideShowPlaybackPlanner.RandomBarsBandCount, progress, horizontal))
             geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
         return geometry;
+    }
+
+    private void PlayStripsTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildStripsTransitionGeometry(
+            w, h, 0, plan.StripsSlopeDown);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildStripsTransitionGeometry(w, h, progress, plan.StripsSlopeDown),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildStripsTransitionGeometry(
+        double width, double height, double progress, bool slopeDown)
+    {
+        var stripPlan = SlideShowMaskGeometryPlanner.BuildStrips(
+            width, height, progress, SlideShowPlaybackPlanner.StripsBandCount, slopeDown);
+        if (stripPlan.IsFullyOpen)
+            return new RectangleGeometry(new Rect(0, 0, width, height));
+
+        var geometry = new PathGeometry { FillRule = FillRule.Nonzero };
+        foreach (var polygon in stripPlan.Polygons)
+        {
+            var figure = new PathFigure
+            {
+                StartPoint = new Point(polygon.Points[0].X, polygon.Points[0].Y),
+                IsClosed = true,
+                IsFilled = true
+            };
+            for (var index = 1; index < polygon.Points.Count; index++)
+                figure.Segments.Add(new LineSegment(
+                    new Point(polygon.Points[index].X, polygon.Points[index].Y),
+                    isStroked: true));
+            geometry.Figures.Add(figure);
+        }
+        return geometry;
+    }
+
+    private void PlayWheelTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildWheelTransitionGeometry(
+            w, h, 0, plan.WheelSpokeCount, plan.WheelReverse);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildWheelTransitionGeometry(
+                    w, h, progress, plan.WheelSpokeCount, plan.WheelReverse),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildWheelTransitionGeometry(
+        double width,
+        double height,
+        double progress,
+        int spokeCount,
+        bool reverse) =>
+        BuildWheelGeometry(width, height, progress, spokeCount, reverse);
+
+    private void PlayZoomTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        var startScale = plan.ZoomIn
+            ? SlideShowPlaybackPlanner.ZoomInStartScale
+            : SlideShowPlaybackPlanner.ZoomOutStartScale;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        var transform = new ScaleTransform(startScale, startScale, w / 2, h / 2);
+        _slideCanvas.RenderTransform = transform;
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        var animationX = new DoubleAnimation(startScale, 1, duration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        var animationY = new DoubleAnimation(startScale, 1, duration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut }
+        };
+        animationX.Completed += (_, _) =>
+        {
+            _slideCanvas.RenderTransform = Transform.Identity;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+
+        transform.BeginAnimation(ScaleTransform.ScaleXProperty, animationX);
+        transform.BeginAnimation(ScaleTransform.ScaleYProperty, animationY);
     }
 
     private void PrepareAnimationOverlay(Slide slide)
@@ -2183,9 +2360,15 @@ public sealed class SlideShowWindow : Window
         sb.Children.Add(anim);
     }
 
-    private static Geometry BuildWheelGeometry(double width, double height, double progress, int spokeCount)
+    private static Geometry BuildWheelGeometry(
+        double width,
+        double height,
+        double progress,
+        int spokeCount,
+        bool reverse = false)
     {
-        var wheelPlan = SlideShowMaskGeometryPlanner.BuildWheel(width, height, progress, spokeCount);
+        var wheelPlan = SlideShowMaskGeometryPlanner.BuildWheel(
+            width, height, progress, spokeCount, clockwise: !reverse);
         if (wheelPlan.IsFullyOpen)
             return new RectangleGeometry(new Rect(0, 0, width, height));
 
@@ -2224,7 +2407,7 @@ public sealed class SlideShowWindow : Window
             new Size(arc.Radius, arc.Radius),
             rotationAngle: 0,
             isLargeArc: arc.IsLargeArc,
-            sweepDirection: SweepDirection.Clockwise,
+            sweepDirection: arc.IsClockwise ? SweepDirection.Clockwise : SweepDirection.Counterclockwise,
             isStroked: true));
 
         var geometry = new PathGeometry();

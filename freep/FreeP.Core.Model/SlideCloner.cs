@@ -414,6 +414,7 @@ public static class SlideCloner
         AdvanceAfterMs  = t.AdvanceAfterMs,
         RawXml          = t.RawXml,
         MorphOption     = t.MorphOption,
+        WheelSpokeCount = t.WheelSpokeCount,
         Sound           = t.Sound is null ? null : new TransitionSound
         {
             AudioBytes  = t.Sound.AudioBytes is not null ? (byte[])t.Sound.AudioBytes.Clone() : null,

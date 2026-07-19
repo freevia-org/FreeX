@@ -134,4 +134,15 @@ public sealed class SlideShowMaskGeometryPlannerTests
         wheel.Arcs.Select(arc => arc.SweepDegrees).Should().AllSatisfy(sweep => sweep.Should().Be(45));
         SlideShowMaskGeometryPlanner.BuildWheel(960, 540, 1, 4).IsFullyOpen.Should().BeTrue();
     }
+
+    [Fact]
+    public void BuildWheel_ReverseUsesCounterClockwiseArcsWithoutChangingSpokeCount()
+    {
+        var normal = SlideShowMaskGeometryPlanner.BuildWheel(960, 540, 0.5, 8);
+        var reverse = SlideShowMaskGeometryPlanner.BuildWheel(960, 540, 0.5, 8, clockwise: false);
+
+        normal.Arcs.Should().HaveCount(8).And.OnlyContain(arc => arc.IsClockwise);
+        reverse.Arcs.Should().HaveCount(8).And.NotContain(arc => arc.IsClockwise);
+        reverse.Arcs[0].SweepDegrees.Should().Be(normal.Arcs[0].SweepDegrees);
+    }
 }

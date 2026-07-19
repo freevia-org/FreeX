@@ -82,6 +82,68 @@ public sealed class SlideShowPlaybackPlannerTests
         plan.RandomBarsHorizontal.Should().BeFalse();
     }
 
+    [Theory]
+    [InlineData(TransitionKind.Wheel, false)]
+    [InlineData(TransitionKind.WheelReverse, true)]
+    public void PlanTransition_WheelUsesDedicatedActionAndPreservesSpokes(
+        TransitionKind kind,
+        bool expectedReverse)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = kind,
+            WheelSpokeCount = 8,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Wheel);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Wheel);
+        plan.WheelSpokeCount.Should().Be(8);
+        plan.WheelReverse.Should().Be(expectedReverse);
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData(TransitionDirection.In, true)]
+    [InlineData(TransitionDirection.Out, false)]
+    public void PlanTransition_ZoomUsesDedicatedActionAndDirection(
+        TransitionDirection? direction,
+        bool expectedZoomIn)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Zoom,
+            Direction = direction,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Zoom);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Zoom);
+        plan.ZoomIn.Should().Be(expectedZoomIn);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.LeftDown, true)]
+    [InlineData(TransitionDirection.RightUp, true)]
+    [InlineData(TransitionDirection.LeftUp, false)]
+    [InlineData(TransitionDirection.RightDown, false)]
+    public void PlanTransition_StripsUsesDedicatedActionAndDirectionSlope(
+        TransitionDirection direction,
+        bool expectedSlopeDown)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Strips,
+            Direction = direction,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Strips);
+        plan.DurationMs.Should().Be(420);
+        plan.StripsSlopeDown.Should().Be(expectedSlopeDown);
+    }
+
     [Fact]
     public void PlanAnimationStep_UsesControllerEntryStartDelays()
     {
