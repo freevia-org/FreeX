@@ -6,9 +6,12 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Controls.Templates;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Threading;
 
 using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.DrawingUI;
@@ -312,6 +315,7 @@ public sealed partial class MainWindow
             ShowInTaskbar = false,
         };
         AutomationProperties.SetAutomationId(dialog, "SelectionPaneDialog");
+        KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
 
         var ok = new Button { Content = UiText.Get("Common_Ok"), IsDefault = true, Width = 78 };
         ApplySelectionPaneButtonChrome(ok, 78, isDefault: true);
@@ -321,6 +325,26 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(cancel, "SelectionPaneCancelButton");
         ok.Click += (_, _) => dialog.Close(true);
         cancel.Click += (_, _) => dialog.Close(false);
+        dialog.Opened += (_, _) => Dispatcher.UIThread.Post(
+            () =>
+            {
+                if (dialog.IsVisible && searchBox.IsVisible && searchBox.IsEffectivelyEnabled)
+                    searchBox.Focus();
+            },
+            DispatcherPriority.Input);
+        dialog.AddHandler(
+            InputElement.KeyDownEvent,
+            (_, args) =>
+            {
+                if (args.Key != Key.Escape || args.KeyModifiers != KeyModifiers.None)
+                    return;
+
+                if (dialog.IsVisible)
+                    dialog.Close(false);
+                args.Handled = true;
+            },
+            RoutingStrategies.Tunnel,
+            handledEventsToo: true);
 
         var searchRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
