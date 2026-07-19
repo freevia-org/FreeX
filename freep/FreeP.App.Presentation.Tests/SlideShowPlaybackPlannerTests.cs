@@ -39,6 +39,20 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanTransition_DissolveUsesDedicatedAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Dissolve,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Dissolve);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Dissolve);
+        plan.DurationMs.Should().Be(420);
+    }
+
+    [Fact]
     public void PlanTransition_SplitUsesDedicatedActionAndPreservesGeometry()
     {
         var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition

@@ -779,6 +779,10 @@ public sealed class SlideShowWindow : Window
                 PlayZoomTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.Dissolve:
+                PlayDissolveTransition(slide, plan.DurationMs);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -872,6 +876,92 @@ public sealed class SlideShowWindow : Window
                 _slideCanvas.Clip = null;
                 _transitionBackImage.IsVisible = false;
             });
+    }
+
+    private void PlayDissolveTransition(Slide slide, int durationMs)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        var h = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = null;
+        _slideCanvas.Clip = BuildDissolveTransitionGeometry(w, h, 0);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.IsVisible = true;
+        }
+
+        AnimateDissolveTransitionClip(
+            _slideCanvas,
+            w,
+            h,
+            durationMs,
+            onComplete: () =>
+            {
+                _slideCanvas.Clip = null;
+                _transitionBackImage.IsVisible = false;
+            });
+    }
+
+    private static Geometry BuildDissolveTransitionGeometry(
+        double width,
+        double height,
+        double progress)
+    {
+        var geometry = new GeometryGroup();
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildDissolveTransitionRects(
+                     width,
+                     height,
+                     SlideShowPlaybackPlanner.DissolveRowCount,
+                     SlideShowPlaybackPlanner.DissolveColumnCount,
+                     progress))
+        {
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        }
+
+        return geometry;
+    }
+
+    private void AnimateDissolveTransitionClip(
+        Control target,
+        double width,
+        double height,
+        int durationMs,
+        Action? onComplete = null)
+    {
+        if (durationMs <= 0)
+        {
+            target.Clip = BuildDissolveTransitionGeometry(width, height, 1);
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            target.Clip = BuildDissolveTransitionGeometry(width, height, EaseInOut(t));
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                target.Clip = BuildDissolveTransitionGeometry(width, height, 1);
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
     }
 
     private static Geometry BuildSplitGeometry(
