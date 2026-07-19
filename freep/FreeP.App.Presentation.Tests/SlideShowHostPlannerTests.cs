@@ -142,6 +142,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Fade)]
     [InlineData(TransitionKind.Split, SlideShowTransitionPlaybackKind.Split)]
     [InlineData(TransitionKind.Blinds, SlideShowTransitionPlaybackKind.Blinds)]
+    [InlineData(TransitionKind.RandomBar, SlideShowTransitionPlaybackKind.RandomBars)]
     [InlineData(TransitionKind.Push, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Cover, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Wipe, SlideShowTransitionPlaybackKind.PushLike)]
@@ -223,6 +224,23 @@ public sealed class SlideShowHostPlannerTests
 
         plan.PlaybackKind.Should().Be(SlideShowTransitionPlaybackKind.Blinds);
         plan.BlindsHorizontal.Should().Be(expectedHorizontal);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Horizontal, true)]
+    [InlineData(TransitionDirection.Vertical, false)]
+    public void PlanTransition_ResolvesRandomBarsAxis(
+        TransitionDirection direction,
+        bool expectedHorizontal)
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.RandomBar,
+            Direction = direction
+        });
+
+        plan.PlaybackKind.Should().Be(SlideShowTransitionPlaybackKind.RandomBars);
+        plan.RandomBarsHorizontal.Should().Be(expectedHorizontal);
     }
 
     [Fact]

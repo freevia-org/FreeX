@@ -69,6 +69,20 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanTransition_RandomBarsUsesDedicatedAction()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.RandomBar,
+            Direction = TransitionDirection.Vertical,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.RandomBars);
+        plan.RandomBarsHorizontal.Should().BeFalse();
+    }
+
+    [Fact]
     public void PlanAnimationStep_UsesControllerEntryStartDelays()
     {
         var slide = new Slide();

@@ -131,6 +131,36 @@ public static class SlideShowMaskGeometryPlanner
     }
 
     /// <summary>
+    /// Builds randomized bars at a shared normalized timeline. Each bar uses
+    /// its deterministic shuffled order, so both hosts reveal the same bands.
+    /// </summary>
+    public static IReadOnlyList<SlideShowMaskRect> BuildRandomBarsTransitionRects(
+        double width,
+        double height,
+        int bandCount,
+        double progress,
+        bool horizontal)
+    {
+        progress = Math.Clamp(progress, 0, 1);
+        var bars = BuildRandomBars(width, height, bandCount, horizontal);
+        var count = Math.Max(1, bars.Count);
+        var rects = new SlideShowMaskRect[count];
+        for (var index = 0; index < bars.Count; index++)
+        {
+            var bar = bars[index];
+            var localProgress = Math.Clamp(progress * (count + 1) - bar.Order, 0, 1);
+            var closed = bar.Geometry.Closed;
+            var open = bar.Geometry.Open;
+            rects[index] = new(
+                closed.X + (open.X - closed.X) * localProgress,
+                closed.Y + (open.Y - closed.Y) * localProgress,
+                closed.Width + (open.Width - closed.Width) * localProgress,
+                closed.Height + (open.Height - closed.Height) * localProgress);
+        }
+        return rects;
+    }
+
+    /// <summary>
     /// Returns the two panels used by a slide split transition. For an
     /// outgoing split the panels open from the center; for an incoming split
     /// they open inward from the two outside edges.

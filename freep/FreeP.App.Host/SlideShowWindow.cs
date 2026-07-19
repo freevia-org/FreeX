@@ -795,6 +795,10 @@ public sealed class SlideShowWindow : Window
                 PlayBlindsTransition(slide, plan);
                 return;
 
+            case SlideShowTransitionPlaybackActionKind.RandomBars:
+                PlayRandomBarsTransition(slide, plan);
+                return;
+
             case SlideShowTransitionPlaybackActionKind.Push:
                 PlayPushTransition(slide, plan);
                 return;
@@ -1038,6 +1042,60 @@ public sealed class SlideShowWindow : Window
         var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
         foreach (var rect in SlideShowMaskGeometryPlanner.BuildBlindsTransitionRects(
                      width, height, SlideShowPlaybackPlanner.BlindsBandCount, progress, horizontal))
+            geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
+        return geometry;
+    }
+
+    private void PlayRandomBarsTransition(Slide slide, SlideShowTransitionPlaybackPlan plan)
+    {
+        var snapshot = CaptureCurrentSlide();
+        var w = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        var h = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+
+        _slideCanvas.Slide = slide;
+        _slideCanvas.Opacity = 1;
+        _slideCanvas.RenderTransform = Transform.Identity;
+        _slideCanvas.Clip = BuildRandomBarsTransitionGeometry(w, h, 0, plan.RandomBarsHorizontal);
+        _slideCanvas.Refresh();
+
+        if (snapshot is not null)
+        {
+            _transitionBackImage.Source = snapshot;
+            _transitionBackImage.Visibility = Visibility.Visible;
+        }
+
+        var animation = new ObjectAnimationUsingKeyFrames
+        {
+            Duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs))
+        };
+        const int frameCount = 30;
+        for (var frame = 0; frame <= frameCount; frame++)
+        {
+            var progress = frame / (double)frameCount;
+            animation.KeyFrames.Add(new DiscreteObjectKeyFrame(
+                BuildRandomBarsTransitionGeometry(w, h, progress, plan.RandomBarsHorizontal),
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(plan.DurationMs * progress))));
+        }
+
+        animation.Completed += (_, _) =>
+        {
+            _slideCanvas.Clip = null;
+            _transitionBackImage.Visibility = Visibility.Collapsed;
+        };
+        Storyboard.SetTarget(animation, _slideCanvas);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(UIElement.ClipProperty));
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(animation);
+        _pendingStoryboards.Add(storyboard);
+        storyboard.Begin(this, true);
+    }
+
+    private static Geometry BuildRandomBarsTransitionGeometry(
+        double width, double height, double progress, bool horizontal)
+    {
+        var geometry = new GeometryGroup { FillRule = FillRule.Nonzero };
+        foreach (var rect in SlideShowMaskGeometryPlanner.BuildRandomBarsTransitionRects(
+                     width, height, SlideShowPlaybackPlanner.RandomBarsBandCount, progress, horizontal))
             geometry.Children.Add(new RectangleGeometry(ToRect(rect)));
         return geometry;
     }
