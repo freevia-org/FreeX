@@ -2,6 +2,7 @@
 using Avalonia.Threading;
 using Free.Shared.Ribbon;
 using FreeX.App.Avalonia.Ribbon;
+using FreeX.App.Presentation;
 using FreeX.App.Presentation.InteractionValidation;
 using FreeX.App.Presentation.Interactions;
 using FreeX.App.Presentation.Shell;
@@ -40,8 +41,7 @@ public sealed partial class MainWindow
             {
                 if (Includes("shortcuts"))
                 {
-                    AddShortcutRoutingResults(results);
-                    await AddShortcutScenarioInteractionResultsAsync(results);
+                    await AddShortcutInteractionValidationResultsAsync(results);
                 }
                 if (Includes("context-menus"))
                     await AddContextMenuInteractionResultsAsync(
@@ -197,6 +197,21 @@ public sealed partial class MainWindow
         }
     }
 
+    internal async Task<IReadOnlyList<InteractionValidationResult>>
+        RunShortcutInteractionValidationCoreForTestAsync()
+    {
+        var results = new List<InteractionValidationResult>();
+        await AddShortcutInteractionValidationResultsAsync(results);
+        return results;
+    }
+
+    private async Task AddShortcutInteractionValidationResultsAsync(
+        List<InteractionValidationResult> results)
+    {
+        AddShortcutRoutingResults(results);
+        await AddShortcutScenarioInteractionResultsAsync(results);
+    }
+
     private async Task AddShortcutScenarioInteractionResultsAsync(List<InteractionValidationResult> results)
     {
         var interactionOrdinal = 0;
@@ -224,7 +239,7 @@ public sealed partial class MainWindow
 
             var probe = await ExerciseShortcutInteractionAsync(
                 interaction,
-                replaceSession: interactionOrdinal % 32 == 0,
+                replaceSession: true,
                 interactionId);
             results.Add(new InteractionValidationResult(
                 Id: interactionId,
@@ -467,6 +482,13 @@ public sealed partial class MainWindow
         CloseOwnedWindows(OwnedWindows.ToArray());
         if (replaceSession || _session.Workbook.Sheets.Count == 0)
             _session = CreateDisposableRibbonSession();
+
+        _session.CancelFormulaEdit();
+        _formulaBoxEditOriginalText = null;
+        ClearFormulaRangeEntryState();
+        ClearInlineCellEditorState();
+        _keyboardSelectionMode = ExcelSelectionMode.Normal;
+        _endMode = false;
         _legacyDataFilterSequenceState = LegacyDataFilterSequenceState.None;
         SetRibbonKeyTipsVisible(false);
         HideBackstageOverlay();
@@ -474,7 +496,25 @@ public sealed partial class MainWindow
         _formulaBarExpanded = false;
         _isFormulaBarHidden = false;
         _formulaBarHost.IsVisible = true;
-        RefreshShell("Shortcut validation fixture ready");
+        _cellAddressBoxHasPendingEdit = false;
+        _cellAddressText.Text = FormatCellReference(_session.ActiveCell);
+        _isApplyingFormulaBoxText = true;
+        try
+        {
+            _formulaBox.Text = FormatEditText(
+                _session.ActiveSheet.GetCell(_session.ActiveCell),
+                _session.ActiveCell);
+        }
+        finally
+        {
+            _isApplyingFormulaBoxText = false;
+        }
+        _statusText.Text = "Shortcut validation fixture ready";
+        _selectionStatsText.Text = _session.SelectionStatsText;
+        _zoomText.Text = StatusBarZoomSliderPlanner.FormatZoomPercent(_session.ZoomPercent);
+        Title = FormatWindowWorkbookTitle();
+        UpdateSaveButton();
+        _refreshRibbonToggleStates?.Invoke();
 
         if (context is ShortcutInteractionContext.FormulaBar or ShortcutInteractionContext.FormulaReferenceEditor)
             _formulaBox.Focus();

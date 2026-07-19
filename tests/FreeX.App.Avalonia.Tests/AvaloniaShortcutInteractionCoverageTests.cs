@@ -113,6 +113,31 @@ public sealed class AvaloniaShortcutInteractionCoverageTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task ProductionShortcutValidationCore_CompletesEntireCatalog()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var results = await window.RunShortcutInteractionValidationCoreForTestAsync();
+
+                results.Where(result => result.Category == "shortcut-scenario")
+                    .Should().HaveCount(InteractiveValidationInventory.KeyboardShortcuts.Sum(scenario => scenario.Interactions.Count));
+                window.OwnedWindows.Should().BeEmpty();
+            }
+            finally
+            {
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
     [Theory]
     [InlineData("shortcut.file.save", 0, "persisted a non-empty workbook")]
     [InlineData("shortcut.file.save", 1, "persisted a non-empty workbook")]
