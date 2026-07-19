@@ -3778,9 +3778,7 @@ public static partial class ChartRenderPlanner
         double normalized,
         int triangleIndex = 0)
     {
-        if (chart.ChartType == ChartType.Surface3D &&
-            UsesImportedTextMetrics(chart) &&
-            chart.VaryColors)
+        if (UsesImportedSurfaceBoundaryFaces(chart))
         {
             return ResolveImportedSurfaceFacetColor(seriesIndex, categoryIndex, triangleIndex);
         }
