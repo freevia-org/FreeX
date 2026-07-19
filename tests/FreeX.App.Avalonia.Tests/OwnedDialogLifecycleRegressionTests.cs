@@ -113,6 +113,62 @@ public sealed class OwnedDialogLifecycleRegressionTests
     }
 
     [Fact]
+    public async Task AdvancedFilterOwnedModal_ClosesThroughEscapeContract()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-advanced-filter-escape-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                try
+                {
+                    window.Show();
+                    await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        interactionOnly: true,
+                        interactionDialogCatalogIds: new HashSet<string>(StringComparer.Ordinal)
+                        {
+                            "dialog.AdvancedFilter",
+                        });
+
+                    var contract = window.DialogInteractionContracts["dialog.AdvancedFilterDialog"];
+                    contract.ActualModality.Should().Be("modal");
+                    contract.Ownership.Should().StartWith("passed:");
+                    contract.OpenerLifecycle.Should().StartWith("passed:");
+                    contract.EscapeCancel.Should().Be("passed:closed-by-escape");
+                    contract.OwnerFocusRestore.Should().StartWith("passed:");
+                }
+                finally
+                {
+                    foreach (var owned in window.OwnedWindows.ToArray())
+                    {
+                        if (owned.IsVisible)
+                            owned.Close();
+                    }
+                    if (window.IsVisible)
+                        window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(outputDirectory))
+                    Directory.Delete(outputDirectory, recursive: true);
+            }
+            catch
+            {
+                // Test cleanup must not hide interaction lifecycle regressions.
+            }
+        }
+    }
+
+    [Fact]
     public async Task AssignedProductionDialogs_PassOwnedFocusTabAndEscapeContracts()
     {
         var outputDirectory = Path.Combine(
