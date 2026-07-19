@@ -1928,7 +1928,7 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Float:
-                FlyInEffect(sb, element, plan);
+                FloatEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Swoop:
@@ -2066,6 +2066,86 @@ public sealed class SlideShowWindow : Window
         sb.Children.Add(animX);
         sb.Children.Add(animY);
         sb.Children.Add(animOp);
+    }
+
+    private void FloatEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double width = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        double height = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        double directionX = plan.OffsetXFactor * width;
+        double directionY = plan.OffsetYFactor * height;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        double startX = isExit ? 0 : directionX;
+        double startY = isExit ? 0 : directionY;
+        double endX = isExit ? directionX : 0;
+        double endY = isExit ? directionY : 0;
+        double arcX = Math.Abs(plan.OffsetYFactor) > 0.01
+            ? -Math.Sign(plan.OffsetYFactor) * width * 0.06
+            : 0;
+        double arcY = Math.Abs(plan.OffsetXFactor) > 0.01
+            ? Math.Sign(plan.OffsetXFactor) * height * 0.06
+            : 0;
+        double midX = (startX + endX) / 2 + arcX;
+        double midY = (startY + endY) / 2 + arcY;
+
+        var translate = new TranslateTransform(startX, startY);
+        el.RenderTransform = translate;
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        AddFloatAxisAnimation(
+            sb,
+            el,
+            startX,
+            midX,
+            endX,
+            duration,
+            plan.DelayMs,
+            "(UIElement.RenderTransform).(TranslateTransform.X)");
+        AddFloatAxisAnimation(
+            sb,
+            el,
+            startY,
+            midY,
+            endY,
+            duration,
+            plan.DelayMs,
+            "(UIElement.RenderTransform).(TranslateTransform.Y)");
+        var opacity = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, duration)
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        Storyboard.SetTarget(opacity, el);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        sb.Children.Add(opacity);
+    }
+
+    private static void AddFloatAxisAnimation(
+        Storyboard sb,
+        FrameworkElement el,
+        double start,
+        double middle,
+        double end,
+        Duration duration,
+        int delayMs,
+        string propertyPath)
+    {
+        var animation = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            Duration = duration
+        };
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(start, KeyTime.FromPercent(0)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            middle,
+            KeyTime.FromPercent(0.72),
+            new KeySpline(0.2, 0, 0.4, 1)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            end,
+            KeyTime.FromPercent(1),
+            new KeySpline(0.2, 0, 0.2, 1)));
+        Storyboard.SetTarget(animation, el);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(propertyPath));
+        sb.Children.Add(animation);
     }
 
     private void BounceEffect(Storyboard sb, FrameworkElement el,
