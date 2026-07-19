@@ -53,6 +53,8 @@ public sealed partial class MainWindow
 
     private async Task ShowPrintPreviewDialogAsync(string? fixturePrinterName = null)
     {
+        await WaitForPendingDirtyWorkbookGateAsync();
+
         if (_isOpening || _isSaving)
             return;
 

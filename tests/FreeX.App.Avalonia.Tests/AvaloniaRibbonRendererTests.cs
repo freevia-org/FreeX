@@ -83,6 +83,15 @@ public sealed class AvaloniaRibbonRendererTests
         public RibbonCommandState GetState() => state;
     }
 
+    private sealed class MutableStatefulCommand(RibbonCommandState state, Action? execute = null) : IRibbonStatefulCommand
+    {
+        public RibbonCommandState State { get; set; } = state;
+
+        public void Execute(RibbonCommandContext context) => execute?.Invoke();
+
+        public RibbonCommandState GetState() => State;
+    }
+
     private sealed class NoOpCommand : IRibbonCommand
     {
         public void Execute(RibbonCommandContext context)
@@ -634,6 +643,52 @@ public sealed class AvaloniaRibbonRendererTests
         Assert.True(checkBox.IsChecked);
         Assert.True(checkBox.IsEnabled);
     });
+
+    [Fact]
+    public Task StatefulCheckBox_SynchronizationDoesNotReexecuteTheCommand()
+    {
+        return RunOnUiThread(() =>
+        {
+            var definition = new RibbonDefinitionBuilder()
+                .Tab("view", "View", "V", view =>
+                {
+                    view.Group("show", "Show", "S", 100, group =>
+                    {
+                        group.CheckBox("headings", "Headings");
+                    });
+                })
+                .Build();
+            var executions = 0;
+            MutableStatefulCommand? command = null;
+            command = new MutableStatefulCommand(
+                new RibbonCommandState(IsChecked: false),
+                () =>
+                {
+                    executions++;
+                    command!.State = command.State with { IsChecked = !command.State.IsChecked };
+                });
+            var registry = new RibbonCommandRegistry();
+            registry.Register("headings", command);
+            Control? content = null;
+            content = AvaloniaRibbonRenderer.BuildTabContent(
+                definition.FindTab("view")!,
+                registry,
+                afterExecute: () => AvaloniaRibbonRenderer.SyncToggleStates(content!, registry));
+            var window = new Window { Width = 320, Height = 160, Content = content };
+            window.Show();
+
+            var checkBox = content.GetLogicalDescendants().OfType<CheckBox>().Single();
+            command.State = new RibbonCommandState(IsChecked: true);
+            AvaloniaRibbonRenderer.SyncToggleStates(content, registry);
+
+            Assert.True(checkBox.IsChecked);
+            Assert.Equal(0, executions);
+
+            checkBox.IsChecked = false;
+            Assert.Equal(1, executions);
+            window.Close();
+        });
+    }
 
     [Fact]
     public Task StaticDrawTab_OnlyWindowsUnavailableFormatCommandsRenderDisabled() => RunOnUiThread(() =>

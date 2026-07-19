@@ -898,6 +898,7 @@ public sealed partial class MainWindow : Window
     private bool _isSaving;
     private bool _allowCloseWithoutDirtyPrompt;
     private bool _isDirtyCloseDialogOpen;
+    private Task? _pendingDirtyWorkbookGate;
     private bool _isUpdatingWorksheetScrollBars;
     private bool _isUpdatingStatusZoomSlider;
     private SelectionPaneObjectKind? _selectedDrawingObjectKind;
@@ -25048,12 +25049,28 @@ public sealed partial class MainWindow : Window
 
     private async Task<bool> ConfirmBeforeDestructiveWorkbookActionAsync(string title, string discardButtonText)
     {
-        return await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
-            _session.IsDirty,
-            async () => ToSaveChangesPrompt(await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText)),
-            SaveCurrentWorkbookAsync,
-            () => _session.IsDirty);
+        if (!_session.IsDirty)
+            return true;
+
+        var gateCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pendingDirtyWorkbookGate = gateCompletion.Task;
+        try
+        {
+            return await WorkbookFileLifecycleCoordinator.CanProceedAfterDirtyGateWithCleanSaveAsync(
+                isDirty: true,
+                async () => ToSaveChangesPrompt(await ShowDirtyWorkbookCloseDialogAsync(title, discardButtonText)),
+                SaveCurrentWorkbookAsync,
+                () => _session.IsDirty);
+        }
+        finally
+        {
+            if (ReferenceEquals(_pendingDirtyWorkbookGate, gateCompletion.Task))
+                _pendingDirtyWorkbookGate = null;
+            gateCompletion.TrySetResult(true);
+        }
     }
+
+    private Task WaitForPendingDirtyWorkbookGateAsync() => _pendingDirtyWorkbookGate ?? Task.CompletedTask;
 
     private static SaveChangesPrompt ToSaveChangesPrompt(DirtyWorkbookCloseChoice choice) => choice switch
     {

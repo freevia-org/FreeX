@@ -14,6 +14,7 @@ using Avalonia.VisualTree;
 using Free.Shared.Ribbon;
 using Free.Shared.Theme;
 using Free.Shared.Theme.Avalonia;
+using System.Runtime.CompilerServices;
 
 namespace Free.Shared.Ribbon.Avalonia;
 
@@ -53,6 +54,12 @@ public static class AvaloniaRibbonRenderer
         "Shape Gradient",
         "Shape Effects",
     };
+    private static readonly ConditionalWeakTable<CheckBox, CheckBoxExecutionState> CheckBoxExecutionStates = new();
+
+    private sealed class CheckBoxExecutionState
+    {
+        internal bool IsSynchronizing;
+    }
 
     internal static AvaloniaRibbonPalette ResolvePalette(RibbonVisualPalette? palette = null) =>
         new(palette ?? RibbonVisualPalette.FromTheme(BrandThemes.FreeX));
@@ -1163,7 +1170,12 @@ public static class AvaloniaRibbonRenderer
             Tag = check.CommandId.Value,
         };
         ApplyStateAndEnablement(box, check.CommandId, registry, palette);
-        box.IsCheckedChanged += (_, _) => Execute(check.CommandId, registry, afterExecute);
+        var executionState = CheckBoxExecutionStates.GetOrCreateValue(box);
+        box.IsCheckedChanged += (_, _) =>
+        {
+            if (!executionState.IsSynchronizing)
+                Execute(check.CommandId, registry, afterExecute);
+        };
         return box;
     }
 
@@ -1530,7 +1542,7 @@ public static class AvaloniaRibbonRenderer
         switch (element)
         {
             case CheckBox checkBox:
-                checkBox.IsChecked = state.IsChecked;
+                SetCheckBoxStateWithoutExecuting(checkBox, state.IsChecked);
                 break;
             case ToggleButton toggle:
                 toggle.IsChecked = state.IsChecked;
@@ -1539,6 +1551,23 @@ public static class AvaloniaRibbonRenderer
             case ComboBox combo when state.Value is { } value:
                 combo.Text = value;
                 break;
+        }
+    }
+
+    private static void SetCheckBoxStateWithoutExecuting(CheckBox checkBox, bool isChecked)
+    {
+        if (checkBox.IsChecked == isChecked)
+            return;
+
+        var executionState = CheckBoxExecutionStates.GetOrCreateValue(checkBox);
+        executionState.IsSynchronizing = true;
+        try
+        {
+            checkBox.IsChecked = isChecked;
+        }
+        finally
+        {
+            executionState.IsSynchronizing = false;
         }
     }
 

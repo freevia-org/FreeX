@@ -276,6 +276,59 @@ public sealed class AvaloniaSaveShortcutSettlementTests
         }, CancellationToken.None);
     }
 
+    [Fact]
+    public async Task TransformedControlShiftF12_AfterCanceledOpenDirtyGate_OpensPrintPreview()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            try
+            {
+                window.Show();
+                Edit(window, window.Session.ActiveCell, "dirty-before-open");
+
+                var openArgs = new KeyEventArgs
+                {
+                    Key = Key.F12,
+                    PhysicalKey = PhysicalKey.F12,
+                    KeyModifiers = KeyModifiers.Control,
+                };
+                var openDispatch = window.RaiseKeyDownForTest(openArgs);
+                var dirtyGate = await WaitForOwnedWindowAsync(window, candidate => candidate.Title == "Open Workbook");
+                dirtyGate.Should().NotBeNull("Ctrl+physical-F12 should open the dirty Open confirmation");
+                dirtyGate!.Close();
+
+                var printArgs = new KeyEventArgs
+                {
+                    Key = Key.F24,
+                    PhysicalKey = PhysicalKey.F12,
+                    KeyModifiers = KeyModifiers.Control | KeyModifiers.Shift,
+                };
+                var printDispatch = window.RaiseKeyDownForTest(printArgs);
+                var preview = await WaitForOwnedWindowAsync(
+                    window,
+                    candidate => AutomationProperties.GetAutomationId(candidate) == "PrintDialog");
+                preview.Should().NotBeNull(
+                    "Ctrl+Shift+physical-F12 must wait for a canceled Open gate to settle, then open Print Preview");
+                preview!.Close();
+
+                await Task.WhenAll(openDispatch, printDispatch);
+                openArgs.Handled.Should().BeTrue();
+                printArgs.Handled.Should().BeTrue();
+                window.OwnedWindows.Should().BeEmpty();
+            }
+            finally
+            {
+                foreach (var owned in window.OwnedWindows.ToArray())
+                    owned.Close();
+                window.AllowCloseWithoutDirtyPromptForParityCapture();
+                window.Close();
+            }
+
+            return true;
+        }, CancellationToken.None);
+    }
+
     private static void Edit(MainWindow window, CellAddress address, string text)
     {
         var result = window.Session.ExecuteReviewCommand(
@@ -307,5 +360,21 @@ public sealed class AvaloniaSaveShortcutSettlementTests
         };
         await window.RaiseKeyDownForTest(args);
         args.Handled.Should().BeTrue();
+    }
+
+    private static async Task<global::Avalonia.Controls.Window?> WaitForOwnedWindowAsync(
+        MainWindow window,
+        Func<global::Avalonia.Controls.Window, bool> predicate)
+    {
+        for (var attempt = 0; attempt < 300; attempt++)
+        {
+            var candidate = window.OwnedWindows.FirstOrDefault(predicate);
+            if (candidate is not null)
+                return candidate;
+
+            await Task.Delay(10);
+        }
+
+        return null;
     }
 }
