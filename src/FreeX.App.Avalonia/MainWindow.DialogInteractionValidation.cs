@@ -29,19 +29,18 @@ internal sealed record DialogInteractionContractEvidence(
 
 public sealed partial class MainWindow
 {
-    private sealed class ModalDialogKeyboardFocusState(
+    private sealed class OwnedDialogKeyboardFocusState(
         MainWindow owner,
         IInputElement? ownerFocusBeforeOpen)
     {
         public MainWindow Owner { get; } = owner;
         public IInputElement? OwnerFocusBeforeOpen { get; } = ownerFocusBeforeOpen;
-        public bool IsModal { get; set; }
     }
 
-    private static readonly ConditionalWeakTable<Window, ModalDialogKeyboardFocusState>
-        ConfiguredModalDialogKeyboardFocus = new();
-    private static readonly bool ModalDialogKeyboardFocusRegistered =
-        RegisterModalDialogKeyboardFocus();
+    private static readonly ConditionalWeakTable<Window, OwnedDialogKeyboardFocusState>
+        ConfiguredOwnedDialogKeyboardFocus = new();
+    private static readonly bool OwnedDialogKeyboardFocusRegistered =
+        RegisterOwnedDialogKeyboardFocus();
     internal static Func<Window, Key, RawInputModifiers, string?>? DialogKeySenderOverride { get; set; }
     private readonly Dictionary<string, DialogInteractionContractEvidence> _dialogInteractionContracts =
         new(StringComparer.Ordinal);
@@ -49,68 +48,84 @@ public sealed partial class MainWindow
     internal IReadOnlyDictionary<string, DialogInteractionContractEvidence> DialogInteractionContracts =>
         _dialogInteractionContracts;
 
-    private static bool RegisterModalDialogKeyboardFocus()
+    private static bool RegisterOwnedDialogKeyboardFocus()
     {
-        Window.OwnerProperty.Changed.AddClassHandler<Window>(ConfigureModalDialogKeyboardFocus);
+        Window.OwnerProperty.Changed.AddClassHandler<Window>(ConfigureOwnedDialogKeyboardFocus);
         return true;
     }
 
-    private static void ConfigureModalDialogKeyboardFocus(
+    private static void ConfigureOwnedDialogKeyboardFocus(
         Window dialog,
         AvaloniaPropertyChangedEventArgs _)
     {
         if (dialog.Owner is not MainWindow owner ||
-            !ConfiguredModalDialogKeyboardFocus.TryAdd(
+            !ConfiguredOwnedDialogKeyboardFocus.TryAdd(
                 dialog,
-                new ModalDialogKeyboardFocusState(owner, owner.FocusManager?.GetFocusedElement())))
+                new OwnedDialogKeyboardFocusState(owner, owner.FocusManager?.GetFocusedElement())))
         {
             return;
         }
 
         KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
-        dialog.Opened += ModalDialogOpened;
-        dialog.KeyDown += ModalDialogEscapeKeyDown;
-        dialog.Closed += ModalDialogClosed;
+        dialog.Opened += OwnedDialogOpened;
+        dialog.Activated += OwnedDialogActivated;
+        dialog.LayoutUpdated += OwnedDialogLayoutUpdated;
+        dialog.KeyDown += OwnedDialogEscapeKeyDown;
+        dialog.Closed += OwnedDialogClosed;
     }
 
-    private static void ModalDialogOpened(object? sender, EventArgs _)
+    private static void OwnedDialogOpened(object? sender, EventArgs _)
     {
-        if (sender is not Window dialog ||
-            !ConfiguredModalDialogKeyboardFocus.TryGetValue(dialog, out var state))
-        {
-            return;
-        }
-
-        state.IsModal = dialog.IsDialog;
-        if (!state.IsModal)
+        if (sender is not Window dialog)
             return;
 
-        Dispatcher.UIThread.Post(
-            () => FocusFirstModalDialogControl(dialog),
-            DispatcherPriority.Input);
+        QueueOwnedDialogInitialFocus(dialog);
     }
 
-    private static void FocusFirstModalDialogControl(Window dialog)
+    private static void OwnedDialogActivated(object? sender, EventArgs _)
+    {
+        if (sender is Window dialog)
+            QueueOwnedDialogInitialFocus(dialog);
+    }
+
+    private static void OwnedDialogLayoutUpdated(object? sender, EventArgs _)
+    {
+        if (sender is Window dialog)
+            FocusFirstOwnedDialogControl(dialog);
+    }
+
+    private static void QueueOwnedDialogInitialFocus(Window dialog)
+    {
+        Dispatcher.UIThread.Post(
+            () => FocusFirstOwnedDialogControl(dialog),
+            DispatcherPriority.Background);
+    }
+
+    private static void FocusFirstOwnedDialogControl(Window dialog)
     {
         if (!dialog.IsVisible)
             return;
 
         var focused = dialog.FocusManager?.GetFocusedElement();
         if (IsFocusInside(dialog, focused))
+        {
+            dialog.LayoutUpdated -= OwnedDialogLayoutUpdated;
             return;
+        }
 
-        dialog.GetVisualDescendants()
+        var firstControl = dialog.GetVisualDescendants()
             .OfType<Control>()
             .FirstOrDefault(control =>
-                control.Focusable && control.IsVisible && control.IsEffectivelyEnabled)
-            ?.Focus();
+                control.Focusable && control.IsVisible && control.IsEffectivelyEnabled);
+        firstControl?.Focus();
+        if (IsFocusInside(dialog, dialog.FocusManager?.GetFocusedElement()))
+            dialog.LayoutUpdated -= OwnedDialogLayoutUpdated;
     }
 
-    private static void ModalDialogEscapeKeyDown(object? sender, KeyEventArgs args)
+    private static void OwnedDialogEscapeKeyDown(object? sender, KeyEventArgs args)
     {
         if (sender is not Window dialog ||
-            !ConfiguredModalDialogKeyboardFocus.TryGetValue(dialog, out var state) ||
-            !state.IsModal ||
+            !ConfiguredOwnedDialogKeyboardFocus.TryGetValue(dialog, out _) ||
             args.Handled ||
             args.Key != Key.Escape ||
             args.KeyModifiers != KeyModifiers.None)
@@ -128,21 +143,26 @@ public sealed partial class MainWindow
         args.Handled = true;
     }
 
-    private static void ModalDialogClosed(object? sender, EventArgs _)
+    private static void OwnedDialogClosed(object? sender, EventArgs _)
     {
         if (sender is not Window dialog ||
-            !ConfiguredModalDialogKeyboardFocus.TryGetValue(dialog, out var state) ||
-            !state.IsModal)
+            !ConfiguredOwnedDialogKeyboardFocus.TryGetValue(dialog, out var state))
         {
             return;
         }
 
+        dialog.Opened -= OwnedDialogOpened;
+        dialog.Activated -= OwnedDialogActivated;
+        dialog.LayoutUpdated -= OwnedDialogLayoutUpdated;
+        dialog.KeyDown -= OwnedDialogEscapeKeyDown;
+        dialog.Closed -= OwnedDialogClosed;
+
         Dispatcher.UIThread.Post(
-            () => RestoreModalDialogOwnerFocus(state),
+            () => RestoreOwnedDialogOwnerFocus(state),
             DispatcherPriority.Input);
     }
 
-    private static void RestoreModalDialogOwnerFocus(ModalDialogKeyboardFocusState state)
+    private static void RestoreOwnedDialogOwnerFocus(OwnedDialogKeyboardFocusState state)
     {
         var owner = state.Owner;
         if (!owner.IsVisible)
