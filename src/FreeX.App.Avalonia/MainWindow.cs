@@ -3822,9 +3822,7 @@ public sealed partial class MainWindow : Window
 
     private void RefreshShell(string status)
     {
-        var preserveFormulaEdit =
-            (_formulaBox.IsFocused || _inlineCellEditor?.IsFocused == true || _inlineCellEditAddress is not null) &&
-            _session.FormulaEditAddress is not null;
+        var preserveFormulaEdit = _session.FormulaEditAddress is not null;
         var formulaText = _inlineCellEditText ?? _inlineCellEditor?.Text ?? _formulaBox.Text;
         var formulaCaretIndex = _formulaBox.CaretIndex;
         var formulaSelectionStart = _formulaBox.SelectionStart;
@@ -7867,18 +7865,18 @@ public sealed partial class MainWindow : Window
                 return;
             }
 
-            // In Draw Border mode skip autofill / move-drag detection and go straight to
-            // selection-drag so the drag extent becomes the range that gets bordered.
-            if (!_borderDrawModeActive &&
-                (TryBeginAutofillDrag(args, border, address) ||
-                 TryBeginSelectionMoveDrag(args, border, address)))
+            if (point.Properties.IsLeftButtonPressed &&
+                TryInsertFormulaPointReference(address))
             {
                 args.Handled = true;
                 return;
             }
 
-            if (point.Properties.IsLeftButtonPressed &&
-                TryInsertFormulaPointReference(address))
+            // In Draw Border mode skip autofill / move-drag detection and go straight to
+            // selection-drag so the drag extent becomes the range that gets bordered.
+            if (!_borderDrawModeActive &&
+                (TryBeginAutofillDrag(args, border, address) ||
+                 TryBeginSelectionMoveDrag(args, border, address)))
             {
                 args.Handled = true;
                 return;
@@ -8000,9 +7998,19 @@ public sealed partial class MainWindow : Window
                 return;
 
             _inlineCellEditText = editor.Text ?? "";
-            _formulaBox.Text = _inlineCellEditText;
+            _isApplyingFormulaBoxText = true;
+            try
+            {
+                _formulaBox.Text = _inlineCellEditText;
+            }
+            finally
+            {
+                _isApplyingFormulaBoxText = false;
+            }
+
             ClearFormulaReferenceEntrySpan();
             UpdateFormulaRangeEntryStateAfterTextChanged(_inlineCellEditText);
+            RefreshFormulaReferenceHighlights();
         };
         editor.KeyDown += (_, args) => InlineCellEditor_KeyDown(address, editor, args);
 
@@ -8259,6 +8267,9 @@ public sealed partial class MainWindow : Window
 
     private TextBox? GetFormulaRangeEntryEditor()
     {
+        if (_formulaBox.IsFocused && IsFormulaRangeEntryActive(_formulaBox.Text))
+            return _formulaBox;
+
         if (_inlineCellEditor is { } inlineEditor &&
             _inlineCellEditAddress is not null &&
             IsFormulaRangeEntryActive(inlineEditor.Text))
@@ -8673,9 +8684,10 @@ public sealed partial class MainWindow : Window
 
     private bool TryInsertFormulaPointReference(CellAddress address)
     {
-        var editor = _inlineCellEditor is not null && _inlineCellEditAddress is not null
-            ? _inlineCellEditor
-            : _formulaBox;
+        var editor = GetFormulaRangeEntryEditor();
+        if (editor is null)
+            return false;
+
         var text = editor.Text ?? "";
         if (_session.FormulaEditAddress is null ||
             !IsFormulaPointModeText(text) ||
@@ -23656,7 +23668,9 @@ public sealed partial class MainWindow : Window
 
     private void MainWindow_TextInput(object? sender, TextInputEventArgs e)
     {
-        if (_formulaBox.IsFocused || string.IsNullOrEmpty(e.Text))
+        if (_formulaBox.IsFocused ||
+            _inlineCellEditor?.IsFocused == true ||
+            string.IsNullOrEmpty(e.Text))
             return;
 
         foreach (var character in e.Text)

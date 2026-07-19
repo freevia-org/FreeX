@@ -28,21 +28,25 @@ public sealed partial class MainWindow
         RefreshShell("Ready");
         await RaiseEditingValidationKeyAsync(ResolveWorksheetValidationKeyTarget(), Key.F2);
         var inlineEditorCreated = _inlineCellEditor is not null && _inlineCellEditAddress == inlineAddress;
+        var inlineEditorStable = false;
         if (_inlineCellEditor is { } inlineEditor)
         {
             inlineEditor.SelectAll();
             RaiseEditingValidationTextInput(inlineEditor, "after");
-            await RaiseEditingValidationKeyAsync(inlineEditor, Key.Enter);
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
+            inlineEditorStable = ReferenceEquals(_inlineCellEditor, inlineEditor);
+            if (_inlineCellEditor is { } currentInlineEditor)
+                await RaiseEditingValidationKeyAsync(currentInlineEditor, Key.Enter);
         }
 
         var inlineCommitted = sheet.GetValue(inlineAddress) is TextValue { Value: "after" };
         results.Add(new InteractionValidationResult(
             "cell-inline-edit",
             "worksheet-editing",
-            inlineEditorCreated && inlineCommitted ? "passed" : "failed",
+            inlineEditorCreated && inlineEditorStable && inlineCommitted ? "passed" : "failed",
             "routed-f2-textinput-enter",
-            $"editor={inlineEditorCreated}; committed={inlineCommitted}",
-            "Routed F2 opened the production inline editor; TextInput replaced the value and routed Enter committed it."));
+            $"editor={inlineEditorCreated}; stable={inlineEditorStable}; committed={inlineCommitted}",
+            "Routed F2 opened the production inline editor; TextInput kept that editor attached, replaced the value, and routed Enter committed it."));
 
         var formulaAddress = new CellAddress(sheet.Id, 3, 2);
         var pointTarget = new CellAddress(sheet.Id, 4, 4);
@@ -52,32 +56,36 @@ public sealed partial class MainWindow
         var inlinePointModeStarted = false;
         var inlineModeToggled = false;
         var inlinePointInserted = false;
+        var inlinePointEditorStable = false;
         var inlinePointText = "";
         if (_inlineCellEditor is { } formulaEditor)
         {
             formulaEditor.SelectAll();
             RaiseEditingValidationTextInput(formulaEditor, "=");
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Input);
+            inlinePointEditorStable = ReferenceEquals(_inlineCellEditor, formulaEditor);
             inlinePointModeStarted = _formulaRangeEntryMode;
-            await RaiseEditingValidationKeyAsync(formulaEditor, Key.F2);
+            await RaiseEditingValidationKeyAsync(_inlineCellEditor ?? formulaEditor, Key.F2);
             var editMode = !_formulaRangeEntryMode;
-            await RaiseEditingValidationKeyAsync(formulaEditor, Key.F2);
+            await RaiseEditingValidationKeyAsync(_inlineCellEditor ?? formulaEditor, Key.F2);
             inlineModeToggled = editMode && _formulaRangeEntryMode;
             inlinePointInserted = TryInsertFormulaPointReference(pointTarget);
-            inlinePointText = formulaEditor.Text ?? _inlineCellEditText ?? "";
-            await RaiseEditingValidationKeyAsync(formulaEditor, Key.Enter);
+            inlinePointText = _inlineCellEditor?.Text ?? _inlineCellEditText ?? "";
+            if (_inlineCellEditor is { } currentFormulaEditor)
+                await RaiseEditingValidationKeyAsync(currentFormulaEditor, Key.Enter);
         }
 
         var inlinePointCommitted = sheet.GetCell(formulaAddress)?.FormulaText is not null;
         results.Add(new InteractionValidationResult(
             "cell-inline-formula-edit-point-mode",
             "worksheet-editing",
-            inlinePointModeStarted && inlineModeToggled && inlinePointInserted &&
+            inlinePointEditorStable && inlinePointModeStarted && inlineModeToggled && inlinePointInserted &&
             inlinePointText.Contains("D4", StringComparison.Ordinal) && inlinePointCommitted
                 ? "passed"
                 : "failed",
             "routed-f2-textinput-mode-toggle-cell-point-enter",
-            $"pointStarted={inlinePointModeStarted}; toggled={inlineModeToggled}; inserted={inlinePointInserted}; text={inlinePointText}; committed={inlinePointCommitted}",
-            "The production inline editor entered Point mode from '=', toggled Edit/Point with F2, accepted a grid reference, and committed with Enter."));
+            $"stable={inlinePointEditorStable}; pointStarted={inlinePointModeStarted}; toggled={inlineModeToggled}; inserted={inlinePointInserted}; text={inlinePointText}; committed={inlinePointCommitted}",
+            "The production inline editor stayed attached while entering Point mode from '=', toggled Edit/Point with F2, accepted a grid reference, and committed with Enter."));
 
         var formulaBarAddress = new CellAddress(sheet.Id, 5, 2);
         _session.SelectCell(formulaBarAddress);
