@@ -192,6 +192,8 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("var from = isExit ? full : closed;");
         source.Should().Contain("opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(plan.FromOpacity, KeyTime.FromPercent(0)))");
         source.Should().Contain("isExit ? 0 : dx, isExit ? dx : 0");
+        source.Should().Contain("var fromX = isExit ? 0 : dx;");
+        source.Should().Contain("var toX = isExit ? dx : 0;");
         source.Should().Contain("_entranceShapeIds.Contains(shapeId) ? 0 : 1");
         source.Should().Contain("MotionPathEffect(sb, element, plan);");
         source.Should().Contain("Storyboard.SetTarget(flashAnim, _slideCanvas);");

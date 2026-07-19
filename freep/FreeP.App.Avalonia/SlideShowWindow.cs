@@ -1302,17 +1302,22 @@ public sealed class SlideShowWindow : Window
         double dx = plan.OffsetXFactor * w;
         double dy = plan.OffsetYFactor * h;
 
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var fromX = isExit ? 0 : dx;
+        var fromY = isExit ? 0 : dy;
+        var toX = isExit ? dx : 0;
+        var toY = isExit ? dy : 0;
         el.Opacity = 1;
         el.Clip = new RectangleGeometry(new Rect(0, 0, w, h));
-        el.RenderTransform = new TranslateTransform(dx, dy);
+        el.RenderTransform = new TranslateTransform(fromX, fromY);
 
         DelayedAction(plan.DelayMs, () =>
             AnimateTranslate(
                 el,
-                dx,
-                dy,
-                0,
-                0,
+                fromX,
+                fromY,
+                toX,
+                toY,
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal)));
     }
