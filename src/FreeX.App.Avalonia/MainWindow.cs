@@ -7998,6 +7998,7 @@ public sealed partial class MainWindow : Window
             VerticalContentAlignment = AvaloniaVerticalAlignment.Center,
         };
         AutomationProperties.SetAutomationId(editor, "WorksheetInlineCellEditor");
+        editor.TextInput += (_, args) => InlineCellEditor_TextInput(address, editor, args);
         editor.TextChanged += (_, _) =>
         {
             if (!Equals(_inlineCellEditAddress, address))
@@ -8033,6 +8034,12 @@ public sealed partial class MainWindow : Window
         if (!Equals(_inlineCellEditAddress, address) || !ReferenceEquals(_inlineCellEditor, editor))
             return;
 
+        // A queued focus handoff must never reset a caret that has already received input. This
+        // occurs on X11 when the first TextInput reaches the attached TextBox before the queued
+        // input-priority focus callback is dispatched.
+        if (editor.IsFocused && _pendingInlineCellCaretIndex is null)
+            return;
+
         var textLength = editor.Text?.Length ?? 0;
         var selectionStart = Math.Clamp(
             _pendingInlineCellCaretIndex ?? _inlineCellEditSelectionStart ?? textLength,
@@ -8049,6 +8056,57 @@ public sealed partial class MainWindow : Window
         _inlineCellEditSelectionStart = selectionStart;
         _inlineCellEditSelectionEnd = selectionEnd;
         _pendingInlineCellCaretIndex = null;
+    }
+
+    private void InlineCellEditor_TextInput(
+        CellAddress address,
+        TextBox editor,
+        TextInputEventArgs args)
+    {
+        if (!Equals(_inlineCellEditAddress, address) || !ReferenceEquals(_inlineCellEditor, editor))
+            return;
+
+        if (TryApplyInlineCellTextInput(editor, args.Text))
+            args.Handled = true;
+    }
+
+    private bool TryApplyInlineCellTextInput(TextBox inlineEditor, string? input)
+    {
+        if (string.IsNullOrEmpty(input))
+            return false;
+
+        foreach (var character in input)
+        {
+            if (char.IsControl(character))
+                return false;
+        }
+
+        var text = inlineEditor.Text ?? "";
+        var rawSelectionStart = _pendingInlineCellCaretIndex ?? Math.Min(
+            inlineEditor.SelectionStart,
+            inlineEditor.SelectionEnd);
+        var rawSelectionEnd = _pendingInlineCellCaretIndex ?? Math.Max(
+            inlineEditor.SelectionStart,
+            inlineEditor.SelectionEnd);
+        var selectionStart = Math.Clamp(
+            rawSelectionStart,
+            0,
+            text.Length);
+        var selectionLength = Math.Clamp(
+            rawSelectionEnd - rawSelectionStart,
+            0,
+            text.Length - selectionStart);
+        var nextCaretIndex = selectionStart + input.Length;
+        ApplyTextBoxEdit(
+            inlineEditor,
+            new ExcelTextEdit(
+                text.Remove(selectionStart, selectionLength).Insert(selectionStart, input),
+                nextCaretIndex,
+                0));
+        _inlineCellEditSelectionStart = nextCaretIndex;
+        _inlineCellEditSelectionEnd = nextCaretIndex;
+        _pendingInlineCellCaretIndex = null;
+        return true;
     }
 
     private void InlineCellEditor_KeyDown(CellAddress address, TextBox editor, KeyEventArgs args)
@@ -23748,42 +23806,25 @@ public sealed partial class MainWindow : Window
             string.IsNullOrEmpty(e.Text))
             return;
 
+        // X11 can source the first post-F2 TextInput from the worksheet while Avalonia is handing
+        // focus to the attached editor. Apply that packet through the same inline-editor boundary
+        // as text sourced by the TextBox, rather than starting a second formula-bar edit.
+        if (_inlineCellEditAddress is not null && _inlineCellEditor is { } inlineEditor)
+        {
+            if (TryApplyInlineCellTextInput(inlineEditor, e.Text))
+            {
+                inlineEditor.Focus();
+                e.Handled = true;
+                return;
+            }
+
+            return;
+        }
+
         foreach (var character in e.Text)
         {
             if (char.IsControl(character))
                 return;
-        }
-
-        // X11 can source the first post-F2 TextInput from the worksheet while Avalonia is handing
-        // focus to the attached editor. Apply that packet to the existing edit instead of starting
-        // a second formula-bar edit; text sourced by a TextBox remains owned by that TextBox above.
-        if (_inlineCellEditAddress is not null && _inlineCellEditor is { } inlineEditor)
-        {
-            var text = inlineEditor.Text ?? "";
-            var selectionStart = Math.Clamp(
-                Math.Min(
-                    _inlineCellEditSelectionStart ?? inlineEditor.SelectionStart,
-                    _inlineCellEditSelectionEnd ?? inlineEditor.SelectionEnd),
-                0,
-                text.Length);
-            var selectionLength = Math.Clamp(
-                Math.Abs(
-                    (_inlineCellEditSelectionEnd ?? inlineEditor.SelectionEnd) -
-                    (_inlineCellEditSelectionStart ?? inlineEditor.SelectionStart)),
-                0,
-                text.Length - selectionStart);
-            inlineEditor.Focus();
-            var nextCaretIndex = selectionStart + e.Text.Length;
-            ApplyTextBoxEdit(
-                inlineEditor,
-                new ExcelTextEdit(
-                    text.Remove(selectionStart, selectionLength).Insert(selectionStart, e.Text),
-                    nextCaretIndex,
-                    0));
-            _inlineCellEditSelectionStart = nextCaretIndex;
-            _inlineCellEditSelectionEnd = nextCaretIndex;
-            e.Handled = true;
-            return;
         }
 
         BeginFormulaEdit(_session.ActiveCell, e.Text);

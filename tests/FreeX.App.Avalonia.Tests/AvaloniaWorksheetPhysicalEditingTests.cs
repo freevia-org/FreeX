@@ -32,8 +32,17 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 var editor = FindByAutomationId<TextBox>(window, "WorksheetInlineCellEditor");
                 editor.IsFocused.Should().BeTrue("F2 must finish the physical focus handoff before X11 sends the first character");
 
+                // X11 can deliver the first character to the newly focused TextBox and a later
+                // packet through the worksheet while its input focus settles. Keep that ordering
+                // intact here: the second path must append to the TextBox-owned caret, not the
+                // selection snapshot captured before the first character.
+                RaiseRawTextInput(editor, "X");
+                await DrainInputAsync();
+                editor.Text.Should().Be("X");
+                editor.CaretIndex.Should().Be(1);
+
                 var rawTarget = window.ActiveCellBorderForTest!;
-                foreach (var character in "X11InlineCommit")
+                foreach (var character in "11InlineCommit")
                 {
                     rawTarget.Focus().Should().BeTrue();
                     RaiseRawTextInput(rawTarget, character.ToString());
@@ -110,8 +119,11 @@ public sealed class AvaloniaWorksheetPhysicalEditingTests
                 Press(window, Key.F2, PhysicalKey.F2);
                 await DrainInputAsync();
 
-                window.KeyTextInput("=");
+                var editor = FindByAutomationId<TextBox>(window, "WorksheetInlineCellEditor");
+                RaiseRawTextInput(editor, "=");
                 await DrainInputAsync();
+                editor.Text.Should().Be("=");
+                editor.CaretIndex.Should().Be(1);
                 window.FormulaPointModeForTest.Should().BeTrue();
 
                 ClickCell(window, "Cell_B2");
