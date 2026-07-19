@@ -176,6 +176,9 @@ public sealed class ChartDataLabels
     /// <summary>Separator between composed label parts. Null keeps FreeP's compact space separator.</summary>
     public string? Separator { get; set; }
 
+    /// <summary>Optional authored text properties from c:dLbls/c:txPr.</summary>
+    public ChartTextStyle? TextStyle { get; set; }
+
     /// <summary>Returns true if any label component is enabled.</summary>
     public bool HasAny => ShowValue || ShowPercent || ShowCategoryName || ShowSeriesName;
 }

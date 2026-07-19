@@ -100,7 +100,7 @@ internal static class PptxChartReader
             or "bar3DChart" or "line3DChart" or "pie3DChart" or "area3DChart" or "ofPieChart"
             or "stockChart" or "surfaceChart" or "surface3DChart");
         var chartDataLabelsEl = firstChartTypeEl?.Element(C + "dLbls");
-        shape.DataLabels = ReadDataLabels(chartDataLabelsEl);
+        shape.DataLabels = ReadDataLabels(chartDataLabelsEl, scheme);
         ApplyPowerPointPercentStackedDataLabelDefaults(firstChartTypeEl, chartDataLabelsEl, shape.DataLabels);
         ApplyPowerPointPiePercentDataLabelDefaults(firstChartTypeEl, chartDataLabelsEl, shape.DataLabels);
         shape.DataTable = ReadDataTable(plotArea.Element(C + "dTable"), scheme);
@@ -568,7 +568,7 @@ internal static class PptxChartReader
             }
 
             // Per-series data labels override
-            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"));
+            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"), scheme);
 
             shape.Series.Add(series);
 
@@ -621,7 +621,7 @@ internal static class PptxChartReader
             ReadPointStyles(serEl, scheme, series);
 
             // Per-series data labels override
-            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"));
+            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"), scheme);
 
             shape.Series.Add(series);
 
@@ -765,7 +765,7 @@ internal static class PptxChartReader
             }
 
             // Per-series data labels override
-            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"));
+            series.DataLabels = ReadDataLabels(serEl.Element(C + "dLbls"), scheme);
 
             shape.Series.Add(series);
 
@@ -1123,7 +1123,9 @@ internal static class PptxChartReader
 
     // ── Data-label parsing ─────────────────────────────────────────────────────
 
-    private static ChartDataLabels? ReadDataLabels(XElement? dLblsEl)
+    private static ChartDataLabels? ReadDataLabels(
+        XElement? dLblsEl,
+        PresentationColorScheme scheme)
     {
         if (dLblsEl is null) return null;
 
@@ -1150,6 +1152,7 @@ internal static class PptxChartReader
             ShowLegendKey    = showLegend,
             NumberFormat     = string.IsNullOrEmpty(numFmt) ? null : numFmt,
             Separator        = dLblsEl.Element(C + "separator")?.Value,
+            TextStyle        = ReadChartTextStyle(dLblsEl.Element(C + "txPr"), scheme),
             Position         = posStr switch
             {
                 "ctr"      => DataLabelPosition.Center,
