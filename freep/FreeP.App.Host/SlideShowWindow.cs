@@ -1936,7 +1936,7 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Boomerang:
-                FlyInEffect(sb, element, plan);
+                BoomerangEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Peek:
@@ -2223,6 +2223,84 @@ public sealed class SlideShowWindow : Window
             end,
             KeyTime.FromPercent(1),
             new KeySpline(0.25, 0, 0.2, 1)));
+        Storyboard.SetTarget(animation, el);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(propertyPath));
+        sb.Children.Add(animation);
+    }
+
+    private void BoomerangEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        double width = _slideCanvas.ActualWidth > 0 ? _slideCanvas.ActualWidth : 960;
+        double height = _slideCanvas.ActualHeight > 0 ? _slideCanvas.ActualHeight : 540;
+        double directionX = plan.OffsetXFactor * width;
+        double directionY = plan.OffsetYFactor * height;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        double startX = isExit ? 0 : directionX;
+        double startY = isExit ? 0 : directionY;
+        double endX = isExit ? directionX : 0;
+        double endY = isExit ? directionY : 0;
+        double overshootX = isExit
+            ? endX + directionX * 0.08
+            : endX - directionX * 0.08;
+        double overshootY = isExit
+            ? endY + directionY * 0.08
+            : endY - directionY * 0.08;
+
+        var translate = new TranslateTransform(startX, startY);
+        el.RenderTransform = translate;
+        var duration = new Duration(TimeSpan.FromMilliseconds(plan.DurationMs));
+        AddBoomerangAxisAnimation(
+            sb,
+            el,
+            startX,
+            overshootX,
+            endX,
+            duration,
+            plan.DelayMs,
+            "(UIElement.RenderTransform).(TranslateTransform.X)");
+        AddBoomerangAxisAnimation(
+            sb,
+            el,
+            startY,
+            overshootY,
+            endY,
+            duration,
+            plan.DelayMs,
+            "(UIElement.RenderTransform).(TranslateTransform.Y)");
+        var opacity = new DoubleAnimation(plan.FromOpacity, plan.ToOpacity, duration)
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+        Storyboard.SetTarget(opacity, el);
+        Storyboard.SetTargetProperty(opacity, new PropertyPath(OpacityProperty));
+        sb.Children.Add(opacity);
+    }
+
+    private static void AddBoomerangAxisAnimation(
+        Storyboard sb,
+        FrameworkElement el,
+        double start,
+        double overshoot,
+        double end,
+        Duration duration,
+        int delayMs,
+        string propertyPath)
+    {
+        var animation = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(delayMs),
+            Duration = duration
+        };
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(start, KeyTime.FromPercent(0)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            overshoot,
+            KeyTime.FromPercent(0.78),
+            new KeySpline(0.2, 0, 0.3, 1)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            end,
+            KeyTime.FromPercent(1),
+            new KeySpline(0.2, 0, 0.2, 1)));
         Storyboard.SetTarget(animation, el);
         Storyboard.SetTargetProperty(animation, new PropertyPath(propertyPath));
         sb.Children.Add(animation);
