@@ -95,6 +95,21 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Fact]
+    public void PlanTransition_DoorsUsesVerticalCenterOpening()
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = TransitionKind.Doors,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Split);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Split);
+        plan.SplitHorizontal.Should().BeTrue();
+        plan.SplitOut.Should().BeTrue();
+    }
+
+    [Fact]
     public void PlanTransition_SplitUsesDedicatedActionAndPreservesGeometry()
     {
         var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
