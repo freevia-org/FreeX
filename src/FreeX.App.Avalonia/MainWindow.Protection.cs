@@ -237,6 +237,7 @@ public sealed partial class MainWindow
         contentChildren.Add(warningText);
 
         dialog.Content = ProtectionDialogLayout(contentChildren, cancelButton, okButton);
+        AttachProtectionDialogInitialFocus(dialog, passwordBox);
         await dialog.ShowDialog(this);
     }
 
@@ -422,6 +423,7 @@ public sealed partial class MainWindow
         contentChildren.Add(warningText);
 
         dialog.Content = ProtectionDialogLayout(contentChildren, cancelButton, okButton);
+        AttachProtectionDialogInitialFocus(dialog, passwordBox);
         await dialog.ShowDialog(this);
     }
 
@@ -492,6 +494,17 @@ public sealed partial class MainWindow
     /// </summary>
     private static string ProtectText(string key, string fallback) =>
         UiText.GetNeutralResourceKeys().Contains(key) ? UiText.Get(key) : fallback;
+
+    private static void AttachProtectionDialogInitialFocus(Window dialog, TextBox passwordBox)
+    {
+        // Match WPF PasswordProtectionDialog.Loaded: route keyboard input to the password field
+        // before the shared owned-dialog lifecycle probes Tab and Escape.
+        dialog.Opened += (_, _) =>
+        {
+            passwordBox.Focus();
+            passwordBox.SelectAll();
+        };
+    }
 
     /// <summary>
     /// A bordered group with a header label — the Avalonia equivalent of the WPF <c>GroupBox</c> used by the

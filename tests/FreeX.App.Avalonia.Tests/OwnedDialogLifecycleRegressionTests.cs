@@ -68,6 +68,136 @@ public sealed class OwnedDialogLifecycleRegressionTests
     ];
 
     [Fact]
+    public async Task AllowEditRangeDialog_UsesWpfRangeBoxAsInitialFocusAndTabOrigin()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-allow-edit-range-focus-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                try
+                {
+                    window.Show();
+                    var selectedIds = new HashSet<string>(StringComparer.Ordinal)
+                    {
+                        "dialog.AllowEditRangeDialog",
+                    };
+
+                    await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        interactionOnly: true,
+                        interactionDialogCatalogIds: selectedIds);
+
+                    var contract = window.DialogInteractionContracts["dialog.AllowEditRangeDialog"];
+                    contract.InitialFocus.Should().Be("passed:TextBox#AllowEditRangeBox");
+                    contract.TabForward.Should().StartWith("passed:");
+                    contract.TabBackward.Should().StartWith("passed:");
+                    window.BuildDialogInteractionContractResults(selectedIds)
+                        .Should().ContainSingle(
+                            result => result.Status == "passed",
+                            "AllowEditRange contract should pass: {0}; {1}; {2}",
+                            contract.InitialFocus,
+                            contract.TabForward,
+                            contract.TabBackward);
+                }
+                finally
+                {
+                    foreach (var owned in window.OwnedWindows.ToArray())
+                    {
+                        if (owned.IsVisible)
+                            owned.Close();
+                    }
+
+                    if (window.IsVisible)
+                        window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(outputDirectory))
+                    Directory.Delete(outputDirectory, recursive: true);
+            }
+            catch
+            {
+                // Temp cleanup must not hide the dialog focus regression.
+            }
+        }
+    }
+
+    [Fact]
+    public async Task ConfirmPasswordDialog_UsesSharedProtectionInputFocusAndEscapeLifecycle()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-confirm-password-focus-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                try
+                {
+                    window.Show();
+                    var selectedIds = new HashSet<string>(StringComparer.Ordinal)
+                    {
+                        "dialog.ConfirmPasswordDialog",
+                    };
+
+                    await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        interactionOnly: true,
+                        interactionDialogCatalogIds: selectedIds);
+
+                    var contract = window.DialogInteractionContracts["dialog.ConfirmPasswordDialog"];
+                    contract.InitialFocus.Should().Be("passed:TextBox#ProtectSheetPasswordBox");
+                    contract.TabForward.Should().StartWith("passed:");
+                    contract.TabBackward.Should().StartWith("passed:");
+                    contract.EscapeCancel.Should().StartWith("passed:");
+                    window.BuildDialogInteractionContractResults(selectedIds)
+                        .Should().ContainSingle(
+                            result => result.Status == "passed",
+                            "ConfirmPassword contract should pass: {0}; {1}; {2}; {3}",
+                            contract.InitialFocus,
+                            contract.TabForward,
+                            contract.TabBackward,
+                            contract.EscapeCancel);
+                }
+                finally
+                {
+                    foreach (var owned in window.OwnedWindows.ToArray())
+                    {
+                        if (owned.IsVisible)
+                            owned.Close();
+                    }
+
+                    if (window.IsVisible)
+                        window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(outputDirectory))
+                    Directory.Delete(outputDirectory, recursive: true);
+            }
+            catch
+            {
+                // Temp cleanup must not hide the protection focus regression.
+            }
+        }
+    }
+
+    [Fact]
     public async Task DirectlyOwnedModelessWindow_ReceivesFocusTabCycleAndEscapeLifecycle()
     {
         await Session.Dispatch(() =>

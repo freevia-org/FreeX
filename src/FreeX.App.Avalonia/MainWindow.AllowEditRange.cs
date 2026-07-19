@@ -333,6 +333,13 @@ public sealed partial class MainWindow
             },
         };
         AttachDialogRangePicker(dialog, rangePicker, rangeBox, "range.allow-edit-range.range");
+        // Match WPF AllowEditRangeDialog.Loaded: the range input owns initial focus and its
+        // contents are selected so typing immediately replaces the current reference.
+        dialog.Opened += (_, _) =>
+        {
+            rangeBox.Focus();
+            rangeBox.SelectAll();
+        };
 
         await dialog.ShowDialog(this);
     }
