@@ -1758,7 +1758,6 @@ function Test-SourceWiring {
                 "private async Task<FindDialogResult?> ShowFindInputDialogAsync(Action<FindDialogSmokeProbe>? launchSmokeProbe = null)",
                 "private void NavigateToFindAllMatch(WorkbookFindAllMatch match)",
                 "FindOptions? options = null,",
-                "private async Task ShowReplaceDialogAsync()",
                 "private async Task<ReplaceDialogResult?> ShowReplaceInputDialogAsync(Action<ReplaceDialogSmokeProbe>? launchSmokeProbe = null)",
                 "private async Task ShowGoToDialogAsync()",
                 "private async Task ShowGoToSpecialDialogAsync()",
@@ -1812,11 +1811,6 @@ function Test-SourceWiring {
                 "var result = _session.FindAll(search.FindText, search.Options, search.MatchCase, search.MatchEntireCell);",
                 "resultsList.ItemsSource = result.Matches;",
                 "var result = _session.GoToCell(match.Address);",
-                "replacement.Action == ReplaceDialogAction.ReplaceAll",
-                "replacement.Options,",
-                "replacement.MatchCase,",
-                "replacement.MatchEntireCell",
-                "replacement.ReplacementFormat",
                 "_session.ReplaceNextValue(",
                 "_session.ReplaceAllValues(",
                 "var result = _session.GoToReference(reference);",
@@ -2141,6 +2135,12 @@ function Test-SourceWiring {
                 "CellTextOrientationLayoutPlanner.NormalizeRotationForDisplay(textRotation)",
                 "private static RotateTransform? CreateTextRotationTransform(double transformAngle)",
                 "new RotateTransform(transformAngle)"
+            )
+            Delegations = @(
+                @{
+                    MethodName = "ShowReplaceDialogAsync"
+                    TargetCall = "ShowFindReplaceTabbedDialogAsync(replaceMode: true)"
+                }
             )
             OrderedPairs = @()
         },
