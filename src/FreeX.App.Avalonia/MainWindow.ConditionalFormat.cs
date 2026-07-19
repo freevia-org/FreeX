@@ -707,7 +707,7 @@ public sealed partial class MainWindow
         };
         AvaloniaGrid.SetColumn(rightColumn, 1);
 
-        dialog.Content = new AvaloniaGrid
+        var root = new AvaloniaGrid
         {
             Margin = new Thickness(16),
             ColumnDefinitions = new ColumnDefinitions("230,*"),
@@ -717,6 +717,9 @@ public sealed partial class MainWindow
                 rightColumn,
             },
         };
+        ConfigureDialogTabCycle(dialog, root);
+        ConfigureNativeDialogInitialFocus(dialog, root, ruleTypeBox);
+        dialog.Content = root;
 
         if (launchSmokeProbe is not null)
         {
