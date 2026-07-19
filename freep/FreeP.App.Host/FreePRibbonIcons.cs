@@ -96,6 +96,7 @@ internal static class FreePRibbonIcons
             ["freep.transition.dissolve"] = RibbonCommandIconKind.Color,
             ["freep.transition.zoom"]     = RibbonCommandIconKind.Zoom,
             ["freep.transition.wheel"]    = RibbonCommandIconKind.Rotate,
+            ["freep.transition.more"]     = RibbonCommandIconKind.Effects,
 
             // Wave 4C: Transition timing
             ["freep.transition.duration"]         = RibbonCommandIconKind.History,
