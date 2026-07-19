@@ -966,14 +966,6 @@ public sealed partial class MainWindow
 
         okButton.Click += (_, _) => Accept();
         cancelButton.Click += (_, _) => dialog.Close();
-        dialog.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape)
-            {
-                dialog.Close();
-                e.Handled = true;
-            }
-        };
 
         DockPanel.SetDock(buttonRow, AvaloniaDock.Bottom);
         DockPanel.SetDock(validationText, AvaloniaDock.Bottom);

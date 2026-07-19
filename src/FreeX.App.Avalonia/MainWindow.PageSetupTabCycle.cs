@@ -15,9 +15,10 @@ public sealed partial class MainWindow
         Button cancelButton)
     {
         KeyboardNavigation.SetTabNavigation(root, KeyboardNavigationMode.Cycle);
+        ConfigureDialogCancelOnEscape(dialog, cancelButton);
         dialog.AddHandler(
             InputElement.KeyDownEvent,
-            (_, args) => HandlePageSetupTabCycle(dialog, root, cancelButton, args),
+            (_, args) => HandlePageSetupTabCycle(dialog, root, args),
             RoutingStrategies.Tunnel,
             handledEventsToo: true);
     }
@@ -25,18 +26,8 @@ public sealed partial class MainWindow
     private static void HandlePageSetupTabCycle(
         Window dialog,
         Control root,
-        Button cancelButton,
         KeyEventArgs args)
     {
-        if (args.Key == Key.Escape && args.KeyModifiers == KeyModifiers.None)
-        {
-            args.Handled = true;
-            Dispatcher.UIThread.Post(
-                () => InvokePageSetupCancel(dialog, cancelButton),
-                DispatcherPriority.Input);
-            return;
-        }
-
         if (args.Key != Key.Tab ||
             (args.KeyModifiers != KeyModifiers.None && args.KeyModifiers != KeyModifiers.Shift))
         {
@@ -55,16 +46,6 @@ public sealed partial class MainWindow
 
         tabStops[nextIndex].Focus();
         args.Handled = true;
-    }
-
-    private static void InvokePageSetupCancel(Window dialog, Button cancelButton)
-    {
-        if (!dialog.IsVisible)
-            return;
-
-        cancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, cancelButton));
-        if (dialog.IsVisible)
-            dialog.Close();
     }
 
     private static Control[] GetPageSetupTabStops(Control root)

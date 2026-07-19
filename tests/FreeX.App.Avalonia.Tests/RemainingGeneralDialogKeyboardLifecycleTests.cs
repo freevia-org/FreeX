@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Input.Raw;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 
@@ -35,6 +36,106 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
             openerName,
             CreatePageSetupArguments(openerName),
             "PageSetupCancelButton");
+    }
+
+    [Fact]
+    public async Task PreHandledRawEscape_ClosesOnceAfterKeyUp()
+    {
+        await Session.Dispatch(() =>
+        {
+            var dialog = new Window();
+            var cancelButton = new Button
+            {
+                Content = "Cancel",
+                IsCancel = true,
+            };
+            dialog.Content = cancelButton;
+
+            var cancelClickCount = 0;
+            cancelButton.Click += (_, _) =>
+            {
+                cancelClickCount++;
+                dialog.Close();
+            };
+            dialog.AddHandler(
+                InputElement.KeyDownEvent,
+                (_, args) => args.Handled = true,
+                RoutingStrategies.Tunnel,
+                handledEventsToo: true);
+            dialog.AddHandler(
+                InputElement.KeyUpEvent,
+                (_, args) => args.Handled = true,
+                RoutingStrategies.Tunnel,
+                handledEventsToo: true);
+
+            typeof(MainWindow)
+                .GetMethod(
+                    "ConfigureDialogCancelOnEscape",
+                    BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, [dialog, cancelButton]);
+
+            dialog.Show();
+            cancelButton.RaiseEvent(CreateEscapeEvent(InputElement.KeyDownEvent));
+            cancelButton.RaiseEvent(CreateEscapeEvent(InputElement.KeyUpEvent));
+            Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
+
+            cancelClickCount.Should().Be(1);
+            dialog.IsVisible.Should().BeFalse();
+            return Task.CompletedTask;
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AdvancedFilterRangePicker_RestoresDialogFocusBeforeEscape()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var owner = new MainWindow([]);
+            Window? dialog = null;
+            Task? opener = null;
+            try
+            {
+                owner.Show();
+                opener = InvokeOpener(owner, "ShowAdvancedFilterInputDialogAsync", []);
+                dialog = await WaitForOwnedDialogAsync(owner);
+                var controls = dialog.GetVisualDescendants().OfType<Control>().ToArray();
+                var picker = controls.OfType<Button>().Single(button =>
+                    AutomationProperties.GetAutomationId(button) == "AdvancedFilterSelectListRangeButton");
+                var target = controls.OfType<TextBox>().Single(textBox =>
+                    AutomationProperties.GetAutomationId(textBox) == "AdvancedFilterListRangeBox");
+
+                picker.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, picker));
+                typeof(MainWindow)
+                    .GetMethod(
+                        "RaiseDialogRangeValidationKey",
+                        BindingFlags.Instance | BindingFlags.NonPublic)!
+                    .Invoke(owner, [Key.Enter]);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
+
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(target);
+                MainWindow.SendDialogKeyForTest(
+                        dialog,
+                        Key.Escape,
+                        RawInputModifiers.None,
+                        out var error)
+                    .Should().BeTrue(error);
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Background);
+
+                dialog.IsVisible.Should().BeFalse();
+                await AwaitClosedAsync(opener);
+            }
+            finally
+            {
+                if (dialog?.IsVisible == true)
+                    dialog.Close();
+                if (opener is not null)
+                    await AwaitClosedAsync(opener);
+                if (owner.IsVisible)
+                    owner.Close();
+            }
+
+            return 0;
+        }, CancellationToken.None);
     }
 
     private static async Task AssertProductionEscapeAsync(
@@ -92,6 +193,15 @@ public sealed class RemainingGeneralDialogKeyboardLifecycleTests
             return 0;
         }, CancellationToken.None);
     }
+
+    private static KeyEventArgs CreateEscapeEvent(RoutedEvent<KeyEventArgs> routedEvent) =>
+        new()
+        {
+            RoutedEvent = routedEvent,
+            Key = Key.Escape,
+            PhysicalKey = PhysicalKey.Escape,
+            KeyDeviceType = KeyDeviceType.Keyboard,
+        };
 
     private static object?[] CreatePageSetupArguments(string openerName)
     {

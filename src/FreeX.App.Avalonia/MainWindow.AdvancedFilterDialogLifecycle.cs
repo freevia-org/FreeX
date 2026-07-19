@@ -10,30 +10,47 @@ public sealed partial class MainWindow
     private static void ConfigureAdvancedFilterDialogEscape(
         Window dialog,
         Button cancelButton)
+        => ConfigureDialogCancelOnEscape(dialog, cancelButton);
+
+    private static void ConfigureDialogCancelOnEscape(
+        Window dialog,
+        Button cancelButton)
     {
+        var cancelQueued = false;
+
+        void InvokeCancel()
+        {
+            cancelQueued = false;
+            if (!dialog.IsVisible)
+                return;
+
+            cancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, cancelButton));
+            if (dialog.IsVisible)
+                dialog.Close();
+        }
+
+        void QueueCancel(KeyEventArgs args)
+        {
+            if (args.Key != Key.Escape || args.KeyModifiers != KeyModifiers.None)
+                return;
+
+            args.Handled = true;
+            if (cancelQueued)
+                return;
+
+            cancelQueued = true;
+            Dispatcher.UIThread.Post(InvokeCancel, DispatcherPriority.Input);
+        }
+
         dialog.AddHandler(
             InputElement.KeyDownEvent,
-            (_, args) =>
-            {
-                if (args.Key != Key.Escape || args.KeyModifiers != KeyModifiers.None)
-                    return;
-
-                args.Handled = true;
-                Dispatcher.UIThread.Post(
-                    () => InvokeAdvancedFilterCancel(dialog, cancelButton),
-                    DispatcherPriority.Input);
-            },
-            RoutingStrategies.Tunnel,
+            (_, args) => QueueCancel(args),
+            RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
             handledEventsToo: true);
-    }
-
-    private static void InvokeAdvancedFilterCancel(Window dialog, Button cancelButton)
-    {
-        if (!dialog.IsVisible)
-            return;
-
-        cancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, cancelButton));
-        if (dialog.IsVisible)
-            dialog.Close();
+        dialog.AddHandler(
+            InputElement.KeyUpEvent,
+            (_, args) => QueueCancel(args),
+            RoutingStrategies.Tunnel | RoutingStrategies.Bubble,
+            handledEventsToo: true);
     }
 }
