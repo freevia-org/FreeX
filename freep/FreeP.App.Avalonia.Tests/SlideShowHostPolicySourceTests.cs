@@ -49,7 +49,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("SlideShowHostPlanner.PlanPointerClick(");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanTransition(");
         source.Should().Contain("PlaySplitTransition(");
+        source.Should().Contain("PlayBlindsTransition(");
         source.Should().Contain("SlideShowMaskGeometryPlanner.BuildSplitRects(");
+        source.Should().Contain("SlideShowMaskGeometryPlanner.BuildBlindsTransitionRects(");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanAnimationStep(");
         source.Should().Contain("SlideShowPlaybackPlanner.PlanFallbackAnimation(");
         source.Should().Contain("SlideShowPlaybackFramePlanner.PlanFrame(");

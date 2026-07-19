@@ -35,6 +35,23 @@ public sealed class SlideShowMaskGeometryPlannerTests
     }
 
     [Fact]
+    public void BuildBlindsTransitionRects_InterpolatesAllBands()
+    {
+        var rects = SlideShowMaskGeometryPlanner.BuildBlindsTransitionRects(
+            width: 80,
+            height: 40,
+            bandCount: 4,
+            progress: 0.5,
+            horizontal: true);
+
+        rects.Should().Equal(
+            new SlideShowMaskRect(0, 0, 80, 5),
+            new SlideShowMaskRect(0, 10, 80, 5),
+            new SlideShowMaskRect(0, 20, 80, 5),
+            new SlideShowMaskRect(0, 30, 80, 5));
+    }
+
+    [Fact]
     public void BuildRandomBars_UsesStableNonSequentialOrderAndCompleteBands()
     {
         var first = SlideShowMaskGeometryPlanner.BuildRandomBars(960, 540, 8, horizontal: true);

@@ -141,6 +141,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Dissolve, SlideShowTransitionPlaybackKind.Fade)]
     [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Fade)]
     [InlineData(TransitionKind.Split, SlideShowTransitionPlaybackKind.Split)]
+    [InlineData(TransitionKind.Blinds, SlideShowTransitionPlaybackKind.Blinds)]
     [InlineData(TransitionKind.Push, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Cover, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Wipe, SlideShowTransitionPlaybackKind.PushLike)]
@@ -205,6 +206,23 @@ public sealed class SlideShowHostPlannerTests
         plan.PlaybackKind.Should().Be(SlideShowTransitionPlaybackKind.Split);
         plan.SplitHorizontal.Should().Be(expectedHorizontal);
         plan.SplitOut.Should().Be(expectedOut);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Horizontal, true)]
+    [InlineData(TransitionDirection.Vertical, false)]
+    public void PlanTransition_ResolvesBlindsAxis(
+        TransitionDirection direction,
+        bool expectedHorizontal)
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Blinds,
+            Direction = direction
+        });
+
+        plan.PlaybackKind.Should().Be(SlideShowTransitionPlaybackKind.Blinds);
+        plan.BlindsHorizontal.Should().Be(expectedHorizontal);
     }
 
     [Fact]
