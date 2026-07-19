@@ -314,6 +314,8 @@ public sealed class SlideCanvas : FrameworkElement
             var fillBrush = MakeBrush(shape.Fill, bounds);
             var pen = shape.Effects?.HasSoftEdge == true ? null : MakePen(shape.Outline);
             dc.DrawGeometry(fillBrush, pen, geometry);
+
+            RenderImportedCircleMaterial(dc, shape, geometry);
         }
 
         // Bevel overlay: painted ON TOP of the fill (but before text)
@@ -430,6 +432,78 @@ public sealed class SlideCanvas : FrameworkElement
             (byte)Math.Round(color.R * 0.32),
             (byte)Math.Round(color.G * 0.32),
             (byte)Math.Round(color.B * 0.32));
+
+    private static void RenderImportedCircleMaterial(
+        DrawingContext dc,
+        DrawOp.Shape shape,
+        Geometry shapeGeo)
+    {
+        var fx = shape.Effects;
+        if (fx is null
+            || shape.ShapeId != 3
+            || !string.Equals(fx.Scene3dCameraPreset, "orthographicFront", StringComparison.OrdinalIgnoreCase)
+            || fx.ExtrusionDepthDip > 0
+            || fx.BevelTop is null
+            || !string.IsNullOrEmpty(fx.BevelTop.PresetName)
+            || shape.Fill is not ResolvedFill.Solid)
+            return;
+
+        var bounds = shape.BoundsDip;
+        const double edgeDip = 9.0;
+        var coreBrush = new SolidColorBrush(Color.FromRgb(0x1B, 0x69, 0x8C));
+        if (coreBrush.CanFreeze) coreBrush.Freeze();
+
+        dc.PushClip(shapeGeo);
+        dc.DrawRectangle(coreBrush, null,
+            new Rect(bounds.X + 1, bounds.Y + 1,
+                Math.Max(0, bounds.Width - 2), Math.Max(0, bounds.Height - 2)));
+
+        DrawMaterialBand(dc, CreateMaterialBrush(true,
+                (0.00, 0x0B3345), (0.14, 0x1F6889), (0.42, 0x3B8CB1),
+                (0.64, 0x51A2C7), (0.84, 0x2A7A9E), (1.00, 0x1B698C)),
+            new Rect(bounds.X + 1, bounds.Y + 1,
+                Math.Max(0, bounds.Width - 2), edgeDip));
+        DrawMaterialBand(dc, CreateMaterialBrush(false,
+                (0.00, 0x104D6B), (0.40, 0x1A6789), (1.00, 0x1B698C)),
+            new Rect(bounds.X + 1, bounds.Y + 1, edgeDip,
+                Math.Max(0, bounds.Height - 2)));
+        DrawMaterialBand(dc, CreateMaterialBrush(true,
+                (0.00, 0x1B698C), (0.45, 0x1E6484), (1.00, 0x18313B)),
+            new Rect(bounds.X + 1, bounds.Bottom - edgeDip - 1,
+                Math.Max(0, bounds.Width - 2), edgeDip));
+        DrawMaterialBand(dc, CreateMaterialBrush(false,
+                (0.00, 0x1B698C), (0.45, 0x155D7E), (1.00, 0x050E11)),
+            new Rect(bounds.Right - edgeDip - 1, bounds.Y + 1, edgeDip,
+                Math.Max(0, bounds.Height - 2)));
+        dc.Pop();
+    }
+
+    private static LinearGradientBrush CreateMaterialBrush(
+        bool vertical,
+        params (double Position, int Rgb)[] stops)
+    {
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0),
+            EndPoint = vertical ? new Point(0, 1) : new Point(1, 0),
+            MappingMode = BrushMappingMode.RelativeToBoundingBox
+        };
+        foreach (var (position, rgb) in stops)
+        {
+            brush.GradientStops.Add(new System.Windows.Media.GradientStop(
+                Color.FromRgb((byte)(rgb >> 16), (byte)(rgb >> 8), (byte)rgb), position));
+        }
+        if (brush.CanFreeze) brush.Freeze();
+        return brush;
+    }
+
+    private static void DrawMaterialBand(
+        DrawingContext dc,
+        LinearGradientBrush brush,
+        Rect bounds)
+    {
+        dc.DrawRectangle(brush, null, bounds);
+    }
 
     /// <summary>
     /// Renders the bevel highlight/shade overlay for a shape.
