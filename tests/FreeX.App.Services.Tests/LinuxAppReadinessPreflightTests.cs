@@ -75,6 +75,9 @@ public sealed class LinuxAppReadinessPreflightTests
         runner.Should().Contain("COPY app.tar.gz /tmp/app.tar.gz");
         runner.Should().Contain("Docker image '$appImage' exists but is not owned by this harness.");
         runner.Should().Contain("FreeX-LinuxInteractive/$workspaceKey/$appKey/publish/linux-x64");
+        runner.Should().Contain("@(\"stop\", \"--timeout\", \"10\", $containerName) -AllowFailure");
+        runner.Should().Contain("$null -ne (Get-OwnedContainerStatus)");
+        runner.Should().NotContain("@(\"stop\", \"--time\", \"10\", $containerName)");
 
         dockerfile.Should().Contain("FROM ubuntu:24.04");
         dockerfile.Should().Contain("novnc");

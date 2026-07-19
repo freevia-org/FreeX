@@ -248,7 +248,10 @@ if ($null -ne $existingStatus) {
         throw "Interactive container '$containerName' already exists with status '$existingStatus'. Use -Replace or the Stop action."
     }
 
-    Invoke-Docker -Arguments @("stop", "--time", "10", $containerName) | Out-Null
+    $stop = Invoke-Docker -Arguments @("stop", "--timeout", "10", $containerName) -AllowFailure
+    if ($stop.ExitCode -ne 0 -and $null -ne (Get-OwnedContainerStatus)) {
+        throw "Could not replace owned interactive container '$containerName'.`n$($stop.Output -join [Environment]::NewLine)"
+    }
 }
 
 New-Item -ItemType Directory -Path $appOutputRoot, $publishDir, $documentsDir -Force | Out-Null

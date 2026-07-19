@@ -250,18 +250,22 @@ try {
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
-    if ($ContextStart -gt 0) {
-        foreach ($existingContextPath in Get-ChildItem -LiteralPath $reportDirectory -Filter "context-batch-*.json" -File) {
-            $existingContextManifest = Read-CompletedJsonManifest -Path $existingContextPath.FullName -Deadline (Get-Date).AddMinutes(1)
-            if ($null -eq $existingContextManifest) {
-                throw "Existing context batch is incomplete: $($existingContextPath.FullName)"
-            }
-            $combinedResults += @($existingContextManifest.results)
-        }
-    }
-
     for ($contextStart = $ContextStart; $contextStart -lt $authoritativeContextCount; $contextStart += $ContextBatchSize) {
         $contextCount = [Math]::Min($ContextBatchSize, $authoritativeContextCount - $contextStart)
+        $existingContextPath = Join-Path $reportDirectory ("context-batch-{0:D3}.json" -f $contextStart)
+        if (Test-Path -LiteralPath $existingContextPath -PathType Leaf) {
+            $batchManifest = Read-CompletedJsonManifest -Path $existingContextPath -Deadline (Get-Date).AddMinutes(1)
+            if ($null -eq $batchManifest) {
+                throw "Existing context batch is incomplete: $existingContextPath"
+            }
+            if ([int]$batchManifest.contextMenuDispatchCatalogCount -ne $authoritativeContextCount) {
+                throw "Existing context-menu dispatch catalog count changed during validation."
+            }
+            $combinedResults += @($batchManifest.results)
+            Write-Host "Reusing context-menu dispatch batch $contextStart..$($contextStart + $contextCount - 1)."
+            continue
+        }
+
         $appArguments = @(
             "--interaction-validation", "/work/validation",
             "--interaction-validation-dialog-count", "0",
@@ -298,6 +302,24 @@ try {
         } else {
             [Math]::Min($DialogBatchSize, $authoritativeDialogCount - $dialogStart)
         }
+        $existingDialogPath = Join-Path $reportDirectory ("batch-{0:D3}.json" -f $dialogStart)
+        if (Test-Path -LiteralPath $existingDialogPath -PathType Leaf) {
+            $batchManifest = Read-CompletedJsonManifest -Path $existingDialogPath -Deadline (Get-Date).AddMinutes(1)
+            if ($null -eq $batchManifest) {
+                throw "Existing dialog batch is incomplete: $existingDialogPath"
+            }
+            if ([int]$batchManifest.dialogCatalogCount -ne $authoritativeDialogCount) {
+                throw "Existing dialog catalog count changed during validation."
+            }
+            if ([int]$batchManifest.ribbonCommandCatalogCount -ne $authoritativeRibbonCount) {
+                throw "Existing dialog batch ribbon catalog count changed during validation."
+            }
+            if ($null -eq $manifest) { $manifest = $batchManifest }
+            $combinedResults += @($batchManifest.results)
+            Write-Host "Reusing dialog interaction batch $dialogStart..$($dialogStart + $dialogCount - 1)."
+            continue
+        }
+
         $appArguments = @(
             "--interaction-validation", "/work/validation",
             "--interaction-validation-dialog-start", [string]$dialogStart,
@@ -361,6 +383,20 @@ try {
     # substantial visual state, and Avalonia retains some subscriptions until process shutdown.
     for ($ribbonStart = 0; $ribbonStart -lt $authoritativeRibbonCount; $ribbonStart += $RibbonBatchSize) {
         $ribbonCount = [Math]::Min($RibbonBatchSize, $authoritativeRibbonCount - $ribbonStart)
+        $existingRibbonPath = Join-Path $reportDirectory ("ribbon-batch-{0:D3}.json" -f $ribbonStart)
+        if (Test-Path -LiteralPath $existingRibbonPath -PathType Leaf) {
+            $batchManifest = Read-CompletedJsonManifest -Path $existingRibbonPath -Deadline (Get-Date).AddMinutes(1)
+            if ($null -eq $batchManifest) {
+                throw "Existing ribbon batch is incomplete: $existingRibbonPath"
+            }
+            if ([int]$batchManifest.ribbonCommandCatalogCount -ne $authoritativeRibbonCount) {
+                throw "Existing ribbon command catalog count changed during validation."
+            }
+            $combinedResults += @($batchManifest.results)
+            Write-Host "Reusing ribbon interaction batch $ribbonStart..$($ribbonStart + $ribbonCount - 1)."
+            continue
+        }
+
         $appArguments = @(
             "--interaction-validation", "/work/validation",
             "--interaction-validation-dialog-start", "0",

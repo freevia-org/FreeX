@@ -80,6 +80,11 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.DoesNotContain("$authoritativeDialogCount = 120", script, StringComparison.Ordinal);
         Assert.Contains("$batchManifest.dialogCatalogCount", script, StringComparison.Ordinal);
         Assert.Contains("[int]$DialogBatchSize = 1", script, StringComparison.Ordinal);
+        Assert.Contains("$existingContextPath", script, StringComparison.Ordinal);
+        Assert.Contains("$existingDialogPath", script, StringComparison.Ordinal);
+        Assert.Contains("$existingRibbonPath", script, StringComparison.Ordinal);
+        Assert.Contains("Reusing dialog interaction batch", script, StringComparison.Ordinal);
+        Assert.Contains("Reusing ribbon interaction batch", script, StringComparison.Ordinal);
     }
 
     [Fact]
