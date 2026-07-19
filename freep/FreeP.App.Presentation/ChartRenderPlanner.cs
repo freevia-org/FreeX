@@ -3442,8 +3442,13 @@ public static partial class ChartRenderPlanner
             Math.Sin(20.0 * Math.PI / 180.0);
         double depthRatio = Math.Clamp((view3D.DepthPercent ?? 100) / 100.0, 0.1, 5.0);
         double heightRatio = Math.Clamp((view3D.HeightPercent ?? 100) / 100.0, 0.1, 5.0);
-        double perspectiveRatio = 1.0 +
-            (Math.Clamp(view3D.Perspective ?? 30, 0, 100) - 30) / 100.0 * 0.15;
+        // c:rAngAx requests orthogonal chart axes rather than a perspective
+        // projection. Preserve the authored depth/elevation while suppressing
+        // only the perspective lift in that camera mode.
+        double perspectiveRatio = view3D.RightAngleAxes == true
+            ? 1.0
+            : 1.0 +
+                (Math.Clamp(view3D.Perspective ?? 30, 0, 100) - 30) / 100.0 * 0.15;
 
         depthX *= azimuthRatio * depthRatio;
         depthY *= elevationRatio * depthRatio;
