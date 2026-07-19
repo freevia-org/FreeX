@@ -101,6 +101,9 @@ public sealed class DocumentView : RichTextBox
     [ThreadStatic]
     private static string? _renderFileName;
 
+    [ThreadStatic]
+    private static bool _renderPageBreakMarkers = true;
+
     /// <summary>
     /// The 1-based page number to use when resolving PAGE fields during a header/footer sub-editor render
     /// in <see cref="DocumentViewMode.PagedEdit"/>. Zero means "not set" (fall back to cached). Set just
@@ -256,6 +259,12 @@ public sealed class DocumentView : RichTextBox
     /// <see cref="ApplyPageChrome"/>). Re-applied on every <see cref="Render"/> and when page settings change.
     /// </summary>
     public bool PrintLayoutEnabled => ViewMode == DocumentViewMode.PrintLayout;
+
+    /// <summary>
+    /// Whether a paragraph with <c>w:pageBreakBefore</c> paints the editor-only separator line.
+    /// Pagination still honours the break when this is disabled.
+    /// </summary>
+    public bool RenderPageBreakMarkers { get; set; } = true;
 
     /// <summary>
     /// The active document view mode (View ▸ Views). Defaults to <see cref="DocumentViewMode.PrintLayout"/>
@@ -4428,6 +4437,7 @@ public sealed class DocumentView : RichTextBox
         // read in BuildRun, never persisted beyond the Render() call.
         _renderFileName = CurrentFileName;
         _renderReviewDisplayPolicy = CurrentReviewDisplayPolicy;
+        _renderPageBreakMarkers = RenderPageBreakMarkers;
         var flow = new FlowDocument { PagePadding = new Thickness(0) };
         flow.FontFamily = new FontFamily(_model.DefaultRun.FontFamily ?? "Calibri");
         flow.FontSize = (_model.DefaultRun.FontSizePt ?? 11) * PxPerPoint;
@@ -8202,7 +8212,7 @@ public sealed class DocumentView : RichTextBox
         // A forced page break before the paragraph (w:pageBreakBefore) has no FlowDocument equivalent,
         // so render it as a dashed separator along the paragraph's top edge — a visible "page break"
         // marker — and carry the flag on the Tag so it survives commit and round-trips to docx.
-        if (paraFmt.PageBreakBefore)
+        if (paraFmt.PageBreakBefore && _renderPageBreakMarkers)
         {
             wpf.BorderBrush ??= new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A));
             wpf.BorderThickness = new Thickness(

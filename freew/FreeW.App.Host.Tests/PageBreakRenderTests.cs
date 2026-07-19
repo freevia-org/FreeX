@@ -42,4 +42,24 @@ public sealed class PageBreakRenderTests
         var paragraph = view.Model.Blocks.OfType<Paragraph>().First();
         Assert.Contains(paragraph.Runs, r => r.IsPageBreak);
     }
+
+    [StaFact]
+    public void PageBreakBefore_CanSuppressEditorMarkerWithoutChangingPagination()
+    {
+        var doc = TextDocument.CreateEmpty();
+        doc.Blocks.Clear();
+        var source = new Paragraph
+        {
+            Formatting = ParagraphFormatting.Default with { PageBreakBefore = true }
+        };
+        source.Runs.Add(new Run("next page"));
+        doc.Blocks.Add(source);
+
+        var view = new DocumentView { RenderPageBreakMarkers = false };
+        view.LoadModel(doc);
+
+        var paragraph = view.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().First();
+        Assert.True(paragraph.BreakPageBefore);
+        Assert.Equal(0, paragraph.BorderThickness.Top);
+    }
 }

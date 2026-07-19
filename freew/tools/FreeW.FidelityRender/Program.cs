@@ -199,7 +199,11 @@ static void RenderDocumentComposite(
     int pixH = (int)Math.Max(1, Math.Round(pageHDip));
 
     // ═══ LAYER 2: Build FlowDocument with correct column layout ═══════════════════════════════════
-    var bodyView = new DocumentView { Width = pageWDip };
+    var bodyView = new DocumentView
+    {
+        Width = pageWDip,
+        RenderPageBreakMarkers = false
+    };
     bodyView.LoadModel(doc);
 
     // Detach the FlowDocument so we can paginate it ourselves (same pattern as bare path).
@@ -288,7 +292,11 @@ static void RenderDocumentComposite(
             - PageLayout.PointsToDip(page.ColumnSpacingPt) * (page.ColumnCount - 1)) / page.ColumnCount;
         // Use a fresh FlowDocument for the diagnostic pagination pass. Changing column geometry on
         // the production FlowDocument after WPF has realized its paginator leaves stale page visuals.
-        var diagnosticView = new DocumentView { Width = pageWDip };
+        var diagnosticView = new DocumentView
+        {
+            Width = pageWDip,
+            RenderPageBreakMarkers = false
+        };
         diagnosticView.LoadModel(doc);
         var diagnosticFlow = diagnosticView.Document;
         diagnosticFlow.PageWidth = diagnosticColumnWidth + flow.PagePadding.Left + flow.PagePadding.Right;
@@ -1785,7 +1793,11 @@ static int RunBare(string input, string outDir, int maxPages)
         {
             var doc = DocxReader.Read(file);
 
-            var view = new DocumentView { Width = pageW };
+            var view = new DocumentView
+            {
+                Width = pageW,
+                RenderPageBreakMarkers = false
+            };
             view.LoadModel(doc);
 
             FlowDocument flow = view.Document;
