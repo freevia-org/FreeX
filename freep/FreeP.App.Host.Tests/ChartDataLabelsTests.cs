@@ -110,10 +110,34 @@ public sealed class ChartDataLabelsTests : IDisposable
     [Fact]
     public void RoundTrip_ChartLevelDataLabels_NumberFormat_Preserved()
     {
-        var chart = BuildColumnChartWithLabels(showValue: true, numFmt: "0.00");
+        var chart = BuildColumnChartWithLabels(
+            showValue: true,
+            position: DataLabelPosition.OutsideEnd,
+            numFmt: "0.00");
         var rt    = DoRoundTrip(chart);
 
         rt.DataLabels!.NumberFormat.Should().Be("0.00");
+    }
+
+    [Fact]
+    public void RoundTrip_ChartLevelDataLabels_TextStyle_Preserved()
+    {
+        var chart = BuildColumnChartWithLabels(showValue: true);
+        chart.DataLabels!.TextStyle = new ChartTextStyle
+        {
+            FontSizePt = 11.5,
+            Bold = true,
+            Italic = true,
+            FontFamily = "Arial"
+        };
+
+        var rt = DoRoundTrip(chart);
+
+        rt.DataLabels!.TextStyle.Should().NotBeNull();
+        rt.DataLabels.TextStyle!.FontSizePt.Should().Be(11.5);
+        rt.DataLabels.TextStyle.Bold.Should().BeTrue();
+        rt.DataLabels.TextStyle.Italic.Should().BeTrue();
+        rt.DataLabels.TextStyle.FontFamily.Should().Be("Arial");
     }
 
     [Fact]
@@ -673,6 +697,27 @@ public sealed class ChartDataLabelsTests : IDisposable
             "numFmt must appear before dLblPos (CT_DLbls schema order)");
         dLblPosPos.Should().BeLessThan(showValPos,
             "dLblPos must appear before showVal (CT_DLbls schema order)");
+    }
+
+    [Fact]
+    public void DLbls_ChildOrder_TextPropertiesFollowNumFmt()
+    {
+        var chart = BuildColumnChartWithLabels(
+            showValue: true,
+            position: DataLabelPosition.OutsideEnd,
+            numFmt: "0.00");
+        chart.DataLabels!.TextStyle = new ChartTextStyle { FontFamily = "Arial" };
+
+        var xmlText = ExtractFirstChartXml(WriteToTempPptx(chart));
+        int numFmtPos = xmlText.IndexOf("<c:numFmt", StringComparison.Ordinal);
+        int txPrPos = xmlText.IndexOf("<c:txPr", StringComparison.Ordinal);
+        int dLblPosPos = xmlText.IndexOf("<c:dLblPos", StringComparison.Ordinal);
+
+        numFmtPos.Should().BeGreaterThan(-1);
+        txPrPos.Should().BeGreaterThan(-1);
+        dLblPosPos.Should().BeGreaterThan(-1);
+        numFmtPos.Should().BeLessThan(txPrPos);
+        txPrPos.Should().BeLessThan(dLblPosPos);
     }
 
     [Fact]

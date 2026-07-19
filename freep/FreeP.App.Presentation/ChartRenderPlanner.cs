@@ -480,6 +480,8 @@ public readonly record struct ChartDataLabelPlan(
     public ChartFillPlan? LegendKeyFill { get; init; }
     public bool WrapText { get; init; }
     public SrgbColor? TextColor { get; init; }
+    public bool IsItalic { get; init; }
+    public string? FontFamily { get; init; }
 }
 
 public readonly record struct ChartLegendItemPlan(
@@ -5316,6 +5318,23 @@ public static partial class ChartRenderPlanner
         return plans;
     }
 
+    private static ChartDataLabelPlan ApplyDataLabelTextStyle(
+        ChartDataLabelPlan plan,
+        ChartDataLabels labels)
+    {
+        var style = labels.TextStyle;
+        return style is null
+            ? plan
+            : plan with
+            {
+                IsBold = style.Bold ?? plan.IsBold,
+                IsItalic = style.Italic ?? plan.IsItalic,
+                FontSize = style.FontSizePt is > 0 ? style.FontSizePt.Value : plan.FontSize,
+                FontFamily = style.FontFamily ?? plan.FontFamily,
+                TextColor = style.Color?.Resolved ?? plan.TextColor
+            };
+    }
+
     public static (double min, double max, double majorUnit) ComputePrimaryValueAxisRange(
         ChartShape chart)
     {
@@ -6625,14 +6644,14 @@ public static partial class ChartRenderPlanner
             if (string.IsNullOrEmpty(text))
                 continue;
 
-            plans.Add(new ChartDataLabelPlan(
+            plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                 seriesIndex,
                 pointIndex,
                 text,
                 PlanScatterDataLabelBounds(point.Value, labels.Position ?? DataLabelPosition.Above),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center));
+                Alignment: ChartPlanTextAlignment.Center), labels));
         }
 
         return plans;
@@ -6825,6 +6844,7 @@ public static partial class ChartRenderPlanner
             {
                 WrapText = importedPercentStackedCluster
             };
+            labelPlan = ApplyDataLabelTextStyle(labelPlan, labels);
             if (labels.ShowLegendKey)
             {
                 const double keySize = 6.0;
@@ -6894,14 +6914,14 @@ public static partial class ChartRenderPlanner
             if (string.IsNullOrEmpty(text))
                 continue;
 
-            plans.Add(new ChartDataLabelPlan(
+            plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                 seriesIndex,
                 categoryIndex,
                 text,
                 new ChartPlanRect(x - 20, y - ResolveDataLabelHeight(chart) - 3, 40, ResolveDataLabelHeight(chart)),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center));
+                Alignment: ChartPlanTextAlignment.Center), labels));
         }
 
         return plans;
@@ -7036,14 +7056,14 @@ public static partial class ChartRenderPlanner
             };
             double labelY = barY + slot.SeriesSize / 2 - labelHeight / 2;
 
-            plans.Add(new ChartDataLabelPlan(
+            plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                 seriesIndex,
                 categoryIndex,
                 text,
                 new ChartPlanRect(labelX, labelY, 44, labelHeight),
                 IsBold: false,
                 FontSize: ResolveTextFontSize(chart, 6.5),
-                Alignment: ChartPlanTextAlignment.Center));
+                Alignment: ChartPlanTextAlignment.Center), labels));
         }
 
         return plans;
@@ -7089,7 +7109,7 @@ public static partial class ChartRenderPlanner
                 double labelX = centerX + labelRadius * Math.Cos(midAngle);
                 double labelY = centerY + labelRadius * Math.Sin(midAngle);
                 double labelWidth = Math.Max(64, text.Length * 12.0);
-                plans.Add(new ChartDataLabelPlan(
+                plans.Add(ApplyDataLabelTextStyle(new ChartDataLabelPlan(
                     SeriesIndex: 0,
                     CategoryIndex: visibleValue.PointIndex,
                     Text: text,
@@ -7101,7 +7121,7 @@ public static partial class ChartRenderPlanner
                     TextColor = UsesImportedPieLegendDefaults(chart)
                         ? new SrgbColor(0x00, 0x00, 0x00)
                         : null
-                });
+                }, labels));
             }
 
             startAngle += sweepAngle;

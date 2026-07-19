@@ -539,6 +539,10 @@ internal static class PptxChartWriter
                 new XAttribute("formatCode", labels.NumberFormat),
                 new XAttribute("sourceLinked", "0")));
 
+        var textProperties = BuildChartTextPropertiesEl(labels.TextStyle);
+        if (textProperties is not null)
+            el.Add(textProperties);
+
         // CA2: dLblPos SECOND (before show* flags).
         // CA3: Gate by chart type / grouping — only emit positions valid for the target type.
         if (labels.Position.HasValue)

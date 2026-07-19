@@ -1118,7 +1118,9 @@ public sealed class SlideCanvas : FrameworkElement
                 label.IsBold,
                 label.FontSize,
                 ToTextAlignment(label.Alignment),
+                isItalic: label.IsItalic,
                 textColor: label.TextColor,
+                fontFamily: label.FontFamily,
                 maxLineCount: label.WrapText ? 2 : 1);
         }
 

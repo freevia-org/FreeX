@@ -144,7 +144,7 @@ public static class SlideCloner
             FirstSliceAngleDegrees = src.FirstSliceAngleDegrees,
             ScatterStyle = src.ScatterStyle,
             RadarStyle = src.RadarStyle,
-            DataLabels = src.DataLabels,
+            DataLabels = CloneChartDataLabels(src.DataLabels),
             SecondaryValueAxis = src.SecondaryValueAxis is null ? null : CloneChartAxis(src.SecondaryValueAxis),
             RegenerateWorkbookOnSave = src.RegenerateWorkbookOnSave,
             SourcePartPath = src.SourcePartPath,
@@ -162,7 +162,7 @@ public static class SlideCloner
                 LineStyle         = CloneChartLineStyle(s.LineStyle),
                 MarkerStyle       = CloneChartMarkerStyle(s.MarkerStyle),
                 OnSecondaryAxis   = s.OnSecondaryAxis,
-                DataLabels        = s.DataLabels,
+                DataLabels        = CloneChartDataLabels(s.DataLabels),
                 OverrideChartType = s.OverrideChartType,
             };
             foreach (var v in s.Values)
@@ -191,6 +191,22 @@ public static class SlideCloner
         BorderOutline        = CloneShapeOutline(settings.BorderOutline),
         TextStyle            = CloneChartTextStyle(settings.TextStyle),
     };
+
+    private static ChartDataLabels? CloneChartDataLabels(ChartDataLabels? labels) =>
+        labels is null
+            ? null
+            : new ChartDataLabels
+            {
+                ShowValue = labels.ShowValue,
+                ShowPercent = labels.ShowPercent,
+                ShowCategoryName = labels.ShowCategoryName,
+                ShowSeriesName = labels.ShowSeriesName,
+                ShowLegendKey = labels.ShowLegendKey,
+                Position = labels.Position,
+                NumberFormat = labels.NumberFormat,
+                Separator = labels.Separator,
+                TextStyle = CloneChartTextStyle(labels.TextStyle),
+            };
 
     private static ChartTextStyle? CloneChartTextStyle(ChartTextStyle? style) =>
         style is null

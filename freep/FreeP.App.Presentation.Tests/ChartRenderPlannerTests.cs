@@ -3672,4 +3672,35 @@ public sealed class ChartRenderPlannerTests
 
         return chart;
     }
+
+    [Fact]
+    public void BuildDataLabelPlans_UsesAuthoredTextStyle()
+    {
+        var chart = new ChartShape { ChartType = ChartType.ColumnClustered };
+        chart.Categories.Add("Q1");
+        var series = new ChartSeries { Name = "Sales" };
+        series.Values.Add(42);
+        chart.Series.Add(series);
+        chart.DataLabels = new ChartDataLabels
+        {
+            ShowValue = true,
+            TextStyle = new ChartTextStyle
+            {
+                FontSizePt = 12.5,
+                Bold = true,
+                Italic = true,
+                FontFamily = "Arial"
+            }
+        };
+
+        var plan = ChartRenderPlanner.BuildDataLabelPlans(
+            chart,
+            new ChartPlanRect(0, 0, 240, 180));
+
+        plan.Should().ContainSingle();
+        plan[0].FontSize.Should().Be(12.5);
+        plan[0].IsBold.Should().BeTrue();
+        plan[0].IsItalic.Should().BeTrue();
+        plan[0].FontFamily.Should().Be("Arial");
+    }
 }
