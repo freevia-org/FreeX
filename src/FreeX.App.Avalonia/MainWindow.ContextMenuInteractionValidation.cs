@@ -275,19 +275,53 @@ public sealed partial class MainWindow
         if (pivot is null)
             return Failed(row, "Pivot fixture could not be created.");
         var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
-        var bucket = row.VariantId.EndsWith("available-fields", StringComparison.Ordinal)
-            ? PivotFieldBucket.Available
-            : row.VariantId.EndsWith("values-bucket", StringComparison.Ordinal)
-                ? PivotFieldBucket.Values
-                : PivotFieldBucket.Rows;
-        var sourceIndex = bucket == PivotFieldBucket.Values && pivot.DataFields.Count > 0
-            ? pivot.DataFields[0].SourceFieldIndex
-            : pivot.RowFields.FirstOrDefault()?.SourceFieldIndex ?? 0;
-        var field = new PivotFieldListItemModel(sourceIndex, headers[sourceIndex], bucket,
-            bucket == PivotFieldBucket.Values ? 0 : null);
+        var field = PreparePivotFieldContextFixture(pivot, headers, row.VariantId);
+        if (field is null)
+            return Failed(row, $"Pivot fixture did not expose the {row.VariantId} field bucket.");
         return await InvokeProductionContextRouteAsync(
             row,
             () => DispatchPivotFieldContextMenuAction(pivot, headers, field, action));
+    }
+
+    private static PivotFieldListItemModel? PreparePivotFieldContextFixture(
+        PivotTableModel pivot,
+        IReadOnlyList<string> headers,
+        string variantId)
+    {
+        EnsurePivotAxisBucketHasField(pivot, headers, PivotFieldBucket.Filters);
+        EnsurePivotAxisBucketHasField(pivot, headers, PivotFieldBucket.Columns);
+
+        var bucket = variantId switch
+        {
+            "variant.available-fields" => PivotFieldBucket.Available,
+            "variant.filters-bucket" => PivotFieldBucket.Filters,
+            "variant.columns-bucket" => PivotFieldBucket.Columns,
+            "variant.rows-bucket" => PivotFieldBucket.Rows,
+            "variant.values-bucket" => PivotFieldBucket.Values,
+            _ => (PivotFieldBucket?)null,
+        };
+        return bucket is { } targetBucket
+            ? PivotFieldListPaneBuilder.Build(pivot, headers).Bucket(targetBucket).Fields.FirstOrDefault()
+            : null;
+    }
+
+    private static void EnsurePivotAxisBucketHasField(
+        PivotTableModel pivot,
+        IReadOnlyList<string> headers,
+        PivotFieldBucket bucket)
+    {
+        var target = bucket switch
+        {
+            PivotFieldBucket.Filters => pivot.PageFields,
+            PivotFieldBucket.Columns => pivot.ColumnFields,
+            _ => throw new ArgumentOutOfRangeException(nameof(bucket)),
+        };
+        if (target.Count > 0)
+            return;
+
+        var available = PivotFieldListPaneBuilder.Build(pivot, headers).Available.Fields.FirstOrDefault();
+        if (available is not null)
+            target.Add(new PivotFieldModel(available.SourceFieldIndex));
     }
 
     private async Task<ContextMenuDispatchEvidence> ExercisePivotHeaderContextRouteAsync(
@@ -325,11 +359,31 @@ public sealed partial class MainWindow
             return Failed(row, "Pivot fixture could not be created.");
         var headers = PivotSourceContext.ReadHeaders(_session.Workbook, pivot);
         var sourceIndex = pivot.RowFields.FirstOrDefault()?.SourceFieldIndex ?? 0;
+        PreparePivotChartContextFixture(pivot, sourceIndex, row.VariantId);
         var target = new PivotHeaderDropdownTargetModel(
             pivot.Name, headers[sourceIndex], sourceIndex, PivotHeaderArea.Row, IsActive: false);
         return await InvokeProductionContextRouteAsync(
             row,
             () => DispatchPivotChartFieldContextMenuAction(pivot, headers, target, action));
+    }
+
+    private static void PreparePivotChartContextFixture(
+        PivotTableModel pivot,
+        int sourceIndex,
+        string variantId)
+    {
+        var rowIndex = pivot.RowFields.FindIndex(field => field.SourceFieldIndex == sourceIndex);
+        if (rowIndex < 0)
+            return;
+
+        var selectedItem = variantId == "variant.filter-state" ? "North" : null;
+        pivot.RowFields[rowIndex] = pivot.RowFields[rowIndex] with
+        {
+            SelectedItem = selectedItem,
+            SelectedItems = null,
+        };
+        pivot.LabelFilters.RemoveAll(filter => filter.SourceFieldIndex == sourceIndex);
+        pivot.ValueFilters.RemoveAll(filter => filter.SourceFieldIndex == sourceIndex);
     }
 
     private ContextMenuDispatchEvidence ExerciseRecentFilesContextRoute(ContextMenuValidationDescriptor row)
@@ -371,17 +425,25 @@ public sealed partial class MainWindow
             return Passed(row, "production-history-dispatch", "ExecuteAvaloniaQuickAccessHistory", "History dispatch completed in the disposable validation workbook.");
         }
 
-        var options = AppOptionsStore.Load();
-        var snapshot = options.QuickAccessToolbarCommands.ToArray();
+        var previousOptionsPath = Environment.GetEnvironmentVariable(AppOptionsStore.OptionsPathEnvironmentVariable);
+        var fixtureDirectory = Path.Combine(Path.GetTempPath(), $"freex-qat-context-{Guid.NewGuid():N}");
+        var fixturePath = Path.Combine(fixtureDirectory, "options.json");
+        Directory.CreateDirectory(fixtureDirectory);
         try
         {
             var commandId = action == QuickAccessToolbarMenuAction.Add
                 ? QuickAccessToolbarCommandIds.Bold
                 : QuickAccessToolbarCommandIds.Redo;
-            options.QuickAccessToolbarCommands = action == QuickAccessToolbarMenuAction.Add
-                ? snapshot.Where(id => !string.Equals(id, commandId, StringComparison.OrdinalIgnoreCase)).ToList()
-                : [QuickAccessToolbarCommandIds.Save, commandId];
-            AppOptionsStore.Save(options);
+            var options = new AppOptions
+            {
+                QuickAccessToolbarCommands = action == QuickAccessToolbarMenuAction.Add
+                    ? [QuickAccessToolbarCommandIds.Save, QuickAccessToolbarCommandIds.Undo]
+                    : [QuickAccessToolbarCommandIds.Save, commandId],
+            };
+            Environment.SetEnvironmentVariable(AppOptionsStore.OptionsPathEnvironmentVariable, fixturePath);
+            if (!AppOptionsStore.Save(options))
+                return Failed(row, options.LastPersistenceError ?? "Could not create the isolated QAT options fixture.");
+
             ApplyAvaloniaQuickAccessCustomization(new QuickAccessToolbarMenuCommand(
                 "",
                 action,
@@ -390,16 +452,15 @@ public sealed partial class MainWindow
                 commandId,
                 StringComparer.OrdinalIgnoreCase) == (action == QuickAccessToolbarMenuAction.Add);
             return changed
-                ? Passed(row, "production-options-effect-restored", "ApplyAvaloniaQuickAccessCustomization", "QAT options changed through the production handler.")
+                ? Passed(row, "production-options-effect-isolated", "ApplyAvaloniaQuickAccessCustomization", "QAT options changed through the production handler in an isolated options store.")
                 : Failed(row, "QAT options did not reflect the dispatched action.");
         }
         finally
         {
-            var restored = AppOptionsStore.Load();
-            restored.QuickAccessToolbarCommands = snapshot.ToList();
-            AppOptionsStore.Save(restored);
-            _avaloniaQuickAccessOptions = restored;
+            Environment.SetEnvironmentVariable(AppOptionsStore.OptionsPathEnvironmentVariable, previousOptionsPath);
+            _avaloniaQuickAccessOptions = AppOptionsStore.Load();
             RebuildAvaloniaQuickAccessToolbar();
+            try { Directory.Delete(fixtureDirectory, recursive: true); } catch { /* best-effort fixture cleanup */ }
         }
     }
 

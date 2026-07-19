@@ -167,6 +167,47 @@ public sealed class ContextMenuInteractionValidationTests
     }
 
     [Fact]
+    public async Task ProductionDispatch_ClosesAllEightExhaustiveContextMenuResiduals()
+    {
+        string[] ids =
+        [
+            "variant.available-fields:ValueFieldSettings",
+            "variant.filters-bucket:ValueFieldSettings",
+            "variant.columns-bucket:ValueFieldSettings",
+            "variant.rows-bucket:ValueFieldSettings",
+            "variant.filter-state:ValueFieldSettings",
+            "variant.no-filter-state:ValueFieldSettings",
+            "variant.customization:Add",
+            "variant.customization:Remove",
+        ];
+
+        await Session.Dispatch(async () =>
+        {
+            var window = new MainWindow([]);
+            window.Show();
+            try
+            {
+                var results = new List<InteractionValidationResult>();
+                foreach (var id in ids)
+                    results.Add(await window.RunContextMenuInteractionValidationForTestAsync(id));
+
+                results.Select(result => result.Id).Should().Equal(ids);
+                results.Should().OnlyContain(result => result.Status == "passed", because:
+                    string.Join(Environment.NewLine, results.Select(result =>
+                        $"{result.Id}: {result.EvidenceLevel} | {result.Note}")));
+                results.Take(6).Should().OnlyContain(result =>
+                    result.EvidenceLevel == "production-dialog-opened-cancelled");
+                results.Skip(6).Should().OnlyContain(result =>
+                    result.EvidenceLevel == "production-options-effect-isolated");
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ProductionDispatch_SmallPivotBatch_KeepsVisualTreeBounded()
     {
         await Session.Dispatch(async () =>

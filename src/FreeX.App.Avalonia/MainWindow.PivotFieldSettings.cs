@@ -419,6 +419,10 @@ public sealed partial class MainWindow
                 return i;
         }
 
+        // WPF opens the only value field when Field Settings is invoked from any pivot field area.
+        if (pivot.DataFields.Count == 1)
+            return 0;
+
         return null;
     }
 }
