@@ -53,6 +53,16 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$normalizedRepoRoot = [IO.Path]::GetFullPath($repoRoot).TrimEnd(
+    [IO.Path]::DirectorySeparatorChar,
+    [IO.Path]::AltDirectorySeparatorChar).ToLowerInvariant()
+$workspaceHasher = [Security.Cryptography.SHA256]::Create()
+try {
+    $workspaceHashBytes = $workspaceHasher.ComputeHash([Text.Encoding]::UTF8.GetBytes($normalizedRepoRoot))
+    $workspaceKey = -join ($workspaceHashBytes[0..5] | ForEach-Object { $_.ToString("x2") })
+} finally {
+    $workspaceHasher.Dispose()
+}
 $dockerContext = Join-Path $PSScriptRoot "LinuxInteractiveDocker"
 $resolvedOutputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
     [IO.Path]::GetFullPath($OutputDir)
@@ -81,10 +91,10 @@ $appDefinitions = @{
 $definition = $appDefinitions[$App]
 $appKey = $App.ToLowerInvariant()
 $containerName = "freex-linux-interactive-$appKey-$Port"
-$appImage = "freex-linux-interactive-app-$appKey`:current"
+$appImage = "freex-linux-interactive-app-$appKey-$workspaceKey`:current"
 $appOutputRoot = Join-Path $resolvedOutputRoot $appKey
 $publishDir = if ([string]::IsNullOrWhiteSpace($PublishDir)) {
-    Join-Path $env:TEMP "FreeX-LinuxInteractive/$appKey/publish/linux-x64"
+    Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/$appKey/publish/linux-x64"
 } elseif ([IO.Path]::IsPathRooted($PublishDir)) {
     [IO.Path]::GetFullPath($PublishDir)
 } else {

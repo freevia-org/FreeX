@@ -69,10 +69,12 @@ public sealed class LinuxAppReadinessPreflightTests
         runner.Should().Contain("io.github.tony-xmelon.freex.linux-interactive");
         runner.Should().Contain("Container '$containerName' exists but is not owned by this harness.");
         runner.Should().Contain("freex-linux-interactive-app-$appKey");
+        runner.Should().Contain("$workspaceKey`:current");
+        runner.Should().Contain("SHA256");
         runner.Should().Contain("& tar -czf $archivePath -C $publishDir .");
         runner.Should().Contain("COPY app.tar.gz /tmp/app.tar.gz");
         runner.Should().Contain("Docker image '$appImage' exists but is not owned by this harness.");
-        runner.Should().Contain("FreeX-LinuxInteractive/$appKey/publish/linux-x64");
+        runner.Should().Contain("FreeX-LinuxInteractive/$workspaceKey/$appKey/publish/linux-x64");
 
         dockerfile.Should().Contain("FROM ubuntu:24.04");
         dockerfile.Should().Contain("novnc");
