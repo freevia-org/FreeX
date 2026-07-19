@@ -951,7 +951,9 @@ public sealed class SlideShowWindow : Window
                         || (a.Kind == AnimationKind.Exit
                             && (a.Preset == AnimationPreset.Appear
                                 || a.Preset == AnimationPreset.Fade
-                                || a.Preset == AnimationPreset.FlyIn))
+                                || a.Preset == AnimationPreset.FlyIn
+                                || a.Preset == AnimationPreset.Wipe
+                                || a.Preset == AnimationPreset.Split))
                         || ((a.Kind == AnimationKind.Entrance || a.Kind == AnimationKind.Motion)
                             && a.TriggerShapeId == null))
             .Select(a => a.ShapeId)
@@ -1354,11 +1356,14 @@ public sealed class SlideShowWindow : Window
         // Make visible first.
         el.Opacity = 1;
 
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
         if (plan.WipeHorizontal)
         {
-            clip.Rect = new Rect(0, 0, 0, h);
+            var from = isExit ? new Rect(0, 0, w, h) : new Rect(0, 0, 0, h);
+            var to = isExit ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, h);
+            clip.Rect = from;
             var a = new RectAnimation(
-                new Rect(0, 0, 0, h), new Rect(0, 0, w, h), dur)
+                from, to, dur)
             {
                 BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
                 EasingFunction = ease
@@ -1369,9 +1374,11 @@ public sealed class SlideShowWindow : Window
         }
         else
         {
-            clip.Rect = new Rect(0, 0, w, 0);
+            var from = isExit ? new Rect(0, 0, w, h) : new Rect(0, 0, w, 0);
+            var to = isExit ? new Rect(0, 0, w, 0) : new Rect(0, 0, w, h);
+            clip.Rect = from;
             var a = new RectAnimation(
-                new Rect(0, 0, w, 0), new Rect(0, 0, w, h), dur)
+                from, to, dur)
             {
                 BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs),
                 EasingFunction = ease
@@ -1397,15 +1404,16 @@ public sealed class SlideShowWindow : Window
         Rect from;
         Rect to;
 
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
         if (plan.WipeHorizontal)
         {
-            from = new Rect(w / 2, 0, 0, h);
-            to = new Rect(0, 0, w, h);
+            from = isExit ? new Rect(0, 0, w, h) : new Rect(w / 2, 0, 0, h);
+            to = isExit ? new Rect(w / 2, 0, 0, h) : new Rect(0, 0, w, h);
         }
         else
         {
-            from = new Rect(0, h / 2, w, 0);
-            to = new Rect(0, 0, w, h);
+            from = isExit ? new Rect(0, 0, w, h) : new Rect(0, h / 2, w, 0);
+            to = isExit ? new Rect(0, h / 2, w, 0) : new Rect(0, 0, w, h);
         }
 
         clip.Rect = from;
