@@ -1912,7 +1912,7 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Flash:
-                FadeEffect(sb, element, plan);
+                FlashEffect(sb, element, plan);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Spiral:
@@ -2995,6 +2995,36 @@ public sealed class SlideShowWindow : Window
         Storyboard.SetTargetProperty(anim,
             new PropertyPath("(UIElement.RenderTransform).(RotateTransform.Angle)"));
         sb.Children.Add(anim);
+    }
+
+    private static void FlashEffect(Storyboard sb, FrameworkElement el,
+        SlideShowShapeAnimationPlaybackPlan plan)
+    {
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var animation = new DoubleAnimationUsingKeyFrames
+        {
+            BeginTime = TimeSpan.FromMilliseconds(plan.DelayMs)
+        };
+
+        // Flash briefly reveals and dims the object before settling at its
+        // authored opacity. Exit effects use the same pulse in reverse.
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(
+            isExit ? plan.FromOpacity : 0,
+            KeyTime.FromPercent(0)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            0.7,
+            KeyTime.FromPercent(0.2),
+            new KeySpline(0.2, 0, 0.4, 1)));
+        animation.KeyFrames.Add(new SplineDoubleKeyFrame(
+            0.35,
+            KeyTime.FromPercent(0.55),
+            new KeySpline(0.2, 0, 0.4, 1)));
+        animation.KeyFrames.Add(new LinearDoubleKeyFrame(
+            plan.ToOpacity,
+            KeyTime.FromPercent(1)));
+        Storyboard.SetTarget(animation, el);
+        Storyboard.SetTargetProperty(animation, new PropertyPath(OpacityProperty));
+        sb.Children.Add(animation);
     }
 
     private static void DisappearEffect(Storyboard sb, FrameworkElement el, int delayMs)
