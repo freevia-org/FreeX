@@ -92,6 +92,7 @@ public sealed partial class MainWindow
 
         content.Children.Add(gallery);
         dialog.Content = content;
+        ConfigurePivotDialogLifecycle(dialog, gallery);
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)

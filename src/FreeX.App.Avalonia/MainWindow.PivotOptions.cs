@@ -302,6 +302,7 @@ public sealed partial class MainWindow
         content.Children.Add(buttonRow);
         content.Children.Add(tabs);
         dialog.Content = content;
+        ConfigurePivotDialogLifecycle(dialog, reportLayoutBox);
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)

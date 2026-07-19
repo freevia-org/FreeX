@@ -179,6 +179,7 @@ public sealed partial class MainWindow
             Children = { ok, cancel },
         });
         dialog.Content = content;
+        ConfigurePivotDialogLifecycle(dialog, fieldBox);
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed)

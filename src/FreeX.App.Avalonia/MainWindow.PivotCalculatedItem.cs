@@ -219,6 +219,7 @@ public sealed partial class MainWindow
         });
         content.Children.Add(AvaloniaCompactDialogChrome.CreateActionRow([save, delete, cancel], new Thickness(0, 8, 0, 0)));
         dialog.Content = content;
+        ConfigurePivotDialogLifecycle(dialog, nameBox, selectAllText: true);
 
         var confirmed = await dialog.ShowDialog<bool>(this);
         if (!confirmed || outcome is null)

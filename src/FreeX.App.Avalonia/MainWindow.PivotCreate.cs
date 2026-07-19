@@ -283,6 +283,7 @@ public sealed partial class MainWindow
         };
         AttachDialogRangePicker(dialog, sourcePicker, sourceBox, "range.pivot-create.source");
         AttachDialogRangePicker(dialog, destinationPicker, destinationBox, "range.pivot-create.destination");
+        ConfigurePivotDialogLifecycle(dialog, sourceBox, selectAllText: true);
 
         await dialog.ShowDialog(this);
     }

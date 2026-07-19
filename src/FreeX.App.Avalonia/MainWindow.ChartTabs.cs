@@ -257,6 +257,7 @@ public sealed partial class MainWindow
                 buttonRow,
             },
         };
+        ConfigurePivotDialogLifecycle(dialog, subtypeGallery);
 
         return await dialog.ShowDialog<ChartType?>(this);
     }
