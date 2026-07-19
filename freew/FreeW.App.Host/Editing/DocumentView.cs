@@ -7605,7 +7605,7 @@ public sealed class DocumentView : RichTextBox
         }
         // WPF Table.CellSpacing grows both axes and breaks Word's fixed-width paginated tables.
         // Preserve that width contract while reserving the authored vertical cell gap on each row.
-        var paginationVerticalCellSpacingDip = isPaginationSegment && table.CellSpacingPt is > 0
+        var paginationVerticalCellSpacingDip = table.CellSpacingPt is > 0
             ? table.CellSpacingPt.Value * PxPerPoint
             : 0;
         var columns = table.ColumnCount;
