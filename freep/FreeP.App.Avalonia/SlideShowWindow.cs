@@ -1976,7 +1976,7 @@ public sealed class SlideShowWindow : Window
                 break;
 
             case SlideShowShapeAnimationEffectKind.Boomerang:
-                FlyInEffect(element, plan, onReveal);
+                BoomerangEffect(element, plan, onReveal);
                 break;
 
             case SlideShowShapeAnimationEffectKind.Peek:
@@ -2382,6 +2382,120 @@ public sealed class SlideShowWindow : Window
         return (
             middleX + (endX - middleX) * finalEased,
             middleY + (endY - middleY) * finalEased);
+    }
+
+    private void BoomerangEffect(Control element,
+        SlideShowShapeAnimationPlaybackPlan plan,
+        Action? onReveal = null)
+    {
+        double width = _slideCanvas.Bounds.Width > 0 ? _slideCanvas.Bounds.Width : 960;
+        double height = _slideCanvas.Bounds.Height > 0 ? _slideCanvas.Bounds.Height : 540;
+        double directionX = plan.OffsetXFactor * width;
+        double directionY = plan.OffsetYFactor * height;
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        double startX = isExit ? 0 : directionX;
+        double startY = isExit ? 0 : directionY;
+        double endX = isExit ? directionX : 0;
+        double endY = isExit ? directionY : 0;
+        double overshootX = isExit
+            ? endX + directionX * 0.08
+            : endX - directionX * 0.08;
+        double overshootY = isExit
+            ? endY + directionY * 0.08
+            : endY - directionY * 0.08;
+
+        var translate = new TranslateTransform(startX, startY);
+        element.RenderTransform = translate;
+        DelayedAction(plan.DelayMs, () =>
+        {
+            AnimateOpacity(element, plan.FromOpacity, plan.ToOpacity, plan.DurationMs);
+            AnimateBoomerangTranslate(
+                translate,
+                startX,
+                startY,
+                overshootX,
+                overshootY,
+                endX,
+                endY,
+                plan.DurationMs,
+                CompleteReveal(plan, onReveal));
+        });
+    }
+
+    private void AnimateBoomerangTranslate(
+        TranslateTransform translate,
+        double startX,
+        double startY,
+        double overshootX,
+        double overshootY,
+        double endX,
+        double endY,
+        int durationMs,
+        Action? onComplete)
+    {
+        if (durationMs <= 0)
+        {
+            translate.X = endX;
+            translate.Y = endY;
+            onComplete?.Invoke();
+            return;
+        }
+
+        const int frameMs = 16;
+        var steps = Math.Max(1, durationMs / frameMs);
+        var frame = 0;
+        var timer = TrackTimer(new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(frameMs)
+        });
+        timer.Tick += (_, _) =>
+        {
+            frame++;
+            var t = Math.Min(1.0, (double)frame / steps);
+            var (x, y) = InterpolateBoomerangPoint(
+                t,
+                startX,
+                startY,
+                overshootX,
+                overshootY,
+                endX,
+                endY);
+            translate.X = x;
+            translate.Y = y;
+            if (frame >= steps)
+            {
+                timer.Stop();
+                _activeTimers.Remove(timer);
+                translate.X = endX;
+                translate.Y = endY;
+                onComplete?.Invoke();
+            }
+        };
+        timer.Start();
+    }
+
+    private static (double X, double Y) InterpolateBoomerangPoint(
+        double t,
+        double startX,
+        double startY,
+        double overshootX,
+        double overshootY,
+        double endX,
+        double endY)
+    {
+        t = Math.Clamp(t, 0, 1);
+        if (t <= 0.78)
+        {
+            var eased = EaseInOut(t / 0.78);
+            return (
+                startX + (overshootX - startX) * eased,
+                startY + (overshootY - startY) * eased);
+        }
+
+        var finalEased = EaseInOut((t - 0.78) / 0.22);
+        return (
+            overshootX + (endX - overshootX) * finalEased,
+            overshootY + (endY - overshootY) * finalEased);
     }
 
     private void BounceEffect(Control element,

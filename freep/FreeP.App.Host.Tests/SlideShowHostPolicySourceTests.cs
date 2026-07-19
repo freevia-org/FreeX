@@ -172,6 +172,7 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Swoop:");
         source.Should().Contain("SwoopEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowShapeAnimationEffectKind.Boomerang:");
+        source.Should().Contain("BoomerangEffect(sb, element, plan);");
         source.Should().Contain("case SlideShowGeometricMaskKind.Circle:");
         source.Should().Contain("CircleEffect(sb, el, plan);");
         source.Should().Contain("case SlideShowGeometricMaskKind.Diamond:");
