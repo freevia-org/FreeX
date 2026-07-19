@@ -43,7 +43,8 @@ public sealed partial class MainWindow
     private static AvaloniaCompactDialogChromeStyle PageLayoutDialogChromeStyle => new(FormulaBarFontFamily);
 
     private async Task ShowPageSetupDialogAsync(
-        PageLayoutPageSetupOpenSource source = PageLayoutPageSetupOpenSource.DialogButton)
+        PageLayoutPageSetupOpenSource source = PageLayoutPageSetupOpenSource.DialogButton,
+        bool openHeaderFooterTab = false)
     {
         if (_isOpening || _isSaving)
             return;
@@ -56,12 +57,16 @@ public sealed partial class MainWindow
         var sheet = _session.ActiveSheet;
         var fields = await ShowPageSetupDialogCoreAsync(
             PageSetupDialogPlanner.PlanSurface(sheet),
-            PageSetupDialogPlanner.PlanOpen(source));
+            PageSetupDialogPlanner.PlanOpen(source),
+            openHeaderFooterTab);
         if (fields is null)
             return;
 
         ApplyPageSetupFields(sheet, fields);
     }
+
+    private Task ShowHeaderFooterDialogAsync() =>
+        ShowPageSetupDialogAsync(openHeaderFooterTab: true);
 
     private void ApplyPageSetupFields(Sheet sheet, PageSetupDialogFields fields)
     {
@@ -292,7 +297,8 @@ public sealed partial class MainWindow
 
     private async Task<PageSetupDialogFields?> ShowPageSetupDialogCoreAsync(
         PageSetupDialogSurfacePlan surface,
-        PageSetupDialogOpenPlan openPlan)
+        PageSetupDialogOpenPlan openPlan,
+        bool openHeaderFooterTab = false)
     {
         PageSetupDialogFields? result = null;
         var initial = surface.Fields;
@@ -974,7 +980,18 @@ public sealed partial class MainWindow
         AttachDialogRangePicker(dialog, printAreaPicker, printAreaBox, "range.page-setup.print-area");
         AttachDialogRangePicker(dialog, repeatRowsPicker, repeatRowsBox, "range.page-setup.rows-to-repeat");
         AttachDialogRangePicker(dialog, repeatColumnsPicker, repeatColumnsBox, "range.page-setup.columns-to-repeat");
-        dialog.Opened += (_, _) => FocusOpenPlan(openPlan);
+        dialog.Opened += (_, _) =>
+        {
+            if (openHeaderFooterTab)
+            {
+                tabs.SelectedItem = headerFooterTab;
+                headerPresetBox.Focus();
+            }
+            else
+            {
+                FocusOpenPlan(openPlan);
+            }
+        };
 
         await dialog.ShowDialog(this);
         return result;

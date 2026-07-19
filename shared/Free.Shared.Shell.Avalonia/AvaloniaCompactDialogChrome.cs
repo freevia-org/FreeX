@@ -54,6 +54,8 @@ public static class AvaloniaCompactDialogChrome
         button.BorderThickness = new Thickness(1);
         button.FontSize = style.FontSize;
         button.FontFamily = style.FontFamily;
+        if (isDefault)
+            button.IsDefault = true;
         button.HorizontalContentAlignment = HorizontalAlignment.Center;
         button.VerticalContentAlignment = VerticalAlignment.Center;
     }

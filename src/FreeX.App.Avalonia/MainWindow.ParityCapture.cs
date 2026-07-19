@@ -327,6 +327,8 @@ public sealed partial class MainWindow
 
         // ── Dialogs: open each, render the dialog window, close it. ──
         var dialogOpeners = ParityDialogOpeners();
+        if (interactionOnly)
+            dialogOpeners = dialogOpeners.Concat(ParityInteractionOnlyDialogOpeners()).ToArray();
         if (interactionSurfaceIds is not null)
             dialogOpeners = dialogOpeners
                 .Where(opener => interactionSurfaceIds.Contains(opener.SurfaceId))
@@ -508,6 +510,11 @@ public sealed partial class MainWindow
         ("dialog.DataValidation", () => ShowDataValidationDialogAsync()),
         ("dialog.ConditionalFormatNewRule", () => ShowConditionalFormatNewRuleDialogAsync()),
         ("dialog.ConditionalFormatManage", () => ShowManageConditionalFormatsParityDialogAsync()),
+    ];
+
+    private IReadOnlyList<(string SurfaceId, Func<Task> Opener)> ParityInteractionOnlyDialogOpeners() =>
+    [
+        ("dialog.PageSetup.HeaderFooter", ShowHeaderFooterDialogAsync),
     ];
 
     /// <summary>

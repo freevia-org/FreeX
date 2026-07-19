@@ -133,6 +133,155 @@ public sealed class ParityCaptureTests
     }
 
     [Fact]
+    public async Task DialogInteractionRoute_StableFailureCohortPassesSharedContract()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-dialog-contract-cohort-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                try
+                {
+                    window.Show();
+                    var selectedIds = new HashSet<string>(StringComparer.Ordinal)
+                    {
+                        "dialog.ActivateSheetDialog",
+                        "dialog.AdvancedFilterDialog",
+                        "dialog.AllowEditRangeDialog",
+                        "dialog.AutoFilterDialog",
+                        "dialog.ChangeChartTypeDialog",
+                        "dialog.ChartAreaLegendDialog",
+                        "dialog.ChartAxisFormatDialog",
+                        "dialog.ChartBarFormatDialog",
+                        "dialog.ChartBubbleFormatDialog",
+                        "dialog.ChartDataLabelsDialog",
+                        "dialog.ChartErrorBarsDialog",
+                        "dialog.ChartPieFormatDialog",
+                        "dialog.ChartSeriesFormatDialog",
+                        "dialog.ChartStockFormatDialog",
+                        "dialog.ChartTitlesDialog",
+                        "dialog.ChartTrendlineOptionsDialog",
+                        "dialog.CommentListWindow",
+                        "dialog.DataValidationDialog",
+                        "dialog.ErrorCheckingDialog",
+                        "dialog.FindReplaceDialog",
+                        "dialog.FormatCellsDialog",
+                        "dialog.FormatPictureDialog",
+                        "dialog.HeaderFooterDialog",
+                        "dialog.LegalNoticesDialog",
+                        "dialog.ManageConditionalFormatsDialog",
+                        "dialog.MoveChartDialog",
+                        "dialog.MovePivotTableDialog",
+                        "dialog.ObjectSizeDialog",
+                        "dialog.PageSetupDialog",
+                        "dialog.PictureCropDialog",
+                        "dialog.PivotCalculatedFieldDialog",
+                        "dialog.PivotCalculatedItemDialog",
+                        "dialog.PivotChartOptionsDialog",
+                        "dialog.PivotChartTypeDialog",
+                        "dialog.PivotFieldFilterDialog",
+                        "dialog.PivotFieldGroupingDialog",
+                        "dialog.PivotLabelFilterDialog",
+                        "dialog.PivotSortOptionsDialog",
+                        "dialog.PivotStyleGalleryDialog",
+                        "dialog.PivotTableDataSourceDialog",
+                        "dialog.PivotTableDialog",
+                        "dialog.PivotTableNameDialog",
+                        "dialog.PivotTableOptionsDialog",
+                        "dialog.PivotValueFieldSettingsDialog",
+                        "dialog.PivotValueFilterDialog",
+                        "dialog.RecommendedPivotTablesDialog",
+                        "dialog.RotationDialog",
+                        "dialog.ScenarioManagerDialog",
+                        "dialog.SelectionPaneDialog",
+                        "dialog.ShapeEffectsDialog",
+                        "dialog.ShapeGradientDialog",
+                        "dialog.SpellCheckDialog",
+                        "dialog.SymbolPickerDialog",
+                        "dialog.TextToColumnsDialog",
+                        "dialog.WatchWindowDialog",
+                        "dialog.WorkbookThemeDialog",
+                        "dialog.OpenWorkbookNativeDialog",
+                        "dialog.SaveAsWorkbookNativeDialog",
+                        "dialog.ProtectWorkbookDialog",
+                    };
+
+                    await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        interactionOnly: true,
+                        interactionDialogCatalogIds: selectedIds);
+
+                    var contracts = window.BuildDialogInteractionContractResults(selectedIds);
+                    contracts.Should().HaveCount(selectedIds.Count);
+                    contracts.Should().OnlyContain(result => result.Status == "passed",
+                        string.Join(Environment.NewLine, contracts.Select(result =>
+                            $"{result.Id}: {result.Evidence}")));
+                }
+                finally
+                {
+                    if (window.IsVisible)
+                        window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task HeaderFooterInteractionRoute_OpensTheProductionPageSetupHeaderFooterTab()
+    {
+        var outputDirectory = Path.Combine(
+            Path.GetTempPath(),
+            "freex-header-footer-interaction-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            await Session.Dispatch(async () =>
+            {
+                var window = new MainWindow([]);
+                try
+                {
+                    window.Show();
+                    var selectedIds = new HashSet<string>(StringComparer.Ordinal)
+                    {
+                        "dialog.HeaderFooterDialog",
+                    };
+
+                    var surfaces = await window.CaptureParitySurfacesAsync(
+                        outputDirectory,
+                        targetSurfaceId: "dialog.HeaderFooterDialog",
+                        interactionOnly: true,
+                        interactionDialogCatalogIds: selectedIds);
+
+                    surfaces.Should().ContainSingle(surface =>
+                        surface.Id == "dialog.PageSetup.HeaderFooter" && surface.Captured);
+                    window.DialogInteractionContracts["dialog.PageSetup.HeaderFooter"].InitialFocus
+                        .Should().Be("passed:ComboBox#PageSetupHeaderPresetBox");
+                    window.BuildDialogInteractionContractResults(selectedIds)
+                        .Should().ContainSingle(result =>
+                            result.Id == "dialog.HeaderFooterDialog" && result.Status == "passed");
+                }
+                finally
+                {
+                    if (window.IsVisible)
+                        window.Close();
+                }
+            }, CancellationToken.None);
+        }
+        finally
+        {
+            TryDeleteDirectory(outputDirectory);
+        }
+    }
+
+    [Fact]
     public async Task CaptureParitySurfaces_ProducesGridAndDialogPngs()
     {
         var outputDirectory = Path.Combine(

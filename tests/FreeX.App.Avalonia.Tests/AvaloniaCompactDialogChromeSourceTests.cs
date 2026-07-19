@@ -125,6 +125,7 @@ public sealed class AvaloniaCompactDialogChromeSourceTests
         source.Should().Contain("button.MaxHeight = style.ControlHeight;");
         source.Should().Contain("button.Background = Brushes.White;");
         source.Should().Contain("button.BorderBrush = isDefault ? DefaultButtonBorderBrush : ButtonBorderBrush;");
+        source.Should().Contain("button.IsDefault = true;");
         source.Should().Contain("if (fixedHeight)");
         source.Should().Contain("textBox.Padding = style.TextBoxPadding;");
         source.Should().Contain("comboBox.Padding = style.ComboBoxPadding;");

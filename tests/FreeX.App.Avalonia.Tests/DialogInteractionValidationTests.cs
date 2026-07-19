@@ -2,6 +2,10 @@ using System.Threading;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Free.Shared.Shell.Avalonia;
 using FreeX.App.Presentation.Interactions;
 
 namespace FreeX.App.Avalonia.Tests;
@@ -108,6 +112,131 @@ public sealed class DialogInteractionValidationTests
                 if (owner?.IsVisible == true)
                     owner.Close();
             }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ModalDialogPolicy_FocusesCyclesEscapesAndRestoresExactOwnerFocus()
+    {
+        await Session.Dispatch(async () =>
+        {
+            MainWindow? owner = null;
+            Window? dialog = null;
+            try
+            {
+                owner = new MainWindow([]);
+                owner.Show();
+                owner.UpdateLayout();
+
+                var ownerFocus = owner.GetVisualDescendants()
+                    .OfType<Control>()
+                    .First(control =>
+                        control.Focusable && control.IsVisible && control.IsEffectivelyEnabled);
+                ownerFocus.Focus();
+
+                var first = new TextBox { Text = "First" };
+                var second = new TextBox { Text = "Second" };
+                var defaultInvoked = false;
+                var accept = new Button { Content = "OK", IsDefault = true };
+                accept.Click += (_, _) => defaultInvoked = true;
+                dialog = new Window
+                {
+                    Width = 300,
+                    Height = 180,
+                    Content = new StackPanel { Children = { first, second, accept } },
+                };
+
+                var dialogTask = dialog.ShowDialog(owner);
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(first);
+
+                for (var i = 0; i < 3; i++)
+                {
+                    MainWindow.SendDialogKeyForTest(dialog, Key.Tab, RawInputModifiers.None, out var tabError)
+                        .Should().BeTrue(tabError);
+                }
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(first);
+
+                MainWindow.SendDialogKeyForTest(dialog, Key.Tab, RawInputModifiers.Shift, out var shiftTabError)
+                    .Should().BeTrue(shiftTabError);
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(accept);
+
+                first.Focus();
+                MainWindow.SendDialogKeyForTest(dialog, Key.Enter, RawInputModifiers.None, out var enterError)
+                    .Should().BeTrue(enterError);
+                defaultInvoked.Should().BeTrue();
+
+                MainWindow.SendDialogKeyForTest(dialog, Key.Escape, RawInputModifiers.None, out var escapeError)
+                    .Should().BeTrue(escapeError);
+                dialog.IsVisible.Should().BeFalse();
+                await dialogTask;
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                owner.FocusManager?.GetFocusedElement().Should().BeSameAs(ownerFocus);
+            }
+            finally
+            {
+                if (dialog?.IsVisible == true)
+                    dialog.Close();
+                if (owner?.IsVisible == true)
+                    owner.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ModalDialogPolicy_PreservesExplicitInitialFocusAndEscapeClosesWithoutCancelButton()
+    {
+        await Session.Dispatch(async () =>
+        {
+            var owner = new MainWindow([]);
+            Window? dialog = null;
+            try
+            {
+                owner.Show();
+                var first = new Button { Content = "First" };
+                var explicitTarget = new Button { Content = "Explicit" };
+                dialog = new Window
+                {
+                    Width = 260,
+                    Height = 140,
+                    Content = new StackPanel { Children = { first, explicitTarget } },
+                };
+                dialog.Opened += (_, _) => explicitTarget.Focus();
+
+                var dialogTask = dialog.ShowDialog(owner);
+                dialog.UpdateLayout();
+                Dispatcher.UIThread.RunJobs(DispatcherPriority.Input);
+                dialog.FocusManager?.GetFocusedElement().Should().BeSameAs(explicitTarget);
+
+                MainWindow.SendDialogKeyForTest(dialog, Key.Escape, RawInputModifiers.None, out var escapeError)
+                    .Should().BeTrue(escapeError);
+                dialog.IsVisible.Should().BeFalse();
+                await dialogTask;
+            }
+            finally
+            {
+                if (dialog?.IsVisible == true)
+                    dialog.Close();
+                if (owner.IsVisible)
+                    owner.Close();
+            }
+        }, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task CompactDialogChrome_DefaultStylingAlsoSetsDefaultButtonSemantics()
+    {
+        await Session.Dispatch(() =>
+        {
+            var button = new Button();
+            AvaloniaCompactDialogChrome.ApplyButton(
+                button,
+                new AvaloniaCompactDialogChromeStyle(FontFamily.Default),
+                minWidth: 72,
+                isDefault: true);
+
+            button.IsDefault.Should().BeTrue();
         }, CancellationToken.None);
     }
 }

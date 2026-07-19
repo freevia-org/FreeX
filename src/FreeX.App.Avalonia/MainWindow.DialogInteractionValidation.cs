@@ -1,3 +1,6 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
+
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -23,12 +26,136 @@ internal sealed record DialogInteractionContractEvidence(
 
 public sealed partial class MainWindow
 {
+    private sealed class ModalDialogKeyboardFocusState(
+        MainWindow owner,
+        IInputElement? ownerFocusBeforeOpen)
+    {
+        public MainWindow Owner { get; } = owner;
+        public IInputElement? OwnerFocusBeforeOpen { get; } = ownerFocusBeforeOpen;
+        public bool IsModal { get; set; }
+    }
+
+    private static readonly ConditionalWeakTable<Window, ModalDialogKeyboardFocusState>
+        ConfiguredModalDialogKeyboardFocus = new();
+    private static readonly bool ModalDialogKeyboardFocusRegistered =
+        RegisterModalDialogKeyboardFocus();
     internal static Func<Window, Key, RawInputModifiers, string?>? DialogKeySenderOverride { get; set; }
     private readonly Dictionary<string, DialogInteractionContractEvidence> _dialogInteractionContracts =
         new(StringComparer.Ordinal);
 
     internal IReadOnlyDictionary<string, DialogInteractionContractEvidence> DialogInteractionContracts =>
         _dialogInteractionContracts;
+
+    private static bool RegisterModalDialogKeyboardFocus()
+    {
+        Window.OwnerProperty.Changed.AddClassHandler<Window>(ConfigureModalDialogKeyboardFocus);
+        return true;
+    }
+
+    private static void ConfigureModalDialogKeyboardFocus(
+        Window dialog,
+        AvaloniaPropertyChangedEventArgs _)
+    {
+        if (dialog.Owner is not MainWindow owner ||
+            !ConfiguredModalDialogKeyboardFocus.TryAdd(
+                dialog,
+                new ModalDialogKeyboardFocusState(owner, owner.FocusManager?.GetFocusedElement())))
+        {
+            return;
+        }
+
+        KeyboardNavigation.SetTabNavigation(dialog, KeyboardNavigationMode.Cycle);
+        dialog.Opened += ModalDialogOpened;
+        dialog.KeyDown += ModalDialogEscapeKeyDown;
+        dialog.Closed += ModalDialogClosed;
+    }
+
+    private static void ModalDialogOpened(object? sender, EventArgs _)
+    {
+        if (sender is not Window dialog ||
+            !ConfiguredModalDialogKeyboardFocus.TryGetValue(dialog, out var state))
+        {
+            return;
+        }
+
+        state.IsModal = dialog.IsDialog;
+        if (!state.IsModal)
+            return;
+
+        Dispatcher.UIThread.Post(
+            () => FocusFirstModalDialogControl(dialog),
+            DispatcherPriority.Input);
+    }
+
+    private static void FocusFirstModalDialogControl(Window dialog)
+    {
+        if (!dialog.IsVisible)
+            return;
+
+        var focused = dialog.FocusManager?.GetFocusedElement();
+        if (IsFocusInside(dialog, focused))
+            return;
+
+        dialog.GetVisualDescendants()
+            .OfType<Control>()
+            .FirstOrDefault(control =>
+                control.Focusable && control.IsVisible && control.IsEffectivelyEnabled)
+            ?.Focus();
+    }
+
+    private static void ModalDialogEscapeKeyDown(object? sender, KeyEventArgs args)
+    {
+        if (sender is not Window dialog ||
+            !ConfiguredModalDialogKeyboardFocus.TryGetValue(dialog, out var state) ||
+            !state.IsModal ||
+            args.Handled ||
+            args.Key != Key.Escape ||
+            args.KeyModifiers != KeyModifiers.None)
+        {
+            return;
+        }
+
+        var cancelButton = dialog.GetVisualDescendants()
+            .OfType<Button>()
+            .FirstOrDefault(button =>
+                button.IsCancel && button.IsVisible && button.IsEffectivelyEnabled);
+        cancelButton?.RaiseEvent(new RoutedEventArgs(Button.ClickEvent, cancelButton));
+        if (dialog.IsVisible)
+            dialog.Close();
+        args.Handled = true;
+    }
+
+    private static void ModalDialogClosed(object? sender, EventArgs _)
+    {
+        if (sender is not Window dialog ||
+            !ConfiguredModalDialogKeyboardFocus.TryGetValue(dialog, out var state) ||
+            !state.IsModal)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(
+            () => RestoreModalDialogOwnerFocus(state),
+            DispatcherPriority.Input);
+    }
+
+    private static void RestoreModalDialogOwnerFocus(ModalDialogKeyboardFocusState state)
+    {
+        var owner = state.Owner;
+        if (!owner.IsVisible)
+            return;
+
+        owner.Activate();
+        if (state.OwnerFocusBeforeOpen is InputElement priorFocus &&
+            priorFocus.Focusable && priorFocus.IsEffectivelyEnabled &&
+            IsFocusInside(owner, priorFocus))
+        {
+            priorFocus.Focus();
+            return;
+        }
+
+        owner._sheetGridHost.Focus();
+    }
 
     private void ResetDialogInteractionContracts()
     {
@@ -228,7 +355,38 @@ public sealed partial class MainWindow
 
         try
         {
-            var target = dialog.FocusManager?.GetFocusedElement() as InputElement ?? dialog;
+            var currentProperty = typeof(AvaloniaLocator).GetProperty(
+                "Current",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+            var resolver = currentProperty?.GetValue(null);
+            var getService = resolver?.GetType().GetMethod(
+                "GetService",
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                binder: null,
+                types: [typeof(Type)],
+                modifiers: null);
+            var inputManager = getService?.Invoke(resolver, [typeof(IInputManager)]) as IInputManager;
+            var keyboard = getService?.Invoke(resolver, [typeof(IKeyboardDevice)]) as IKeyboardDevice;
+            var inputRoot = typeof(TopLevel).GetProperty(
+                    "InputRoot",
+                    BindingFlags.NonPublic | BindingFlags.Instance)
+                ?.GetValue(dialog) as IInputRoot;
+            var rawKeyConstructor = typeof(RawKeyEventArgs)
+                .GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .SingleOrDefault(constructor => constructor.GetParameters().Length == 9);
+            var processInput = inputManager?.GetType().GetMethods(
+                    BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .SingleOrDefault(method =>
+                    method.Name.EndsWith("ProcessInput", StringComparison.Ordinal) &&
+                    method.GetParameters() is [{ ParameterType: var parameterType }] &&
+                    parameterType == typeof(RawInputEventArgs));
+            if (inputManager is null || keyboard is null || inputRoot is null ||
+                rawKeyConstructor is null || processInput is null)
+            {
+                error = "Avalonia raw keyboard input services are unavailable.";
+                return false;
+            }
+
             var physicalKey = key switch
             {
                 Key.Tab => PhysicalKey.Tab,
@@ -236,29 +394,25 @@ public sealed partial class MainWindow
                 Key.Escape => PhysicalKey.Escape,
                 _ => PhysicalKey.None,
             };
-            var keyModifiers = KeyModifiers.None;
-            if ((modifiers & RawInputModifiers.Shift) != 0)
-                keyModifiers |= KeyModifiers.Shift;
-            if ((modifiers & RawInputModifiers.Control) != 0)
-                keyModifiers |= KeyModifiers.Control;
-            if ((modifiers & RawInputModifiers.Alt) != 0)
-                keyModifiers |= KeyModifiers.Alt;
-            if ((modifiers & RawInputModifiers.Meta) != 0)
-                keyModifiers |= KeyModifiers.Meta;
+            var timestamp = unchecked((ulong)Environment.TickCount64);
 
-            KeyEventArgs CreateKeyEvent(RoutedEvent routedEvent) => new()
-            {
-                RoutedEvent = routedEvent,
-                Key = key,
-                KeyModifiers = keyModifiers,
-                PhysicalKey = physicalKey,
-                KeyDeviceType = KeyDeviceType.Keyboard,
-                Source = target,
-            };
+            RawInputEventArgs CreateRawKeyEvent(RawKeyEventType eventType) =>
+                (RawInputEventArgs)rawKeyConstructor.Invoke(
+                [
+                    keyboard,
+                    timestamp,
+                    inputRoot,
+                    eventType,
+                    key,
+                    modifiers,
+                    physicalKey,
+                    null,
+                    KeyDeviceType.Keyboard,
+                ]);
 
-            target.RaiseEvent(CreateKeyEvent(InputElement.KeyDownEvent));
+            processInput.Invoke(inputManager, [CreateRawKeyEvent(RawKeyEventType.KeyDown)]);
             if (dialog.IsVisible)
-                target.RaiseEvent(CreateKeyEvent(InputElement.KeyUpEvent));
+                processInput.Invoke(inputManager, [CreateRawKeyEvent(RawKeyEventType.KeyUp)]);
 
             error = "";
             return true;
