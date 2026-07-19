@@ -592,6 +592,36 @@
   <data name="Ribbon_Command_TransitionSplit_KeyTip" xml:space="preserve">
     <value>S</value>
   </data>
+  <data name="Ribbon_Command_TransitionBox_Label" xml:space="preserve">
+    <value>Box</value>
+  </data>
+  <data name="Ribbon_Command_TransitionBox_KeyTip" xml:space="preserve">
+    <value>X</value>
+  </data>
+  <data name="Ribbon_Command_TransitionDoors_Label" xml:space="preserve">
+    <value>Doors</value>
+  </data>
+  <data name="Ribbon_Command_TransitionDoors_KeyTip" xml:space="preserve">
+    <value>J</value>
+  </data>
+  <data name="Ribbon_Command_TransitionReveal_Label" xml:space="preserve">
+    <value>Reveal</value>
+  </data>
+  <data name="Ribbon_Command_TransitionReveal_KeyTip" xml:space="preserve">
+    <value>R</value>
+  </data>
+  <data name="Ribbon_Command_TransitionFlash_Label" xml:space="preserve">
+    <value>Flash</value>
+  </data>
+  <data name="Ribbon_Command_TransitionFlash_KeyTip" xml:space="preserve">
+    <value>L</value>
+  </data>
+  <data name="Ribbon_Command_TransitionMorph_Label" xml:space="preserve">
+    <value>Morph</value>
+  </data>
+  <data name="Ribbon_Command_TransitionMorph_KeyTip" xml:space="preserve">
+    <value>M</value>
+  </data>
   <data name="Ribbon_Command_TransitionCut_Label" xml:space="preserve">
     <value>Cut</value>
   </data>
@@ -615,6 +645,54 @@
   </data>
   <data name="Ribbon_Command_TransitionBlinds_KeyTip" xml:space="preserve">
     <value>B</value>
+  </data>
+  <data name="Ribbon_Command_TransitionComb_Label" xml:space="preserve">
+    <value>Comb</value>
+  </data>
+  <data name="Ribbon_Command_TransitionComb_KeyTip" xml:space="preserve">
+    <value>O</value>
+  </data>
+  <data name="Ribbon_Command_TransitionRandomBars_Label" xml:space="preserve">
+    <value>Random Bars</value>
+  </data>
+  <data name="Ribbon_Command_TransitionRandomBars_KeyTip" xml:space="preserve">
+    <value>Y</value>
+  </data>
+  <data name="Ribbon_Command_TransitionStrips_Label" xml:space="preserve">
+    <value>Strips</value>
+  </data>
+  <data name="Ribbon_Command_TransitionStrips_KeyTip" xml:space="preserve">
+    <value>T</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWheelReverse_Label" xml:space="preserve">
+    <value>Wheel Reverse</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWheelReverse_KeyTip" xml:space="preserve">
+    <value>Q</value>
+  </data>
+  <data name="Ribbon_Command_TransitionGallery_Label" xml:space="preserve">
+    <value>Gallery</value>
+  </data>
+  <data name="Ribbon_Command_TransitionGallery_KeyTip" xml:space="preserve">
+    <value>G</value>
+  </data>
+  <data name="Ribbon_Command_TransitionConveyor_Label" xml:space="preserve">
+    <value>Conveyor</value>
+  </data>
+  <data name="Ribbon_Command_TransitionConveyor_KeyTip" xml:space="preserve">
+    <value>A</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPan_Label" xml:space="preserve">
+    <value>Pan</value>
+  </data>
+  <data name="Ribbon_Command_TransitionPan_KeyTip" xml:space="preserve">
+    <value>P</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWindow_Label" xml:space="preserve">
+    <value>Window</value>
+  </data>
+  <data name="Ribbon_Command_TransitionWindow_KeyTip" xml:space="preserve">
+    <value>E</value>
   </data>
   <data name="Ribbon_Command_TransitionDissolve_Label" xml:space="preserve">
     <value>Dissolve</value>

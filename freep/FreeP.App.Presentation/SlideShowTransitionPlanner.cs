@@ -87,6 +87,10 @@ public static class SlideShowTransitionPlanner
 
             TransitionKind.Blinds => SlideShowTransitionPlaybackKind.Blinds,
 
+            // OOXML comb is a directional bar wipe; reuse the renderer-neutral
+            // blinds geometry so both slideshow hosts preserve horz/vert axes.
+            TransitionKind.Comb => SlideShowTransitionPlaybackKind.Blinds,
+
             TransitionKind.RandomBar => SlideShowTransitionPlaybackKind.RandomBars,
 
             TransitionKind.Strips => SlideShowTransitionPlaybackKind.Strips,
@@ -99,7 +103,6 @@ public static class SlideShowTransitionPlanner
             TransitionKind.Gallery or
             TransitionKind.Conveyor or
             TransitionKind.Pan or
-            TransitionKind.Comb or
             TransitionKind.Window => SlideShowTransitionPlaybackKind.PushLike,
 
             _ => SlideShowTransitionPlaybackKind.FadeFallback

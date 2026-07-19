@@ -729,6 +729,24 @@ public sealed class ChartRenderPlannerTests
     }
 
     [Fact]
+    public void BuildSurfaceCellPrimitives_DisplayBlanksAsZero_MaterializesZeroValueCell()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.DisplayBlanksAs = ChartDisplayBlanksAs.Zero;
+        chart.Series[0].Values[1] = null;
+
+        var cells = ChartRenderPlanner.BuildSurfaceCellPrimitives(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        cells.Should().HaveCount(6);
+        cells.Single(cell => cell.SeriesIndex == 0 && cell.CategoryIndex == 1)
+            .Value.Should().Be(0);
+        cells.Single(cell => cell.SeriesIndex == 0 && cell.CategoryIndex == 1)
+            .Bounds.Should().Be(new ChartPlanRect(100, 0, 100, 60));
+    }
+
+    [Fact]
     public void BuildSurfaceGeometryPlan_Surface3DPlansProjectedFacetsAndWireframe()
     {
         var chart = MakeSurfaceChart(ChartType.Surface3D);
@@ -792,6 +810,61 @@ public sealed class ChartRenderPlannerTests
             "a larger authored azimuth and depth should move the rear category farther right");
         authoredPoint.Point.Y.Should().BeLessThan(baselinePoint.Point.Y,
             "a taller authored camera should raise the projected surface");
+    }
+
+    [Fact]
+    public void BuildSurfaceGeometryPlan_RightAngleAxesSuppressesPerspectiveLift()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.View3D = new Chart3DView
+        {
+            RotationX = 30,
+            RotationY = 40,
+            Perspective = 80,
+            HeightPercent = 100,
+            DepthPercent = 100,
+            RightAngleAxes = false
+        };
+
+        var perspective = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        chart.View3D.RightAngleAxes = true;
+        var rightAngle = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        var perspectivePoint = perspective.Points.Single(point =>
+            point.SeriesIndex == 1 && point.CategoryIndex == 1);
+        var rightAnglePoint = rightAngle.Points.Single(point =>
+            point.SeriesIndex == 1 && point.CategoryIndex == 1);
+        rightAnglePoint.Point.Y.Should().BeGreaterThan(
+            perspectivePoint.Point.Y,
+            "right-angle axes remove the authored perspective lift while retaining the camera orientation");
+    }
+
+    [Fact]
+    public void BuildSurfaceGeometryPlan_NonCanonicalImportedSurfaceUsesElevationPalette()
+    {
+        var chart = MakeSurfaceChart(ChartType.Surface3D);
+        chart.TextStyle = new ChartTextStyle { FontSizePt = 18.0 };
+        chart.VaryColors = true;
+        chart.Series[0].Values[0] = 2;
+        chart.Series[0].Values[1] = 12;
+        chart.Series[0].Values[2] = 22;
+        chart.Series[1].Values[0] = 32;
+        chart.Series[1].Values[1] = 42;
+        chart.Series[1].Values[2] = 52;
+
+        var plan = ChartRenderPlanner.BuildSurfaceGeometryPlan(
+            chart,
+            new ChartPlanRect(0, 0, 300, 120));
+
+        plan.Facets.Select(facet => facet.Fill.Color).Distinct()
+            .Should().HaveCountGreaterThan(1,
+                "non-canonical imported surfaces should retain PowerPoint's elevation color bands");
+        plan.Facets.Should().OnlyContain(facet => facet.Fill.Alpha == 255);
     }
 
     [Fact]

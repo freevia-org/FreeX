@@ -146,6 +146,7 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Flash, SlideShowTransitionPlaybackKind.Fade)]
     [InlineData(TransitionKind.Split, SlideShowTransitionPlaybackKind.Split)]
     [InlineData(TransitionKind.Blinds, SlideShowTransitionPlaybackKind.Blinds)]
+    [InlineData(TransitionKind.Comb, SlideShowTransitionPlaybackKind.Blinds)]
     [InlineData(TransitionKind.RandomBar, SlideShowTransitionPlaybackKind.RandomBars)]
     [InlineData(TransitionKind.Wheel, SlideShowTransitionPlaybackKind.Wheel)]
     [InlineData(TransitionKind.WheelReverse, SlideShowTransitionPlaybackKind.Wheel)]
@@ -155,7 +156,6 @@ public sealed class SlideShowHostPlannerTests
     [InlineData(TransitionKind.Gallery, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Conveyor, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Pan, SlideShowTransitionPlaybackKind.PushLike)]
-    [InlineData(TransitionKind.Comb, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Doors, SlideShowTransitionPlaybackKind.Split)]
     [InlineData(TransitionKind.Window, SlideShowTransitionPlaybackKind.PushLike)]
     [InlineData(TransitionKind.Morph, SlideShowTransitionPlaybackKind.FadeFallback)]
@@ -223,6 +223,23 @@ public sealed class SlideShowHostPlannerTests
         var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
         {
             Kind = TransitionKind.Blinds,
+            Direction = direction
+        });
+
+        plan.PlaybackKind.Should().Be(SlideShowTransitionPlaybackKind.Blinds);
+        plan.BlindsHorizontal.Should().Be(expectedHorizontal);
+    }
+
+    [Theory]
+    [InlineData(TransitionDirection.Horizontal, true)]
+    [InlineData(TransitionDirection.Vertical, false)]
+    public void PlanTransition_ResolvesCombAsDirectionalBarWipe(
+        TransitionDirection direction,
+        bool expectedHorizontal)
+    {
+        var plan = SlideShowTransitionPlanner.Plan(new SlideTransition
+        {
+            Kind = TransitionKind.Comb,
             Direction = direction
         });
 
