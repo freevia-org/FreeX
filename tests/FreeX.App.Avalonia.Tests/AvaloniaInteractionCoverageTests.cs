@@ -105,6 +105,34 @@ public sealed class AvaloniaInteractionCoverageTests
         Assert.Contains("bounded-batch-aggregate-incomplete", script, StringComparison.Ordinal);
         Assert.Contains("payloadFingerprint", script, StringComparison.Ordinal);
         Assert.Contains("appImageId", script, StringComparison.Ordinal);
+        Assert.Contains("[IO.Path]::DirectorySeparatorChar", script, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Replace('', '/')", script, StringComparison.Ordinal);
+        Assert.Contains("$fingerprintHasher.ComputeHash($bytes)", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("[Security.Cryptography.SHA256]::HashData", script, StringComparison.Ordinal);
+        Assert.Contains("[BitConverter]::ToString($digest)", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("[Convert]::ToHexString", script, StringComparison.Ordinal);
+        Assert.Contains("git -C $repoRoot rev-parse --verify HEAD", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("rev-parse HEAD 2>$null | Select-Object -First 1", script, StringComparison.Ordinal);
+        Assert.Contains("([int]::MaxValue)", script, StringComparison.Ordinal);
+        Assert.DoesNotContain(" [int]::MaxValue", script, StringComparison.Ordinal);
+        Assert.Contains("[bool]$RequireRunnerMetadata = $false", script, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "[Parameter(Mandatory = $true)][bool]$RequireRunnerMetadata = $false",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains("$value = $property.Value", script, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "$value = Get-ManifestProperty -Manifest $Manifest -Name $Name",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains("$selected -gt 0 -and $batchStatus -eq \"failed\"", script, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "0 ([int]::MaxValue) 0 0 $contextStart $contextCount",
+            script,
+            StringComparison.Ordinal);
+        Assert.Contains("ConvertTo-ManifestEscapedId", script, StringComparison.Ordinal);
+        Assert.Contains("Replace(\"(\", \"%28\")", script, StringComparison.Ordinal);
+        Assert.Contains("Replace(\")\", \"%29\")", script, StringComparison.Ordinal);
     }
 
     [Fact]

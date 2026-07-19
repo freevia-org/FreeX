@@ -71,11 +71,13 @@ $appImageReference = "freex-linux-interactive-app-freex-$workspaceKey" + ":curre
 $publishDirectory = Join-Path $env:TEMP "FreeX-LinuxInteractive/$workspaceKey/freex/publish/linux-x64"
 
 function Get-SourceCommit {
-    $commit = (& git -C $repoRoot rev-parse HEAD 2>$null | Select-Object -First 1)
-    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$commit)) {
+    $output = @(& git -C $repoRoot rev-parse --verify HEAD 2>$null)
+    $gitExitCode = $LASTEXITCODE
+    $commit = if ($output.Count -gt 0) { [string]$output[0] } else { "" }
+    if ($gitExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($commit)) {
         throw "Could not resolve the current source commit for interaction validation provenance."
     }
-    ([string]$commit).Trim()
+    $commit.Trim()
 }
 
 function Get-DirectoryFingerprint {
@@ -91,14 +93,21 @@ function Get-DirectoryFingerprint {
     $lines = foreach ($file in $files) {
         $relative = $file.FullName.Substring($Path.Length).TrimStart(
             [IO.Path]::DirectorySeparatorChar,
-            [IO.Path]::AltDirectorySeparatorChar).Replace('', '/')
+            [IO.Path]::AltDirectorySeparatorChar).Replace(
+                [IO.Path]::DirectorySeparatorChar,
+                [char]'/')
         $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
         "$relative|$hash"
     }
     $bytes = [Text.Encoding]::UTF8.GetBytes(($lines -join [Environment]::NewLine))
-    $digest = [Security.Cryptography.SHA256]::HashData($bytes)
+    $fingerprintHasher = [Security.Cryptography.SHA256]::Create()
+    try {
+        $digest = $fingerprintHasher.ComputeHash($bytes)
+    } finally {
+        $fingerprintHasher.Dispose()
+    }
     [pscustomobject]@{
-        fingerprint = ([Convert]::ToHexString($digest)).ToLowerInvariant()
+        fingerprint = ([BitConverter]::ToString($digest)).Replace("-", "").ToLowerInvariant()
         fileCount = $files.Count
     }
 }
@@ -208,7 +217,11 @@ function Get-ManifestStringArray {
         [Parameter(Mandatory = $true)][string]$Name
     )
 
-    $value = Get-ManifestProperty -Manifest $Manifest -Name $Name
+    $property = $Manifest.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        throw "Interaction manifest is missing required property '$Name'."
+    }
+    $value = $property.Value
     if ($null -eq $value) {
         throw "Interaction manifest property '$Name' must be an array."
     }
@@ -286,6 +299,19 @@ function Get-ExpectedManifestSelectionIds {
     }
 }
 
+function ConvertTo-ManifestEscapedId {
+    param([Parameter(Mandatory = $true)][string]$Value)
+
+    # Windows PowerShell runs on .NET Framework, whose EscapeDataString leaves
+    # these RFC 3986 reserved characters unescaped. The app runs on modern .NET.
+    ([Uri]::EscapeDataString($Value)).
+        Replace("!", "%21").
+        Replace("*", "%2A").
+        Replace("'", "%27").
+        Replace("(", "%28").
+        Replace(")", "%29")
+}
+
 function Assert-ManifestIdentity {
     param(
         [Parameter(Mandatory = $true)]$Manifest,
@@ -355,7 +381,7 @@ function Assert-ManifestResultShape {
             }
         }
         "ribbon-only" {
-            $expected = @($selected | ForEach-Object { "ribbon-command-behavior/$([Uri]::EscapeDataString($_))" } | Sort-Object)
+            $expected = @($selected | ForEach-Object { "ribbon-command-behavior/$(ConvertTo-ManifestEscapedId $_)" } | Sort-Object)
             $actual = @($results | Where-Object category -eq "ribbon-command-behavior" | ForEach-Object id | Sort-Object)
             if (($actual -join "`n") -ne ($expected -join "`n")) {
                 throw "Ribbon batch has unexpected command behavior IDs."
@@ -480,7 +506,7 @@ function Save-ValidatedManifest {
         [Parameter(Mandatory = $true)][int]$RibbonCommandCount,
         [Parameter(Mandatory = $true)][int]$ContextMenuDispatchStart,
         [Parameter(Mandatory = $true)][int]$ContextMenuDispatchCount,
-        [Parameter(Mandatory = $true)][bool]$RequireRunnerMetadata = $false
+        [bool]$RequireRunnerMetadata = $false
     )
 
     Validate-InteractionManifest $Manifest $Section $IncludeCoreResults $RibbonOnly $DialogStart $DialogCount $RibbonCommandStart $RibbonCommandCount $ContextMenuDispatchStart $ContextMenuDispatchCount $RequireRunnerMetadata | Out-Null
@@ -527,9 +553,13 @@ function Merge-ContextMenuAggregateResults {
             }
             $selectedTotal += $selected
             $passed += [int]$match.Groups[4].Value
-            $failed += [int]$match.Groups[5].Value
+            $observedFailed = [int]$match.Groups[5].Value
+            $failed += $observedFailed
             $skipped += [int]$match.Groups[6].Value
-            $batchFailed = $batchFailed -or $match.Groups[3].Value -eq "failed" -or [string]$row.status -eq "failed"
+            $batchStatus = $match.Groups[3].Value
+            $batchFailed = $batchFailed -or
+                $observedFailed -gt 0 -or
+                ($selected -gt 0 -and $batchStatus -eq "failed")
         }
         $status = if ($batchFailed -or $failed -gt 0) {
             "failed"
@@ -684,7 +714,7 @@ try {
                 $authoritativeRibbonCount = [int]$batchManifest.ribbonCommandCatalogCount
                 $authoritativeContextCount = [int]$batchManifest.contextMenuDispatchCatalogCount
             }
-            Save-ValidatedManifest $batchManifest $existingCorePath $coreSection $true $false 0 0 0 0 0 [int]::MaxValue $true | Out-Null
+            Save-ValidatedManifest $batchManifest $existingCorePath $coreSection $true $false 0 0 0 0 0 ([int]::MaxValue) $true | Out-Null
             if ($null -eq $manifest) { $manifest = $batchManifest }
             $combinedResults += @($batchManifest.results)
             Write-Host "Reusing core interaction section '$coreSection'."
@@ -731,7 +761,7 @@ try {
         }
         if ($null -eq $manifest) { $manifest = $batchManifest }
         $combinedResults += @($batchManifest.results)
-        Save-ValidatedManifest $batchManifest (Join-Path $reportDirectory "core-$coreSection.json") $coreSection $true $false 0 0 0 0 0 [int]::MaxValue | Out-Null
+        Save-ValidatedManifest $batchManifest (Join-Path $reportDirectory "core-$coreSection.json") $coreSection $true $false 0 0 0 0 0 ([int]::MaxValue) | Out-Null
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
@@ -746,7 +776,7 @@ try {
             if ([int]$batchManifest.contextMenuDispatchCatalogCount -ne $authoritativeContextCount) {
                 throw "Existing context-menu dispatch catalog count changed during validation."
             }
-            Save-ValidatedManifest $batchManifest $existingContextPath "context-menus" $true $false 0 [int]::MaxValue 0 0 $contextStart $contextCount $true | Out-Null
+            Save-ValidatedManifest $batchManifest $existingContextPath "context-menus" $true $false 0 0 0 0 $contextStart $contextCount $true | Out-Null
             $combinedResults += @($batchManifest.results)
             Write-Host "Reusing context-menu dispatch batch $contextStart..$($contextStart + $contextCount - 1)."
             continue
@@ -780,7 +810,7 @@ try {
             throw "Context-menu dispatch catalog count changed during validation."
         }
         $combinedResults += @($batchManifest.results)
-        Save-ValidatedManifest $batchManifest (Join-Path $reportDirectory ("context-batch-{0:D3}.json" -f $contextStart)) "context-menus" $true $false 0 [int]::MaxValue 0 0 $contextStart $contextCount | Out-Null
+        Save-ValidatedManifest $batchManifest (Join-Path $reportDirectory ("context-batch-{0:D3}.json" -f $contextStart)) "context-menus" $true $false 0 0 0 0 $contextStart $contextCount | Out-Null
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
@@ -885,7 +915,7 @@ try {
             if ([int]$batchManifest.ribbonCommandCatalogCount -ne $authoritativeRibbonCount) {
                 throw "Existing ribbon command catalog count changed during validation."
             }
-            Save-ValidatedManifest $batchManifest $existingRibbonPath "ribbon-only" $true $true 0 0 $ribbonStart $ribbonCount 0 [int]::MaxValue $true | Out-Null
+            Save-ValidatedManifest $batchManifest $existingRibbonPath "ribbon-only" $true $true 0 0 $ribbonStart $ribbonCount 0 ([int]::MaxValue) $true | Out-Null
             $combinedResults += @($batchManifest.results)
             Write-Host "Reusing ribbon interaction batch $ribbonStart..$($ribbonStart + $ribbonCount - 1)."
             continue
@@ -920,7 +950,7 @@ try {
             throw "Ribbon command catalog count changed during validation: expected $authoritativeRibbonCount, observed $($batchManifest.ribbonCommandCatalogCount)."
         }
         $combinedResults += @($batchManifest.results)
-        Save-ValidatedManifest $batchManifest (Join-Path $reportDirectory ("ribbon-batch-{0:D3}.json" -f $ribbonStart)) "ribbon-only" $true $true 0 0 $ribbonStart $ribbonCount 0 [int]::MaxValue | Out-Null
+        Save-ValidatedManifest $batchManifest (Join-Path $reportDirectory ("ribbon-batch-{0:D3}.json" -f $ribbonStart)) "ribbon-only" $true $true 0 0 $ribbonStart $ribbonCount 0 ([int]::MaxValue) | Out-Null
         & $harness -Action Stop -App FreeX -Port $Port
     }
 
