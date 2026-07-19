@@ -10,6 +10,7 @@ public enum SlideShowTransitionPlaybackKind
     Blinds,
     RandomBars,
     Strips,
+    Wheel,
     PushLike,
     FadeFallback
 }
@@ -22,7 +23,9 @@ public sealed record SlideShowTransitionPlan(
     bool SplitOut,
     bool BlindsHorizontal,
     bool RandomBarsHorizontal,
-    bool StripsSlopeDown);
+    bool StripsSlopeDown,
+    int WheelSpokeCount,
+    bool WheelReverse);
 
 public static class SlideShowTransitionPlanner
 {
@@ -39,7 +42,9 @@ public static class SlideShowTransitionPlanner
             ResolveSplitOut(transition),
             ResolveBlindsHorizontal(transition),
             ResolveRandomBarsHorizontal(transition),
-            ResolveStripsSlopeDown(transition));
+            ResolveStripsSlopeDown(transition),
+            ResolveWheelSpokeCount(transition),
+            transition.Kind == TransitionKind.WheelReverse);
     }
 
     public static SlideShowTransitionPlaybackKind PlanPlaybackKind(TransitionKind kind) =>
@@ -59,6 +64,9 @@ public static class SlideShowTransitionPlanner
             TransitionKind.RandomBar => SlideShowTransitionPlaybackKind.RandomBars,
 
             TransitionKind.Strips => SlideShowTransitionPlaybackKind.Strips,
+
+            TransitionKind.Wheel or
+            TransitionKind.WheelReverse => SlideShowTransitionPlaybackKind.Wheel,
 
             TransitionKind.Push or
             TransitionKind.Cover or
@@ -91,6 +99,9 @@ public static class SlideShowTransitionPlanner
 
     private static bool ResolveStripsSlopeDown(SlideTransition transition) =>
         transition.Direction is TransitionDirection.LeftDown or TransitionDirection.RightUp;
+
+    private static int ResolveWheelSpokeCount(SlideTransition transition) =>
+        Math.Clamp(transition.WheelSpokeCount is > 0 ? transition.WheelSpokeCount.Value : 4, 1, 32);
 
     public static (double X, double Y) ResolveIncomingOffset(TransitionDirection? direction) =>
         direction switch

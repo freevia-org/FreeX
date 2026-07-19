@@ -304,6 +304,7 @@ public static class PresentationTransitionCommandPlanner
             AdvanceAfterMs = transition.AdvanceAfterMs,
             RawXml = transition.RawXml,
             MorphOption = transition.MorphOption,
+            WheelSpokeCount = transition.WheelSpokeCount,
             Sound = transition.Sound is null
                 ? null
                 : new TransitionSound

@@ -27,7 +27,8 @@ public sealed record SlideShowMaskArc(
     SlideShowMaskPoint Start,
     SlideShowMaskPoint End,
     double SweepDegrees,
-    bool IsLargeArc);
+    bool IsLargeArc,
+    bool IsClockwise);
 
 public sealed record SlideShowMaskSweepPlan(
     bool IsFullyOpen,
@@ -354,14 +355,15 @@ public static class SlideShowMaskGeometryPlanner
         }
 
         var radius = Math.Sqrt(width * width + height * height) / 2;
-        return new(false, false, new[] { BuildArc(center, radius, -90, 360 * progress) });
+        return new(false, false, new[] { BuildArc(center, radius, -90, 360 * progress, clockwise: true) });
     }
 
     public static SlideShowMaskSweepPlan BuildWheel(
         double width,
         double height,
         double progress,
-        int spokeCount)
+        int spokeCount,
+        bool clockwise = true)
     {
         progress = Math.Clamp(progress, 0, 1);
         var center = new SlideShowMaskPoint(width / 2, height / 2);
@@ -384,8 +386,11 @@ public static class SlideShowMaskGeometryPlanner
             arcs[spoke] = BuildArc(
                 center,
                 radius,
-                -90 + spoke * spokeSweep,
-                spokeSweep * progress);
+                clockwise
+                    ? -90 + spoke * spokeSweep
+                    : -90 - spoke * spokeSweep,
+                (clockwise ? 1 : -1) * spokeSweep * progress,
+                clockwise);
         }
 
         return new(false, false, arcs);
@@ -395,7 +400,8 @@ public static class SlideShowMaskGeometryPlanner
         SlideShowMaskPoint center,
         double radius,
         double startDegrees,
-        double sweepDegrees)
+        double sweepDegrees,
+        bool clockwise)
     {
         var start = PointOnRadius(center, radius, startDegrees);
         var end = PointOnRadius(center, radius, startDegrees + sweepDegrees);
@@ -404,8 +410,9 @@ public static class SlideShowMaskGeometryPlanner
             radius,
             start,
             end,
-            sweepDegrees,
-            sweepDegrees > 180);
+            Math.Abs(sweepDegrees),
+            Math.Abs(sweepDegrees) > 180,
+            clockwise);
     }
 
     private static SlideShowMaskPoint PointOnRadius(

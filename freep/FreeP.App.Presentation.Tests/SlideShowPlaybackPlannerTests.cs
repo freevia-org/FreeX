@@ -83,6 +83,26 @@ public sealed class SlideShowPlaybackPlannerTests
     }
 
     [Theory]
+    [InlineData(TransitionKind.Wheel, false)]
+    [InlineData(TransitionKind.WheelReverse, true)]
+    public void PlanTransition_WheelUsesDedicatedActionAndPreservesSpokes(
+        TransitionKind kind,
+        bool expectedReverse)
+    {
+        var plan = SlideShowPlaybackPlanner.PlanTransition(new SlideTransition
+        {
+            Kind = kind,
+            WheelSpokeCount = 8,
+            DurationMs = 420
+        });
+
+        plan.ActionKind.Should().Be(SlideShowTransitionPlaybackActionKind.Wheel);
+        plan.SourceKind.Should().Be(SlideShowTransitionPlaybackKind.Wheel);
+        plan.WheelSpokeCount.Should().Be(8);
+        plan.WheelReverse.Should().Be(expectedReverse);
+    }
+
+    [Theory]
     [InlineData(TransitionDirection.LeftDown, true)]
     [InlineData(TransitionDirection.RightUp, true)]
     [InlineData(TransitionDirection.LeftUp, false)]
