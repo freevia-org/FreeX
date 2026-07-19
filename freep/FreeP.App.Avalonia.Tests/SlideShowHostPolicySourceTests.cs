@@ -205,6 +205,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("onReveal: anim.Kind == AnimationKind.Exit ? null : () =>");
         source.Should().Contain("DisappearEffect(element, plan.DelayMs);");
         source.Should().Contain("var isExit = plan.Animation.Kind == AnimationKind.Exit;");
+        source.Should().Contain("var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);");
+        source.Should().Contain("var from = isExit ? full : closed;");
+        source.Should().Contain("el.Opacity = isExit ? plan.FromOpacity : 0;");
         source.Should().Contain("AnimateTranslate(el, isExit ? 0 : dx, isExit ? 0 : dy,");
         source.Should().Contain("_entranceShapeIds.Contains(shapeId) ? 0 : 1");
         source.Should().Contain("MotionPathEffect(element, plan, onReveal);");

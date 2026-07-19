@@ -188,6 +188,9 @@ public sealed class SlideShowHostPolicySourceTests
         source.Should().Contain("_slideCanvas.SuppressedShapeIds.Add(anim.ShapeId);");
         source.Should().Contain("DisappearEffect(sb, element, plan.DelayMs);");
         source.Should().Contain("var isExit = plan.Animation.Kind == AnimationKind.Exit;");
+        source.Should().Contain("var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);");
+        source.Should().Contain("var from = isExit ? full : closed;");
+        source.Should().Contain("opacityAnim.KeyFrames.Add(new DiscreteDoubleKeyFrame(plan.FromOpacity, KeyTime.FromPercent(0)))");
         source.Should().Contain("isExit ? 0 : dx, isExit ? dx : 0");
         source.Should().Contain("_entranceShapeIds.Contains(shapeId) ? 0 : 1");
         source.Should().Contain("MotionPathEffect(sb, element, plan);");

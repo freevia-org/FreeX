@@ -1400,11 +1400,14 @@ public sealed class SlideShowWindow : Window
         double w = el.Width  > 0 ? el.Width  : 960;
         double h = el.Height > 0 ? el.Height : 540;
 
-        var from = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
-        var to = new Rect(0, 0, w, h);
+        var isExit = plan.Animation.Kind == AnimationKind.Exit;
+        var closed = plan.WipeHorizontal ? new Rect(0, 0, 0, h) : new Rect(0, 0, w, 0);
+        var full = new Rect(0, 0, w, h);
+        var from = isExit ? full : closed;
+        var to = isExit ? closed : full;
         var clipRect = new RectangleGeometry(from);
         el.Clip = clipRect;
-        el.Opacity = 0;
+        el.Opacity = isExit ? plan.FromOpacity : 0;
 
         DelayedAction(plan.DelayMs, () =>
         {
@@ -1415,9 +1418,9 @@ public sealed class SlideShowWindow : Window
                 to,
                 plan.DurationMs,
                 onComplete: CompleteReveal(plan, onReveal));
-            el.Opacity = 0.15;
-            DelayedAction(plan.DurationMs / 5, () => el.Opacity = 0.45);
-            DelayedAction(plan.DurationMs / 2, () => el.Opacity = 0.75);
+            el.Opacity = isExit ? 0.7 : 0.15;
+            DelayedAction(plan.DurationMs / 5, () => el.Opacity = isExit ? 0.35 : 0.45);
+            DelayedAction(plan.DurationMs / 2, () => el.Opacity = isExit ? 0.15 : 0.75);
             DelayedAction(plan.DurationMs, () => el.Opacity = plan.ToOpacity);
         });
     }
