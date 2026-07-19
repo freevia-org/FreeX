@@ -325,26 +325,6 @@ public sealed partial class MainWindow
         AutomationProperties.SetAutomationId(cancel, "SelectionPaneCancelButton");
         ok.Click += (_, _) => dialog.Close(true);
         cancel.Click += (_, _) => dialog.Close(false);
-        dialog.Opened += (_, _) => Dispatcher.UIThread.Post(
-            () =>
-            {
-                if (dialog.IsVisible && searchBox.IsVisible && searchBox.IsEffectivelyEnabled)
-                    searchBox.Focus();
-            },
-            DispatcherPriority.Input);
-        dialog.AddHandler(
-            InputElement.KeyDownEvent,
-            (_, args) =>
-            {
-                if (args.Key != Key.Escape || args.KeyModifiers != KeyModifiers.None)
-                    return;
-
-                if (dialog.IsVisible)
-                    dialog.Close(false);
-                args.Handled = true;
-            },
-            RoutingStrategies.Tunnel,
-            handledEventsToo: true);
 
         var searchRow = new Grid { Margin = new Thickness(0, 0, 0, 8) };
         searchRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -386,6 +366,8 @@ public sealed partial class MainWindow
         AddGridChild(content, commandRow, 3, isRow: true);
         AddGridChild(content, buttonRow, 4, isRow: true);
         dialog.Content = content;
+        ConfigureNativeDialogInitialFocus(dialog, content, searchBox);
+        ConfigureDeferredDialogCancel(dialog, cancel);
 
         Rebind(null);
         if (captureSelectedRow is not null)

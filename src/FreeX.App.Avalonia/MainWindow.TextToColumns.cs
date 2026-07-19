@@ -714,14 +714,7 @@ public sealed partial class MainWindow
             dialog.UpdateLayout();
             Dispatcher.UIThread.Post(FocusCurrentWizardStepTarget, DispatcherPriority.Input);
         };
-        dialog.KeyDown += (_, args) =>
-        {
-            if (args.Key != Key.Escape || args.KeyModifiers != KeyModifiers.None)
-                return;
-
-            dialog.Close();
-            args.Handled = true;
-        };
+        ConfigureDeferredDialogCancel(dialog, cancelButton);
 
         SyncWizardNavigation();
         UpdateModeVisibility();
